@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.ExchangeSet;
+namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
 /// Represents a container (e.g. a directory or archive) holding an S-100 exchange set

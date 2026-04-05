@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace EncDotNet.S100.ExchangeSet;
+namespace EncDotNet.S100.ExchangeSets;
 
 public static class ExchangeCatalogueReader
 {

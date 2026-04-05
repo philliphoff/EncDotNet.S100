@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.ExchangeSet;
+namespace EncDotNet.S100.ExchangeSets;
 
 public sealed class CatalogueDiscoveryMetadata
 {

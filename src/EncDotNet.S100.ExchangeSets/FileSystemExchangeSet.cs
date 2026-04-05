@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.ExchangeSet;
+namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
 /// An exchange set provider backed by a local file system directory.
