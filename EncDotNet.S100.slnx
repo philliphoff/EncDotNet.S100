@@ -4,4 +4,7 @@
     <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />
     <Project Path="src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
+  </Folder>
 </Solution>
