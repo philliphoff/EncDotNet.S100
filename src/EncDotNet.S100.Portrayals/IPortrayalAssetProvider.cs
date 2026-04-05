@@ -1,12 +1,22 @@
 namespace EncDotNet.S100.Portrayals;
 
 /// <summary>
-/// Provides deferred access to portrayal asset file contents (SVGs, Lua scripts, XML line styles, etc.).
+/// Represents a container (e.g. a directory or archive) holding a portrayal catalogue and its assets.
 /// </summary>
-public interface IPortrayalAssetProvider
+public interface IPortrayalCatalogueProvider : IDisposable
 {
     /// <summary>
-    /// Fetches the content of a portrayal asset by its file name relative to the catalogue root.
+    /// Gets the parsed portrayal catalogue metadata.
     /// </summary>
-    Task<Stream> FetchAssetAsync(string fileName, CancellationToken cancellationToken = default);
+    PortrayalCatalogue Catalogue { get; }
+
+    /// <summary>
+    /// Fetches the content of a portrayal asset referenced by a catalogue item.
+    /// </summary>
+    Task<Stream> FetchAssetAsync(CatalogItem item, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the content of a portrayal asset referenced by a rule file.
+    /// </summary>
+    Task<Stream> FetchAssetAsync(RuleFile ruleFile, CancellationToken cancellationToken = default);
 }

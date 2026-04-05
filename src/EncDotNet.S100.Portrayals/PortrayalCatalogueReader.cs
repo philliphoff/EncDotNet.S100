@@ -3,39 +3,20 @@ using System.Xml.Linq;
 
 namespace EncDotNet.S100.Portrayals;
 
-public sealed class PortrayalCatalogueReader
+public static class PortrayalCatalogueReader
 {
     private static readonly XNamespace PC = "http://www.iho.int/S100PortrayalCatalog/5.2";
 
-    private readonly IPortrayalAssetProvider _assetProvider;
-
-    public PortrayalCatalogueReader(IPortrayalAssetProvider assetProvider)
-    {
-        _assetProvider = assetProvider ?? throw new ArgumentNullException(nameof(assetProvider));
-    }
-
-    public PortrayalCatalogue Read(Stream stream)
+    public static PortrayalCatalogue Read(Stream stream)
     {
         var doc = XDocument.Load(stream);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
-    public PortrayalCatalogue Read(string path)
+    public static PortrayalCatalogue Read(string path)
     {
         var doc = XDocument.Load(path);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
-    }
-
-    public Task<Stream> FetchAssetAsync(CatalogItem item, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        return _assetProvider.FetchAssetAsync(item.FileName, cancellationToken);
-    }
-
-    public Task<Stream> FetchAssetAsync(RuleFile ruleFile, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(ruleFile);
-        return _assetProvider.FetchAssetAsync(ruleFile.FileName, cancellationToken);
     }
 
     private static PortrayalCatalogue ReadCatalogue(XElement root)
