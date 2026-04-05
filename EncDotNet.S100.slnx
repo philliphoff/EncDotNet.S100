@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />
+  </Folder>
+</Solution>
