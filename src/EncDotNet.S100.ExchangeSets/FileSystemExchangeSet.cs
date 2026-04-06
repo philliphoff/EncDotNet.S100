@@ -3,18 +3,15 @@ namespace EncDotNet.S100.ExchangeSets;
 /// <summary>
 /// An exchange set provider backed by a local file system directory.
 /// </summary>
-public sealed class FileSystemExchangeSet : IExchangeSetProvider
+public sealed class FileSystemExchangeSet : ExchangeSetBase
 {
     private readonly string _basePath;
 
     private FileSystemExchangeSet(string basePath, ExchangeCatalogue catalogue)
+        : base(catalogue)
     {
         _basePath = basePath;
-        Catalogue = catalogue;
     }
-
-    /// <inheritdoc />
-    public ExchangeCatalogue Catalogue { get; }
 
     /// <summary>
     /// Creates a <see cref="FileSystemExchangeSet"/> from a directory containing a
@@ -34,49 +31,14 @@ public sealed class FileSystemExchangeSet : IExchangeSetProvider
     }
 
     /// <inheritdoc />
-    public Task<Stream> FetchDatasetAsync(DatasetDiscoveryMetadata dataset, CancellationToken cancellationToken = default)
+    protected override Task<Stream> OpenFileAsync(string relativePath, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(dataset);
-        return FetchFileAsync(dataset.FileName);
-    }
-
-    /// <inheritdoc />
-    public Task<Stream> FetchSupportFileAsync(SupportFileDiscoveryMetadata supportFile, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(supportFile);
-        return FetchFileAsync(supportFile.FileName);
-    }
-
-    /// <inheritdoc />
-    public Task<Stream> FetchCatalogueFileAsync(CatalogueDiscoveryMetadata catalogueFile, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(catalogueFile);
-        return FetchFileAsync(catalogueFile.FileName);
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        // No unmanaged resources; present for future extensibility.
-    }
-
-    private Task<Stream> FetchFileAsync(string fileName)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(fileName);
-
-        // Strip the file:/ URI prefix that S-100 exchange catalogues use
-        string relativePath = fileName;
-        if (relativePath.StartsWith("file:/", StringComparison.OrdinalIgnoreCase))
-        {
-            relativePath = relativePath["file:/".Length..];
-        }
-
         string fullPath = Path.GetFullPath(Path.Combine(_basePath, relativePath));
 
         // Prevent path traversal
         if (!fullPath.StartsWith(_basePath, StringComparison.Ordinal))
         {
-            throw new ArgumentException("File name must not navigate outside the exchange set directory.", nameof(fileName));
+            throw new ArgumentException("File name must not navigate outside the exchange set directory.", nameof(relativePath));
         }
 
         Stream stream = File.OpenRead(fullPath);
