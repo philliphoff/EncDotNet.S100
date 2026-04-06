@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
   </ItemGroup>
 

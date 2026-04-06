@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj" />
     <Project Path="src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj" />
     <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;
 
@@ -11,24 +12,27 @@ public class ZipExchangeSetTests
     }
 
     [Fact]
-    public void Create_FromFilePath_ReturnsProvider()
+    public async Task Create_FromFilePath_ReturnsProvider()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         Assert.NotNull(provider);
     }
 
     [Fact]
-    public void Create_FromStream_ReturnsProvider()
+    public async Task Create_FromStream_ReturnsProvider()
     {
         var stream = File.OpenRead(GetZipPath());
-        using var provider = ZipExchangeSet.Create(stream);
+        using var source = ZipAssetSource.Open(stream);
+        using var provider = await ExchangeSet.CreateAsync(source);
         Assert.NotNull(provider);
     }
 
     [Fact]
-    public void Create_ParsesCatalogue()
+    public async Task Create_ParsesCatalogue()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
 
         Assert.Equal("IHO_V12", provider.Catalogue.Identifier.Identifier);
         Assert.Equal(19, provider.Catalogue.DatasetDiscoveryMetadata.Count);
@@ -37,7 +41,8 @@ public class ZipExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_ReturnsReadableStream()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         var dataset = provider.Catalogue.DatasetDiscoveryMetadata[0];
 
         await using var stream = await provider.FetchDatasetAsync(dataset);
@@ -52,7 +57,8 @@ public class ZipExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_AllDatasets_Readable()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
 
         foreach (var dataset in provider.Catalogue.DatasetDiscoveryMetadata)
         {
@@ -64,7 +70,8 @@ public class ZipExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_PathTraversal_Throws()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         var malicious = new DatasetDiscoveryMetadata { FileName = "../../etc/passwd" };
 
         await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious));
@@ -73,14 +80,15 @@ public class ZipExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_MissingEntry_ThrowsFileNotFound()
     {
-        using var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         var missing = new DatasetDiscoveryMetadata { FileName = "nonexistent.000" };
 
         await Assert.ThrowsAsync<FileNotFoundException>(() => provider.FetchDatasetAsync(missing));
     }
 
     [Fact]
-    public void Create_WithMissingCatalogue_Throws()
+    public async Task Create_WithMissingCatalogue_Throws()
     {
         string zipPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
         try
@@ -91,7 +99,8 @@ public class ZipExchangeSetTests
                 archive.CreateEntry("dummy.txt");
             }
 
-            Assert.ThrowsAny<Exception>(() => ZipExchangeSet.Create(zipPath));
+            using var source = ZipAssetSource.Open(zipPath);
+            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.CreateAsync(source));
         }
         finally
         {
@@ -102,7 +111,8 @@ public class ZipExchangeSetTests
     [Fact]
     public async Task Dispose_DisposesArchive()
     {
-        var provider = ZipExchangeSet.Create(GetZipPath());
+        using var source = ZipAssetSource.Open(GetZipPath());
+        var provider = await ExchangeSet.CreateAsync(source);
         provider.Dispose();
 
         // Accessing a dataset after dispose should fail

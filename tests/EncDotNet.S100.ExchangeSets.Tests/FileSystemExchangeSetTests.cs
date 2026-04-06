@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.ExchangeSets.Tests;
 
@@ -10,17 +11,19 @@ public class FileSystemExchangeSetTests
     }
 
     [Fact]
-    public void Create_ReturnsProvider()
+    public async Task Create_ReturnsProvider()
     {
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath());
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
 
         Assert.NotNull(provider);
     }
 
     [Fact]
-    public void Create_ParsesCatalogue()
+    public async Task Create_ParsesCatalogue()
     {
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath());
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
 
         Assert.Equal("IHO_V12", provider.Catalogue.Identifier.Identifier);
         Assert.Equal(19, provider.Catalogue.DatasetDiscoveryMetadata.Count);
@@ -29,7 +32,8 @@ public class FileSystemExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_ReturnsStream()
     {
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath());
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         var dataset = provider.Catalogue.DatasetDiscoveryMetadata[0];
 
         await using var stream = await provider.FetchDatasetAsync(dataset);
@@ -42,7 +46,8 @@ public class FileSystemExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_AllDatasets_Readable()
     {
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath());
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
 
         foreach (var dataset in provider.Catalogue.DatasetDiscoveryMetadata)
         {
@@ -54,21 +59,23 @@ public class FileSystemExchangeSetTests
     [Fact]
     public async Task FetchDatasetAsync_PathTraversal_Throws()
     {
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath());
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source);
         var malicious = new DatasetDiscoveryMetadata { FileName = "../../etc/passwd" };
 
         await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious));
     }
 
     [Fact]
-    public void Create_WithMissingCatalogue_Throws()
+    public async Task Create_WithMissingCatalogue_Throws()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            Assert.ThrowsAny<Exception>(() => FileSystemExchangeSet.Create(tempDir));
+            using var source = new FileSystemAssetSource(tempDir);
+            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.CreateAsync(source));
         }
         finally
         {
@@ -77,10 +84,11 @@ public class FileSystemExchangeSetTests
     }
 
     [Fact]
-    public void Create_WithCustomCatalogueFileName()
+    public async Task Create_WithCustomCatalogueFileName()
     {
         // The default is CATALOG.XML — verify it works explicitly
-        using var provider = FileSystemExchangeSet.Create(GetExchangeSetPath(), "CATALOG.XML");
+        using var source = new FileSystemAssetSource(GetExchangeSetPath());
+        using var provider = await ExchangeSet.CreateAsync(source, "CATALOG.XML");
 
         Assert.NotNull(provider.Catalogue);
     }
