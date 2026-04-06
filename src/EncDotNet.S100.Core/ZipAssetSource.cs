@@ -10,44 +10,50 @@ public sealed class ZipAssetSource : IAssetSource
     private readonly ZipArchive _archive;
     private readonly string _basePath;
 
+    private ZipAssetSource(ZipArchive archive, string basePath)
+    {
+        _archive = archive;
+        _basePath = basePath;
+    }
+
     /// <summary>
-    /// Initializes a new instance of <see cref="ZipAssetSource"/> wrapping an existing archive.
+    /// Creates a <see cref="ZipAssetSource"/> wrapping an existing archive.
+    /// The source takes ownership and will dispose it.
     /// </summary>
-    /// <param name="archive">The ZIP archive to read from. The source takes ownership and will dispose it.</param>
+    /// <param name="archive">The ZIP archive to read from.</param>
     /// <param name="basePath">
     /// An optional path prefix prepended to all relative paths when locating entries
     /// (e.g. <c>"S101/"</c> if entries are stored under that folder in the archive).
     /// </param>
-    public ZipAssetSource(ZipArchive archive, string basePath = "")
+    public static ZipAssetSource Create(ZipArchive archive, string basePath = "")
     {
         ArgumentNullException.ThrowIfNull(archive);
-        _archive = archive;
-        _basePath = basePath ?? "";
+        return new ZipAssetSource(archive, basePath ?? "");
     }
 
     /// <summary>
-    /// Opens a <see cref="ZipAssetSource"/> from a ZIP file on disk.
+    /// Creates a <see cref="ZipAssetSource"/> from a ZIP file on disk.
     /// </summary>
     /// <param name="zipPath">The path to the ZIP file.</param>
     /// <param name="basePath">An optional entry path prefix.</param>
-    public static ZipAssetSource Open(string zipPath, string basePath = "")
+    public static ZipAssetSource Create(string zipPath, string basePath = "")
     {
         ArgumentException.ThrowIfNullOrEmpty(zipPath);
         var archive = ZipFile.OpenRead(zipPath);
-        return new ZipAssetSource(archive, basePath);
+        return new ZipAssetSource(archive, basePath ?? "");
     }
 
     /// <summary>
-    /// Opens a <see cref="ZipAssetSource"/> from a stream containing ZIP data.
+    /// Creates a <see cref="ZipAssetSource"/> from a stream containing ZIP data.
     /// The source takes ownership of the stream.
     /// </summary>
     /// <param name="stream">A readable stream containing the ZIP data.</param>
     /// <param name="basePath">An optional entry path prefix.</param>
-    public static ZipAssetSource Open(Stream stream, string basePath = "")
+    public static ZipAssetSource Create(Stream stream, string basePath = "")
     {
         ArgumentNullException.ThrowIfNull(stream);
         var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-        return new ZipAssetSource(archive, basePath);
+        return new ZipAssetSource(archive, basePath ?? "");
     }
 
     /// <inheritdoc />

@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Portrayals;
 /// <summary>
 /// A portrayal catalogue provider backed by an <see cref="IAssetSource"/>.
 /// </summary>
-public sealed class PortrayalCatalogueProvider : IPortrayalCatalogueProvider
+public sealed class PortrayalCatalogueProvider : IDisposable
 {
     private readonly IAssetSource _source;
 
@@ -22,16 +22,18 @@ public sealed class PortrayalCatalogueProvider : IPortrayalCatalogueProvider
         Catalogue = catalogue;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the parsed portrayal catalogue metadata.
+    /// </summary>
     public PortrayalCatalogue Catalogue { get; }
 
     /// <summary>
-    /// Creates a <see cref="PortrayalCatalogueProvider"/> by reading the catalogue from the given source.
+    /// Opens a <see cref="PortrayalCatalogueProvider"/> by reading the catalogue from the given source.
     /// </summary>
     /// <param name="source">The asset source containing the portrayal catalogue and assets.</param>
     /// <param name="cataloguePath">The relative path to the catalogue XML file within the source.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    public static async Task<PortrayalCatalogueProvider> CreateAsync(IAssetSource source, string cataloguePath = "portrayal_catalogue.xml", CancellationToken cancellationToken = default)
+    public static async Task<PortrayalCatalogueProvider> OpenAsync(IAssetSource source, string cataloguePath = "portrayal_catalogue.xml", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(cataloguePath);
@@ -41,14 +43,18 @@ public sealed class PortrayalCatalogueProvider : IPortrayalCatalogueProvider
         return new PortrayalCatalogueProvider(source, catalogue);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Fetches the content of a portrayal asset referenced by a catalogue item.
+    /// </summary>
     public Task<Stream> FetchAssetAsync(CatalogItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
         return _source.OpenAsync(item.FileName, cancellationToken);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Fetches the content of a portrayal asset referenced by a rule file.
+    /// </summary>
     public Task<Stream> FetchAssetAsync(RuleFile ruleFile, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(ruleFile);

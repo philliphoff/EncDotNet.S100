@@ -7,14 +7,19 @@ public sealed class FileSystemAssetSource : IAssetSource
 {
     private readonly string _basePath;
 
+    private FileSystemAssetSource(string basePath)
+    {
+        _basePath = basePath;
+    }
+
     /// <summary>
-    /// Initializes a new instance of <see cref="FileSystemAssetSource"/> rooted at the given directory.
+    /// Creates a <see cref="FileSystemAssetSource"/> rooted at the given directory.
     /// </summary>
     /// <param name="directoryPath">The path to the root directory.</param>
-    public FileSystemAssetSource(string directoryPath)
+    public static FileSystemAssetSource Create(string directoryPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(directoryPath);
-        _basePath = Path.GetFullPath(directoryPath);
+        return new FileSystemAssetSource(Path.GetFullPath(directoryPath));
     }
 
     /// <inheritdoc />

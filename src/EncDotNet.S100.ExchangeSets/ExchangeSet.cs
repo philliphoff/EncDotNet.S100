@@ -3,9 +3,9 @@ using EncDotNet.S100.Core;
 namespace EncDotNet.S100.ExchangeSets;
 
 /// <summary>
-/// An exchange set provider backed by an <see cref="IAssetSource"/>.
+/// An exchange set backed by an <see cref="IAssetSource"/>.
 /// </summary>
-public sealed class ExchangeSet : IExchangeSetProvider
+public sealed class ExchangeSet : IDisposable
 {
     private readonly IAssetSource _source;
 
@@ -22,16 +22,18 @@ public sealed class ExchangeSet : IExchangeSetProvider
         Catalogue = catalogue;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Gets the parsed exchange catalogue metadata.
+    /// </summary>
     public ExchangeCatalogue Catalogue { get; }
 
     /// <summary>
-    /// Creates an <see cref="ExchangeSet"/> by reading the catalogue from the given source.
+    /// Opens an <see cref="ExchangeSet"/> by reading the catalogue from the given source.
     /// </summary>
     /// <param name="source">The asset source containing the exchange set.</param>
     /// <param name="cataloguePath">The relative path to the catalogue XML file within the source.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    public static async Task<ExchangeSet> CreateAsync(IAssetSource source, string cataloguePath = "CATALOG.XML", CancellationToken cancellationToken = default)
+    public static async Task<ExchangeSet> OpenAsync(IAssetSource source, string cataloguePath = "CATALOG.XML", CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(cataloguePath);
@@ -41,21 +43,27 @@ public sealed class ExchangeSet : IExchangeSetProvider
         return new ExchangeSet(source, catalogue);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Fetches the content of a dataset file referenced by the catalogue.
+    /// </summary>
     public Task<Stream> FetchDatasetAsync(DatasetDiscoveryMetadata dataset, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         return _source.OpenAsync(NormalizeFileName(dataset.FileName), cancellationToken);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Fetches the content of a support file referenced by the catalogue.
+    /// </summary>
     public Task<Stream> FetchSupportFileAsync(SupportFileDiscoveryMetadata supportFile, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(supportFile);
         return _source.OpenAsync(NormalizeFileName(supportFile.FileName), cancellationToken);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Fetches the content of a sub-catalogue file referenced by the catalogue.
+    /// </summary>
     public Task<Stream> FetchCatalogueFileAsync(CatalogueDiscoveryMetadata catalogueFile, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(catalogueFile);
