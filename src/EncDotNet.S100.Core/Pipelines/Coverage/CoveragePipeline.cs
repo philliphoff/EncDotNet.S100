@@ -25,8 +25,10 @@ public class CoveragePipeline
         for (int c = 0; c < cols; c++)
         {
             float value = fieldData[r, c];
-            cellColors[r * cols + c] =
-                value == metadata.NoDataValue ? null : colorScheme.Resolve(value);
+            bool isNoData = float.IsNaN(metadata.NoDataValue)
+                ? float.IsNaN(value)
+                : value == metadata.NoDataValue;
+            cellColors[r * cols + c] = isNoData ? null : colorScheme.Resolve(value);
         }
 
         // Extract contour lines if the catalogue defines them

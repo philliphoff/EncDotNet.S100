@@ -8,5 +8,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
   </Folder>
 </Solution>
