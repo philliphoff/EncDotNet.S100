@@ -5,6 +5,9 @@ namespace EncDotNet.S100.Datasets.S102;
 
 public class S102CoverageSource : ICoverageSource
 {
+    /// <summary>S-102 standard fill value for no-data cells.</summary>
+    public const float FillValue = 1_000_000f;
+
     private readonly S102Dataset _dataset;
     private readonly BathymetryCoverage _coverage;
     
@@ -33,7 +36,7 @@ public class S102CoverageSource : ICoverageSource
         },
         HorizontalCRS = _dataset.HorizontalCRS?.ToString() ?? "EPSG:4326",
         VerticalDatum = "MSL",
-        NoDataValue = float.NaN,
+        NoDataValue = FillValue,
         ValueFields =
         [
             new CoverageValueField 
@@ -41,14 +44,14 @@ public class S102CoverageSource : ICoverageSource
                 Name = "depth", 
                 Type = CoverageValueType.Float,
                 Units = "metres",
-                FillValue = float.NaN,
+                FillValue = FillValue,
             },
             new CoverageValueField
             {
                 Name = "uncertainty",
                 Type = CoverageValueType.Float,
                 Units = "metres",
-                FillValue = float.NaN,
+                FillValue = FillValue,
             },
         ]
     };
