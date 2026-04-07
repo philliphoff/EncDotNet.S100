@@ -46,7 +46,8 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         {
             float value = fieldData[row, col];
             var color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
-            bitmap.SetPixel(col, row, color);
+            // Grid row 0 is the southernmost (bottom of image), so flip vertically.
+            bitmap.SetPixel(col, rows - 1 - row, color);
         }
 
         return bitmap;

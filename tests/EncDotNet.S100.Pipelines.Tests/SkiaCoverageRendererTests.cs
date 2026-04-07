@@ -40,10 +40,11 @@ public class SkiaCoverageRendererTests
         using var bitmap = renderer.Render(layer, DefaultViewport);
 
         // Band: [0, 3) → #ADE3FF, [3, 10) → #6BC5FF, [10, 30) → #2196F3, [30, 100) → #0D47A1
-        AssertPixelHex(bitmap, col: 0, row: 0, "#ADE3FF"); // 1m → shallow
-        AssertPixelHex(bitmap, col: 1, row: 0, "#6BC5FF"); // 5m → medium
-        AssertPixelHex(bitmap, col: 0, row: 1, "#2196F3"); // 25m → deep
-        AssertPixelHex(bitmap, col: 1, row: 1, "#0D47A1"); // 50m → very deep
+        // Grid row 0 (south) maps to bitmap row 1 (bottom), grid row 1 (north) maps to bitmap row 0 (top)
+        AssertPixelHex(bitmap, col: 0, row: 1, "#ADE3FF"); // 1m → shallow (grid row 0)
+        AssertPixelHex(bitmap, col: 1, row: 1, "#6BC5FF"); // 5m → medium (grid row 0)
+        AssertPixelHex(bitmap, col: 0, row: 0, "#2196F3"); // 25m → deep (grid row 1)
+        AssertPixelHex(bitmap, col: 1, row: 0, "#0D47A1"); // 50m → very deep (grid row 1)
     }
 
     [Fact]

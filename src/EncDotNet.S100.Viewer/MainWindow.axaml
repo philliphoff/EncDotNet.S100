@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+        x:Class="EncDotNet.S100.Viewer.MainWindow"
+        Title="S-102 Viewer"
+        Width="900" Height="600">
+
+    <Window.Styles>
+        <Style Selector="Button.toolbar">
+            <Setter Property="Background" Value="#B0000000" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,6" />
+        </Style>
+        <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#D0000000" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <!-- Map control fills the entire area -->
+        <mapsui:MapControl x:Name="MapControl" />
+
+        <!-- Floating toolbar -->
+        <StackPanel Orientation="Horizontal"
+                    Spacing="6"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="12">
+            <Button x:Name="OpenButton"
+                    Classes="toolbar"
+                    Content="Open S-102 File..."
+                    Click="OnOpenClick" />
+            <Button x:Name="ClearButton"
+                    Classes="toolbar"
+                    Content="Clear"
+                    Click="OnClearClick"
+                    IsEnabled="False" />
+        </StackPanel>
+
+        <!-- Status bar -->
+        <Border Background="#B0000000"
+                CornerRadius="8"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                Margin="12"
+                Padding="12,6"
+                IsVisible="False"
+                x:Name="StatusBorder">
+            <TextBlock x:Name="StatusText"
+                       Foreground="White"
+                       FontSize="12" />
+        </Border>
+    </Grid>
+</Window>
