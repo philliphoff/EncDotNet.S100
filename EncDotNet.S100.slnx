@@ -5,6 +5,7 @@
     <Project Path="src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj" />
     <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />
     <Project Path="src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj" />
+    <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj" />
     <Project Path="src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj" />
   </Folder>

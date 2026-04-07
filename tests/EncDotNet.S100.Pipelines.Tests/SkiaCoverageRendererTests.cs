@@ -121,28 +121,43 @@ public class SkiaCoverageRendererTests
         ]
     };
 
+    private static readonly GridMetadata TestGridMetadata = new()
+    {
+        NumRows = 1,
+        NumColumns = 1,
+        OriginLatitude = 0,
+        OriginLongitude = 0,
+        SpacingLatitudinal = 0.01,
+        SpacingLongitudinal = 0.01,
+    };
+
     private static StyledCoverageLayer MakeStyledLayer(
         float[,] depths,
-        float noDataValue) =>
-        new()
+        float noDataValue)
+    {
+        var gridMeta = new GridMetadata
+        {
+            NumRows = depths.GetLength(0),
+            NumColumns = depths.GetLength(1),
+            OriginLatitude = 0,
+            OriginLongitude = 0,
+            SpacingLatitudinal = 0.01,
+            SpacingLongitudinal = 0.01,
+        };
+
+        return new()
         {
             Coverage = new SampledCoverage
             {
                 Region = GridRegion.Full,
-                Metadata = new GridMetadata
-                {
-                    NumRows = depths.GetLength(0),
-                    NumColumns = depths.GetLength(1),
-                    OriginLatitude = 0,
-                    OriginLongitude = 0,
-                    SpacingLatitudinal = 0.01,
-                    SpacingLongitudinal = 0.01,
-                },
+                Metadata = gridMeta,
                 Values = new Dictionary<string, float[,]> { ["depth"] = depths },
             },
             ColorScheme = TestColorScheme,
             NoDataValue = noDataValue,
+            Georeferencer = new GridGeoreferencer(gridMeta, "EPSG:4326"),
         };
+    }
 
     private static StyledCoverageLayer MakeStyledLayer(
         int rows, int cols,

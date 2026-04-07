@@ -14,4 +14,10 @@ public sealed class StyledCoverageLayer
 
     /// <summary>The value treated as no-data in the coverage grid.</summary>
     public required float NoDataValue { get; init; }
+
+    /// <summary>
+    /// Georeferencer that maps grid cells to native CRS coordinates.
+    /// Carries the source CRS identifier needed for reprojection.
+    /// </summary>
+    public required GridGeoreferencer Georeferencer { get; init; }
 }

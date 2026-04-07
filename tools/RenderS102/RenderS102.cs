@@ -66,6 +66,9 @@ var styledLayer = new StyledCoverageLayer
     Coverage = source.Sample(GridRegion.Full),
     ColorScheme = colorScheme,
     NoDataValue = S102CoverageSource.FillValue,
+    Georeferencer = new GridGeoreferencer(
+        source.Metadata.GridMetadata,
+        source.Metadata.HorizontalCRS),
 };
 
 // 5. Render to bitmap
