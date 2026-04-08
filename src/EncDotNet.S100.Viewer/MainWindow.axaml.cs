@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;

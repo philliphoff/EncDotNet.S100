@@ -1,6 +1,7 @@
+using EncDotNet.S100.Hdf5;
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S102;
+namespace EncDotNet.S100.Hdf5.PureHdf;
 
 /// <summary>
 /// <see cref="IHdf5File"/> implementation backed by PureHDF.

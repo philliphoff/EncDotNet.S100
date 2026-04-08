@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Datasets.S102;
+namespace EncDotNet.S100.Hdf5;
 
 /// <summary>
 /// Abstraction over an HDF5 group, providing navigation and typed data access.

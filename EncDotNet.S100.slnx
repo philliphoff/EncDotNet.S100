@@ -4,6 +4,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj" />
     <Project Path="src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj" />
     <Project Path="src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj" />
+    <Project Path="src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <Project Path="src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj" />

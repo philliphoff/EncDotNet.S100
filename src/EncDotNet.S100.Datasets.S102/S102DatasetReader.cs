@@ -1,3 +1,5 @@
+using EncDotNet.S100.Hdf5;
+
 namespace EncDotNet.S100.Datasets.S102;
 
 /// <summary>

@@ -1,10 +1,12 @@
 #:package SkiaSharp@3.119.0
 #:project ../../src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj
+#:project ../../src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj
 #:project ../../src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj
 #:project ../../src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj
 
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;

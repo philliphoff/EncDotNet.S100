@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Datasets.S102;
+namespace EncDotNet.S100.Hdf5;
 
 /// <summary>
 /// Abstraction over an HDF5 file, providing access to the root group.
