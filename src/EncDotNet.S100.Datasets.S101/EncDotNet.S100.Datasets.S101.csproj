@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EncDotNet.S57" Version="0.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+  </ItemGroup>
+
+</Project>
