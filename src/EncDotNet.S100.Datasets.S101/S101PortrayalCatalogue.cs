@@ -23,6 +23,8 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     private readonly Dictionary<string, SvgSymbol> _symbols = new();
     private readonly Dictionary<string, LineStyle> _lineStyles = new();
     private readonly Dictionary<string, AreaFill> _areaFills = new();
+    private readonly Dictionary<PaletteType, ColorPalette> _palettes = new();
+    private bool _palettesLoaded;
 
     public S101PortrayalCatalogue(PortrayalCatalogueProvider provider, ILuaEngine? luaEngine = null)
     {
@@ -37,10 +39,61 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public void SwitchPalette(PaletteType type)
     {
-        ActivePalette = ColorPalette.FromType(type);
+        EnsurePalettesLoaded();
+
+        if (!_palettes.TryGetValue(type, out var palette))
+        {
+            throw new KeyNotFoundException($"Color palette '{type}' not found in the portrayal catalogue.");
+        }
+
+        ActivePalette = palette;
     }
 
     public ViewingGroupController ViewingGroups { get; } = new();
+
+    // ── Palettes ───────────────────────────────────────────────────────
+
+    private void EnsurePalettesLoaded()
+    {
+        if (_palettesLoaded) return;
+        _palettesLoaded = true;
+
+        foreach (var item in _provider.Catalogue.ColorProfiles)
+        {
+            var paletteName = item.Description.Name;
+            if (string.IsNullOrEmpty(paletteName))
+            {
+                paletteName = Path.GetFileNameWithoutExtension(item.FileName);
+            }
+
+            var paletteType = paletteName switch
+            {
+                var n when n.Contains("Day", StringComparison.OrdinalIgnoreCase) => PaletteType.Day,
+                var n when n.Contains("Dusk", StringComparison.OrdinalIgnoreCase) => PaletteType.Dusk,
+                var n when n.Contains("Night", StringComparison.OrdinalIgnoreCase) => PaletteType.Night,
+                _ => (PaletteType?)null,
+            };
+
+            if (paletteType is null) continue;
+
+            try
+            {
+                using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                var palette = ColorProfileReader.Read(stream, paletteName);
+                _palettes[paletteType.Value] = palette;
+            }
+            catch (Exception)
+            {
+                // If a color profile cannot be loaded, skip it gracefully.
+            }
+        }
+
+        // Set Day palette as active if available
+        if (_palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        {
+            ActivePalette = dayPalette;
+        }
+    }
 
     // ── Rules ──────────────────────────────────────────────────────────
 
@@ -84,9 +137,22 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private static IReadOnlyList<string> InferFeatureTypes(RuleFile ruleFile)
     {
-        // S-101 PC convention: rule files are named after their target feature type
-        // e.g. "DepthContour.xsl" → ["DepthContour"], "LIGHTS05.lua" → ["LIGHTS"]
-        var name = Path.GetFileNameWithoutExtension(ruleFile.FileName);
+        // S-101 PC convention: rule files are named after their target feature type.
+        // Use the Description.Name first (more reliable than filename), falling back to filename.
+        var name = !string.IsNullOrEmpty(ruleFile.Description.Name)
+            ? ruleFile.Description.Name
+            : Path.GetFileNameWithoutExtension(ruleFile.FileName);
+
+        // Top-level / utility rules that apply to all features
+        if (name.Contains("TopLevel", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("PlainBoundaries", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("TopOfChart", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("main", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("template", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Updates", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
 
         // Strip trailing numeric suffixes (e.g. "LIGHTS05" → "LIGHTS")
         int i = name.Length - 1;
@@ -157,17 +223,8 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     private SvgSymbol LoadSymbol(string symbolName)
     {
         var catalogItem = _provider.Catalogue.Symbols
-            .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
-
-        if (catalogItem is null)
-        {
-            // Return a placeholder for missing symbols
-            return new SvgSymbol
-            {
-                Name = symbolName,
-                SvgContent = $"<svg id=\"{symbolName}\" />",
-            };
-        }
+            .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new KeyNotFoundException($"Symbol '{symbolName}' not found in the portrayal catalogue.");
 
         using var stream = _provider.FetchAssetAsync(catalogItem, "Symbols").GetAwaiter().GetResult();
         using var reader = new StreamReader(stream);
@@ -193,14 +250,12 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private LineStyle LoadLineStyle(string name)
     {
-        // Line styles are typically XML-defined in the PC.
-        // For now, return a default style; real implementation parses the XML.
-        return new LineStyle
-        {
-            Name = name,
-            Width = 1.0f,
-            Color = "#000000",
-        };
+        var catalogItem = _provider.Catalogue.LineStyles
+            .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new KeyNotFoundException($"Line style '{name}' not found in the portrayal catalogue.");
+
+        using var stream = _provider.FetchAssetAsync(catalogItem, "LineStyles").GetAwaiter().GetResult();
+        return LineStyleReader.Read(stream, name);
     }
 
     // ── Area fills ─────────────────────────────────────────────────────
@@ -216,13 +271,12 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private AreaFill LoadAreaFill(string name)
     {
-        // Area fills are typically XML-defined in the PC.
-        // For now, return a default fill; real implementation parses the XML.
-        return new AreaFill
-        {
-            Name = name,
-            Color = "#C8C8C8",
-        };
+        var catalogItem = _provider.Catalogue.AreaFills
+            .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new KeyNotFoundException($"Area fill '{name}' not found in the portrayal catalogue.");
+
+        using var stream = _provider.FetchAssetAsync(catalogItem, "AreaFills").GetAwaiter().GetResult();
+        return AreaFillReader.Read(stream, name);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
