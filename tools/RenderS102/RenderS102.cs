@@ -1,25 +1,36 @@
 #:package SkiaSharp@3.119.0
 #:project ../../src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj
 #:project ../../src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj
+#:project ../../src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj
 
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Scripting.MoonSharp;
 using SkiaSharp;
 
-if (args.Length < 2)
+if (args.Length < 3)
 {
-    Console.Error.WriteLine("Usage: dotnet run RenderS102.cs <input.h5> <output.png>");
+    Console.Error.WriteLine("Usage: dotnet run RenderS102.cs <input.h5> <output.png> <portrayal-catalogue-dir>");
     return 1;
 }
 
 string inputPath = args[0];
 string outputPath = args[1];
+string portrayalPath = args[2];
 
 if (!File.Exists(inputPath))
 {
     Console.Error.WriteLine($"Input file not found: {inputPath}");
+    return 1;
+}
+
+if (!Directory.Exists(portrayalPath))
+{
+    Console.Error.WriteLine($"Portrayal catalogue directory not found: {portrayalPath}");
     return 1;
 }
 
@@ -38,7 +49,10 @@ Console.WriteLine($"  Origin        : ({coverage.OriginLatitude:F6}, {coverage.O
 
 // 2. Create the pipeline components
 var source = new S102CoverageSource(dataset);
-var catalogue = new S102PortrayalCatalogue { FourShades = true };
+var engine = new MoonSharpLuaEngine();
+using var assetSource = new FileSystemAssetSource(portrayalPath);
+using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource);
+var catalogue = new S102PortrayalCatalogue(engine, provider) { FourShades = true };
 var pipeline = new CoveragePipeline();
 
 // 3. Run the pipeline

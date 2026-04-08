@@ -1,6 +1,9 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting.MoonSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -10,9 +13,34 @@ namespace EncDotNet.S100.Pipelines.Tests;
 ///   - Depth range: 4.44m to ~8m (real values), fill value = 1000000
 ///   - UTM Zone 17N (EPSG:32617), grid spacing 16m
 /// </summary>
-public class S102CoveragePipelineIntegrationTests
+public class S102CoveragePipelineIntegrationTests : IDisposable
 {
     private const string TestDataFile = "TestData/102US004MI1CI262227.h5";
+    private const string PortrayalCataloguePath = "TestData/PortrayalCatalogue";
+
+    // IHO S-52 Day palette depth colours (matching BathymetryCoverage.lua)
+    private const string DEPIT = "#58AF9C";
+    private const string DEPVS = "#61B7FF";
+    private const string DEPMS = "#82CAFF";
+    private const string DEPMD = "#A7D9FB";
+    private const string DEPDW = "#C9EDFF";
+
+    private readonly MoonSharpLuaEngine _engine = new();
+    private readonly PortrayalCatalogueProvider _provider;
+
+    public S102CoveragePipelineIntegrationTests()
+    {
+        var source = FileSystemAssetSource.Create(PortrayalCataloguePath);
+        _provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+    }
+
+    public void Dispose()
+    {
+        _provider.Dispose();
+    }
+
+    private S102PortrayalCatalogue CreateCatalogue(bool fourShades = true) =>
+        new(_engine, _provider) { FourShades = fourShades };
 
     [Fact]
     public async Task EndToEnd_ReadsHdf5_ProducesColoredLayer()
@@ -20,7 +48,7 @@ public class S102CoveragePipelineIntegrationTests
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = new S102PortrayalCatalogue();
+        var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
@@ -36,7 +64,7 @@ public class S102CoveragePipelineIntegrationTests
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = new S102PortrayalCatalogue { FourShades = true };
+        var catalogue = CreateCatalogue(fourShades: true);
         var context = new NavigationContext
         {
             Viewport = new Viewport
@@ -60,7 +88,7 @@ public class S102CoveragePipelineIntegrationTests
         Assert.NotEmpty(nonNull);
 
         // All real depth values (4.44 to ~8m) fall in DEPMS [2, 30)
-        Assert.All(nonNull, color => Assert.Equal(S102PortrayalCatalogue.DEPMS, color));
+        Assert.All(nonNull, color => Assert.Equal(DEPMS, color));
     }
 
     [Fact]
@@ -69,7 +97,7 @@ public class S102CoveragePipelineIntegrationTests
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = new S102PortrayalCatalogue();
+        var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
@@ -92,7 +120,7 @@ public class S102CoveragePipelineIntegrationTests
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = new S102PortrayalCatalogue();
+        var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
@@ -109,7 +137,7 @@ public class S102CoveragePipelineIntegrationTests
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = new S102PortrayalCatalogue { FourShades = false };
+        var catalogue = CreateCatalogue(fourShades: false);
         var context = new NavigationContext
         {
             Viewport = new Viewport
@@ -130,13 +158,13 @@ public class S102CoveragePipelineIntegrationTests
 
         // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW
         // All real values 4–8m → DEPVS
-        Assert.All(nonNull, color => Assert.Equal(S102PortrayalCatalogue.DEPVS, color));
+        Assert.All(nonNull, color => Assert.Equal(DEPVS, color));
     }
 
     [Fact]
     public void S102PortrayalCatalogue_FourShades_ProducesExpectedBands()
     {
-        var catalogue = new S102PortrayalCatalogue { FourShades = true };
+        var catalogue = CreateCatalogue(fourShades: true);
         var context = new NavigationContext
         {
             Viewport = new Viewport
@@ -158,17 +186,17 @@ public class S102CoveragePipelineIntegrationTests
         Assert.Equal(5, scheme.Bands.Count);
 
         // Verify the band boundaries match the Lua logic
-        Assert.Equal(S102PortrayalCatalogue.DEPIT, scheme.Resolve(-5f));    // intertidal
-        Assert.Equal(S102PortrayalCatalogue.DEPVS, scheme.Resolve(1f));     // [0, 2)
-        Assert.Equal(S102PortrayalCatalogue.DEPMS, scheme.Resolve(5f));     // [2, 10)
-        Assert.Equal(S102PortrayalCatalogue.DEPMD, scheme.Resolve(20f));    // [10, 30)
-        Assert.Equal(S102PortrayalCatalogue.DEPDW, scheme.Resolve(50f));    // [30, +inf)
+        Assert.Equal(DEPIT, scheme.Resolve(-5f));    // intertidal
+        Assert.Equal(DEPVS, scheme.Resolve(1f));     // [0, 2)
+        Assert.Equal(DEPMS, scheme.Resolve(5f));     // [2, 10)
+        Assert.Equal(DEPMD, scheme.Resolve(20f));    // [10, 30)
+        Assert.Equal(DEPDW, scheme.Resolve(50f));    // [30, +inf)
     }
 
     [Fact]
     public void S102PortrayalCatalogue_TwoShades_ProducesExpectedBands()
     {
-        var catalogue = new S102PortrayalCatalogue { FourShades = false };
+        var catalogue = CreateCatalogue(fourShades: false);
         var context = new NavigationContext
         {
             Viewport = new Viewport
@@ -187,8 +215,8 @@ public class S102CoveragePipelineIntegrationTests
         // 3 bands: intertidal + 2 depth bands
         Assert.Equal(3, scheme.Bands.Count);
 
-        Assert.Equal(S102PortrayalCatalogue.DEPIT, scheme.Resolve(-5f));
-        Assert.Equal(S102PortrayalCatalogue.DEPVS, scheme.Resolve(5f));
-        Assert.Equal(S102PortrayalCatalogue.DEPDW, scheme.Resolve(15f));
+        Assert.Equal(DEPIT, scheme.Resolve(-5f));
+        Assert.Equal(DEPVS, scheme.Resolve(5f));
+        Assert.Equal(DEPDW, scheme.Resolve(15f));
     }
 }

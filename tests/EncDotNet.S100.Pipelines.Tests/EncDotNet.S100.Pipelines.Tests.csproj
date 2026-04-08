@@ -22,10 +22,12 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\datasets\S102\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S102\PortrayalCatalogue\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

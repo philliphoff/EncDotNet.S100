@@ -5,10 +5,14 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Scripting.MoonSharp;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -19,10 +23,15 @@ namespace EncDotNet.S100.Viewer;
 public partial class MainWindow : Window
 {
     private const string CoverageLayerName = "S-102 Coverage";
+    private static readonly ILuaEngine LuaEngine = new MoonSharpLuaEngine();
+    private readonly ViewerSettings _settings;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _settings = ViewerSettings.Load();
+        UpdatePortrayalButtonText();
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
     }
@@ -57,14 +66,54 @@ public partial class MainWindow : Window
         SetStatus(null);
     }
 
+    private async void OnPortrayalClick(object? sender, RoutedEventArgs e)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select S-102 Portrayal Catalogue Folder",
+            AllowMultiple = false,
+        });
+
+        if (folders.Count == 0)
+            return;
+
+        var folderPath = folders[0].TryGetLocalPath();
+        if (folderPath is null)
+            return;
+
+        _settings.PortrayalCataloguePath = folderPath;
+        _settings.Save();
+        UpdatePortrayalButtonText();
+        SetStatus($"Portrayal catalogue: {folderPath}");
+    }
+
+    private void UpdatePortrayalButtonText()
+    {
+        if (_settings.PortrayalCataloguePath is { } p)
+        {
+            PortrayalButton.Content = $"Portrayal: {Path.GetFileName(p.TrimEnd(Path.DirectorySeparatorChar))}";
+        }
+        else
+        {
+            PortrayalButton.Content = "Portrayal Catalogue...";
+        }
+    }
+
     private async Task LoadDatasetAsync(string path)
     {
+        if (_settings.PortrayalCataloguePath is not { } portrayalPath
+            || !Directory.Exists(portrayalPath))
+        {
+            SetStatus("Please select an S-102 Portrayal Catalogue folder first.");
+            return;
+        }
+
         SetStatus($"Loading {Path.GetFileName(path)}...");
         OpenButton.IsEnabled = false;
 
         try
         {
-            var (layer, extent, info) = await Task.Run(() => BuildCoverageLayer(path));
+            var (layer, extent, info) = await Task.Run(() => BuildCoverageLayer(path, portrayalPath));
 
             RemoveCoverageLayer();
             MapControl.Map?.Layers.Add(layer);
@@ -88,7 +137,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static (ILayer Layer, MRect Extent, string Info) BuildCoverageLayer(string path)
+    private static (ILayer Layer, MRect Extent, string Info) BuildCoverageLayer(string path, string portrayalDir)
     {
         // 1. Read the S-102 dataset
         using var hdf5 = PureHdfFile.Open(path);
@@ -96,8 +145,10 @@ public partial class MainWindow : Window
         var source = new S102CoverageSource(dataset);
         var metadata = source.Metadata;
 
-        // 2. Build the styled coverage layer
-        var catalogue = new S102PortrayalCatalogue { FourShades = true };
+        // 2. Open the portrayal catalogue
+        using var assetSource = FileSystemAssetSource.Create(portrayalDir);
+        using var provider = PortrayalCatalogueProvider.OpenAsync(assetSource).GetAwaiter().GetResult();
+        var catalogue = new S102PortrayalCatalogue(LuaEngine, provider) { FourShades = true };
         var context = new NavigationContext
         {
             Viewport = new Pipelines.Viewport

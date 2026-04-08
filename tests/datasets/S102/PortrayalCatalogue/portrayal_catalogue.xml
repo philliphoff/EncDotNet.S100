@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<portrayalCatalog productId="S-102" version="1.0.0"
+    xmlns="http://www.iho.int/S100PortrayalCatalog/5.2">
+  <rules>
+    <ruleFile id="BathymetryCoverage">
+      <description>
+        <name>BathymetryCoverage</name>
+        <description>Depth shading rules for S-102 bathymetric coverage.</description>
+      </description>
+      <fileName>BathymetryCoverage.lua</fileName>
+      <fileType>Lua</fileType>
+      <fileFormat>text/x-lua</fileFormat>
+      <ruleType>Coverage</ruleType>
+    </ruleFile>
+  </rules>
+</portrayalCatalog>

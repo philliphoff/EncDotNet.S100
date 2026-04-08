@@ -40,6 +40,10 @@
                     Content="Clear"
                     Click="OnClearClick"
                     IsEnabled="False" />
+            <Button x:Name="PortrayalButton"
+                    Classes="toolbar"
+                    Content="Portrayal Catalogue..."
+                    Click="OnPortrayalClick" />
         </StackPanel>
 
         <!-- Status bar -->
