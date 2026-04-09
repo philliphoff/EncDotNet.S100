@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -27,6 +28,16 @@ public sealed class MapsuiS101VectorRenderer
     /// When set, overrides the built-in fallback colors.
     /// </summary>
     public ColorPalette? Palette { get; set; }
+
+    /// <summary>
+    /// Optional function that returns raw SVG content for a symbol name
+    /// (e.g. "POSGEN03" → the contents of POSGEN03.svg).
+    /// When set, point features will render using actual SVG symbols.
+    /// </summary>
+    public Func<string, string?>? SymbolProvider { get; set; }
+
+    // Caches processed SVG data URIs keyed by symbol name.
+    private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Renders a set of parsed drawing instructions for the given dataset
@@ -79,7 +90,7 @@ public sealed class MapsuiS101VectorRenderer
             if (geom.Coords.Count == 0)
                 continue;
 
-            var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor);
+            var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
             if (mapFeature is not null)
                 mapFeatures.Add(mapFeature);
         }
@@ -96,7 +107,8 @@ public sealed class MapsuiS101VectorRenderer
         ParsedDrawingInstruction instruction,
         GeometryType geomType,
         IReadOnlyList<(double Lat, double Lon)> coords,
-        Func<string?, MapsuiColor> resolveColor)
+        Func<string?, MapsuiColor> resolveColor,
+        MapsuiS101VectorRenderer renderer)
     {
         switch (instruction.Type)
         {
@@ -107,7 +119,7 @@ public sealed class MapsuiS101VectorRenderer
                 return CreateLineFeature(instruction, geomType, coords, resolveColor);
 
             case InstructionType.Point:
-                return CreatePointFeature(instruction, coords, resolveColor);
+                return CreatePointFeature(instruction, coords, resolveColor, renderer);
 
             case InstructionType.Text:
                 return CreateTextFeature(instruction, coords, resolveColor);
@@ -203,7 +215,8 @@ public sealed class MapsuiS101VectorRenderer
     private static IFeature? CreatePointFeature(
         ParsedDrawingInstruction instruction,
         IReadOnlyList<(double Lat, double Lon)> coords,
-        Func<string?, MapsuiColor> resolveColor)
+        Func<string?, MapsuiColor> resolveColor,
+        MapsuiS101VectorRenderer renderer)
     {
         if (coords.Count == 0)
             return null;
@@ -212,19 +225,37 @@ public sealed class MapsuiS101VectorRenderer
         var (lat, lon) = coords[0];
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-        var symbolColor = ResolveSymbolColor(instruction.SymbolRef, resolveColor);
-        var style = new SymbolStyle
-        {
-            SymbolScale = 0.15 * instruction.ScaleFactor,
-            Fill = new Brush { Color = symbolColor },
-            Line = null,
-        };
-
-        if (instruction.Rotation.HasValue)
-            style.SymbolRotation = instruction.Rotation.Value;
-
         var feature = new PointFeature(mx, my);
-        feature.Styles.Add(style);
+
+        // Try to render with an actual SVG symbol
+        var symbolRef = instruction.SymbolRef;
+        var svgSource = renderer.GetSymbolSource(symbolRef);
+        if (svgSource is not null)
+        {
+            var style = new ImageStyle
+            {
+                Image = new Image { Source = svgSource, RasterizeSvg = true },
+            };
+            style.SymbolScale = 0.6 * instruction.ScaleFactor;
+            if (instruction.Rotation.HasValue)
+                style.SymbolRotation = instruction.Rotation.Value;
+            feature.Styles.Add(style);
+        }
+        else
+        {
+            // Fallback: colored dot
+            var symbolColor = ResolveSymbolColor(symbolRef, resolveColor);
+            var style = new SymbolStyle
+            {
+                SymbolScale = 0.15 * instruction.ScaleFactor,
+                Fill = new Brush { Color = symbolColor },
+                Line = null,
+            };
+            if (instruction.Rotation.HasValue)
+                style.SymbolRotation = instruction.Rotation.Value;
+            feature.Styles.Add(style);
+        }
+
         return feature;
     }
 
@@ -265,6 +296,137 @@ public sealed class MapsuiS101VectorRenderer
             result.Add(new Coordinate(mx, my));
         }
         return result;
+    }
+
+    // ── SVG symbol processing ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns a Mapsui svg-content:// source string for the given symbol name,
+    /// processing and caching the SVG on first access. Returns null if no
+    /// SymbolProvider is set or the symbol is not found.
+    /// </summary>
+    private string? GetSymbolSource(string? symbolRef)
+    {
+        if (string.IsNullOrEmpty(symbolRef) || SymbolProvider is null)
+            return null;
+
+        if (_symbolDataUriCache.TryGetValue(symbolRef, out var cached))
+            return cached;
+
+        string? source = null;
+        try
+        {
+            var svgContent = SymbolProvider(symbolRef);
+            if (svgContent is not null)
+            {
+                var processed = ProcessSvg(svgContent, Palette);
+                source = "svg-content://" + processed;
+            }
+        }
+        catch
+        {
+            // Symbol not found or malformed — fall back to dot
+        }
+
+        _symbolDataUriCache[symbolRef] = source;
+        return source;
+    }
+
+    /// <summary>
+    /// Processes an S-100 SVG symbol by:
+    /// 1. Removing layout elements (symbolBox, svgBox, pivotPoint)
+    /// 2. Removing the xml-stylesheet PI
+    /// 3. Resolving CSS class names (fTOKEN, sTOKEN, f0, sl) to inline style attributes
+    /// </summary>
+    private static string ProcessSvg(string svgContent, ColorPalette? palette)
+    {
+        var doc = XDocument.Parse(svgContent);
+        XNamespace ns = "http://www.w3.org/2000/svg";
+
+        var svg = doc.Root!;
+
+        // Remove xml-stylesheet processing instructions (they reference external CSS
+        // files that Mapsui's SVG rasterizer cannot resolve)
+        foreach (var pi in doc.Nodes().OfType<XProcessingInstruction>().ToList())
+            pi.Remove();
+
+        // Remove elements with class containing "layout"
+        var layoutElements = svg.Descendants()
+            .Where(e => (e.Attribute("class")?.Value ?? "").Contains("layout"))
+            .ToList();
+        foreach (var el in layoutElements)
+            el.Remove();
+
+        // Process remaining elements: resolve CSS classes to inline styles
+        foreach (var el in svg.Descendants().ToList())
+        {
+            var classAttr = el.Attribute("class");
+            if (classAttr is null) continue;
+
+            var classes = classAttr.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            string? fill = null;
+            string? stroke = null;
+            string? strokeLinecap = null;
+            string? strokeLinejoin = null;
+
+            foreach (var cls in classes)
+            {
+                if (cls == "f0")
+                {
+                    fill = "none";
+                }
+                else if (cls == "sl")
+                {
+                    strokeLinecap = "round";
+                    strokeLinejoin = "round";
+                }
+                else if (cls.StartsWith('f') && cls.Length > 1 && char.IsUpper(cls[1]))
+                {
+                    // Fill class: fTOKEN (e.g. fCHBLK → fill:#000000)
+                    var token = cls[1..];
+                    fill = ResolveTokenHex(token, palette);
+                }
+                else if (cls.StartsWith('s') && cls.Length > 1 && char.IsUpper(cls[1]))
+                {
+                    // Stroke class: sTOKEN (e.g. sCHBLK → stroke:#000000)
+                    var token = cls[1..];
+                    stroke = ResolveTokenHex(token, palette);
+                }
+            }
+
+            // Build inline style, preserving existing attributes
+            if (fill is not null && el.Attribute("fill") is null)
+                el.SetAttributeValue("fill", fill);
+            if (stroke is not null && el.Attribute("stroke") is null)
+                el.SetAttributeValue("stroke", stroke);
+            if (strokeLinecap is not null && el.Attribute("stroke-linecap") is null)
+                el.SetAttributeValue("stroke-linecap", strokeLinecap);
+            if (strokeLinejoin is not null && el.Attribute("stroke-linejoin") is null)
+                el.SetAttributeValue("stroke-linejoin", strokeLinejoin);
+
+            // Remove the class attribute since we've inlined the styles
+            classAttr.Remove();
+        }
+
+        // Remove metadata (not needed for rendering)
+        svg.Elements(ns + "metadata").Remove();
+        svg.Elements(ns + "title").Remove();
+        svg.Elements(ns + "desc").Remove();
+
+        return doc.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string ResolveTokenHex(string token, ColorPalette? palette)
+    {
+        if (palette is not null)
+        {
+            var hex = palette.Resolve(token);
+            if (hex != "#000000" || string.Equals(token, "CHBLK", StringComparison.OrdinalIgnoreCase))
+                return hex;
+        }
+
+        // Fallback: return black
+        return "#000000";
     }
 
     // ── SAFCON contour label merging ───────────────────────────────────

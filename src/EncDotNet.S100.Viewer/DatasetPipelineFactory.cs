@@ -197,6 +197,18 @@ internal sealed class DatasetPipelineFactory
                 {
                     LayerName = $"S-101: {Path.GetFileName(path)}",
                     Palette = palette,
+                    SymbolProvider = symbolName =>
+                    {
+                        try
+                        {
+                            var svg = s101Cat.GetSymbol(symbolName);
+                            return svg.SvgContent;
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    },
                 };
                 var mapLayer = vectorRenderer.Render(parsed, dataset);
                 var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
