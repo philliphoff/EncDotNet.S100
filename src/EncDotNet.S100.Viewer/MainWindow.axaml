@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
         x:Class="EncDotNet.S100.Viewer.MainWindow"
-        Title="S-102 Viewer"
+        Title="S-100 Viewer"
         Width="900" Height="600">
 
     <Window.Styles>
@@ -33,7 +33,7 @@
                     Margin="12">
             <Button x:Name="OpenButton"
                     Classes="toolbar"
-                    Content="Open S-102 File..."
+                    Content="Open Dataset..."
                     Click="OnOpenClick" />
             <Button x:Name="ClearButton"
                     Classes="toolbar"
@@ -42,7 +42,7 @@
                     IsEnabled="False" />
             <Button x:Name="PortrayalButton"
                     Classes="toolbar"
-                    Content="Portrayal Catalogue..."
+                    Content="Portrayal Catalogues..."
                     Click="OnPortrayalClick" />
         </StackPanel>
 

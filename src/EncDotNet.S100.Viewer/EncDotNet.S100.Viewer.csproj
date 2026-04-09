@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />

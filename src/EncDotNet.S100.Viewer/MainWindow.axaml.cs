@@ -1,18 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.S102;
-using EncDotNet.S100.Hdf5.PureHdf;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Scripting.MoonSharp;
 using Mapsui;
 using Mapsui.Extensions;
@@ -23,17 +18,33 @@ namespace EncDotNet.S100.Viewer;
 
 public partial class MainWindow : Window
 {
-    private const string CoverageLayerName = "S-102 Coverage";
-    private static readonly ILuaEngine LuaEngine = new MoonSharpLuaEngine();
+    private static readonly string[] SupportedSpecs = ["S-101", "S-102"];
+
     private readonly ViewerSettings _settings;
+    private readonly PortrayalCatalogueManager _catalogueManager = new();
+    private readonly DatasetPipelineFactory _pipelineFactory;
 
     public MainWindow()
     {
         InitializeComponent();
 
         _settings = ViewerSettings.Load();
-        UpdatePortrayalButtonText();
 
+        // Seed catalogue manager from persisted settings
+        foreach (var (spec, path) in _settings.CataloguePaths)
+        {
+            if (Directory.Exists(path))
+            {
+                _catalogueManager.SetPath(spec, path);
+            }
+        }
+
+        _pipelineFactory = new DatasetPipelineFactory(
+            _catalogueManager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory());
+
+        UpdatePortrayalButtonText();
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
     }
 
@@ -41,11 +52,12 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open S-102 HDF5 File",
+            Title = "Open S-100 Dataset",
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("HDF5 Files") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
+                new FilePickerFileType("S-101 Files (ISO 8211)") { Patterns = ["*.000"] },
+                new FilePickerFileType("S-102 Files (HDF5)") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
                 new FilePickerFileType("All Files") { Patterns = ["*"] },
             ],
         });
@@ -62,16 +74,29 @@ public partial class MainWindow : Window
 
     private void OnClearClick(object? sender, RoutedEventArgs e)
     {
-        RemoveCoverageLayer();
+        RemoveDatasetLayers();
         ClearButton.IsEnabled = false;
         SetStatus(null);
     }
 
     private async void OnPortrayalClick(object? sender, RoutedEventArgs e)
     {
+        // Let the user pick which product spec to configure
+        var specOptions = SupportedSpecs.Select(s =>
+        {
+            var current = _catalogueManager.GetPath(s);
+            var label = current is not null
+                ? $"{s} — {Path.GetFileName(current.TrimEnd(Path.DirectorySeparatorChar))}"
+                : $"{s} — (not set)";
+            return label;
+        }).ToArray();
+
+        // Simple approach: cycle through specs or use a sub-window.
+        // For now, ask user to pick a folder and detect which spec it belongs to,
+        // or let user assign it to a specific spec via folder name convention.
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Select S-102 Portrayal Catalogue Folder",
+            Title = "Select Portrayal Catalogue Folder",
             AllowMultiple = false,
         });
 
@@ -82,30 +107,67 @@ public partial class MainWindow : Window
         if (folderPath is null)
             return;
 
-        _settings.PortrayalCataloguePath = folderPath;
+        // Detect the product spec from the catalogue XML
+        string? detectedSpec = DetectCatalogueSpec(folderPath);
+
+        if (detectedSpec is null)
+        {
+            SetStatus($"Could not detect product spec from catalogue at {folderPath}");
+            return;
+        }
+
+        _catalogueManager.SetPath(detectedSpec, folderPath);
+        _settings.CataloguePaths[detectedSpec] = folderPath;
         _settings.Save();
         UpdatePortrayalButtonText();
-        SetStatus($"Portrayal catalogue: {folderPath}");
+        SetStatus($"{detectedSpec} portrayal catalogue: {folderPath}");
+    }
+
+    private static string? DetectCatalogueSpec(string folderPath)
+    {
+        // Try to read the portrayal_catalogue.xml to get the productId
+        var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
+        if (!File.Exists(cataloguePath))
+            return null;
+
+        try
+        {
+            using var stream = File.OpenRead(cataloguePath);
+            var catalogue = PortrayalCatalogueReader.Read(stream);
+            return string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void UpdatePortrayalButtonText()
     {
-        if (_settings.PortrayalCataloguePath is { } p)
+        var configured = _catalogueManager.RegisteredCatalogues;
+        if (configured.Count == 0)
         {
-            PortrayalButton.Content = $"Portrayal: {Path.GetFileName(p.TrimEnd(Path.DirectorySeparatorChar))}";
+            PortrayalButton.Content = "Portrayal Catalogues...";
         }
         else
         {
-            PortrayalButton.Content = "Portrayal Catalogue...";
+            var labels = configured.Keys.OrderBy(k => k).ToArray();
+            PortrayalButton.Content = $"Portrayal: {string.Join(", ", labels)}";
         }
     }
 
     private async Task LoadDatasetAsync(string path)
     {
-        if (_settings.PortrayalCataloguePath is not { } portrayalPath
-            || !Directory.Exists(portrayalPath))
+        var spec = DatasetPipelineFactory.DetectProductSpec(path);
+        if (spec is null)
         {
-            SetStatus("Please select an S-102 Portrayal Catalogue folder first.");
+            SetStatus($"Unrecognized file type: {Path.GetExtension(path)}");
+            return;
+        }
+
+        if (!_catalogueManager.HasCatalogue(spec))
+        {
+            SetStatus($"Please select a portrayal catalogue for {spec} first.");
             return;
         }
 
@@ -114,18 +176,18 @@ public partial class MainWindow : Window
 
         try
         {
-            var (layer, extent, info) = await Task.Run(() => BuildCoverageLayer(path, portrayalPath));
+            var result = await Task.Run(() => _pipelineFactory.Process(path));
 
-            RemoveCoverageLayer();
-            MapControl.Map?.Layers.Add(layer);
+            RemoveDatasetLayers();
+            MapControl.Map?.Layers.Add(result.Layer);
 
             if (MapControl.Map?.Navigator is { } nav)
             {
-                nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1));
+                nav.ZoomToBox(result.Extent.Grow(result.Extent.Width * 0.1, result.Extent.Height * 0.1));
             }
 
             ClearButton.IsEnabled = true;
-            SetStatus(info);
+            SetStatus(result.Info);
         }
         catch (Exception ex)
         {
@@ -138,71 +200,17 @@ public partial class MainWindow : Window
         }
     }
 
-    private static (ILayer Layer, MRect Extent, string Info) BuildCoverageLayer(string path, string portrayalDir)
-    {
-        // 1. Read the S-102 dataset
-        using var hdf5 = PureHdfFile.Open(path);
-        var dataset = S102DatasetReader.Read(hdf5);
-        var source = new S102CoverageSource(dataset);
-        var metadata = source.Metadata;
-
-        // 2. Open the portrayal catalogue
-        using var assetSource = FileSystemAssetSource.Create(portrayalDir);
-        using var provider = PortrayalCatalogueProvider.OpenAsync(assetSource).GetAwaiter().GetResult();
-        var catalogue = new S102PortrayalCatalogue(LuaEngine, provider) { FourShades = true };
-        var context = new NavigationContext
-        {
-            Viewport = new Pipelines.Viewport
-            {
-                MinLatitude = metadata.Extent.SouthLatitude,
-                MaxLatitude = metadata.Extent.NorthLatitude,
-                MinLongitude = metadata.Extent.WestLongitude,
-                MaxLongitude = metadata.Extent.EastLongitude,
-                WidthPixels = metadata.GridMetadata.NumColumns,
-                HeightPixels = metadata.GridMetadata.NumRows,
-            },
-            ScaleDenominator = 50_000,
-        };
-
-        var colorScheme = catalogue.ResolveColorScheme(context);
-        var sampled = source.Sample(GridRegion.Full);
-
-        var styledLayer = new StyledCoverageLayer
-        {
-            Coverage = sampled,
-            ColorScheme = colorScheme,
-            NoDataValue = S102CoverageSource.FillValue,
-            Georeferencer = new GridGeoreferencer(
-                metadata.GridMetadata,
-                metadata.HorizontalCRS),
-        };
-
-        // 3. Render to a Mapsui layer via the reprojecting renderer
-        var renderer = new MapsuiCoverageRenderer(new ProjNetCrsTransformFactory())
-        {
-            LayerName = CoverageLayerName,
-        };
-
-        var mapLayer = renderer.Render(styledLayer, context.Viewport);
-
-        // 4. Extract extent for zoom-to-fit
-        var extent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
-
-        var grid = metadata.GridMetadata;
-        int crs = dataset.HorizontalCRS ?? 4326;
-        var geoId = dataset.GeographicIdentifier ?? Path.GetFileName(path);
-        var info = $"{geoId} — {grid.NumColumns}×{grid.NumRows} grid, CRS: EPSG:{crs}";
-
-        return (mapLayer, extent, info);
-    }
-
-    private void RemoveCoverageLayer()
+    private void RemoveDatasetLayers()
     {
         if (MapControl.Map is not { } map)
             return;
 
-        var existing = map.Layers.FindLayer(CoverageLayerName);
-        foreach (var layer in existing)
+        // Remove any layers added by dataset processing (named "S-1xx: ...")
+        var toRemove = map.Layers
+            .Where(l => l.Name?.StartsWith("S-10", StringComparison.Ordinal) == true)
+            .ToList();
+
+        foreach (var layer in toRemove)
         {
             map.Layers.Remove(layer);
         }

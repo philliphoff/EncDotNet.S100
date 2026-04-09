@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -15,6 +16,10 @@ internal sealed class ViewerSettings
 
     private static readonly string SettingsPath = Path.Combine(SettingsDir, "settings.json");
 
+    /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
+    public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Legacy single path — migrated to <see cref="CataloguePaths"/> on load.</summary>
     public string? PortrayalCataloguePath { get; set; }
 
     public static ViewerSettings Load()
@@ -24,7 +29,16 @@ internal sealed class ViewerSettings
             if (File.Exists(SettingsPath))
             {
                 var json = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize<ViewerSettings>(json) ?? new ViewerSettings();
+                var settings = JsonSerializer.Deserialize<ViewerSettings>(json) ?? new ViewerSettings();
+
+                // Migrate legacy single-path setting to S-102 entry
+                if (settings.PortrayalCataloguePath is { } legacy && !settings.CataloguePaths.ContainsKey("S-102"))
+                {
+                    settings.CataloguePaths["S-102"] = legacy;
+                    settings.PortrayalCataloguePath = null;
+                }
+
+                return settings;
             }
         }
         catch
