@@ -31,6 +31,14 @@ public sealed class AreaFill
     public required string Name { get; init; }
     public string? Color { get; init; }
     public string? PatternSymbol { get; init; }
+    /// <summary>Tiling vector 1 (x component, in mm).</summary>
+    public double V1X { get; init; }
+    /// <summary>Tiling vector 1 (y component, in mm).</summary>
+    public double V1Y { get; init; }
+    /// <summary>Tiling vector 2 (x component, in mm).</summary>
+    public double V2X { get; init; }
+    /// <summary>Tiling vector 2 (y component, in mm).</summary>
+    public double V2Y { get; init; }
 }
 
 /// <summary>

@@ -209,6 +209,17 @@ internal sealed class DatasetPipelineFactory
                             return null;
                         }
                     },
+                    AreaFillProvider = fillName =>
+                    {
+                        try
+                        {
+                            return s101Cat.GetAreaFill(fillName);
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    },
                 };
                 var mapLayer = vectorRenderer.Render(parsed, dataset);
                 var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);

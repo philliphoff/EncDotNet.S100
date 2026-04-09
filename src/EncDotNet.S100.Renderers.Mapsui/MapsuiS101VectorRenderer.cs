@@ -9,6 +9,8 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using SkiaSharp;
+using Svg.Skia;
 using MapsuiColor = Mapsui.Styles.Color;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -36,8 +38,17 @@ public sealed class MapsuiS101VectorRenderer
     /// </summary>
     public Func<string, string?>? SymbolProvider { get; set; }
 
+    /// <summary>
+    /// Optional function that returns an <see cref="AreaFill"/> definition by name.
+    /// When set, non-colorFill area instructions will render using tiled SVG patterns.
+    /// </summary>
+    public Func<string, AreaFill?>? AreaFillProvider { get; set; }
+
     // Caches processed SVG data URIs keyed by symbol name.
     private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
+
+    // Caches rasterized pattern tile sources keyed by area fill name.
+    private readonly Dictionary<string, (string Source, AreaFill Fill)?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Renders a set of parsed drawing instructions for the given dataset
@@ -113,7 +124,7 @@ public sealed class MapsuiS101VectorRenderer
         switch (instruction.Type)
         {
             case InstructionType.AreaFill:
-                return CreateAreaFeature(instruction, geomType, coords, resolveColor);
+                return CreateAreaFeature(instruction, geomType, coords, resolveColor, renderer);
 
             case InstructionType.Line:
                 return CreateLineFeature(instruction, geomType, coords, resolveColor);
@@ -133,15 +144,10 @@ public sealed class MapsuiS101VectorRenderer
         ParsedDrawingInstruction instruction,
         GeometryType geomType,
         IReadOnlyList<(double Lat, double Lon)> coords,
-        Func<string?, MapsuiColor> resolveColor)
+        Func<string?, MapsuiColor> resolveColor,
+        MapsuiS101VectorRenderer renderer)
     {
         if (coords.Count < 3)
-            return null;
-
-        // Non-colorFill area fills are pattern references (e.g. DIAMOND1, DQUALB01)
-        // that require SVG symbol tiling. Skip them for now — the colorFill instructions
-        // already provide the proper background colour for the area.
-        if (!instruction.IsColorFill)
             return null;
 
         var projected = ProjectCoordinates(coords);
@@ -157,23 +163,51 @@ public sealed class MapsuiS101VectorRenderer
         var ring = new LinearRing(ringCoords.ToArray());
         var polygon = new Polygon(ring);
 
-        var fillColor = resolveColor(instruction.SymbolRef);
-
-        if (instruction.Transparency.HasValue)
+        if (instruction.IsColorFill)
         {
-            int alpha = (int)(255 * (1.0 - instruction.Transparency.Value));
-            fillColor = new Color(fillColor.R, fillColor.G, fillColor.B, alpha);
+            // Solid color fill
+            var fillColor = resolveColor(instruction.SymbolRef);
+
+            if (instruction.Transparency.HasValue)
+            {
+                int alpha = (int)(255 * (1.0 - instruction.Transparency.Value));
+                fillColor = new MapsuiColor(fillColor.R, fillColor.G, fillColor.B, alpha);
+            }
+
+            var style = new VectorStyle
+            {
+                Fill = new Brush { Color = fillColor },
+                Outline = new Pen { Color = new MapsuiColor(0, 0, 0, 40), Width = 0.5 },
+            };
+
+            var feature = new GeometryFeature(polygon);
+            feature.Styles.Add(style);
+            return feature;
         }
-
-        var style = new VectorStyle
+        else
         {
-            Fill = new Brush { Color = fillColor },
-            Outline = new Pen { Color = new Color(0, 0, 0, 40), Width = 0.5 },
-        };
+            // Pattern fill via AreaFillReference
+            var patternResult = renderer.GetPatternTileSource(instruction.SymbolRef);
+            if (patternResult is null)
+                return null;
 
-        var feature = new GeometryFeature(polygon);
-        feature.Styles.Add(style);
-        return feature;
+            var (tileSource, _) = patternResult.Value;
+
+            var brush = new Brush
+            {
+                Image = new Image { Source = tileSource },
+            };
+
+            var style = new VectorStyle
+            {
+                Fill = brush,
+                Outline = new Pen { Color = new MapsuiColor(0, 0, 0, 40), Width = 0.5 },
+            };
+
+            var feature = new GeometryFeature(polygon);
+            feature.Styles.Add(style);
+            return feature;
+        }
     }
 
     private static IFeature? CreateLineFeature(
@@ -330,6 +364,134 @@ public sealed class MapsuiS101VectorRenderer
 
         _symbolDataUriCache[symbolRef] = source;
         return source;
+    }
+
+    // ── Pattern tile rasterization ─────────────────────────────────────
+
+    // Pixels per mm used when rasterizing SVG pattern tiles.
+    // S-100 defines pattern dimensions in mm for paper charts (~3.78 px/mm at 96 DPI).
+    // For interactive display we use a lower density so patterns repeat more tightly
+    // relative to the on-screen polygon size.
+    private const double PixelsPerMm = 1.5;
+
+    /// <summary>
+    /// Returns a Mapsui base64-content:// source string for the given area fill name,
+    /// rasterizing the pattern SVG to a tiled bitmap on first access.
+    /// </summary>
+    private (string Source, AreaFill Fill)? GetPatternTileSource(string? fillName)
+    {
+        if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
+            return null;
+
+        if (_patternTileCache.TryGetValue(fillName, out var cached))
+            return cached;
+
+        (string Source, AreaFill Fill)? result = null;
+        try
+        {
+            var areaFill = AreaFillProvider(fillName);
+            if (areaFill?.PatternSymbol is not null)
+            {
+                var svgContent = SymbolProvider(areaFill.PatternSymbol);
+                if (svgContent is not null)
+                {
+                    var processed = ProcessSvg(svgContent, Palette);
+                    var tileSource = RasterizePatternTile(processed, areaFill);
+                    if (tileSource is not null)
+                    {
+                        result = (tileSource, areaFill);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Area fill or symbol not found — skip pattern
+        }
+
+        _patternTileCache[fillName] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// Rasterizes a processed SVG pattern into a repeating tile bitmap.
+    /// Returns a base64-content:// source suitable for <see cref="Brush.Image"/>.
+    /// </summary>
+    private static string? RasterizePatternTile(string processedSvg, AreaFill areaFill)
+    {
+        // Parse SVG into an SkiaSharp picture via Svg.Skia
+        using var svg = SKSvg.CreateFromSvg(processedSvg);
+        if (svg is null) return null;
+
+        var picture = svg.Picture;
+        if (picture is null) return null;
+
+        var svgBounds = picture.CullRect;
+        if (svgBounds.Width <= 0 || svgBounds.Height <= 0) return null;
+
+        // Determine tile dimensions from the tiling vectors.
+        // v1 defines horizontal repeat spacing; v2 defines vertical + optional horizontal offset.
+        double tileWidthMm = Math.Abs(areaFill.V1X);
+        double tileHeightMm = Math.Abs(areaFill.V2Y);
+        if (tileWidthMm <= 0) tileWidthMm = svgBounds.Width;
+        if (tileHeightMm <= 0) tileHeightMm = svgBounds.Height;
+
+        bool hasOffset = Math.Abs(areaFill.V2X) > 0.01;
+
+        // For parallelogram lattices (v2.x != 0), create a double-height tile
+        // with the second row offset by v2.x, producing the correct brick-like pattern.
+        double totalHeightMm = hasOffset ? tileHeightMm * 2 : tileHeightMm;
+
+        int tileW = Math.Max(1, (int)Math.Round(tileWidthMm * PixelsPerMm));
+        int tileH = Math.Max(1, (int)Math.Round(totalHeightMm * PixelsPerMm));
+
+        // Cap tile size for sanity
+        if (tileW > 512 || tileH > 512) return null;
+
+        using var bitmap = new SKBitmap(tileW, tileH);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+
+        // Scale the SVG to fit within one tile cell
+        float svgW = svgBounds.Width;
+        float svgH = svgBounds.Height;
+        float cellW = (float)(tileWidthMm * PixelsPerMm);
+        float cellH = (float)(tileHeightMm * PixelsPerMm);
+        float scaleX = cellW / svgW;
+        float scaleY = cellH / svgH;
+        float scale = Math.Min(scaleX, scaleY);
+
+        // Center the SVG in the cell
+        float scaledW = svgW * scale;
+        float scaledH = svgH * scale;
+        float offsetX = (cellW - scaledW) / 2;
+        float offsetY = (cellH - scaledH) / 2;
+
+        // Draw the SVG at position (0,0) for the first row
+        canvas.Save();
+        canvas.Translate(offsetX - svgBounds.Left * scale, offsetY - svgBounds.Top * scale);
+        canvas.Scale(scale);
+        canvas.DrawPicture(picture);
+        canvas.Restore();
+
+        // For parallelogram lattices, draw a second copy offset for the second row
+        if (hasOffset)
+        {
+            float offset2X = (float)(areaFill.V2X * PixelsPerMm);
+            canvas.Save();
+            canvas.Translate(offset2X + offsetX - svgBounds.Left * scale, cellH + offsetY - svgBounds.Top * scale);
+            canvas.Scale(scale);
+            canvas.DrawPicture(picture);
+            canvas.Restore();
+        }
+
+        canvas.Flush();
+
+        // Encode to PNG and return as base64-content:// source
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        var base64 = Convert.ToBase64String(data.ToArray());
+        return "base64-content://" + base64;
     }
 
     /// <summary>
