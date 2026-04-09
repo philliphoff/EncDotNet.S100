@@ -19,6 +19,9 @@ internal sealed class ViewerSettings
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Feature catalogue file paths keyed by product spec (e.g. "S-101").</summary>
+    public Dictionary<string, string> FeatureCataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Legacy single path — migrated to <see cref="CataloguePaths"/> on load.</summary>
     public string? PortrayalCataloguePath { get; set; }
 

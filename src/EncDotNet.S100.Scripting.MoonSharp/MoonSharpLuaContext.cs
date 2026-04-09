@@ -1,4 +1,5 @@
 using MoonSharp.Interpreter;
+using MoonSharp.Interpreter.Loaders;
 
 namespace EncDotNet.S100.Scripting.MoonSharp;
 
@@ -22,6 +23,14 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrEmpty(source);
         _script.DoString(source);
+    }
+
+    /// <inheritdoc />
+    public void SetModuleLoader(Func<string, string?> loader)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(loader);
+        _script.Options.ScriptLoader = new DelegateScriptLoader(loader);
     }
 
     /// <inheritdoc />
@@ -97,6 +106,7 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         string s => DynValue.NewString(s),
         Delegate del => DynValue.NewCallback(WrapDelegate(del)),
         IReadOnlyDictionary<string, object?> dict => MarshalDictionaryToTable(dict),
+        IList<object> list => MarshalListToTable(list),
         _ => DynValue.FromObject(_script, value),
     };
 
@@ -209,6 +219,16 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         foreach (var (key, val) in dict)
         {
             table[key] = MarshalToLua(val);
+        }
+        return DynValue.NewTable(table);
+    }
+
+    private DynValue MarshalListToTable(IList<object> list)
+    {
+        var table = new Table(_script);
+        for (int i = 0; i < list.Count; i++)
+        {
+            table[i + 1] = MarshalToLua(list[i]);
         }
         return DynValue.NewTable(table);
     }

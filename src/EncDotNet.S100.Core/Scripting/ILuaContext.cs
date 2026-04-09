@@ -14,6 +14,14 @@ public interface ILuaContext : IDisposable
     void Execute(string source);
 
     /// <summary>
+    /// Registers a callback that resolves module names to Lua source code,
+    /// enabling the Lua <c>require()</c> function. When a script calls
+    /// <c>require("moduleName")</c>, the callback is invoked with the module
+    /// name; it should return the source code or <c>null</c> if not found.
+    /// </summary>
+    void SetModuleLoader(Func<string, string?> loader);
+
+    /// <summary>
     /// Sets a global variable in the Lua environment.
     /// <para>Supported .NET → Lua type mappings:</para>
     /// <list type="bullet">

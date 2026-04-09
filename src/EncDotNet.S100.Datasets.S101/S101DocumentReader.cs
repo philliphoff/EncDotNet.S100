@@ -30,11 +30,16 @@ internal static class S101DocumentReader
         S101DatasetStructureInfo? dssi = null;
         var featureTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
         var attributeTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
+        var informationTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
+        var informationAssociationCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
+        var featureAssociationCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
+        var roleCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
         var points = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
         var curveSegments = ImmutableDictionary.CreateBuilder<uint, S101CurveSegmentRecord>();
         var compositeCurves = ImmutableDictionary.CreateBuilder<uint, S101CompositeCurveRecord>();
         var surfaces = ImmutableDictionary.CreateBuilder<uint, S101SurfaceRecord>();
         var features = ImmutableArray.CreateBuilder<S101FeatureRecord>();
+        var informationTypes = ImmutableDictionary.CreateBuilder<uint, S101InformationRecord>();
 
         foreach (var record in iso.DataRecords)
         {
@@ -79,6 +84,12 @@ internal static class S101DocumentReader
                     if (feat is not null)
                         features.Add(feat);
                     break;
+
+                case "IRID":
+                    var info = ParseInformationType(record, ddr);
+                    if (info is not null)
+                        informationTypes[info.RecordId] = info;
+                    break;
             }
 
             // Check for DSSI, FTCS, ATCS on DSID record
@@ -87,6 +98,10 @@ internal static class S101DocumentReader
                 dssi = ParseDssi(record, ddr);
                 ParseCatalogue(record, ddr, "FTCS", "FTCD", "FTNC", featureTypeCatalogue);
                 ParseCatalogue(record, ddr, "ATCS", "ATCD", "ANCD", attributeTypeCatalogue);
+                ParseCatalogue(record, ddr, "ITCS", "ITCD", "ITNC", informationTypeCatalogue);
+                ParseCatalogue(record, ddr, "IACS", "IACD", "IANC", informationAssociationCatalogue);
+                ParseCatalogue(record, ddr, "FACS", "FACD", "FANC", featureAssociationCatalogue);
+                ParseCatalogue(record, ddr, "ARCS", "ARCD", "ARNC", roleCatalogue);
             }
         }
 
@@ -101,6 +116,11 @@ internal static class S101DocumentReader
             CompositeCurves = compositeCurves.ToImmutable(),
             Surfaces = surfaces.ToImmutable(),
             Features = features.ToImmutable(),
+            InformationTypes = informationTypes.ToImmutable(),
+            InformationTypeCatalogue = informationTypeCatalogue.ToImmutable(),
+            InformationAssociationCatalogue = informationAssociationCatalogue.ToImmutable(),
+            FeatureAssociationCatalogue = featureAssociationCatalogue.ToImmutable(),
+            RoleCatalogue = roleCatalogue.ToImmutable(),
         };
     }
 
@@ -371,6 +391,40 @@ internal static class S101DocumentReader
             }
         }
 
+        // FACS — Feature associations
+        var featureAssociations = ImmutableArray.CreateBuilder<S101FeatureAssociation>();
+        foreach (var facsField in record.GetFieldsByTag("FACS"))
+        {
+            var facsDef = ddr.GetFieldDefinition("FACS");
+            if (facsDef is null) break;
+            var facsReader = new Iso8211FieldReader(facsDef, facsField.Data);
+            foreach (var group in facsReader.GetSubfieldGroups())
+            {
+                var nfac = group.GetSubfield<ushort>("NFAC");
+                var rrid = group.GetSubfield<uint>("RRID");
+                ushort narc = 0;
+                try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
+                featureAssociations.Add(new S101FeatureAssociation(nfac, rrid, narc));
+            }
+        }
+
+        // INAS — Information associations
+        var informationAssociations = ImmutableArray.CreateBuilder<S101InformationAssociation>();
+        foreach (var inasField in record.GetFieldsByTag("INAS"))
+        {
+            var inasDef = ddr.GetFieldDefinition("INAS");
+            if (inasDef is null) break;
+            var inasReader = new Iso8211FieldReader(inasDef, inasField.Data);
+            foreach (var group in inasReader.GetSubfieldGroups())
+            {
+                var niac = group.GetSubfield<ushort>("NIAC");
+                var rrid = group.GetSubfield<uint>("RRID");
+                ushort narc = 0;
+                try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
+                informationAssociations.Add(new S101InformationAssociation(niac, rrid, narc));
+            }
+        }
+
         return new S101FeatureRecord
         {
             RecordId = rcid,
@@ -380,6 +434,42 @@ internal static class S101DocumentReader
             FeatureIdentificationSubdivision = fids,
             Attributes = attributes.ToImmutable(),
             SpatialAssociations = spatials.ToImmutable(),
+            FeatureAssociations = featureAssociations.ToImmutable(),
+            InformationAssociations = informationAssociations.ToImmutable(),
+        };
+    }
+
+    private static S101InformationRecord? ParseInformationType(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
+    {
+        var iridField = record.GetFieldByTag("IRID");
+        if (iridField is null) return null;
+
+        var iridDef = ddr.GetFieldDefinition("IRID")!;
+        var iridReader = new Iso8211FieldReader(iridDef, iridField.Data);
+        var rcid = iridReader.GetSubfield<uint>("RCID");
+        iridReader.TryGetSubfield<ushort>("NITC", out var nitc);
+
+        var attributes = ImmutableArray.CreateBuilder<S101Attribute>();
+        foreach (var attrField in record.GetFieldsByTag("ATTR"))
+        {
+            var attrDef = ddr.GetFieldDefinition("ATTR")!;
+            var attrReader = new Iso8211FieldReader(attrDef, attrField.Data);
+            foreach (var group in attrReader.GetSubfieldGroups())
+            {
+                var natc = group.GetSubfield<ushort>("NATC");
+                var atix = group.GetSubfield<ushort>("ATIX");
+                string atvl;
+                try { atvl = group.GetSubfield<string>("ATVL"); }
+                catch (KeyNotFoundException) { atvl = ""; }
+                attributes.Add(new S101Attribute(natc, atix, atvl));
+            }
+        }
+
+        return new S101InformationRecord
+        {
+            RecordId = rcid,
+            InformationTypeCode = nitc,
+            Attributes = attributes.ToImmutable(),
         };
     }
 }

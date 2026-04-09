@@ -5,9 +5,14 @@ namespace EncDotNet.S100.Features;
 
 public static class FeatureCatalogueReader
 {
-    private static readonly XNamespace S100FC = "http://www.iho.int/S100FC";
-    private static readonly XNamespace S100Base = "http://www.iho.int/S100Base";
-    private static readonly XNamespace S100CI = "http://www.iho.int/S100CI";
+    // Namespace URIs — resolved from the root element at parse time to handle
+    // versioned namespaces (e.g. "http://www.iho.int/S100FC/5.2").
+    [ThreadStatic] private static XNamespace? _s100fc;
+    [ThreadStatic] private static XNamespace? _s100base;
+    [ThreadStatic] private static XNamespace? _s100ci;
+    private static XNamespace S100FC => _s100fc ?? "http://www.iho.int/S100FC";
+    private static XNamespace S100Base => _s100base ?? "http://www.iho.int/S100Base";
+    private static XNamespace S100CI => _s100ci ?? "http://www.iho.int/S100CI";
     private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
     public static FeatureCatalogue Read(Stream stream)
@@ -22,8 +27,30 @@ public static class FeatureCatalogueReader
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
+    /// <summary>
+    /// Resolves the actual namespace URI for a given prefix by scanning
+    /// the root element's declared namespaces. Falls back to the base URI
+    /// without a version suffix.
+    /// </summary>
+    private static XNamespace ResolveNamespace(XElement root, string prefix, string fallback)
+    {
+        foreach (var attr in root.Attributes())
+        {
+            if (attr.IsNamespaceDeclaration && attr.Name.LocalName == prefix)
+            {
+                return (XNamespace)attr.Value;
+            }
+        }
+
+        return fallback;
+    }
+
     private static FeatureCatalogue ReadCatalogue(XElement root)
     {
+        // Resolve versioned namespaces from the document's declarations
+        _s100fc = ResolveNamespace(root, "S100FC", "http://www.iho.int/S100FC");
+        _s100base = ResolveNamespace(root, "S100Base", "http://www.iho.int/S100Base");
+        _s100ci = ResolveNamespace(root, "S100CI", "http://www.iho.int/S100CI");
         return new FeatureCatalogue
         {
             Name = (string)root.Element(S100FC + "name")!,

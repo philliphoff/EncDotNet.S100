@@ -15,7 +15,10 @@ public sealed class MoonSharpLuaEngine : ILuaEngine
     public CoreModules Modules { get; init; } =
         CoreModules.Preset_HardSandbox
         | CoreModules.Coroutine
-        | CoreModules.TableIterators;
+        | CoreModules.TableIterators
+        | CoreModules.Metatables
+        | CoreModules.ErrorHandling
+        | CoreModules.LoadMethods;
 
     /// <inheritdoc />
     public ILuaContext CreateContext()

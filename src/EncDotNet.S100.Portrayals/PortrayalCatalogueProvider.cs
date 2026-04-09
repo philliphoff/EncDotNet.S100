@@ -86,6 +86,15 @@ public sealed class PortrayalCatalogueProvider : IDisposable
         return _source.OpenAsync(ResolvePath(ruleFile.FileName, "Rules"), cancellationToken);
     }
 
+    /// <summary>
+    /// Fetches a rule file by bare filename from the <c>Rules/</c> subdirectory.
+    /// </summary>
+    public Task<Stream> FetchRuleAsync(string fileName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(fileName);
+        return _source.OpenAsync(ResolvePath(fileName, "Rules"), cancellationToken);
+    }
+
     /// <inheritdoc />
     public void Dispose() => _source.Dispose();
 

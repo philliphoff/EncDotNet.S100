@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -32,15 +33,18 @@ internal sealed class DatasetPipelineFactory
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly ILuaEngine _luaEngine;
     private readonly ICrsTransformFactory _crsTransformFactory;
+    private readonly Func<string, string?> _featureCataloguePathResolver;
 
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        ICrsTransformFactory crsTransformFactory)
+        ICrsTransformFactory crsTransformFactory,
+        Func<string, string?>? featureCataloguePathResolver = null)
     {
         _catalogueManager = catalogueManager;
         _luaEngine = luaEngine;
         _crsTransformFactory = crsTransformFactory;
+        _featureCataloguePathResolver = featureCataloguePathResolver ?? (_ => null);
     }
 
     /// <summary>
@@ -146,12 +150,8 @@ internal sealed class DatasetPipelineFactory
     private DatasetResult ProcessS101(string path)
     {
         var provider = _catalogueManager.GetProvider("S-101");
-
         var dataset = S101Dataset.Open(path);
-        var featureXmlSource = new S101FeatureXmlSource(dataset);
-        var catalogue = new S101PortrayalCatalogue(provider, _luaEngine);
 
-        var pipeline = new VectorPipeline(_luaEngine);
         var context = new NavigationContext
         {
             Viewport = new Pipelines.Viewport
@@ -166,29 +166,88 @@ internal sealed class DatasetPipelineFactory
             ScaleDenominator = 0,
         };
 
+        // Try the Lua portrayal pipeline if a feature catalogue is available
+        var fcPath = _featureCataloguePathResolver("S-101");
+        if (fcPath is not null && File.Exists(fcPath))
+        {
+            try
+            {
+                Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
+                var fc = FeatureCatalogueReader.Read(fcPath);
+                var portrayal = new S101LuaPortrayal(_luaEngine, provider, fc);
+                var emitted = portrayal.Execute(dataset, context);
+                Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");
+
+                // Show emitted instruction strings for diagnostics
+                int nonEmpty = 0;
+                foreach (var e in emitted)
+                {
+                    if (!string.IsNullOrEmpty(e.InstructionString))
+                    {
+                        nonEmpty++;
+                        if (nonEmpty <= 10)
+                            Console.WriteLine($"[S101-Lua]   Feature={e.FeatureRef}, Instructions={e.InstructionString[..Math.Min(300, e.InstructionString.Length)]}");
+                    }
+                }
+                Console.WriteLine($"[S101-Lua] {nonEmpty} of {emitted.Count} have non-empty instruction strings");
+
+                // Parse emitted instruction strings
+                var parsed = new List<ParsedDrawingInstruction>();
+                foreach (var e in emitted)
+                {
+                    parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
+                }
+                Console.WriteLine($"[S101-Lua] Parsed {parsed.Count} drawing instructions");
+
+                var mapLayer = new MemoryLayer
+                {
+                    Name = $"S-101: {Path.GetFileName(path)}",
+                };
+
+                var info = $"{dataset.DatasetName} — {dataset.FeatureCount} features, " +
+                           $"{emitted.Count} emitted, {parsed.Count} instructions";
+
+                return new DatasetResult
+                {
+                    Layer = mapLayer,
+                    Extent = new MRect(0, 0, 0, 0),
+                    Info = info,
+                    ProductSpec = "S-101",
+                };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[S101-Lua] ERROR: {ex.Message}");
+                Console.WriteLine($"[S101-Lua] Falling back to legacy pipeline.");
+                // Fall through to legacy pipeline
+            }
+        }
+
+        // Fallback: use the legacy VectorPipeline (XSLT + per-rule Lua)
+        var featureXmlSource = new S101FeatureXmlSource(dataset);
+        var catalogue = new S101PortrayalCatalogue(provider, _luaEngine);
+
+        var pipeline = new VectorPipeline(_luaEngine);
         var vectorLayer = pipeline.ProcessAsync(featureXmlSource, catalogue, context)
             .GetAwaiter().GetResult();
 
-        // TODO: Replace with a proper MapsuiVectorRenderer when available.
-        // For now, create a MemoryLayer with the instruction count as info.
         var instructions = vectorLayer.Instructions;
 
-        var mapLayer = new MemoryLayer
+        var fallbackLayer = new MemoryLayer
         {
             Name = $"S-101: {Path.GetFileName(path)}",
         };
 
-        // Compute extent from drawing instructions
         var extent = ComputeVectorExtent(instructions);
 
-        var info = $"{dataset.DatasetName} — {dataset.FeatureCount} features, " +
+        var fallbackInfo = $"{dataset.DatasetName} — {dataset.FeatureCount} features, " +
                    $"{instructions.Count} instructions";
 
         return new DatasetResult
         {
-            Layer = mapLayer,
+            Layer = fallbackLayer,
             Extent = extent,
-            Info = info,
+            Info = fallbackInfo,
             ProductSpec = "S-101",
         };
     }

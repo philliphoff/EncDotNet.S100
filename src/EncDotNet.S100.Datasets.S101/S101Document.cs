@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+                                                                                                                                                                                                                                                                                                                                           using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -16,6 +16,11 @@ internal sealed class S101Document
     public required ImmutableDictionary<uint, S101CompositeCurveRecord> CompositeCurves { get; init; }
     public required ImmutableDictionary<uint, S101SurfaceRecord> Surfaces { get; init; }
     public required ImmutableArray<S101FeatureRecord> Features { get; init; }
+    public required ImmutableDictionary<uint, S101InformationRecord> InformationTypes { get; init; }
+    public required ImmutableDictionary<ushort, string> InformationTypeCatalogue { get; init; }
+    public required ImmutableDictionary<ushort, string> InformationAssociationCatalogue { get; init; }
+    public required ImmutableDictionary<ushort, string> FeatureAssociationCatalogue { get; init; }
+    public required ImmutableDictionary<ushort, string> RoleCatalogue { get; init; }
 }
 
 /// <summary>DSID — Dataset Identification.</summary>
@@ -81,7 +86,7 @@ internal sealed class S101SurfaceRecord
 /// <summary>Ring association from RIAS field: exterior (USAG=1) or interior (USAG=2).</summary>
 internal readonly record struct S101RingAssociation(byte RecordName, uint RecordId, byte Orientation, byte Usage);
 
-/// <summary>FRID + FOID + ATTR + SPAS — Feature record.</summary>
+/// <summary>FRID + FOID + ATTR + SPAS + FACS + INAS — Feature record.</summary>
 internal sealed class S101FeatureRecord
 {
     public uint RecordId { get; init; }
@@ -91,6 +96,16 @@ internal sealed class S101FeatureRecord
     public ushort FeatureIdentificationSubdivision { get; init; }
     public ImmutableArray<S101Attribute> Attributes { get; init; }
     public ImmutableArray<S101SpatialAssociation> SpatialAssociations { get; init; }
+    public ImmutableArray<S101FeatureAssociation> FeatureAssociations { get; init; }
+    public ImmutableArray<S101InformationAssociation> InformationAssociations { get; init; }
+}
+
+/// <summary>IRID + ATTR — Information type record.</summary>
+internal sealed class S101InformationRecord
+{
+    public uint RecordId { get; init; }
+    public ushort InformationTypeCode { get; init; }
+    public ImmutableArray<S101Attribute> Attributes { get; init; }
 }
 
 /// <summary>Attribute from ATTR field.</summary>
@@ -98,3 +113,9 @@ internal readonly record struct S101Attribute(ushort NumericCode, ushort Index, 
 
 /// <summary>Spatial association from SPAS field.</summary>
 internal readonly record struct S101SpatialAssociation(byte RecordName, uint RecordId, byte Orientation);
+
+/// <summary>Feature association from FACS field: links a feature to another feature.</summary>
+internal readonly record struct S101FeatureAssociation(ushort NumericCode, uint RecordId, ushort RoleCode);
+
+/// <summary>Information association from INAS field: links a feature to an information type.</summary>
+internal readonly record struct S101InformationAssociation(ushort NumericCode, uint RecordId, ushort RoleCode);

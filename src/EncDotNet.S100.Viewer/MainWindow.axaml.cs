@@ -42,7 +42,8 @@ public partial class MainWindow : Window
         _pipelineFactory = new DatasetPipelineFactory(
             _catalogueManager,
             new MoonSharpLuaEngine(),
-            new ProjNetCrsTransformFactory());
+            new ProjNetCrsTransformFactory(),
+            spec => _settings.FeatureCataloguePaths.TryGetValue(spec, out var p) ? p : null);
 
         UpdatePortrayalButtonText();
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());

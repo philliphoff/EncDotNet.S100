@@ -1,0 +1,272 @@
+using System.Globalization;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Scripting;
+
+namespace EncDotNet.S100.Datasets.S101;
+
+/// <summary>
+/// Orchestrates the S-101 Lua portrayal pipeline as defined in S-100 Part 9A.
+/// Creates a single Lua context, registers the Host API, loads the main.lua
+/// entry point (which requires the S-100 scripting framework), initialises
+/// context parameters, calls <c>PortrayalMain()</c>, and collects the emitted
+/// drawing instructions.
+/// </summary>
+public sealed class S101LuaPortrayal
+{
+    private readonly ILuaEngine _luaEngine;
+    private readonly PortrayalCatalogueProvider _provider;
+    private readonly FeatureCatalogue _featureCatalogue;
+
+    /// <summary>
+    /// Lua shim that wraps HostFeatureGetSpatialAssociations to convert
+    /// the raw host data (List of {SpatialID, SpatialType, Orientation})
+    /// into proper SpatialAssociation objects via CreateSpatialAssociation().
+    /// </summary>
+    private const string SpatialAssociationShim = """
+        local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
+        HostFeatureGetSpatialAssociations = function(featureID)
+            local raw = _rawHostGetSpatial(featureID)
+            if raw == nil then return nil end
+            local result = {}
+            for i, sa in ipairs(raw) do
+                result[i] = CreateSpatialAssociation(sa.SpatialType, sa.SpatialID, sa.Orientation)
+            end
+            if #result == 0 then return nil end
+            result.Type = 'array:SpatialAssociation'
+            return result
+        end
+        """;
+
+    /// <summary>
+    /// Lua shim that implements HostGetSpatial by calling the C# HostGetSpatialData
+    /// to get raw data, then constructing proper Spatial Lua objects via the
+    /// Create* functions from PortrayalAPI.lua.
+    /// </summary>
+    private const string HostGetSpatialShim = """
+        local _rawHostGetSpatialData = HostGetSpatialData
+        function HostGetSpatial(spatialID)
+            local data = _rawHostGetSpatialData(spatialID)
+            if data == nil then return nil end
+
+            if data.RecordType == 'Point' then
+                return CreatePoint(data.X, data.Y)
+            elseif data.RecordType == 'Curve' then
+                local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
+                local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')
+                local controlPoints = {}
+                if data.ControlPoints then
+                    for _, cp in ipairs(data.ControlPoints) do
+                        controlPoints[#controlPoints + 1] = CreatePoint(cp.X, cp.Y)
+                    end
+                end
+                local segment = CreateCurveSegment(controlPoints)
+                return CreateCurve(startSA, endSA, { segment })
+            elseif data.RecordType == 'CompositeCurve' then
+                local curveAssocs = {}
+                for _, ca in ipairs(data.CurveAssociations) do
+                    curveAssocs[#curveAssocs + 1] = CreateSpatialAssociation(ca.SpatialType, ca.SpatialID, ca.Orientation)
+                end
+                curveAssocs.Type = 'array:SpatialAssociation'
+                return CreateCompositeCurve(curveAssocs)
+            elseif data.RecordType == 'Surface' then
+                local exteriorRing = nil
+                if data.ExteriorRing then
+                    exteriorRing = CreateSpatialAssociation(data.ExteriorRing.SpatialType, data.ExteriorRing.SpatialID, data.ExteriorRing.Orientation)
+                end
+                local interiorRings = {}
+                if data.InteriorRings then
+                    for _, ir in ipairs(data.InteriorRings) do
+                        interiorRings[#interiorRings + 1] = CreateSpatialAssociation(ir.SpatialType, ir.SpatialID, ir.Orientation)
+                    end
+                end
+                interiorRings.Type = 'array:SpatialAssociation'
+                return CreateSurface(exteriorRing, interiorRings)
+            end
+            return nil
+        end
+        """;
+
+    public S101LuaPortrayal(
+        ILuaEngine luaEngine,
+        PortrayalCatalogueProvider provider,
+        FeatureCatalogue featureCatalogue)
+    {
+        ArgumentNullException.ThrowIfNull(luaEngine);
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(featureCatalogue);
+
+        _luaEngine = luaEngine;
+        _provider = provider;
+        _featureCatalogue = featureCatalogue;
+    }
+
+    /// <summary>
+    /// Runs the S-101 Lua portrayal pipeline for the given dataset.
+    /// Returns the raw emitted drawing instruction strings, keyed by feature reference.
+    /// </summary>
+    public IReadOnlyList<EmittedInstruction> Execute(S101Dataset dataset, NavigationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var dataProvider = new S101LuaDataProvider(dataset, _featureCatalogue);
+
+        using var lua = _luaEngine.CreateContext();
+
+        // 1. Configure require() to resolve modules from the Rules/ subdirectory
+        lua.SetModuleLoader(moduleName =>
+        {
+            // MoonSharp may pass the bare name (e.g. "S100Scripting") or with
+            // a .lua extension (e.g. "S100Scripting.lua") depending on ModulePaths.
+            var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)
+                ? moduleName
+                : $"{moduleName}.lua";
+            try
+            {
+                using var stream = _provider.FetchRuleAsync(fileName)
+                    .GetAwaiter().GetResult();
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            }
+            catch
+            {
+                return null;
+            }
+        });
+
+        // 2. Register all Host* functions on the Lua context
+        dataProvider.RegisterHostFunctions(lua);
+
+        // 3. Load and execute main.lua (which will require S100Scripting, PortrayalModel, etc.)
+        string mainSource = LoadRuleSource("main.lua");
+        lua.Execute(mainSource);
+
+        // 3a. Wrap HostFeatureGetSpatialAssociations so the raw data from the host
+        //     is converted into proper SpatialAssociation objects via CreateSpatialAssociation().
+        //     CreateSpatialAssociation (from PortrayalAPI.lua) handles string→SpatialType
+        //     lookup, sets metatables, etc.
+        lua.Execute(SpatialAssociationShim);
+
+        // 3b. Implement HostGetSpatial by wrapping HostGetSpatialData (C#) and
+        //     constructing proper Spatial Lua objects via Create* functions.
+        lua.Execute(HostGetSpatialShim);
+
+        // 4. Build context parameter array using the Lua-side factory function
+        //    PortrayalCreateContextParameter(name, type, default) → ContextParameter table
+        //    Then pass the array to PortrayalInitializeContextParameters()
+        var cpSource = BuildContextParameterInitScript();
+        lua.Execute(cpSource);
+
+        // 5. Set context parameter overrides from NavigationContext
+        SetContextParameters(lua, context);
+
+        // 6. Call PortrayalMain(featureIDs) — iterates features, calls per-feature
+        //    rule functions, emits drawing instructions via HostPortrayalEmit.
+        try
+        {
+            lua.Call("PortrayalMain");
+        }
+        catch (Exception ex)
+        {
+            // Extract Lua source location if available (MoonSharp)
+            var decorated = ex.GetType().GetProperty("DecoratedMessage")?.GetValue(ex) as string;
+            var detail = decorated ?? ex.Message;
+            throw new InvalidOperationException(
+                $"S-101 Lua portrayal failed: {detail}", ex);
+        }
+
+        // 7. Collect results
+        return dataProvider.EmittedInstructions
+            .Select(e => new EmittedInstruction
+            {
+                FeatureRef = e.FeatureRef,
+                InstructionString = e.Instructions,
+                ObservedParameters = e.ObservedParams,
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Builds a Lua script that creates context parameters via
+    /// <c>PortrayalCreateContextParameter(name, type, default)</c> and passes them
+    /// to <c>PortrayalInitializeContextParameters()</c>.
+    /// </summary>
+    private string BuildContextParameterInitScript()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("local _cp = {}");
+
+        foreach (var cp in _provider.Catalogue.ContextParameters)
+        {
+            // Escape the default value for Lua string literal
+            var escapedId = EscapeLuaString(cp.Id);
+            var escapedType = EscapeLuaString(cp.Type);
+            var escapedDefault = EscapeLuaString(cp.Default);
+            sb.AppendLine(
+                $"_cp[#_cp + 1] = PortrayalCreateContextParameter('{escapedId}', '{escapedType}', '{escapedDefault}')");
+        }
+
+        sb.AppendLine("PortrayalInitializeContextParameters(_cp)");
+        return sb.ToString();
+    }
+
+    private void SetContextParameters(ILuaContext lua, NavigationContext context)
+    {
+        // Known S-101 context parameters mapped from NavigationContext.
+        // PortrayalSetContextParameter expects both arguments as strings.
+        var parameters = new Dictionary<string, string>
+        {
+            ["SafetyContour"] = context.SafetyContour.ToString(CultureInfo.InvariantCulture),
+            ["SafetyDepth"] = context.SafetyDepth.ToString(CultureInfo.InvariantCulture),
+            ["ShallowContour"] = context.ShallowContour.ToString(CultureInfo.InvariantCulture),
+            ["DeepContour"] = context.DeepContour.ToString(CultureInfo.InvariantCulture),
+        };
+
+        foreach (var (name, value) in parameters)
+        {
+            try
+            {
+                lua.Call("PortrayalSetContextParameter", name, value);
+            }
+            catch
+            {
+                // Skip parameters not recognized by this catalogue version.
+            }
+        }
+    }
+
+    private static string EscapeLuaString(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        return s.Replace("\\", "\\\\").Replace("'", "\\'");
+    }
+
+    private string LoadRuleSource(string fileName)
+    {
+        using var stream = _provider.FetchRuleAsync(fileName)
+            .GetAwaiter().GetResult();
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+}
+
+/// <summary>
+/// A single emitted drawing instruction from the Lua portrayal pipeline.
+/// </summary>
+public sealed class EmittedInstruction
+{
+    /// <summary>Feature reference string (typically the feature record ID).</summary>
+    public required string FeatureRef { get; init; }
+
+    /// <summary>
+    /// Semicolon-separated key:value drawing instruction string, e.g.
+    /// "ViewingGroup:36050;DrawingPriority:6;DisplayPlane:UnderRadar;PointInstruction:BOYLAT01".
+    /// </summary>
+    public required string InstructionString { get; init; }
+
+    /// <summary>Observed context parameter names used during rule evaluation.</summary>
+    public required string ObservedParameters { get; init; }
+}
