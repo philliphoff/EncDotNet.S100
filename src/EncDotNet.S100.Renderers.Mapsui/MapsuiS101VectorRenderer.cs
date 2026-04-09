@@ -8,6 +8,7 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using MapsuiColor = Mapsui.Styles.Color;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -20,6 +21,12 @@ public sealed class MapsuiS101VectorRenderer
 {
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-101 Vector";
+
+    /// <summary>
+    /// The color palette to use for resolving S-100 color tokens.
+    /// When set, overrides the built-in fallback colors.
+    /// </summary>
+    public ColorPalette? Palette { get; set; }
 
     /// <summary>
     /// Renders a set of parsed drawing instructions for the given dataset
@@ -53,7 +60,10 @@ public sealed class MapsuiS101VectorRenderer
             .ThenBy(i => i.DrawingPriority)
             .ToList();
 
-        // 3. Convert each instruction to a Mapsui feature
+        // 3. Build color resolver from palette
+        var resolveColor = BuildColorResolver(Palette);
+
+        // 4. Convert each instruction to a Mapsui feature
         var mapFeatures = new List<IFeature>();
         foreach (var instruction in sorted)
         {
@@ -66,7 +76,7 @@ public sealed class MapsuiS101VectorRenderer
             if (geom.Coords.Count == 0)
                 continue;
 
-            var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords);
+            var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor);
             if (mapFeature is not null)
                 mapFeatures.Add(mapFeature);
         }
@@ -82,21 +92,22 @@ public sealed class MapsuiS101VectorRenderer
     private static IFeature? CreateMapFeature(
         ParsedDrawingInstruction instruction,
         GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords)
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
     {
         switch (instruction.Type)
         {
             case InstructionType.AreaFill:
-                return CreateAreaFeature(instruction, geomType, coords);
+                return CreateAreaFeature(instruction, geomType, coords, resolveColor);
 
             case InstructionType.Line:
-                return CreateLineFeature(instruction, geomType, coords);
+                return CreateLineFeature(instruction, geomType, coords, resolveColor);
 
             case InstructionType.Point:
-                return CreatePointFeature(instruction, coords);
+                return CreatePointFeature(instruction, coords, resolveColor);
 
             case InstructionType.Text:
-                return CreateTextFeature(instruction, coords);
+                return CreateTextFeature(instruction, coords, resolveColor);
 
             default:
                 return null;
@@ -106,7 +117,8 @@ public sealed class MapsuiS101VectorRenderer
     private static IFeature? CreateAreaFeature(
         ParsedDrawingInstruction instruction,
         GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords)
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
     {
         if (coords.Count < 3)
             return null;
@@ -130,7 +142,7 @@ public sealed class MapsuiS101VectorRenderer
         var ring = new LinearRing(ringCoords.ToArray());
         var polygon = new Polygon(ring);
 
-        var fillColor = ResolveColor(instruction.SymbolRef);
+        var fillColor = resolveColor(instruction.SymbolRef);
 
         if (instruction.Transparency.HasValue)
         {
@@ -152,7 +164,8 @@ public sealed class MapsuiS101VectorRenderer
     private static IFeature? CreateLineFeature(
         ParsedDrawingInstruction instruction,
         GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords)
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
     {
         if (coords.Count < 2)
             return null;
@@ -160,7 +173,7 @@ public sealed class MapsuiS101VectorRenderer
         var projected = ProjectCoordinates(coords);
         var lineString = new LineString(projected.ToArray());
 
-        var lineColor = ResolveColor(instruction.LineColor);
+        var lineColor = resolveColor(instruction.LineColor);
         var pen = new Pen
         {
             Color = lineColor,
@@ -186,7 +199,8 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreatePointFeature(
         ParsedDrawingInstruction instruction,
-        IReadOnlyList<(double Lat, double Lon)> coords)
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
     {
         if (coords.Count == 0)
             return null;
@@ -195,7 +209,7 @@ public sealed class MapsuiS101VectorRenderer
         var (lat, lon) = coords[0];
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-        var symbolColor = ResolveSymbolColor(instruction.SymbolRef);
+        var symbolColor = ResolveSymbolColor(instruction.SymbolRef, resolveColor);
         var style = new SymbolStyle
         {
             SymbolScale = 0.15 * instruction.ScaleFactor,
@@ -213,7 +227,8 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreateTextFeature(
         ParsedDrawingInstruction instruction,
-        IReadOnlyList<(double Lat, double Lon)> coords)
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
     {
         if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
             return null;
@@ -221,7 +236,7 @@ public sealed class MapsuiS101VectorRenderer
         var (lat, lon) = coords[0];
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-        var textColor = ResolveColor(instruction.FontColor);
+        var textColor = resolveColor(instruction.FontColor);
         var style = new LabelStyle
         {
             Text = instruction.Text,
@@ -250,90 +265,63 @@ public sealed class MapsuiS101VectorRenderer
     }
 
     // ── S-100 Color resolution ─────────────────────────────────────────
-    //
-    // The S-100 portrayal catalogue defines color tokens (e.g. "DEPVS", "CHBLK")
-    // that map to CIE xyL values in a color profile. For the initial implementation,
-    // we use a hardcoded lookup table of common S-100 Day palette colors (sRGB
-    // approximations of the IHO standard colours).
 
-    private static readonly Dictionary<string, Color> S100Colors = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>
+    /// Builds a color resolver function from the given palette.
+    /// Falls back to black for unknown tokens.
+    /// </summary>
+    private static Func<string?, MapsuiColor> BuildColorResolver(ColorPalette? palette)
     {
-        // Chart colours
-        ["NODTA"] = new Color(163, 180, 183),   // No data — grey
-        ["CHBLK"] = new Color(0, 0, 0),         // Chart black
-        ["CHGRD"] = new Color(140, 140, 140),    // Chart grey dominant
-        ["CHGRF"] = new Color(200, 200, 200),    // Chart grey faint
-        ["CHRED"] = new Color(200, 50, 50),      // Chart red
-        ["CHGRN"] = new Color(0, 135, 70),       // Chart green
-        ["CHYLW"] = new Color(230, 200, 0),      // Chart yellow
-        ["CHMGD"] = new Color(200, 80, 200),     // Chart magenta dominant
-        ["CHMGF"] = new Color(220, 160, 220),    // Chart magenta faint
-        ["CHBRN"] = new Color(160, 100, 60),     // Chart brown
-        ["CHWHT"] = new Color(255, 255, 255),    // Chart white
-        ["CSTLN"] = new Color(0, 0, 0),          // Coastline
+        return token =>
+        {
+            if (string.IsNullOrEmpty(token))
+                return MapsuiColor.Black;
 
-        // Depth colours (Day palette approximations)
-        ["DEPDW"] = new Color(255, 255, 255),    // Deep water — white
-        ["DEPMD"] = new Color(204, 229, 255),    // Medium depth — light blue
-        ["DEPMS"] = new Color(153, 204, 255),    // Medium shallow — mid blue
-        ["DEPVS"] = new Color(102, 178, 255),    // Very shallow — blue
-        ["DEPIT"] = new Color(175, 210, 150),    // Intertidal — yellow-green
-        ["DEPSC"] = new Color(0, 130, 175),      // Safety contour
+            if (palette is not null)
+            {
+                var hex = palette.Resolve(token);
+                if (hex != "#000000" || string.Equals(token, "CHBLK", StringComparison.OrdinalIgnoreCase))
+                {
+                    return HexToColor(hex);
+                }
+            }
 
-        // Contour/line colours
-        ["DEPCN"] = new Color(130, 175, 200),    // Depth contour — blue-grey
-        ["LANDF"] = new Color(230, 220, 190),    // Land — beige
-        ["LANDA"] = new Color(210, 200, 170),    // Land area fill
-        ["LITRD"] = new Color(230, 180, 130),    // Drying area
-        ["RESBL"] = new Color(160, 200, 220),    // Restricted area blue
-        ["APTS2"] = new Color(170, 170, 210),    // Anchorage fill
-        ["TRFCD"] = new Color(200, 170, 220),    // Routeing colours
-        ["TRFCF"] = new Color(220, 200, 230),
-
-        // Navigation
-        ["RADHI"] = new Color(0, 130, 0),        // Radar conspicuous
-        ["DNGHL"] = new Color(255, 0, 0),        // Danger highlight
-
-        // Buoy/beacon
-        ["OUTLW"] = new Color(100, 100, 100),    // Outline
-        ["LITGN"] = new Color(0, 180, 80),       // Light green
-        ["LITRD"] = new Color(255, 80, 80),       // Light red
-
-        // Flat colours used in text/labels
-        ["SNDG1"] = new Color(60, 60, 60),       // Sounding colour
-        ["SNDG2"] = new Color(0, 0, 0),          // Sounding depth colour
-    };
-
-    private static Color ResolveColor(string? token)
-    {
-        if (string.IsNullOrEmpty(token))
-            return Color.Black;
-
-        if (S100Colors.TryGetValue(token, out var color))
-            return color;
-
-        return Color.Black;
+            return MapsuiColor.Black;
+        };
     }
 
-    private static Color ResolveSymbolColor(string? symbolRef)
+    private static MapsuiColor HexToColor(string hex)
+    {
+        if (hex.Length == 7 && hex[0] == '#' &&
+            int.TryParse(hex.AsSpan(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
+            int.TryParse(hex.AsSpan(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
+            int.TryParse(hex.AsSpan(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
+            return new MapsuiColor(r, g, b);
+        }
+
+        return MapsuiColor.Black;
+    }
+
+    private static MapsuiColor ResolveSymbolColor(string? symbolRef, Func<string?, MapsuiColor> resolveColor)
     {
         if (string.IsNullOrEmpty(symbolRef))
-            return Color.Black;
+            return MapsuiColor.Black;
 
         // Symbol names like QUESMRK1, SAFCON03, BOYCAR01 etc.
         // Map by prefix/known names to approximate colours
         if (symbolRef.StartsWith("SAFCON", StringComparison.Ordinal))
-            return new Color(60, 60, 60);       // Sounding symbols — dark grey
+            return resolveColor("SNDG1");     // Sounding symbols — use sounding colour
         if (symbolRef.StartsWith("BOYCAR", StringComparison.Ordinal) ||
             symbolRef.StartsWith("BOYLAT", StringComparison.Ordinal))
-            return new Color(0, 0, 0);          // Buoy symbols — black
+            return resolveColor("CHBLK");     // Buoy symbols — black
         if (symbolRef.StartsWith("BCNLAT", StringComparison.Ordinal))
-            return new Color(0, 0, 0);          // Beacon symbols — black
+            return resolveColor("CHBLK");     // Beacon symbols — black
         if (symbolRef == "QUESMRK1")
-            return new Color(200, 0, 200, 120); // Default/unknown — faint magenta
+            return new MapsuiColor(200, 0, 200, 120); // Default/unknown — faint magenta
         if (symbolRef.StartsWith("LIGHTS", StringComparison.Ordinal))
-            return new Color(200, 200, 0);      // Lights — yellow
+            return resolveColor("LITYW");     // Lights — yellow
 
-        return new Color(100, 100, 100);
+        return resolveColor("OUTLW");
     }
 }

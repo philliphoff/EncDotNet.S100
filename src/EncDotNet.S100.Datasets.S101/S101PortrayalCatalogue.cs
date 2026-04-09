@@ -74,17 +74,41 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
                 _ => (PaletteType?)null,
             };
 
-            if (paletteType is null) continue;
-
-            try
+            if (paletteType is not null)
             {
-                using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
-                var palette = ColorProfileReader.Read(stream, paletteName);
-                _palettes[paletteType.Value] = palette;
+                try
+                {
+                    using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                    var palette = ColorProfileReader.Read(stream, paletteName);
+                    _palettes[paletteType.Value] = palette;
+                }
+                catch (Exception)
+                {
+                    // If a color profile cannot be loaded, skip it gracefully.
+                }
             }
-            catch (Exception)
+            else
             {
-                // If a color profile cannot be loaded, skip it gracefully.
+                // The manifest entry name does not indicate a specific palette.
+                // The file may contain multiple palettes (Day, Dusk, Night) —
+                // try loading each one from the same file.
+                foreach (var (type, name) in new[] { (PaletteType.Day, "Day"), (PaletteType.Dusk, "Dusk"), (PaletteType.Night, "Night") })
+                {
+                    if (_palettes.ContainsKey(type)) continue;
+                    try
+                    {
+                        using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                        var palette = ColorProfileReader.Read(stream, name);
+                        if (palette.Colors.Count > 0)
+                        {
+                            _palettes[type] = palette;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Skip gracefully.
+                    }
+                }
             }
         }
 

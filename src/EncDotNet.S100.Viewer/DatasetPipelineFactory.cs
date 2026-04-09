@@ -186,10 +186,17 @@ internal sealed class DatasetPipelineFactory
                 }
                 Console.WriteLine($"[S101-Lua] Parsed {parsed.Count} drawing instructions");
 
+                // Load the colour palette from the portrayal catalogue
+                var s101Cat = new S101PortrayalCatalogue(provider, _luaEngine);
+                s101Cat.SwitchPalette(PaletteType.Day);
+                var palette = s101Cat.ActivePalette;
+                Console.WriteLine($"[S101-Lua] Loaded Day palette with {palette.Colors.Count} colors");
+
                 // Render to Mapsui layer
                 var vectorRenderer = new MapsuiS101VectorRenderer
                 {
                     LayerName = $"S-101: {Path.GetFileName(path)}",
+                    Palette = palette,
                 };
                 var mapLayer = vectorRenderer.Render(parsed, dataset);
                 var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
