@@ -136,13 +136,15 @@ public sealed class S101LuaDataProvider
     private List<object> HostFeatureGetSimpleAttribute(double featureId, string attributePath, string attributeCode)
     {
         var feat = GetFeature((uint)featureId);
-        return GetSimpleAttributeValues(feat.Attributes, attributeCode);
+        var attrs = ResolveAttributeScope(feat.Attributes, attributePath);
+        return GetSimpleAttributeValues(attrs, attributeCode);
     }
 
     private double HostFeatureGetComplexAttributeCount(double featureId, string attributePath, string attributeCode)
     {
         var feat = GetFeature((uint)featureId);
-        return CountComplexAttributes(feat.Attributes, attributeCode);
+        var attrs = ResolveAttributeScope(feat.Attributes, attributePath);
+        return CountComplexAttributes(attrs, attributeCode);
     }
 
     private object? HostFeatureGetSpatialAssociations(double featureId)
@@ -220,7 +222,8 @@ public sealed class S101LuaDataProvider
     {
         if (_doc.InformationTypes.TryGetValue((uint)infoId, out var info))
         {
-            return GetSimpleAttributeValues(info.Attributes, attributeCode);
+            var attrs = ResolveAttributeScope(info.Attributes, attributePath);
+            return GetSimpleAttributeValues(attrs, attributeCode);
         }
         return new List<object>();
     }
@@ -229,7 +232,8 @@ public sealed class S101LuaDataProvider
     {
         if (_doc.InformationTypes.TryGetValue((uint)infoId, out var info))
         {
-            return CountComplexAttributes(info.Attributes, attributeCode);
+            var attrs = ResolveAttributeScope(info.Attributes, attributePath);
+            return CountComplexAttributes(attrs, attributeCode);
         }
         return 0;
     }
@@ -375,6 +379,73 @@ public sealed class S101LuaDataProvider
             .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Navigate into the flat attribute list to find sub-attributes under the
+    /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
+    /// Returns the sub-attributes within the specified complex attribute scope.
+    /// </summary>
+    private ImmutableArray<S101Attribute> ResolveAttributeScope(ImmutableArray<S101Attribute> attributes, string attributePath)
+    {
+        if (string.IsNullOrEmpty(attributePath))
+            return attributes;
+
+        // Parse path segments like "verticalClearanceFixed:1"
+        var segments = attributePath.Split(';');
+        var current = attributes;
+        foreach (var segment in segments)
+        {
+            var colonIdx = segment.IndexOf(':');
+            var complexCode = segment[..colonIdx];
+            var instanceIndex = int.Parse(segment[(colonIdx + 1)..]);
+
+            // Resolve complex attribute numeric code
+            ushort? numericCode = null;
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+            {
+                if (string.Equals(name, complexCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    numericCode = code;
+                    break;
+                }
+            }
+
+            if (numericCode is null) return ImmutableArray<S101Attribute>.Empty;
+
+            // Find the nth instance of this complex attribute and collect sub-attributes
+            int found = 0;
+            var subAttrs = ImmutableArray.CreateBuilder<S101Attribute>();
+            bool collecting = false;
+            foreach (var attr in current)
+            {
+                if (attr.NumericCode == numericCode && attr.Index == 1)
+                {
+                    found++;
+                    if (found == instanceIndex)
+                    {
+                        collecting = true;
+                        continue; // Skip the complex attribute marker itself
+                    }
+                    else if (collecting)
+                    {
+                        break; // Next instance of same complex attribute — done
+                    }
+                }
+                else if (collecting)
+                {
+                    // Check if this is another top-level/sibling complex attribute (not a sub-attribute)
+                    // Sub-attributes have Index values that may vary, but we track them by
+                    // whether we've hit another complex attr marker. For simplicity, collect
+                    // until we see a code that matches ANY complex attribute at this level.
+                    subAttrs.Add(attr);
+                }
+            }
+
+            current = subAttrs.ToImmutable();
+        }
+
+        return current;
+    }
+
     private List<object> GetSimpleAttributeValues(ImmutableArray<S101Attribute> attributes, string attributeCode)
     {
         // Resolve attribute code from name to numeric code
@@ -393,7 +464,7 @@ public sealed class S101LuaDataProvider
         var result = new List<object>();
         foreach (var attr in attributes)
         {
-            if (attr.NumericCode == numericCode)
+            if (attr.NumericCode == numericCode && attr.Value.Length > 0)
             {
                 result.Add(attr.Value);
             }

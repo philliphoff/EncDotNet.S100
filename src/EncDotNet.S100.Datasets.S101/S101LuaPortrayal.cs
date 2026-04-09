@@ -154,6 +154,17 @@ public sealed class S101LuaPortrayal
         //     constructing proper Spatial Lua objects via Create* functions.
         lua.Execute(HostGetSpatialShim);
 
+        // 3c. Patch 'contains' to handle nil/void gracefully. MoonSharp may
+        //     return DynValue.Void (rather than nil) from __index when an
+        //     attribute is missing, causing type() to error.
+        lua.Execute("""
+            local _orig_contains = contains
+            function contains(value, array)
+                if value == nil then return false end
+                return _orig_contains(value, array)
+            end
+            """);
+
         // 4. Build context parameter array using the Lua-side factory function
         //    PortrayalCreateContextParameter(name, type, default) → ContextParameter table
         //    Then pass the array to PortrayalInitializeContextParameters()
