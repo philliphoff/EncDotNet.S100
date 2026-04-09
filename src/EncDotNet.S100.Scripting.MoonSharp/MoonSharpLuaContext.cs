@@ -1,3 +1,4 @@
+using System.Globalization;
 using MoonSharp.Interpreter;
 using MoonSharp.Interpreter.Loaders;
 
@@ -22,7 +23,7 @@ internal sealed class MoonSharpLuaContext : ILuaContext
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrEmpty(source);
-        _script.DoString(source);
+        WithInvariantCulture(() => _script.DoString(source));
     }
 
     /// <inheritdoc />
@@ -61,7 +62,7 @@ internal sealed class MoonSharpLuaContext : ILuaContext
             throw new InvalidOperationException($"Lua global '{functionName}' is nil or not defined.");
 
         var luaArgs = args.Select(MarshalToLua).ToArray();
-        var result = _script.Call(fn, luaArgs);
+        var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
         return MarshalFromLua(result);
     }
 
@@ -76,7 +77,7 @@ internal sealed class MoonSharpLuaContext : ILuaContext
             throw new InvalidOperationException($"Lua global '{functionName}' is nil or not defined.");
 
         var luaArgs = args.Select(MarshalToLua).ToArray();
-        var result = _script.Call(fn, luaArgs);
+        var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
 
         if (result.Type == DataType.Tuple)
         {
@@ -90,6 +91,39 @@ internal sealed class MoonSharpLuaContext : ILuaContext
     public void Dispose()
     {
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Runs an action with <see cref="CultureInfo.InvariantCulture"/> as the current
+    /// thread culture, ensuring Lua number-to-string conversions always use '.' as
+    /// the decimal separator.
+    /// </summary>
+    private static void WithInvariantCulture(Action action)
+    {
+        var prev = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            action();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = prev;
+        }
+    }
+
+    private static T WithInvariantCulture<T>(Func<T> func)
+    {
+        var prev = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            return func();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = prev;
+        }
     }
 
     /// <summary>

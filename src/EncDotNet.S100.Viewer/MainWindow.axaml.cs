@@ -3,9 +3,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
@@ -23,6 +26,7 @@ public partial class MainWindow : Window
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager = new();
     private readonly DatasetPipelineFactory _pipelineFactory;
+    private string? _screenshotPath;
 
     public MainWindow()
     {
@@ -48,11 +52,25 @@ public partial class MainWindow : Window
         UpdatePortrayalButtonText();
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
 
-        // Auto-load dataset from command-line argument if provided
+        // Parse command-line arguments
         var cliArgs = Environment.GetCommandLineArgs();
-        if (cliArgs.Length > 1 && File.Exists(cliArgs[1]))
+        string? datasetArg = null;
+
+        for (int i = 1; i < cliArgs.Length; i++)
         {
-            Opened += async (_, _) => await LoadDatasetAsync(cliArgs[1]);
+            if (cliArgs[i] == "--screenshot" && i + 1 < cliArgs.Length)
+            {
+                _screenshotPath = cliArgs[++i];
+            }
+            else if (datasetArg is null && File.Exists(cliArgs[i]))
+            {
+                datasetArg = cliArgs[i];
+            }
+        }
+
+        if (datasetArg is not null)
+        {
+            Opened += async (_, _) => await LoadDatasetAsync(datasetArg);
         }
     }
 
@@ -196,6 +214,13 @@ public partial class MainWindow : Window
 
             ClearButton.IsEnabled = true;
             SetStatus(result.Info);
+
+            if (_screenshotPath is not null)
+            {
+                // Let the map render a couple of frames before capturing
+                await Task.Delay(2000);
+                await Dispatcher.UIThread.InvokeAsync(() => CaptureScreenshot(_screenshotPath));
+            }
         }
         catch (Exception ex)
         {
@@ -205,6 +230,29 @@ public partial class MainWindow : Window
         finally
         {
             OpenButton.IsEnabled = true;
+        }
+    }
+
+    private void CaptureScreenshot(string outputPath)
+    {
+        try
+        {
+            var pixelSize = new PixelSize((int)MapControl.Bounds.Width, (int)MapControl.Bounds.Height);
+            if (pixelSize.Width <= 0 || pixelSize.Height <= 0)
+            {
+                Console.Error.WriteLine($"[Screenshot] Map control has zero size, skipping.");
+                return;
+            }
+
+            using var bitmap = new RenderTargetBitmap(pixelSize);
+            bitmap.Render(MapControl);
+            bitmap.Save(outputPath);
+
+            Console.WriteLine($"[Screenshot] Saved {pixelSize.Width}x{pixelSize.Height} to {outputPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Screenshot] Failed: {ex.Message}");
         }
     }
 

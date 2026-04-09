@@ -178,19 +178,6 @@ internal sealed class DatasetPipelineFactory
                 var emitted = portrayal.Execute(dataset, context);
                 Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");
 
-                // Show emitted instruction strings for diagnostics
-                int nonEmpty = 0;
-                foreach (var e in emitted)
-                {
-                    if (!string.IsNullOrEmpty(e.InstructionString))
-                    {
-                        nonEmpty++;
-                        if (nonEmpty <= 10)
-                            Console.WriteLine($"[S101-Lua]   Feature={e.FeatureRef}, Instructions={e.InstructionString[..Math.Min(300, e.InstructionString.Length)]}");
-                    }
-                }
-                Console.WriteLine($"[S101-Lua] {nonEmpty} of {emitted.Count} have non-empty instruction strings");
-
                 // Parse emitted instruction strings
                 var parsed = new List<ParsedDrawingInstruction>();
                 foreach (var e in emitted)
@@ -199,10 +186,14 @@ internal sealed class DatasetPipelineFactory
                 }
                 Console.WriteLine($"[S101-Lua] Parsed {parsed.Count} drawing instructions");
 
-                var mapLayer = new MemoryLayer
+                // Render to Mapsui layer
+                var vectorRenderer = new MapsuiS101VectorRenderer
                 {
-                    Name = $"S-101: {Path.GetFileName(path)}",
+                    LayerName = $"S-101: {Path.GetFileName(path)}",
                 };
+                var mapLayer = vectorRenderer.Render(parsed, dataset);
+                var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
+                Console.WriteLine($"[S101-Lua] Rendered {parsed.Count} instructions to Mapsui layer");
 
                 var info = $"{dataset.DatasetName} — {dataset.FeatureCount} features, " +
                            $"{emitted.Count} emitted, {parsed.Count} instructions";
@@ -210,7 +201,7 @@ internal sealed class DatasetPipelineFactory
                 return new DatasetResult
                 {
                     Layer = mapLayer,
-                    Extent = new MRect(0, 0, 0, 0),
+                    Extent = layerExtent,
                     Info = info,
                     ProductSpec = "S-101",
                 };

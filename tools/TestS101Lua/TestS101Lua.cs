@@ -85,6 +85,20 @@ sw.Stop();
 Console.WriteLine($"PortrayalMain completed in {sw.ElapsedMilliseconds}ms");
 Console.WriteLine($"  Emitted: {emitted.Count}");
 
+// Dump first few raw instruction strings containing LineStyle
+Console.WriteLine();
+Console.WriteLine("First 3 raw instruction strings containing LineStyle:");
+int rawShown = 0;
+foreach (var e in emitted)
+{
+    if (rawShown >= 3) break;
+    if (e.InstructionString?.Contains("LineStyle") == true)
+    {
+        Console.WriteLine($"  Feature {e.FeatureRef}: {e.InstructionString}");
+        rawShown++;
+    }
+}
+
 // Analyze results
 int withInstructions = 0;
 int nullInstructions = 0;
@@ -161,6 +175,101 @@ foreach (var e in emitted)
         Console.WriteLine($"  Feature {e.FeatureRef}: {e.InstructionString[..Math.Min(120, e.InstructionString.Length)]}");
         shown++;
     }
+}
+
+// ── Detailed diagnostics: geometry + instructions per feature ──
+Console.WriteLine();
+Console.WriteLine("=== DETAILED FEATURE DIAGNOSTICS ===");
+
+// Get feature geometry from the vector source
+var vectorSource = new S101VectorSource(dataset);
+var geoFeatures = vectorSource.GetFeatures();
+var geoLookup = new Dictionary<long, (string FeatureType, string GeomType, int CoordCount, double MinLat, double MaxLat, double MinLon, double MaxLon)>();
+foreach (var gf in geoFeatures)
+{
+    double minLat = double.MaxValue, maxLat = double.MinValue;
+    double minLon = double.MaxValue, maxLon = double.MinValue;
+    foreach (var (lat, lon) in gf.Coordinates)
+    {
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lon < minLon) minLon = lon;
+        if (lon > maxLon) maxLon = lon;
+    }
+    geoLookup[gf.Id] = (gf.FeatureType, gf.GeometryType.ToString(), gf.Coordinates.Count,
+        minLat, maxLat, minLon, maxLon);
+}
+
+Console.WriteLine($"Features with geometry: {geoLookup.Count} of {dataset.FeatureCount}");
+Console.WriteLine();
+
+// Overall coordinate extent
+if (geoLookup.Count > 0)
+{
+    double oMinLat = geoLookup.Values.Min(g => g.MinLat);
+    double oMaxLat = geoLookup.Values.Max(g => g.MaxLat);
+    double oMinLon = geoLookup.Values.Min(g => g.MinLon);
+    double oMaxLon = geoLookup.Values.Max(g => g.MaxLon);
+    Console.WriteLine($"Overall extent: Lat [{oMinLat:F6}, {oMaxLat:F6}], Lon [{oMinLon:F6}, {oMaxLon:F6}]");
+    Console.WriteLine();
+}
+
+// Group emitted by feature, show full instructions + geometry
+Console.WriteLine("Per-feature detail (first 20 features with proper rules):");
+int detailShown = 0;
+foreach (var e in emitted)
+{
+    if (string.IsNullOrEmpty(e.InstructionString)) continue;
+    if (e.InstructionString.Contains("QUESMRK1")) continue;  // skip defaults
+    if (e.InstructionString.Contains("NullInstruction")) continue;
+    if (detailShown >= 20) break;
+    detailShown++;
+
+    Console.WriteLine($"  Feature {e.FeatureRef}:");
+    if (long.TryParse(e.FeatureRef, out var fid) && geoLookup.TryGetValue(fid, out var geo))
+    {
+        Console.WriteLine($"    Type: {geo.FeatureType}, Geom: {geo.GeomType}, Coords: {geo.CoordCount}");
+        Console.WriteLine($"    Extent: Lat [{geo.MinLat:F6}, {geo.MaxLat:F6}], Lon [{geo.MinLon:F6}, {geo.MaxLon:F6}]");
+    }
+    else
+    {
+        Console.WriteLine($"    ** No geometry found **");
+    }
+
+    // Show parsed instructions for this feature
+    var featureParsed = parsed.Where(p => p.FeatureRef == e.FeatureRef).ToList();
+    foreach (var p in featureParsed)
+    {
+        var detail = p.Type switch
+        {
+            InstructionType.AreaFill => $"AreaFill: symbol={p.SymbolRef}, colorFill={p.IsColorFill}, transparency={p.Transparency}",
+            InstructionType.Line => $"Line: symbol={p.SymbolRef}, color={p.LineColor}, width={p.LineWidth}",
+            InstructionType.Point => $"Point: symbol={p.SymbolRef}, rotation={p.Rotation}, scale={p.ScaleFactor}",
+            InstructionType.Text => $"Text: \"{p.Text}\", color={p.FontColor}, size={p.FontSize}",
+            _ => p.Type.ToString(),
+        };
+        Console.WriteLine($"    [{p.Type}] VG={p.ViewingGroup} DP={p.DrawingPriority} Plane={p.DisplayPlane} {detail}");
+    }
+    Console.WriteLine();
+}
+
+// Show geometry type distribution
+Console.WriteLine("Geometry type distribution:");
+foreach (var group in geoLookup.Values.GroupBy(g => g.GeomType).OrderByDescending(g => g.Count()))
+{
+    Console.WriteLine($"  {group.Key}: {group.Count()}");
+}
+
+// Show features with instructions but no geometry
+Console.WriteLine();
+var missingGeo = emitted
+    .Where(e => !string.IsNullOrEmpty(e.InstructionString) && !e.InstructionString.Contains("NullInstruction"))
+    .Where(e => long.TryParse(e.FeatureRef, out var fid2) && !geoLookup.ContainsKey(fid2))
+    .ToList();
+Console.WriteLine($"Features with instructions but NO geometry: {missingGeo.Count}");
+foreach (var e in missingGeo.Take(5))
+{
+    Console.WriteLine($"  Feature {e.FeatureRef}: {e.InstructionString[..Math.Min(80, e.InstructionString.Length)]}");
 }
 
 return 0;

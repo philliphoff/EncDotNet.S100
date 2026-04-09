@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Mapsui" Version="5.0.2" />
+    <PackageReference Include="Mapsui.Nts" Version="5.0.2" />
     <PackageReference Include="Mapsui.Tiling" Version="5.0.2" />
     <PackageReference Include="ProjNet" Version="2.0.0" />
     <PackageReference Include="SkiaSharp" Version="3.119.0" />
@@ -15,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
   </ItemGroup>
 
 </Project>
