@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EncDotNet.S57" Version="0.3.2" />
+    <PackageReference Include="EncDotNet.Iso8211" Version="0.3.4" />
   </ItemGroup>
 
   <ItemGroup>

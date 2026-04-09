@@ -1,47 +1,44 @@
-using EncDotNet.S57.Charts;
-
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>
-/// An S-101 Electronic Navigational Chart dataset, built on the S-57
-/// encoding (ISO 8211) through <see cref="S57Chart"/>.
+/// An S-101 Electronic Navigational Chart dataset, parsed directly from
+/// ISO 8211 encoded records via <see cref="S101DocumentReader"/>.
 /// </summary>
 public sealed class S101Dataset
 {
-    private S101Dataset(S57Chart chart)
+    private S101Dataset(S101Document document)
     {
-        Chart = chart;
+        Document = document;
     }
 
-    /// <summary>The underlying S-57 chart providing indexed features and spatial records.</summary>
-    internal S57Chart Chart { get; }
+    /// <summary>The underlying parsed S-101 document.</summary>
+    internal S101Document Document { get; }
 
     /// <summary>Dataset name from the DSID record.</summary>
-    public string DatasetName => Chart.Identification.DataSetName ?? "";
+    public string DatasetName => Document.Identification.DatasetName;
 
-    /// <summary>Compilation scale denominator (e.g. 22000 for 1:22,000).</summary>
-    public int CompilationScale => Chart.CompilationScale;
+    /// <summary>Coordinate multiplication factor for X (longitude).</summary>
+    public uint CoordinateMultiplicationFactorX => Document.StructureInfo.CoordinateMultiplicationFactorX;
 
-    /// <summary>Coordinate multiplication factor (raw integers ÷ COMF → degrees).</summary>
-    public int CoordinateMultiplicationFactor => Chart.CoordinateMultiplicationFactor;
+    /// <summary>Coordinate multiplication factor for Y (latitude).</summary>
+    public uint CoordinateMultiplicationFactorY => Document.StructureInfo.CoordinateMultiplicationFactorY;
 
     /// <summary>Number of feature records in the dataset.</summary>
-    public int FeatureCount =>
-        Chart.PointFeatures.Count + Chart.LineFeatures.Count + Chart.AreaFeatures.Count;
+    public int FeatureCount => Document.Features.Length;
 
     /// <summary>Opens an S-101 dataset from a file path.</summary>
     public static S101Dataset Open(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
-        var chart = S57Chart.FromFile(path);
-        return new S101Dataset(chart);
+        var doc = S101DocumentReader.ReadFromFile(path);
+        return new S101Dataset(doc);
     }
 
     /// <summary>Opens an S-101 dataset from a stream.</summary>
     public static S101Dataset Open(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        var chart = S57Chart.FromStream(stream);
-        return new S101Dataset(chart);
+        var doc = S101DocumentReader.ReadFromStream(stream);
+        return new S101Dataset(doc);
     }
 }

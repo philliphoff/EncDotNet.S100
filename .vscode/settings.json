@@ -8,6 +8,11 @@
         "dotnet tool": true,
         "awk": true,
         "cp": true,
-        "mkdir": true
+        "mkdir": true,
+        "dotnet list": true,
+        "dotnet ilspycmd": true,
+        "dotnet nuget": true,
+        "dotnet add": true,
+        "dotnet ildasm": true
     }
 }

@@ -163,7 +163,7 @@ internal sealed class DatasetPipelineFactory
                 WidthPixels = 1024,
                 HeightPixels = 768,
             },
-            ScaleDenominator = dataset.CompilationScale,
+            ScaleDenominator = 0,
         };
 
         var vectorLayer = pipeline.ProcessAsync(featureXmlSource, catalogue, context)
@@ -182,7 +182,7 @@ internal sealed class DatasetPipelineFactory
         var extent = ComputeVectorExtent(instructions);
 
         var info = $"{dataset.DatasetName} — {dataset.FeatureCount} features, " +
-                   $"{instructions.Count} instructions, scale 1:{dataset.CompilationScale}";
+                   $"{instructions.Count} instructions";
 
         return new DatasetResult
         {

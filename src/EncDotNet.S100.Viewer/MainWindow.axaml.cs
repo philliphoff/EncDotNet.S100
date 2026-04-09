@@ -46,6 +46,13 @@ public partial class MainWindow : Window
 
         UpdatePortrayalButtonText();
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // Auto-load dataset from command-line argument if provided
+        var cliArgs = Environment.GetCommandLineArgs();
+        if (cliArgs.Length > 1 && File.Exists(cliArgs[1]))
+        {
+            Opened += async (_, _) => await LoadDatasetAsync(cliArgs[1]);
+        }
     }
 
     private async void OnOpenClick(object? sender, RoutedEventArgs e)
@@ -192,7 +199,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             SetStatus($"Error: {ex.Message}");
-            Debug.WriteLine($"Failed to load {path}: {ex}");
+            Console.Error.WriteLine($"Failed to load {path}:\n{ex}");
         }
         finally
         {

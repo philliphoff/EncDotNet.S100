@@ -114,7 +114,10 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
         foreach (var ruleFile in _provider.Catalogue.RuleFiles)
         {
-            var ruleType = ruleFile.RuleType.Equals("Lua", StringComparison.OrdinalIgnoreCase)
+            // Determine type from file extension first; the catalogue ruleType field
+            // (e.g. "TopLevelTemplate", "SubTemplate") describes the rule's role,
+            // not its format.
+            var ruleType = Path.GetExtension(ruleFile.FileName).Equals(".lua", StringComparison.OrdinalIgnoreCase)
                 ? PortrayalRuleType.Lua
                 : PortrayalRuleType.Xslt;
 
