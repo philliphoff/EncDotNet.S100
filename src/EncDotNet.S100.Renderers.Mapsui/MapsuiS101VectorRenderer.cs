@@ -63,9 +63,12 @@ public sealed class MapsuiS101VectorRenderer
         // 3. Build color resolver from palette
         var resolveColor = BuildColorResolver(Palette);
 
+        // 3a. Merge consecutive SAFCON point instructions into text labels
+        var merged = MergeSafconLabels(sorted);
+
         // 4. Convert each instruction to a Mapsui feature
         var mapFeatures = new List<IFeature>();
-        foreach (var instruction in sorted)
+        foreach (var instruction in merged)
         {
             if (!long.TryParse(instruction.FeatureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var featureId))
                 continue;
@@ -262,6 +265,105 @@ public sealed class MapsuiS101VectorRenderer
             result.Add(new Coordinate(mx, my));
         }
         return result;
+    }
+
+    // ── SAFCON contour label merging ───────────────────────────────────
+    //
+    // The S-101 Lua portrayal emits depth contour labels as sequences of
+    // PointInstruction:SAFCONxy symbols, where each symbol represents a
+    // single positioned digit glyph in an SVG composition. Since we don't
+    // yet render SVG symbols, we decode the SAFCON sequence back into a
+    // depth text string and emit a single text instruction instead.
+    //
+    // SAFCON encoding (from SAFCON01.lua):
+    //   Row 0: single/middle digit    Row 5: fractional (depth 10–30)
+    //   Row 1: units of 2-digit       Row 6: fractional (depth <10)
+    //   Row 2: tens of 2-digit        Row 7: last digit of 4/5-digit
+    //   Row 3: first of 4-digit       Row 8: first of 3-digit
+    //   Row 4: first of 5-digit       Row 9: third of 3-digit
+
+    private static List<ParsedDrawingInstruction> MergeSafconLabels(List<ParsedDrawingInstruction> instructions)
+    {
+        var result = new List<ParsedDrawingInstruction>(instructions.Count);
+
+        // Group consecutive SAFCON points by feature
+        var i = 0;
+        while (i < instructions.Count)
+        {
+            var instr = instructions[i];
+
+            if (instr.Type == InstructionType.Point && IsSafconSymbol(instr.SymbolRef))
+            {
+                // Collect all consecutive SAFCON instructions for this feature
+                var safcons = new List<ParsedDrawingInstruction> { instr };
+                var j = i + 1;
+                while (j < instructions.Count &&
+                       instructions[j].Type == InstructionType.Point &&
+                       instructions[j].FeatureRef == instr.FeatureRef &&
+                       IsSafconSymbol(instructions[j].SymbolRef))
+                {
+                    safcons.Add(instructions[j]);
+                    j++;
+                }
+
+                // Decode the SAFCON sequence into a depth string
+                var depthText = DecodeSafconSequence(safcons);
+
+                // Emit a synthetic text instruction
+                result.Add(new ParsedDrawingInstruction
+                {
+                    FeatureRef = instr.FeatureRef,
+                    Type = InstructionType.Text,
+                    Text = depthText,
+                    ViewingGroup = instr.ViewingGroup,
+                    DrawingPriority = instr.DrawingPriority,
+                    DisplayPlane = instr.DisplayPlane,
+                    FontSize = 10,
+                    FontColor = "SNDG2",
+                    ScaleMinimum = instr.ScaleMinimum,
+                    ScaleMaximum = instr.ScaleMaximum,
+                });
+
+                i = j;
+            }
+            else
+            {
+                result.Add(instr);
+                i++;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsSafconSymbol(string? symbolRef)
+    {
+        return symbolRef is not null &&
+               symbolRef.StartsWith("SAFCON", StringComparison.Ordinal) &&
+               symbolRef.Length == 8;
+    }
+
+    private static string DecodeSafconSequence(List<ParsedDrawingInstruction> safcons)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        foreach (var instr in safcons)
+        {
+            var name = instr.SymbolRef!;
+            // SAFCONxy — x is row (position type), y is digit
+            var row = name[6] - '0';
+            var digit = name[7];
+
+            if (row == 5 || row == 6)
+            {
+                // Fractional digit — prepend decimal point
+                sb.Append('.');
+            }
+
+            sb.Append(digit);
+        }
+
+        return sb.ToString();
     }
 
     // ── S-100 Color resolution ─────────────────────────────────────────
