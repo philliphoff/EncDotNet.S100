@@ -28,7 +28,7 @@ public partial class DatasetsView : UserControl
             FileTypeFilter =
             [
                 new FilePickerFileType("S-101 Files (ISO 8211)") { Patterns = ["*.000"] },
-                new FilePickerFileType("S-102 Files (HDF5)") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
+                new FilePickerFileType("S-100 HDF5 Files (S-102, S-111)") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
                 new FilePickerFileType("All Files") { Patterns = ["*"] },
             ],
         });
