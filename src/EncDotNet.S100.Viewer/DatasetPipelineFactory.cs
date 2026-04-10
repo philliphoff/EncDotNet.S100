@@ -351,6 +351,17 @@ internal sealed class DatasetPipelineFactory
         var arrowRenderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
         {
             LayerName = $"S-111 Arrows: {Path.GetFileName(path)}",
+            Palette = catalogue.ActivePalette,
+            SymbolProvider = symbolName =>
+            {
+                var item = provider.Catalogue.Symbols
+                    .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
+                if (item is null) return null;
+
+                using var stream = provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            },
         };
         var arrowLayer = arrowRenderer.Render(styledLayer, context.Viewport);
         if (arrowLayer is not null)

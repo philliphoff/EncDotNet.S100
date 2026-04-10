@@ -1,5 +1,7 @@
+using System.Xml.Linq;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -12,20 +14,17 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Renders oriented symbols (e.g. current arrows) from a <see cref="StyledCoverageLayer"/>
-/// as a georeferenced raster that scales with map zoom, using SkiaSharp to draw
-/// rotated arrow polygons colored by speed band.
+/// as a georeferenced raster that scales with map zoom. Symbol geometry is parsed from
+/// the portrayal catalogue SVGs at runtime using <see cref="SKPath.ParseSvgPathData"/>,
+/// so the renderer is not coupled to any specific symbol shape.
 /// </summary>
 public sealed class MapsuiCoverageArrowRenderer
 {
     private const int MaxDim = 4096;
+    private static readonly XNamespace SvgNs = "http://www.w3.org/2000/svg";
 
     private readonly ICrsTransformFactory _transformFactory;
-
-    /// <summary>
-    /// Arrow shape from the S-111 SVG symbols, centered at origin, pointing north
-    /// (negative Y in screen coords). The path is 4 units wide and 10 units tall.
-    /// </summary>
-    private static readonly SKPath ArrowPath = CreateArrowPath();
+    private readonly Dictionary<string, ParsedSymbol?> _symbolCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "Coverage Arrows";
@@ -47,6 +46,16 @@ public sealed class MapsuiCoverageArrowRenderer
     /// </summary>
     public int MinArrowPixels { get; set; } = 20;
 
+    /// <summary>
+    /// The color palette used to resolve SVG CSS fill/stroke tokens.
+    /// </summary>
+    public ColorPalette? Palette { get; set; }
+
+    /// <summary>
+    /// Returns raw SVG content for a symbol reference name (e.g. "SCAROW01").
+    /// </summary>
+    public required Func<string, string?> SymbolProvider { get; set; }
+
     public MapsuiCoverageArrowRenderer(ICrsTransformFactory transformFactory)
     {
         _transformFactory = transformFactory;
@@ -54,7 +63,7 @@ public sealed class MapsuiCoverageArrowRenderer
 
     /// <summary>
     /// Renders the symbol scheme from a styled coverage layer into a georeferenced
-    /// raster layer with rotated arrow polygons. Returns <c>null</c> if the layer
+    /// raster layer with rotated symbol polygons. Returns <c>null</c> if the layer
     /// has no symbol scheme.
     /// </summary>
     public ILayer? Render(StyledCoverageLayer layer, PipelineViewport viewport)
@@ -65,7 +74,6 @@ public sealed class MapsuiCoverageArrowRenderer
 
         var sampled = layer.Coverage;
         var georeferencer = layer.Georeferencer;
-        var colorScheme = layer.ColorScheme;
         var valueData = sampled.GetField(symbolScheme.ValueFieldName);
         var rotationData = sampled.GetField(symbolScheme.RotationFieldName);
         int srcRows = valueData.GetLength(0);
@@ -83,15 +91,6 @@ public sealed class MapsuiCoverageArrowRenderer
         {
             int longestAxis = Math.Max(srcRows, srcCols);
             stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
-        }
-
-        // Pre-resolve color bands: hex → SKColor
-        var bands = new (float Min, float Max, SKColor Color)[colorScheme.Bands.Count];
-        for (int i = 0; i < colorScheme.Bands.Count; i++)
-        {
-            var band = colorScheme.Bands[i];
-            var rgba = RgbaColor.FromHex(band.Color);
-            bands[i] = (band.MinValue, band.MaxValue, new SKColor(rgba.R, rgba.G, rgba.B, rgba.A));
         }
 
         // Project grid corners to Mercator to determine extent.
@@ -149,32 +148,13 @@ public sealed class MapsuiCoverageArrowRenderer
         double pxPerMercX = outCols / mercWidth;
         double pxPerMercY = outRows / mercHeight;
 
-        // Arrow height in pixels: proportional to stride × cell spacing, scaled to
-        // leave room between arrows. The arrow path is 10 units tall (-5 to +5).
-        double arrowSpacingPx = stride * cellSizeY * pxPerMercY;
-        double baseArrowScale = arrowSpacingPx * 0.5 / 10.0;
-        baseArrowScale = Math.Max(baseArrowScale, 0.5);
-
-        // Draw arrows onto a transparent bitmap
+        // Draw symbols onto a transparent bitmap
         using var bmp = new SKBitmap(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var canvas = new SKCanvas(bmp);
         canvas.Clear(SKColors.Transparent);
 
-        using var fillPaint = new SKPaint
-        {
-            Style = SKPaintStyle.Fill,
-            IsAntialias = true,
-        };
-
-        using var strokePaint = new SKPaint
-        {
-            Style = SKPaintStyle.Stroke,
-            Color = SKColors.Black,
-            StrokeWidth = 0.32f,
-            StrokeJoin = SKStrokeJoin.Round,
-            StrokeCap = SKStrokeCap.Round,
-            IsAntialias = true,
-        };
+        using var fillPaint = new SKPaint { Style = SKPaintStyle.Fill, IsAntialias = true };
+        using var strokePaint = new SKPaint { Style = SKPaintStyle.Stroke, IsAntialias = true };
 
         for (int r = 0; r < srcRows; r += stride)
         for (int c = 0; c < srcCols; c += stride)
@@ -187,24 +167,24 @@ public sealed class MapsuiCoverageArrowRenderer
             bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
             if (dirNoData) continue;
 
-            // Find fill color from color scheme bands
-            SKColor color = SKColors.Transparent;
-            for (int b = 0; b < bands.Length; b++)
-            {
-                if (value >= bands[b].Min && value < bands[b].Max)
-                {
-                    color = bands[b].Color;
-                    break;
-                }
-            }
-            if (color.Alpha == 0) continue;
-
-            // Band-specific scale factor from the symbol scheme
+            // Resolve symbol band
             var symbolBand = symbolScheme.Resolve(value);
-            double bandScale = symbolBand is not null
-                ? (symbolBand.ScaleByValue ? symbolBand.ScaleFactor * value : symbolBand.ScaleFactor)
-                : 1.0;
-            float totalScale = (float)(baseArrowScale * bandScale);
+            if (symbolBand is null) continue;
+
+            // Load and cache the parsed SVG symbol
+            var parsed = GetParsedSymbol(symbolBand.SymbolRef);
+            if (parsed is null) continue;
+
+            // Arrow size in pixels: proportional to stride × cell spacing.
+            // Scale so the symbol's viewBox height maps to ~50% of the arrow spacing.
+            double arrowSpacingPx = stride * cellSizeY * pxPerMercY;
+            double baseScale = arrowSpacingPx * 0.5 / parsed.ViewBoxHeight;
+            baseScale = Math.Max(baseScale, 0.5);
+
+            double bandScale = symbolBand.ScaleByValue
+                ? symbolBand.ScaleFactor * value
+                : symbolBand.ScaleFactor;
+            float totalScale = (float)(baseScale * bandScale);
 
             // Project to pixel coordinates
             var (nativeX, nativeY) = georeferencer.ToNative(r, c);
@@ -216,15 +196,28 @@ public sealed class MapsuiCoverageArrowRenderer
             float px = (float)((mx - mercMinX) * pxPerMercX);
             float py = (float)(outRows - 1 - (my - mercMinY) * pxPerMercY);
 
-            // Draw rotated + scaled arrow
             canvas.Save();
             canvas.Translate(px, py);
             canvas.RotateDegrees(direction);
             canvas.Scale(totalScale);
 
-            fillPaint.Color = color;
-            canvas.DrawPath(ArrowPath, fillPaint);
-            canvas.DrawPath(ArrowPath, strokePaint);
+            // Draw each drawing command from the parsed SVG
+            foreach (var cmd in parsed.Commands)
+            {
+                if (cmd.IsFill)
+                {
+                    fillPaint.Color = cmd.Color;
+                    canvas.DrawPath(cmd.Path, fillPaint);
+                }
+                else
+                {
+                    strokePaint.Color = cmd.Color;
+                    strokePaint.StrokeWidth = cmd.StrokeWidth;
+                    strokePaint.StrokeJoin = SKStrokeJoin.Round;
+                    strokePaint.StrokeCap = SKStrokeCap.Round;
+                    canvas.DrawPath(cmd.Path, strokePaint);
+                }
+            }
 
             canvas.Restore();
         }
@@ -249,18 +242,118 @@ public sealed class MapsuiCoverageArrowRenderer
         };
     }
 
-    private static SKPath CreateArrowPath()
+    /// <summary>
+    /// Parses an S-100 SVG symbol into drawing commands (fill/stroke paths with colors).
+    /// Resolves CSS classes (e.g. <c>fSCBN1</c>, <c>sCHBLK</c>) via the <see cref="Palette"/>.
+    /// </summary>
+    private ParsedSymbol? GetParsedSymbol(string symbolRef)
     {
-        var path = new SKPath();
-        path.MoveTo(0, 5);
-        path.LineTo(-0.5f, 5);
-        path.LineTo(-1.0f, -1.5f);
-        path.LineTo(-2.0f, -1.5f);
-        path.LineTo(0, -5);
-        path.LineTo(2.0f, -1.5f);
-        path.LineTo(1.0f, -1.5f);
-        path.LineTo(0.5f, 5);
-        path.Close();
-        return path;
+        if (_symbolCache.TryGetValue(symbolRef, out var cached))
+            return cached;
+
+        ParsedSymbol? result = null;
+        try
+        {
+            var svgContent = SymbolProvider(symbolRef);
+            if (svgContent is not null)
+                result = ParseSvgSymbol(svgContent);
+        }
+        catch
+        {
+            // Symbol not found or malformed
+        }
+
+        _symbolCache[symbolRef] = result;
+        return result;
     }
+
+    private ParsedSymbol ParseSvgSymbol(string svgContent)
+    {
+        var doc = XDocument.Parse(svgContent);
+        var svg = doc.Root!;
+
+        // Parse viewBox for coordinate system: "minX minY width height"
+        double vbHeight = 10.0; // default
+        var viewBoxAttr = svg.Attribute("viewBox");
+        if (viewBoxAttr is not null)
+        {
+            var parts = viewBoxAttr.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 4 && double.TryParse(parts[3], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var h))
+                vbHeight = h;
+        }
+
+        var commands = new List<DrawCommand>();
+
+        foreach (var pathEl in svg.Elements(SvgNs + "path"))
+        {
+            var dAttr = pathEl.Attribute("d");
+            if (dAttr is null) continue;
+
+            var classAttr = pathEl.Attribute("class")?.Value ?? "";
+            var classes = classAttr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            // Skip layout elements
+            if (classes.Contains("layout")) continue;
+
+            var skPath = SKPath.ParseSvgPathData(dAttr.Value);
+            if (skPath is null) continue;
+
+            // Determine if this is a fill or stroke path by inspecting CSS classes
+            bool hasNoFill = classes.Contains("f0");
+            string? fillToken = null;
+            string? strokeToken = null;
+
+            foreach (var cls in classes)
+            {
+                if (cls == "f0" || cls == "sl") continue;
+                if (cls.Length > 1 && cls[0] == 'f' && char.IsUpper(cls[1]))
+                    fillToken = cls[1..];
+                else if (cls.Length > 1 && cls[0] == 's' && char.IsUpper(cls[1]))
+                    strokeToken = cls[1..];
+            }
+
+            if (!hasNoFill && fillToken is not null)
+            {
+                // Fill path — resolve color token via palette
+                var color = ResolveToken(fillToken);
+                commands.Add(new DrawCommand(skPath, true, color, 0));
+            }
+
+            if (strokeToken is not null)
+            {
+                // Stroke path
+                var color = ResolveToken(strokeToken);
+                float sw = 0.32f;
+                var swAttr = pathEl.Attribute("stroke-width");
+                if (swAttr is not null &&
+                    float.TryParse(swAttr.Value, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                    sw = parsed;
+
+                commands.Add(new DrawCommand(skPath, false, color, sw));
+            }
+        }
+
+        return new ParsedSymbol(commands, vbHeight);
+    }
+
+    private SKColor ResolveToken(string token)
+    {
+        if (Palette is not null && Palette.TryResolve(token, out var hex))
+        {
+            var rgba = RgbaColor.FromHex(hex);
+            return new SKColor(rgba.R, rgba.G, rgba.B, rgba.A);
+        }
+
+        // Common fallback: CHBLK = black
+        if (token.Equals("CHBLK", StringComparison.OrdinalIgnoreCase))
+            return SKColors.Black;
+
+        return SKColors.Black;
+    }
+
+    private sealed record DrawCommand(SKPath Path, bool IsFill, SKColor Color, float StrokeWidth);
+
+    private sealed record ParsedSymbol(IReadOnlyList<DrawCommand> Commands, double ViewBoxHeight);
 }
