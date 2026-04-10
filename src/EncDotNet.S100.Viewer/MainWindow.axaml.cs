@@ -105,6 +105,10 @@ public partial class MainWindow : ShadUI.Window
         // Enable trackpad scroll/swipe to pan the map (tunnel phase to intercept before MapControl)
         MapControl.AddHandler(PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
 
+        // Zoom in/out overlay buttons
+        ZoomInButton.Click += OnZoomInClick;
+        ZoomOutButton.Click += OnZoomOutClick;
+
         // Parse command-line arguments
         var cliArgs = Environment.GetCommandLineArgs();
         string? datasetArg = null;
@@ -205,6 +209,22 @@ public partial class MainWindow : ShadUI.Window
         {
             Console.Error.WriteLine($"[Screenshot] Failed: {ex.Message}");
         }
+    }
+
+    private void OnZoomInClick(object? sender, RoutedEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        navigator.ZoomTo(navigator.Viewport.Resolution / 2, 250);
+    }
+
+    private void OnZoomOutClick(object? sender, RoutedEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        navigator.ZoomTo(navigator.Viewport.Resolution * 2, 250);
     }
 
     private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
