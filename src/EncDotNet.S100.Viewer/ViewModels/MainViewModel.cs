@@ -1,4 +1,6 @@
 using System.Windows.Input;
+using Avalonia;
+using Avalonia.Styling;
 using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -66,6 +68,15 @@ internal sealed class MainViewModel : ViewModelBase
 
     public bool IsStatusVisible => _statusText is not null;
 
+    private bool _isDarkTheme = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
+    public bool IsDarkTheme
+    {
+        get => _isDarkTheme;
+        private set => SetProperty(ref _isDarkTheme, value);
+    }
+
+    public ICommand ToggleThemeCommand { get; }
+
     public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager)
     {
         FeatureCatalogues = new FeatureCataloguesViewModel(settings);
@@ -77,5 +88,17 @@ internal sealed class MainViewModel : ViewModelBase
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
+
+        ToggleThemeCommand = new RelayCommand(() =>
+        {
+            if (Application.Current is { } app)
+            {
+                var next = app.ActualThemeVariant == ThemeVariant.Dark
+                    ? ThemeVariant.Light
+                    : ThemeVariant.Dark;
+                app.RequestedThemeVariant = next;
+                IsDarkTheme = next == ThemeVariant.Dark;
+            }
+        });
     }
 }
