@@ -15,6 +15,48 @@
         IsTitleBarVisible="True"
         ShowBottomBorder="True">
 
+    <shadui:Window.Styles>
+        <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
+        <Style Selector="ToggleButton.ActivityIcon">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.ActivityIcon:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <Style Selector="ToggleButton.ActivityIcon:checked">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <!-- Inherit foreground into the FluentIcon inside -->
+        <Style Selector="ToggleButton.ActivityIcon ic|FluentIcon">
+            <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
+        <!-- Hide ShadUI check icon on selected ListBoxItems -->
+        <Style Selector="ListBoxItem:selected /template/ PathIcon#CheckSelected">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <!-- Accent color on pane splitter hover/drag -->
+        <Style Selector="GridSplitter#PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="GridSplitter#PaneSplitter:pointerover">
+            <Setter Property="Background" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <Style Selector="GridSplitter#PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+    </shadui:Window.Styles>
+
     <shadui:Window.RightWindowTitleBarContent>
         <Button Command="{Binding ToggleThemeCommand}"
                 ToolTip.Tip="Toggle Light/Dark Theme"
@@ -55,68 +97,80 @@
                 Background="{DynamicResource BackgroundColor}"
                 BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="0,0,1,0"
-                Width="52"
-                Padding="4,0">
+                Width="48"
+                Padding="0">
             <DockPanel>
                 <!-- Settings pinned at bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,4">
-                    <ToggleButton IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                                  Command="{Binding SelectSettingsCommand}"
-                                  ToolTip.Tip="Settings"
-                                  Width="44" Height="44"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  Background="Transparent"
-                                  BorderThickness="0">
-                        <ic:FluentIcon Icon="Settings" IconVariant="Regular" FontSize="22"
-                                        Foreground="{DynamicResource ForegroundColor}" />
-                    </ToggleButton>
+                    <Grid>
+                        <Border Width="2" HorizontalAlignment="Left"
+                                Background="{DynamicResource PrimaryColor}"
+                                IsVisible="{Binding IsSettingsSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                                      Command="{Binding SelectSettingsCommand}"
+                                      ToolTip.Tip="Settings"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Settings" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Top group: main activities -->
                 <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,4">
                     <!-- Feature Catalogues -->
-                    <ToggleButton IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
-                                  Command="{Binding SelectFeatureCataloguesCommand}"
-                                  ToolTip.Tip="Feature Catalogues"
-                                  Width="44" Height="44"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  Background="Transparent"
-                                  BorderThickness="0">
-                        <ic:FluentIcon Icon="BookOpen" IconVariant="Regular" FontSize="22"
-                                        Foreground="{DynamicResource ForegroundColor}" />
-                    </ToggleButton>
+                    <Grid>
+                        <Border Width="2" HorizontalAlignment="Left"
+                                Background="{DynamicResource PrimaryColor}"
+                                IsVisible="{Binding IsFeatureCataloguesSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
+                                      Command="{Binding SelectFeatureCataloguesCommand}"
+                                      ToolTip.Tip="Feature Catalogues"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="BookOpen" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
 
                     <!-- Portrayal Catalogues -->
-                    <ToggleButton IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
-                                  Command="{Binding SelectPortrayalCataloguesCommand}"
-                                  ToolTip.Tip="Portrayal Catalogues"
-                                  Width="44" Height="44"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  Background="Transparent"
-                                  BorderThickness="0">
-                        <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" FontSize="22"
-                                        Foreground="{DynamicResource ForegroundColor}" />
-                    </ToggleButton>
+                    <Grid>
+                        <Border Width="2" HorizontalAlignment="Left"
+                                Background="{DynamicResource PrimaryColor}"
+                                IsVisible="{Binding IsPortrayalCataloguesSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
+                                      Command="{Binding SelectPortrayalCataloguesCommand}"
+                                      ToolTip.Tip="Portrayal Catalogues"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
 
                     <!-- Datasets -->
-                    <ToggleButton IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
-                                  Command="{Binding SelectDatasetsCommand}"
-                                  ToolTip.Tip="Datasets"
-                                  Width="44" Height="44"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  Background="Transparent"
-                                  BorderThickness="0">
-                        <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22"
-                                        Foreground="{DynamicResource ForegroundColor}" />
-                    </ToggleButton>
+                    <Grid>
+                        <Border Width="2" HorizontalAlignment="Left"
+                                Background="{DynamicResource PrimaryColor}"
+                                IsVisible="{Binding IsDatasetsSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
+                                      Command="{Binding SelectDatasetsCommand}"
+                                      ToolTip.Tip="Datasets"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -138,12 +192,11 @@
                 <DockPanel>
                     <!-- Pane header -->
                     <Border DockPanel.Dock="Top"
-                            Padding="12,8"
-                            BorderBrush="{DynamicResource BorderColor}"
-                            BorderThickness="0,0,0,1">
+                            Padding="12,8">
                         <TextBlock Text="{Binding PaneTitle}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold" />
+                                   FontSize="11"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1" />
                     </Border>
 
                     <!-- Pane content: show the appropriate view based on selection -->
@@ -163,9 +216,9 @@
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
                           Width="4"
-                          Background="Transparent"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsPaneVisible}" />
+                          IsVisible="{Binding IsPaneVisible}"
+                          Name="PaneSplitter" />
 
             <!-- Map control fills remaining space -->
             <mapsui:MapControl Grid.Column="2" x:Name="MapControl" />

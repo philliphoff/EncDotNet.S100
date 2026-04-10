@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              x:Class="EncDotNet.S100.Viewer.Views.FeatureCataloguesView"
              x:DataType="vm:FeatureCataloguesViewModel">
@@ -13,7 +14,8 @@
                 x:Name="AddButton" />
 
         <ListBox ItemsSource="{Binding Entries}"
-                 Margin="0,4">
+                 Margin="8,4"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CatalogueEntry">
                     <Grid ColumnDefinitions="*,Auto">
@@ -26,11 +28,12 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"
-                                Classes="Ghost"
-                                Content="✕"
+                                Classes="Ghost Icon"
                                 Command="{Binding $parent[ListBox].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
-                                VerticalAlignment="Center" />
+                                VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                        </Button>
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

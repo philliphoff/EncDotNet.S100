@@ -38,10 +38,10 @@ internal sealed class MainViewModel : ViewModelBase
 
     public string PaneTitle => _selectedActivity switch
     {
-        ActivityKind.FeatureCatalogues => "Feature Catalogues",
-        ActivityKind.PortrayalCatalogues => "Portrayal Catalogues",
-        ActivityKind.Datasets => "Datasets",
-        ActivityKind.Settings => "Settings",
+        ActivityKind.FeatureCatalogues => "FEATURE CATALOGUES",
+        ActivityKind.PortrayalCatalogues => "PORTRAYAL CATALOGUES",
+        ActivityKind.Datasets => "DATASETS",
+        ActivityKind.Settings => "SETTINGS",
         _ => string.Empty,
     };
 
