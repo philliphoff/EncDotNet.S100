@@ -5,11 +5,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Mapsui.Manipulations;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
@@ -93,6 +95,15 @@ public partial class MainWindow : ShadUI.Window
         _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // Enable pinch-to-zoom on the map control via trackpad magnify gesture
+        MapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
+
+        // Enable double-tap to zoom in
+        MapControl.DoubleTapped += OnMapDoubleTapped;
+
+        // Enable trackpad scroll/swipe to pan the map (tunnel phase to intercept before MapControl)
+        MapControl.AddHandler(PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
 
         // Parse command-line arguments
         var cliArgs = Environment.GetCommandLineArgs();
@@ -194,6 +205,44 @@ public partial class MainWindow : ShadUI.Window
         {
             Console.Error.WriteLine($"[Screenshot] Failed: {ex.Message}");
         }
+    }
+
+    private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        var resolution = navigator.Viewport.Resolution;
+        var newResolution = resolution / (1 + e.Delta.Y);
+        var position = e.GetPosition(MapControl);
+        var center = new ScreenPosition(position.X, position.Y);
+        navigator.ZoomTo(newResolution, center);
+        e.Handled = true;
+    }
+
+    private void OnMapPointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        var viewport = navigator.Viewport;
+        var dx = e.Delta.X * viewport.Resolution * 50;
+        var dy = e.Delta.Y * viewport.Resolution * 50;
+        navigator.CenterOn(viewport.CenterX - dx, viewport.CenterY + dy);
+        e.Handled = true;
+    }
+
+    private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        var resolution = navigator.Viewport.Resolution;
+        var newResolution = resolution / 2;
+        var position = e.GetPosition(MapControl);
+        var center = new ScreenPosition(position.X, position.Y);
+        navigator.ZoomTo(newResolution, center, 250);
+        e.Handled = true;
     }
 
     private void RemoveDatasetLayers()
