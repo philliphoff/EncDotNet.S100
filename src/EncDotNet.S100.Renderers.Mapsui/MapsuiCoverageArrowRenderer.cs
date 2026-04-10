@@ -44,7 +44,7 @@ public sealed class MapsuiCoverageArrowRenderer
     /// Minimum number of pixels allocated per arrow in the output raster
     /// (along the shorter arrow axis). Controls the output bitmap resolution.
     /// </summary>
-    public int MinArrowPixels { get; set; } = 20;
+    public int MinArrowPixels { get; set; } = 60;
 
     /// <summary>
     /// The color palette used to resolve SVG CSS fill/stroke tokens.
