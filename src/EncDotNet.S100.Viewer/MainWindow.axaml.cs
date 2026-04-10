@@ -164,7 +164,10 @@ public partial class MainWindow : ShadUI.Window
             var result = await Task.Run(() => _pipelineFactory.Process(entry.FilePath));
 
             RemoveDatasetLayers();
-            MapControl.Map?.Layers.Add(result.Layer);
+            foreach (var layer in result.Layers)
+            {
+                MapControl.Map?.Layers.Add(layer);
+            }
 
             if (MapControl.Map?.Navigator is { } nav)
             {
@@ -270,9 +273,9 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map is not { } map)
             return;
 
-        // Remove any layers added by dataset processing (named "S-1xx: ...")
+        // Remove any layers added by dataset processing (named "S-1xx: ..." or "S-1xx Arrows: ...")
         var toRemove = map.Layers
-            .Where(l => l.Name?.StartsWith("S-10", StringComparison.Ordinal) == true)
+            .Where(l => l.Name?.StartsWith("S-1", StringComparison.Ordinal) == true)
             .ToList();
 
         foreach (var layer in toRemove)

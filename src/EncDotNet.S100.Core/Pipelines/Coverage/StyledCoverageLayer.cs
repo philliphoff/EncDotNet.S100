@@ -20,4 +20,10 @@ public sealed class StyledCoverageLayer
     /// Carries the source CRS identifier needed for reprojection.
     /// </summary>
     public required GridGeoreferencer Georeferencer { get; init; }
+
+    /// <summary>
+    /// Optional symbol scheme for oriented overlay symbols (e.g. current arrows).
+    /// When set, a renderer may produce an additional symbol layer on top of the color raster.
+    /// </summary>
+    public CoverageSymbolScheme? SymbolScheme { get; init; }
 }

@@ -19,17 +19,17 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// Speed band definitions matching the S-111 Ed.2.0.0 portrayal catalogue XSLT.
     /// Each band maps a speed range (knots) to a color token and arrow symbol.
     /// </summary>
-    private static readonly (float Min, float Max, string Token, string Label)[] Bands =
+    private static readonly (float Min, float Max, string Token, string Symbol, bool ScaleByValue, float ScaleFactor, string Label)[] Bands =
     [
-        (0.0f, 0.5f, "SCBN1", "0–0.5 kn"),
-        (0.5f, 1.0f, "SCBN2", "0.5–1 kn"),
-        (1.0f, 2.0f, "SCBN3", "1–2 kn"),
-        (2.0f, 3.0f, "SCBN4", "2–3 kn"),
-        (3.0f, 5.0f, "SCBN5", "3–5 kn"),
-        (5.0f, 7.0f, "SCBN6", "5–7 kn"),
-        (7.0f, 10.0f, "SCBN7", "7–10 kn"),
-        (10.0f, 13.0f, "SCBN8", "10–13 kn"),
-        (13.0f, float.MaxValue, "SCBN9", "> 13 kn"),
+        (0.0f, 0.5f, "SCBN1", "SCAROW01", false, 0.40f, "0–0.5 kn"),
+        (0.5f, 1.0f, "SCBN2", "SCAROW02", false, 0.40f, "0.5–1 kn"),
+        (1.0f, 2.0f, "SCBN3", "SCAROW03", false, 0.40f, "1–2 kn"),
+        (2.0f, 3.0f, "SCBN4", "SCAROW04", true, 0.20f, "2–3 kn"),
+        (3.0f, 5.0f, "SCBN5", "SCAROW05", true, 0.20f, "3–5 kn"),
+        (5.0f, 7.0f, "SCBN6", "SCAROW06", true, 0.20f, "5–7 kn"),
+        (7.0f, 10.0f, "SCBN7", "SCAROW07", true, 0.20f, "7–10 kn"),
+        (10.0f, 13.0f, "SCBN8", "SCAROW08", true, 0.20f, "10–13 kn"),
+        (13.0f, float.MaxValue, "SCBN9", "SCAROW09", false, 2.60f, "> 13 kn"),
     ];
 
     /// <summary>
@@ -68,7 +68,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 
         var colorBands = new List<ColorBand>();
 
-        foreach (var (min, max, token, label) in Bands)
+        foreach (var (min, max, token, symbol, scaleByValue, scaleFactor, label) in Bands)
         {
             if (!ActivePalette.TryResolve(token, out var color))
                 throw new InvalidOperationException($"Color token '{token}' not found in the S-111 color profile.");
@@ -86,6 +86,31 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         {
             FieldName = "surfaceCurrentSpeed",
             Bands = colorBands,
+        };
+    }
+
+    public CoverageSymbolScheme ResolveSymbolScheme(NavigationContext context)
+    {
+        var symbolBands = new List<SymbolBand>();
+
+        foreach (var (min, max, token, symbol, scaleByValue, scaleFactor, label) in Bands)
+        {
+            symbolBands.Add(new SymbolBand
+            {
+                MinValue = min,
+                MaxValue = max,
+                SymbolRef = symbol,
+                ScaleByValue = scaleByValue,
+                ScaleFactor = scaleFactor,
+                Label = label,
+            });
+        }
+
+        return new CoverageSymbolScheme
+        {
+            ValueFieldName = "surfaceCurrentSpeed",
+            RotationFieldName = "surfaceCurrentDirection",
+            Bands = symbolBands,
         };
     }
 

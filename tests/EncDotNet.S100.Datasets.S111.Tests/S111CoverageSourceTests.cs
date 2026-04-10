@@ -165,4 +165,57 @@ public class S111CoverageSourceTests : IDisposable
         Assert.NotEmpty(nonNull);
         Assert.True(nullCount > 0, "Expected some no-data cells in the coastal current grid");
     }
+
+    [Fact]
+    public void PortrayalCatalogue_ResolveSymbolScheme_Returns9Bands()
+    {
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var source = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        var catalogue = new S111PortrayalCatalogue(provider);
+
+        var context = new NavigationContext
+        {
+            Viewport = new Viewport
+            {
+                MinLatitude = 0, MaxLatitude = 1,
+                MinLongitude = 0, MaxLongitude = 1,
+                WidthPixels = 100, HeightPixels = 100,
+            },
+            ScaleDenominator = 50_000,
+        };
+
+        var scheme = catalogue.ResolveSymbolScheme(context);
+
+        Assert.NotNull(scheme);
+        Assert.Equal("surfaceCurrentSpeed", scheme.ValueFieldName);
+        Assert.Equal("surfaceCurrentDirection", scheme.RotationFieldName);
+        Assert.Equal(9, scheme.Bands.Count);
+
+        // Band 1: slow → small fixed arrow
+        var band1 = scheme.Resolve(0.1f);
+        Assert.NotNull(band1);
+        Assert.Equal("SCAROW01", band1.SymbolRef);
+        Assert.False(band1.ScaleByValue);
+        Assert.Equal(0.40f, band1.ScaleFactor);
+
+        // Band 5: mid-range → speed-scaled arrow
+        var band5 = scheme.Resolve(3.5f);
+        Assert.NotNull(band5);
+        Assert.Equal("SCAROW05", band5.SymbolRef);
+        Assert.True(band5.ScaleByValue);
+        Assert.Equal(0.20f, band5.ScaleFactor);
+
+        // Band 9: fastest → large fixed arrow
+        var band9 = scheme.Resolve(14.0f);
+        Assert.NotNull(band9);
+        Assert.Equal("SCAROW09", band9.SymbolRef);
+        Assert.False(band9.ScaleByValue);
+        Assert.Equal(2.60f, band9.ScaleFactor);
+
+        // No-data → null
+        Assert.Null(scheme.Resolve(-9999f));
+    }
 }

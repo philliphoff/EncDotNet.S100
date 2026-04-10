@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Viewer;
 /// </summary>
 internal sealed class DatasetResult
 {
-    public required ILayer Layer { get; init; }
+    public required IReadOnlyList<ILayer> Layers { get; init; }
     public required MRect Extent { get; init; }
     public required string Info { get; init; }
     public required string ProductSpec { get; init; }
@@ -164,7 +164,7 @@ internal sealed class DatasetPipelineFactory
 
         return new DatasetResult
         {
-            Layer = mapLayer,
+            Layers = [mapLayer],
             Extent = extent,
             Info = info,
             ProductSpec = "S-102",
@@ -254,7 +254,7 @@ internal sealed class DatasetPipelineFactory
 
                 return new DatasetResult
                 {
-                    Layer = mapLayer,
+                    Layers = [mapLayer],
                     Extent = layerExtent,
                     Info = info,
                     ProductSpec = "S-101",
@@ -290,7 +290,7 @@ internal sealed class DatasetPipelineFactory
 
         return new DatasetResult
         {
-            Layer = fallbackLayer,
+            Layers = [fallbackLayer],
             Extent = extent,
             Info = fallbackInfo,
             ProductSpec = "S-101",
@@ -304,9 +304,10 @@ internal sealed class DatasetPipelineFactory
         var source = new S111CoverageSource(dataset);
         var metadata = source.Metadata;
 
-        var catalogue = _catalogueManager.HasCatalogue("S-111")
-            ? new S111PortrayalCatalogue(_catalogueManager.GetProvider("S-111"))
+        var provider = _catalogueManager.HasCatalogue("S-111")
+            ? _catalogueManager.GetProvider("S-111")
             : throw new InvalidOperationException("S-111 portrayal catalogue is not registered. Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
+        var catalogue = new S111PortrayalCatalogue(provider);
         var context = new NavigationContext
         {
             Viewport = new Pipelines.Viewport
@@ -322,6 +323,7 @@ internal sealed class DatasetPipelineFactory
         };
 
         var colorScheme = catalogue.ResolveColorScheme(context);
+        var symbolScheme = catalogue.ResolveSymbolScheme(context);
         var sampled = source.Sample(GridRegion.Full);
 
         var styledLayer = new StyledCoverageLayer
@@ -332,15 +334,40 @@ internal sealed class DatasetPipelineFactory
             Georeferencer = new GridGeoreferencer(
                 metadata.GridMetadata,
                 metadata.HorizontalCRS),
+            SymbolScheme = symbolScheme,
         };
 
-        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        // Color raster layer
+        var colorRenderer = new MapsuiCoverageRenderer(_crsTransformFactory)
         {
             LayerName = $"S-111: {Path.GetFileName(path)}",
         };
+        var colorLayer = colorRenderer.Render(styledLayer, context.Viewport);
+        var extent = colorLayer.Extent ?? new MRect(0, 0, 0, 0);
 
-        var mapLayer = renderer.Render(styledLayer, context.Viewport);
-        var extent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
+        var layers = new List<ILayer> { colorLayer };
+
+        // Arrow overlay layer
+        var arrowRenderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
+        {
+            LayerName = $"S-111 Arrows: {Path.GetFileName(path)}",
+            Palette = catalogue.ActivePalette,
+            SymbolProvider = symbolName =>
+            {
+                var item = provider.Catalogue.Symbols
+                    .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
+                if (item is null) return null;
+
+                using var stream = provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            },
+        };
+        var arrowLayer = arrowRenderer.Render(styledLayer, context.Viewport);
+        if (arrowLayer is not null)
+        {
+            layers.Add(arrowLayer);
+        }
 
         int crs = dataset.HorizontalCRS ?? 4326;
         var geoId = dataset.GeographicIdentifier ?? Path.GetFileName(path);
@@ -351,7 +378,7 @@ internal sealed class DatasetPipelineFactory
 
         return new DatasetResult
         {
-            Layer = mapLayer,
+            Layers = layers,
             Extent = extent,
             Info = info,
             ProductSpec = "S-111",
