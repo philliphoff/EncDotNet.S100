@@ -32,96 +32,128 @@
                 Background="{DynamicResource BackgroundColor}"
                 BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="0,0,1,0"
-                Width="48">
-            <StackPanel VerticalAlignment="Top" Spacing="2" Margin="0,4">
-                <!-- Feature Catalogues -->
-                <ToggleButton IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
-                              Command="{Binding SelectFeatureCataloguesCommand}"
-                              ToolTip.Tip="Feature Catalogues"
-                              Width="44" Height="44"
-                              Padding="0"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Background="Transparent"
-                              BorderThickness="0">
-                    <!-- Book icon (Unicode) -->
-                    <TextBlock Text="📖" FontSize="20" HorizontalAlignment="Center" />
-                </ToggleButton>
-
-                <!-- Portrayal Catalogues -->
-                <ToggleButton IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
-                              Command="{Binding SelectPortrayalCataloguesCommand}"
-                              ToolTip.Tip="Portrayal Catalogues"
-                              Width="44" Height="44"
-                              Padding="0"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Background="Transparent"
-                              BorderThickness="0">
-                    <TextBlock Text="🎨" FontSize="20" HorizontalAlignment="Center" />
-                </ToggleButton>
-
-                <!-- Datasets -->
-                <ToggleButton IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
-                              Command="{Binding SelectDatasetsCommand}"
-                              ToolTip.Tip="Datasets"
-                              Width="44" Height="44"
-                              Padding="0"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Background="Transparent"
-                              BorderThickness="0">
-                    <TextBlock Text="🗺" FontSize="20" HorizontalAlignment="Center" />
-                </ToggleButton>
-
-                <!-- Settings (pinned at bottom via a separator spacer) -->
-                <ToggleButton IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                              Command="{Binding SelectSettingsCommand}"
-                              ToolTip.Tip="Settings"
-                              Width="44" Height="44"
-                              Padding="0"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Background="Transparent"
-                              BorderThickness="0">
-                    <TextBlock Text="⚙" FontSize="20" HorizontalAlignment="Center" />
-                </ToggleButton>
-            </StackPanel>
-        </Border>
-
-        <!-- Activity pane (slides in on the left, ~1/3 width) -->
-        <Border DockPanel.Dock="Left"
-                Background="{DynamicResource BackgroundColor}"
-                BorderBrush="{DynamicResource BorderColor}"
-                BorderThickness="0,0,1,0"
-                Width="320"
-                IsVisible="{Binding IsPaneVisible}">
+                Width="52"
+                Padding="4,0">
             <DockPanel>
-                <!-- Pane header -->
-                <Border DockPanel.Dock="Top"
-                        Padding="12,8"
-                        BorderBrush="{DynamicResource BorderColor}"
-                        BorderThickness="0,0,0,1">
-                    <TextBlock Text="{Binding PaneTitle}"
-                               FontSize="13"
-                               FontWeight="SemiBold" />
-                </Border>
+                <!-- Settings pinned at bottom -->
+                <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,4">
+                    <ToggleButton IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                                  Command="{Binding SelectSettingsCommand}"
+                                  ToolTip.Tip="Settings"
+                                  Width="44" Height="44"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  Background="Transparent"
+                                  BorderThickness="0">
+                        <!-- Lucide "settings" (gear) -->
+                        <PathIcon Width="22" Height="22"
+                                  Foreground="{DynamicResource ForegroundColor}"
+                                  Data="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                    </ToggleButton>
+                </StackPanel>
 
-                <!-- Pane content: show the appropriate view based on selection -->
-                <Panel>
-                    <views:FeatureCataloguesView DataContext="{Binding FeatureCatalogues}"
-                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsFeatureCataloguesSelected}" />
-                    <views:PortrayalCataloguesView DataContext="{Binding PortrayalCatalogues}"
-                                                   IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
-                    <views:DatasetsView DataContext="{Binding Datasets}"
-                                        IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
-                    <views:SettingsView DataContext="{Binding Settings}"
-                                        IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
-                </Panel>
+                <!-- Top group: main activities -->
+                <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,4">
+                    <!-- Feature Catalogues -->
+                    <ToggleButton IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
+                                  Command="{Binding SelectFeatureCataloguesCommand}"
+                                  ToolTip.Tip="Feature Catalogues"
+                                  Width="44" Height="44"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  Background="Transparent"
+                                  BorderThickness="0">
+                        <!-- Lucide "book-open" -->
+                        <PathIcon Width="22" Height="22"
+                                  Foreground="{DynamicResource ForegroundColor}"
+                                  Data="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </ToggleButton>
+
+                    <!-- Portrayal Catalogues -->
+                    <ToggleButton IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
+                                  Command="{Binding SelectPortrayalCataloguesCommand}"
+                                  ToolTip.Tip="Portrayal Catalogues"
+                                  Width="44" Height="44"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  Background="Transparent"
+                                  BorderThickness="0">
+                        <!-- Lucide "palette" -->
+                        <PathIcon Width="22" Height="22"
+                                  Foreground="{DynamicResource ForegroundColor}"
+                                  Data="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.1-.7-.4-1-.3-.3-.4-.7-.4-1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+                    </ToggleButton>
+
+                    <!-- Datasets -->
+                    <ToggleButton IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
+                                  Command="{Binding SelectDatasetsCommand}"
+                                  ToolTip.Tip="Datasets"
+                                  Width="44" Height="44"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  Background="Transparent"
+                                  BorderThickness="0">
+                        <!-- Lucide "layers" -->
+                        <PathIcon Width="22" Height="22"
+                                  Foreground="{DynamicResource ForegroundColor}"
+                                  Data="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                    </ToggleButton>
+                </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- Map control fills all remaining space -->
-        <mapsui:MapControl x:Name="MapControl" />
+        <!-- Activity pane + splitter + map in a resizable grid -->
+        <Grid x:Name="ContentGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Activity pane -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource BackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,1,0"
+                    IsVisible="{Binding IsPaneVisible}">
+                <DockPanel>
+                    <!-- Pane header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,8"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="0,0,0,1">
+                        <TextBlock Text="{Binding PaneTitle}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold" />
+                    </Border>
+
+                    <!-- Pane content: show the appropriate view based on selection -->
+                    <Panel>
+                        <views:FeatureCataloguesView DataContext="{Binding FeatureCatalogues}"
+                                                     IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsFeatureCataloguesSelected}" />
+                        <views:PortrayalCataloguesView DataContext="{Binding PortrayalCatalogues}"
+                                                       IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
+                        <views:DatasetsView DataContext="{Binding Datasets}"
+                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
+                        <views:SettingsView DataContext="{Binding Settings}"
+                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
+                    </Panel>
+                </DockPanel>
+            </Border>
+
+            <!-- Resize grip between pane and map -->
+            <GridSplitter Grid.Column="1"
+                          Width="4"
+                          Background="Transparent"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding IsPaneVisible}" />
+
+            <!-- Map control fills remaining space -->
+            <mapsui:MapControl Grid.Column="2" x:Name="MapControl" />
+        </Grid>
     </DockPanel>
 </shadui:Window>

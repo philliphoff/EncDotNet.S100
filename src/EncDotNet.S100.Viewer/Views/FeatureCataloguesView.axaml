@@ -6,6 +6,7 @@
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
+                Classes="Outline"
                 Content="Add Feature Catalogue..."
                 HorizontalAlignment="Stretch"
                 Margin="8"
@@ -25,12 +26,11 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"
+                                Classes="Ghost"
                                 Content="✕"
                                 Command="{Binding $parent[ListBox].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
-                                VerticalAlignment="Center"
-                                Padding="6,2"
-                                Background="Transparent" />
+                                VerticalAlignment="Center" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

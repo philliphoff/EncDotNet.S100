@@ -27,6 +27,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly MainViewModel _viewModel;
     private string? _screenshotPath;
+    private double _lastPaneWidth = 320;
 
     public MainWindow()
     {
@@ -51,6 +52,28 @@ public partial class MainWindow : ShadUI.Window
 
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;
+
+        // Collapse/expand the pane column when visibility changes
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
+            {
+                var col = ContentGrid.ColumnDefinitions[0];
+                if (_viewModel.IsPaneVisible)
+                {
+                    col.Width = new GridLength(_lastPaneWidth, GridUnitType.Pixel);
+                    col.MinWidth = 200;
+                    col.MaxWidth = 600;
+                }
+                else
+                {
+                    _lastPaneWidth = col.Width.IsAbsolute ? col.Width.Value : 320;
+                    col.Width = new GridLength(0);
+                    col.MinWidth = 0;
+                    col.MaxWidth = 0;
+                }
+            }
+        };
 
         // Wire up dataset load requests
         _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);

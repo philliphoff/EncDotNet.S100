@@ -6,6 +6,7 @@
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
+                Classes="Outline"
                 Content="Open Dataset..."
                 HorizontalAlignment="Stretch"
                 Margin="8"
@@ -31,12 +32,11 @@
                                        TextWrapping="Wrap" />
                         </StackPanel>
                         <Button Grid.Column="1"
+                                Classes="Ghost"
                                 Content="✕"
                                 Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
-                                VerticalAlignment="Center"
-                                Padding="6,2"
-                                Background="Transparent" />
+                                VerticalAlignment="Center" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>
