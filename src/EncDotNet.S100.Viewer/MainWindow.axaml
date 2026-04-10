@@ -107,7 +107,7 @@
                 <!-- Settings pinned at bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,4">
                     <Grid>
-                        <Border Width="2" HorizontalAlignment="Left"
+                        <Border Width="3" HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentBrush}"
                                 IsVisible="{Binding IsSettingsSelected}" />
                         <ToggleButton Classes="ActivityIcon"
@@ -127,7 +127,7 @@
                 <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,4">
                     <!-- Feature Catalogues -->
                     <Grid>
-                        <Border Width="2" HorizontalAlignment="Left"
+                        <Border Width="3" HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentBrush}"
                                 IsVisible="{Binding IsFeatureCataloguesSelected}" />
                         <ToggleButton Classes="ActivityIcon"
@@ -144,7 +144,7 @@
 
                     <!-- Portrayal Catalogues -->
                     <Grid>
-                        <Border Width="2" HorizontalAlignment="Left"
+                        <Border Width="3" HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentBrush}"
                                 IsVisible="{Binding IsPortrayalCataloguesSelected}" />
                         <ToggleButton Classes="ActivityIcon"
@@ -161,7 +161,7 @@
 
                     <!-- Datasets -->
                     <Grid>
-                        <Border Width="2" HorizontalAlignment="Left"
+                        <Border Width="3" HorizontalAlignment="Left"
                                 Background="{DynamicResource AccentBrush}"
                                 IsVisible="{Binding IsDatasetsSelected}" />
                         <ToggleButton Classes="ActivityIcon"
