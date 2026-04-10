@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             x:Class="EncDotNet.S100.Viewer.Views.PortrayalCataloguesView"
+             x:DataType="vm:PortrayalCataloguesViewModel">
+
+    <DockPanel>
+        <Button DockPanel.Dock="Bottom"
+                Content="Add Portrayal Catalogue..."
+                HorizontalAlignment="Stretch"
+                Margin="8"
+                x:Name="AddButton" />
+
+        <ListBox ItemsSource="{Binding Entries}"
+                 Margin="0,4">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:CatalogueEntry">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ProductSpec}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Path}"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="✕"
+                                Command="{Binding $parent[ListBox].((vm:PortrayalCataloguesViewModel)DataContext).RemoveCommand}"
+                                CommandParameter="{Binding}"
+                                VerticalAlignment="Center"
+                                Padding="6,2"
+                                Background="Transparent" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

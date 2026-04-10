@@ -1,0 +1,81 @@
+using System.Windows.Input;
+using EncDotNet.S100.Portrayals;
+
+namespace EncDotNet.S100.Viewer.ViewModels;
+
+internal sealed class MainViewModel : ViewModelBase
+{
+    public FeatureCataloguesViewModel FeatureCatalogues { get; }
+    public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
+    public DatasetsViewModel Datasets { get; }
+    public SettingsViewModel Settings { get; }
+
+    private ActivityKind? _selectedActivity;
+    public ActivityKind? SelectedActivity
+    {
+        get => _selectedActivity;
+        set
+        {
+            // Toggle: clicking the same activity again hides the pane
+            if (_selectedActivity == value)
+                value = null;
+
+            if (SetProperty(ref _selectedActivity, value))
+            {
+                OnPropertyChanged(nameof(IsPaneVisible));
+                OnPropertyChanged(nameof(PaneTitle));
+                OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
+                OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
+                OnPropertyChanged(nameof(IsDatasetsSelected));
+                OnPropertyChanged(nameof(IsSettingsSelected));
+            }
+        }
+    }
+
+    public bool IsPaneVisible => _selectedActivity.HasValue;
+
+    public string PaneTitle => _selectedActivity switch
+    {
+        ActivityKind.FeatureCatalogues => "Feature Catalogues",
+        ActivityKind.PortrayalCatalogues => "Portrayal Catalogues",
+        ActivityKind.Datasets => "Datasets",
+        ActivityKind.Settings => "Settings",
+        _ => string.Empty,
+    };
+
+    public bool IsFeatureCataloguesSelected => _selectedActivity == ActivityKind.FeatureCatalogues;
+    public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
+    public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
+    public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
+
+    public ICommand SelectFeatureCataloguesCommand { get; }
+    public ICommand SelectPortrayalCataloguesCommand { get; }
+    public ICommand SelectDatasetsCommand { get; }
+    public ICommand SelectSettingsCommand { get; }
+
+    private string? _statusText;
+    public string? StatusText
+    {
+        get => _statusText;
+        set
+        {
+            if (SetProperty(ref _statusText, value))
+                OnPropertyChanged(nameof(IsStatusVisible));
+        }
+    }
+
+    public bool IsStatusVisible => _statusText is not null;
+
+    public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager)
+    {
+        FeatureCatalogues = new FeatureCataloguesViewModel(settings);
+        PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
+        Datasets = new DatasetsViewModel();
+        Settings = new SettingsViewModel(settings);
+
+        SelectFeatureCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.FeatureCatalogues);
+        SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
+        SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
+        SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
+    }
+}

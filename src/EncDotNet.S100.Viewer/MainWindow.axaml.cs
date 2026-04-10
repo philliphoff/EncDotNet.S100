@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -19,13 +20,12 @@ using Mapsui.Tiling;
 
 namespace EncDotNet.S100.Viewer;
 
-public partial class MainWindow : Window
+public partial class MainWindow : ShadUI.Window
 {
-    private static readonly string[] SupportedSpecs = ["S-101", "S-102"];
-
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager = new();
     private readonly DatasetPipelineFactory _pipelineFactory;
+    private readonly MainViewModel _viewModel;
     private string? _screenshotPath;
 
     public MainWindow()
@@ -49,7 +49,12 @@ public partial class MainWindow : Window
             new ProjNetCrsTransformFactory(),
             spec => _settings.FeatureCataloguePaths.TryGetValue(spec, out var p) ? p : null);
 
-        UpdatePortrayalButtonText();
+        _viewModel = new MainViewModel(_settings, _catalogueManager);
+        DataContext = _viewModel;
+
+        // Wire up dataset load requests
+        _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
+
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
 
         // Parse command-line arguments
@@ -70,139 +75,36 @@ public partial class MainWindow : Window
 
         if (datasetArg is not null)
         {
-            Opened += async (_, _) => await LoadDatasetAsync(datasetArg);
+            Opened += async (_, _) =>
+            {
+                var spec = DatasetPipelineFactory.DetectProductSpec(datasetArg) ?? "S-101";
+                var entry = _viewModel.Datasets.Add(datasetArg, spec);
+                _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+                await LoadDatasetAsync(entry);
+            };
         }
     }
 
-    private async void OnOpenClick(object? sender, RoutedEventArgs e)
+    private async Task LoadDatasetAsync(DatasetEntry entry)
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open S-100 Dataset",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("S-101 Files (ISO 8211)") { Patterns = ["*.000"] },
-                new FilePickerFileType("S-102 Files (HDF5)") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
-                new FilePickerFileType("All Files") { Patterns = ["*"] },
-            ],
-        });
-
-        if (files.Count == 0)
-            return;
-
-        var path = files[0].TryGetLocalPath();
-        if (path is null)
-            return;
-
-        await LoadDatasetAsync(path);
-    }
-
-    private void OnClearClick(object? sender, RoutedEventArgs e)
-    {
-        RemoveDatasetLayers();
-        ClearButton.IsEnabled = false;
-        SetStatus(null);
-    }
-
-    private async void OnPortrayalClick(object? sender, RoutedEventArgs e)
-    {
-        // Let the user pick which product spec to configure
-        var specOptions = SupportedSpecs.Select(s =>
-        {
-            var current = _catalogueManager.GetPath(s);
-            var label = current is not null
-                ? $"{s} — {Path.GetFileName(current.TrimEnd(Path.DirectorySeparatorChar))}"
-                : $"{s} — (not set)";
-            return label;
-        }).ToArray();
-
-        // Simple approach: cycle through specs or use a sub-window.
-        // For now, ask user to pick a folder and detect which spec it belongs to,
-        // or let user assign it to a specific spec via folder name convention.
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select Portrayal Catalogue Folder",
-            AllowMultiple = false,
-        });
-
-        if (folders.Count == 0)
-            return;
-
-        var folderPath = folders[0].TryGetLocalPath();
-        if (folderPath is null)
-            return;
-
-        // Detect the product spec from the catalogue XML
-        string? detectedSpec = DetectCatalogueSpec(folderPath);
-
-        if (detectedSpec is null)
-        {
-            SetStatus($"Could not detect product spec from catalogue at {folderPath}");
-            return;
-        }
-
-        _catalogueManager.SetPath(detectedSpec, folderPath);
-        _settings.CataloguePaths[detectedSpec] = folderPath;
-        _settings.Save();
-        UpdatePortrayalButtonText();
-        SetStatus($"{detectedSpec} portrayal catalogue: {folderPath}");
-    }
-
-    private static string? DetectCatalogueSpec(string folderPath)
-    {
-        // Try to read the portrayal_catalogue.xml to get the productId
-        var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
-        if (!File.Exists(cataloguePath))
-            return null;
-
-        try
-        {
-            using var stream = File.OpenRead(cataloguePath);
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private void UpdatePortrayalButtonText()
-    {
-        var configured = _catalogueManager.RegisteredCatalogues;
-        if (configured.Count == 0)
-        {
-            PortrayalButton.Content = "Portrayal Catalogues...";
-        }
-        else
-        {
-            var labels = configured.Keys.OrderBy(k => k).ToArray();
-            PortrayalButton.Content = $"Portrayal: {string.Join(", ", labels)}";
-        }
-    }
-
-    private async Task LoadDatasetAsync(string path)
-    {
-        var spec = DatasetPipelineFactory.DetectProductSpec(path);
+        var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
         if (spec is null)
         {
-            SetStatus($"Unrecognized file type: {Path.GetExtension(path)}");
+            _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(entry.FilePath)}";
             return;
         }
 
         if (!_catalogueManager.HasCatalogue(spec))
         {
-            SetStatus($"Please select a portrayal catalogue for {spec} first.");
+            _viewModel.StatusText = $"Please select a portrayal catalogue for {spec} first.";
             return;
         }
 
-        SetStatus($"Loading {Path.GetFileName(path)}...");
-        OpenButton.IsEnabled = false;
+        _viewModel.StatusText = $"Loading {Path.GetFileName(entry.FilePath)}...";
 
         try
         {
-            var result = await Task.Run(() => _pipelineFactory.Process(path));
+            var result = await Task.Run(() => _pipelineFactory.Process(entry.FilePath));
 
             RemoveDatasetLayers();
             MapControl.Map?.Layers.Add(result.Layer);
@@ -212,24 +114,20 @@ public partial class MainWindow : Window
                 nav.ZoomToBox(result.Extent.Grow(result.Extent.Width * 0.1, result.Extent.Height * 0.1));
             }
 
-            ClearButton.IsEnabled = true;
-            SetStatus(result.Info);
+            entry.IsLoaded = true;
+            entry.Info = result.Info;
+            _viewModel.StatusText = result.Info;
 
             if (_screenshotPath is not null)
             {
-                // Let the map render a couple of frames before capturing
                 await Task.Delay(2000);
                 await Dispatcher.UIThread.InvokeAsync(() => CaptureScreenshot(_screenshotPath));
             }
         }
         catch (Exception ex)
         {
-            SetStatus($"Error: {ex.Message}");
-            Console.Error.WriteLine($"Failed to load {path}:\n{ex}");
-        }
-        finally
-        {
-            OpenButton.IsEnabled = true;
+            _viewModel.StatusText = $"Error: {ex.Message}";
+            Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
         }
     }
 
@@ -269,19 +167,6 @@ public partial class MainWindow : Window
         foreach (var layer in toRemove)
         {
             map.Layers.Remove(layer);
-        }
-    }
-
-    private void SetStatus(string? message)
-    {
-        if (message is null)
-        {
-            StatusBorder.IsVisible = false;
-        }
-        else
-        {
-            StatusText.Text = message;
-            StatusBorder.IsVisible = true;
         }
     }
 }

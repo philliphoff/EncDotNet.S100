@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
+             x:DataType="vm:DatasetsViewModel">
+
+    <DockPanel>
+        <Button DockPanel.Dock="Bottom"
+                Content="Open Dataset..."
+                HorizontalAlignment="Stretch"
+                Margin="8"
+                x:Name="AddButton" />
+
+        <ListBox ItemsSource="{Binding Entries}"
+                 Margin="0,4"
+                 x:Name="DatasetList"
+                 DoubleTapped="OnDatasetDoubleTapped">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DatasetEntry">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding ProductSpec}"
+                                       FontSize="11"
+                                       Opacity="0.6" />
+                            <TextBlock Text="{Binding Info}"
+                                       FontSize="11"
+                                       Opacity="0.5"
+                                       IsVisible="{Binding IsLoaded}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="✕"
+                                Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
+                                CommandParameter="{Binding}"
+                                VerticalAlignment="Center"
+                                Padding="6,2"
+                                Background="Transparent" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>
