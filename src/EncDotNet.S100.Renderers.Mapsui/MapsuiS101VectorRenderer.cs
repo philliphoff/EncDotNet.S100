@@ -3,14 +3,13 @@ using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Skia;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
-using SkiaSharp;
-using Svg.Skia;
 using MapsuiColor = Mapsui.Styles.Color;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -353,7 +352,7 @@ public sealed class MapsuiS101VectorRenderer
             var svgContent = SymbolProvider(symbolRef);
             if (svgContent is not null)
             {
-                var processed = ProcessSvg(svgContent, Palette);
+                var processed = SvgProcessor.Process(svgContent, Palette);
                 source = "svg-content://" + processed;
             }
         }
@@ -367,12 +366,6 @@ public sealed class MapsuiS101VectorRenderer
     }
 
     // ── Pattern tile rasterization ─────────────────────────────────────
-
-    // Pixels per mm used when rasterizing SVG pattern tiles.
-    // S-100 defines pattern dimensions in mm for paper charts (~3.78 px/mm at 96 DPI).
-    // For interactive display we use a lower density so patterns repeat more tightly
-    // relative to the on-screen polygon size.
-    private const double PixelsPerMm = 1.5;
 
     /// <summary>
     /// Returns a Mapsui base64-content:// source string for the given area fill name,
@@ -395,11 +388,12 @@ public sealed class MapsuiS101VectorRenderer
                 var svgContent = SymbolProvider(areaFill.PatternSymbol);
                 if (svgContent is not null)
                 {
-                    var processed = ProcessSvg(svgContent, Palette);
-                    var tileSource = RasterizePatternTile(processed, areaFill);
-                    if (tileSource is not null)
+                    var processed = SvgProcessor.Process(svgContent, Palette);
+                    var pngBytes = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                    if (pngBytes is not null)
                     {
-                        result = (tileSource, areaFill);
+                        var base64 = Convert.ToBase64String(pngBytes);
+                        result = ("base64-content://" + base64, areaFill);
                     }
                 }
             }
@@ -412,90 +406,6 @@ public sealed class MapsuiS101VectorRenderer
         _patternTileCache[fillName] = result;
         return result;
     }
-
-    /// <summary>
-    /// Rasterizes a processed SVG pattern into a repeating tile bitmap.
-    /// Returns a base64-content:// source suitable for <see cref="Brush.Image"/>.
-    /// </summary>
-    private static string? RasterizePatternTile(string processedSvg, AreaFill areaFill)
-    {
-        // Parse SVG into an SkiaSharp picture via Svg.Skia
-        using var svg = SKSvg.CreateFromSvg(processedSvg);
-        if (svg is null) return null;
-
-        var picture = svg.Picture;
-        if (picture is null) return null;
-
-        var svgBounds = picture.CullRect;
-        if (svgBounds.Width <= 0 || svgBounds.Height <= 0) return null;
-
-        // Determine tile dimensions from the tiling vectors.
-        // v1 defines horizontal repeat spacing; v2 defines vertical + optional horizontal offset.
-        double tileWidthMm = Math.Abs(areaFill.V1X);
-        double tileHeightMm = Math.Abs(areaFill.V2Y);
-        if (tileWidthMm <= 0) tileWidthMm = svgBounds.Width;
-        if (tileHeightMm <= 0) tileHeightMm = svgBounds.Height;
-
-        bool hasOffset = Math.Abs(areaFill.V2X) > 0.01;
-
-        // For parallelogram lattices (v2.x != 0), create a double-height tile
-        // with the second row offset by v2.x, producing the correct brick-like pattern.
-        double totalHeightMm = hasOffset ? tileHeightMm * 2 : tileHeightMm;
-
-        int tileW = Math.Max(1, (int)Math.Round(tileWidthMm * PixelsPerMm));
-        int tileH = Math.Max(1, (int)Math.Round(totalHeightMm * PixelsPerMm));
-
-        // Cap tile size for sanity
-        if (tileW > 512 || tileH > 512) return null;
-
-        using var bitmap = new SKBitmap(tileW, tileH);
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
-
-        // Scale the SVG to fit within one tile cell
-        float svgW = svgBounds.Width;
-        float svgH = svgBounds.Height;
-        float cellW = (float)(tileWidthMm * PixelsPerMm);
-        float cellH = (float)(tileHeightMm * PixelsPerMm);
-        float scaleX = cellW / svgW;
-        float scaleY = cellH / svgH;
-        float scale = Math.Min(scaleX, scaleY);
-
-        // Center the SVG in the cell
-        float scaledW = svgW * scale;
-        float scaledH = svgH * scale;
-        float offsetX = (cellW - scaledW) / 2;
-        float offsetY = (cellH - scaledH) / 2;
-
-        // Draw the SVG at position (0,0) for the first row
-        canvas.Save();
-        canvas.Translate(offsetX - svgBounds.Left * scale, offsetY - svgBounds.Top * scale);
-        canvas.Scale(scale);
-        canvas.DrawPicture(picture);
-        canvas.Restore();
-
-        // For parallelogram lattices, draw a second copy offset for the second row
-        if (hasOffset)
-        {
-            float offset2X = (float)(areaFill.V2X * PixelsPerMm);
-            canvas.Save();
-            canvas.Translate(offset2X + offsetX - svgBounds.Left * scale, cellH + offsetY - svgBounds.Top * scale);
-            canvas.Scale(scale);
-            canvas.DrawPicture(picture);
-            canvas.Restore();
-        }
-
-        canvas.Flush();
-
-        // Encode to PNG and return as base64-content:// source
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        var base64 = Convert.ToBase64String(data.ToArray());
-        return "base64-content://" + base64;
-    }
-
-    private static string ProcessSvg(string svgContent, ColorPalette? palette) =>
-        SvgProcessor.Process(svgContent, palette);
 
     // ── SAFCON contour label merging ───────────────────────────────────
     //
