@@ -87,19 +87,19 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             if (my > mercMaxY) mercMaxY = my;
         }
 
-        // Determine output bitmap dimensions
-        double avgSpacingX = (mercMaxX - mercMinX) / Math.Max(srcCols - 1, 1);
-        double avgSpacingY = (mercMaxY - mercMinY) / Math.Max(srcRows - 1, 1);
-        double cellSize = Math.Min(avgSpacingX, avgSpacingY);
+        // Determine output bitmap dimensions using separate X/Y cell sizes
+        // to account for non-conformal projections (e.g. WGS84 → Mercator distortion).
+        double cellSizeX = (mercMaxX - mercMinX) / Math.Max(srcCols - 1, 1);
+        double cellSizeY = (mercMaxY - mercMinY) / Math.Max(srcRows - 1, 1);
 
         // Pad extent by half a cell
-        mercMinX -= cellSize / 2;
-        mercMinY -= cellSize / 2;
-        mercMaxX += cellSize / 2;
-        mercMaxY += cellSize / 2;
+        mercMinX -= cellSizeX / 2;
+        mercMinY -= cellSizeY / 2;
+        mercMaxX += cellSizeX / 2;
+        mercMaxY += cellSizeY / 2;
 
-        int outCols = (int)Math.Ceiling((mercMaxX - mercMinX) / cellSize);
-        int outRows = (int)Math.Ceiling((mercMaxY - mercMinY) / cellSize);
+        int outCols = (int)Math.Ceiling((mercMaxX - mercMinX) / cellSizeX);
+        int outRows = (int)Math.Ceiling((mercMaxY - mercMinY) / cellSizeY);
 
         // Cap output size
         if (outCols > MaxDim || outRows > MaxDim)
@@ -107,9 +107,8 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             double scale = (double)MaxDim / Math.Max(outCols, outRows);
             outCols = (int)(outCols * scale);
             outRows = (int)(outRows * scale);
-            cellSize = Math.Max(
-                (mercMaxX - mercMinX) / outCols,
-                (mercMaxY - mercMinY) / outRows);
+            cellSizeX = (mercMaxX - mercMinX) / outCols;
+            cellSizeY = (mercMaxY - mercMinY) / outRows;
         }
 
         // Render: for each grid node, place its color at the correct Mercator pixel
@@ -134,8 +133,8 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             if (color.Alpha == 0) continue;
 
             var (mx, my) = nodePositions[r, c];
-            int px = (int)((mx - mercMinX) / cellSize);
-            int py = outRows - 1 - (int)((my - mercMinY) / cellSize);
+            int px = (int)((mx - mercMinX) / cellSizeX);
+            int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
 
             if (px >= 0 && px < outCols && py >= 0 && py < outRows)
                 bmp.SetPixel(px, py, color);
