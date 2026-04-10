@@ -20,8 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\datasets\S111\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

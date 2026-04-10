@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -54,12 +55,12 @@ internal sealed class DatasetPipelineFactory
     {
         var ext = Path.GetExtension(path);
 
-        // S-102: HDF5 files
+        // HDF5 files: inspect productSpecification attribute to distinguish S-102 vs S-111
         if (ext.Equals(".h5", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".H5", StringComparison.OrdinalIgnoreCase) ||
             ext.Equals(".hdf5", StringComparison.OrdinalIgnoreCase))
         {
-            return "S-102";
+            return DetectHdf5ProductSpec(path);
         }
 
         // S-101: ISO 8211 files
@@ -69,6 +70,28 @@ internal sealed class DatasetPipelineFactory
         }
 
         return null;
+    }
+
+    private static string DetectHdf5ProductSpec(string path)
+    {
+        try
+        {
+            using var hdf5 = PureHdfFile.Open(path);
+            var root = hdf5.Root;
+
+            if (root.AttributeExists("productSpecification"))
+            {
+                var spec = root.ReadStringAttribute("productSpecification");
+                if (spec.Contains("S-111", StringComparison.OrdinalIgnoreCase))
+                    return "S-111";
+            }
+        }
+        catch
+        {
+            // Fall through to default
+        }
+
+        return "S-102";
     }
 
     /// <summary>
@@ -85,6 +108,7 @@ internal sealed class DatasetPipelineFactory
         {
             "S-102" => ProcessS102(path),
             "S-101" => ProcessS101(path),
+            "S-111" => ProcessS111(path),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }
@@ -270,6 +294,65 @@ internal sealed class DatasetPipelineFactory
             Extent = extent,
             Info = fallbackInfo,
             ProductSpec = "S-101",
+        };
+    }
+
+    private DatasetResult ProcessS111(string path)
+    {
+        using var hdf5 = PureHdfFile.Open(path);
+        var dataset = S111DatasetReader.Read(hdf5);
+        var source = new S111CoverageSource(dataset);
+        var metadata = source.Metadata;
+
+        var catalogue = new S111PortrayalCatalogue();
+        var context = new NavigationContext
+        {
+            Viewport = new Pipelines.Viewport
+            {
+                MinLatitude = metadata.Extent.SouthLatitude,
+                MaxLatitude = metadata.Extent.NorthLatitude,
+                MinLongitude = metadata.Extent.WestLongitude,
+                MaxLongitude = metadata.Extent.EastLongitude,
+                WidthPixels = metadata.GridMetadata.NumColumns,
+                HeightPixels = metadata.GridMetadata.NumRows,
+            },
+            ScaleDenominator = 50_000,
+        };
+
+        var colorScheme = catalogue.ResolveColorScheme(context);
+        var sampled = source.Sample(GridRegion.Full);
+
+        var styledLayer = new StyledCoverageLayer
+        {
+            Coverage = sampled,
+            ColorScheme = colorScheme,
+            NoDataValue = S111CoverageSource.FillValue,
+            Georeferencer = new GridGeoreferencer(
+                metadata.GridMetadata,
+                metadata.HorizontalCRS),
+        };
+
+        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        {
+            LayerName = $"S-111: {Path.GetFileName(path)}",
+        };
+
+        var mapLayer = renderer.Render(styledLayer, context.Viewport);
+        var extent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
+
+        int crs = dataset.HorizontalCRS ?? 4326;
+        var geoId = dataset.GeographicIdentifier ?? Path.GetFileName(path);
+        var timeInfo = source.AvailableTimes.Count > 0
+            ? $", {source.AvailableTimes.Count} time steps ({source.AvailableTimes[0]:u}–{source.AvailableTimes[^1]:u})"
+            : "";
+        var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
+
+        return new DatasetResult
+        {
+            Layer = mapLayer,
+            Extent = extent,
+            Info = info,
+            ProductSpec = "S-111",
         };
     }
 

@@ -5,31 +5,19 @@ namespace EncDotNet.S100.Datasets.S111.Tests;
 
 /// <summary>
 /// Integration tests for S111DatasetReader using real NOAA S-111 HDF5 data.
-/// Test file: Delaware Bay (DBOFS) dcf2 regional, 410×448 grid, 48 hourly time steps.
+/// Test file: Delaware Bay (DBOFS) dcf2 tile, 53×53 grid, 48 hourly time steps.
 /// </summary>
 public class S111DatasetReaderTests : IDisposable
 {
-    // Point this at a local dcf2 regional file from the NOAA S-111 public dataset.
-    private const string TestDataDir = "~/Downloads/aws/noaa-s111-pds/ed1.0.1/model_forecast_guidance/dbofs";
+    private const string TestDataFile = "TestData/111US00_DBOFS_20260320T18Z_US4DE1BB.h5";
 
-    private readonly string? _testFile;
     private readonly PureHdfFile? _hdf5;
 
     public S111DatasetReaderTests()
     {
-        // Find the first available dcf2 regional file.
-        var expanded = TestDataDir.Replace("~", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-        var dcf2Dir = Directory.EnumerateDirectories(expanded, "dcf2", SearchOption.AllDirectories).FirstOrDefault();
-
-        if (dcf2Dir is not null)
+        if (File.Exists(TestDataFile))
         {
-            var regionalDir = Path.Combine(dcf2Dir, "regional");
-            _testFile = Directory.EnumerateFiles(regionalDir, "*.h5").FirstOrDefault();
-        }
-
-        if (_testFile is not null)
-        {
-            _hdf5 = PureHdfFile.Open(_testFile);
+            _hdf5 = PureHdfFile.Open(TestDataFile);
         }
     }
 
@@ -40,7 +28,7 @@ public class S111DatasetReaderTests : IDisposable
 
     private void SkipIfNoTestData()
     {
-        Skip.If(_hdf5 is null, "No S-111 test data found. Set TestDataDir to a NOAA S-111 dataset path.");
+        Skip.If(_hdf5 is null, $"S-111 test data not found at {TestDataFile}.");
     }
 
     [SkippableFact]
