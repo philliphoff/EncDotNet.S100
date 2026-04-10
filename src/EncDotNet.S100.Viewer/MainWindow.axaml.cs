@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -52,6 +53,19 @@ public partial class MainWindow : ShadUI.Window
 
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;
+
+        // Apply persisted accent color
+        ApplyAccentColor(_viewModel.Settings.AccentColor);
+        _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
+
+        // If no pane is initially selected, start collapsed
+        if (!_viewModel.IsPaneVisible)
+        {
+            var col = ContentGrid.ColumnDefinitions[0];
+            col.Width = new GridLength(0);
+            col.MinWidth = 0;
+            col.MaxWidth = 0;
+        }
 
         // Collapse/expand the pane column when visibility changes
         _viewModel.PropertyChanged += (_, e) =>
@@ -106,6 +120,11 @@ public partial class MainWindow : ShadUI.Window
                 await LoadDatasetAsync(entry);
             };
         }
+    }
+
+    private void ApplyAccentColor(Color color)
+    {
+        Resources["AccentBrush"] = new SolidColorBrush(color);
     }
 
     private async Task LoadDatasetAsync(DatasetEntry entry)

@@ -4,12 +4,26 @@
              x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
-    <StackPanel Margin="12" Spacing="12">
-        <TextBlock Text="Application Settings"
-                   FontSize="14"
-                   FontWeight="SemiBold"
-                   Opacity="0.7" />
-        <TextBlock Text="No configurable settings yet."
-                   Opacity="0.5" />
-    </StackPanel>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                   VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12" Spacing="16">
+            <TextBlock Text="Application Settings"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+
+            <!-- Accent Color -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Accent Color"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <ColorView Color="{Binding AccentColor}"
+                           IsAlphaVisible="False"
+                           IsColorComponentsVisible="False"
+                           IsColorSpectrumSliderVisible="True"
+                           MaxWidth="300"
+                           HorizontalAlignment="Left" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

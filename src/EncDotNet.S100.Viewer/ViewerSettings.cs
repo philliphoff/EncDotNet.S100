@@ -25,6 +25,12 @@ internal sealed class ViewerSettings
     /// <summary>Legacy single path — migrated to <see cref="CataloguePaths"/> on load.</summary>
     public string? PortrayalCataloguePath { get; set; }
 
+    /// <summary>Custom accent color hex string (e.g. "#007ACC"). Defaults to VS Code blue.</summary>
+    public string AccentColor { get; set; } = "#007ACC";
+
+    /// <summary>Last selected activity pane, or null if none was open.</summary>
+    public string? LastSelectedActivity { get; set; }
+
     public static ViewerSettings Load()
     {
         try

@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Styling;
@@ -7,6 +8,8 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class MainViewModel : ViewModelBase
 {
+    private readonly ViewerSettings _settings;
+
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
@@ -30,6 +33,10 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
                 OnPropertyChanged(nameof(IsDatasetsSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
+
+                // Persist the last selected activity (Settings is transient, don't remember it)
+                _settings.LastSelectedActivity = value is ActivityKind.Settings ? null : value?.ToString();
+                _settings.Save();
             }
         }
     }
@@ -79,6 +86,8 @@ internal sealed class MainViewModel : ViewModelBase
 
     public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager)
     {
+        _settings = settings;
+
         FeatureCatalogues = new FeatureCataloguesViewModel(settings);
         PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
         Datasets = new DatasetsViewModel();
@@ -100,5 +109,12 @@ internal sealed class MainViewModel : ViewModelBase
                 IsDarkTheme = next == ThemeVariant.Dark;
             }
         });
+
+        // Restore last selected activity (set field directly to avoid re-saving)
+        if (settings.LastSelectedActivity is { } last
+            && Enum.TryParse<ActivityKind>(last, out var restored))
+        {
+            _selectedActivity = restored;
+        }
     }
 }
