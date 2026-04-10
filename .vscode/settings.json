@@ -17,6 +17,7 @@
         "nuget": true,
         "dotnet remove": true,
         "dotnet-ilspy": true,
-        "strings": true
+        "strings": true,
+        "pip": true
     }
 }
