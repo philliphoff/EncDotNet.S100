@@ -19,6 +19,9 @@ public sealed class ColorPalette
     public string Resolve(string token) =>
         Colors.TryGetValue(token, out var hex) ? hex : "#000000";
 
+    public bool TryResolve(string token, out string hex) =>
+        Colors.TryGetValue(token, out hex!);
+
     public static ColorPalette FromType(PaletteType type) => type switch
     {
         PaletteType.Day => Default,
