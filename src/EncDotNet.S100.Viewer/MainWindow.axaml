@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
+        xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -25,15 +26,13 @@
                 BorderThickness="0">
             <Panel>
                 <!-- Sun icon (shown in dark mode, click to go light) -->
-                <PathIcon Width="16" Height="16"
-                          Foreground="{DynamicResource ForegroundColor}"
-                          IsVisible="{Binding IsDarkTheme}"
-                          Data="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z" />
+                <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
+                               Foreground="{DynamicResource ForegroundColor}"
+                               IsVisible="{Binding IsDarkTheme}" />
                 <!-- Moon icon (shown in light mode, click to go dark) -->
-                <PathIcon Width="16" Height="16"
-                          Foreground="{DynamicResource ForegroundColor}"
-                          IsVisible="{Binding !IsDarkTheme}"
-                          Data="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
+                               Foreground="{DynamicResource ForegroundColor}"
+                               IsVisible="{Binding !IsDarkTheme}" />
             </Panel>
         </Button>
     </shadui:Window.RightWindowTitleBarContent>
@@ -70,10 +69,8 @@
                                   VerticalContentAlignment="Center"
                                   Background="Transparent"
                                   BorderThickness="0">
-                        <!-- Lucide "settings" (gear) -->
-                        <PathIcon Width="22" Height="22"
-                                  Foreground="{DynamicResource ForegroundColor}"
-                                  Data="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                        <ic:FluentIcon Icon="Settings" IconVariant="Regular" FontSize="22"
+                                        Foreground="{DynamicResource ForegroundColor}" />
                     </ToggleButton>
                 </StackPanel>
 
@@ -89,10 +86,8 @@
                                   VerticalContentAlignment="Center"
                                   Background="Transparent"
                                   BorderThickness="0">
-                        <!-- Lucide "book-open" -->
-                        <PathIcon Width="22" Height="22"
-                                  Foreground="{DynamicResource ForegroundColor}"
-                                  Data="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                        <ic:FluentIcon Icon="BookOpen" IconVariant="Regular" FontSize="22"
+                                        Foreground="{DynamicResource ForegroundColor}" />
                     </ToggleButton>
 
                     <!-- Portrayal Catalogues -->
@@ -105,10 +100,8 @@
                                   VerticalContentAlignment="Center"
                                   Background="Transparent"
                                   BorderThickness="0">
-                        <!-- Lucide "palette" -->
-                        <PathIcon Width="22" Height="22"
-                                  Foreground="{DynamicResource ForegroundColor}"
-                                  Data="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.7 1.5-1.5 0-.4-.1-.7-.4-1-.3-.3-.4-.7-.4-1 0-.8.7-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-5-4.5-9-10-9zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+                        <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" FontSize="22"
+                                        Foreground="{DynamicResource ForegroundColor}" />
                     </ToggleButton>
 
                     <!-- Datasets -->
@@ -121,10 +114,8 @@
                                   VerticalContentAlignment="Center"
                                   Background="Transparent"
                                   BorderThickness="0">
-                        <!-- Lucide "layers" -->
-                        <PathIcon Width="22" Height="22"
-                                  Foreground="{DynamicResource ForegroundColor}"
-                                  Data="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                        <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22"
+                                        Foreground="{DynamicResource ForegroundColor}" />
                     </ToggleButton>
                 </StackPanel>
             </DockPanel>

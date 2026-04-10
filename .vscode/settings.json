@@ -13,6 +13,10 @@
         "dotnet ilspycmd": true,
         "dotnet nuget": true,
         "dotnet add": true,
-        "dotnet ildasm": true
+        "dotnet ildasm": true,
+        "nuget": true,
+        "dotnet remove": true,
+        "dotnet-ilspy": true,
+        "strings": true
     }
 }
