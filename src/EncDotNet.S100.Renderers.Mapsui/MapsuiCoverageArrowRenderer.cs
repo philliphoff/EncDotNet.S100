@@ -1,10 +1,10 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Portrayals;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Styles;
+using SkiaSharp;
 
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
@@ -12,12 +12,20 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Renders oriented symbols (e.g. current arrows) from a <see cref="StyledCoverageLayer"/>
-/// as a Mapsui <see cref="ILayer"/> of <see cref="PointFeature"/>s with rotated SVG images.
+/// as a georeferenced raster that scales with map zoom, using SkiaSharp to draw
+/// rotated arrow polygons colored by speed band.
 /// </summary>
 public sealed class MapsuiCoverageArrowRenderer
 {
+    private const int MaxDim = 4096;
+
     private readonly ICrsTransformFactory _transformFactory;
-    private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Arrow shape from the S-111 SVG symbols, centered at origin, pointing north
+    /// (negative Y in screen coords). The path is 4 units wide and 10 units tall.
+    /// </summary>
+    private static readonly SKPath ArrowPath = CreateArrowPath();
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "Coverage Arrows";
@@ -26,29 +34,18 @@ public sealed class MapsuiCoverageArrowRenderer
     public double Opacity { get; set; } = 1.0;
 
     /// <summary>
-    /// Base scale applied to all symbol sizes before band-specific scaling.
-    /// Adjust to taste depending on map zoom.
-    /// </summary>
-    public double BaseSymbolScale { get; set; } = 0.3;
-
-    /// <summary>
     /// Target maximum number of arrows along the longest grid axis.
     /// The renderer computes a stride so that no more than roughly
-    /// <c>MaxArrowsPerAxis²</c> arrows are produced, preventing
-    /// excessive feature counts on large regional grids.
+    /// <c>MaxArrowsPerAxis²</c> arrows are produced.
     /// Set to 0 to disable subsampling.
     /// </summary>
     public int MaxArrowsPerAxis { get; set; } = 80;
 
     /// <summary>
-    /// The color palette used to resolve SVG CSS fill tokens to inline colors.
+    /// Minimum number of pixels allocated per arrow in the output raster
+    /// (along the shorter arrow axis). Controls the output bitmap resolution.
     /// </summary>
-    public ColorPalette? Palette { get; set; }
-
-    /// <summary>
-    /// Returns raw SVG content for a symbol reference name (e.g. "SCAROW01").
-    /// </summary>
-    public required Func<string, string?> SymbolProvider { get; set; }
+    public int MinArrowPixels { get; set; } = 20;
 
     public MapsuiCoverageArrowRenderer(ICrsTransformFactory transformFactory)
     {
@@ -56,8 +53,9 @@ public sealed class MapsuiCoverageArrowRenderer
     }
 
     /// <summary>
-    /// Renders the symbol scheme from a styled coverage layer into a Mapsui point layer.
-    /// Returns <c>null</c> if the layer has no symbol scheme.
+    /// Renders the symbol scheme from a styled coverage layer into a georeferenced
+    /// raster layer with rotated arrow polygons. Returns <c>null</c> if the layer
+    /// has no symbol scheme.
     /// </summary>
     public ILayer? Render(StyledCoverageLayer layer, PipelineViewport viewport)
     {
@@ -67,6 +65,7 @@ public sealed class MapsuiCoverageArrowRenderer
 
         var sampled = layer.Coverage;
         var georeferencer = layer.Georeferencer;
+        var colorScheme = layer.ColorScheme;
         var valueData = sampled.GetField(symbolScheme.ValueFieldName);
         var rotationData = sampled.GetField(symbolScheme.RotationFieldName);
         int srcRows = valueData.GetLength(0);
@@ -86,7 +85,96 @@ public sealed class MapsuiCoverageArrowRenderer
             stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
         }
 
-        var features = new List<PointFeature>();
+        // Pre-resolve color bands: hex → SKColor
+        var bands = new (float Min, float Max, SKColor Color)[colorScheme.Bands.Count];
+        for (int i = 0; i < colorScheme.Bands.Count; i++)
+        {
+            var band = colorScheme.Bands[i];
+            var rgba = RgbaColor.FromHex(band.Color);
+            bands[i] = (band.MinValue, band.MaxValue, new SKColor(rgba.R, rgba.G, rgba.B, rgba.A));
+        }
+
+        // Project grid corners to Mercator to determine extent.
+        double mercMinX = double.MaxValue, mercMinY = double.MaxValue;
+        double mercMaxX = double.MinValue, mercMaxY = double.MinValue;
+
+        void ExpandExtent(int r, int c)
+        {
+            var (nX, nY) = georeferencer.ToNative(r, c);
+            double lon, lat;
+            if (nativeToWgs84.IsIdentity) { lon = nX; lat = nY; }
+            else { (lon, lat) = nativeToWgs84.Transform(nX, nY); }
+            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+            if (mx < mercMinX) mercMinX = mx;
+            if (my < mercMinY) mercMinY = my;
+            if (mx > mercMaxX) mercMaxX = mx;
+            if (my > mercMaxY) mercMaxY = my;
+        }
+
+        ExpandExtent(0, 0);
+        ExpandExtent(0, srcCols - 1);
+        ExpandExtent(srcRows - 1, 0);
+        ExpandExtent(srcRows - 1, srcCols - 1);
+
+        double cellSizeX = (mercMaxX - mercMinX) / Math.Max(srcCols - 1, 1);
+        double cellSizeY = (mercMaxY - mercMinY) / Math.Max(srcRows - 1, 1);
+
+        // Pad extent by half a cell (match color renderer alignment)
+        mercMinX -= cellSizeX / 2;
+        mercMinY -= cellSizeY / 2;
+        mercMaxX += cellSizeX / 2;
+        mercMaxY += cellSizeY / 2;
+
+        double mercWidth = mercMaxX - mercMinX;
+        double mercHeight = mercMaxY - mercMinY;
+
+        // Compute output bitmap dimensions: ensure each arrow gets MinArrowPixels,
+        // while preserving the geographic aspect ratio.
+        int arrowsX = (srcCols + stride - 1) / stride;
+        int arrowsY = (srcRows + stride - 1) / stride;
+        double aspect = mercWidth / mercHeight;
+
+        int outCols, outRows;
+        if (aspect >= 1.0)
+        {
+            outCols = Math.Min(MaxDim, arrowsX * MinArrowPixels);
+            outRows = Math.Max(1, (int)(outCols / aspect));
+        }
+        else
+        {
+            outRows = Math.Min(MaxDim, arrowsY * MinArrowPixels);
+            outCols = Math.Max(1, (int)(outRows * aspect));
+        }
+
+        double pxPerMercX = outCols / mercWidth;
+        double pxPerMercY = outRows / mercHeight;
+
+        // Arrow height in pixels: proportional to stride × cell spacing, scaled to
+        // leave room between arrows. The arrow path is 10 units tall (-5 to +5).
+        double arrowSpacingPx = stride * cellSizeY * pxPerMercY;
+        double baseArrowScale = arrowSpacingPx * 0.5 / 10.0;
+        baseArrowScale = Math.Max(baseArrowScale, 0.5);
+
+        // Draw arrows onto a transparent bitmap
+        using var bmp = new SKBitmap(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bmp);
+        canvas.Clear(SKColors.Transparent);
+
+        using var fillPaint = new SKPaint
+        {
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true,
+        };
+
+        using var strokePaint = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            Color = SKColors.Black,
+            StrokeWidth = 0.32f,
+            StrokeJoin = SKStrokeJoin.Round,
+            StrokeCap = SKStrokeCap.Round,
+            IsAntialias = true,
+        };
 
         for (int r = 0; r < srcRows; r += stride)
         for (int c = 0; c < srcCols; c += stride)
@@ -99,75 +187,80 @@ public sealed class MapsuiCoverageArrowRenderer
             bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
             if (dirNoData) continue;
 
-            // Resolve symbol band
-            var band = symbolScheme.Resolve(value);
-            if (band is null) continue;
+            // Find fill color from color scheme bands
+            SKColor color = SKColors.Transparent;
+            for (int b = 0; b < bands.Length; b++)
+            {
+                if (value >= bands[b].Min && value < bands[b].Max)
+                {
+                    color = bands[b].Color;
+                    break;
+                }
+            }
+            if (color.Alpha == 0) continue;
 
-            // Get processed SVG data URI (cached)
-            var svgSource = GetSymbolSource(band.SymbolRef);
-            if (svgSource is null) continue;
+            // Band-specific scale factor from the symbol scheme
+            var symbolBand = symbolScheme.Resolve(value);
+            double bandScale = symbolBand is not null
+                ? (symbolBand.ScaleByValue ? symbolBand.ScaleFactor * value : symbolBand.ScaleFactor)
+                : 1.0;
+            float totalScale = (float)(baseArrowScale * bandScale);
 
-            // Project grid cell to Mercator
+            // Project to pixel coordinates
             var (nativeX, nativeY) = georeferencer.ToNative(r, c);
             double lon, lat;
-            if (nativeToWgs84.IsIdentity)
-            {
-                lon = nativeX;
-                lat = nativeY;
-            }
-            else
-            {
-                (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY);
-            }
-
+            if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
+            else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
             var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-            // Compute scale
-            double scale = band.ScaleByValue
-                ? BaseSymbolScale * band.ScaleFactor * value
-                : BaseSymbolScale * band.ScaleFactor;
+            float px = (float)((mx - mercMinX) * pxPerMercX);
+            float py = (float)(outRows - 1 - (my - mercMinY) * pxPerMercY);
 
-            var feature = new PointFeature(mx, my);
-            feature.Styles.Add(new ImageStyle
-            {
-                Image = new Image { Source = svgSource, RasterizeSvg = true },
-                SymbolScale = scale,
-                SymbolRotation = direction,
-            });
+            // Draw rotated + scaled arrow
+            canvas.Save();
+            canvas.Translate(px, py);
+            canvas.RotateDegrees(direction);
+            canvas.Scale(totalScale);
 
-            features.Add(feature);
+            fillPaint.Color = color;
+            canvas.DrawPath(ArrowPath, fillPaint);
+            canvas.DrawPath(ArrowPath, strokePaint);
+
+            canvas.Restore();
         }
+
+        // Encode to PNG and wrap as a georeferenced raster layer
+        using var image = SKImage.FromBitmap(bmp);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        var pngBytes = data.ToArray();
+
+        var mercatorExtent = new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
+        var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
+        {
+            Styles = { new RasterStyle() },
+        };
 
         return new MemoryLayer
         {
             Name = LayerName,
-            Features = features,
+            Features = new List<RasterFeature> { rasterFeature },
             Style = null,
             Opacity = Opacity,
         };
     }
 
-    private string? GetSymbolSource(string symbolRef)
+    private static SKPath CreateArrowPath()
     {
-        if (_symbolDataUriCache.TryGetValue(symbolRef, out var cached))
-            return cached;
-
-        string? source = null;
-        try
-        {
-            var svgContent = SymbolProvider(symbolRef);
-            if (svgContent is not null)
-            {
-                var processed = SvgProcessor.Process(svgContent, Palette);
-                source = "svg-content://" + processed;
-            }
-        }
-        catch
-        {
-            // Symbol not found or malformed
-        }
-
-        _symbolDataUriCache[symbolRef] = source;
-        return source;
+        var path = new SKPath();
+        path.MoveTo(0, 5);
+        path.LineTo(-0.5f, 5);
+        path.LineTo(-1.0f, -1.5f);
+        path.LineTo(-2.0f, -1.5f);
+        path.LineTo(0, -5);
+        path.LineTo(2.0f, -1.5f);
+        path.LineTo(1.0f, -1.5f);
+        path.LineTo(0.5f, 5);
+        path.Close();
+        return path;
     }
 }
