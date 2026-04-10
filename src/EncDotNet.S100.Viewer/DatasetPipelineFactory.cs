@@ -304,7 +304,9 @@ internal sealed class DatasetPipelineFactory
         var source = new S111CoverageSource(dataset);
         var metadata = source.Metadata;
 
-        var catalogue = new S111PortrayalCatalogue();
+        var catalogue = _catalogueManager.HasCatalogue("S-111")
+            ? new S111PortrayalCatalogue(_catalogueManager.GetProvider("S-111"))
+            : throw new InvalidOperationException("S-111 portrayal catalogue is not registered. Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
         var context = new NavigationContext
         {
             Viewport = new Pipelines.Viewport

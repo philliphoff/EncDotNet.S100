@@ -1,7 +1,9 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Datasets.S111.Tests;
 
@@ -104,32 +106,16 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal(coverage.NumPointsLongitudinal, direction.GetLength(1));
     }
 
-    [SkippableFact]
-    public async Task CoveragePipeline_ProducesColoredLayer()
-    {
-        SkipIfNoTestData();
-
-        var source = new S111CoverageSource(_dataset!);
-        var catalogue = new S111PortrayalCatalogue();
-        var pipeline = new CoveragePipeline();
-
-        var layer = await pipeline.ProcessAsync(source, catalogue);
-
-        Assert.Equal("S-111", layer.Metadata.ProductSpec);
-        Assert.NotEmpty(layer.CellColors);
-
-        // Should have some non-null (colored) cells and some null (no-data) cells
-        var nonNull = layer.CellColors.Where(c => c is not null).ToList();
-        var nullCount = layer.CellColors.Count(c => c is null);
-
-        Assert.NotEmpty(nonNull);
-        Assert.True(nullCount > 0, "Expected some no-data cells in the coastal current grid");
-    }
-
-    [SkippableFact]
+    [Fact]
     public void PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
     {
-        var catalogue = new S111PortrayalCatalogue();
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var source = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        var catalogue = new S111PortrayalCatalogue(provider);
+
         var context = new NavigationContext
         {
             Viewport = new Viewport
@@ -144,13 +130,39 @@ public class S111CoverageSourceTests : IDisposable
         var scheme = catalogue.ResolveColorScheme(context);
 
         Assert.Equal("surfaceCurrentSpeed", scheme.FieldName);
-        Assert.NotEmpty(scheme.Bands);
+        Assert.Equal(9, scheme.Bands.Count);
 
-        // Slow current → light blue
+        // Colors should come from the color profile, not the hardcoded defaults
         Assert.NotNull(scheme.Resolve(0.1f));
-        // Fast current → red
         Assert.NotNull(scheme.Resolve(3.5f));
-        // No-data value → null
         Assert.Null(scheme.Resolve(-9999f));
+    }
+
+    [SkippableFact]
+    public async Task CoveragePipeline_ProducesColoredLayer()
+    {
+        SkipIfNoTestData();
+
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var assetSource = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = PortrayalCatalogueProvider.OpenAsync(assetSource).GetAwaiter().GetResult();
+
+        var source = new S111CoverageSource(_dataset!);
+        var catalogue = new S111PortrayalCatalogue(provider);
+        var pipeline = new CoveragePipeline();
+
+        var layer = await pipeline.ProcessAsync(source, catalogue);
+
+        Assert.Equal("S-111", layer.Metadata.ProductSpec);
+        Assert.NotEmpty(layer.CellColors);
+
+        // Should have some non-null (colored) cells and some null (no-data) cells
+        var nonNull = layer.CellColors.Where(c => c is not null).ToList();
+        var nullCount = layer.CellColors.Count(c => c is null);
+
+        Assert.NotEmpty(nonNull);
+        Assert.True(nullCount > 0, "Expected some no-data cells in the coastal current grid");
     }
 }

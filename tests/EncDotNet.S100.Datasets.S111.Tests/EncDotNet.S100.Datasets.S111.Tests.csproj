@@ -23,10 +23,12 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\datasets\S111\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <Content Include="..\portrayals\S111\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
