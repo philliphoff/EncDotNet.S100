@@ -13,12 +13,17 @@
                 Margin="8"
                 x:Name="AddButton" />
 
-        <ListBox ItemsSource="{Binding Entries}"
-                 Margin="8,4"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                 x:Name="DatasetList"
-                 DoubleTapped="OnDatasetDoubleTapped">
-            <ListBox.ItemTemplate>
+        <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Entries}"
+                      Margin="8,4"
+                      x:Name="DatasetList"
+                      DoubleTapped="OnDatasetDoubleTapped">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:DatasetEntry">
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
@@ -55,14 +60,15 @@
                         </StackPanel>
                         <Button Grid.Column="1"
                                 Classes="Ghost Icon"
-                                Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
+                                Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
                                 VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                         </Button>
                     </Grid>
                 </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        </ScrollViewer>
     </DockPanel>
 </UserControl>

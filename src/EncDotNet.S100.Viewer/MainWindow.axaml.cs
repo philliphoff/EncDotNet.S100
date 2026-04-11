@@ -31,6 +31,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
+    private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
 
@@ -95,6 +96,19 @@ public partial class MainWindow : ShadUI.Window
 
         // Wire up dataset load requests
         _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
+
+        // Clean up layers when a dataset entry is removed from the list
+        _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems is not null)
+            {
+                foreach (DatasetEntry removed in e.OldItems)
+                {
+                    RemoveEntryLayers(removed);
+                    _processors.Remove(removed);
+                }
+            }
+        };
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
 
@@ -168,8 +182,10 @@ public partial class MainWindow : ShadUI.Window
 
             var result = await Task.Run(() => processor.Render());
 
-            RemoveDatasetLayers();
-            foreach (var layer in result.Layers)
+            RemoveEntryLayers(entry);
+            var layers = result.Layers.ToList();
+            _entryLayers[entry] = layers;
+            foreach (var layer in layers)
             {
                 MapControl.Map?.Layers.Add(layer);
             }
@@ -227,8 +243,10 @@ public partial class MainWindow : ShadUI.Window
             var context = new S111RenderContext(times[idx]);
             var result = await Task.Run(() => proc.Render(context));
 
-            RemoveDatasetLayers();
-            foreach (var layer in result.Layers)
+            RemoveEntryLayers(entry);
+            var layers = result.Layers.ToList();
+            _entryLayers[entry] = layers;
+            foreach (var layer in layers)
             {
                 MapControl.Map?.Layers.Add(layer);
             }
@@ -320,19 +338,19 @@ public partial class MainWindow : ShadUI.Window
         e.Handled = true;
     }
 
-    private void RemoveDatasetLayers()
+    private void RemoveEntryLayers(DatasetEntry entry)
     {
         if (MapControl.Map is not { } map)
             return;
 
-        // Remove any layers added by dataset processing (named "S-1xx: ..." or "S-1xx Arrows: ...")
-        var toRemove = map.Layers
-            .Where(l => l.Name?.StartsWith("S-1", StringComparison.Ordinal) == true)
-            .ToList();
-
-        foreach (var layer in toRemove)
+        if (_entryLayers.TryGetValue(entry, out var oldLayers))
         {
-            map.Layers.Remove(layer);
+            foreach (var layer in oldLayers)
+            {
+                map.Layers.Remove(layer);
+            }
+
+            _entryLayers.Remove(entry);
         }
     }
 }

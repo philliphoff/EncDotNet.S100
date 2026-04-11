@@ -48,9 +48,20 @@ public partial class DatasetsView : UserControl
     private void OnDatasetDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (DataContext is not DatasetsViewModel vm) return;
-        if (DatasetList.SelectedItem is DatasetEntry entry)
+
+        // Walk up from the tapped element to find the DatasetEntry data context
+        if (e.Source is Control source)
         {
-            vm.RequestLoad(entry);
+            var current = source;
+            while (current is not null)
+            {
+                if (current.DataContext is DatasetEntry entry)
+                {
+                    vm.RequestLoad(entry);
+                    return;
+                }
+                current = current.Parent as Control;
+            }
         }
     }
 }
