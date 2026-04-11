@@ -1,0 +1,37 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Avalonia -->
+    <PackageVersion Include="Avalonia" Version="11.3.10" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.3.10" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.10" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.10" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.10" />
+    <!-- EncDotNet -->
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.3.4" />
+    <!-- Mapping / rendering -->
+    <PackageVersion Include="FluentIcons.Avalonia.Fluent" Version="2.0.323" />
+    <PackageVersion Include="Mapsui" Version="5.0.2" />
+    <PackageVersion Include="Mapsui.Avalonia" Version="5.0.2" />
+    <PackageVersion Include="Mapsui.Nts" Version="5.0.2" />
+    <PackageVersion Include="Mapsui.Tiling" Version="5.0.2" />
+    <PackageVersion Include="MoonSharp" Version="2.0.0" />
+    <PackageVersion Include="ProjNet" Version="2.0.0" />
+    <PackageVersion Include="PureHDF" Version="2.1.2" />
+    <PackageVersion Include="ShadUI" Version="0.1.6" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <PackageVersion Include="Svg.Skia" Version="3.2.1" />
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <!-- Test -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
+  </ItemGroup>
+
+</Project>
