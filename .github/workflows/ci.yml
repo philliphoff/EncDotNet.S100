@@ -100,6 +100,9 @@ jobs:
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp src/EncDotNet.S100.Viewer/Info.plist "$APP/Contents/"
           cp -a "$PUBLISH_DIR"/. "$APP/Contents/MacOS/"
+          # Remove debug symbols; they are not needed in the release bundle
+          # and codesign treats them as unsigned code objects.
+          find "$APP" -name '*.pdb' -delete
 
       - name: Import signing certificate
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
