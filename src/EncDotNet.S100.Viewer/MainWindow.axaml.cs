@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -29,6 +30,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly PortrayalCatalogueManager _catalogueManager = new();
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly MainViewModel _viewModel;
+    private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
 
@@ -161,7 +163,10 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var result = await Task.Run(() => _pipelineFactory.Process(entry.FilePath));
+            var processor = await Task.Run(() => _pipelineFactory.CreateProcessor(entry.FilePath));
+            _processors[entry] = processor;
+
+            var result = await Task.Run(() => processor.Render());
 
             RemoveDatasetLayers();
             foreach (var layer in result.Layers)
@@ -178,6 +183,20 @@ public partial class MainWindow : ShadUI.Window
             entry.Info = result.Info;
             _viewModel.StatusText = result.Info;
 
+            // Populate time steps for S-111 datasets
+            if (processor is S111DatasetProcessor s111)
+            {
+                entry.AvailableTimes = s111.AvailableTimes;
+                // SelectedTimeIndex defaults to 0, matching the initial render
+            }
+
+            // Re-render when the user changes the time step
+            entry.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DatasetEntry.SelectedTimeIndex))
+                    _ = ReRenderTimeStepAsync(entry);
+            };
+
             if (_screenshotPath is not null)
             {
                 await Task.Delay(2000);
@@ -188,6 +207,39 @@ public partial class MainWindow : ShadUI.Window
         {
             _viewModel.StatusText = $"Error: {ex.Message}";
             Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
+        }
+    }
+
+    private async Task ReRenderTimeStepAsync(DatasetEntry entry)
+    {
+        if (!_processors.TryGetValue(entry, out var proc))
+            return;
+
+        var times = entry.AvailableTimes;
+        var idx = entry.SelectedTimeIndex;
+        if (times is null || idx < 0 || idx >= times.Count)
+            return;
+
+        _viewModel.StatusText = $"Rendering time step {idx + 1}/{times.Count}...";
+
+        try
+        {
+            var context = new S111RenderContext(times[idx]);
+            var result = await Task.Run(() => proc.Render(context));
+
+            RemoveDatasetLayers();
+            foreach (var layer in result.Layers)
+            {
+                MapControl.Map?.Layers.Add(layer);
+            }
+
+            entry.Info = result.Info;
+            _viewModel.StatusText = result.Info;
+        }
+        catch (Exception ex)
+        {
+            _viewModel.StatusText = $"Error: {ex.Message}";
+            Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
         }
     }
 

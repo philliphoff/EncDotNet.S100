@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Input;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -24,11 +26,72 @@ internal sealed class DatasetEntry : ViewModelBase
         set => SetProperty(ref _info, value);
     }
 
+    // --- Time step support (S-111) ---
+
+    private IReadOnlyList<DateTime>? _availableTimes;
+    public IReadOnlyList<DateTime>? AvailableTimes
+    {
+        get => _availableTimes;
+        set
+        {
+            if (SetProperty(ref _availableTimes, value))
+            {
+                OnPropertyChanged(nameof(HasTimeSteps));
+                OnPropertyChanged(nameof(TimeStepMax));
+                OnPropertyChanged(nameof(TimeStepLabels));
+                OnPropertyChanged(nameof(TimeStepLabel));
+                _previousTimeStepCommand.RaiseCanExecuteChanged();
+                _nextTimeStepCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool HasTimeSteps => _availableTimes is { Count: > 1 };
+
+    public int TimeStepMax => _availableTimes is { Count: > 0 } ? _availableTimes.Count - 1 : 0;
+
+    private int _selectedTimeIndex;
+    public int SelectedTimeIndex
+    {
+        get => _selectedTimeIndex;
+        set
+        {
+            if (SetProperty(ref _selectedTimeIndex, value))
+            {
+                OnPropertyChanged(nameof(TimeStepLabel));
+                _previousTimeStepCommand.RaiseCanExecuteChanged();
+                _nextTimeStepCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public IReadOnlyList<string>? TimeStepLabels =>
+        _availableTimes?.Select((t, i) => $"{i + 1}/{_availableTimes.Count}: {t:u}").ToList();
+
+    public string TimeStepLabel =>
+        _availableTimes is { Count: > 0 }
+            ? $"{_selectedTimeIndex + 1}/{_availableTimes.Count}: {_availableTimes[_selectedTimeIndex]:u}"
+            : "";
+
+    private readonly RelayCommand _previousTimeStepCommand;
+    private readonly RelayCommand _nextTimeStepCommand;
+
+    public ICommand PreviousTimeStepCommand => _previousTimeStepCommand;
+    public ICommand NextTimeStepCommand => _nextTimeStepCommand;
+
     public DatasetEntry(string filePath, string productSpec)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
         DisplayName = System.IO.Path.GetFileName(filePath);
+
+        _previousTimeStepCommand = new RelayCommand(
+            () => { if (_selectedTimeIndex > 0) SelectedTimeIndex--; },
+            () => _selectedTimeIndex > 0);
+
+        _nextTimeStepCommand = new RelayCommand(
+            () => { if (_availableTimes is not null && _selectedTimeIndex < _availableTimes.Count - 1) SelectedTimeIndex++; },
+            () => _availableTimes is not null && _selectedTimeIndex < _availableTimes.Count - 1);
     }
 }
 
