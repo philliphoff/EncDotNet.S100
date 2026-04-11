@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+  </ItemGroup>
+
+</Project>
