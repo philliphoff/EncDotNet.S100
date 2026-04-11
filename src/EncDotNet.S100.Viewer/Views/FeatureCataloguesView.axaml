@@ -33,7 +33,7 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"
-                                Classes="Ghost Icon"
+                                Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
                                 VerticalAlignment="Center">

@@ -42,7 +42,7 @@
                                         IsVisible="{Binding HasTimeSteps}"
                                         Margin="0,4,0,0"
                                         Spacing="4">
-                                <Button Classes="Ghost Icon" Padding="2"
+                                <Button Classes="Icon" Padding="2"
                                         Command="{Binding PreviousTimeStepCommand}">
                                     <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="12" />
                                 </Button>
@@ -52,14 +52,14 @@
                                           Padding="4,2"
                                           MinHeight="0"
                                           VerticalAlignment="Center" />
-                                <Button Classes="Ghost Icon" Padding="2"
+                                <Button Classes="Icon" Padding="2"
                                         Command="{Binding NextTimeStepCommand}">
                                     <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="12" />
                                 </Button>
                             </StackPanel>
                         </StackPanel>
                         <Button Grid.Column="1"
-                                Classes="Ghost Icon"
+                                Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
                                 VerticalAlignment="Center">
