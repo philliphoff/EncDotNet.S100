@@ -92,6 +92,15 @@ jobs:
           --runtime ${{ matrix.rid }}
           ${{ matrix.rid == 'osx-arm64' && '-p:PublishSingleFile=false' || '' }}
 
+      - name: Create macOS .app bundle
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish"
+          APP="EncDotNet.S100.Viewer.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp src/EncDotNet.S100.Viewer/Info.plist "$APP/Contents/"
+          cp -a "$PUBLISH_DIR"/. "$APP/Contents/MacOS/"
+
       - name: Import signing certificate
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
         env:
@@ -105,23 +114,23 @@ jobs:
           security import cert.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
-      - name: Sign macOS binary
+      - name: Sign macOS .app bundle
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish"
+          APP="EncDotNet.S100.Viewer.app"
           ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
-          find "$PUBLISH_DIR" -name '*.dylib' -exec \
+          find "$APP" -name '*.dylib' -exec \
             codesign --force --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" {} \;
           codesign --force --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" \
-            "$PUBLISH_DIR/EncDotNet.S100.Viewer"
+            "$APP"
 
-      - name: Notarize macOS binary
+      - name: Notarize macOS .app bundle
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -129,7 +138,7 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           ditto -c -k --keepParent \
-            src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish \
+            EncDotNet.S100.Viewer.app \
             Viewer.zip
           xcrun notarytool submit Viewer.zip \
             --apple-id "$APPLE_ID" \
@@ -139,14 +148,16 @@ jobs:
 
       - name: Staple notarization ticket
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
-        run: >
-          xcrun stapler staple
-          src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/EncDotNet.S100.Viewer
+        run: xcrun stapler staple EncDotNet.S100.Viewer.app
 
       - name: Archive published app
         run: |
-          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
-          tar -czf "${{ matrix.artifact }}.tar.gz" -C "$PUBLISH_DIR" .
+          if [ "${{ matrix.rid }}" = "osx-arm64" ]; then
+            tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
+          else
+            PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
+            tar -czf "${{ matrix.artifact }}.tar.gz" -C "$PUBLISH_DIR" .
+          fi
 
       - name: Upload published app
         uses: actions/upload-artifact@v4
