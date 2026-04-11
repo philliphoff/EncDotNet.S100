@@ -27,9 +27,9 @@ public sealed class S104Dataset
     public int DataCodingFormat { get; init; }
 
     /// <summary>
-    /// Method used to compute water level values (e.g. observation, model forecast, hybrid).
+    /// Method or source used to compute water level values (e.g. model name or description).
     /// </summary>
-    public int? MethodWaterLevelProduct { get; init; }
+    public string? MethodWaterLevelProduct { get; init; }
 
     /// <summary>The water level coverages contained in the dataset, one per time step.</summary>
     public required IReadOnlyList<WaterLevelCoverage> Coverages { get; init; }

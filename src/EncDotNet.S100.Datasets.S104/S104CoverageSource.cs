@@ -56,7 +56,7 @@ public class S104CoverageSource : ICoverageSource
                         Name = "waterLevelTrend",
                         Type = CoverageValueType.Float,
                         Units = "",
-                        FillValue = FillValue,
+                        FillValue = 0f,
                     },
                 ]
             };
@@ -115,7 +115,7 @@ public class S104CoverageSource : ICoverageSource
             int srcIdx = (rowStart + r * region.RowStride) * gridCols
                        + (colStart + c * region.ColStride);
             height[r, c] = values[srcIdx].Height;
-            trend[r, c] = values[srcIdx].Trend;
+            trend[r, c] = (float)values[srcIdx].Trend;
         }
 
         return new SampledCoverage

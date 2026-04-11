@@ -19,8 +19,8 @@ public static class S104DatasetReader
 
         var root = file.Root;
 
-        int? horizontalCRS = root.AttributeExists("horizontalDatumValue")
-            ? root.ReadAttribute<int>("horizontalDatumValue")
+        int? horizontalCRS = root.AttributeExists("horizontalCRS")
+            ? root.ReadAttribute<int>("horizontalCRS")
             : null;
 
         string? epoch = root.AttributeExists("epoch")
@@ -45,8 +45,8 @@ public static class S104DatasetReader
             ? wlGroup.ReadAttribute<byte>("dataCodingFormat")
             : 2;
 
-        int? methodWaterLevelProduct = wlGroup.AttributeExists("methodWaterLevelProduct")
-            ? wlGroup.ReadAttribute<byte>("methodWaterLevelProduct")
+        string? methodWaterLevelProduct = wlGroup.AttributeExists("methodWaterLevelProduct")
+            ? wlGroup.ReadStringAttribute("methodWaterLevelProduct")
             : null;
 
         var coverages = ReadCoverages(wlGroup, dataCodingFormat);
@@ -88,12 +88,12 @@ public static class S104DatasetReader
 
     private static void ReadInstance(IHdf5Group instance, List<WaterLevelCoverage> coverages)
     {
-        double originLat = instance.ReadAttribute<float>("gridOriginLatitude");
-        double originLon = instance.ReadAttribute<float>("gridOriginLongitude");
-        double spacingLat = instance.ReadAttribute<float>("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadAttribute<float>("gridSpacingLongitudinal");
-        int numLat = instance.ReadAttribute<int>("numPointsLatitudinal");
-        int numLon = instance.ReadAttribute<int>("numPointsLongitudinal");
+        double originLat = instance.ReadAttribute<double>("gridOriginLatitude");
+        double originLon = instance.ReadAttribute<double>("gridOriginLongitude");
+        double spacingLat = instance.ReadAttribute<double>("gridSpacingLatitudinal");
+        double spacingLon = instance.ReadAttribute<double>("gridSpacingLongitudinal");
+        int numLat = (int)instance.ReadAttribute<uint>("numPointsLatitudinal");
+        int numLon = (int)instance.ReadAttribute<uint>("numPointsLongitudinal");
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")

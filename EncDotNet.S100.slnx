@@ -17,6 +17,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.S104.Tests/EncDotNet.S100.Datasets.S104.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S111.Tests/EncDotNet.S100.Datasets.S111.Tests.csproj" />
   </Folder>
 </Solution>
