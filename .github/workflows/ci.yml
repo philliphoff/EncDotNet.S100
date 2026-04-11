@@ -154,13 +154,26 @@ jobs:
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
-            --wait
+            --wait \
+            --output-format json | tee notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
 
       - name: Staple notarization ticket
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        continue-on-error: true
         run: |
-          # The notarization ticket may not be available in CloudKit
-          # immediately after notarytool returns; retry with backoff.
+          # The notarization ticket may not be immediately available in
+          # CloudKit. Stapling is optional — Gatekeeper will verify the
+          # notarization online on first launch if the ticket is absent.
           for i in 1 2 3 4 5; do
             if xcrun stapler staple EncDotNet.S100.Viewer.app; then
               exit 0
@@ -168,7 +181,7 @@ jobs:
             echo "Staple attempt $i failed, waiting 30s..."
             sleep 30
           done
-          echo "Stapling failed after 5 attempts"
+          echo "::warning::Stapling failed after 5 attempts. The app is still notarized; Gatekeeper will verify online."
           exit 1
 
       - name: Archive macOS .app bundle
