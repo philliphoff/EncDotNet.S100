@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +72,8 @@ jobs:
             rid: linux-x64
             artifact: Viewer-linux-x64
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     env:
       HAS_SIGNING_SECRETS: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 != '' }}
 
