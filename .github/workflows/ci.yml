@@ -111,9 +111,13 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish"
+          ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
           find "$PUBLISH_DIR" -name '*.dylib' -exec \
-            codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" {} \;
+            codesign --force --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            --sign "$APPLE_SIGNING_IDENTITY" {} \;
           codesign --force --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" \
             "$PUBLISH_DIR/EncDotNet.S100.Viewer"
 
@@ -133,11 +137,22 @@ jobs:
             --password "$APPLE_APP_PASSWORD" \
             --wait
 
+      - name: Staple notarization ticket
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        run: >
+          xcrun stapler staple
+          src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/EncDotNet.S100.Viewer
+
+      - name: Archive published app
+        run: |
+          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C "$PUBLISH_DIR" .
+
       - name: Upload published app
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/
+          path: ${{ matrix.artifact }}.tar.gz
 
   publish-nuget:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -180,18 +195,10 @@ jobs:
         with:
           path: artifacts
 
-      - name: Archive platform binaries
-        run: |
-          cd artifacts
-          for dir in Viewer-*/; do
-            name="${dir%/}"
-            tar -czf "${name}.tar.gz" -C "$dir" .
-          done
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
             artifacts/nupkgs/*.nupkg
-            artifacts/Viewer-*.tar.gz
+            artifacts/Viewer-*/*.tar.gz
