@@ -124,17 +124,21 @@ jobs:
         run: |
           APP="EncDotNet.S100.Viewer.app"
           ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
-          # Sign native libraries with entitlements (needed for JIT)
-          find "$APP" -name '*.dylib' -exec \
+          # Sign all Mach-O binaries (dylibs and native executables like
+          # createdump) with hardened runtime and JIT entitlements.
+          find "$APP/Contents/MacOS" -type f -exec sh -c '
+            file "$1" | grep -q "Mach-O"
+          ' _ {} \; -print0 | xargs -0 -n1 \
             codesign --force --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" \
-            --sign "$APPLE_SIGNING_IDENTITY" {} \;
-          # Sign all other files in Contents/MacOS so codesign does not
-          # reject them as unsigned subcomponents (covers .dll, .json, etc.)
-          find "$APP/Contents/MacOS" -type f ! -name '*.dylib' -exec \
+            --sign "$APPLE_SIGNING_IDENTITY"
+          # Sign all remaining non-Mach-O files (managed .dll, .json, etc.)
+          find "$APP/Contents/MacOS" -type f -exec sh -c '
+            ! file "$1" | grep -q "Mach-O"
+          ' _ {} \; -print0 | xargs -0 -n1 \
             codesign --force --timestamp \
-            --sign "$APPLE_SIGNING_IDENTITY" {} \;
-          # Sign the bundle (which also signs the main executable)
+            --sign "$APPLE_SIGNING_IDENTITY"
+          # Sign the bundle (seals everything and signs the main executable)
           codesign --force --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" \
