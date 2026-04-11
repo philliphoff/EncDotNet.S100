@@ -129,8 +129,9 @@ jobs:
             codesign --force --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" {} \;
-          # Sign managed assemblies (codesign treats .dll files as code subcomponents)
-          find "$APP" -name '*.dll' -exec \
+          # Sign all other files in Contents/MacOS so codesign does not
+          # reject them as unsigned subcomponents (covers .dll, .json, etc.)
+          find "$APP/Contents/MacOS" -type f ! -name '*.dylib' -exec \
             codesign --force --timestamp \
             --sign "$APPLE_SIGNING_IDENTITY" {} \;
           # Sign the bundle (which also signs the main executable)
