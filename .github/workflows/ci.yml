@@ -158,7 +158,18 @@ jobs:
 
       - name: Staple notarization ticket
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
-        run: xcrun stapler staple EncDotNet.S100.Viewer.app
+        run: |
+          # The notarization ticket may not be available in CloudKit
+          # immediately after notarytool returns; retry with backoff.
+          for i in 1 2 3 4 5; do
+            if xcrun stapler staple EncDotNet.S100.Viewer.app; then
+              exit 0
+            fi
+            echo "Staple attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "Stapling failed after 5 attempts"
+          exit 1
 
       - name: Archive published app
         run: |
