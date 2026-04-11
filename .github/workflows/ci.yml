@@ -171,14 +171,15 @@ jobs:
           echo "Stapling failed after 5 attempts"
           exit 1
 
+      - name: Archive macOS .app bundle
+        if: matrix.rid == 'osx-arm64'
+        run: tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
+
       - name: Archive published app
+        if: matrix.rid != 'osx-arm64'
         run: |
-          if [ "${{ matrix.rid }}" = "osx-arm64" ]; then
-            tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
-          else
-            PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
-            tar -czf "${{ matrix.artifact }}.tar.gz" -C "$PUBLISH_DIR" .
-          fi
+          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C "$PUBLISH_DIR" .
 
       - name: Upload published app
         uses: actions/upload-artifact@v4
