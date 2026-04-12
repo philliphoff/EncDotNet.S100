@@ -61,20 +61,7 @@
         <Style Selector="GridSplitter#PaneSplitter:pressed">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <!-- Map zoom overlay buttons -->
-        <Style Selector="Button.mapZoom">
-            <Setter Property="Background" Value="#B0000000" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="CornerRadius" Value="16" />
-        </Style>
-        <Style Selector="Button.mapZoom:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#D0000000" />
-            <Setter Property="Foreground" Value="White" />
-        </Style>
-        <Style Selector="Button.mapZoom:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#F0000000" />
-            <Setter Property="Foreground" Value="White" />
-        </Style>
+
     </shadui:Window.Styles>
 
     <shadui:Window.RightWindowTitleBarContent>
@@ -246,28 +233,16 @@
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"
-                            VerticalAlignment="Bottom"
-                            Margin="0,0,12,12">
+                            VerticalAlignment="Top"
+                            Margin="0,12,12,0">
                     <Button x:Name="ZoomInButton"
-                            Classes="mapZoom"
-                            Content="+"
-                            FontSize="18"
-                            FontWeight="Bold"
-                            Width="32"
-                            Height="32"
-                            Padding="0"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center" />
+                            Classes="Icon">
+                        <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
+                    </Button>
                     <Button x:Name="ZoomOutButton"
-                            Classes="mapZoom"
-                            Content="−"
-                            FontSize="18"
-                            FontWeight="Bold"
-                            Width="32"
-                            Height="32"
-                            Padding="0"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center" />
+                            Classes="Icon">
+                        <ic:FluentIcon Icon="Subtract" IconVariant="Regular" FontSize="16" />
+                    </Button>
                 </StackPanel>
             </Grid>
         </Grid>
