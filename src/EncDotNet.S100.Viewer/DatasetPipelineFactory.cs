@@ -76,6 +76,8 @@ internal sealed class DatasetPipelineFactory
             if (root.AttributeExists("productSpecification"))
             {
                 var spec = root.ReadStringAttribute("productSpecification");
+                if (spec.Contains("S-104", StringComparison.OrdinalIgnoreCase))
+                    return "S-104";
                 if (spec.Contains("S-111", StringComparison.OrdinalIgnoreCase))
                     return "S-111";
             }
@@ -101,6 +103,7 @@ internal sealed class DatasetPipelineFactory
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
             "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCataloguePathResolver),
+            "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };

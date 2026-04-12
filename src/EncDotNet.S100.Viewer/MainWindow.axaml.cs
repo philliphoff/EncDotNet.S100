@@ -167,7 +167,8 @@ public partial class MainWindow : ShadUI.Window
             return;
         }
 
-        if (!_catalogueManager.HasCatalogue(spec))
+        // S-104 ships a built-in portrayal catalogue; all others need an external one.
+        if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
         {
             _viewModel.StatusText = $"Please select a portrayal catalogue for {spec} first.";
             return;
@@ -206,6 +207,12 @@ public partial class MainWindow : ShadUI.Window
                 // SelectedTimeIndex defaults to 0, matching the initial render
             }
 
+            // Populate time steps for S-104 datasets
+            if (processor is S104DatasetProcessor s104)
+            {
+                entry.AvailableTimes = s104.AvailableTimes;
+            }
+
             // Re-render when the user changes the time step
             entry.PropertyChanged += (_, e) =>
             {
@@ -240,7 +247,11 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var context = new S111RenderContext(times[idx]);
+            RenderContext context = proc switch
+            {
+                S104DatasetProcessor => new S104RenderContext(times[idx]),
+                _ => new S111RenderContext(times[idx]),
+            };
             var result = await Task.Run(() => proc.Render(context));
 
             RemoveEntryLayers(entry);

@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
