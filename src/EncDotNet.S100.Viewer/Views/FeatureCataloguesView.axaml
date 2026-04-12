@@ -36,6 +36,7 @@
                                 Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
+                                IsVisible="{Binding !IsBuiltIn}"
                                 VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                         </Button>

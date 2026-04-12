@@ -48,9 +48,21 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
         Entries.Add(new CatalogueEntry(spec, path));
     }
 
+    /// <summary>
+    /// Adds a built-in catalogue entry that cannot be removed by the user.
+    /// Skipped if a user-provided entry already exists for the spec.
+    /// </summary>
+    public void AddBuiltIn(string spec, string displayPath)
+    {
+        if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
+        {
+            Entries.Add(new CatalogueEntry(spec, displayPath, isBuiltIn: true));
+        }
+    }
+
     private void Remove(CatalogueEntry? entry)
     {
-        if (entry is null) return;
+        if (entry is null || entry.IsBuiltIn) return;
         _settings.FeatureCataloguePaths.Remove(entry.ProductSpec);
         _settings.Save();
         Reload();
@@ -102,9 +114,21 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
         Entries.Add(new CatalogueEntry(spec, path));
     }
 
+    /// <summary>
+    /// Adds a built-in catalogue entry that cannot be removed by the user.
+    /// Skipped if a user-provided entry already exists for the spec.
+    /// </summary>
+    public void AddBuiltIn(string spec, string displayPath)
+    {
+        if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
+        {
+            Entries.Add(new CatalogueEntry(spec, displayPath, isBuiltIn: true));
+        }
+    }
+
     private void Remove(CatalogueEntry? entry)
     {
-        if (entry is null) return;
+        if (entry is null || entry.IsBuiltIn) return;
         _settings.CataloguePaths.Remove(entry.ProductSpec);
         _settings.Save();
         Reload();
@@ -115,11 +139,13 @@ internal sealed class CatalogueEntry
 {
     public string ProductSpec { get; }
     public string Path { get; }
+    public bool IsBuiltIn { get; }
     public string DisplayName => $"{ProductSpec} — {System.IO.Path.GetFileName(Path.TrimEnd(System.IO.Path.DirectorySeparatorChar))}";
 
-    public CatalogueEntry(string productSpec, string path)
+    public CatalogueEntry(string productSpec, string path, bool isBuiltIn = false)
     {
         ProductSpec = productSpec;
         Path = path;
+        IsBuiltIn = isBuiltIn;
     }
 }

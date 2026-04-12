@@ -99,6 +99,17 @@ public partial class MainWindow : ShadUI.Window
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;
 
+        // Show built-in specification entries in the catalogue views
+        foreach (var spec in Specifications.Specification.AvailableSpecs)
+        {
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, "(built-in)");
+
+            if (Specifications.Specification.HasPortrayalCatalogue(spec))
+            {
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, "(built-in)");
+            }
+        }
+
         // Apply persisted accent color
         ApplyAccentColor(_viewModel.Settings.AccentColor);
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
