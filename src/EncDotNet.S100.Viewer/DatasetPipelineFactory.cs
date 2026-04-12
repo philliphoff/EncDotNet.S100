@@ -63,6 +63,12 @@ internal sealed class DatasetPipelineFactory
             return "S-101";
         }
 
+        // S-124: GML encoded files
+        if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase))
+        {
+            return DetectGmlProductSpec(path);
+        }
+
         return null;
     }
 
@@ -90,6 +96,35 @@ internal sealed class DatasetPipelineFactory
         return "S-102";
     }
 
+    private static string? DetectGmlProductSpec(string path)
+    {
+        try
+        {
+            using var reader = System.Xml.XmlReader.Create(path, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
+            while (reader.Read())
+            {
+                if (reader.NodeType == System.Xml.XmlNodeType.Element)
+                {
+                    // S-124 datasets have a root element in the S-124 namespace
+                    if (reader.NamespaceURI.Contains("S-124", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S124", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-124";
+                    }
+
+                    break;
+                }
+            }
+        }
+        catch
+        {
+            // Unable to parse – unknown
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Creates a processor for the given dataset file.
     /// The processor can be called multiple times with different contexts.
@@ -105,6 +140,7 @@ internal sealed class DatasetPipelineFactory
             "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueResolver),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
+            "S-124" => new S124DatasetProcessor(path, _catalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }

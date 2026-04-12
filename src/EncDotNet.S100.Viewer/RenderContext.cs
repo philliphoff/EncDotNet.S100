@@ -14,3 +14,5 @@ internal sealed record S102RenderContext : RenderContext;
 internal sealed record S111RenderContext(DateTime? TimeStep = null) : RenderContext;
 
 internal sealed record S104RenderContext(DateTime? TimeStep = null) : RenderContext;
+
+internal sealed record S124RenderContext : RenderContext;
