@@ -19,7 +19,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly ILuaEngine _luaEngine;
-    private readonly string? _featureCataloguePath;
+    private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
 
     public string ProductSpec => "S-101";
@@ -28,13 +28,13 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, string?> featureCataloguePathResolver)
+        Func<string, Stream?> featureCatalogueResolver)
     {
         _fileName = Path.GetFileName(path);
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _dataset = S101Dataset.Open(path);
-        _featureCataloguePath = featureCataloguePathResolver("S-101");
+        _featureCatalogueResolver = featureCatalogueResolver;
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -54,12 +54,13 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         };
 
         // Try the Lua portrayal pipeline if a feature catalogue is available
-        if (_featureCataloguePath is not null && File.Exists(_featureCataloguePath))
+        using var fcStream = _featureCatalogueResolver("S-101");
+        if (fcStream is not null)
         {
             try
             {
                 Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
-                var fc = FeatureCatalogueReader.Read(_featureCataloguePath);
+                var fc = FeatureCatalogueReader.Read(fcStream);
                 var portrayal = new S101LuaPortrayal(_luaEngine, _provider, fc);
                 var emitted = portrayal.Execute(_dataset, navContext);
                 Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");

@@ -28,18 +28,18 @@ internal sealed class DatasetPipelineFactory
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly ILuaEngine _luaEngine;
     private readonly ICrsTransformFactory _crsTransformFactory;
-    private readonly Func<string, string?> _featureCataloguePathResolver;
+    private readonly Func<string, Stream?> _featureCatalogueResolver;
 
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
-        Func<string, string?>? featureCataloguePathResolver = null)
+        Func<string, Stream?>? featureCatalogueResolver = null)
     {
         _catalogueManager = catalogueManager;
         _luaEngine = luaEngine;
         _crsTransformFactory = crsTransformFactory;
-        _featureCataloguePathResolver = featureCataloguePathResolver ?? (_ => null);
+        _featureCatalogueResolver = featureCatalogueResolver ?? (_ => null);
     }
 
     /// <summary>
@@ -102,7 +102,7 @@ internal sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCataloguePathResolver),
+            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueResolver),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),

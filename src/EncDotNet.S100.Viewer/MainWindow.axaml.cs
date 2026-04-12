@@ -79,13 +79,22 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
+        // Register bundled portrayal catalogues as fallback for any spec not yet configured
+        foreach (var spec in Specifications.Specification.AvailableSpecs)
+        {
+            if (!_catalogueManager.HasCatalogue(spec) && Specifications.Specification.HasPortrayalCatalogue(spec))
+            {
+                _catalogueManager.SetSource(spec, Specifications.Specification.CreatePortrayalCatalogueSource(spec));
+            }
+        }
+
         _pipelineFactory = new DatasetPipelineFactory(
             _catalogueManager,
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
-            spec => transientFcPaths.TryGetValue(spec, out var p) ? p
-                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? sp
-                  : null);
+            spec => transientFcPaths.TryGetValue(spec, out var p) ? File.OpenRead(p)
+                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
+                  : Specifications.Specification.TryOpenFeatureCatalogue(spec));
 
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;

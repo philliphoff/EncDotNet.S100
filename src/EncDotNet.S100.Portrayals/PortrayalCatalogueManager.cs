@@ -49,6 +49,30 @@ public sealed class PortrayalCatalogueManager : IDisposable
         new Dictionary<string, string>(_paths, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Registers an <see cref="IAssetSource"/> directly for a product spec's portrayal catalogue.
+    /// The source is opened immediately and the resulting provider is cached.
+    /// Evicts any previously cached provider or path for that spec.
+    /// </summary>
+    /// <param name="productSpec">The product specification identifier (e.g. "S-101", "S-102").</param>
+    /// <param name="source">An asset source containing the portrayal catalogue and assets.</param>
+    public void SetSource(string productSpec, IAssetSource source)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+        ArgumentNullException.ThrowIfNull(source);
+
+        // Evict stale cached provider
+        if (_providers.TryRemove(productSpec, out var old))
+        {
+            old.Dispose();
+        }
+
+        _paths.TryRemove(productSpec, out _);
+
+        var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        _providers[productSpec] = provider;
+    }
+
+    /// <summary>
     /// Gets (or lazily opens) the <see cref="PortrayalCatalogueProvider"/> for the given product spec.
     /// </summary>
     /// <exception cref="InvalidOperationException">No catalogue path registered for the spec.</exception>
@@ -80,10 +104,11 @@ public sealed class PortrayalCatalogueManager : IDisposable
     }
 
     /// <summary>
-    /// Returns true if a catalogue path is registered for the given product spec.
+    /// Returns true if a catalogue is available for the given product spec
+    /// (either via a registered path or a directly registered source).
     /// </summary>
     public bool HasCatalogue(string productSpec) =>
-        _paths.ContainsKey(productSpec);
+        _paths.ContainsKey(productSpec) || _providers.ContainsKey(productSpec);
 
     public void Dispose()
     {
