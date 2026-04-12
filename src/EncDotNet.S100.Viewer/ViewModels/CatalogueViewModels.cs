@@ -40,6 +40,14 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
         Reload();
     }
 
+    /// <summary>
+    /// Adds a catalogue entry for the current session only, without persisting to settings.
+    /// </summary>
+    public void AddTransient(string spec, string path)
+    {
+        Entries.Add(new CatalogueEntry(spec, path));
+    }
+
     private void Remove(CatalogueEntry? entry)
     {
         if (entry is null) return;
@@ -83,6 +91,15 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
         _settings.CataloguePaths[spec] = path;
         _settings.Save();
         Reload();
+    }
+
+    /// <summary>
+    /// Adds a catalogue entry for the current session only, without persisting to settings.
+    /// </summary>
+    public void AddTransient(string spec, string path)
+    {
+        _catalogueManager.SetPath(spec, path);
+        Entries.Add(new CatalogueEntry(spec, path));
     }
 
     private void Remove(CatalogueEntry? entry)

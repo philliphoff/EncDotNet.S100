@@ -22,6 +22,7 @@
     <PackageReference Include="FluentIcons.Avalonia.Fluent" />
     <PackageReference Include="Mapsui.Avalonia" />
     <PackageReference Include="ShadUI" />
+    <PackageReference Include="Spectre.Console.Cli" />
     <PackageReference Include="Tmds.DBus.Protocol" />
   </ItemGroup>
 

@@ -13,6 +13,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Mapsui.Manipulations;
+using System.Text.RegularExpressions;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
@@ -35,7 +37,9 @@ public partial class MainWindow : ShadUI.Window
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
 
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    internal MainWindow(ViewerCommandSettings? options)
     {
         InitializeComponent();
 
@@ -50,11 +54,38 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
+        // Apply CLI portrayal catalogues (transient — not persisted)
+        if (options?.PortrayalCatalogues is { } cliPcs)
+        {
+            foreach (var pcPath in cliPcs)
+            {
+                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                {
+                    _catalogueManager.SetPath(pcSpec, pcPath);
+                }
+            }
+        }
+
+        // Collect CLI feature catalogues (transient — not persisted)
+        var transientFcPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (options?.FeatureCatalogues is { } cliFcs)
+        {
+            foreach (var fcPath in cliFcs)
+            {
+                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
+                {
+                    transientFcPaths[fcSpec] = fcPath;
+                }
+            }
+        }
+
         _pipelineFactory = new DatasetPipelineFactory(
             _catalogueManager,
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
-            spec => _settings.FeatureCataloguePaths.TryGetValue(spec, out var p) ? p : null);
+            spec => transientFcPaths.TryGetValue(spec, out var p) ? p
+                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? sp
+                  : null);
 
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;
@@ -125,30 +156,46 @@ public partial class MainWindow : ShadUI.Window
         ZoomInButton.Click += OnZoomInClick;
         ZoomOutButton.Click += OnZoomOutClick;
 
-        // Parse command-line arguments
-        var cliArgs = Environment.GetCommandLineArgs();
-        string? datasetArg = null;
+        // Apply CLI options
+        _screenshotPath = options?.ScreenshotPath;
 
-        for (int i = 1; i < cliArgs.Length; i++)
+        // Add CLI portrayal catalogues to the view model (transient — not persisted)
+        if (options?.PortrayalCatalogues is { } pcArgs)
         {
-            if (cliArgs[i] == "--screenshot" && i + 1 < cliArgs.Length)
+            foreach (var pcPath in pcArgs)
             {
-                _screenshotPath = cliArgs[++i];
-            }
-            else if (datasetArg is null && File.Exists(cliArgs[i]))
-            {
-                datasetArg = cliArgs[i];
+                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                {
+                    _viewModel.PortrayalCatalogues.AddTransient(pcSpec, pcPath);
+                }
             }
         }
 
-        if (datasetArg is not null)
+        // Add CLI feature catalogues to the view model (transient — not persisted)
+        if (options?.FeatureCatalogues is { } fcArgs)
+        {
+            foreach (var fcPath in fcArgs)
+            {
+                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
+                {
+                    _viewModel.FeatureCatalogues.AddTransient(fcSpec, fcPath);
+                }
+            }
+        }
+
+        // Load CLI dataset files
+        var datasetPaths = options?.Datasets?.Where(File.Exists).ToArray() ?? [];
+        if (datasetPaths.Length > 0)
         {
             Opened += async (_, _) =>
             {
-                var spec = DatasetPipelineFactory.DetectProductSpec(datasetArg) ?? "S-101";
-                var entry = _viewModel.Datasets.Add(datasetArg, spec);
                 _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-                await LoadDatasetAsync(entry);
+                foreach (var datasetPath in datasetPaths)
+                {
+                    var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath) ?? "S-101";
+                    var entry = _viewModel.Datasets.Add(datasetPath, spec);
+                    await LoadDatasetAsync(entry);
+                }
             };
         }
     }
@@ -362,6 +409,40 @@ public partial class MainWindow : ShadUI.Window
             }
 
             _entryLayers.Remove(entry);
+        }
+    }
+
+    private static string? DetectPortrayalCatalogueSpec(string folderPath)
+    {
+        try
+        {
+            var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
+            if (!File.Exists(cataloguePath)) return null;
+
+            using var stream = File.OpenRead(cataloguePath);
+            var catalogue = PortrayalCatalogueReader.Read(stream);
+            return string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static readonly Regex SpecPattern = new(@"S-\d+", RegexOptions.Compiled);
+
+    private static string? DetectFeatureCatalogueSpec(string filePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            var catalogue = FeatureCatalogueReader.Read(stream);
+            var match = SpecPattern.Match(catalogue.Name);
+            return match.Success ? match.Value : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 }

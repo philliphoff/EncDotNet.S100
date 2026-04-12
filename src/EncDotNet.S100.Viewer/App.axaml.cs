@@ -6,6 +6,8 @@ namespace EncDotNet.S100.Viewer;
 
 public partial class App : Application
 {
+    internal static ViewerCommandSettings? StartupOptions { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -15,7 +17,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            desktop.MainWindow = new MainWindow(StartupOptions);
         }
 
         base.OnFrameworkInitializationCompleted();
