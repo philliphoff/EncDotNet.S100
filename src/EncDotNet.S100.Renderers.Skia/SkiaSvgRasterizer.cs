@@ -81,15 +81,30 @@ public static class SkiaSvgRasterizer
         canvas.DrawPicture(picture);
         canvas.Restore();
 
-        // For parallelogram lattices, draw a second copy offset for the second row
+        // For parallelogram lattices, draw offset copies for the second row.
+        // Because the tile repeats as a simple rectangle, the offset symbol may
+        // extend past the tile boundary. Draw wrapping copies so the clipped
+        // portions appear correctly when the tile is repeated.
         if (hasOffset)
         {
             float offset2X = (float)(areaFill.V2X * pixelsPerMm);
-            canvas.Save();
-            canvas.Translate(offset2X + offsetX - svgBounds.Left * scale, cellH + offsetY - svgBounds.Top * scale);
-            canvas.Scale(scale);
-            canvas.DrawPicture(picture);
-            canvas.Restore();
+            float baseY = cellH + offsetY - svgBounds.Top * scale;
+            float baseTranslateX = offsetX - svgBounds.Left * scale;
+
+            foreach (float wrapOffset in new[] { 0f, -tileW, tileW })
+            {
+                float tx = offset2X + baseTranslateX + wrapOffset;
+
+                // Skip if the entire symbol would be off-canvas
+                if (tx + scaledW < 0 || tx > tileW)
+                    continue;
+
+                canvas.Save();
+                canvas.Translate(tx, baseY);
+                canvas.Scale(scale);
+                canvas.DrawPicture(picture);
+                canvas.Restore();
+            }
         }
 
         canvas.Flush();
