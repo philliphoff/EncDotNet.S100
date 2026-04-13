@@ -33,15 +33,25 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
         ( 2.0f,   5.0f, "#006D2C", "2 to 5 m"),
     ];
 
+    /// <summary>Gets the S-100 product specification identifier for this catalogue.</summary>
     public string ProductSpec => "S-104";
+
+    /// <summary>Gets the edition of the portrayal catalogue.</summary>
     public string Edition => "2.0.0";
+
+    /// <summary>Gets the currently active color palette.</summary>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
+    /// <summary>Switches the active color palette to the given type.</summary>
     public void SwitchPalette(PaletteType type)
     {
         ActivePalette = ColorPalette.FromType(type);
     }
 
+    /// <summary>
+    /// Returns a <see cref="CoverageColorScheme"/> for the <c>waterLevelHeight</c> field
+    /// using the built-in diverging blue/green height bands.
+    /// </summary>
     public CoverageColorScheme ResolveColorScheme(NavigationContext context)
     {
         var colorBands = new List<ColorBand>(DefaultBands.Length);
@@ -64,5 +74,6 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
         };
     }
 
+    /// <summary>S-104 does not define contours; returns an empty list.</summary>
     public IReadOnlyList<ContourStyle> Contours => [];
 }

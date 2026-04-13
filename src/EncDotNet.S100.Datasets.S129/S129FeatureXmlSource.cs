@@ -14,12 +14,16 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
     private readonly S129Dataset _dataset;
     private IReadOnlyList<string>? _featureTypes;
 
+    /// <summary>
+    /// Initializes a new <see cref="S129FeatureXmlSource"/> wrapping the given dataset.
+    /// </summary>
     public S129FeatureXmlSource(S129Dataset dataset)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         _dataset = dataset;
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<string> FeatureTypesPresent
     {
         get
@@ -37,6 +41,7 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
         }
     }
 
+    /// <inheritdoc/>
     public XmlReader GetFeatureXml()
     {
         var xmlDoc = BuildFeatureXml();
