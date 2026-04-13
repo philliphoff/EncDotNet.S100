@@ -38,7 +38,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
     public DatasetResult Render(RenderContext? context = null)
     {
         var catalogue = new S124PortrayalCatalogue(_provider);
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // Build geometry index by feature ID
         var featureGeometry = new Dictionary<string, S124Feature>(StringComparer.OrdinalIgnoreCase);

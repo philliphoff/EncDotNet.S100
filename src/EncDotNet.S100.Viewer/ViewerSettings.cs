@@ -28,6 +28,9 @@ internal sealed class ViewerSettings
     /// <summary>Custom accent color hex string (e.g. "#007ACC"). Defaults to VS Code blue.</summary>
     public string AccentColor { get; set; } = "#007ACC";
 
+    /// <summary>Selected color profile name: "Day", "Dusk", or "Night".</summary>
+    public string ColorProfile { get; set; } = "Day";
+
     /// <summary>Last selected activity pane, or null if none was open.</summary>
     public string? LastSelectedActivity { get; set; }
 

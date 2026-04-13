@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Media;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -24,9 +25,29 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public event Action<Color>? AccentColorChanged;
 
+    public static PaletteType[] AvailablePalettes { get; } = [PaletteType.Day, PaletteType.Dusk, PaletteType.Night];
+
+    private PaletteType _selectedPalette;
+    public PaletteType SelectedPalette
+    {
+        get => _selectedPalette;
+        set
+        {
+            if (SetProperty(ref _selectedPalette, value))
+            {
+                _settings.ColorProfile = value.ToString();
+                _settings.Save();
+                PaletteChanged?.Invoke(value);
+            }
+        }
+    }
+
+    public event Action<PaletteType>? PaletteChanged;
+
     public SettingsViewModel(ViewerSettings settings)
     {
         _settings = settings;
         _accentColor = Color.TryParse(settings.AccentColor, out var c) ? c : Color.Parse("#007ACC");
+        _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
     }
 }

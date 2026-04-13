@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using Mapsui.Manipulations;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
@@ -113,6 +114,9 @@ public partial class MainWindow : ShadUI.Window
         // Apply persisted accent color
         ApplyAccentColor(_viewModel.Settings.AccentColor);
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
+
+        // Re-render all loaded datasets when the color profile changes
+        _viewModel.Settings.PaletteChanged += palette => _ = ReRenderAllDatasetsAsync();
 
         // If no pane is initially selected, start collapsed
         if (!_viewModel.IsPaneVisible)
@@ -248,7 +252,18 @@ public partial class MainWindow : ShadUI.Window
             var processor = await Task.Run(() => _pipelineFactory.CreateProcessor(entry.FilePath));
             _processors[entry] = processor;
 
-            var result = await Task.Run(() => processor.Render());
+            var palette = _viewModel.Settings.SelectedPalette;
+            RenderContext initialContext = processor switch
+            {
+                S101DatasetProcessor => new S101RenderContext { Palette = palette },
+                S102DatasetProcessor => new S102RenderContext { Palette = palette },
+                S104DatasetProcessor => new S104RenderContext { Palette = palette },
+                S111DatasetProcessor => new S111RenderContext { Palette = palette },
+                S124DatasetProcessor => new S124RenderContext { Palette = palette },
+                S129DatasetProcessor => new S129RenderContext { Palette = palette },
+                _ => new S101RenderContext { Palette = palette },
+            };
+            var result = await Task.Run(() => processor.Render(initialContext));
 
             RemoveEntryLayers(entry);
             var layers = result.Layers.ToList();
@@ -314,10 +329,11 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
+            var palette = _viewModel.Settings.SelectedPalette;
             RenderContext context = proc switch
             {
-                S104DatasetProcessor => new S104RenderContext(times[idx]),
-                _ => new S111RenderContext(times[idx]),
+                S104DatasetProcessor => new S104RenderContext(times[idx]) { Palette = palette },
+                _ => new S111RenderContext(times[idx]) { Palette = palette },
             };
             var result = await Task.Run(() => proc.Render(context));
 
@@ -337,6 +353,57 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.StatusText = $"Error: {ex.Message}";
             Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
         }
+    }
+
+    private async Task ReRenderAllDatasetsAsync()
+    {
+        var palette = _viewModel.Settings.SelectedPalette;
+        _viewModel.StatusText = $"Switching to {palette} palette...";
+
+        foreach (var (entry, proc) in _processors.ToArray())
+        {
+            if (!entry.IsLoaded) continue;
+
+            try
+            {
+                // Build a context that preserves the current time step (if any)
+                var times = entry.AvailableTimes;
+                var idx = entry.SelectedTimeIndex;
+
+                RenderContext context = proc switch
+                {
+                    S104DatasetProcessor when times is not null && idx >= 0 && idx < times.Count
+                        => new S104RenderContext(times[idx]) { Palette = palette },
+                    S104DatasetProcessor => new S104RenderContext { Palette = palette },
+                    S111DatasetProcessor when times is not null && idx >= 0 && idx < times.Count
+                        => new S111RenderContext(times[idx]) { Palette = palette },
+                    S111DatasetProcessor => new S111RenderContext { Palette = palette },
+                    S101DatasetProcessor => new S101RenderContext { Palette = palette },
+                    S102DatasetProcessor => new S102RenderContext { Palette = palette },
+                    S124DatasetProcessor => new S124RenderContext { Palette = palette },
+                    S129DatasetProcessor => new S129RenderContext { Palette = palette },
+                    _ => new S101RenderContext { Palette = palette },
+                };
+
+                var result = await Task.Run(() => proc.Render(context));
+
+                RemoveEntryLayers(entry);
+                var layers = result.Layers.ToList();
+                _entryLayers[entry] = layers;
+                foreach (var layer in layers)
+                {
+                    MapControl.Map?.Layers.Add(layer);
+                }
+
+                entry.Info = result.Info;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} with {palette} palette:\n{ex}");
+            }
+        }
+
+        _viewModel.StatusText = $"{palette} palette applied.";
     }
 
     private void CaptureScreenshot(string outputPath)

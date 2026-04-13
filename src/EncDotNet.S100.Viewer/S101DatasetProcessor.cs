@@ -75,9 +75,10 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
 
                 // Load the colour palette from the portrayal catalogue
                 var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
-                s101Cat.SwitchPalette(PaletteType.Day);
+                var paletteType = context?.Palette ?? PaletteType.Day;
+                s101Cat.SwitchPalette(paletteType);
                 var palette = s101Cat.ActivePalette;
-                Console.WriteLine($"[S101-Lua] Loaded Day palette with {palette.Colors.Count} colors");
+                Console.WriteLine($"[S101-Lua] Loaded {paletteType} palette with {palette.Colors.Count} colors");
 
                 // Render to Mapsui layer
                 var vectorRenderer = new MapsuiS101VectorRenderer

@@ -1,11 +1,16 @@
 using System;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// Base class for spec-specific render contexts passed to dataset processors.
 /// </summary>
-internal abstract record RenderContext;
+internal abstract record RenderContext
+{
+    /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
+    public PaletteType Palette { get; init; } = PaletteType.Day;
+}
 
 internal sealed record S101RenderContext : RenderContext;
 
@@ -16,3 +21,5 @@ internal sealed record S111RenderContext(DateTime? TimeStep = null) : RenderCont
 internal sealed record S104RenderContext(DateTime? TimeStep = null) : RenderContext;
 
 internal sealed record S124RenderContext : RenderContext;
+
+internal sealed record S129RenderContext : RenderContext;

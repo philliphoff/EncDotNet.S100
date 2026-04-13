@@ -24,6 +24,21 @@
                            MaxWidth="300"
                            HorizontalAlignment="Left" />
             </StackPanel>
+
+            <!-- Color Profile -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Color Profile"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="Controls the Day/Dusk/Night color palette used across all datasets."
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailablePalettes}"
+                          SelectedItem="{Binding SelectedPalette}"
+                          MinWidth="140"
+                          HorizontalAlignment="Left" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

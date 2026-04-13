@@ -49,6 +49,8 @@ internal sealed class S111DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
         // Select the requested time step, defaulting to the first
         DateTime selectedTime;
         if (context is S111RenderContext { TimeStep: { } timeStep })

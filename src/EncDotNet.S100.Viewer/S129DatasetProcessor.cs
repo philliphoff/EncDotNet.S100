@@ -39,7 +39,7 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
     public DatasetResult Render(RenderContext? context = null)
     {
         var catalogue = new S129PortrayalCatalogue(_provider);
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // Build geometry index by feature ID
         var featureGeometry = new Dictionary<string, S129Feature>(StringComparer.OrdinalIgnoreCase);

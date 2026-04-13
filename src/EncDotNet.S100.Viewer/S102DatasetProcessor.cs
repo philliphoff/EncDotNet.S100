@@ -39,6 +39,7 @@ internal sealed class S102DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
         var metadata = _source.Metadata;
 
         var navContext = new NavigationContext
