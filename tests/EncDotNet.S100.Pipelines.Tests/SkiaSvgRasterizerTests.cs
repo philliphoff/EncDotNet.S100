@@ -51,6 +51,38 @@ public class SkiaSvgRasterizerTests
     }
 
     [Fact]
+    public void RasterizePatternTile_SymbolSmallerThanTile_HasTransparentGaps()
+    {
+        // The SVG is 10x10 CSS px (≈ 2.65mm at 96 DPI). The tile cell is
+        // 20mm × 20mm. The symbol should occupy a fraction of the cell, leaving
+        // transparent gaps around the edges.
+        var fill = new AreaFill
+        {
+            Name = "test",
+            V1X = 20,
+            V1Y = 0,
+            V2X = 0,
+            V2Y = 20,
+        };
+
+        var png = SkiaSvgRasterizer.RasterizePatternTile(TestSvg, fill, pixelsPerMm: 2);
+        Assert.NotNull(png);
+
+        using var bitmap = SKBitmap.Decode(png);
+
+        // The corners of the tile should be transparent because the symbol
+        // is centered and smaller than the cell.
+        Assert.Equal(0, bitmap.GetPixel(0, 0).Alpha);
+        Assert.Equal(0, bitmap.GetPixel(bitmap.Width - 1, 0).Alpha);
+        Assert.Equal(0, bitmap.GetPixel(0, bitmap.Height - 1).Alpha);
+        Assert.Equal(0, bitmap.GetPixel(bitmap.Width - 1, bitmap.Height - 1).Alpha);
+
+        // The center of the tile should have non-transparent pixels.
+        var center = bitmap.GetPixel(bitmap.Width / 2, bitmap.Height / 2);
+        Assert.True(center.Alpha > 0, "Expected a non-transparent pixel at the tile center.");
+    }
+
+    [Fact]
     public void RasterizePatternTile_ParallelogramLattice_OffsetRowWrapsAcrossTileBoundary()
     {
         // Use a large offset (15mm out of 20mm tile width) so the symbol

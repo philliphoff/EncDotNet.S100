@@ -59,14 +59,18 @@ public static class SkiaSvgRasterizer
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
 
-        // Scale the SVG to fit within one tile cell
+        // Scale the SVG to its natural mm size within the tile.
+        // S-100 SVG symbols specify dimensions in mm. Svg.Skia rasterizes at
+        // 96 DPI, converting mm to pixels at 96/25.4 ≈ 3.78 px/mm. We render
+        // the tile at the caller's pixelsPerMm density, so scale the SVG down
+        // from its native DPI to the target density. This preserves the intended
+        // spacing between symbols defined by the tiling vectors.
+        const double SvgPxPerMm = 96.0 / 25.4;
         float svgW = svgBounds.Width;
         float svgH = svgBounds.Height;
         float cellW = (float)(tileWidthMm * pixelsPerMm);
         float cellH = (float)(tileHeightMm * pixelsPerMm);
-        float scaleX = cellW / svgW;
-        float scaleY = cellH / svgH;
-        float scale = Math.Min(scaleX, scaleY);
+        float scale = (float)(pixelsPerMm / SvgPxPerMm);
 
         // Center the SVG in the cell
         float scaledW = svgW * scale;
