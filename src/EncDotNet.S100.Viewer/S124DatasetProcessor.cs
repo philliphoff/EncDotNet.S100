@@ -101,6 +101,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         {
             Name = $"S-124: {_fileName}",
             Features = mapFeatures,
+            Style = null,
         };
 
         // Compute extent
@@ -154,15 +155,18 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         var mapFeature = new GeometryFeature(geom);
 
         // Resolve symbol color from palette if available
-        MapsuiColor fillColor = new(255, 0, 255, 200); // Default magenta
         if (instr.SymbolReference is not null)
         {
             try
             {
                 var symbol = catalogue.GetSymbol(instr.SymbolReference);
                 var processedSvg = SvgProcessor.Process(symbol.SvgContent, palette);
-                // TODO: render SVG symbol to bitmap for Mapsui ImageStyle
-                // For now, use a colored marker
+                mapFeature.Styles.Add(new ImageStyle
+                {
+                    Image = new Image { Source = "svg-content://" + processedSvg, RasterizeSvg = true },
+                    SymbolScale = 0.6 * instr.SymbolScaleFactor,
+                });
+                return mapFeature;
             }
             catch
             {
@@ -172,7 +176,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
 
         mapFeature.Styles.Add(new SymbolStyle
         {
-            Fill = new Brush(fillColor),
+            Fill = new Brush(new MapsuiColor(255, 0, 255, 200)),
             Outline = new Pen(new MapsuiColor(128, 0, 128), 1),
             SymbolScale = 0.5,
         });
@@ -335,10 +339,14 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
             double lineWidth = 0;
             string? textContent = null;
 
-            // Point: <symbol reference="..."/>
+            // Point: <symbol reference="..."><scaleFactor>1</scaleFactor></symbol>
+            double scaleFactor = 1.0;
             var symbolEl = element.Element("symbol");
             if (symbolEl is not null)
+            {
                 symbolRef = symbolEl.Attribute("reference")?.Value;
+                scaleFactor = ParseDouble(symbolEl.Element("scaleFactor")?.Value, 1.0);
+            }
 
             // Line: <lineStyleReference reference="..."/> or inline <lineStyle>
             var lineStyleRefEl = element.Element("lineStyleReference");
@@ -370,6 +378,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
                 ViewingGroup = viewingGroup,
                 DrawingPriority = drawingPriority,
                 SymbolReference = symbolRef,
+                SymbolScaleFactor = scaleFactor,
                 LineStyleReference = lineStyleRef,
                 LineColor = lineColor,
                 LineWidth = lineWidth,
@@ -398,6 +407,7 @@ internal sealed class S124DrawingInstruction
     public int ViewingGroup { get; init; }
     public int DrawingPriority { get; init; }
     public string? SymbolReference { get; init; }
+    public double SymbolScaleFactor { get; init; } = 1.0;
     public string? LineStyleReference { get; init; }
     public string? LineColor { get; init; }
     public double LineWidth { get; init; }

@@ -94,6 +94,7 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
         {
             Name = $"S-129: {_fileName}",
             Features = mapFeatures,
+            Style = null,
         };
 
         // Compute extent
@@ -154,6 +155,13 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
             {
                 var symbol = catalogue.GetSymbol(instr.SymbolReference);
                 var processedSvg = SvgProcessor.Process(symbol.SvgContent, palette);
+                mapFeature.Styles.Add(new ImageStyle
+                {
+                    Image = new Image { Source = "svg-content://" + processedSvg, RasterizeSvg = true },
+                    SymbolScale = 0.6 * instr.SymbolScaleFactor,
+                    SymbolRotation = instr.SymbolRotation,
+                });
+                return mapFeature;
             }
             catch
             {
@@ -394,10 +402,16 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
             string? textContent = null;
             string? fillColor = null;
 
-            // Point: <symbol reference="..."/>
+            // Point: <symbol reference="..."><scaleFactor>1</scaleFactor><rotation>0</rotation></symbol>
+            double scaleFactor = 1.0;
+            double rotation = 0;
             var symbolEl = element.Element("symbol");
             if (symbolEl is not null)
+            {
                 symbolRef = symbolEl.Attribute("reference")?.Value;
+                scaleFactor = ParseDouble(symbolEl.Element("scaleFactor")?.Value, 1.0);
+                rotation = ParseDouble(symbolEl.Element("rotation")?.Value);
+            }
 
             // Line: <lineStyleReference reference="..."/> or inline <lineStyle>
             var lineStyleRefEl = element.Element("lineStyleReference");
@@ -436,6 +450,8 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
                 ViewingGroup = viewingGroup,
                 DrawingPriority = drawingPriority,
                 SymbolReference = symbolRef,
+                SymbolScaleFactor = scaleFactor,
+                SymbolRotation = rotation,
                 LineStyleReference = lineStyleRef,
                 LineColor = lineColor,
                 LineWidth = lineWidth,
@@ -478,6 +494,8 @@ internal sealed class S129DrawingInstruction
     public int ViewingGroup { get; init; }
     public int DrawingPriority { get; init; }
     public string? SymbolReference { get; init; }
+    public double SymbolScaleFactor { get; init; } = 1.0;
+    public double SymbolRotation { get; init; }
     public string? LineStyleReference { get; init; }
     public string? LineColor { get; init; }
     public double LineWidth { get; init; }
