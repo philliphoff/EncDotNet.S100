@@ -3,6 +3,10 @@ using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Datasets.S104;
 
+/// <summary>
+/// <see cref="ICoverageSource"/> implementation for S-104 Water Level datasets.
+/// Provides time-indexed access to water level height and trend grids.
+/// </summary>
 public class S104CoverageSource : ICoverageSource
 {
     /// <summary>S-104 standard fill value for no-data cells.</summary>
@@ -11,12 +15,17 @@ public class S104CoverageSource : ICoverageSource
     private readonly S104Dataset _dataset;
     private int _selectedTimeIndex;
 
+    /// <summary>
+    /// Initializes a new instance of <see cref="S104CoverageSource"/> from the given dataset.
+    /// </summary>
+    /// <param name="dataset">The S-104 dataset to expose as a coverage source.</param>
     public S104CoverageSource(S104Dataset dataset)
     {
         _dataset = dataset;
         _selectedTimeIndex = 0;
     }
 
+    /// <inheritdoc/>
     public CoverageMetadata Metadata
     {
         get
@@ -63,9 +72,11 @@ public class S104CoverageSource : ICoverageSource
         }
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<DateTime> AvailableTimes =>
         _dataset.Coverages.Select(c => c.TimePoint).ToList();
 
+    /// <inheritdoc/>
     public void SelectTime(DateTime time)
     {
         for (int i = 0; i < _dataset.Coverages.Count; i++)
@@ -93,6 +104,7 @@ public class S104CoverageSource : ICoverageSource
         _selectedTimeIndex = closest;
     }
 
+    /// <inheritdoc/>
     public SampledCoverage Sample(GridRegion region)
     {
         var coverage = _dataset.Coverages[_selectedTimeIndex];

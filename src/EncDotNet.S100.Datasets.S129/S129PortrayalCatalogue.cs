@@ -27,16 +27,25 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
     private readonly Dictionary<PaletteType, ColorPalette> _palettes = new();
     private bool _palettesLoaded;
 
+    /// <summary>
+    /// Initializes a new <see cref="S129PortrayalCatalogue"/> backed by the given provider.
+    /// </summary>
     public S129PortrayalCatalogue(PortrayalCatalogueProvider provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
     }
 
+    /// <summary>Gets the S-100 product specification identifier for this catalogue.</summary>
     public string ProductSpec => "S-129";
+
+    /// <summary>Gets the edition of the portrayal catalogue.</summary>
     public string Edition => _provider.Catalogue.Version;
+
+    /// <summary>Gets the currently active color palette.</summary>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
+    /// <summary>Switches the active color palette to the given type.</summary>
     public void SwitchPalette(PaletteType type)
     {
         EnsurePalettesLoaded();
@@ -47,6 +56,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
         }
     }
 
+    /// <summary>Gets the controller for viewing group visibility.</summary>
     public ViewingGroupController ViewingGroups { get; } = new();
 
     // ── Palettes ───────────────────────────────────────────────────────
@@ -115,6 +125,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Rules ──────────────────────────────────────────────────────────
 
+    /// <summary>Gets the ordered list of portrayal rules defined by the S-129 Portrayal Catalogue.</summary>
     public IReadOnlyList<PortrayalRule> Rules
     {
         get
@@ -149,6 +160,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── XSLT ───────────────────────────────────────────────────────────
 
+    /// <summary>Returns the compiled XSLT transform for the given rule name, loading and caching it on first access.</summary>
     public XslCompiledTransform GetCompiledRule(string ruleName)
     {
         if (_compiledXslt.TryGetValue(ruleName, out var cached)) return cached;
@@ -181,6 +193,8 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Lua (not used by S-129) ────────────────────────────────────────
 
+    /// <summary>Not supported — S-129 uses XSLT portrayal rules only.</summary>
+    /// <exception cref="NotSupportedException">Always thrown.</exception>
     public Script GetLuaScript(string scriptName)
     {
         throw new NotSupportedException("S-129 does not use Lua portrayal rules.");
@@ -188,6 +202,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Symbols ────────────────────────────────────────────────────────
 
+    /// <summary>Returns the SVG symbol with the given name, loading and caching it on first access.</summary>
     public SvgSymbol GetSymbol(string symbolName)
     {
         if (_symbols.TryGetValue(symbolName, out var cached)) return cached;
@@ -212,6 +227,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Line styles ────────────────────────────────────────────────────
 
+    /// <summary>Returns the line style with the given name, loading and caching it on first access.</summary>
     public LineStyle GetLineStyle(string name)
     {
         if (_lineStyles.TryGetValue(name, out var cached)) return cached;
@@ -229,6 +245,7 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Area fills ─────────────────────────────────────────────────────
 
+    /// <summary>Returns the area fill with the given name, loading and caching it on first access.</summary>
     public AreaFill GetAreaFill(string name)
     {
         if (_areaFills.TryGetValue(name, out var cached)) return cached;

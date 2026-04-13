@@ -21,6 +21,7 @@ public readonly struct WaterLevelValue
     /// </summary>
     public readonly byte Trend;
 
+    /// <summary>Initializes a new <see cref="WaterLevelValue"/> with the given height and trend.</summary>
     public WaterLevelValue(float height, byte trend)
     {
         Height = height;
