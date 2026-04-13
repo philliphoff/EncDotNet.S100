@@ -18,6 +18,8 @@
         "dotnet remove": true,
         "dotnet-ilspy": true,
         "strings": true,
-        "pip": true
+        "pip": true,
+        "ilspycmd": true,
+        "~/.dotnet/tools/ilspycmd": true
     }
 }

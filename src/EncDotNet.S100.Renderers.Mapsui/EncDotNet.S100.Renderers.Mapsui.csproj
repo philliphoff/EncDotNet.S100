@@ -3,6 +3,7 @@
   <ItemGroup>
     <PackageReference Include="Mapsui" />
     <PackageReference Include="Mapsui.Nts" />
+    <PackageReference Include="Mapsui.Rendering.Skia" />
     <PackageReference Include="Mapsui.Tiling" />
     <PackageReference Include="ProjNet" />
     <PackageReference Include="SkiaSharp" />

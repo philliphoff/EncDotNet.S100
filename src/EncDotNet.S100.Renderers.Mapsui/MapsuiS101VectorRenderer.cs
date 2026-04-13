@@ -46,8 +46,8 @@ public sealed class MapsuiS101VectorRenderer
     // Caches processed SVG data URIs keyed by symbol name.
     private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
 
-    // Caches rasterized pattern tile sources keyed by area fill name.
-    private readonly Dictionary<string, (string Source, AreaFill Fill)?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
+    // Caches rasterized pattern tile PNG bytes keyed by area fill name.
+    private readonly Dictionary<string, byte[]?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Renders a set of parsed drawing instructions for the given dataset
@@ -57,6 +57,10 @@ public sealed class MapsuiS101VectorRenderer
         IReadOnlyList<ParsedDrawingInstruction> instructions,
         S101Dataset dataset)
     {
+        // Ensure the custom pattern fill renderer is registered before Mapsui
+        // encounters any AnchoredPatternFillStyle instances.
+        AnchoredPatternFillRenderer.Register();
+
         // 1. Resolve all feature geometries from the dataset
         var vectorSource = new S101VectorSource(dataset);
         var features = vectorSource.GetFeatures();
@@ -185,22 +189,15 @@ public sealed class MapsuiS101VectorRenderer
         }
         else
         {
-            // Pattern fill via AreaFillReference
-            var patternResult = renderer.GetPatternTileSource(instruction.SymbolRef);
-            if (patternResult is null)
+            // Pattern fill via AreaFillReference, using a custom style so the
+            // pattern is anchored to the geometry and moves during panning.
+            var tilePng = renderer.GetPatternTilePng(instruction.SymbolRef);
+            if (tilePng is null)
                 return null;
 
-            var (tileSource, _) = patternResult.Value;
-
-            var brush = new Brush
+            var style = new AnchoredPatternFillStyle
             {
-                Image = new Image { Source = tileSource },
-            };
-
-            var style = new VectorStyle
-            {
-                Fill = brush,
-                Outline = new Pen { Color = new MapsuiColor(0, 0, 0, 40), Width = 0.5 },
+                TilePng = tilePng,
             };
 
             var feature = new GeometryFeature(polygon);
@@ -368,10 +365,10 @@ public sealed class MapsuiS101VectorRenderer
     // ── Pattern tile rasterization ─────────────────────────────────────
 
     /// <summary>
-    /// Returns a Mapsui base64-content:// source string for the given area fill name,
-    /// rasterizing the pattern SVG to a tiled bitmap on first access.
+    /// Returns rasterized pattern tile PNG bytes for the given area fill name,
+    /// processing and caching on first access.
     /// </summary>
-    private (string Source, AreaFill Fill)? GetPatternTileSource(string? fillName)
+    private byte[]? GetPatternTilePng(string? fillName)
     {
         if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
             return null;
@@ -379,7 +376,7 @@ public sealed class MapsuiS101VectorRenderer
         if (_patternTileCache.TryGetValue(fillName, out var cached))
             return cached;
 
-        (string Source, AreaFill Fill)? result = null;
+        byte[]? result = null;
         try
         {
             var areaFill = AreaFillProvider(fillName);
@@ -389,12 +386,7 @@ public sealed class MapsuiS101VectorRenderer
                 if (svgContent is not null)
                 {
                     var processed = SvgProcessor.Process(svgContent, Palette);
-                    var pngBytes = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
-                    if (pngBytes is not null)
-                    {
-                        var base64 = Convert.ToBase64String(pngBytes);
-                        result = ("base64-content://" + base64, areaFill);
-                    }
+                    result = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
                 }
             }
         }
