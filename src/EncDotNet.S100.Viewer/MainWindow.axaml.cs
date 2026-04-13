@@ -173,6 +173,9 @@ public partial class MainWindow : ShadUI.Window
         // Enable double-tap to zoom in
         MapControl.DoubleTapped += OnMapDoubleTapped;
 
+        // Enable drag & drop of dataset files onto the map
+        AddHandler(DragDrop.DropEvent, OnDrop);
+
         // Enable trackpad scroll/swipe to pan the map (tunnel phase to intercept before MapControl)
         MapControl.AddHandler(PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
 
@@ -481,6 +484,31 @@ public partial class MainWindow : ShadUI.Window
         var center = new ScreenPosition(position.X, position.Y);
         navigator.ZoomTo(newResolution, center, 250);
         e.Handled = true;
+    }
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (e.DataTransfer.TryGetFiles() is not { } files)
+            return;
+
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+
+        foreach (var item in files)
+        {
+            var path = item.TryGetLocalPath();
+            if (path is null || !File.Exists(path))
+                continue;
+
+            var spec = DatasetPipelineFactory.DetectProductSpec(path);
+            if (spec is null)
+            {
+                _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(path)}";
+                continue;
+            }
+
+            var entry = _viewModel.Datasets.Add(path, spec);
+            await LoadDatasetAsync(entry);
+        }
     }
 
     private void RemoveEntryLayers(DatasetEntry entry)

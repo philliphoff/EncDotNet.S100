@@ -228,7 +228,7 @@
                           Name="PaneSplitter" />
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
-            <Grid Grid.Column="2">
+            <Grid Grid.Column="2" DragDrop.AllowDrop="True">
                 <mapsui:MapControl x:Name="MapControl" />
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
