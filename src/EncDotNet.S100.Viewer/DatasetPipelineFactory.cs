@@ -100,17 +100,52 @@ internal sealed class DatasetPipelineFactory
     {
         try
         {
-            using var reader = System.Xml.XmlReader.Create(path, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
+            // Some GML files have leading whitespace before the XML declaration;
+            // read as text, trim, and parse via a StringReader to tolerate this.
+            var xml = File.ReadAllText(path).TrimStart();
+            using var stringReader = new StringReader(xml);
+            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
             while (reader.Read())
             {
                 if (reader.NodeType == System.Xml.XmlNodeType.Element)
                 {
                     // S-124 datasets have a root element in the S-124 namespace
                     if (reader.NamespaceURI.Contains("S-124", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Contains("S124", StringComparison.OrdinalIgnoreCase)
-                        || reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
+                        || reader.LocalName.Contains("S124", StringComparison.OrdinalIgnoreCase))
                     {
                         return "S-124";
+                    }
+
+                    // S-129 datasets have a root element in the S-129 namespace
+                    if (reader.NamespaceURI.Contains("S-129", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S129", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S129", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-129";
+                    }
+
+                    // Generic GML DataSet fallback — inspect declared namespaces
+                    if (reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (reader.MoveToFirstAttribute())
+                        {
+                            do
+                            {
+                                if (reader.Value.Contains("S129", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-129", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-129";
+                                }
+
+                                if (reader.Value.Contains("S124", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-124", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-124";
+                                }
+                            } while (reader.MoveToNextAttribute());
+                        }
+
+                        return null;
                     }
 
                     break;
@@ -141,6 +176,7 @@ internal sealed class DatasetPipelineFactory
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
+            "S-129" => new S129DatasetProcessor(path, _catalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }
