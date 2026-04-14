@@ -91,8 +91,16 @@ public sealed class MapsuiS101VectorRenderer
         // 3a. Merge consecutive SAFCON point instructions into text labels
         var merged = MergeSafconLabels(sorted);
 
-        // 4. Convert each instruction to a Mapsui feature
+        // 4. Convert each instruction to a Mapsui feature.
+        //    Pattern fills are collected and merged per unique pattern so that
+        //    overlapping polygons with the same globally-anchored pattern are
+        //    drawn exactly once, preventing alpha accumulation artifacts.
+        //    Merged patterns are inserted after all color fills to ensure no
+        //    solid fill can cover a previously-drawn pattern.
         var mapFeatures = new List<IFeature>();
+        var patternGroups = new Dictionary<byte[], List<Polygon>>();
+        int lastColorFillIndex = -1;
+
         foreach (var instruction in merged)
         {
             if (!long.TryParse(instruction.FeatureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var featureId))
@@ -104,9 +112,50 @@ public sealed class MapsuiS101VectorRenderer
             if (geom.Coords.Count == 0)
                 continue;
 
+            // Defer pattern fills for merging
+            if (instruction.Type == InstructionType.AreaFill && !instruction.IsColorFill)
+            {
+                var tilePng = GetPatternTilePng(instruction.SymbolRef);
+                if (tilePng is not null)
+                {
+                    var polygon = CreatePolygonFromCoords(geom.Coords);
+                    if (polygon is not null)
+                    {
+                        if (!patternGroups.TryGetValue(tilePng, out var polygons))
+                        {
+                            polygons = new List<Polygon>();
+                            patternGroups[tilePng] = polygons;
+                        }
+                        polygons.Add(polygon);
+                    }
+                }
+                continue;
+            }
+
             var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
             if (mapFeature is not null)
+            {
                 mapFeatures.Add(mapFeature);
+
+                // Track where color fills end so we can insert patterns after them
+                if (instruction.Type == InstructionType.AreaFill && instruction.IsColorFill)
+                    lastColorFillIndex = mapFeatures.Count;
+            }
+        }
+
+        // Insert merged pattern fill features after all color fills but before
+        // lines/points/text. This ensures no solid fill can occlude a pattern.
+        int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
+        foreach (var (tilePng, polygons) in patternGroups)
+        {
+            Geometry geometry = polygons.Count == 1
+                ? polygons[0]
+                : new MultiPolygon(polygons.ToArray());
+
+            var feature = new GeometryFeature(geometry);
+            feature.Styles.Add(new AnchoredPatternFillStyle { TilePng = tilePng });
+            mapFeatures.Insert(insertAt, feature);
+            insertAt++;
         }
 
         return new MemoryLayer
@@ -150,21 +199,9 @@ public sealed class MapsuiS101VectorRenderer
         Func<string?, MapsuiColor> resolveColor,
         MapsuiS101VectorRenderer renderer)
     {
-        if (coords.Count < 3)
+        var polygon = CreatePolygonFromCoords(coords);
+        if (polygon is null)
             return null;
-
-        var projected = ProjectCoordinates(coords);
-
-        // Close the ring if not already closed
-        var ringCoords = new List<Coordinate>(projected);
-        if (ringCoords.Count > 0 && !ringCoords[0].Equals2D(ringCoords[^1]))
-            ringCoords.Add(new Coordinate(ringCoords[0].X, ringCoords[0].Y));
-
-        if (ringCoords.Count < 4)
-            return null;
-
-        var ring = new LinearRing(ringCoords.ToArray());
-        var polygon = new Polygon(ring);
 
         if (instruction.IsColorFill)
         {
@@ -316,6 +353,25 @@ public sealed class MapsuiS101VectorRenderer
     }
 
     // ── Coordinate projection ──────────────────────────────────────────
+
+    private static Polygon? CreatePolygonFromCoords(IReadOnlyList<(double Lat, double Lon)> coords)
+    {
+        if (coords.Count < 3)
+            return null;
+
+        var projected = ProjectCoordinates(coords);
+
+        // Close the ring if not already closed
+        var ringCoords = new List<Coordinate>(projected);
+        if (ringCoords.Count > 0 && !ringCoords[0].Equals2D(ringCoords[^1]))
+            ringCoords.Add(new Coordinate(ringCoords[0].X, ringCoords[0].Y));
+
+        if (ringCoords.Count < 4)
+            return null;
+
+        var ring = new LinearRing(ringCoords.ToArray());
+        return new Polygon(ring);
+    }
 
     private static List<Coordinate> ProjectCoordinates(IReadOnlyList<(double Lat, double Lon)> coords)
     {

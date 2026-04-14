@@ -78,8 +78,12 @@ public static class SkiaSvgRasterizer
         float offsetX = (cellW - scaledW) / 2;
         float offsetY = (cellH - scaledH) / 2;
 
-        // Draw the SVG at position (0,0) for the first row
+        // Draw the SVG at position (0,0) for the first row.
+        // Clip to the cell rectangle so boundary paths don't bleed into
+        // the second row's cell space (which would cause crosshatch when
+        // the tile repeats and adjacent cells' boundary strokes overlap).
         canvas.Save();
+        canvas.ClipRect(new SKRect(0, 0, cellW, cellH));
         canvas.Translate(offsetX - svgBounds.Left * scale, offsetY - svgBounds.Top * scale);
         canvas.Scale(scale);
         canvas.DrawPicture(picture);
@@ -89,6 +93,7 @@ public static class SkiaSvgRasterizer
         // Because the tile repeats as a simple rectangle, the offset symbol may
         // extend past the tile boundary. Draw wrapping copies so the clipped
         // portions appear correctly when the tile is repeated.
+        // Clip to the second-row cell rectangle to prevent boundary bleed.
         if (hasOffset)
         {
             float offset2X = (float)(areaFill.V2X * pixelsPerMm);
@@ -104,6 +109,7 @@ public static class SkiaSvgRasterizer
                     continue;
 
                 canvas.Save();
+                canvas.ClipRect(new SKRect(0, cellH, tileW, tileH));
                 canvas.Translate(tx, baseY);
                 canvas.Scale(scale);
                 canvas.DrawPicture(picture);

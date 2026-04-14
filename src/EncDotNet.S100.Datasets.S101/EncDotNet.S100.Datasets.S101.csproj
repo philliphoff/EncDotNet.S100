@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="EncDotNet.Iso8211" />
   </ItemGroup>
 

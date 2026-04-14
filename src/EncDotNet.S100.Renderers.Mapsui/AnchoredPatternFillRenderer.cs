@@ -36,16 +36,31 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
                      IFeature feature, IStyle style, RenderService renderService, long iteration)
     {
         if (feature is not GeometryFeature gf ||
-            gf.Geometry is not Polygon polygon ||
             style is not AnchoredPatternFillStyle patternStyle)
         {
             return false;
         }
 
+        IEnumerable<Polygon> polygons = gf.Geometry switch
+        {
+            Polygon p => [p],
+            MultiPolygon mp => mp.Geometries.OfType<Polygon>(),
+            _ => []
+        };
+
         float opacity = (float)(layer.Opacity * style.Opacity);
         var clipRect = viewport.ToSkiaRect();
 
-        using var path = ToSkiaPath(polygon, viewport, clipRect);
+        // Build a combined path from all polygons so the pattern is drawn
+        // exactly once over the union of all geometries, preventing alpha
+        // accumulation where polygons overlap.
+        using var path = new SKPath();
+        foreach (var polygon in polygons)
+        {
+            using var polyPath = ToSkiaPath(polygon, viewport, clipRect);
+            path.AddPath(polyPath);
+        }
+
         if (path.IsEmpty)
             return false;
 
@@ -56,12 +71,13 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
         if (tileImage is null)
             return false;
 
-        // Anchor the shader to the polygon's *unclipped* world-coordinate envelope
-        // projected to screen space. Using the clipped path bounds would cause the
-        // pattern to shift when part of the polygon is off-screen (the clipped
-        // bounds get clamped to the viewport edge).
-        var env = polygon.EnvelopeInternal;
-        var (anchorScreenX, anchorScreenY) = viewport.WorldToScreenXY(env.MinX, env.MaxY);
+        // Anchor the shader to a fixed world-coordinate origin projected to screen
+        // space. S-100 area fills with areaCRS=GlobalGeometry use a single global
+        // tile grid shared by all polygons. Using a per-polygon anchor would cause
+        // overlapping polygons with the same pattern to produce moiré artifacts.
+        // The world origin (0,0) is arbitrary but consistent — since the pattern
+        // repeats, any fixed point produces seamless tiling across all polygons.
+        var (anchorScreenX, anchorScreenY) = viewport.WorldToScreenXY(0, 0);
         var anchorMatrix = SKMatrix.CreateTranslation((float)anchorScreenX, (float)anchorScreenY);
         using var shader = tileImage.ToShader(
             SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, anchorMatrix);

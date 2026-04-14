@@ -148,5 +148,4 @@ public static class SvgProcessor
 
         return doc.ToString(SaveOptions.DisableFormatting);
     }
-
 }

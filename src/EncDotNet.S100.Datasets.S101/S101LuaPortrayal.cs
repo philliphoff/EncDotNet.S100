@@ -189,15 +189,30 @@ public sealed class S101LuaPortrayal
                 $"S-101 Lua portrayal failed: {detail}", ex);
         }
 
-        // 7. Collect results
-        return dataProvider.EmittedInstructions
-            .Select(e => new EmittedInstruction
+        // 7. Collect results.
+        //    The S-101 Lua PortrayalModel.lua AddFeature() stores items in the same
+        //    table using both sequential array append (self[#self+1]) and feature-ID
+        //    indexing (self[feature.ID]). Because feature IDs are numeric and overlap
+        //    with array positions, ipairs() can visit some items twice, causing
+        //    HostPortrayalEmit to be called with identical instructions for the same
+        //    feature. Deduplicate by (FeatureRef, InstructionString) to eliminate
+        //    these spurious repeats.
+        var seen = new HashSet<(string, string)>();
+        var results = new List<EmittedInstruction>();
+        foreach (var e in dataProvider.EmittedInstructions)
+        {
+            if (seen.Add((e.FeatureRef, e.Instructions)))
             {
-                FeatureRef = e.FeatureRef,
-                InstructionString = e.Instructions,
-                ObservedParameters = e.ObservedParams,
-            })
-            .ToList();
+                results.Add(new EmittedInstruction
+                {
+                    FeatureRef = e.FeatureRef,
+                    InstructionString = e.Instructions,
+                    ObservedParameters = e.ObservedParams,
+                });
+            }
+        }
+
+        return results;
     }
 
     /// <summary>
