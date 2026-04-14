@@ -20,6 +20,7 @@
         "strings": true,
         "pip": true,
         "ilspycmd": true,
-        "~/.dotnet/tools/ilspycmd": true
+        "~/.dotnet/tools/ilspycmd": true,
+        "dotnet msbuild": true
     }
 }

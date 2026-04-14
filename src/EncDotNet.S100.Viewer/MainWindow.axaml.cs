@@ -103,11 +103,11 @@ public partial class MainWindow : ShadUI.Window
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, "(built-in)");
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, "(built-in)", ReadBuiltInFeatureCatalogueVersion(spec));
 
             if (Specifications.Specification.HasPortrayalCatalogue(spec))
             {
-                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, "(built-in)");
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, "(built-in)", ReadBuiltInPortrayalCatalogueVersion(spec));
             }
         }
 
@@ -554,6 +554,36 @@ public partial class MainWindow : ShadUI.Window
             var catalogue = FeatureCatalogueReader.Read(stream);
             var match = SpecPattern.Match(catalogue.Name);
             return match.Success ? match.Value : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadBuiltInFeatureCatalogueVersion(string spec)
+    {
+        try
+        {
+            using var stream = Specifications.Specification.TryOpenFeatureCatalogue(spec);
+            if (stream is null) return null;
+            var catalogue = FeatureCatalogueReader.Read(stream);
+            return string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadBuiltInPortrayalCatalogueVersion(string spec)
+    {
+        try
+        {
+            using var source = Specifications.Specification.CreatePortrayalCatalogueSource(spec);
+            using var stream = source.OpenAsync("portrayal_catalogue.xml").GetAwaiter().GetResult();
+            var catalogue = PortrayalCatalogueReader.Read(stream);
+            return string.IsNullOrEmpty(catalogue.Version) ? null : catalogue.Version;
         }
         catch
         {

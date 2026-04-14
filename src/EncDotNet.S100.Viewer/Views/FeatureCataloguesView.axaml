@@ -25,8 +25,15 @@
                 <DataTemplate x:DataType="vm:CatalogueEntry">
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding ProductSpec}"
-                                       FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding ProductSpec}"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Version}"
+                                           FontSize="11"
+                                           Opacity="0.6"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding Version, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            </StackPanel>
                             <TextBlock Text="{Binding Path}"
                                        FontSize="11"
                                        Opacity="0.6"
