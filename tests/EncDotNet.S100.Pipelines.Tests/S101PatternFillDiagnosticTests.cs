@@ -275,81 +275,143 @@ public class S101PatternFillDiagnosticTests
 
         int colorFillCount = 0, patternFillCount = 0;
 
-        foreach (var af in areaFills)
+        // --- Phase 1: Draw all color fills ---
+        foreach (var af in areaFills.Where(a => a.IsColorFill))
         {
             if (!featureGeom.TryGetValue(af.FeatureRef, out var coords) || coords.Count < 3)
                 continue;
 
-            // Build SKPath
+            colorFillCount++;
             using var path = new SKPath();
             path.MoveTo(ScaleX(coords[0].Longitude), ScaleY(coords[0].Latitude));
             for (int i = 1; i < coords.Count; i++)
                 path.LineTo(ScaleX(coords[i].Longitude), ScaleY(coords[i].Latitude));
             path.Close();
 
-            if (af.IsColorFill)
+            SKColor fillColor = SKColors.LightBlue;
+            if (af.SymbolRef is not null && palette.TryResolve(af.SymbolRef, out var hex))
             {
-                colorFillCount++;
-                // Resolve color
-                SKColor fillColor = SKColors.LightBlue;
-                if (af.SymbolRef is not null && palette.TryResolve(af.SymbolRef, out var hex))
-                {
-                    fillColor = SKColor.Parse(hex);
-                }
-                if (af.Transparency.HasValue)
-                {
-                    byte alpha = (byte)(255 * (1.0 - af.Transparency.Value));
-                    fillColor = fillColor.WithAlpha(alpha);
-                }
+                fillColor = SKColor.Parse(hex);
+            }
+            if (af.Transparency.HasValue)
+            {
+                byte alpha = (byte)(255 * (1.0 - af.Transparency.Value));
+                fillColor = fillColor.WithAlpha(alpha);
+            }
 
+            using var paint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = fillColor,
+            };
+            canvas.DrawPath(path, paint);
+        }
+
+        // --- Phase 2: Group pattern fills by (symbolRef, priority) ---
+        var patternGroups = new List<(string SymbolRef, int Priority, SKPath CombinedPath)>();
+        foreach (var group in areaFills.Where(a => !a.IsColorFill)
+            .GroupBy(a => (a.SymbolRef!, a.DrawingPriority))
+            .OrderBy(g => g.Key.DrawingPriority))
+        {
+            var combinedPath = new SKPath();
+            foreach (var af in group)
+            {
+                if (!featureGeom.TryGetValue(af.FeatureRef, out var coords) || coords.Count < 3)
+                    continue;
+
+                var polyPath = new SKPath();
+                polyPath.MoveTo(ScaleX(coords[0].Longitude), ScaleY(coords[0].Latitude));
+                for (int i = 1; i < coords.Count; i++)
+                    polyPath.LineTo(ScaleX(coords[i].Longitude), ScaleY(coords[i].Latitude));
+                polyPath.Close();
+                combinedPath.AddPath(polyPath);
+                polyPath.Dispose();
+            }
+            patternGroups.Add((group.Key.Item1, group.Key.DrawingPriority, combinedPath));
+        }
+
+        // --- Phase 3: Clip lower-priority patterns by higher-priority areas ---
+        // Walk from highest priority down, building a union of higher-priority areas
+        SKPath? higherPriorityAreas = null;
+        var clippedPaths = new SKPath[patternGroups.Count];
+        for (int i = patternGroups.Count - 1; i >= 0; i--)
+        {
+            var (_, _, groupPath) = patternGroups[i];
+            if (higherPriorityAreas is not null)
+            {
+                var clipped = groupPath.Op(higherPriorityAreas, SKPathOp.Difference);
+                clippedPaths[i] = clipped ?? groupPath;
+            }
+            else
+            {
+                clippedPaths[i] = groupPath;
+            }
+
+            // Union this group's area into the higher-priority accumulator
+            if (higherPriorityAreas is null)
+            {
+                higherPriorityAreas = new SKPath(groupPath);
+            }
+            else
+            {
+                var union = higherPriorityAreas.Op(groupPath, SKPathOp.Union);
+                if (union is not null)
+                {
+                    higherPriorityAreas.Dispose();
+                    higherPriorityAreas = union;
+                }
+            }
+        }
+
+        // --- Phase 4: Draw clipped pattern fills ---
+        for (int i = 0; i < patternGroups.Count; i++)
+        {
+            var (symbolRef, _, _) = patternGroups[i];
+            var path = clippedPaths[i];
+            if (path.IsEmpty) continue;
+
+            patternFillCount++;
+            if (!tileCache.TryGetValue(symbolRef, out var tileBitmap))
+            {
+                try
+                {
+                    var areaFill = catalogue.GetAreaFill(symbolRef);
+                    if (areaFill.PatternSymbol is not null)
+                    {
+                        var svgContent = catalogue.GetSymbol(areaFill.PatternSymbol).SvgContent;
+                        var processed = SvgProcessor.Process(svgContent, palette);
+                        var png = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                        if (png is not null)
+                            tileBitmap = SKBitmap.Decode(png);
+                    }
+                }
+                catch { }
+                tileCache[symbolRef] = tileBitmap;
+            }
+
+            if (tileBitmap is not null)
+            {
+                using var tileImage = SKImage.FromBitmap(tileBitmap);
+                using var shader = tileImage.ToShader(
+                    SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
                 using var paint = new SKPaint
                 {
                     IsAntialias = true,
                     Style = SKPaintStyle.Fill,
-                    Color = fillColor,
+                    Shader = shader,
                 };
-                canvas.DrawPath(path, paint);
-            }
-            else
-            {
-                patternFillCount++;
-                // Pattern fill
-                if (!tileCache.TryGetValue(af.SymbolRef!, out var tileBitmap))
-                {
-                    try
-                    {
-                        var areaFill = catalogue.GetAreaFill(af.SymbolRef!);
-                        if (areaFill.PatternSymbol is not null)
-                        {
-                            var svgContent = catalogue.GetSymbol(areaFill.PatternSymbol).SvgContent;
-                            var processed = SvgProcessor.Process(svgContent, palette);
-                            var png = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
-                            if (png is not null)
-                                tileBitmap = SKBitmap.Decode(png);
-                        }
-                    }
-                    catch { }
-                    tileCache[af.SymbolRef!] = tileBitmap;
-                }
-
-                if (tileBitmap is not null)
-                {
-                    using var tileImage = SKImage.FromBitmap(tileBitmap);
-                    using var shader = tileImage.ToShader(
-                        SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
-                    using var paint = new SKPaint
-                    {
-                        IsAntialias = true,
-                        Style = SKPaintStyle.Fill,
-                        Shader = shader,
-                    };
-                    canvas.Save();
-                    canvas.ClipPath(path);
-                    canvas.DrawRect(path.Bounds, paint);
-                    canvas.Restore();
-                }
+                canvas.Save();
+                canvas.ClipPath(path);
+                canvas.DrawRect(path.Bounds, paint);
+                canvas.Restore();
             }
         }
+
+        // Dispose pattern paths
+        foreach (var pg in patternGroups) pg.CombinedPath.Dispose();
+        foreach (var cp in clippedPaths) { if (!patternGroups.Any(pg => ReferenceEquals(pg.CombinedPath, cp))) cp?.Dispose(); }
+        higherPriorityAreas?.Dispose();
 
         canvas.Flush();
 

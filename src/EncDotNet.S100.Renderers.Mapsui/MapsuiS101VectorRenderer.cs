@@ -98,7 +98,7 @@ public sealed class MapsuiS101VectorRenderer
         //    Merged patterns are inserted after all color fills to ensure no
         //    solid fill can cover a previously-drawn pattern.
         var mapFeatures = new List<IFeature>();
-        var patternGroups = new Dictionary<byte[], List<Polygon>>();
+        var patternEntries = new List<(byte[] TilePng, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
         foreach (var instruction in merged)
@@ -121,12 +121,17 @@ public sealed class MapsuiS101VectorRenderer
                     var polygon = CreatePolygonFromCoords(geom.Coords);
                     if (polygon is not null)
                     {
-                        if (!patternGroups.TryGetValue(tilePng, out var polygons))
+                        // Find existing entry with the same tile and priority, or create a new one
+                        var existing = patternEntries.Find(e =>
+                            ReferenceEquals(e.TilePng, tilePng) && e.Priority == instruction.DrawingPriority);
+                        if (existing.TilePng is not null)
                         {
-                            polygons = new List<Polygon>();
-                            patternGroups[tilePng] = polygons;
+                            existing.Polygons.Add(polygon);
                         }
-                        polygons.Add(polygon);
+                        else
+                        {
+                            patternEntries.Add((tilePng, instruction.DrawingPriority, new List<Polygon> { polygon }));
+                        }
                     }
                 }
                 continue;
@@ -143,15 +148,17 @@ public sealed class MapsuiS101VectorRenderer
             }
         }
 
+        // Clip lower-priority pattern groups to exclude areas covered by
+        // higher-priority patterns so that, e.g., DIAMOND1 (priority 9)
+        // diamonds do not show through DQUAL (priority 12) pattern zones.
+        patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        var clippedPatterns = ClipPatternsByPriority(patternEntries);
+
         // Insert merged pattern fill features after all color fills but before
         // lines/points/text. This ensures no solid fill can occlude a pattern.
         int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
-        foreach (var (tilePng, polygons) in patternGroups)
+        foreach (var (tilePng, geometry) in clippedPatterns)
         {
-            Geometry geometry = polygons.Count == 1
-                ? polygons[0]
-                : new MultiPolygon(polygons.ToArray());
-
             var feature = new GeometryFeature(geometry);
             feature.Styles.Add(new AnchoredPatternFillStyle { TilePng = tilePng });
             mapFeatures.Insert(insertAt, feature);
@@ -607,5 +614,70 @@ public sealed class MapsuiS101VectorRenderer
             return resolveColor("LITYW");     // Lights — yellow
 
         return resolveColor("OUTLW");
+    }
+
+    /// <summary>
+    /// Clips lower-priority pattern groups so that higher-priority patterns
+    /// occlude them. For example, DIAMOND1 (priority 9) geometry is clipped
+    /// to exclude areas covered by DQUAL patterns (priority 12).
+    /// </summary>
+    /// <remarks>
+    /// Entries must be sorted by ascending priority before calling.
+    /// Returns (tilePng, clippedGeometry) pairs in ascending priority order.
+    /// </remarks>
+    private static List<(byte[] TilePng, Geometry Geometry)> ClipPatternsByPriority(
+        List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries)
+    {
+        if (entries.Count == 0)
+            return [];
+
+        // Build merged geometry for each entry
+        var merged = entries.Select(e =>
+        {
+            Geometry g = e.Polygons.Count == 1
+                ? e.Polygons[0]
+                : new MultiPolygon(e.Polygons.ToArray());
+            return (e.TilePng, e.Priority, Geometry: g);
+        }).ToList();
+
+        // Walk from highest priority down, accumulating a union of
+        // higher-priority areas that will clip lower-priority patterns.
+        Geometry? higherPriorityAreas = null;
+        var result = new (byte[] TilePng, Geometry Geometry)[merged.Count];
+
+        for (int i = merged.Count - 1; i >= 0; i--)
+        {
+            var (tile, _, geometry) = merged[i];
+
+            if (higherPriorityAreas is not null)
+            {
+                try
+                {
+                    var clipped = geometry.Difference(higherPriorityAreas);
+                    result[i] = (tile, clipped);
+                }
+                catch (TopologyException)
+                {
+                    // Fall back to unclipped geometry if the difference fails
+                    result[i] = (tile, geometry);
+                }
+            }
+            else
+            {
+                result[i] = (tile, geometry);
+            }
+
+            // Add this entry's original (unclipped) area to the higher-priority union
+            try
+            {
+                higherPriorityAreas = higherPriorityAreas?.Union(geometry) ?? geometry;
+            }
+            catch (TopologyException)
+            {
+                // If union fails, keep the existing accumulated area
+            }
+        }
+
+        return [.. result];
     }
 }
