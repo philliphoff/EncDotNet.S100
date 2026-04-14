@@ -101,6 +101,20 @@ public sealed class MapsuiS101VectorRenderer
         var patternEntries = new List<(byte[] TilePng, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
+        // Track which features produce pattern fills, so we can identify
+        // "non-patterned" color fill areas (like land) that should occlude patterns.
+        var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var instruction in merged)
+        {
+            if (instruction.Type == InstructionType.AreaFill && !instruction.IsColorFill)
+                featuresWithPatterns.Add(instruction.FeatureRef);
+        }
+
+        // Collect opaque color fill polygons from features that do NOT also
+        // produce a pattern fill. These represent areas (such as land) where
+        // patterns from other features should not be visible.
+        var nonPatternedColorFillPolygons = new List<Polygon>();
+
         foreach (var instruction in merged)
         {
             if (!long.TryParse(instruction.FeatureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var featureId))
@@ -137,6 +151,15 @@ public sealed class MapsuiS101VectorRenderer
                 continue;
             }
 
+            // Track non-patterned color fills (e.g. land areas) for pattern clipping
+            if (instruction.Type == InstructionType.AreaFill && instruction.IsColorFill
+                && !featuresWithPatterns.Contains(instruction.FeatureRef))
+            {
+                var polygon = CreatePolygonFromCoords(geom.Coords);
+                if (polygon is not null)
+                    nonPatternedColorFillPolygons.Add(polygon);
+            }
+
             var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
             if (mapFeature is not null)
             {
@@ -151,8 +174,10 @@ public sealed class MapsuiS101VectorRenderer
         // Clip lower-priority pattern groups to exclude areas covered by
         // higher-priority patterns so that, e.g., DIAMOND1 (priority 9)
         // diamonds do not show through DQUAL (priority 12) pattern zones.
+        // Also clips all patterns against non-patterned color fill areas
+        // (e.g. land) so patterns don't bleed over land.
         patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-        var clippedPatterns = ClipPatternsByPriority(patternEntries);
+        var clippedPatterns = ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
 
         // Insert merged pattern fill features after all color fills but before
         // lines/points/text. This ensures no solid fill can occlude a pattern.
@@ -617,19 +642,40 @@ public sealed class MapsuiS101VectorRenderer
     }
 
     /// <summary>
-    /// Clips lower-priority pattern groups so that higher-priority patterns
-    /// occlude them. For example, DIAMOND1 (priority 9) geometry is clipped
-    /// to exclude areas covered by DQUAL patterns (priority 12).
+    /// Clips pattern groups so that:
+    /// 1. Lower-priority patterns are clipped by higher-priority pattern areas
+    ///    (e.g. DIAMOND1 at priority 9 is clipped by DQUAL at priority 12).
+    /// 2. All patterns are clipped to exclude non-patterned color fill areas
+    ///    (e.g. land areas) where patterns should not be visible.
     /// </summary>
     /// <remarks>
     /// Entries must be sorted by ascending priority before calling.
     /// Returns (tilePng, clippedGeometry) pairs in ascending priority order.
     /// </remarks>
     private static List<(byte[] TilePng, Geometry Geometry)> ClipPatternsByPriority(
-        List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries)
+        List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries,
+        List<Polygon> nonPatternedColorFills)
     {
         if (entries.Count == 0)
             return [];
+
+        // Build a union of non-patterned color fill areas (e.g. land) that
+        // should occlude all pattern fills.
+        Geometry? excludeAreas = null;
+        if (nonPatternedColorFills.Count > 0)
+        {
+            try
+            {
+                Geometry nonPatterned = nonPatternedColorFills.Count == 1
+                    ? nonPatternedColorFills[0]
+                    : new MultiPolygon(nonPatternedColorFills.ToArray());
+                excludeAreas = nonPatterned.Union();
+            }
+            catch (TopologyException)
+            {
+                // If union fails, skip land clipping
+            }
+        }
 
         // Build merged geometry for each entry
         var merged = entries.Select(e =>
@@ -649,23 +695,36 @@ public sealed class MapsuiS101VectorRenderer
         {
             var (tile, _, geometry) = merged[i];
 
+            // Start with the original geometry, then subtract exclusion areas
+            var clipped = geometry;
+
+            // Subtract higher-priority pattern areas
             if (higherPriorityAreas is not null)
             {
                 try
                 {
-                    var clipped = geometry.Difference(higherPriorityAreas);
-                    result[i] = (tile, clipped);
+                    clipped = clipped.Difference(higherPriorityAreas);
                 }
                 catch (TopologyException)
                 {
-                    // Fall back to unclipped geometry if the difference fails
-                    result[i] = (tile, geometry);
+                    // Fall back to unclipped geometry
                 }
             }
-            else
+
+            // Subtract non-patterned color fill areas (e.g. land)
+            if (excludeAreas is not null)
             {
-                result[i] = (tile, geometry);
+                try
+                {
+                    clipped = clipped.Difference(excludeAreas);
+                }
+                catch (TopologyException)
+                {
+                    // Fall back to current clipped geometry
+                }
             }
+
+            result[i] = (tile, clipped);
 
             // Add this entry's original (unclipped) area to the higher-priority union
             try
