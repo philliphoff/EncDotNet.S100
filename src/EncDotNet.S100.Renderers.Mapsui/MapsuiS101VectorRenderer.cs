@@ -160,19 +160,6 @@ public sealed class MapsuiS101VectorRenderer
                     nonPatternedColorFillPolygons.Add(polygon);
             }
 
-            // For depth contour labels with LinePlacement, the S-100 repeat
-            // semantics place the symbol at each vertex AND at the midpoint
-            // of each segment along the curve.
-            if (instruction.Type == InstructionType.Text
-                && instruction.LinePlacementPosition.HasValue
-                && geom.Coords.Count >= 2)
-            {
-                var textFeatures = CreateLineRepeatedTextFeatures(
-                    instruction, geom.Coords, resolveColor);
-                mapFeatures.AddRange(textFeatures);
-                continue;
-            }
-
             var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
             if (mapFeature is not null)
             {
@@ -409,55 +396,7 @@ public sealed class MapsuiS101VectorRenderer
         return feature;
     }
 
-    /// <summary>
-    /// Creates text label features at each vertex and segment midpoint
-    /// of a polyline to implement S-100 LinePlacement repeat semantics.
-    /// </summary>
-    private static List<IFeature> CreateLineRepeatedTextFeatures(
-        ParsedDrawingInstruction instruction,
-        IReadOnlyList<(double Lat, double Lon)> coords,
-        Func<string?, MapsuiColor> resolveColor)
-    {
-        var features = new List<IFeature>();
-        if (string.IsNullOrEmpty(instruction.Text) || coords.Count < 2)
-            return features;
 
-        var textColor = resolveColor(instruction.FontColor);
-
-        IFeature MakeLabel(double lat, double lon)
-        {
-            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-            var style = new LabelStyle
-            {
-                Text = instruction.Text,
-                ForeColor = textColor,
-                Font = new Font { Size = instruction.FontSize },
-                HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
-                VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
-                BackColor = null,
-                Halo = new Pen { Color = MapsuiColor.White, Width = 1 },
-            };
-            var f = new PointFeature(mx, my);
-            f.Styles.Add(style);
-            return f;
-        }
-
-        // Place at each vertex
-        foreach (var (lat, lon) in coords)
-        {
-            features.Add(MakeLabel(lat, lon));
-        }
-
-        // Place at the midpoint of each segment
-        for (int i = 0; i < coords.Count - 1; i++)
-        {
-            double midLat = (coords[i].Lat + coords[i + 1].Lat) / 2.0;
-            double midLon = (coords[i].Lon + coords[i + 1].Lon) / 2.0;
-            features.Add(MakeLabel(midLat, midLon));
-        }
-
-        return features;
-    }
 
     // ── Coordinate projection ──────────────────────────────────────────
 
