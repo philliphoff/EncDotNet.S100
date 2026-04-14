@@ -1,5 +1,12 @@
 # EncDotNet.S100
 
+[![CI](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml/badge.svg)](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/philliphoff/EncDotNet.S100)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/philliphoff/EncDotNet.S100?label=release&sort=semver)](https://github.com/philliphoff/EncDotNet.S100/releases)
+[![.NET](https://img.shields.io/badge/.NET-10-512bd4)](https://dotnet.microsoft.com/)
+[![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
+
 A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, and S-111 Surface Currents.
 
 ## Libraries
@@ -27,12 +34,45 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 |---|---|
 | **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-124, and S-129 datasets and renders them on an interactive map. |
 
-## Tools
+## Screenshots
 
-| Tool | Description |
-|---|---|
-| **RenderS102** | CLI tool that renders an S-102 HDF5 bathymetric file to a PNG image. |
-| **TestS101Lua** | CLI tool that runs the S-101 Lua portrayal pipeline and dumps drawing instructions. |
+The cross-platform viewer rendering various S-100 dataset types:
+
+### S-101 — Electronic Navigational Charts
+
+![S-101 ENC](readme/S101Screenshot.png)
+
+Vector chart data with IHO symbology including depth contours, navigation aids, land areas, and other chart features.
+
+### S-102 — Bathymetric Surfaces
+
+![S-102 Bathymetry](readme/S102Screenshot.png)
+
+Color-shaded bathymetric depth grids providing high-resolution seafloor elevation data.
+
+### S-104 — Water Level Information
+
+![S-104 Water Level](readme/S104Screenshot.png)
+
+Gridded water level data for surface navigation, showing tidal and non-tidal water level variations.
+
+### S-111 — Surface Currents
+
+![S-111 Surface Currents](readme/S111Screenshot.png)
+
+Gridded surface current data showing current speed and direction.
+
+### S-124 — Navigational Warnings
+
+![S-124 Navigational Warnings](readme/S124Screenshot.png)
+
+GML-encoded navigational warnings rendered via XSLT portrayal, highlighting hazards and notices to mariners.
+
+### S-129 — Under Keel Clearance Management
+
+![S-129 Under Keel Clearance](readme/S129Screenshot.png)
+
+Under keel clearance data for safe navigation in shallow or restricted waterways.
 
 ## Building
 
