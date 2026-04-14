@@ -49,6 +49,7 @@ public static class DrawingInstructionParser
         // Text style state
         double fontSize = 10;
         string fontColor = "CHBLK";
+        double? linePlacementPosition = null;
 
         var segments = instructionString.Split(';');
 
@@ -173,6 +174,7 @@ public static class DrawingInstructionParser
                         ScaleFactor = scaleFactor,
                         LocalOffsetX = localOffsetX,
                         LocalOffsetY = localOffsetY,
+                        LinePlacementPosition = linePlacementPosition,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
@@ -255,6 +257,16 @@ public static class DrawingInstructionParser
                     // Intentional no-op
                     break;
 
+                case "LinePlacement":
+                    // LinePlacement:Relative,0.5[,,true]
+                    var lpParts = value.Split(',');
+                    if (lpParts.Length >= 2 &&
+                        double.TryParse(lpParts[1], CultureInfo.InvariantCulture, out var lpPos))
+                    {
+                        linePlacementPosition = lpPos;
+                    }
+                    break;
+
                 case "AlertReference":
                 case "Hover":
                 case "SpatialReference":
@@ -263,7 +275,6 @@ public static class DrawingInstructionParser
                 case "AugmentedRay":
                 case "AugmentedPath":
                 case "ArcByRadius":
-                case "LinePlacement":
                 case "AreaPlacement":
                 case "AreaCRS":
                 case "Date":
@@ -358,6 +369,10 @@ public sealed class ParsedDrawingInstruction
     // Text properties
     public double FontSize { get; init; } = 10;
     public string FontColor { get; init; } = "CHBLK";
+
+    // Line placement: when set, the symbol/text should be placed at this
+    // relative position (0.0–1.0) along the feature's curve geometry.
+    public double? LinePlacementPosition { get; init; }
 
     // Scale visibility
     public double? ScaleMinimum { get; init; }

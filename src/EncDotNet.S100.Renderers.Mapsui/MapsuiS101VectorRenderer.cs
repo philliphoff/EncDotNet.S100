@@ -160,6 +160,19 @@ public sealed class MapsuiS101VectorRenderer
                     nonPatternedColorFillPolygons.Add(polygon);
             }
 
+            // For depth contour labels with LinePlacement, the S-100 repeat
+            // semantics place the symbol at each vertex AND at the midpoint
+            // of each segment along the curve.
+            if (instruction.Type == InstructionType.Text
+                && instruction.LinePlacementPosition.HasValue
+                && geom.Coords.Count >= 2)
+            {
+                var textFeatures = CreateLineRepeatedTextFeatures(
+                    instruction, geom.Coords, resolveColor);
+                mapFeatures.AddRange(textFeatures);
+                continue;
+            }
+
             var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
             if (mapFeature is not null)
             {
@@ -366,7 +379,18 @@ public sealed class MapsuiS101VectorRenderer
         if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        var (lat, lon) = coords[0];
+        // Determine position: if LinePlacementPosition is set and we have
+        // enough coordinates to form a line, interpolate along the polyline.
+        double lat, lon;
+        if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2)
+        {
+            (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
+        }
+        else
+        {
+            (lat, lon) = coords[0];
+        }
+
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
         var textColor = resolveColor(instruction.FontColor);
@@ -377,6 +401,7 @@ public sealed class MapsuiS101VectorRenderer
             Font = new Font { Size = instruction.FontSize },
             HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
             VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
+            BackColor = null,
         };
 
         var feature = new PointFeature(mx, my);
@@ -384,7 +409,103 @@ public sealed class MapsuiS101VectorRenderer
         return feature;
     }
 
+    /// <summary>
+    /// Creates text label features at each vertex and segment midpoint
+    /// of a polyline to implement S-100 LinePlacement repeat semantics.
+    /// </summary>
+    private static List<IFeature> CreateLineRepeatedTextFeatures(
+        ParsedDrawingInstruction instruction,
+        IReadOnlyList<(double Lat, double Lon)> coords,
+        Func<string?, MapsuiColor> resolveColor)
+    {
+        var features = new List<IFeature>();
+        if (string.IsNullOrEmpty(instruction.Text) || coords.Count < 2)
+            return features;
+
+        var textColor = resolveColor(instruction.FontColor);
+
+        IFeature MakeLabel(double lat, double lon)
+        {
+            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+            var style = new LabelStyle
+            {
+                Text = instruction.Text,
+                ForeColor = textColor,
+                Font = new Font { Size = instruction.FontSize },
+                HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
+                VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
+                BackColor = null,
+                Halo = new Pen { Color = MapsuiColor.White, Width = 1 },
+            };
+            var f = new PointFeature(mx, my);
+            f.Styles.Add(style);
+            return f;
+        }
+
+        // Place at each vertex
+        foreach (var (lat, lon) in coords)
+        {
+            features.Add(MakeLabel(lat, lon));
+        }
+
+        // Place at the midpoint of each segment
+        for (int i = 0; i < coords.Count - 1; i++)
+        {
+            double midLat = (coords[i].Lat + coords[i + 1].Lat) / 2.0;
+            double midLon = (coords[i].Lon + coords[i + 1].Lon) / 2.0;
+            features.Add(MakeLabel(midLat, midLon));
+        }
+
+        return features;
+    }
+
     // ── Coordinate projection ──────────────────────────────────────────
+
+    /// <summary>
+    /// Interpolates a position at a relative distance (0.0–1.0) along a polyline.
+    /// </summary>
+    private static (double Lat, double Lon) InterpolateAlongPolyline(
+        IReadOnlyList<(double Lat, double Lon)> coords, double fraction)
+    {
+        if (coords.Count < 2)
+            return coords[0];
+
+        fraction = Math.Clamp(fraction, 0.0, 1.0);
+
+        // Compute total length of the polyline (in degrees — approximate but fine for interpolation)
+        double totalLength = 0;
+        for (int i = 1; i < coords.Count; i++)
+        {
+            double dLat = coords[i].Lat - coords[i - 1].Lat;
+            double dLon = coords[i].Lon - coords[i - 1].Lon;
+            totalLength += Math.Sqrt(dLat * dLat + dLon * dLon);
+        }
+
+        if (totalLength <= 0)
+            return coords[0];
+
+        double targetLength = totalLength * fraction;
+        double accumulated = 0;
+
+        for (int i = 1; i < coords.Count; i++)
+        {
+            double dLat = coords[i].Lat - coords[i - 1].Lat;
+            double dLon = coords[i].Lon - coords[i - 1].Lon;
+            double segmentLength = Math.Sqrt(dLat * dLat + dLon * dLon);
+
+            if (accumulated + segmentLength >= targetLength)
+            {
+                double t = segmentLength > 0 ? (targetLength - accumulated) / segmentLength : 0;
+                return (
+                    coords[i - 1].Lat + t * dLat,
+                    coords[i - 1].Lon + t * dLon);
+            }
+
+            accumulated += segmentLength;
+        }
+
+        return coords[^1];
+    }
 
     private static Polygon? CreatePolygonFromCoords(IReadOnlyList<(double Lat, double Lon)> coords)
     {
@@ -529,7 +650,7 @@ public sealed class MapsuiS101VectorRenderer
                 // Decode the SAFCON sequence into a depth string
                 var depthText = DecodeSafconSequence(safcons);
 
-                // Emit a synthetic text instruction
+                // Emit a synthetic text instruction preserving line placement
                 result.Add(new ParsedDrawingInstruction
                 {
                     FeatureRef = instr.FeatureRef,
@@ -539,7 +660,8 @@ public sealed class MapsuiS101VectorRenderer
                     DrawingPriority = instr.DrawingPriority,
                     DisplayPlane = instr.DisplayPlane,
                     FontSize = 10,
-                    FontColor = "SNDG2",
+                    FontColor = "DEPCN",
+                    LinePlacementPosition = instr.LinePlacementPosition,
                     ScaleMinimum = instr.ScaleMinimum,
                     ScaleMaximum = instr.ScaleMaximum,
                 });
