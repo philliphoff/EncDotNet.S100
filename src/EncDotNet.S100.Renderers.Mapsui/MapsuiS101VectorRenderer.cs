@@ -21,6 +21,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 public sealed class MapsuiS101VectorRenderer
 {
+    /// <summary>
+    /// Key used to store the originating S-100 feature reference on Mapsui features.
+    /// Consumers can read <c>feature[FeatureRefKey]</c> to trace a rendered feature
+    /// back to its source dataset record.
+    /// </summary>
+    public const string FeatureRefKey = "S100.FeatureRef";
+
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-101 Vector";
 
@@ -215,23 +222,21 @@ public sealed class MapsuiS101VectorRenderer
         Func<string?, MapsuiColor> resolveColor,
         MapsuiS101VectorRenderer renderer)
     {
-        switch (instruction.Type)
+        var feature = instruction.Type switch
         {
-            case InstructionType.AreaFill:
-                return CreateAreaFeature(instruction, geomType, coords, resolveColor, renderer);
+            InstructionType.AreaFill => CreateAreaFeature(instruction, geomType, coords, resolveColor, renderer),
+            InstructionType.Line => CreateLineFeature(instruction, geomType, coords, resolveColor),
+            InstructionType.Point => CreatePointFeature(instruction, coords, resolveColor, renderer),
+            InstructionType.Text => CreateTextFeature(instruction, coords, resolveColor, renderer),
+            _ => null,
+        };
 
-            case InstructionType.Line:
-                return CreateLineFeature(instruction, geomType, coords, resolveColor);
-
-            case InstructionType.Point:
-                return CreatePointFeature(instruction, coords, resolveColor, renderer);
-
-            case InstructionType.Text:
-                return CreateTextFeature(instruction, coords, resolveColor, renderer);
-
-            default:
-                return null;
+        if (feature is not null)
+        {
+            feature[FeatureRefKey] = instruction.FeatureRef;
         }
+
+        return feature;
     }
 
     private static IFeature? CreateAreaFeature(

@@ -8,7 +8,9 @@ using System.Xml.Linq;
 using System.Xml.Xsl;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Portrayals;using Mapsui;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Mapsui;
+using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Projections;
@@ -131,17 +133,20 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         double symbolScale,
         double textScale)
     {
-        switch (instr.Type)
+        var mapFeature = instr.Type switch
         {
-            case S124InstructionType.Point:
-                return RenderPointInstruction(instr, feature, catalogue, palette, symbolScale);
-            case S124InstructionType.Line:
-                return RenderLineInstruction(instr, feature, palette);
-            case S124InstructionType.Text:
-                return RenderTextInstruction(instr, feature, textScale);
-            default:
-                return null;
+            S124InstructionType.Point => RenderPointInstruction(instr, feature, catalogue, palette, symbolScale),
+            S124InstructionType.Line => RenderLineInstruction(instr, feature, palette),
+            S124InstructionType.Text => RenderTextInstruction(instr, feature, textScale),
+            _ => null,
+        };
+
+        if (mapFeature is not null)
+        {
+            mapFeature[MapsuiS101VectorRenderer.FeatureRefKey] = instr.FeatureReference;
         }
+
+        return mapFeature;
     }
 
     private static IFeature? RenderPointInstruction(
