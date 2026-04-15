@@ -85,6 +85,8 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                 {
                     LayerName = $"S-101: {_fileName}",
                     Palette = palette,
+                    SymbolScale = context?.SymbolScale ?? 1.0,
+                    TextScale = context?.TextScale ?? 1.0,
                     SymbolProvider = symbolName =>
                     {
                         try

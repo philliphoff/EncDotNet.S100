@@ -86,13 +86,15 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         // Render to Mapsui features
         var mapFeatures = new List<IFeature>();
         var palette = catalogue.ActivePalette;
+        var symbolScale = context?.SymbolScale ?? 1.0;
+        var textScale = context?.TextScale ?? 1.0;
 
         foreach (var instr in drawingInstructions)
         {
             if (!featureGeometry.TryGetValue(instr.FeatureReference, out var feature))
                 continue;
 
-            var mapFeature = RenderInstruction(instr, feature, catalogue, palette);
+            var mapFeature = RenderInstruction(instr, feature, catalogue, palette, symbolScale, textScale);
             if (mapFeature is not null)
                 mapFeatures.Add(mapFeature);
         }
@@ -125,16 +127,18 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         S124DrawingInstruction instr,
         S124Feature feature,
         S124PortrayalCatalogue catalogue,
-        ColorPalette palette)
+        ColorPalette palette,
+        double symbolScale,
+        double textScale)
     {
         switch (instr.Type)
         {
             case S124InstructionType.Point:
-                return RenderPointInstruction(instr, feature, catalogue, palette);
+                return RenderPointInstruction(instr, feature, catalogue, palette, symbolScale);
             case S124InstructionType.Line:
                 return RenderLineInstruction(instr, feature, palette);
             case S124InstructionType.Text:
-                return RenderTextInstruction(instr, feature);
+                return RenderTextInstruction(instr, feature, textScale);
             default:
                 return null;
         }
@@ -144,7 +148,8 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         S124DrawingInstruction instr,
         S124Feature feature,
         S124PortrayalCatalogue catalogue,
-        ColorPalette palette)
+        ColorPalette palette,
+        double symbolScale)
     {
         if (feature.Points.IsDefaultOrEmpty) return null;
 
@@ -164,7 +169,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
                 mapFeature.Styles.Add(new ImageStyle
                 {
                     Image = new Image { Source = "svg-content://" + processedSvg, RasterizeSvg = true },
-                    SymbolScale = 0.6 * instr.SymbolScaleFactor,
+                    SymbolScale = 0.6 * instr.SymbolScaleFactor * symbolScale,
                 });
                 return mapFeature;
             }
@@ -178,7 +183,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         {
             Fill = new Brush(new MapsuiColor(255, 0, 255, 200)),
             Outline = new Pen(new MapsuiColor(128, 0, 128), 1),
-            SymbolScale = 0.5,
+            SymbolScale = 0.5 * symbolScale,
         });
 
         return mapFeature;
@@ -227,7 +232,8 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
 
     private static IFeature? RenderTextInstruction(
         S124DrawingInstruction instr,
-        S124Feature feature)
+        S124Feature feature,
+        double textScale)
     {
         if (feature.Points.IsDefaultOrEmpty || instr.TextContent is null)
             return null;
@@ -243,7 +249,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
             Text = instr.TextContent,
             ForeColor = new MapsuiColor(255, 0, 255),
             BackColor = new Brush(new MapsuiColor(255, 255, 255, 180)),
-            Font = new Font { Size = 10 },
+            Font = new Font { Size = 10 * textScale },
             Offset = new Offset(0, -15),
         });
 

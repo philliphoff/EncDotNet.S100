@@ -44,10 +44,44 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public event Action<PaletteType>? PaletteChanged;
 
+    private double _symbolScale;
+    public double SymbolScale
+    {
+        get => _symbolScale;
+        set
+        {
+            if (SetProperty(ref _symbolScale, value))
+            {
+                _settings.SymbolScale = value;
+                _settings.Save();
+                DisplayScaleChanged?.Invoke();
+            }
+        }
+    }
+
+    private double _textScale;
+    public double TextScale
+    {
+        get => _textScale;
+        set
+        {
+            if (SetProperty(ref _textScale, value))
+            {
+                _settings.TextScale = value;
+                _settings.Save();
+                DisplayScaleChanged?.Invoke();
+            }
+        }
+    }
+
+    public event Action? DisplayScaleChanged;
+
     public SettingsViewModel(ViewerSettings settings)
     {
         _settings = settings;
         _accentColor = Color.TryParse(settings.AccentColor, out var c) ? c : Color.Parse("#007ACC");
         _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
+        _symbolScale = settings.SymbolScale;
+        _textScale = settings.TextScale;
     }
 }

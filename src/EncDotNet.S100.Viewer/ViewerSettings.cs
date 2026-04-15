@@ -34,6 +34,12 @@ internal sealed class ViewerSettings
     /// <summary>Last selected activity pane, or null if none was open.</summary>
     public string? LastSelectedActivity { get; set; }
 
+    /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
+    public double SymbolScale { get; set; } = 1.0;
+
+    /// <summary>Global text scale factor (1.0 = default). Scales all text labels.</summary>
+    public double TextScale { get; set; } = 1.0;
+
     public static ViewerSettings Load()
     {
         try

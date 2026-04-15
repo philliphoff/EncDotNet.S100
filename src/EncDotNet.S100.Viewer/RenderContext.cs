@@ -10,6 +10,12 @@ internal abstract record RenderContext
 {
     /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
     public PaletteType Palette { get; init; } = PaletteType.Day;
+
+    /// <summary>Global symbol scale factor (1.0 = default).</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>Global text scale factor (1.0 = default).</summary>
+    public double TextScale { get; init; } = 1.0;
 }
 
 internal sealed record S101RenderContext : RenderContext;

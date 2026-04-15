@@ -43,6 +43,16 @@ public sealed class MapsuiS101VectorRenderer
     /// </summary>
     public Func<string, AreaFill?>? AreaFillProvider { get; set; }
 
+    /// <summary>
+    /// Global scale factor applied to all point symbols (default 1.0).
+    /// </summary>
+    public double SymbolScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// Global scale factor applied to all text labels (default 1.0).
+    /// </summary>
+    public double TextScale { get; set; } = 1.0;
+
     // Caches processed SVG data URIs keyed by symbol name.
     private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -217,7 +227,7 @@ public sealed class MapsuiS101VectorRenderer
                 return CreatePointFeature(instruction, coords, resolveColor, renderer);
 
             case InstructionType.Text:
-                return CreateTextFeature(instruction, coords, resolveColor);
+                return CreateTextFeature(instruction, coords, resolveColor, renderer);
 
             default:
                 return null;
@@ -335,7 +345,7 @@ public sealed class MapsuiS101VectorRenderer
             {
                 Image = new Image { Source = svgSource, RasterizeSvg = true },
             };
-            style.SymbolScale = 0.6 * instruction.ScaleFactor;
+            style.SymbolScale = 0.6 * instruction.ScaleFactor * renderer.SymbolScale;
             if (instruction.Rotation.HasValue)
                 style.SymbolRotation = instruction.Rotation.Value;
             feature.Styles.Add(style);
@@ -346,7 +356,7 @@ public sealed class MapsuiS101VectorRenderer
             var symbolColor = ResolveSymbolColor(symbolRef, resolveColor);
             var style = new SymbolStyle
             {
-                SymbolScale = 0.15 * instruction.ScaleFactor,
+                SymbolScale = 0.15 * instruction.ScaleFactor * renderer.SymbolScale,
                 Fill = new Brush { Color = symbolColor },
                 Line = null,
             };
@@ -361,7 +371,8 @@ public sealed class MapsuiS101VectorRenderer
     private static IFeature? CreateTextFeature(
         ParsedDrawingInstruction instruction,
         IReadOnlyList<(double Lat, double Lon)> coords,
-        Func<string?, MapsuiColor> resolveColor)
+        Func<string?, MapsuiColor> resolveColor,
+        MapsuiS101VectorRenderer renderer)
     {
         if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
             return null;
@@ -385,7 +396,7 @@ public sealed class MapsuiS101VectorRenderer
         {
             Text = instruction.Text,
             ForeColor = textColor,
-            Font = new Font { Size = instruction.FontSize },
+            Font = new Font { Size = instruction.FontSize * renderer.TextScale },
             HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
             VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
             BackColor = null,

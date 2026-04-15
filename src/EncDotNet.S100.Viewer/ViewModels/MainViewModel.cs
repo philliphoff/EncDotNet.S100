@@ -61,6 +61,7 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand SelectPortrayalCataloguesCommand { get; }
     public ICommand SelectDatasetsCommand { get; }
     public ICommand SelectSettingsCommand { get; }
+    public ICommand TogglePrimarySideBarCommand { get; }
 
     private string? _statusText;
     public string? StatusText
@@ -97,6 +98,31 @@ internal sealed class MainViewModel : ViewModelBase
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
+
+        TogglePrimarySideBarCommand = new RelayCommand(() =>
+        {
+            if (_selectedActivity.HasValue)
+            {
+                // Close the pane (set field directly, then notify)
+                _selectedActivity = null;
+            }
+            else
+            {
+                // Re-open with Datasets as default, or the last persisted activity
+                _selectedActivity = (settings.LastSelectedActivity is { } last
+                    && Enum.TryParse<ActivityKind>(last, out var restored))
+                    ? restored
+                    : ActivityKind.Datasets;
+            }
+
+            OnPropertyChanged(nameof(SelectedActivity));
+            OnPropertyChanged(nameof(IsPaneVisible));
+            OnPropertyChanged(nameof(PaneTitle));
+            OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
+            OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
+            OnPropertyChanged(nameof(IsDatasetsSelected));
+            OnPropertyChanged(nameof(IsSettingsSelected));
+        });
 
         ToggleThemeCommand = new RelayCommand(() =>
         {

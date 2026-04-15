@@ -100,6 +100,33 @@ public partial class MainWindow : ShadUI.Window
         _viewModel = new MainViewModel(_settings, _catalogueManager);
         DataContext = _viewModel;
 
+        // Build native menu bar
+        var sideBarItem = new NativeMenuItem("Primary Side Bar")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsPaneVisible,
+        };
+        sideBarItem.Click += (_, _) => _viewModel.TogglePrimarySideBarCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
+                sideBarItem.IsChecked = _viewModel.IsPaneVisible;
+        };
+
+        var appearanceMenu = new NativeMenuItem("Appearance")
+        {
+            Menu = new NativeMenu { sideBarItem },
+        };
+
+        var viewMenu = new NativeMenuItem("View")
+        {
+            Menu = new NativeMenu { appearanceMenu },
+        };
+
+        var nativeMenu = new NativeMenu { viewMenu };
+        NativeMenu.SetMenu(this, nativeMenu);
+
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
@@ -117,6 +144,9 @@ public partial class MainWindow : ShadUI.Window
 
         // Re-render all loaded datasets when the color profile changes
         _viewModel.Settings.PaletteChanged += palette => _ = ReRenderAllDatasetsAsync();
+
+        // Re-render all loaded datasets when symbol or text scale changes
+        _viewModel.Settings.DisplayScaleChanged += () => _ = ReRenderAllDatasetsAsync();
 
         // If no pane is initially selected, start collapsed
         if (!_viewModel.IsPaneVisible)
@@ -232,6 +262,34 @@ public partial class MainWindow : ShadUI.Window
         Resources["AccentBrush"] = new SolidColorBrush(color);
     }
 
+    private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
+    {
+        var palette = _viewModel.Settings.SelectedPalette;
+        var symbolScale = _viewModel.Settings.SymbolScale;
+        var textScale = _viewModel.Settings.TextScale;
+
+        return processor switch
+        {
+            S104DatasetProcessor when timeStep is not null
+                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S104DatasetProcessor
+                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S111DatasetProcessor when timeStep is not null
+                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S111DatasetProcessor
+                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S101DatasetProcessor
+                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S102DatasetProcessor
+                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S124DatasetProcessor
+                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S129DatasetProcessor
+                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+        };
+    }
+
     private async Task LoadDatasetAsync(DatasetEntry entry)
     {
         var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
@@ -256,16 +314,7 @@ public partial class MainWindow : ShadUI.Window
             _processors[entry] = processor;
 
             var palette = _viewModel.Settings.SelectedPalette;
-            RenderContext initialContext = processor switch
-            {
-                S101DatasetProcessor => new S101RenderContext { Palette = palette },
-                S102DatasetProcessor => new S102RenderContext { Palette = palette },
-                S104DatasetProcessor => new S104RenderContext { Palette = palette },
-                S111DatasetProcessor => new S111RenderContext { Palette = palette },
-                S124DatasetProcessor => new S124RenderContext { Palette = palette },
-                S129DatasetProcessor => new S129RenderContext { Palette = palette },
-                _ => new S101RenderContext { Palette = palette },
-            };
+            var initialContext = CreateRenderContext(processor);
             var result = await Task.Run(() => processor.Render(initialContext));
 
             RemoveEntryLayers(entry);
@@ -332,12 +381,7 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var palette = _viewModel.Settings.SelectedPalette;
-            RenderContext context = proc switch
-            {
-                S104DatasetProcessor => new S104RenderContext(times[idx]) { Palette = palette },
-                _ => new S111RenderContext(times[idx]) { Palette = palette },
-            };
+            var context = CreateRenderContext(proc, times[idx]);
             var result = await Task.Run(() => proc.Render(context));
 
             RemoveEntryLayers(entry);
@@ -373,20 +417,8 @@ public partial class MainWindow : ShadUI.Window
                 var times = entry.AvailableTimes;
                 var idx = entry.SelectedTimeIndex;
 
-                RenderContext context = proc switch
-                {
-                    S104DatasetProcessor when times is not null && idx >= 0 && idx < times.Count
-                        => new S104RenderContext(times[idx]) { Palette = palette },
-                    S104DatasetProcessor => new S104RenderContext { Palette = palette },
-                    S111DatasetProcessor when times is not null && idx >= 0 && idx < times.Count
-                        => new S111RenderContext(times[idx]) { Palette = palette },
-                    S111DatasetProcessor => new S111RenderContext { Palette = palette },
-                    S101DatasetProcessor => new S101RenderContext { Palette = palette },
-                    S102DatasetProcessor => new S102RenderContext { Palette = palette },
-                    S124DatasetProcessor => new S124RenderContext { Palette = palette },
-                    S129DatasetProcessor => new S129RenderContext { Palette = palette },
-                    _ => new S101RenderContext { Palette = palette },
-                };
+                DateTime? timeStep = times is not null && idx >= 0 && idx < times.Count ? times[idx] : null;
+                var context = CreateRenderContext(proc, timeStep);
 
                 var result = await Task.Run(() => proc.Render(context));
 

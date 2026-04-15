@@ -17,12 +17,9 @@
                 <TextBlock Text="Accent Color"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <ColorView Color="{Binding AccentColor}"
-                           IsAlphaVisible="False"
-                           IsColorComponentsVisible="False"
-                           IsColorSpectrumSliderVisible="True"
-                           MaxWidth="300"
-                           HorizontalAlignment="Left" />
+                <ColorPicker Color="{Binding AccentColor}"
+                             IsAlphaVisible="False"
+                             HorizontalAlignment="Left" />
             </StackPanel>
 
             <!-- Color Profile -->
@@ -38,6 +35,56 @@
                           SelectedItem="{Binding SelectedPalette}"
                           MinWidth="140"
                           HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Symbol Scale -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Symbol Scale"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="Adjusts the size of all point symbols."
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <Slider Grid.Column="0"
+                            Minimum="0.5"
+                            Maximum="3.0"
+                            TickFrequency="0.1"
+                            IsSnapToTickEnabled="True"
+                            Value="{Binding SymbolScale}" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SymbolScale, StringFormat={}{0:F1}x}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"
+                               MinWidth="36" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Text Scale -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Text Scale"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="Adjusts the size of all text labels."
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <Slider Grid.Column="0"
+                            Minimum="0.5"
+                            Maximum="3.0"
+                            TickFrequency="0.1"
+                            IsSnapToTickEnabled="True"
+                            Value="{Binding TextScale}" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding TextScale, StringFormat={}{0:F1}x}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="8,0,0,0"
+                               MinWidth="36" />
+                </Grid>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>
