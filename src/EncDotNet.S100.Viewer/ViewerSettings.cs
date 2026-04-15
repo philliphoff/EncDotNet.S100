@@ -40,6 +40,8 @@ internal sealed class ViewerSettings
     /// <summary>Global text scale factor (1.0 = default). Scales all text labels.</summary>
     public double TextScale { get; set; } = 1.0;
 
+    public bool IsStatusBarVisible { get; set; } = true;
+
     public static ViewerSettings Load()
     {
         try

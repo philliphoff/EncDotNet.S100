@@ -114,9 +114,22 @@ public partial class MainWindow : ShadUI.Window
                 sideBarItem.IsChecked = _viewModel.IsPaneVisible;
         };
 
+        var statusBarItem = new NativeMenuItem("Status Bar")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsStatusBarVisible,
+        };
+        statusBarItem.Click += (_, _) => _viewModel.ToggleStatusBarCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsStatusBarVisible))
+                statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
+        };
+
         var appearanceMenu = new NativeMenuItem("Appearance")
         {
-            Menu = new NativeMenu { sideBarItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem },
         };
 
         var viewMenu = new NativeMenuItem("View")

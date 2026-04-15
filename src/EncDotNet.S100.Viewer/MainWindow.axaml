@@ -93,10 +93,12 @@
                 BorderBrush="{DynamicResource BorderColor}"
                 BorderThickness="0,1,0,0"
                 Padding="8,3"
-                IsVisible="{Binding IsStatusVisible}">
+                Height="26"
+                IsVisible="{Binding IsStatusBarVisible}">
             <TextBlock Text="{Binding StatusText}"
                        FontSize="12"
-                       Opacity="0.7" />
+                       Opacity="0.7"
+                       VerticalAlignment="Center" />
         </Border>
 
         <!-- Activity bar (narrow icon strip on far left) -->

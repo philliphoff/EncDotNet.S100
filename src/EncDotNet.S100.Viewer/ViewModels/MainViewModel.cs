@@ -67,14 +67,24 @@ internal sealed class MainViewModel : ViewModelBase
     public string? StatusText
     {
         get => _statusText;
+        set => SetProperty(ref _statusText, value);
+    }
+
+    private bool _isStatusBarVisible;
+    public bool IsStatusBarVisible
+    {
+        get => _isStatusBarVisible;
         set
         {
-            if (SetProperty(ref _statusText, value))
-                OnPropertyChanged(nameof(IsStatusVisible));
+            if (SetProperty(ref _isStatusBarVisible, value))
+            {
+                _settings.IsStatusBarVisible = value;
+                _settings.Save();
+            }
         }
     }
 
-    public bool IsStatusVisible => _statusText is not null;
+    public ICommand ToggleStatusBarCommand { get; }
 
     private bool _isDarkTheme = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
     public bool IsDarkTheme
@@ -123,6 +133,10 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsDatasetsSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
         });
+
+        _isStatusBarVisible = settings.IsStatusBarVisible;
+
+        ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
         ToggleThemeCommand = new RelayCommand(() =>
         {
