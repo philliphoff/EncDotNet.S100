@@ -21,6 +21,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly ILuaEngine _luaEngine;
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
+    private Dictionary<long, Pipelines.Vector.Feature>? _featureIndex;
 
     public string ProductSpec => "S-101";
 
@@ -161,6 +162,38 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
             Info = fallbackInfo,
             ProductSpec = "S-101",
         };
+    }
+
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var featureId))
+            return null;
+
+        _featureIndex ??= BuildFeatureIndex();
+
+        if (!_featureIndex.TryGetValue(featureId, out var feature))
+            return null;
+
+        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in feature.Attributes)
+            attrs[key] = value?.ToString();
+
+        return new FeatureInfo
+        {
+            FeatureRef = featureRef,
+            FeatureType = feature.FeatureType,
+            Attributes = attrs,
+        };
+    }
+
+    private Dictionary<long, Pipelines.Vector.Feature> BuildFeatureIndex()
+    {
+        var vectorSource = new S101VectorSource(_dataset);
+        var features = vectorSource.GetFeatures();
+        var index = new Dictionary<long, Pipelines.Vector.Feature>(features.Count);
+        foreach (var f in features)
+            index[f.Id] = f;
+        return index;
     }
 
     private static MRect ComputeVectorExtent(IReadOnlyList<DrawingInstruction> instructions)

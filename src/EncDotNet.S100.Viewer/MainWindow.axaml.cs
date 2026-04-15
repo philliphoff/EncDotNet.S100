@@ -216,6 +216,9 @@ public partial class MainWindow : ShadUI.Window
         // Enable double-tap to zoom in
         MapControl.DoubleTapped += OnMapDoubleTapped;
 
+        // Enable single-tap feature identify (pick report)
+        MapControl.MapTapped += OnMapTapped;
+
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
 
@@ -529,6 +532,49 @@ public partial class MainWindow : ShadUI.Window
         var center = new ScreenPosition(position.X, position.Y);
         navigator.ZoomTo(newResolution, center, 250);
         e.Handled = true;
+    }
+
+    private void OnMapTapped(object? sender, BaseEventArgs e)
+    {
+        if (e.GestureType != GestureType.SingleTap)
+            return;
+
+        var datasetLayers = _entryLayers.Values.SelectMany(l => l);
+        var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
+        if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
+            return;
+
+        if (hitFeature[MapsuiS101VectorRenderer.FeatureRefKey] is not string featureRef)
+            return;
+
+        // Find which dataset entry owns the hit layer
+        DatasetEntry? owningEntry = null;
+        foreach (var (entry, layers) in _entryLayers)
+        {
+            if (layers.Contains(hitLayer))
+            {
+                owningEntry = entry;
+                break;
+            }
+        }
+
+        if (owningEntry is null || !_processors.TryGetValue(owningEntry, out var processor))
+            return;
+
+        var info = processor.GetFeatureInfo(featureRef);
+        if (info is null)
+        {
+            _viewModel.StatusText = $"Feature {featureRef} (no details available)";
+            return;
+        }
+
+        var attrs = string.Join(", ", info.Attributes
+            .Where(a => a.Value is not null)
+            .Select(a => $"{a.Key}={a.Value}"));
+
+        _viewModel.StatusText = string.IsNullOrEmpty(attrs)
+            ? $"{info.FeatureType} [{info.FeatureRef}]"
+            : $"{info.FeatureType} [{info.FeatureRef}]: {attrs}";
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

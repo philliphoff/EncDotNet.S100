@@ -125,6 +125,27 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         };
     }
 
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        var feature = _dataset.Features.FirstOrDefault(f => string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
+        if (feature is null)
+            return null;
+
+        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in feature.Attributes)
+            attrs[key] = value;
+        foreach (var complex in feature.ComplexAttributes)
+            foreach (var (key, value) in complex.SubAttributes)
+                attrs[$"{complex.Code}.{key}"] = value;
+
+        return new FeatureInfo
+        {
+            FeatureRef = featureRef,
+            FeatureType = feature.FeatureType,
+            Attributes = attrs,
+        };
+    }
+
     private IFeature? RenderInstruction(
         S124DrawingInstruction instr,
         S124Feature feature,

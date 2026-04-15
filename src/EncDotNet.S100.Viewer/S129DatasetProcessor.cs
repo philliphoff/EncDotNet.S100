@@ -9,6 +9,7 @@ using System.Xml.Xsl;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -116,6 +117,27 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
         };
     }
 
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        var feature = _dataset.Features.FirstOrDefault(f => string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
+        if (feature is null)
+            return null;
+
+        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in feature.Attributes)
+            attrs[key] = value;
+        foreach (var complex in feature.ComplexAttributes)
+            foreach (var (key, value) in complex.SubAttributes)
+                attrs[$"{complex.Code}.{key}"] = value;
+
+        return new FeatureInfo
+        {
+            FeatureRef = featureRef,
+            FeatureType = feature.FeatureType,
+            Attributes = attrs,
+        };
+    }
+
     private IFeature? RenderInstruction(
         S129DrawingInstruction instr,
         S129Feature feature,
@@ -124,19 +146,21 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
         double symbolScale,
         double textScale)
     {
-        switch (instr.Type)
+        var mapFeature = instr.Type switch
         {
-            case S129InstructionType.Point:
-                return RenderPointInstruction(instr, feature, catalogue, palette, symbolScale);
-            case S129InstructionType.Line:
-                return RenderLineInstruction(instr, feature, palette);
-            case S129InstructionType.Area:
-                return RenderAreaInstruction(instr, feature, palette);
-            case S129InstructionType.Text:
-                return RenderTextInstruction(instr, feature, palette, textScale);
-            default:
-                return null;
+            S129InstructionType.Point => RenderPointInstruction(instr, feature, catalogue, palette, symbolScale),
+            S129InstructionType.Line => RenderLineInstruction(instr, feature, palette),
+            S129InstructionType.Area => RenderAreaInstruction(instr, feature, palette),
+            S129InstructionType.Text => RenderTextInstruction(instr, feature, palette, textScale),
+            _ => null,
+        };
+
+        if (mapFeature is not null)
+        {
+            mapFeature[MapsuiS101VectorRenderer.FeatureRefKey] = instr.FeatureReference;
         }
+
+        return mapFeature;
     }
 
     private static IFeature? RenderPointInstruction(

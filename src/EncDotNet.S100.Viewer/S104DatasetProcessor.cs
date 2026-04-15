@@ -106,4 +106,6 @@ internal sealed class S104DatasetProcessor : IDatasetProcessor
             ProductSpec = "S-104",
         };
     }
+
+    public FeatureInfo? GetFeatureInfo(string featureRef) => null;
 }
