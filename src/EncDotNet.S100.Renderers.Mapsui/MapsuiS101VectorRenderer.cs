@@ -346,11 +346,29 @@ public sealed class MapsuiS101VectorRenderer
         var svgSource = renderer.GetSymbolSource(symbolRef);
         if (svgSource is not null)
         {
+            var svgScale = 0.6 * instruction.ScaleFactor * renderer.SymbolScale;
+
+            // Add a nearly-invisible rectangle as a hit-test area so that
+            // tapping on a transparent portion of the SVG still picks this
+            // feature.  The rectangle is slightly larger than the SVG to
+            // provide a comfortable tap target.
+            var hitStyle = new SymbolStyle
+            {
+                SymbolType = SymbolType.Rectangle,
+                SymbolScale = svgScale * 1.2,
+                Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+                Line = null,
+                Outline = null,
+            };
+            if (instruction.Rotation.HasValue)
+                hitStyle.SymbolRotation = instruction.Rotation.Value;
+            feature.Styles.Add(hitStyle);
+
             var style = new ImageStyle
             {
                 Image = new Image { Source = svgSource, RasterizeSvg = true },
             };
-            style.SymbolScale = 0.6 * instruction.ScaleFactor * renderer.SymbolScale;
+            style.SymbolScale = svgScale;
             if (instruction.Rotation.HasValue)
                 style.SymbolRotation = instruction.Rotation.Value;
             feature.Styles.Add(style);

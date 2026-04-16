@@ -184,10 +184,24 @@ internal sealed class S129DatasetProcessor : IDatasetProcessor
             {
                 var symbol = catalogue.GetSymbol(instr.SymbolReference);
                 var processedSvg = SvgProcessor.Process(symbol.SvgContent, palette);
+                var svgScale = 0.6 * instr.SymbolScaleFactor * symbolScale;
+
+                // Nearly-invisible rectangle as hit-test area so tapping on
+                // a transparent portion of the SVG still picks this feature.
+                mapFeature.Styles.Add(new SymbolStyle
+                {
+                    SymbolType = SymbolType.Rectangle,
+                    SymbolScale = svgScale * 1.2,
+                    Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+                    Line = null,
+                    Outline = null,
+                    SymbolRotation = instr.SymbolRotation,
+                });
+
                 mapFeature.Styles.Add(new ImageStyle
                 {
                     Image = new Image { Source = "svg-content://" + processedSvg, RasterizeSvg = true },
-                    SymbolScale = 0.6 * instr.SymbolScaleFactor * symbolScale,
+                    SymbolScale = svgScale,
                     SymbolRotation = instr.SymbolRotation,
                 });
                 return mapFeature;
