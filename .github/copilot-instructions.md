@@ -102,3 +102,23 @@ docs/                                # DocFX documentation source; specs PDF liv
 ### Specifications content
 - Spec assets (FCs, PCs, Lua rules, symbols) belong under `src/EncDotNet.S100.Specifications/content/<SXXX>/` following the layout described in that project's README.
 - Never commit real ENC data files to the repository; use small synthetic test fixtures or skip tests that require live data.
+
+## Spec expertise routing
+
+This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.md` and matching **instructions files** under `.github/instructions/`. Engage them as follows:
+
+- **Before** designing or implementing any non-trivial feature that touches a spec's semantics (encoding, attribute names, feature catalogue rules, portrayal pipelines, etc.), load the matching skill(s):
+
+  | Signal in task or files touched | Load skill |
+  |---|---|
+  | S-100 framework, exchange sets, portrayal engine, Part 1–10 semantics | `s100-framework` |
+  | S-101, ENC, ISO 8211, vector features, Lua portrayal | `s101-enc` |
+  | S-102, bathymetry, depth, uncertainty grids | `s102-bathymetry` |
+  | S-104, water level, tide grids | `s104-water-level` |
+  | S-111, surface currents, current speed/direction | `s111-surface-currents` |
+  | S-124, navigational warnings, GML, XSLT portrayal | `s124-nav-warnings` |
+  | S-129, under keel clearance, UKC | `s129-ukc` |
+
+- For **cross-spec** features (e.g. a change to `CoveragePipeline` affecting S-102/S-104/S-111), load all affected spec skills and reconcile their guidance before writing code.
+- When delegating exploration via `search_subagent`, prefer one subagent per affected `src/EncDotNet.S100.Datasets.Sxxx/` project so each runs with its spec context isolated.
+- Cite the relevant spec section number(s) in PR descriptions and in XML doc comments for spec-derived constants, enums, attribute names, and group paths.
