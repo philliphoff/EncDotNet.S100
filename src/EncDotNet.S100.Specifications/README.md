@@ -25,6 +25,18 @@ content/
     ...
   S111/
     ...
+  S124/
+    ...
+  S129/
+    ...
+  S421/
+    fc/
+      FeatureCatalogue.xml
+    pc/
+      portrayal_catalogue.xml
+      ColorProfiles/
+      Rules/
+      Symbols/
 ```
 
 ## Usage

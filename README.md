@@ -24,6 +24,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S111** | Reader and coverage portrayal pipeline for S-111 Surface Current datasets. |
 | **EncDotNet.S100.Datasets.S124** | Reader and XSLT portrayal pipeline for S-124 Navigational Warnings datasets. |
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
+| **EncDotNet.S100.Datasets.S421** | Reader and XSLT portrayal pipeline for S-421 Route Plan datasets. |
 | **EncDotNet.S100.Scripting.MoonSharp** | Lua scripting engine implementation using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). |
 | **EncDotNet.S100.Renderers.Skia** | Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps. |
 | **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection. |
@@ -32,7 +33,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-124, and S-129 datasets and renders them on an interactive map. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-124, S-129, and S-421 datasets and renders them on an interactive map. |
 
 ## Screenshots
 

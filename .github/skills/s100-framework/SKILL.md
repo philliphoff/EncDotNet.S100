@@ -13,7 +13,7 @@ description: |
   EncDotNet.S100.Specifications, choosing an encoding for a new
   product, designing pipeline abstractions. DO NOT USE FOR: a single
   product spec (use s101-enc, s102-bathymetry, s104-water-level,
-  s111-surface-currents, s124-nav-warnings, or s129-ukc).
+  s111-surface-currents, s124-nav-warnings, s129-ukc, or s421-route-plans).
 ---
 
 # S-100 framework expert
