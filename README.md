@@ -75,6 +75,12 @@ GML-encoded navigational warnings rendered via XSLT portrayal, highlighting haza
 
 Under keel clearance data for safe navigation in shallow or restricted waterways.
 
+### S-421 — Route Plans
+
+![S-421 Route Plan](readme/S421Screenshot.png)
+
+GML-encoded route plans rendered via XSLT portrayal, showing waypoints, route legs, and action points along a planned voyage.
+
 ## Building
 
 ```sh
