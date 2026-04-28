@@ -31,6 +31,28 @@ Key types include:
 - **`S421FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S421Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
 - **`S421PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
+### Strongly-typed data model
+
+The types above expose the dataset as a feature bag — schema-agnostic, well
+suited for the portrayal pipeline, but inconvenient when client code wants to
+inspect routes, waypoints, or schedules directly. The
+`EncDotNet.S100.Datasets.S421.DataModel` namespace layers a strongly-typed
+projection on top:
+
+- **`S421RoutePlan.From(dataset, out diagnostics)`** — projects an
+  `S421Dataset` into a typed object graph rooted at `S421Route`, resolving
+  `xlink:href` cross-references and parsing primitive values
+  (`int`, `double`, `bool`, `DateTimeOffset`).
+- **`S421Route`** with `Info`, `Waypoints`, `Legs`, `ActionPoints`, `Schedules`.
+- **`S421Waypoint`** with `OutgoingLeg` graph navigation.
+- **`S421ActionPoint`**, **`S421Schedule`** + variants (Manual / Calculated /
+  Recommended), **`S421ScheduleElement`**.
+- Anything the typed model does not understand is preserved on each object's
+  `ExtraAttributes` dictionary, so extension and future-edition attributes
+  round-trip verbatim.
+- Projection failures (unresolved references, unparseable date/times) surface
+  as `S421ProjectionDiagnostic` entries rather than exceptions.
+
 ## Installation
 
 ```sh
@@ -53,4 +75,28 @@ foreach (var wp in dataset.Features.Where(f => f.FeatureType == "RouteWaypoint")
     var (lat, lon) = wp.Points[0];
     Console.WriteLine($"  Waypoint {wp.Attributes["routeWaypointID"]}: {lat}, {lon}");
 }
+```
+
+### Quick start (typed model)
+
+```csharp
+using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Datasets.S421.DataModel;
+
+var dataset = S421Dataset.Open("RTE-TEST-GMIN.s421.gml");
+var plan = S421RoutePlan.From(dataset, out var diagnostics);
+
+Console.WriteLine($"Route {plan.Route.RouteId} ed.{plan.Route.EditionNumber}");
+Console.WriteLine($"  Author: {plan.Route.Info?.Author}");
+Console.WriteLine($"  Vessel: {plan.Route.Info?.Vessel?.Name} (MMSI {plan.Route.Info?.Vessel?.Mmsi})");
+
+foreach (var wp in plan.Route.Waypoints)
+{
+    var leg = wp.OutgoingLeg;
+    Console.WriteLine(
+        $"  WP{wp.WaypointNumber} {wp.Position.Latitude:F4}, {wp.Position.Longitude:F4}"
+        + (leg is not null ? $" → leg {leg.Id}" : ""));
+}
+
+foreach (var d in diagnostics) Console.WriteLine(d);
 ```
