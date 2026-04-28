@@ -124,6 +124,15 @@ internal sealed class DatasetPipelineFactory
                         return "S-129";
                     }
 
+                    // S-421 datasets use the S421 namespace prefix and the
+                    // namespace URI "http://www.iho.int/S421/gml/cs0/1.0".
+                    if (reader.NamespaceURI.Contains("S-421", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S421", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S421", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-421";
+                    }
+
                     // Generic GML DataSet fallback — inspect declared namespaces
                     if (reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
                     {
@@ -141,6 +150,12 @@ internal sealed class DatasetPipelineFactory
                                     || reader.Value.Contains("S-124", StringComparison.OrdinalIgnoreCase))
                                 {
                                     return "S-124";
+                                }
+
+                                if (reader.Value.Contains("S421", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-421", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-421";
                                 }
                             } while (reader.MoveToNextAttribute());
                         }
@@ -177,6 +192,7 @@ internal sealed class DatasetPipelineFactory
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager),
+            "S-421" => new S421DatasetProcessor(path, _catalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }
