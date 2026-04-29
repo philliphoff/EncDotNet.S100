@@ -217,6 +217,9 @@ public partial class MainWindow : ShadUI.Window
         // Enable pinch-to-zoom on the map control via trackpad magnify gesture
         MapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
 
+        // Enable trackpad rotate gesture to rotate the map
+        MapControl.AddHandler(Gestures.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
+
         // Enable double-tap to zoom in
         MapControl.DoubleTapped += OnMapDoubleTapped;
 
@@ -539,6 +542,24 @@ public partial class MainWindow : ShadUI.Window
         var position = e.GetPosition(MapControl);
         var center = new ScreenPosition(position.X, position.Y);
         navigator.ZoomTo(newResolution, center);
+        e.Handled = true;
+    }
+
+    private void OnMapRotateGesture(object? sender, PointerDeltaEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        // macOS reports the rotation delta in degrees (counter-clockwise positive).
+        // Mapsui's viewport rotation is clockwise positive, so negate.
+        var deltaDegrees = -e.Delta.X;
+        if (deltaDegrees == 0)
+            return;
+
+        var newRotation = navigator.Viewport.Rotation + deltaDegrees;
+        // Normalize to [0, 360).
+        newRotation = ((newRotation % 360.0) + 360.0) % 360.0;
+        navigator.RotateTo(newRotation);
         e.Handled = true;
     }
 
