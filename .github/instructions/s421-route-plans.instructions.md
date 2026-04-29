@@ -1,5 +1,5 @@
 ---
-applyTo: "src/EncDotNet.S100.Datasets.S421/**,tests/EncDotNet.S100.Datasets.S421.Tests/**,src/EncDotNet.S100.Renderers.Mapsui/MapsuiS421VectorRenderer.cs,src/EncDotNet.S100.Viewer/S421DatasetProcessor.cs,src/EncDotNet.S100.Specifications/content/S421/**"
+applyTo: "src/EncDotNet.S100.Datasets.S421/**,tests/EncDotNet.S100.Datasets.S421.Tests/**,src/EncDotNet.S100.Renderers.Mapsui/MapsuiDisplayListRenderer.cs,src/EncDotNet.S100.Viewer/S421DatasetProcessor.cs,src/EncDotNet.S100.Specifications/content/S421/**"
 ---
 
 # S-421 editing rules
@@ -27,7 +27,7 @@ When modifying S-421 code or assets:
   `xsl:include`. The `Default.xsl` fallback handles unhandled
   primitives — keep it in the include list.
 - Rendered Mapsui features must be tagged with
-  `MapsuiS101VectorRenderer.FeatureRefKey` so the viewer's identify
+  `MapsuiDisplayListRenderer.FeatureRefKey` so the viewer's identify
   flow works.
 - Cite the S-421 (or IEC 63173-2) section number in XML doc comments
   when adding spec-derived constants or element names.

@@ -10,7 +10,7 @@ description: |
   USE FOR: S-421 datasets, route plans, voyage plans, waypoints, route
   legs, action points, GML parsing for S-421, XSLT portrayal of routes,
   vector pipeline changes affecting S-421, S-421 reader/source code,
-  S-421 tests, MapsuiS421VectorRenderer changes. DO NOT USE FOR: S-124
+  S-421 tests, vector pipeline changes affecting S-421. DO NOT USE FOR: S-124
   nav warnings (use s124-nav-warnings), S-129 UKC (use s129-ukc),
   S-101 ENC (use s101-enc), generic GML / framework concerns (use
   s100-framework).
@@ -21,7 +21,7 @@ description: |
 ## When engaged
 - Tasks touching `src/EncDotNet.S100.Datasets.S421/**` or
   `tests/EncDotNet.S100.Datasets.S421.Tests/**`
-- Changes to `MapsuiS421VectorRenderer` or the S-421 viewer processor
+- Changes to `MapsuiDisplayListRenderer` that affect S-421 output, or to the S-421 viewer processor (`S421DatasetProcessor`)
 - GML / XSLT portrayal changes for route plans
 - Bundled S-421 portrayal catalogue assets under
   `src/EncDotNet.S100.Specifications/content/S421/**`
@@ -73,10 +73,12 @@ description: |
    top-level template includes per-feature sub-templates (Waypoint,
    WaypointLeg, ActionPoint) plus `Default.xsl` for unhandled
    primitives. Do not bypass `Default.xsl`.
-7. The renderer (`MapsuiS421VectorRenderer`) consumes a Part 9 display
-   list (XML) keyed by `featureReference` matching `gml:id`. Always
-   tag rendered Mapsui features with
-   `MapsuiS101VectorRenderer.FeatureRefKey` so picking works.
+7. The product-agnostic renderer (`MapsuiDisplayListRenderer` in
+   `EncDotNet.S100.Renderers.Mapsui`) consumes the unified
+   `DrawingInstruction` list emitted by `Part9DisplayListReader` and
+   keyed by `featureReference` matching `gml:id`. Always tag rendered
+   Mapsui features with the renderer's feature-reference key so picking
+   works. There is no S-421-specific renderer subclass.
 8. Public API changes have xunit tests under
    `tests/EncDotNet.S100.Datasets.S421.Tests/**`. Use the IEC sample
    fixtures under `tests/datasets/S421/` (GMIN, GBASIC, GFULL).
