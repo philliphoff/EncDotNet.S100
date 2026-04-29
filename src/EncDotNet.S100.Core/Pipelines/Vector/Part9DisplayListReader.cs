@@ -221,15 +221,27 @@ public static class Part9DisplayListReader
 
         // <bodySize>, <foreground> and <background> are the names actually
         // emitted by the S-100 Part 9 / S-421 XSL (see e.g. RouteActionPoint.xsl).
+        // Both colour elements may carry an optional transparency attribute
+        // in [0.0, 1.0] where 0 = opaque and 1 = fully transparent.
         var bodySize = element.Descendants("bodySize").FirstOrDefault();
         if (bodySize is not null)
         {
             fontSize = ParseDouble(bodySize.Value, fontSize);
         }
+        double? fontTransparency = null;
         var foreground = element.Descendants("foreground").FirstOrDefault();
         if (foreground is not null && !string.IsNullOrWhiteSpace(foreground.Value))
         {
             fontColor = foreground.Value.Trim();
+            fontTransparency = ParseNullableDouble(foreground.Attribute("transparency")?.Value);
+        }
+        string? backgroundColor = null;
+        double? backgroundTransparency = null;
+        var background = element.Descendants("background").FirstOrDefault();
+        if (background is not null && !string.IsNullOrWhiteSpace(background.Value))
+        {
+            backgroundColor = background.Value.Trim();
+            backgroundTransparency = ParseNullableDouble(background.Attribute("transparency")?.Value);
         }
 
         // Placement: S-100 Part 9 §11.4 distinguishes <textPoint> (anchored at
@@ -298,6 +310,9 @@ public static class Part9DisplayListReader
             Text = text,
             FontSize = fontSize,
             FontColor = fontColor,
+            FontTransparency = fontTransparency,
+            BackgroundColor = backgroundColor,
+            BackgroundTransparency = backgroundTransparency,
             Rotation = rotation,
             HorizontalAlignment = hAlign,
             VerticalAlignment = vAlign,

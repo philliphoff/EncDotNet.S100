@@ -52,6 +52,36 @@ public class Part9DisplayListReaderTests
     }
 
     [Fact]
+    public void ReadText_ForegroundAndBackgroundTransparency_AreCaptured()
+    {
+        var doc = XDocument.Parse(
+            """
+            <displayList>
+              <textInstruction>
+                <featureReference>F1B</featureReference>
+                <viewingGroup>52270</viewingGroup>
+                <displayPlane>OverRadar</displayPlane>
+                <drawingPriority>24</drawingPriority>
+                <textPoint>
+                  <element>
+                    <text>UKCM</text>
+                    <foreground transparency="0.25">AA44A8</foreground>
+                    <background transparency="0.5">FFFFFF</background>
+                  </element>
+                </textPoint>
+              </textInstruction>
+            </displayList>
+            """);
+
+        var text = Assert.IsType<TextInstruction>(Assert.Single(Part9DisplayListReader.Read(doc)));
+
+        Assert.Equal("AA44A8", text.FontColor);
+        Assert.Equal(0.25, text.FontTransparency);
+        Assert.Equal("FFFFFF", text.BackgroundColor);
+        Assert.Equal(0.5, text.BackgroundTransparency);
+    }
+
+    [Fact]
     public void ReadText_TextLineWithRelativeOffsets_DerivesMidpointFraction()
     {
         var doc = XDocument.Parse(

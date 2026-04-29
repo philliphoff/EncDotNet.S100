@@ -464,12 +464,25 @@ public sealed class MapsuiDisplayListRenderer
 
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-        var textColor = resolveColor(instruction.FontColor);
+        // Apply the optional S-100 §11.4 transparency attribute (0 = opaque,
+        // 1 = fully transparent) on top of the resolved palette colour.
+        var textColor = ApplyTransparency(resolveColor(instruction.FontColor), instruction.FontTransparency);
 
         // Convert mm offsets (S-100 §11.4 nominal display surface) to screen
         // pixels using the standard 1 px = 0.32 mm convention.
         var offsetXpx = (instruction.OffsetXmm ?? 0) / S100PixelSizeMm;
         var offsetYpx = (instruction.OffsetYmm ?? 0) / S100PixelSizeMm;
+
+        Brush? backBrush = null;
+        if (!string.IsNullOrEmpty(instruction.BackgroundColor))
+        {
+            var bgBase = resolveColor(instruction.BackgroundColor);
+            // Default background transparency: when the spec leaves it
+            // unspecified, fall back to the same translucency convention as
+            // legacy renderers (~50%).
+            var bgColor = ApplyTransparency(bgBase, instruction.BackgroundTransparency ?? 0.5);
+            backBrush = new Brush { Color = bgColor };
+        }
 
         var style = new LabelStyle
         {
@@ -479,12 +492,27 @@ public sealed class MapsuiDisplayListRenderer
             HorizontalAlignment = MapHAlign(instruction.HorizontalAlignment),
             VerticalAlignment = MapVAlign(instruction.VerticalAlignment),
             Offset = new Offset(offsetXpx, offsetYpx),
-            BackColor = null,
+            BackColor = backBrush,
         };
 
         var feature = new PointFeature(mx, my);
         feature.Styles.Add(style);
         return feature;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="color"/> with its alpha attenuated by
+    /// <paramref name="transparency"/> (0 = unchanged opaque, 1 = fully
+    /// transparent).  When <paramref name="transparency"/> is null the input
+    /// colour is returned unchanged.
+    /// </summary>
+    private static MapsuiColor ApplyTransparency(MapsuiColor color, double? transparency)
+    {
+        if (!transparency.HasValue)
+            return color;
+        var t = Math.Clamp(transparency.Value, 0.0, 1.0);
+        var a = (int)Math.Round(color.A * (1.0 - t));
+        return new MapsuiColor(color.R, color.G, color.B, a);
     }
 
     private static LabelStyle.HorizontalAlignmentEnum MapHAlign(TextHorizontalAlignment a) => a switch
@@ -709,21 +737,56 @@ public sealed class MapsuiDisplayListRenderer
             if (palette is not null && palette.TryResolve(token, out var hex))
                 return HexToColor(hex);
 
+            // S-100 Part 9 instructions may also carry inline hex literals
+            // (e.g. the S-421 RouteActionPoint XSL emits <foreground>AA44A8</foreground>).
+            // Treat any 6- or 8-digit hex string (with or without a leading '#')
+            // as a literal colour before giving up.
+            if (TryParseHexLiteral(token, out var literal))
+                return literal;
+
             return MapsuiColor.Black;
         };
     }
 
     private static MapsuiColor HexToColor(string hex)
     {
-        if (hex.Length == 7 && hex[0] == '#' &&
-            int.TryParse(hex.AsSpan(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
-            int.TryParse(hex.AsSpan(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
-            int.TryParse(hex.AsSpan(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            return new MapsuiColor(r, g, b);
-        }
+        if (TryParseHexLiteral(hex, out var color))
+            return color;
 
         return MapsuiColor.Black;
+    }
+
+    /// <summary>
+    /// Parses a literal hex colour in the formats <c>RRGGBB</c>,
+    /// <c>#RRGGBB</c>, <c>RRGGBBAA</c>, or <c>#RRGGBBAA</c>.  Returns false
+    /// for anything else so the caller can fall back to a palette token
+    /// lookup.
+    /// </summary>
+    private static bool TryParseHexLiteral(string value, out MapsuiColor color)
+    {
+        color = MapsuiColor.Black;
+        if (string.IsNullOrEmpty(value)) return false;
+
+        var span = value.AsSpan();
+        if (span[0] == '#') span = span[1..];
+        if (span.Length != 6 && span.Length != 8) return false;
+
+        if (!int.TryParse(span[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
+            !int.TryParse(span.Slice(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
+            !int.TryParse(span.Slice(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
+            return false;
+        }
+
+        int a = 255;
+        if (span.Length == 8 &&
+            !int.TryParse(span.Slice(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out a))
+        {
+            return false;
+        }
+
+        color = new MapsuiColor(r, g, b, a);
+        return true;
     }
 
     private static MapsuiColor ResolveSymbolColor(string? symbolRef, Func<string?, MapsuiColor> resolveColor)

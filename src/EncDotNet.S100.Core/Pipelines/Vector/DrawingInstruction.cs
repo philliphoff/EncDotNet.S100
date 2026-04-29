@@ -147,6 +147,27 @@ public sealed class TextInstruction : DrawingInstruction
     /// <summary>S-100 colour token (e.g. <c>CHBLK</c>) for the text foreground.</summary>
     public string FontColor { get; init; } = "CHBLK";
 
+    /// <summary>
+    /// Optional opacity for the foreground colour, in the range 0.0 (fully
+    /// opaque) to 1.0 (fully transparent), matching the S-100 Part 9
+    /// <c>transparency</c> attribute on <c>&lt;foreground&gt;</c>.
+    /// </summary>
+    public double? FontTransparency { get; init; }
+
+    /// <summary>
+    /// Optional S-100 colour token for the text background (S-100 Part 9
+    /// §11.4 <c>&lt;background&gt;</c>).  Renderers typically draw this as a
+    /// translucent box or halo behind the glyphs.
+    /// </summary>
+    public string? BackgroundColor { get; init; }
+
+    /// <summary>
+    /// Optional opacity for the background colour, in the range 0.0 (fully
+    /// opaque) to 1.0 (fully transparent), matching the S-100 Part 9
+    /// <c>transparency</c> attribute on <c>&lt;background&gt;</c>.
+    /// </summary>
+    public double? BackgroundTransparency { get; init; }
+
     /// <summary>Text rotation in degrees (clockwise from north). Null means upright.</summary>
     public double? Rotation { get; init; }
 
