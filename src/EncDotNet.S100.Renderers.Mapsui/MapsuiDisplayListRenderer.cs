@@ -1,5 +1,4 @@
 using System.Globalization;
-using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
@@ -15,11 +14,18 @@ using MapsuiColor = Mapsui.Styles.Color;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// Renders S-101 parsed drawing instructions into a Mapsui <see cref="ILayer"/>
-/// by resolving feature geometry from the dataset, projecting to EPSG:3857,
-/// and applying styles derived from the instruction properties.
+/// Renders an S-100 Part 9 drawing-instruction display list into a Mapsui
+/// <see cref="ILayer"/> by resolving feature geometry from an
+/// <see cref="IFeatureGeometryProvider"/>, projecting to EPSG:3857, and
+/// applying styles derived from the instruction properties.
 /// </summary>
-public sealed class MapsuiS101VectorRenderer
+/// <remarks>
+/// This renderer is product-agnostic: it consumes the unified
+/// <see cref="DrawingInstruction"/> model (produced by S-101 Lua, S-124/S-129/S-421
+/// XSLT, or other portrayal pipelines) and a geometry provider that knows how to
+/// look up feature geometry for the current product.
+/// </remarks>
+public sealed class MapsuiDisplayListRenderer
 {
     /// <summary>
     /// Key used to store the originating S-100 feature reference on Mapsui features.
@@ -67,27 +73,27 @@ public sealed class MapsuiS101VectorRenderer
     private readonly Dictionary<string, byte[]?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Renders a set of S-101 drawing instructions for the given dataset
-    /// into a Mapsui layer.
+    /// Renders the supplied display list against the geometry provided by
+    /// <paramref name="geometryProvider"/>, returning a Mapsui memory layer.
     /// </summary>
+    /// <remarks>
+    /// Drawing instructions whose feature reference cannot be resolved by
+    /// the provider are silently skipped; this lets callers pre-process the
+    /// list (e.g. merging S-101 SAFCON labels) without worrying about
+    /// synthesised feature references.
+    /// </remarks>
     public ILayer Render(
         IReadOnlyList<DrawingInstruction> instructions,
-        S101Dataset dataset)
+        IFeatureGeometryProvider geometryProvider)
     {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+
         // Ensure the custom pattern fill renderer is registered before Mapsui
         // encounters any AnchoredPatternFillStyle instances.
         AnchoredPatternFillRenderer.Register();
 
-        // 1. Resolve all feature geometries from the dataset
-        var vectorSource = new S101VectorSource(dataset);
-        var features = vectorSource.GetFeatures();
-        var featureGeometry = new Dictionary<long, (GeometryType Type, IReadOnlyList<(double Lat, double Lon)> Coords)>();
-        foreach (var f in features)
-        {
-            featureGeometry[f.Id] = (f.GeometryType, f.Coordinates);
-        }
-
-        // 2. Sort instructions by rendering order: areas first, then lines, then points/text
+        // 1. Sort instructions by rendering order: areas first, then lines, then points/text
         //    Within same type, sort by DrawingPriority
         var sorted = instructions
             .OrderBy(i => i.Plane == Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
@@ -102,13 +108,10 @@ public sealed class MapsuiS101VectorRenderer
             .ThenBy(i => i.DrawingPriority)
             .ToList();
 
-        // 3. Build color resolver from palette
+        // 2. Build color resolver from palette
         var resolveColor = BuildColorResolver(Palette);
 
-        // 3a. Merge consecutive SAFCON point instructions into text labels
-        var merged = MergeSafconLabels(sorted);
-
-        // 4. Convert each instruction to a Mapsui feature.
+        // 3. Convert each instruction to a Mapsui feature.
         //    Pattern fills are collected and merged per unique pattern so that
         //    overlapping polygons with the same globally-anchored pattern are
         //    drawn exactly once, preventing alpha accumulation artifacts.
@@ -121,7 +124,7 @@ public sealed class MapsuiS101VectorRenderer
         // Track which features produce pattern fills, so we can identify
         // "non-patterned" color fill areas (like land) that should occlude patterns.
         var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var instruction in merged)
+        foreach (var instruction in sorted)
         {
             if (instruction is AreaInstruction { AreaFillReference: not null } pa)
                 featuresWithPatterns.Add(pa.FeatureReference);
@@ -132,15 +135,10 @@ public sealed class MapsuiS101VectorRenderer
         // patterns from other features should not be visible.
         var nonPatternedColorFillPolygons = new List<Polygon>();
 
-        foreach (var instruction in merged)
+        foreach (var instruction in sorted)
         {
-            if (!long.TryParse(instruction.FeatureReference, NumberStyles.Integer, CultureInfo.InvariantCulture, out var featureId))
-                continue;
-
-            if (!featureGeometry.TryGetValue(featureId, out var geom))
-                continue;
-
-            if (geom.Coords.Count == 0)
+            var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
+            if (geom is null || geom.Coordinates.Count == 0)
                 continue;
 
             // Defer pattern fills for merging
@@ -149,7 +147,7 @@ public sealed class MapsuiS101VectorRenderer
                 var tilePng = GetPatternTilePng(patternRef);
                 if (tilePng is not null)
                 {
-                    var polygon = CreatePolygonFromCoords(geom.Coords);
+                    var polygon = CreatePolygonFromGeometry(geom);
                     if (polygon is not null)
                     {
                         // Find existing entry with the same tile and priority, or create a new one
@@ -172,12 +170,12 @@ public sealed class MapsuiS101VectorRenderer
             if (instruction is AreaInstruction { FillColor: not null } colorFill
                 && !featuresWithPatterns.Contains(colorFill.FeatureReference))
             {
-                var polygon = CreatePolygonFromCoords(geom.Coords);
+                var polygon = CreatePolygonFromGeometry(geom);
                 if (polygon is not null)
                     nonPatternedColorFillPolygons.Add(polygon);
             }
 
-            var mapFeature = CreateMapFeature(instruction, geom.Type, geom.Coords, resolveColor, this);
+            var mapFeature = CreateMapFeature(instruction, geom, resolveColor, this);
             if (mapFeature is not null)
             {
                 mapFeatures.Add(mapFeature);
@@ -217,17 +215,16 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreateMapFeature(
         DrawingInstruction instruction,
-        GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords,
+        FeatureGeometry geometry,
         Func<string?, MapsuiColor> resolveColor,
-        MapsuiS101VectorRenderer renderer)
+        MapsuiDisplayListRenderer renderer)
     {
         var feature = instruction switch
         {
-            AreaInstruction area => CreateAreaFeature(area, geomType, coords, resolveColor, renderer),
-            LineInstruction line => CreateLineFeature(line, geomType, coords, resolveColor),
-            PointInstruction point => CreatePointFeature(point, coords, resolveColor, renderer),
-            TextInstruction text => CreateTextFeature(text, coords, resolveColor, renderer),
+            AreaInstruction area => CreateAreaFeature(area, geometry, resolveColor, renderer),
+            LineInstruction line => CreateLineFeature(line, geometry, resolveColor),
+            PointInstruction point => CreatePointFeature(point, geometry, resolveColor, renderer),
+            TextInstruction text => CreateTextFeature(text, geometry, resolveColor, renderer),
             _ => null,
         };
 
@@ -241,12 +238,11 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreateAreaFeature(
         AreaInstruction instruction,
-        GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords,
+        FeatureGeometry geometry,
         Func<string?, MapsuiColor> resolveColor,
-        MapsuiS101VectorRenderer renderer)
+        MapsuiDisplayListRenderer renderer)
     {
-        var polygon = CreatePolygonFromCoords(coords);
+        var polygon = CreatePolygonFromGeometry(geometry);
         if (polygon is null)
             return null;
 
@@ -290,10 +286,10 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreateLineFeature(
         LineInstruction instruction,
-        GeometryType geomType,
-        IReadOnlyList<(double Lat, double Lon)> coords,
+        FeatureGeometry geometry,
         Func<string?, MapsuiColor> resolveColor)
     {
+        var coords = geometry.Coordinates;
         if (coords.Count < 2)
             return null;
 
@@ -326,10 +322,11 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreatePointFeature(
         PointInstruction instruction,
-        IReadOnlyList<(double Lat, double Lon)> coords,
+        FeatureGeometry geometry,
         Func<string?, MapsuiColor> resolveColor,
-        MapsuiS101VectorRenderer renderer)
+        MapsuiDisplayListRenderer renderer)
     {
+        var coords = geometry.Coordinates;
         if (coords.Count == 0)
             return null;
 
@@ -391,10 +388,11 @@ public sealed class MapsuiS101VectorRenderer
 
     private static IFeature? CreateTextFeature(
         TextInstruction instruction,
-        IReadOnlyList<(double Lat, double Lon)> coords,
+        FeatureGeometry geometry,
         Func<string?, MapsuiColor> resolveColor,
-        MapsuiS101VectorRenderer renderer)
+        MapsuiDisplayListRenderer renderer)
     {
+        var coords = geometry.Coordinates;
         if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
             return null;
 
@@ -478,7 +476,29 @@ public sealed class MapsuiS101VectorRenderer
         return coords[^1];
     }
 
-    private static Polygon? CreatePolygonFromCoords(IReadOnlyList<(double Lat, double Lon)> coords)
+    private static Polygon? CreatePolygonFromGeometry(FeatureGeometry geometry)
+    {
+        var shell = BuildLinearRing(geometry.Coordinates);
+        if (shell is null)
+            return null;
+
+        if (geometry.InteriorRings.Count == 0)
+            return new Polygon(shell);
+
+        var holes = new List<LinearRing>(geometry.InteriorRings.Count);
+        foreach (var hole in geometry.InteriorRings)
+        {
+            var ring = BuildLinearRing(hole);
+            if (ring is not null)
+                holes.Add(ring);
+        }
+
+        return holes.Count == 0
+            ? new Polygon(shell)
+            : new Polygon(shell, holes.ToArray());
+    }
+
+    private static LinearRing? BuildLinearRing(IReadOnlyList<(double Latitude, double Longitude)> coords)
     {
         if (coords.Count < 3)
             return null;
@@ -486,18 +506,16 @@ public sealed class MapsuiS101VectorRenderer
         var projected = ProjectCoordinates(coords);
 
         // Close the ring if not already closed
-        var ringCoords = new List<Coordinate>(projected);
-        if (ringCoords.Count > 0 && !ringCoords[0].Equals2D(ringCoords[^1]))
-            ringCoords.Add(new Coordinate(ringCoords[0].X, ringCoords[0].Y));
+        if (projected.Count > 0 && !projected[0].Equals2D(projected[^1]))
+            projected.Add(new Coordinate(projected[0].X, projected[0].Y));
 
-        if (ringCoords.Count < 4)
+        if (projected.Count < 4)
             return null;
 
-        var ring = new LinearRing(ringCoords.ToArray());
-        return new Polygon(ring);
+        return new LinearRing(projected.ToArray());
     }
 
-    private static List<Coordinate> ProjectCoordinates(IReadOnlyList<(double Lat, double Lon)> coords)
+    private static List<Coordinate> ProjectCoordinates(IReadOnlyList<(double Latitude, double Longitude)> coords)
     {
         var result = new List<Coordinate>(coords.Count);
         foreach (var (lat, lon) in coords)
@@ -577,105 +595,6 @@ public sealed class MapsuiS101VectorRenderer
 
         _patternTileCache[fillName] = result;
         return result;
-    }
-
-    // ── SAFCON contour label merging ───────────────────────────────────
-    //
-    // The S-101 Lua portrayal emits depth contour labels as sequences of
-    // PointInstruction:SAFCONxy symbols, where each symbol represents a
-    // single positioned digit glyph in an SVG composition. Since we don't
-    // yet render SVG symbols, we decode the SAFCON sequence back into a
-    // depth text string and emit a single text instruction instead.
-    //
-    // SAFCON encoding (from SAFCON01.lua):
-    //   Row 0: single/middle digit    Row 5: fractional (depth 10–30)
-    //   Row 1: units of 2-digit       Row 6: fractional (depth <10)
-    //   Row 2: tens of 2-digit        Row 7: last digit of 4/5-digit
-    //   Row 3: first of 4-digit       Row 8: first of 3-digit
-    //   Row 4: first of 5-digit       Row 9: third of 3-digit
-
-    private static List<DrawingInstruction> MergeSafconLabels(List<DrawingInstruction> instructions)
-    {
-        var result = new List<DrawingInstruction>(instructions.Count);
-
-        // Group consecutive SAFCON points by feature
-        var i = 0;
-        while (i < instructions.Count)
-        {
-            var instr = instructions[i];
-
-            if (instr is PointInstruction p && IsSafconSymbol(p.SymbolReference))
-            {
-                // Collect all consecutive SAFCON instructions for this feature
-                var safcons = new List<PointInstruction> { p };
-                var j = i + 1;
-                while (j < instructions.Count &&
-                       instructions[j] is PointInstruction pj &&
-                       pj.FeatureReference == p.FeatureReference &&
-                       IsSafconSymbol(pj.SymbolReference))
-                {
-                    safcons.Add(pj);
-                    j++;
-                }
-
-                // Decode the SAFCON sequence into a depth string
-                var depthText = DecodeSafconSequence(safcons);
-
-                // Emit a synthetic text instruction preserving line placement
-                result.Add(new TextInstruction
-                {
-                    FeatureReference = p.FeatureReference,
-                    Text = depthText,
-                    ViewingGroup = p.ViewingGroup,
-                    DrawingPriority = p.DrawingPriority,
-                    Plane = p.Plane,
-                    FontSize = 10,
-                    FontColor = "DEPCN",
-                    LinePlacementPosition = p.LinePlacementPosition,
-                    ScaleMinimum = p.ScaleMinimum,
-                    ScaleMaximum = p.ScaleMaximum,
-                });
-
-                i = j;
-            }
-            else
-            {
-                result.Add(instr);
-                i++;
-            }
-        }
-
-        return result;
-    }
-
-    private static bool IsSafconSymbol(string? symbolRef)
-    {
-        return symbolRef is not null &&
-               symbolRef.StartsWith("SAFCON", StringComparison.Ordinal) &&
-               symbolRef.Length == 8;
-    }
-
-    private static string DecodeSafconSequence(List<PointInstruction> safcons)
-    {
-        var sb = new System.Text.StringBuilder();
-
-        foreach (var instr in safcons)
-        {
-            var name = instr.SymbolReference!;
-            // SAFCONxy — x is row (position type), y is digit
-            var row = name[6] - '0';
-            var digit = name[7];
-
-            if (row == 5 || row == 6)
-            {
-                // Fractional digit — prepend decimal point
-                sb.Append('.');
-            }
-
-            sb.Append(digit);
-        }
-
-        return sb.ToString();
     }
 
     // ── S-100 Color resolution ─────────────────────────────────────────

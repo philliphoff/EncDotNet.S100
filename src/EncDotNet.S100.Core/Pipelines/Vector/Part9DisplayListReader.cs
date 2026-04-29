@@ -1,0 +1,237 @@
+using System.Globalization;
+using System.Xml.Linq;
+
+namespace EncDotNet.S100.Pipelines.Vector;
+
+/// <summary>
+/// Reads an S-100 Part 9 drawing-instruction display list from XML produced
+/// by an XSLT portrayal rule (used by S-124, S-129, S-421, etc.) and returns
+/// the unified <see cref="DrawingInstruction"/> model.
+/// </summary>
+/// <remarks>
+/// The expected XML shape is the lower-camel-case form emitted by S-100
+/// Part 9 portrayal stylesheets:
+/// <code>
+/// &lt;displayList&gt;
+///   &lt;pointInstruction&gt;
+///     &lt;featureReference&gt;...&lt;/featureReference&gt;
+///     &lt;viewingGroup&gt;...&lt;/viewingGroup&gt;
+///     &lt;drawingPriority&gt;...&lt;/drawingPriority&gt;
+///     &lt;symbol reference="..."&gt;
+///       &lt;scaleFactor&gt;1&lt;/scaleFactor&gt;
+///       &lt;rotation&gt;0&lt;/rotation&gt;
+///     &lt;/symbol&gt;
+///   &lt;/pointInstruction&gt;
+///   &lt;lineInstruction&gt; ... &lt;/lineInstruction&gt;
+///   &lt;areaInstruction&gt; ... &lt;/areaInstruction&gt;
+///   &lt;textInstruction&gt; ... &lt;/textInstruction&gt;
+/// &lt;/displayList&gt;
+/// </code>
+/// </remarks>
+public static class Part9DisplayListReader
+{
+    /// <summary>
+    /// Parses the given XSLT-output document into drawing instructions.
+    /// Unknown element names are skipped silently so the reader is tolerant
+    /// of stylesheets that emit additional metadata.
+    /// </summary>
+    public static IReadOnlyList<DrawingInstruction> Read(XDocument doc)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        var instructions = new List<DrawingInstruction>();
+        var root = doc.Root;
+        if (root is null) return instructions;
+
+        foreach (var element in root.Elements())
+        {
+            var instruction = ReadInstruction(element);
+            if (instruction is not null)
+                instructions.Add(instruction);
+        }
+
+        return instructions;
+    }
+
+    private static DrawingInstruction? ReadInstruction(XElement element)
+    {
+        var featureReference = element.Element("featureReference")?.Value
+            ?? element.Attribute("featureReference")?.Value
+            ?? "";
+
+        var viewingGroup = ParseInt(element.Element("viewingGroup")?.Value);
+        var drawingPriority = ParseInt(element.Element("drawingPriority")?.Value);
+        var plane = ParsePlane(element.Element("displayPlane")?.Value);
+        var scaleMin = ParseNullableInt(element.Element("scaleMinimum")?.Value);
+        var scaleMax = ParseNullableInt(element.Element("scaleMaximum")?.Value);
+
+        switch (element.Name.LocalName)
+        {
+            case "pointInstruction":
+                return ReadPoint(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+            case "lineInstruction":
+                return ReadLine(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+            case "areaInstruction":
+                return ReadArea(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+            case "textInstruction":
+                return ReadText(element, featureReference, viewingGroup, drawingPriority, plane, scaleMin, scaleMax);
+            default:
+                return null;
+        }
+    }
+
+    private static PointInstruction? ReadPoint(
+        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        DisplayPlane plane, int? scaleMin, int? scaleMax)
+    {
+        var symbolEl = element.Element("symbol");
+        if (symbolEl is null) return null;
+
+        var symbolRef = symbolEl.Attribute("reference")?.Value
+            ?? symbolEl.Element("reference")?.Value;
+        if (symbolRef is null) return null;
+
+        var scaleFactor = ParseDouble(symbolEl.Element("scaleFactor")?.Value, 1.0);
+        var rotation = ParseNullableDouble(symbolEl.Element("rotation")?.Value);
+        var offsetX = ParseDouble(symbolEl.Element("offset")?.Element("x")?.Value);
+        var offsetY = ParseDouble(symbolEl.Element("offset")?.Element("y")?.Value);
+
+        return new PointInstruction
+        {
+            FeatureReference = featureReference,
+            ViewingGroup = viewingGroup,
+            DrawingPriority = drawingPriority,
+            Plane = plane,
+            ScaleMinimum = scaleMin,
+            ScaleMaximum = scaleMax,
+            SymbolReference = symbolRef,
+            SymbolScale = scaleFactor,
+            Rotation = rotation,
+            LocalOffsetX = offsetX,
+            LocalOffsetY = offsetY,
+        };
+    }
+
+    private static LineInstruction? ReadLine(
+        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        DisplayPlane plane, int? scaleMin, int? scaleMax)
+    {
+        string? lineStyleRef = null;
+        string? color = null;
+        double width = 0;
+
+        var refEl = element.Element("lineStyleReference");
+        if (refEl is not null)
+            lineStyleRef = refEl.Attribute("reference")?.Value ?? refEl.Value;
+
+        var inlineStyle = element.Element("lineStyle");
+        if (inlineStyle is not null)
+        {
+            var pen = inlineStyle.Element("pen");
+            if (pen is not null)
+            {
+                color = pen.Element("color")?.Value ?? pen.Attribute("color")?.Value;
+                width = ParseDouble(pen.Attribute("width")?.Value
+                    ?? pen.Element("width")?.Value);
+            }
+        }
+
+        if (lineStyleRef is null && color is null) return null;
+
+        return new LineInstruction
+        {
+            FeatureReference = featureReference,
+            ViewingGroup = viewingGroup,
+            DrawingPriority = drawingPriority,
+            Plane = plane,
+            ScaleMinimum = scaleMin,
+            ScaleMaximum = scaleMax,
+            LineStyleReference = lineStyleRef,
+            LineColor = color,
+            LineWidth = width,
+        };
+    }
+
+    private static AreaInstruction? ReadArea(
+        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        DisplayPlane plane, int? scaleMin, int? scaleMax)
+    {
+        string? areaFillRef = null;
+        string? fillColor = null;
+        double? transparency = null;
+
+        var fillRefEl = element.Element("areaFillReference");
+        if (fillRefEl is not null)
+            areaFillRef = fillRefEl.Attribute("reference")?.Value ?? fillRefEl.Value;
+
+        var colorFillEl = element.Element("colorFill");
+        if (colorFillEl is not null)
+        {
+            fillColor = colorFillEl.Element("color")?.Value;
+            var transp = colorFillEl.Element("transparency")?.Value;
+            transparency = ParseNullableDouble(transp);
+        }
+
+        if (areaFillRef is null && fillColor is null) return null;
+
+        return new AreaInstruction
+        {
+            FeatureReference = featureReference,
+            ViewingGroup = viewingGroup,
+            DrawingPriority = drawingPriority,
+            Plane = plane,
+            ScaleMinimum = scaleMin,
+            ScaleMaximum = scaleMax,
+            AreaFillReference = areaFillRef,
+            FillColor = fillColor,
+            Transparency = transparency,
+        };
+    }
+
+    private static TextInstruction? ReadText(
+        XElement element, string featureReference, int viewingGroup, int drawingPriority,
+        DisplayPlane plane, int? scaleMin, int? scaleMax)
+    {
+        // Text content can appear at <textPoint><element><text>...</text></element></textPoint>,
+        // a direct <text> child, or a <textValue> element.
+        var text = element.Descendants("text").FirstOrDefault()?.Value
+            ?? element.Element("textValue")?.Value;
+        if (string.IsNullOrEmpty(text)) return null;
+
+        var fontEl = element.Descendants("font").FirstOrDefault();
+        double fontSize = 10;
+        string fontColor = "CHBLK";
+        if (fontEl is not null)
+        {
+            fontSize = ParseDouble(fontEl.Element("size")?.Value, 10);
+            fontColor = fontEl.Element("color")?.Value ?? fontColor;
+        }
+
+        return new TextInstruction
+        {
+            FeatureReference = featureReference,
+            ViewingGroup = viewingGroup,
+            DrawingPriority = drawingPriority,
+            Plane = plane,
+            ScaleMinimum = scaleMin,
+            ScaleMaximum = scaleMax,
+            Text = text,
+            FontSize = fontSize,
+            FontColor = fontColor,
+        };
+    }
+
+    private static int ParseInt(string? value, int defaultValue = 0) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
+
+    private static int? ParseNullableInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : null;
+
+    private static double ParseDouble(string? value, double defaultValue = 0.0) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
+
+    private static double? ParseNullableDouble(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result) ? result : null;
+
+    private static DisplayPlane ParsePlane(string? value) =>
+        Enum.TryParse<DisplayPlane>(value, ignoreCase: true, out var p) ? p : DisplayPlane.UnderRadar;
+}

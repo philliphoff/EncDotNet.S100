@@ -74,6 +74,9 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                 }
                 Console.WriteLine($"[S101-Lua] Parsed {parsed.Count} drawing instructions");
 
+                // Merge S-101 SAFCON contour-label sequences into single text instructions
+                var prepared = S101SafconLabelMerger.Merge(parsed);
+
                 // Load the colour palette from the portrayal catalogue
                 var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
                 var paletteType = context?.Palette ?? PaletteType.Day;
@@ -82,7 +85,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                 Console.WriteLine($"[S101-Lua] Loaded {paletteType} palette with {palette.Colors.Count} colors");
 
                 // Render to Mapsui layer
-                var vectorRenderer = new MapsuiS101VectorRenderer
+                var vectorRenderer = new MapsuiDisplayListRenderer
                 {
                     LayerName = $"S-101: {_fileName}",
                     Palette = palette,
@@ -112,9 +115,10 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                         }
                     },
                 };
-                var mapLayer = vectorRenderer.Render(parsed, _dataset);
+                var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+                var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
                 var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
-                Console.WriteLine($"[S101-Lua] Rendered {parsed.Count} instructions to Mapsui layer");
+                Console.WriteLine($"[S101-Lua] Rendered {prepared.Count} instructions to Mapsui layer");
 
                 var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
                            $"{emitted.Count} emitted, {parsed.Count} instructions";

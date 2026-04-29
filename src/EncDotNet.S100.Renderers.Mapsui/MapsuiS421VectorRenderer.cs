@@ -114,7 +114,7 @@ public sealed class MapsuiS421VectorRenderer
             if (mapFeature is null)
                 continue;
 
-            mapFeature[MapsuiS101VectorRenderer.FeatureRefKey] = instr.FeatureReference;
+            mapFeature[MapsuiDisplayListRenderer.FeatureRefKey] = instr.FeatureReference;
             mapFeatures.Add(mapFeature);
         }
 

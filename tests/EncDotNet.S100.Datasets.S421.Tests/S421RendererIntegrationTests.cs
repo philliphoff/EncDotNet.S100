@@ -92,7 +92,7 @@ public class S421RendererIntegrationTests
         // Each rendered feature must carry its source dataset reference.
         foreach (var f in features)
         {
-            var refValue = f[MapsuiS101VectorRenderer.FeatureRefKey] as string;
+            var refValue = f[MapsuiDisplayListRenderer.FeatureRefKey] as string;
             Assert.False(string.IsNullOrEmpty(refValue));
         }
     }

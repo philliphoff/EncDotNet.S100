@@ -544,7 +544,7 @@ public partial class MainWindow : ShadUI.Window
         if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
             return;
 
-        if (hitFeature[MapsuiS101VectorRenderer.FeatureRefKey] is not string featureRef)
+        if (hitFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
             return;
 
         // Find which dataset entry owns the hit layer
