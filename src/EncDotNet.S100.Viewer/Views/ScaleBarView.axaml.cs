@@ -5,7 +5,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -25,8 +24,6 @@ public partial class ScaleBarView : UserControl
     {
         InitializeComponent();
     }
-
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
     /// <summary>
     /// Recomputes the scale bar for the current EPSG:3857 viewport.
@@ -77,7 +74,7 @@ public partial class ScaleBarView : UserControl
         var segmentPx = segmentMeters / groundMetersPerPixel;
         var totalPx = segmentPx * pick.SegmentCount;
 
-        var accent = (IBrush?)Application.Current?.FindResource("AccentBrush") ?? Brushes.SteelBlue;
+        var accent = TryFindAccentBrush() ?? Brushes.SteelBlue;
 
         // Segments
         for (var i = 0; i < pick.SegmentCount; i++)
@@ -138,6 +135,13 @@ public partial class ScaleBarView : UserControl
         var canvasWidth = totalPx + leftPad + rightPad;
         BarCanvas.Width = canvasWidth;
         LabelsCanvas.Width = canvasWidth;
+    }
+
+    private IBrush? TryFindAccentBrush()
+    {
+        if (this.TryFindResource("AccentBrush", out var value) && value is IBrush brush)
+            return brush;
+        return null;
     }
 
     private static double EstimateLabelHalfWidth(string text)
