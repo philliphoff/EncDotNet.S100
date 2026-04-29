@@ -196,13 +196,19 @@ public sealed class S124PortrayalCatalogue : IVectorPortrayalCatalogue
         return transform;
     }
 
-    // ── Lua (not used by S-124) ────────────────────────────────────────
+    // ── Lua ────────────────────────────────────────────────
 
-    /// <summary>Not supported — S-124 uses XSLT portrayal rules only.</summary>
-    /// <exception cref="NotSupportedException">Always thrown.</exception>
+    /// <summary>
+    /// The current S-124 portrayal catalogue ships only XSLT rules, so this
+    /// method always throws <see cref="KeyNotFoundException"/>. Future editions
+    /// or vendor catalogues may include Lua rules; in that case this method
+    /// will resolve them via the loaded rule files.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No Lua script with the given name is loaded.</exception>
     public Script GetLuaScript(string scriptName)
     {
-        throw new NotSupportedException("S-124 does not use Lua portrayal rules.");
+        throw new KeyNotFoundException(
+            $"Lua script '{scriptName}' not found in the portrayal catalogue.");
     }
 
     // ── Symbols ────────────────────────────────────────────────────────
