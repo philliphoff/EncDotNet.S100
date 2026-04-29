@@ -52,7 +52,12 @@ public static class DrawingInstructionParser
         // Text style state
         double fontSize = 10;
         string fontColor = "CHBLK";
+        double? fontTransparency = null;
+        string? fontBackgroundColor = null;
+        double? fontBackgroundTransparency = null;
         double? linePlacementPosition = null;
+        TextHorizontalAlignment textHAlign = TextHorizontalAlignment.Center;
+        TextVerticalAlignment textVAlign = TextVerticalAlignment.Center;
 
         var segments = instructionString.Split(';');
 
@@ -161,7 +166,20 @@ public static class DrawingInstructionParser
                     break;
 
                 case "FontColor":
-                    fontColor = value;
+                    {
+                        // FontColor:token[,transparency]
+                        var fcParts = value.Split(',');
+                        fontColor = fcParts[0];
+                        if (fcParts.Length > 1 &&
+                            double.TryParse(fcParts[1], CultureInfo.InvariantCulture, out var fct))
+                        {
+                            fontTransparency = fct;
+                        }
+                        else
+                        {
+                            fontTransparency = null;
+                        }
+                    }
                     break;
 
                 // ── Rendering commands (emit a parsed instruction) ──
@@ -246,10 +264,23 @@ public static class DrawingInstructionParser
                         Plane = displayPlane,
                         FontSize = fontSize,
                         FontColor = fontColor,
+                        FontTransparency = fontTransparency,
+                        BackgroundColor = fontBackgroundColor,
+                        BackgroundTransparency = fontBackgroundTransparency,
                         LinePlacementPosition = linePlacementPosition,
+                        HorizontalAlignment = textHAlign,
+                        VerticalAlignment = textVAlign,
+                        OffsetXmm = localOffsetX != 0 ? localOffsetX : null,
+                        OffsetYmm = localOffsetY != 0 ? localOffsetY : null,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
+                    // Reset per-instruction text state so the next label
+                    // doesn't inherit alignment / offset from this one.
+                    textHAlign = TextHorizontalAlignment.Center;
+                    textVAlign = TextVerticalAlignment.Center;
+                    localOffsetX = 0;
+                    localOffsetY = 0;
                     break;
 
                 case "NullInstruction":
@@ -281,6 +312,37 @@ public static class DrawingInstructionParser
                 case "DateTime":
                 case "TimeValid":
                 case "ClearTime":
+                case "TextAlignHorizontal":
+                    if (Enum.TryParse<TextHorizontalAlignment>(value, ignoreCase: true, out var parsedHAlign))
+                        textHAlign = parsedHAlign;
+                    break;
+
+                case "TextAlignVertical":
+                    if (Enum.TryParse<TextVerticalAlignment>(value, ignoreCase: true, out var parsedVAlign))
+                        textVAlign = parsedVAlign;
+                    break;
+
+                case "FontBackgroundColor":
+                    {
+                        // FontBackgroundColor:[token[,transparency]]
+                        // An empty value clears any inherited background.
+                        if (string.IsNullOrEmpty(value))
+                        {
+                            fontBackgroundColor = null;
+                            fontBackgroundTransparency = null;
+                        }
+                        else
+                        {
+                            var fbParts = value.Split(',');
+                            fontBackgroundColor = string.IsNullOrEmpty(fbParts[0]) ? null : fbParts[0];
+                            fontBackgroundTransparency = fbParts.Length > 1 &&
+                                double.TryParse(fbParts[1], CultureInfo.InvariantCulture, out var fbt)
+                                ? fbt
+                                : null;
+                        }
+                    }
+                    break;
+
                 case "FontWeight":
                 case "FontSlant":
                 case "FontProportion":
@@ -289,9 +351,6 @@ public static class DrawingInstructionParser
                 case "FontStrikethrough":
                 case "FontUpperline":
                 case "FontReference":
-                case "FontBackgroundColor":
-                case "TextAlignHorizontal":
-                case "TextAlignVertical":
                 case "TextVerticalOffset":
                     // Recognised but not yet handled — skip silently
                     break;
