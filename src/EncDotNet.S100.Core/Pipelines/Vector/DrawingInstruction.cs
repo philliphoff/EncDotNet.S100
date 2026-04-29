@@ -156,5 +156,62 @@ public sealed class TextInstruction : DrawingInstruction
     /// </summary>
     public double? LinePlacementPosition { get; init; }
 
+    /// <summary>
+    /// Horizontal alignment of the text relative to its anchor point
+    /// (S-100 Part 9 §11.4: <c>Start</c> | <c>Center</c> | <c>End</c>).
+    /// </summary>
+    public TextHorizontalAlignment HorizontalAlignment { get; init; } = TextHorizontalAlignment.Center;
+
+    /// <summary>
+    /// Vertical alignment of the text relative to its anchor point
+    /// (S-100 Part 9 §11.4: <c>Top</c> | <c>Center</c> | <c>Bottom</c>).
+    /// </summary>
+    public TextVerticalAlignment VerticalAlignment { get; init; } = TextVerticalAlignment.Center;
+
+    /// <summary>Optional X offset (millimetres on the nominal display surface) from the anchor.</summary>
+    public double? OffsetXmm { get; init; }
+
+    /// <summary>Optional Y offset (millimetres on the nominal display surface) from the anchor.</summary>
+    public double? OffsetYmm { get; init; }
+
+    /// <summary>
+    /// Optional line-placement start offset (S-100 Part 9 §11.4.2). Interpretation
+    /// depends on <see cref="LineOffsetMode"/>: a fraction of the curve length when
+    /// <c>Relative</c>, millimetres when <c>Absolute</c>.
+    /// </summary>
+    public double? LineStartOffset { get; init; }
+
+    /// <summary>Optional line-placement end offset; see <see cref="LineStartOffset"/>.</summary>
+    public double? LineEndOffset { get; init; }
+
+    /// <summary>Mode used to interpret <see cref="LineStartOffset"/> / <see cref="LineEndOffset"/>.</summary>
+    public LinePlacementMode? LineOffsetMode { get; init; }
+
     internal override int TypeSortOrder => 3;
+}
+
+/// <summary>S-100 Part 9 horizontal text alignment.</summary>
+public enum TextHorizontalAlignment
+{
+    Start,
+    Center,
+    End,
+}
+
+/// <summary>S-100 Part 9 vertical text alignment.</summary>
+public enum TextVerticalAlignment
+{
+    Top,
+    Center,
+    Bottom,
+}
+
+/// <summary>S-100 Part 9 line placement mode.</summary>
+public enum LinePlacementMode
+{
+    /// <summary>Offsets are fractions in the range [0,1] of the curve length.</summary>
+    Relative,
+
+    /// <summary>Offsets are absolute distances in millimetres along the curve.</summary>
+    Absolute,
 }

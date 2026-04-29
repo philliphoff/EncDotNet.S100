@@ -435,18 +435,23 @@ public sealed class MapsuiDisplayListRenderer
         if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        // Determine position: if LinePlacementPosition is set and we have
-        // enough coordinates to form a line, interpolate along the polyline.
-        // Otherwise pick a sensible per-primitive anchor:
-        //   Curve   → middle vertex of the polyline (so labels along a route
-        //             leg or curve don't all stack at the start point);
-        //   Surface → first vertex of the exterior ring (matches the legacy
-        //             S-421 renderer placement);
-        //   Point   → the point itself.
+        // Determine position from explicit instructions first; only fall back
+        // to per-primitive heuristics if the instruction is silent.
+        //   • LinePlacementPosition (S-100 Part 9 §11.4.2 textLine) on a
+        //     curve  → interpolate along the polyline at that fraction.
+        //   • LinePlacementPosition on a surface → centroid of the exterior
+        //     ring (line offsets are not meaningful on a polygon, but some
+        //     catalogues emit them anyway).
+        //   • Otherwise: curve → middle vertex; surface/point → first vertex.
         double lat, lon;
-        if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2)
+        if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
+            && geometry.Type == GeometryType.Curve)
         {
             (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
+        }
+        else if (geometry.Type == GeometryType.Surface && coords.Count >= 3)
+        {
+            (lat, lon) = ComputeRingCentroid(coords);
         }
         else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
         {
@@ -460,19 +465,61 @@ public sealed class MapsuiDisplayListRenderer
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
         var textColor = resolveColor(instruction.FontColor);
+
+        // Convert mm offsets (S-100 §11.4 nominal display surface) to screen
+        // pixels using the standard 1 px = 0.32 mm convention.
+        var offsetXpx = (instruction.OffsetXmm ?? 0) / S100PixelSizeMm;
+        var offsetYpx = (instruction.OffsetYmm ?? 0) / S100PixelSizeMm;
+
         var style = new LabelStyle
         {
             Text = instruction.Text,
             ForeColor = textColor,
             Font = new Font { Size = instruction.FontSize * renderer.TextScale },
-            HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
-            VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
+            HorizontalAlignment = MapHAlign(instruction.HorizontalAlignment),
+            VerticalAlignment = MapVAlign(instruction.VerticalAlignment),
+            Offset = new Offset(offsetXpx, offsetYpx),
             BackColor = null,
         };
 
         var feature = new PointFeature(mx, my);
         feature.Styles.Add(style);
         return feature;
+    }
+
+    private static LabelStyle.HorizontalAlignmentEnum MapHAlign(TextHorizontalAlignment a) => a switch
+    {
+        TextHorizontalAlignment.Start => LabelStyle.HorizontalAlignmentEnum.Left,
+        TextHorizontalAlignment.End => LabelStyle.HorizontalAlignmentEnum.Right,
+        _ => LabelStyle.HorizontalAlignmentEnum.Center,
+    };
+
+    private static LabelStyle.VerticalAlignmentEnum MapVAlign(TextVerticalAlignment a) => a switch
+    {
+        TextVerticalAlignment.Top => LabelStyle.VerticalAlignmentEnum.Top,
+        TextVerticalAlignment.Bottom => LabelStyle.VerticalAlignmentEnum.Bottom,
+        _ => LabelStyle.VerticalAlignmentEnum.Center,
+    };
+
+    /// <summary>
+    /// Centroid of a closed exterior ring (lat/lon, simple unweighted average
+    /// of the unique vertices).  Sufficient for label placement on the
+    /// near-equirectangular ring sizes typical of S-100 surface features.
+    /// </summary>
+    private static (double Lat, double Lon) ComputeRingCentroid(
+        IReadOnlyList<(double Lat, double Lon)> ring)
+    {
+        // Drop the closing duplicate vertex if present.
+        int count = ring.Count;
+        if (count >= 2 && ring[0] == ring[count - 1])
+            count--;
+        double sumLat = 0, sumLon = 0;
+        for (int i = 0; i < count; i++)
+        {
+            sumLat += ring[i].Lat;
+            sumLon += ring[i].Lon;
+        }
+        return (sumLat / count, sumLon / count);
     }
 
 

@@ -219,6 +219,74 @@ public static class Part9DisplayListReader
             fontColor = fontEl.Element("color")?.Value ?? fontColor;
         }
 
+        // <bodySize>, <foreground> and <background> are the names actually
+        // emitted by the S-100 Part 9 / S-421 XSL (see e.g. RouteActionPoint.xsl).
+        var bodySize = element.Descendants("bodySize").FirstOrDefault();
+        if (bodySize is not null)
+        {
+            fontSize = ParseDouble(bodySize.Value, fontSize);
+        }
+        var foreground = element.Descendants("foreground").FirstOrDefault();
+        if (foreground is not null && !string.IsNullOrWhiteSpace(foreground.Value))
+        {
+            fontColor = foreground.Value.Trim();
+        }
+
+        // Placement: S-100 Part 9 §11.4 distinguishes <textPoint> (anchored at
+        // the feature's representative point with optional mm <offset>) and
+        // <textLine> (anchored along a curve via <startOffset>/<endOffset> +
+        // <placementMode>).  Some catalogues (e.g. S-421's RouteActionPoint
+        // and RouteWaypointLeg XSL) emit line-placement children inside a
+        // <textPoint> wrapper, so we accept either element name and infer
+        // the mode from the children present.
+        var placement = element.Element("textPoint") ?? element.Element("textLine");
+
+        var hAlign = ParseHAlign(placement?.Attribute("horizontalAlignment")?.Value);
+        var vAlign = ParseVAlign(placement?.Attribute("verticalAlignment")?.Value);
+        var rotation = ParseNullableDouble(placement?.Attribute("rotation")?.Value);
+
+        double? offsetX = null, offsetY = null;
+        var offsetEl = placement?.Element("offset");
+        if (offsetEl is not null)
+        {
+            offsetX = ParseNullableDouble(offsetEl.Element("x")?.Value);
+            offsetY = ParseNullableDouble(offsetEl.Element("y")?.Value);
+        }
+
+        double? startOffset = ParseNullableDouble(placement?.Element("startOffset")?.Value);
+        double? endOffset = ParseNullableDouble(placement?.Element("endOffset")?.Value);
+        LinePlacementMode? lineMode = null;
+        var modeText = placement?.Element("placementMode")?.Value
+            ?? placement?.Element("linePlacement")?.Attribute("placementMode")?.Value;
+        if (!string.IsNullOrWhiteSpace(modeText)
+            && Enum.TryParse<LinePlacementMode>(modeText, ignoreCase: true, out var m))
+        {
+            lineMode = m;
+        }
+
+        // Derive a single 0–1 fraction for downstream renderers when line
+        // offsets are supplied.  For Relative mode we trust the offsets
+        // directly (clamped); for Absolute mode the renderer would need the
+        // line length, so we leave LinePlacementPosition unset and surface
+        // the raw offsets via LineStartOffset / LineEndOffset.
+        double? linePos = null;
+        if (startOffset.HasValue || endOffset.HasValue)
+        {
+            if ((lineMode ?? LinePlacementMode.Relative) == LinePlacementMode.Relative
+                && startOffset.HasValue && endOffset.HasValue
+                && startOffset.Value >= 0 && startOffset.Value <= 1
+                && endOffset.Value >= 0 && endOffset.Value <= 1)
+            {
+                linePos = (startOffset.Value + endOffset.Value) / 2.0;
+            }
+            else
+            {
+                // Out-of-range relative offsets (some catalogues emit raw mm
+                // here despite declaring "Relative") — fall back to midpoint.
+                linePos = 0.5;
+            }
+        }
+
         return new TextInstruction
         {
             FeatureReference = featureReference,
@@ -230,8 +298,25 @@ public static class Part9DisplayListReader
             Text = text,
             FontSize = fontSize,
             FontColor = fontColor,
+            Rotation = rotation,
+            HorizontalAlignment = hAlign,
+            VerticalAlignment = vAlign,
+            OffsetXmm = offsetX,
+            OffsetYmm = offsetY,
+            LineStartOffset = startOffset,
+            LineEndOffset = endOffset,
+            LineOffsetMode = lineMode,
+            LinePlacementPosition = linePos,
         };
     }
+
+    private static TextHorizontalAlignment ParseHAlign(string? value) =>
+        Enum.TryParse<TextHorizontalAlignment>(value, ignoreCase: true, out var a)
+            ? a : TextHorizontalAlignment.Center;
+
+    private static TextVerticalAlignment ParseVAlign(string? value) =>
+        Enum.TryParse<TextVerticalAlignment>(value, ignoreCase: true, out var a)
+            ? a : TextVerticalAlignment.Center;
 
     private static int ParseInt(string? value, int defaultValue = 0) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result) ? result : defaultValue;
