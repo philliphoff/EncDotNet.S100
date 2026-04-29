@@ -232,6 +232,10 @@
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
             <Grid Grid.Column="2" DragDrop.AllowDrop="True">
                 <mapsui:MapControl x:Name="MapControl" />
+                <views:ScaleBarView x:Name="ScaleBar"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Margin="0,12,0,0" />
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"

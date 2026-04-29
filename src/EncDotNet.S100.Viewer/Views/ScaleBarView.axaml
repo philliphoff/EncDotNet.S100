@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EncDotNet.S100.Viewer.Views.ScaleBarView"
+             IsHitTestVisible="False">
+
+    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="2">
+        <!-- Labels positioned absolutely above the bar -->
+        <Canvas x:Name="LabelsCanvas" Height="14" />
+
+        <!-- Segment rectangles positioned absolutely -->
+        <Canvas x:Name="BarCanvas" Height="8" />
+
+        <!-- Unit label centered below the bar -->
+        <TextBlock x:Name="UnitLabel"
+                   Text="NM"
+                   FontSize="11"
+                   HorizontalAlignment="Center"
+                   Opacity="0.85" />
+    </StackPanel>
+</UserControl>
