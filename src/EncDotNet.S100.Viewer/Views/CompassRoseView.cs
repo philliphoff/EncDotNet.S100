@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -11,7 +12,8 @@ namespace EncDotNet.S100.Viewer.Views;
 /// cardinal ticks emphasized and the north tick rendered in the accent color.
 /// The whole tick ring rotates with the map so the north tick always points to
 /// true north; the center letter shows whichever cardinal direction is most
-/// closely aligned with screen-up.
+/// closely aligned with screen-up. Background, tick, and text colors follow
+/// the active light/dark theme variant.
 /// </summary>
 internal sealed class CompassRoseView : Control
 {
@@ -24,6 +26,11 @@ internal sealed class CompassRoseView : Control
     static CompassRoseView()
     {
         AffectsRender<CompassRoseView>(MapRotationProperty);
+    }
+
+    public CompassRoseView()
+    {
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
     }
 
     public double MapRotation
@@ -56,11 +63,9 @@ internal sealed class CompassRoseView : Control
         if (outerRadius <= 0)
             return;
 
-        var bgBrush = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255));
-        context.DrawEllipse(bgBrush, null, new Point(cx, cy), outerRadius, outerRadius);
+        var palette = ResolvePalette();
 
-        var accent = TryFindAccentBrush() ?? Brushes.SteelBlue;
-        var tickBrush = new SolidColorBrush(Color.FromArgb(150, 40, 40, 40));
+        context.DrawEllipse(palette.Background, null, new Point(cx, cy), outerRadius, outerRadius);
 
         var rotation = MapRotation;
         // Inset the tick ring so ticks don't touch the compass edge.
@@ -81,7 +86,7 @@ internal sealed class CompassRoseView : Control
             var cos = Math.Cos(rad);
             var p1 = new Point(cx + sin * tickOuterRadius, cy - cos * tickOuterRadius);
             var p2 = new Point(cx + sin * (tickOuterRadius - minorLength), cy - cos * (tickOuterRadius - minorLength));
-            var pen = new Pen(tickBrush, 1.0) { LineCap = PenLineCap.Round };
+            var pen = new Pen(palette.Tick, 1.0) { LineCap = PenLineCap.Round };
             context.DrawLine(pen, p1, p2);
         }
 
@@ -92,7 +97,7 @@ internal sealed class CompassRoseView : Control
             var isNorth = a == 0;
             var tickLen = isNorth ? northLength : cardinalLength;
             var halfBase = isNorth ? Math.Max(2.0, size * 0.07) : Math.Max(1.5, size * 0.05);
-            IBrush fill = isNorth ? accent : tickBrush;
+            IBrush fill = isNorth ? palette.North : palette.Tick;
 
             var rad = (rotation + a) * Math.PI / 180.0;
             var sin = Math.Sin(rad);
@@ -124,7 +129,6 @@ internal sealed class CompassRoseView : Control
         var upBearing = (((360.0 - rotation) % 360.0) + 360.0) % 360.0;
         var letter = NearestCardinal(upBearing);
         var typeface = new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold);
-        var foreground = new SolidColorBrush(Color.FromRgb(26, 26, 26));
         var fontSize = Math.Max(8.0, size * 0.40);
         var formatted = new FormattedText(
             letter,
@@ -132,15 +136,40 @@ internal sealed class CompassRoseView : Control
             FlowDirection.LeftToRight,
             typeface,
             fontSize,
-            foreground);
+            palette.Foreground);
         var origin = new Point(cx - formatted.Width / 2.0, cy - formatted.Height / 2.0);
         context.DrawText(formatted, origin);
     }
 
+    private Palette ResolvePalette()
+    {
+        var isDark = ActualThemeVariant == ThemeVariant.Dark;
+        var north = TryFindAccentBrush() ?? Brushes.SteelBlue;
+        if (isDark)
+        {
+            return new Palette(
+                Background: new SolidColorBrush(Color.FromArgb(140, 30, 30, 30)),
+                Tick: new SolidColorBrush(Color.FromArgb(190, 230, 230, 230)),
+                Foreground: new SolidColorBrush(Color.FromArgb(240, 240, 240, 240)),
+                North: north);
+        }
+
+        return new Palette(
+            Background: new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
+            Tick: new SolidColorBrush(Color.FromArgb(170, 40, 40, 40)),
+            Foreground: new SolidColorBrush(Color.FromArgb(230, 26, 26, 26)),
+            North: north);
+    }
+
     private IBrush? TryFindAccentBrush()
     {
-        if (this.TryFindResource("AccentBrush", out var value) && value is IBrush brush)
-            return brush;
+        if (this.TryFindResource("AccentBrush", out var value))
+        {
+            if (value is IBrush brush)
+                return brush;
+            if (value is Color color)
+                return new SolidColorBrush(color);
+        }
         return null;
     }
 
@@ -153,4 +182,6 @@ internal sealed class CompassRoseView : Control
         if (b < 225.0) return "S";
         return "W";
     }
+
+    private readonly record struct Palette(IBrush Background, IBrush Tick, IBrush Foreground, IBrush North);
 }
