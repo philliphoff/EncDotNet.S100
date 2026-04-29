@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:viewer="using:EncDotNet.S100.Viewer"
              x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
@@ -85,6 +86,27 @@
                                Margin="8,0,0,0"
                                MinWidth="36" />
                 </Grid>
+            </StackPanel>
+
+            <!-- Distance Unit -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Distance Units"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="Units used by the map scale bar."
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableDistanceUnits}"
+                          SelectedItem="{Binding DistanceUnit}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="viewer:DistanceUnit">
+                            <TextBlock Text="{Binding Converter={x:Static viewer:DistanceUnitNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

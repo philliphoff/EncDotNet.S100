@@ -161,6 +161,10 @@ public partial class MainWindow : ShadUI.Window
         // Re-render all loaded datasets when symbol or text scale changes
         _viewModel.Settings.DisplayScaleChanged += () => _ = ReRenderAllDatasetsAsync();
 
+        // Apply persisted scale-bar distance unit and react to changes.
+        ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
+        _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
+
         // If no pane is initially selected, start collapsed
         if (!_viewModel.IsPaneVisible)
         {
@@ -228,6 +232,13 @@ public partial class MainWindow : ShadUI.Window
         // Zoom in/out overlay buttons
         ZoomInButton.Click += OnZoomInClick;
         ZoomOutButton.Click += OnZoomOutClick;
+
+        // Keep the scale bar in sync with the viewport.
+        if (MapControl.Map?.Navigator is { } scaleNav)
+        {
+            scaleNav.ViewportChanged += OnViewportChangedForScaleBar;
+            UpdateScaleBar(scaleNav.Viewport);
+        }
 
         // Apply CLI options
         _screenshotPath = options?.ScreenshotPath;
@@ -486,6 +497,27 @@ public partial class MainWindow : ShadUI.Window
             return;
 
         navigator.ZoomTo(navigator.Viewport.Resolution / 2, 250);
+    }
+
+    private void OnViewportChangedForScaleBar(object? sender, Mapsui.ViewportChangedEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } nav)
+            return;
+
+        var viewport = nav.Viewport;
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            UpdateScaleBar(viewport);
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => UpdateScaleBar(viewport));
+        }
+    }
+
+    private void UpdateScaleBar(Mapsui.Viewport viewport)
+    {
+        ScaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
     }
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e)

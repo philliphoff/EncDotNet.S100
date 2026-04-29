@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EncDotNet.S100.Viewer.Views.ScaleBarView"
+             IsHitTestVisible="False">
+
+    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="0"
+                TextElement.Foreground="#1A1A1A">
+        <!-- Labels positioned absolutely above the bar -->
+        <Canvas x:Name="LabelsCanvas" Height="14" />
+
+        <!-- Segment rectangles positioned absolutely -->
+        <Canvas x:Name="BarCanvas" Height="5" />
+    </StackPanel>
+</UserControl>
