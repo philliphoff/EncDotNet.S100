@@ -375,6 +375,14 @@ public sealed class MapsuiDisplayListRenderer
 
         var feature = new PointFeature(mx, my);
 
+        // Translate the S-100 §11.3 LocalOffset (millimetres on the nominal
+        // display surface) to screen pixels using the standard 1 px = 0.32 mm
+        // convention.  Both ImageStyle and SymbolStyle expose Offset via the
+        // shared VectorStyle base.
+        var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
+        var symOffsetYpx = instruction.LocalOffsetY / S100PixelSizeMm;
+        var hasSymbolOffset = symOffsetXpx != 0 || symOffsetYpx != 0;
+
         // Try to render with an actual SVG symbol
         var symbolRef = instruction.SymbolReference;
         var svgSource = renderer.GetSymbolSource(symbolRef);
@@ -396,6 +404,8 @@ public sealed class MapsuiDisplayListRenderer
             };
             if (instruction.Rotation.HasValue)
                 hitStyle.SymbolRotation = instruction.Rotation.Value;
+            if (hasSymbolOffset)
+                hitStyle.Offset = new Offset(symOffsetXpx, symOffsetYpx);
             feature.Styles.Add(hitStyle);
 
             var style = new ImageStyle
@@ -405,6 +415,8 @@ public sealed class MapsuiDisplayListRenderer
             style.SymbolScale = svgScale;
             if (instruction.Rotation.HasValue)
                 style.SymbolRotation = instruction.Rotation.Value;
+            if (hasSymbolOffset)
+                style.Offset = new Offset(symOffsetXpx, symOffsetYpx);
             feature.Styles.Add(style);
         }
         else
@@ -419,6 +431,8 @@ public sealed class MapsuiDisplayListRenderer
             };
             if (instruction.Rotation.HasValue)
                 style.SymbolRotation = instruction.Rotation.Value;
+            if (hasSymbolOffset)
+                style.Offset = new Offset(symOffsetXpx, symOffsetYpx);
             feature.Styles.Add(style);
         }
 

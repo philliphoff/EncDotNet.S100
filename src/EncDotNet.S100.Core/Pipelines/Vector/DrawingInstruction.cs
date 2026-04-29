@@ -67,10 +67,17 @@ public sealed class PointInstruction : DrawingInstruction
     /// <summary>Symbol rotation in degrees (clockwise from north). Null means upright.</summary>
     public double? Rotation { get; init; }
 
-    /// <summary>Local horizontal offset in symbol units.</summary>
+    /// <summary>
+    /// Local horizontal offset of the symbol from the geometry anchor, in
+    /// millimetres on the nominal S-100 display surface (S-100 Part 9 §11.3).
+    /// </summary>
     public double LocalOffsetX { get; init; }
 
-    /// <summary>Local vertical offset in symbol units.</summary>
+    /// <summary>
+    /// Local vertical offset of the symbol from the geometry anchor, in
+    /// millimetres on the nominal S-100 display surface (S-100 Part 9 §11.3).
+    /// Positive values move the symbol toward the bottom of the display.
+    /// </summary>
     public double LocalOffsetY { get; init; }
 
     /// <summary>

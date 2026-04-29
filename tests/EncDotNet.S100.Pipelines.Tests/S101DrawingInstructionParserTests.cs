@@ -105,4 +105,20 @@ public class S101DrawingInstructionParserTests
         Assert.Null(texts[1].BackgroundColor);
         Assert.Null(texts[1].BackgroundTransparency);
     }
+
+    [Fact]
+    public void PointInstruction_PicksUpLocalOffsetAndScaleAndRotation()
+    {
+        const string s =
+            "LocalOffset:1.5,-2.0;ScaleFactor:1.5;Rotation:PortrayalCRS,45;PointInstruction:BOYLAT11";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+
+        var pt = Assert.Single(parsed.OfType<PointInstruction>());
+        Assert.Equal(1.5, pt.LocalOffsetX);
+        Assert.Equal(-2.0, pt.LocalOffsetY);
+        Assert.Equal(1.5, pt.SymbolScale);
+        Assert.Equal(45, pt.Rotation);
+        Assert.Equal("BOYLAT11", pt.SymbolReference);
+    }
 }
