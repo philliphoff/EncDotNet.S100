@@ -518,6 +518,7 @@ public partial class MainWindow : ShadUI.Window
     private void UpdateScaleBar(Mapsui.Viewport viewport)
     {
         ScaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
+        CompassRose.UpdateForViewport(viewport.Rotation);
     }
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e)
