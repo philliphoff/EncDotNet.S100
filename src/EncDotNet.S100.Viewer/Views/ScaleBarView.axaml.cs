@@ -219,7 +219,7 @@ public partial class ScaleBarView : UserControl
     private static string FormatTickLabel(int tickIndex, double segmentLengthNm)
     {
         var value = tickIndex * segmentLengthNm;
-        return value.ToString("0.####", CultureInfo.InvariantCulture);
+        return value.ToString("0.####", CultureInfo.CurrentCulture);
     }
 
     private readonly record struct SegmentationPick(double SegmentLengthNm, int SegmentCount)
