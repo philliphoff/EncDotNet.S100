@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
 
@@ -14,6 +15,10 @@ namespace EncDotNet.S100.Viewer.Views;
 /// true north; the center letter shows whichever cardinal direction is most
 /// closely aligned with screen-up. Background, tick, and text colors follow
 /// the active light/dark theme variant.
+///
+/// The compass also acts as a rotation control: pressing inside the compass
+/// "grabs" an arm; subsequent pointer motion rotates the map so the grabbed
+/// angle stays under the pointer. Releasing the pointer ends the gesture.
 /// </summary>
 internal sealed class CompassRoseView : Control
 {
@@ -23,6 +28,10 @@ internal sealed class CompassRoseView : Control
     public static readonly StyledProperty<double> MapRotationProperty =
         AvaloniaProperty.Register<CompassRoseView, double>(nameof(MapRotation));
 
+    private bool _isDragging;
+    private double _grabPointerAngle;
+    private double _grabMapRotation;
+
     static CompassRoseView()
     {
         AffectsRender<CompassRoseView>(MapRotationProperty);
@@ -31,6 +40,7 @@ internal sealed class CompassRoseView : Control
     public CompassRoseView()
     {
         ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+        Cursor = new Cursor(StandardCursorType.Hand);
     }
 
     public double MapRotation
@@ -38,6 +48,13 @@ internal sealed class CompassRoseView : Control
         get => GetValue(MapRotationProperty);
         set => SetValue(MapRotationProperty, value);
     }
+
+    /// <summary>
+    /// Raised continuously while the user is rotating via the compass. The
+    /// argument is the requested map rotation in degrees clockwise, normalized
+    /// to <c>[0, 360)</c>.
+    /// </summary>
+    public event Action<double>? RotationRequested;
 
     /// <summary>
     /// Updates the compass for the current map viewport rotation (degrees clockwise).
@@ -139,6 +156,76 @@ internal sealed class CompassRoseView : Control
             palette.Foreground);
         var origin = new Point(cx - formatted.Width / 2.0, cy - formatted.Height / 2.0);
         context.DrawText(formatted, origin);
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        var pos = e.GetPosition(this);
+        if (!IsInsideCompass(pos))
+            return;
+
+        _isDragging = true;
+        _grabPointerAngle = AngleFromCenter(pos);
+        _grabMapRotation = MapRotation;
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (!_isDragging)
+            return;
+
+        var pos = e.GetPosition(this);
+        var angle = AngleFromCenter(pos);
+        var rotation = _grabMapRotation + (angle - _grabPointerAngle);
+        rotation = ((rotation % 360.0) + 360.0) % 360.0;
+        RotationRequested?.Invoke(rotation);
+        e.Handled = true;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!_isDragging)
+            return;
+
+        _isDragging = false;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        _isDragging = false;
+    }
+
+    private bool IsInsideCompass(Point pos)
+    {
+        var cx = Bounds.Width / 2.0;
+        var cy = Bounds.Height / 2.0;
+        var radius = Math.Min(Bounds.Width, Bounds.Height) / 2.0 - 1.0;
+        if (radius <= 0)
+            return false;
+        var dx = pos.X - cx;
+        var dy = pos.Y - cy;
+        return dx * dx + dy * dy <= radius * radius;
+    }
+
+    private double AngleFromCenter(Point pos)
+    {
+        var cx = Bounds.Width / 2.0;
+        var cy = Bounds.Height / 2.0;
+        // Screen-up is angle 0; clockwise positive (matches Mapsui rotation).
+        var dx = pos.X - cx;
+        var dy = pos.Y - cy;
+        var rad = Math.Atan2(dx, -dy);
+        return rad * 180.0 / Math.PI;
     }
 
     private Palette ResolvePalette()
