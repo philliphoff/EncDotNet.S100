@@ -12,7 +12,7 @@
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.10" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.10" />
     <!-- EncDotNet -->
-    <PackageVersion Include="EncDotNet.Iso8211" Version="0.3.4" />
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.4.0" />
     <!-- Mapping / rendering -->
     <PackageVersion Include="FluentIcons.Avalonia.Fluent" Version="2.0.323" />
     <PackageVersion Include="Mapsui" Version="5.0.2" />
