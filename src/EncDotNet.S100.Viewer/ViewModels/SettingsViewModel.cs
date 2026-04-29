@@ -76,6 +76,31 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public event Action? DisplayScaleChanged;
 
+    public static DistanceUnit[] AvailableDistanceUnits { get; } =
+    [
+        EncDotNet.S100.Viewer.DistanceUnit.NauticalMiles,
+        EncDotNet.S100.Viewer.DistanceUnit.Kilometers,
+        EncDotNet.S100.Viewer.DistanceUnit.Miles,
+        EncDotNet.S100.Viewer.DistanceUnit.Meters,
+    ];
+
+    private DistanceUnit _distanceUnit;
+    public DistanceUnit DistanceUnit
+    {
+        get => _distanceUnit;
+        set
+        {
+            if (SetProperty(ref _distanceUnit, value))
+            {
+                _settings.DistanceUnit = value.ToString();
+                _settings.Save();
+                DistanceUnitChanged?.Invoke(value);
+            }
+        }
+    }
+
+    public event Action<DistanceUnit>? DistanceUnitChanged;
+
     public SettingsViewModel(ViewerSettings settings)
     {
         _settings = settings;
@@ -83,5 +108,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
         _symbolScale = settings.SymbolScale;
         _textScale = settings.TextScale;
+        _distanceUnit = Enum.TryParse<DistanceUnit>(settings.DistanceUnit, ignoreCase: true, out var u)
+            ? u
+            : EncDotNet.S100.Viewer.DistanceUnit.NauticalMiles;
     }
 }

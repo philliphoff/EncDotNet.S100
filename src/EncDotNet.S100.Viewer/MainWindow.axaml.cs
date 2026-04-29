@@ -161,6 +161,10 @@ public partial class MainWindow : ShadUI.Window
         // Re-render all loaded datasets when symbol or text scale changes
         _viewModel.Settings.DisplayScaleChanged += () => _ = ReRenderAllDatasetsAsync();
 
+        // Apply persisted scale-bar distance unit and react to changes.
+        ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
+        _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
+
         // If no pane is initially selected, start collapsed
         if (!_viewModel.IsPaneVisible)
         {

@@ -40,6 +40,9 @@ internal sealed class ViewerSettings
     /// <summary>Global text scale factor (1.0 = default). Scales all text labels.</summary>
     public double TextScale { get; set; } = 1.0;
 
+    /// <summary>Distance unit used by the map scale bar.</summary>
+    public string DistanceUnit { get; set; } = "NauticalMiles";
+
     public bool IsStatusBarVisible { get; set; } = true;
 
     public static ViewerSettings Load()

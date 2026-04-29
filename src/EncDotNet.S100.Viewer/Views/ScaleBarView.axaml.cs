@@ -18,11 +18,30 @@ public partial class ScaleBarView : UserControl
 {
     private const double TargetPixelWidth = 200.0;
     private const double EarthRadiusMeters = 6378137.0;
-    private const double MetersPerNauticalMile = 1852.0;
+
+    private DistanceUnit _unit = DistanceUnit.NauticalMiles;
+    private double _lastResolution = double.NaN;
+    private double _lastCenterY = double.NaN;
 
     public ScaleBarView()
     {
         InitializeComponent();
+    }
+
+    /// <summary>Distance unit displayed by the bar. Setting this re-renders.</summary>
+    internal DistanceUnit Unit
+    {
+        get => _unit;
+        set
+        {
+            if (_unit == value)
+                return;
+            _unit = value;
+            if (!double.IsNaN(_lastResolution))
+            {
+                UpdateForViewport(_lastResolution, _lastCenterY);
+            }
+        }
     }
 
     /// <summary>
@@ -32,6 +51,9 @@ public partial class ScaleBarView : UserControl
     /// <param name="mercatorCenterY">Mercator Y coordinate of the viewport center (used to correct for latitude distortion).</param>
     public void UpdateForViewport(double mercatorResolution, double mercatorCenterY)
     {
+        _lastResolution = mercatorResolution;
+        _lastCenterY = mercatorCenterY;
+
         if (double.IsNaN(mercatorResolution) || mercatorResolution <= 0)
         {
             ClearBar();
@@ -47,14 +69,15 @@ public partial class ScaleBarView : UserControl
             return;
         }
 
-        var pick = PickSegmentation(groundMetersPerPixel, TargetPixelWidth);
+        var metersPerUnit = _unit.MetersPerUnit();
+        var pick = PickSegmentation(groundMetersPerPixel, metersPerUnit, TargetPixelWidth);
         if (pick is null)
         {
             ClearBar();
             return;
         }
 
-        BuildBar(pick.Value, groundMetersPerPixel);
+        BuildBar(pick.Value, groundMetersPerPixel, metersPerUnit, _unit.Abbreviation());
     }
 
     private void ClearBar()
@@ -65,12 +88,12 @@ public partial class ScaleBarView : UserControl
         BarCanvas.Width = 0;
     }
 
-    private void BuildBar(SegmentationPick pick, double groundMetersPerPixel)
+    private void BuildBar(SegmentationPick pick, double groundMetersPerPixel, double metersPerUnit, string unitAbbreviation)
     {
         LabelsCanvas.Children.Clear();
         BarCanvas.Children.Clear();
 
-        var segmentMeters = pick.SegmentLengthNm * MetersPerNauticalMile;
+        var segmentMeters = pick.SegmentLength * metersPerUnit;
         var segmentPx = segmentMeters / groundMetersPerPixel;
         var totalPx = segmentPx * pick.SegmentCount;
 
@@ -92,7 +115,7 @@ public partial class ScaleBarView : UserControl
         }
 
         // Labels (one at each tick: 0, 1*L, 2*L, ..., N*L)
-        const string UnitText = " NM";
+        var unitText = " " + unitAbbreviation;
         var unitWidth = 0.0;
 
         for (var i = 0; i <= pick.SegmentCount; i++)
@@ -118,7 +141,7 @@ public partial class ScaleBarView : UserControl
             {
                 var unitLabel = new TextBlock
                 {
-                    Text = UnitText,
+                    Text = unitText,
                     FontSize = 11,
                     FontWeight = FontWeight.SemiBold,
                 };
@@ -170,10 +193,10 @@ public partial class ScaleBarView : UserControl
         return text.Length * 4.0;
     }
 
-    private static SegmentationPick? PickSegmentation(double groundMetersPerPixel, double targetPx)
+    private static SegmentationPick? PickSegmentation(double groundMetersPerPixel, double metersPerUnit, double targetPx)
     {
-        var targetNm = targetPx * groundMetersPerPixel / MetersPerNauticalMile;
-        if (targetNm <= 0 || double.IsInfinity(targetNm))
+        var targetUnits = targetPx * groundMetersPerPixel / metersPerUnit;
+        if (targetUnits <= 0 || double.IsInfinity(targetUnits))
             return null;
 
         SegmentationPick? best = null;
@@ -183,8 +206,8 @@ public partial class ScaleBarView : UserControl
         {
             for (var n = 2; n <= 4; n++)
             {
-                var totalNm = candidate * n;
-                var totalPx = totalNm * MetersPerNauticalMile / groundMetersPerPixel;
+                var totalUnits = candidate * n;
+                var totalPx = totalUnits * metersPerUnit / groundMetersPerPixel;
                 // Penalise candidates that fall too far from the target width;
                 // use log-distance so over-shoot and under-shoot are weighted similarly.
                 var score = Math.Abs(Math.Log(totalPx / targetPx));
@@ -216,14 +239,14 @@ public partial class ScaleBarView : UserControl
         }
     }
 
-    private static string FormatTickLabel(int tickIndex, double segmentLengthNm)
+    private static string FormatTickLabel(int tickIndex, double segmentLength)
     {
-        var value = tickIndex * segmentLengthNm;
+        var value = tickIndex * segmentLength;
         return value.ToString("0.####", CultureInfo.CurrentCulture);
     }
 
-    private readonly record struct SegmentationPick(double SegmentLengthNm, int SegmentCount)
+    private readonly record struct SegmentationPick(double SegmentLength, int SegmentCount)
     {
-        public string FormatTick(int tickIndex) => FormatTickLabel(tickIndex, SegmentLengthNm);
+        public string FormatTick(int tickIndex) => FormatTickLabel(tickIndex, SegmentLength);
     }
 }
