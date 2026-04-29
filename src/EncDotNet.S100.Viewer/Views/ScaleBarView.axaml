@@ -3,7 +3,8 @@
              x:Class="EncDotNet.S100.Viewer.Views.ScaleBarView"
              IsHitTestVisible="False">
 
-    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="2">
+    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="2"
+                TextElement.Foreground="#1A1A1A">
         <!-- Labels positioned absolutely above the bar -->
         <Canvas x:Name="LabelsCanvas" Height="14" />
 
@@ -14,7 +15,7 @@
         <TextBlock x:Name="UnitLabel"
                    Text="NM"
                    FontSize="11"
-                   HorizontalAlignment="Center"
-                   Opacity="0.85" />
+                   FontWeight="SemiBold"
+                   HorizontalAlignment="Center" />
     </StackPanel>
 </UserControl>

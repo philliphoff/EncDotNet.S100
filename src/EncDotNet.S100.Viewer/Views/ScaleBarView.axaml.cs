@@ -99,6 +99,7 @@ public partial class ScaleBarView : UserControl
             {
                 Text = text,
                 FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
                 TextAlignment = TextAlignment.Center,
             };
             // Measure to center on the tick.
@@ -163,7 +164,7 @@ public partial class ScaleBarView : UserControl
         {
             for (var n = 2; n <= 4; n++)
             {
-                var totalNm = candidate.LengthNm * n;
+                var totalNm = candidate * n;
                 var totalPx = totalNm * MetersPerNauticalMile / groundMetersPerPixel;
                 // Penalise candidates that fall too far from the target width;
                 // use log-distance so over-shoot and under-shoot are weighted similarly.
@@ -174,7 +175,7 @@ public partial class ScaleBarView : UserControl
                 if (score < bestScore)
                 {
                     bestScore = score;
-                    best = new SegmentationPick(candidate.LengthNm, n, candidate.Formatter);
+                    best = new SegmentationPick(candidate, n);
                 }
             }
         }
@@ -182,59 +183,28 @@ public partial class ScaleBarView : UserControl
         return best;
     }
 
-    private static IEnumerable<SegmentLengthCandidate> EnumerateSegmentLengths()
+    private static IEnumerable<double> EnumerateSegmentLengths()
     {
-        // Standard "1-2-2.5-5" nice numbers across many decades, plus a thirds
-        // family for the zoomed-in halves/thirds/quarters case the user asked for.
-        // 0.5 (=5e-1) and 0.25 (=2.5e-1) cover halves and quarters of 1 NM.
+        // "1-2-2.5-5" nice numbers across many decades. 0.5 (=5e-1) and
+        // 0.25 (=2.5e-1) cover halves and quarters of 1 NM at zoomed-in scales.
         for (var k = -4; k <= 6; k++)
         {
             var p = Math.Pow(10, k);
-            yield return new SegmentLengthCandidate(1.0 * p, DecimalFormatter);
-            yield return new SegmentLengthCandidate(2.0 * p, DecimalFormatter);
-            yield return new SegmentLengthCandidate(2.5 * p, DecimalFormatter);
-            yield return new SegmentLengthCandidate(5.0 * p, DecimalFormatter);
-
-            if (k >= 0)
-            {
-                // Thirds family: 1/3, 10/3, 100/3, ... NM. Only enable for
-                // p >= 1 so labels remain compact (e.g. avoid 0.0333 NM).
-                yield return new SegmentLengthCandidate(p / 3.0, MakeThirdsFormatter(p));
-            }
+            yield return 1.0 * p;
+            yield return 2.0 * p;
+            yield return 2.5 * p;
+            yield return 5.0 * p;
         }
     }
 
-    private static string DecimalFormatter(int tickIndex, double segmentLengthNm)
+    private static string FormatTickLabel(int tickIndex, double segmentLengthNm)
     {
         var value = tickIndex * segmentLengthNm;
-        // Trim trailing zeros, keep up to 4 decimals.
         return value.ToString("0.####", CultureInfo.InvariantCulture);
     }
 
-    private static Func<int, double, string> MakeThirdsFormatter(double powerOfTen)
+    private readonly record struct SegmentationPick(double SegmentLengthNm, int SegmentCount)
     {
-        // Each tick is i * (powerOfTen / 3). Express as a mixed number
-        // (whole + ⅓/⅔) when powerOfTen >= 1.
-        return (tickIndex, _) =>
-        {
-            var numerator = tickIndex * (long)Math.Round(powerOfTen);
-            var whole = numerator / 3;
-            var remainder = numerator % 3;
-            var wholeText = whole == 0 && remainder != 0 ? string.Empty : whole.ToString(CultureInfo.InvariantCulture);
-            return remainder switch
-            {
-                0 => whole.ToString(CultureInfo.InvariantCulture),
-                1 => wholeText + "\u2153", // ⅓
-                2 => wholeText + "\u2154", // ⅔
-                _ => whole.ToString(CultureInfo.InvariantCulture),
-            };
-        };
-    }
-
-    private readonly record struct SegmentLengthCandidate(double LengthNm, Func<int, double, string> Formatter);
-
-    private readonly record struct SegmentationPick(double SegmentLengthNm, int SegmentCount, Func<int, double, string> Formatter)
-    {
-        public string FormatTick(int tickIndex) => Formatter(tickIndex, SegmentLengthNm);
+        public string FormatTick(int tickIndex) => FormatTickLabel(tickIndex, SegmentLengthNm);
     }
 }
