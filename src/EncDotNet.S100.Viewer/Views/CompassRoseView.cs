@@ -56,37 +56,66 @@ internal sealed class CompassRoseView : Control
         if (outerRadius <= 0)
             return;
 
-        var bgBrush = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255));
-        var borderBrush = new SolidColorBrush(Color.FromArgb(96, 0, 0, 0));
+        var bgBrush = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255));
+        var borderBrush = new SolidColorBrush(Color.FromArgb(64, 0, 0, 0));
         var borderPen = new Pen(borderBrush, 1);
         context.DrawEllipse(bgBrush, borderPen, new Point(cx, cy), outerRadius, outerRadius);
 
         var accent = TryFindAccentBrush() ?? Brushes.SteelBlue;
-        var tickBrush = new SolidColorBrush(Color.FromArgb(190, 30, 30, 30));
-        var cardinalBrush = new SolidColorBrush(Color.FromArgb(230, 20, 20, 20));
+        var tickBrush = new SolidColorBrush(Color.FromArgb(150, 40, 40, 40));
 
         var rotation = MapRotation;
-        var cardinalLength = Math.Max(3.0, size * 0.18);
         var minorLength = Math.Max(2.0, size * 0.10);
+        var cardinalLength = Math.Max(4.0, size * 0.22);
+        var northLength = Math.Max(5.0, size * 0.28);
 
-        for (var a = 0; a < 360; a += 10)
+        // Minor ticks every 30 degrees, skipping the cardinals (which are
+        // drawn as triangles below).
+        for (var a = 30; a < 360; a += 30)
         {
-            var isCardinal = a % 90 == 0;
-            var isNorth = a == 0;
-            var tickLen = isCardinal ? cardinalLength : minorLength;
-            var thickness = isCardinal ? 1.6 : 1.0;
-            IBrush brush = isNorth ? accent : (isCardinal ? cardinalBrush : tickBrush);
-
+            if (a % 90 == 0)
+                continue;
             var rad = (rotation + a) * Math.PI / 180.0;
             var sin = Math.Sin(rad);
             var cos = Math.Cos(rad);
             var p1 = new Point(cx + sin * outerRadius, cy - cos * outerRadius);
-            var p2 = new Point(cx + sin * (outerRadius - tickLen), cy - cos * (outerRadius - tickLen));
-            var pen = new Pen(brush, thickness)
-            {
-                LineCap = PenLineCap.Round,
-            };
+            var p2 = new Point(cx + sin * (outerRadius - minorLength), cy - cos * (outerRadius - minorLength));
+            var pen = new Pen(tickBrush, 1.0) { LineCap = PenLineCap.Round };
             context.DrawLine(pen, p1, p2);
+        }
+
+        // Cardinal ticks rendered as thin inward-pointing triangles. North is
+        // larger and rendered in the accent color.
+        for (var a = 0; a < 360; a += 90)
+        {
+            var isNorth = a == 0;
+            var tickLen = isNorth ? northLength : cardinalLength;
+            var halfBase = isNorth ? Math.Max(2.0, size * 0.07) : Math.Max(1.5, size * 0.05);
+            IBrush fill = isNorth ? accent : tickBrush;
+
+            var rad = (rotation + a) * Math.PI / 180.0;
+            var sin = Math.Sin(rad);
+            var cos = Math.Cos(rad);
+            // Tangent direction (perpendicular to the radial), used to offset
+            // the base vertices to either side of the tick line.
+            var tx = cos;
+            var ty = sin;
+
+            var tip = new Point(cx + sin * outerRadius, cy - cos * outerRadius);
+            var basePx = cx + sin * (outerRadius - tickLen);
+            var basePy = cy - cos * (outerRadius - tickLen);
+            var b1 = new Point(basePx + tx * halfBase, basePy + ty * halfBase);
+            var b2 = new Point(basePx - tx * halfBase, basePy - ty * halfBase);
+
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(tip, isFilled: true);
+                ctx.LineTo(b1);
+                ctx.LineTo(b2);
+                ctx.EndFigure(isClosed: true);
+            }
+            context.DrawGeometry(fill, null, geometry);
         }
 
         // Center letter shows the cardinal direction nearest to screen-up.
