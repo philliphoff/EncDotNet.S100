@@ -245,6 +245,7 @@ public partial class MainWindow : ShadUI.Window
 
         // Drive the map rotation from compass-rose drag gestures.
         CompassRose.RotationRequested += OnCompassRotationRequested;
+        CompassRose.RotationResetRequested += OnCompassRotationReset;
 
         // Apply CLI options
         _screenshotPath = options?.ScreenshotPath;
@@ -571,6 +572,16 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map?.Navigator is not { } navigator)
             return;
         navigator.RotateTo(rotationDegrees);
+    }
+
+    private void OnCompassRotationReset()
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+        // Pick the equivalent rotation closest to 0 to avoid spinning the long way.
+        var current = navigator.Viewport.Rotation;
+        var target = current > 180.0 ? 360.0 : 0.0;
+        navigator.RotateTo(target, 250);
     }
 
     private void OnMapPointerWheelChanged(object? sender, PointerWheelEventArgs e)

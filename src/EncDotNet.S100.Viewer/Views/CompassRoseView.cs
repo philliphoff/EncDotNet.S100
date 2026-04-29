@@ -57,6 +57,12 @@ internal sealed class CompassRoseView : Control
     public event Action<double>? RotationRequested;
 
     /// <summary>
+    /// Raised when the user double-clicks the compass to request resetting
+    /// the map to a north-up orientation.
+    /// </summary>
+    public event Action? RotationResetRequested;
+
+    /// <summary>
     /// Updates the compass for the current map viewport rotation (degrees clockwise).
     /// </summary>
     public void UpdateForViewport(double mapRotationDegrees)
@@ -166,6 +172,15 @@ internal sealed class CompassRoseView : Control
         var pos = e.GetPosition(this);
         if (!IsInsideCompass(pos))
             return;
+
+        if (e.ClickCount >= 2)
+        {
+            // Double-click resets the map to north-up. Don't enter drag mode.
+            _isDragging = false;
+            RotationResetRequested?.Invoke();
+            e.Handled = true;
+            return;
+        }
 
         _isDragging = true;
         _grabPointerAngle = AngleFromCenter(pos);
