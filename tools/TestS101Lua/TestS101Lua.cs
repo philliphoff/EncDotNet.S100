@@ -57,20 +57,8 @@ Console.WriteLine($"  Feature types: {fc.FeatureTypes.Count}");
 Console.WriteLine($"  Simple attributes: {fc.SimpleAttributes.Count}");
 Console.WriteLine($"  Complex attributes: {fc.ComplexAttributes.Count}");
 
-// Set up navigation context
-var context = new NavigationContext
-{
-    Viewport = new Viewport
-    {
-        MinLatitude = -90,
-        MaxLatitude = 90,
-        MinLongitude = -180,
-        MaxLongitude = 180,
-        WidthPixels = 1024,
-        HeightPixels = 768,
-    },
-    ScaleDenominator = 0,
-};
+// Set up mariner settings
+var mariner = MarinerSettings.Default;
 
 // Run Lua portrayal
 Console.WriteLine();
@@ -79,7 +67,7 @@ var luaEngine = new MoonSharpLuaEngine();
 var portrayal = new S101LuaPortrayal(luaEngine, provider, fc);
 
 var sw = System.Diagnostics.Stopwatch.StartNew();
-var emitted = portrayal.Execute(dataset, context);
+var emitted = portrayal.Execute(dataset, mariner);
 sw.Stop();
 
 Console.WriteLine($"PortrayalMain completed in {sw.ElapsedMilliseconds}ms");

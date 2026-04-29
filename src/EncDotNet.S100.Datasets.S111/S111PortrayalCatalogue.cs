@@ -59,7 +59,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         ActivePalette = LoadColorPalette(paletteName);
     }
 
-    public CoverageColorScheme ResolveColorScheme(NavigationContext context)
+    public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         if (ActivePalette.Colors.Count == 0)
         {
@@ -89,7 +89,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         };
     }
 
-    public CoverageSymbolScheme ResolveSymbolScheme(NavigationContext context)
+    public CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings)
     {
         var symbolBands = new List<SymbolBand>();
 

@@ -52,7 +52,7 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// Returns a <see cref="CoverageColorScheme"/> for the <c>waterLevelHeight</c> field
     /// using the built-in diverging blue/green height bands.
     /// </summary>
-    public CoverageColorScheme ResolveColorScheme(NavigationContext context)
+    public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         var colorBands = new List<ColorBand>(DefaultBands.Length);
 

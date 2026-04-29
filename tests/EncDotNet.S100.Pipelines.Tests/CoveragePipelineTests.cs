@@ -322,7 +322,7 @@ public class CoveragePipelineTests
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }
 
-        public CoverageColorScheme ResolveColorScheme(NavigationContext context) => _colorScheme;
+        public CoverageColorScheme ResolveColorScheme(MarinerSettings settings) => _colorScheme;
         public IReadOnlyList<ContourStyle> Contours => _contours;
     }
 

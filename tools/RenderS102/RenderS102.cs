@@ -62,20 +62,7 @@ Console.WriteLine("Running coverage pipeline...");
 var layer = await pipeline.ProcessAsync(source, catalogue);
 
 // 4. Build the styled layer for rendering
-var colorScheme = catalogue.ResolveColorScheme(
-    new NavigationContext
-    {
-        Viewport = new Viewport
-        {
-            MinLatitude = source.Metadata.Extent.SouthLatitude,
-            MaxLatitude = source.Metadata.Extent.NorthLatitude,
-            MinLongitude = source.Metadata.Extent.WestLongitude,
-            MaxLongitude = source.Metadata.Extent.EastLongitude,
-            WidthPixels = source.Metadata.GridMetadata.NumColumns,
-            HeightPixels = source.Metadata.GridMetadata.NumRows,
-        },
-        ScaleDenominator = 50_000,
-    });
+var colorScheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
 
 var styledLayer = new StyledCoverageLayer
 {
@@ -98,6 +85,7 @@ var viewport = new Viewport
     MaxLongitude = source.Metadata.Extent.EastLongitude,
     WidthPixels = source.Metadata.GridMetadata.NumColumns,
     HeightPixels = source.Metadata.GridMetadata.NumRows,
+    ScaleDenominator = 50_000,
 };
 
 using var bitmap = renderer.Render(styledLayer, viewport);

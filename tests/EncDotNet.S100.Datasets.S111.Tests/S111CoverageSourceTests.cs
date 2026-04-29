@@ -116,18 +116,7 @@ public class S111CoverageSourceTests : IDisposable
         using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
         var catalogue = new S111PortrayalCatalogue(provider);
 
-        var context = new NavigationContext
-        {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 50_000,
-        };
-
-        var scheme = catalogue.ResolveColorScheme(context);
+        var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
 
         Assert.Equal("surfaceCurrentSpeed", scheme.FieldName);
         Assert.Equal(9, scheme.Bands.Count);
@@ -176,18 +165,7 @@ public class S111CoverageSourceTests : IDisposable
         using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
         var catalogue = new S111PortrayalCatalogue(provider);
 
-        var context = new NavigationContext
-        {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 50_000,
-        };
-
-        var scheme = catalogue.ResolveSymbolScheme(context);
+        var scheme = catalogue.ResolveSymbolScheme(MarinerSettings.Default);
 
         Assert.NotNull(scheme);
         Assert.Equal("surfaceCurrentSpeed", scheme.ValueFieldName);

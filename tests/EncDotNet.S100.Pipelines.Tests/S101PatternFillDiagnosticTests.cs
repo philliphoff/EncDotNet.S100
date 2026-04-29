@@ -451,21 +451,7 @@ public class S101PatternFillDiagnosticTests
 
         // Run Lua portrayal
         var portrayal = new S101LuaPortrayal(luaEngine, provider, fc);
-        var navContext = new NavigationContext
-        {
-            Viewport = new Pipelines.Viewport
-            {
-                MinLatitude = -90,
-                MaxLatitude = 90,
-                MinLongitude = -180,
-                MaxLongitude = 180,
-                WidthPixels = 1024,
-                HeightPixels = 768,
-            },
-            ScaleDenominator = 0,
-        };
-
-        var emitted = portrayal.Execute(dataset, navContext);
+        var emitted = portrayal.Execute(dataset, MarinerSettings.Default);
 
         // Dump raw emit strings for key features
         var rawLines = new List<string> { "=== Raw Lua Emit Strings ===" };

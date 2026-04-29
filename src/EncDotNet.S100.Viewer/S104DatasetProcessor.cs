@@ -57,21 +57,18 @@ internal sealed class S104DatasetProcessor : IDatasetProcessor
 
         var metadata = _source.Metadata;
 
-        var navContext = new NavigationContext
+        var viewport = new Pipelines.Viewport
         {
-            Viewport = new Pipelines.Viewport
-            {
-                MinLatitude = metadata.Extent.SouthLatitude,
-                MaxLatitude = metadata.Extent.NorthLatitude,
-                MinLongitude = metadata.Extent.WestLongitude,
-                MaxLongitude = metadata.Extent.EastLongitude,
-                WidthPixels = metadata.GridMetadata.NumColumns,
-                HeightPixels = metadata.GridMetadata.NumRows,
-            },
+            MinLatitude = metadata.Extent.SouthLatitude,
+            MaxLatitude = metadata.Extent.NorthLatitude,
+            MinLongitude = metadata.Extent.WestLongitude,
+            MaxLongitude = metadata.Extent.EastLongitude,
+            WidthPixels = metadata.GridMetadata.NumColumns,
+            HeightPixels = metadata.GridMetadata.NumRows,
             ScaleDenominator = 50_000,
         };
 
-        var colorScheme = _catalogue.ResolveColorScheme(navContext);
+        var colorScheme = _catalogue.ResolveColorScheme(MarinerSettings.Default);
         var sampled = _source.Sample(GridRegion.Full);
 
         var styledLayer = new StyledCoverageLayer
@@ -88,7 +85,7 @@ internal sealed class S104DatasetProcessor : IDatasetProcessor
         {
             LayerName = $"S-104: {_fileName}",
         };
-        var colorLayer = colorRenderer.Render(styledLayer, navContext.Viewport);
+        var colorLayer = colorRenderer.Render(styledLayer, viewport);
         var extent = colorLayer.Extent ?? new MRect(0, 0, 0, 0);
 
         int crs = _dataset.HorizontalCRS ?? 4326;

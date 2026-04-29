@@ -1,17 +1,13 @@
 namespace EncDotNet.S100.Pipelines;
 
 /// <summary>
-/// Captures display state that influences portrayal rule selection:
-/// current viewport, scale, safety parameters, and user preferences.
+/// Mariner-configurable display preferences used by S-100 portrayal rules
+/// (S-100 Part 9 §4.2 — "Mariner Selections"). These values are independent
+/// of the current display viewport and are typically persisted across
+/// sessions per user preference.
 /// </summary>
-public sealed class NavigationContext
+public sealed class MarinerSettings
 {
-    /// <summary>Current display viewport.</summary>
-    public required Viewport Viewport { get; init; }
-
-    /// <summary>Display scale denominator (e.g. 25_000 for 1:25000).</summary>
-    public required double ScaleDenominator { get; init; }
-
     /// <summary>Safety contour depth in metres.</summary>
     public double SafetyContour { get; init; } = 30.0;
 
@@ -23,4 +19,7 @@ public sealed class NavigationContext
 
     /// <summary>Deep contour depth in metres.</summary>
     public double DeepContour { get; init; } = 30.0;
+
+    /// <summary>Default mariner settings (safety contour 30 m, etc.).</summary>
+    public static MarinerSettings Default { get; } = new();
 }

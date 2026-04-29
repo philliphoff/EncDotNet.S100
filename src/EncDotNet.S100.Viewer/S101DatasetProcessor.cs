@@ -40,19 +40,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        var navContext = new NavigationContext
-        {
-            Viewport = new Pipelines.Viewport
-            {
-                MinLatitude = -90,
-                MaxLatitude = 90,
-                MinLongitude = -180,
-                MaxLongitude = 180,
-                WidthPixels = 1024,
-                HeightPixels = 768,
-            },
-            ScaleDenominator = 0,
-        };
+        var mariner = MarinerSettings.Default;
 
         // Try the Lua portrayal pipeline if a feature catalogue is available
         using var fcStream = _featureCatalogueResolver("S-101");
@@ -63,7 +51,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                 Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
                 var fc = FeatureCatalogueReader.Read(fcStream);
                 var portrayal = new S101LuaPortrayal(_luaEngine, _provider, fc);
-                var emitted = portrayal.Execute(_dataset, navContext);
+                var emitted = portrayal.Execute(_dataset, mariner);
                 Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");
 
                 // Parse emitted instruction strings
@@ -149,7 +137,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         var catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
 
         var pipeline = new VectorPipeline(_luaEngine);
-        var vectorLayer = pipeline.ProcessAsync(featureXmlSource, catalogue, navContext)
+        var vectorLayer = pipeline.ProcessAsync(featureXmlSource, catalogue, viewport: null, mariner: mariner)
             .GetAwaiter().GetResult();
 
         var instructions = vectorLayer.Instructions;

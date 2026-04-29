@@ -66,22 +66,15 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
         var catalogue = CreateCatalogue(fourShades: true);
-        var context = new NavigationContext
+        var mariner = new MarinerSettings
         {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 25_000,
             ShallowContour = 2.0,
             SafetyContour = 30.0,
             DeepContour = 30.0,
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
 
         // The test file has real depths 4.44–8m, all in [ShallowContour=2, SafetyContour=30) → DEPMS
         // and fill-value cells (1000000) → null (no-data)
@@ -139,20 +132,13 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
         var catalogue = CreateCatalogue(fourShades: false);
-        var context = new NavigationContext
+        var mariner = new MarinerSettings
         {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 25_000,
             SafetyContour = 30.0,
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, context);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
 
         var nonNull = layer.CellColors.Where(c => c is not null).ToList();
         Assert.NotEmpty(nonNull);
@@ -166,21 +152,14 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
     public void S102PortrayalCatalogue_FourShades_ProducesExpectedBands()
     {
         var catalogue = CreateCatalogue(fourShades: true);
-        var context = new NavigationContext
+        var mariner = new MarinerSettings
         {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 25_000,
             ShallowContour = 2.0,
             SafetyContour = 10.0,
             DeepContour = 30.0,
         };
 
-        var scheme = catalogue.ResolveColorScheme(context);
+        var scheme = catalogue.ResolveColorScheme(mariner);
 
         Assert.Equal("depth", scheme.FieldName);
         // 5 bands: intertidal + 4 depth bands
@@ -198,19 +177,12 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
     public void S102PortrayalCatalogue_TwoShades_ProducesExpectedBands()
     {
         var catalogue = CreateCatalogue(fourShades: false);
-        var context = new NavigationContext
+        var mariner = new MarinerSettings
         {
-            Viewport = new Viewport
-            {
-                MinLatitude = 0, MaxLatitude = 1,
-                MinLongitude = 0, MaxLongitude = 1,
-                WidthPixels = 100, HeightPixels = 100,
-            },
-            ScaleDenominator = 25_000,
             SafetyContour = 10.0,
         };
 
-        var scheme = catalogue.ResolveColorScheme(context);
+        var scheme = catalogue.ResolveColorScheme(mariner);
 
         Assert.Equal("depth", scheme.FieldName);
         // 3 bands: intertidal + 2 depth bands

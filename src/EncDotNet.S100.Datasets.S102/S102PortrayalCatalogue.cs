@@ -61,7 +61,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         ActivePalette = ColorPalette.FromType(type);
     }
 
-    public CoverageColorScheme ResolveColorScheme(NavigationContext context)
+    public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         using var lua = _luaEngine.CreateContext();
 
@@ -72,10 +72,10 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         var contextParams = new Dictionary<string, object?>
         {
             ["FourShades"] = FourShades,
-            ["SafetyContour"] = context.SafetyContour,
-            ["ShallowContour"] = context.ShallowContour,
-            ["DeepContour"] = context.DeepContour,
-            ["SafetyDepth"] = context.SafetyDepth,
+            ["SafetyContour"] = settings.SafetyContour,
+            ["ShallowContour"] = settings.ShallowContour,
+            ["DeepContour"] = settings.DeepContour,
+            ["SafetyDepth"] = settings.SafetyDepth,
         };
         lua.SetGlobal("contextParameters", contextParams);
 

@@ -28,7 +28,8 @@ public class VectorPipeline
     public Task<IVectorLayer> ProcessAsync(
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
-        NavigationContext? context = null)
+        Viewport? viewport = null,
+        MarinerSettings? mariner = null)
     {
         // Stage 1 — load FeatureXML into a navigable document
         XDocument featureDoc;
@@ -42,10 +43,10 @@ public class VectorPipeline
         var applicableRules = SelectRules(featureTypes, catalogue);
 
         // Stage 3 — XSLT transformation
-        var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, context);
+        var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
 
         // Stage 4 — Lua execution
-        RunLuaRules(drawingInstructionsDoc, applicableRules, catalogue, context);
+        RunLuaRules(drawingInstructionsDoc, applicableRules, catalogue, viewport, mariner);
 
         // Stage 5 — assemble typed drawing instructions
         var instructions = AssembleInstructions(drawingInstructionsDoc, catalogue);
@@ -82,7 +83,7 @@ public class VectorPipeline
         XDocument featureDoc,
         IReadOnlyList<PortrayalRule> rules,
         IVectorPortrayalCatalogue catalogue,
-        NavigationContext? context)
+        Viewport? viewport)
     {
         var drawingInstructions = new XDocument(
             new XElement("DrawingInstructions"));
@@ -97,10 +98,10 @@ public class VectorPipeline
                 args.AddParam(token, string.Empty, color);
             }
 
-            // Pass display scale if navigation context is available
-            if (context is not null)
+            // Pass display scale if a viewport is available
+            if (viewport is not null)
             {
-                args.AddParam("displayScale", string.Empty, context.ScaleDenominator);
+                args.AddParam("displayScale", string.Empty, viewport.ScaleDenominator);
             }
 
             var transform = catalogue.GetCompiledRule(rule.Name);
@@ -128,7 +129,8 @@ public class VectorPipeline
         XDocument drawingInstructionsDoc,
         IReadOnlyList<PortrayalRule> rules,
         IVectorPortrayalCatalogue catalogue,
-        NavigationContext? context)
+        Viewport? viewport,
+        MarinerSettings? mariner)
     {
         var luaRules = rules.Where(r => r.Type == PortrayalRuleType.Lua).ToList();
         if (luaRules.Count == 0) return;
@@ -147,13 +149,16 @@ public class VectorPipeline
 
             // Configure the S-100 host environment
             var contextParams = new Dictionary<string, object?>();
-            if (context is not null)
+            if (mariner is not null)
             {
-                contextParams["SafetyContour"] = context.SafetyContour;
-                contextParams["SafetyDepth"] = context.SafetyDepth;
-                contextParams["ShallowContour"] = context.ShallowContour;
-                contextParams["DeepContour"] = context.DeepContour;
-                contextParams["displayScale"] = context.ScaleDenominator;
+                contextParams["SafetyContour"] = mariner.SafetyContour;
+                contextParams["SafetyDepth"] = mariner.SafetyDepth;
+                contextParams["ShallowContour"] = mariner.ShallowContour;
+                contextParams["DeepContour"] = mariner.DeepContour;
+            }
+            if (viewport is not null)
+            {
+                contextParams["displayScale"] = viewport.ScaleDenominator;
             }
 
             S100LuaHost.Configure(

@@ -12,6 +12,7 @@ public class SkiaCoverageRendererTests
         MinLatitude = 0, MaxLatitude = 1,
         MinLongitude = 0, MaxLongitude = 1,
         WidthPixels = 100, HeightPixels = 100,
+        ScaleDenominator = 50_000,
     };
 
     [Fact]

@@ -66,22 +66,19 @@ internal sealed class S111DatasetProcessor : IDatasetProcessor
 
         var metadata = _source.Metadata;
 
-        var navContext = new NavigationContext
+        var viewport = new Pipelines.Viewport
         {
-            Viewport = new Pipelines.Viewport
-            {
-                MinLatitude = metadata.Extent.SouthLatitude,
-                MaxLatitude = metadata.Extent.NorthLatitude,
-                MinLongitude = metadata.Extent.WestLongitude,
-                MaxLongitude = metadata.Extent.EastLongitude,
-                WidthPixels = metadata.GridMetadata.NumColumns,
-                HeightPixels = metadata.GridMetadata.NumRows,
-            },
+            MinLatitude = metadata.Extent.SouthLatitude,
+            MaxLatitude = metadata.Extent.NorthLatitude,
+            MinLongitude = metadata.Extent.WestLongitude,
+            MaxLongitude = metadata.Extent.EastLongitude,
+            WidthPixels = metadata.GridMetadata.NumColumns,
+            HeightPixels = metadata.GridMetadata.NumRows,
             ScaleDenominator = 50_000,
         };
 
-        var colorScheme = _catalogue.ResolveColorScheme(navContext);
-        var symbolScheme = _catalogue.ResolveSymbolScheme(navContext);
+        var colorScheme = _catalogue.ResolveColorScheme(MarinerSettings.Default);
+        var symbolScheme = _catalogue.ResolveSymbolScheme(MarinerSettings.Default);
         var sampled = _source.Sample(GridRegion.Full);
 
         var styledLayer = new StyledCoverageLayer
@@ -100,7 +97,7 @@ internal sealed class S111DatasetProcessor : IDatasetProcessor
         {
             LayerName = $"S-111: {_fileName}",
         };
-        var colorLayer = colorRenderer.Render(styledLayer, navContext.Viewport);
+        var colorLayer = colorRenderer.Render(styledLayer, viewport);
         var extent = colorLayer.Extent ?? new MRect(0, 0, 0, 0);
 
         var layers = new List<ILayer> { colorLayer };
@@ -121,7 +118,7 @@ internal sealed class S111DatasetProcessor : IDatasetProcessor
                 return reader.ReadToEnd();
             },
         };
-        var arrowLayer = arrowRenderer.Render(styledLayer, navContext.Viewport);
+        var arrowLayer = arrowRenderer.Render(styledLayer, viewport);
         if (arrowLayer is not null)
         {
             layers.Add(arrowLayer);

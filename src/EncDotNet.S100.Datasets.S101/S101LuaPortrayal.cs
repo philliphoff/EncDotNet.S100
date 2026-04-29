@@ -107,10 +107,10 @@ public sealed class S101LuaPortrayal
     /// Runs the S-101 Lua portrayal pipeline for the given dataset.
     /// Returns the raw emitted drawing instruction strings, keyed by feature reference.
     /// </summary>
-    public IReadOnlyList<EmittedInstruction> Execute(S101Dataset dataset, NavigationContext context)
+    public IReadOnlyList<EmittedInstruction> Execute(S101Dataset dataset, MarinerSettings mariner)
     {
         ArgumentNullException.ThrowIfNull(dataset);
-        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(mariner);
 
         var dataProvider = new S101LuaDataProvider(dataset, _featureCatalogue);
 
@@ -171,8 +171,8 @@ public sealed class S101LuaPortrayal
         var cpSource = BuildContextParameterInitScript();
         lua.Execute(cpSource);
 
-        // 5. Set context parameter overrides from NavigationContext
-        SetContextParameters(lua, context);
+        // 5. Set context parameter overrides from MarinerSettings
+        SetContextParameters(lua, mariner);
 
         // 6. Call PortrayalMain(featureIDs) — iterates features, calls per-feature
         //    rule functions, emits drawing instructions via HostPortrayalEmit.
@@ -239,16 +239,16 @@ public sealed class S101LuaPortrayal
         return sb.ToString();
     }
 
-    private void SetContextParameters(ILuaContext lua, NavigationContext context)
+    private void SetContextParameters(ILuaContext lua, MarinerSettings mariner)
     {
-        // Known S-101 context parameters mapped from NavigationContext.
+        // Known S-101 context parameters mapped from MarinerSettings.
         // PortrayalSetContextParameter expects both arguments as strings.
         var parameters = new Dictionary<string, string>
         {
-            ["SafetyContour"] = context.SafetyContour.ToString(CultureInfo.InvariantCulture),
-            ["SafetyDepth"] = context.SafetyDepth.ToString(CultureInfo.InvariantCulture),
-            ["ShallowContour"] = context.ShallowContour.ToString(CultureInfo.InvariantCulture),
-            ["DeepContour"] = context.DeepContour.ToString(CultureInfo.InvariantCulture),
+            ["SafetyContour"] = mariner.SafetyContour.ToString(CultureInfo.InvariantCulture),
+            ["SafetyDepth"] = mariner.SafetyDepth.ToString(CultureInfo.InvariantCulture),
+            ["ShallowContour"] = mariner.ShallowContour.ToString(CultureInfo.InvariantCulture),
+            ["DeepContour"] = mariner.DeepContour.ToString(CultureInfo.InvariantCulture),
         };
 
         foreach (var (name, value) in parameters)

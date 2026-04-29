@@ -16,6 +16,9 @@ public sealed class Viewport
     /// <summary>Display height in pixels.</summary>
     public required int HeightPixels { get; init; }
 
+    /// <summary>Display scale denominator (e.g. 25_000 for 1:25000).</summary>
+    public required double ScaleDenominator { get; init; }
+
     public double LatitudeSpan => MaxLatitude - MinLatitude;
     public double LongitudeSpan => MaxLongitude - MinLongitude;
 }

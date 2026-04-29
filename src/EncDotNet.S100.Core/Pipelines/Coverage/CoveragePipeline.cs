@@ -5,12 +5,11 @@ public class CoveragePipeline
     public Task<ICoverageLayer> ProcessAsync(
         ICoverageSource source,
         ICoveragePortrayalCatalogue catalogue,
-        NavigationContext? context = null
+        MarinerSettings? mariner = null
     )
     {
         var metadata = source.Metadata;
-        var colorScheme = catalogue.ResolveColorScheme(
-            context ?? DefaultNavigationContext(metadata));
+        var colorScheme = catalogue.ResolveColorScheme(mariner ?? MarinerSettings.Default);
 
         // Sample the full grid (viewport clipping can narrow this later)
         var sampled = source.Sample(GridRegion.Full);
@@ -49,21 +48,6 @@ public class CoveragePipeline
 
         return Task.FromResult(layer);
     }
-
-    private static NavigationContext DefaultNavigationContext(CoverageMetadata metadata) =>
-        new NavigationContext
-        {
-            Viewport = new Viewport
-            {
-                MinLatitude = metadata.Extent.SouthLatitude,
-                MaxLatitude = metadata.Extent.NorthLatitude,
-                MinLongitude = metadata.Extent.WestLongitude,
-                MaxLongitude = metadata.Extent.EastLongitude,
-                WidthPixels = metadata.GridMetadata.NumColumns,
-                HeightPixels = metadata.GridMetadata.NumRows,
-            },
-            ScaleDenominator = 50_000,
-        };
 
     private static List<ContourLine> ExtractContours(
         SampledCoverage sampled,
