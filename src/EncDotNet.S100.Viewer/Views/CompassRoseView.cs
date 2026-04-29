@@ -57,17 +57,18 @@ internal sealed class CompassRoseView : Control
             return;
 
         var bgBrush = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255));
-        var borderBrush = new SolidColorBrush(Color.FromArgb(64, 0, 0, 0));
-        var borderPen = new Pen(borderBrush, 1);
-        context.DrawEllipse(bgBrush, borderPen, new Point(cx, cy), outerRadius, outerRadius);
+        context.DrawEllipse(bgBrush, null, new Point(cx, cy), outerRadius, outerRadius);
 
         var accent = TryFindAccentBrush() ?? Brushes.SteelBlue;
         var tickBrush = new SolidColorBrush(Color.FromArgb(150, 40, 40, 40));
 
         var rotation = MapRotation;
-        var minorLength = Math.Max(2.0, size * 0.10);
-        var cardinalLength = Math.Max(4.0, size * 0.22);
-        var northLength = Math.Max(5.0, size * 0.28);
+        // Inset the tick ring so ticks don't touch the compass edge.
+        var tickPadding = Math.Max(2.0, size * 0.06);
+        var tickOuterRadius = outerRadius - tickPadding;
+        var minorLength = Math.Max(2.0, size * 0.08);
+        var cardinalLength = Math.Max(3.0, size * 0.14);
+        var northLength = Math.Max(4.0, size * 0.20);
 
         // Minor ticks every 30 degrees, skipping the cardinals (which are
         // drawn as triangles below).
@@ -78,8 +79,8 @@ internal sealed class CompassRoseView : Control
             var rad = (rotation + a) * Math.PI / 180.0;
             var sin = Math.Sin(rad);
             var cos = Math.Cos(rad);
-            var p1 = new Point(cx + sin * outerRadius, cy - cos * outerRadius);
-            var p2 = new Point(cx + sin * (outerRadius - minorLength), cy - cos * (outerRadius - minorLength));
+            var p1 = new Point(cx + sin * tickOuterRadius, cy - cos * tickOuterRadius);
+            var p2 = new Point(cx + sin * (tickOuterRadius - minorLength), cy - cos * (tickOuterRadius - minorLength));
             var pen = new Pen(tickBrush, 1.0) { LineCap = PenLineCap.Round };
             context.DrawLine(pen, p1, p2);
         }
@@ -101,9 +102,9 @@ internal sealed class CompassRoseView : Control
             var tx = cos;
             var ty = sin;
 
-            var tip = new Point(cx + sin * outerRadius, cy - cos * outerRadius);
-            var basePx = cx + sin * (outerRadius - tickLen);
-            var basePy = cy - cos * (outerRadius - tickLen);
+            var tip = new Point(cx + sin * tickOuterRadius, cy - cos * tickOuterRadius);
+            var basePx = cx + sin * (tickOuterRadius - tickLen);
+            var basePy = cy - cos * (tickOuterRadius - tickLen);
             var b1 = new Point(basePx + tx * halfBase, basePy + ty * halfBase);
             var b2 = new Point(basePx - tx * halfBase, basePy - ty * halfBase);
 
