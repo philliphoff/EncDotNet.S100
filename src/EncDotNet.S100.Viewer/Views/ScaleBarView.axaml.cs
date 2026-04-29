@@ -92,6 +92,9 @@ public partial class ScaleBarView : UserControl
         }
 
         // Labels (one at each tick: 0, 1*L, 2*L, ..., N*L)
+        const string UnitText = " NM";
+        var unitWidth = 0.0;
+
         for (var i = 0; i <= pick.SegmentCount; i++)
         {
             var text = pick.FormatTick(i);
@@ -108,6 +111,22 @@ public partial class ScaleBarView : UserControl
             var tickX = i * segmentPx;
             Canvas.SetLeft(label, tickX - labelWidth / 2.0);
             LabelsCanvas.Children.Add(label);
+
+            // Append the unit label after the rightmost tick value so it reads
+            // e.g. "0  1  2  3 NM".
+            if (i == pick.SegmentCount)
+            {
+                var unitLabel = new TextBlock
+                {
+                    Text = UnitText,
+                    FontSize = 11,
+                    FontWeight = FontWeight.SemiBold,
+                };
+                unitLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                unitWidth = unitLabel.DesiredSize.Width;
+                Canvas.SetLeft(unitLabel, tickX + labelWidth / 2.0);
+                LabelsCanvas.Children.Add(unitLabel);
+            }
         }
 
         // Pad the canvases so the outermost labels (which extend past the bar
@@ -115,7 +134,7 @@ public partial class ScaleBarView : UserControl
         var firstLabelHalf = EstimateLabelHalfWidth(pick.FormatTick(0));
         var lastLabelHalf = EstimateLabelHalfWidth(pick.FormatTick(pick.SegmentCount));
         var leftPad = Math.Max(0, firstLabelHalf);
-        var rightPad = Math.Max(0, lastLabelHalf);
+        var rightPad = Math.Max(0, lastLabelHalf + unitWidth);
 
         // Shift everything right by leftPad so x=0 stays inside the canvas.
         foreach (var child in BarCanvas.Children)
