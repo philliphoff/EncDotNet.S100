@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Specifications;
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Datasets.S421.Tests;
 
 /// <summary>
 /// Integration tests that drive the full S-421 portrayal pipeline:
-/// dataset → FeatureXML → XSLT (bundled PC) → MapsuiS421VectorRenderer.
+/// dataset → FeatureXML → XSLT (bundled PC) → MapsuiDisplayListRenderer.
 /// </summary>
 public class S421RendererIntegrationTests
 {
@@ -72,21 +73,23 @@ public class S421RendererIntegrationTests
     {
         var (displayList, dataset, catalogue) = RunPipeline("RTE-TEST-GMIN.s421.gml");
 
-        var renderer = new MapsuiS421VectorRenderer
+        var renderer = new MapsuiDisplayListRenderer
         {
             Palette = catalogue.ActivePalette,
             SymbolProvider = name =>
             {
-                try { return catalogue.GetSymbol(name); }
+                try { return catalogue.GetSymbol(name).SvgContent; }
                 catch { return null; }
             },
         };
 
-        var layer = renderer.Render(displayList, dataset);
+        var instructions = Part9DisplayListReader.Read(displayList);
+        var geometryProvider = new S421FeatureGeometryProvider(dataset);
+        var layer = renderer.Render(instructions, geometryProvider);
         Assert.IsType<MemoryLayer>(layer);
 
         var memLayer = (MemoryLayer)layer;
-        var features = memLayer.Features.OfType<GeometryFeature>().ToList();
+        var features = memLayer.Features.ToList();
         Assert.Equal(2, features.Count); // both waypoints
 
         // Each rendered feature must carry its source dataset reference.
@@ -102,8 +105,10 @@ public class S421RendererIntegrationTests
     {
         var (displayList, dataset, catalogue) = RunPipeline("RTE-TEST-GFULL.s421.gml");
 
-        var renderer = new MapsuiS421VectorRenderer { Palette = catalogue.ActivePalette };
-        var layer = (MemoryLayer)renderer.Render(displayList, dataset);
+        var renderer = new MapsuiDisplayListRenderer { Palette = catalogue.ActivePalette };
+        var instructions = Part9DisplayListReader.Read(displayList);
+        var geometryProvider = new S421FeatureGeometryProvider(dataset);
+        var layer = (MemoryLayer)renderer.Render(instructions, geometryProvider);
 
         var features = layer.Features.OfType<GeometryFeature>().ToList();
         Assert.NotEmpty(features);

@@ -118,6 +118,7 @@ public static class Part9DisplayListReader
         string? lineStyleRef = null;
         string? color = null;
         double width = 0;
+        List<(double Offset, double Length)>? dashes = null;
 
         var refEl = element.Element("lineStyleReference");
         if (refEl is not null)
@@ -132,6 +133,17 @@ public static class Part9DisplayListReader
                 color = pen.Element("color")?.Value ?? pen.Attribute("color")?.Value;
                 width = ParseDouble(pen.Attribute("width")?.Value
                     ?? pen.Element("width")?.Value);
+            }
+
+            // S-421 (and other XSLT pipelines) emit dash patterns as
+            // <dash><start>0</start><length>3.6</length></dash> children of
+            // <lineStyle>; carry them through so the renderer can switch to
+            // a dashed pen.
+            foreach (var dashEl in inlineStyle.Elements("dash"))
+            {
+                var start = ParseDouble(dashEl.Element("start")?.Value);
+                var length = ParseDouble(dashEl.Element("length")?.Value);
+                (dashes ??= []).Add((start, length));
             }
         }
 
@@ -148,6 +160,7 @@ public static class Part9DisplayListReader
             LineStyleReference = lineStyleRef,
             LineColor = color,
             LineWidth = width,
+            Dashes = dashes,
         };
     }
 

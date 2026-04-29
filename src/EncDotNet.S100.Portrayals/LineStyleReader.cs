@@ -51,15 +51,21 @@ public static class LineStyleReader
                 color = colorElement.Value.Trim();
             }
 
+            // Width may be expressed as either a child element <width>
+            // or an attribute width="..."  on <pen>.
             var widthElement = FindElement(pen, "width");
-            if (widthElement is not null &&
-                float.TryParse(widthElement.Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var w))
+            var widthText = widthElement?.Value.Trim() ?? pen.Attribute("width")?.Value;
+            if (widthText is not null &&
+                float.TryParse(widthText, NumberStyles.Float, CultureInfo.InvariantCulture, out var w))
             {
                 width = w;
             }
         }
 
-        // Parse dash pattern entries
+        // Parse dash pattern entries.
+        // S-100 line style files use either <start>+<stop> or <start>+<length>
+        // children inside <dash>; we accept both forms and emit
+        // (offset, segmentLength) pairs.
         var dashElements = FindElements(root, "dash").ToList();
         if (dashElements.Count > 0)
         {
@@ -67,7 +73,7 @@ public static class LineStyleReader
             foreach (var dash in dashElements)
             {
                 var start = FindElement(dash, "start");
-                var stop = FindElement(dash, "stop");
+                var stop = FindElement(dash, "stop") ?? FindElement(dash, "length");
 
                 if (start is not null &&
                     float.TryParse(start.Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var s))

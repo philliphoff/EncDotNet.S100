@@ -58,6 +58,11 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
                 try { return catalogue.GetAreaFill(fillName); }
                 catch { return null; }
             },
+            LineStyleProvider = name =>
+            {
+                try { return catalogue.GetLineStyle(name); }
+                catch { return null; }
+            },
         };
 
         var geometryProvider = new S124FeatureGeometryProvider(_dataset);

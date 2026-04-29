@@ -114,6 +114,11 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                             return null;
                         }
                     },
+                    LineStyleProvider = name =>
+                    {
+                        try { return s101Cat.GetLineStyle(name); }
+                        catch { return null; }
+                    },
                 };
                 var geometryProvider = new S101FeatureGeometryProvider(_dataset);
                 var mapLayer = vectorRenderer.Render(prepared, geometryProvider);

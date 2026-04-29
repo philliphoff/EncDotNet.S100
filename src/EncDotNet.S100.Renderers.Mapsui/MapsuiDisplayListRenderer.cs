@@ -34,6 +34,13 @@ public sealed class MapsuiDisplayListRenderer
     /// </summary>
     public const string FeatureRefKey = "S100.FeatureRef";
 
+    /// <summary>
+    /// Size, in millimetres, of one S-100 portrayal "pixel" on the nominal
+    /// display surface (S-100 Part 9 §3.10.4 — 1 pixel = 0.32 mm).  Used to
+    /// convert spec-defined widths from millimetres to Mapsui screen pixels.
+    /// </summary>
+    private const double S100PixelSizeMm = 0.32;
+
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-101 Vector";
 
@@ -55,6 +62,15 @@ public sealed class MapsuiDisplayListRenderer
     /// When set, non-colorFill area instructions will render using tiled SVG patterns.
     /// </summary>
     public Func<string, AreaFill?>? AreaFillProvider { get; set; }
+
+    /// <summary>
+    /// Optional function that returns a <see cref="LineStyle"/> definition by
+    /// name. When set, line instructions that carry only a
+    /// <c>lineStyleReference</c> (e.g. S-421 <c>RTEACTLEGLINE</c>) will render
+    /// using the referenced colour, width, and dash pattern from the
+    /// portrayal catalogue.
+    /// </summary>
+    public Func<string, LineStyle?>? LineStyleProvider { get; set; }
 
     /// <summary>
     /// Global scale factor applied to all point symbols (default 1.0).
@@ -222,7 +238,7 @@ public sealed class MapsuiDisplayListRenderer
         var feature = instruction switch
         {
             AreaInstruction area => CreateAreaFeature(area, geometry, resolveColor, renderer),
-            LineInstruction line => CreateLineFeature(line, geometry, resolveColor),
+            LineInstruction line => CreateLineFeature(line, geometry, resolveColor, renderer),
             PointInstruction point => CreatePointFeature(point, geometry, resolveColor, renderer),
             TextInstruction text => CreateTextFeature(text, geometry, resolveColor, renderer),
             _ => null,
@@ -287,7 +303,8 @@ public sealed class MapsuiDisplayListRenderer
     private static IFeature? CreateLineFeature(
         LineInstruction instruction,
         FeatureGeometry geometry,
-        Func<string?, MapsuiColor> resolveColor)
+        Func<string?, MapsuiColor> resolveColor,
+        MapsuiDisplayListRenderer renderer)
     {
         var coords = geometry.Coordinates;
         if (coords.Count < 2)
@@ -296,14 +313,36 @@ public sealed class MapsuiDisplayListRenderer
         var projected = ProjectCoordinates(coords);
         var lineString = new LineString(projected.ToArray());
 
-        var lineColor = resolveColor(instruction.LineColor);
+        // Resolve color, width, and dash pattern.  Inline lineStyle wins; if
+        // only a lineStyleReference is supplied, look up the external style
+        // through the LineStyleProvider (e.g. S-421 RTEACTLEGLINE).
+        string? colorToken = instruction.LineColor;
+        double width = instruction.LineWidth;
+        bool dashed = instruction.Dashes is { Count: > 0 };
+
+        if (colorToken is null && instruction.LineStyleReference is not null && renderer.LineStyleProvider is not null)
+        {
+            var externalStyle = renderer.LineStyleProvider(instruction.LineStyleReference);
+            if (externalStyle is not null)
+            {
+                colorToken = externalStyle.Color;
+                if (externalStyle.Width > 0)
+                    width = externalStyle.Width;
+                if (externalStyle.DashPattern is { Length: > 0 })
+                    dashed = true;
+            }
+        }
+
+        // S-100 Part 9 specifies pen widths in millimetres on the nominal
+        // display surface, where 1 portrayal pixel = 0.32 mm.  Mapsui Pen.Width
+        // is in screen pixels, so convert mm → px before assigning.
+        var widthPx = width > 0 ? (width / S100PixelSizeMm) : 0.0;
         var pen = new Pen
         {
-            Color = lineColor,
-            Width = Math.Max(instruction.LineWidth, 0.5),
+            Color = resolveColor(colorToken),
+            Width = Math.Max(widthPx, 1.0),
         };
-
-        if (instruction.Dashes is { Count: > 0 })
+        if (dashed)
         {
             pen.PenStyle = PenStyle.Dash;
         }
@@ -398,10 +437,20 @@ public sealed class MapsuiDisplayListRenderer
 
         // Determine position: if LinePlacementPosition is set and we have
         // enough coordinates to form a line, interpolate along the polyline.
+        // Otherwise pick a sensible per-primitive anchor:
+        //   Curve   → middle vertex of the polyline (so labels along a route
+        //             leg or curve don't all stack at the start point);
+        //   Surface → first vertex of the exterior ring (matches the legacy
+        //             S-421 renderer placement);
+        //   Point   → the point itself.
         double lat, lon;
         if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2)
         {
             (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
+        }
+        else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
+        {
+            (lat, lon) = coords[coords.Count / 2];
         }
         else
         {
