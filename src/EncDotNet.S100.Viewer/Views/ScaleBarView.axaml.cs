@@ -69,15 +69,26 @@ public partial class ScaleBarView : UserControl
             return;
         }
 
-        var metersPerUnit = _unit.MetersPerUnit();
-        var pick = PickSegmentation(groundMetersPerPixel, metersPerUnit, TargetPixelWidth);
-        if (pick is null)
+        var options = _unit.GetUnits();
+        for (var idx = 0; idx < options.Count; idx++)
         {
-            ClearBar();
-            return;
+            var option = options[idx];
+            var pick = PickSegmentation(groundMetersPerPixel, option.MetersPerUnit, TargetPixelWidth);
+            if (pick is null)
+                continue;
+
+            var totalMeters = pick.Value.SegmentLength * pick.Value.SegmentCount * option.MetersPerUnit;
+            var isLast = idx == options.Count - 1;
+            // Drop to a smaller unit (e.g. km -> m) once the bar shrinks to or
+            // below this unit's switch threshold; the smallest unit always wins.
+            if (isLast || totalMeters > option.SwitchBelowMeters)
+            {
+                BuildBar(pick.Value, groundMetersPerPixel, option.MetersPerUnit, option.Abbreviation);
+                return;
+            }
         }
 
-        BuildBar(pick.Value, groundMetersPerPixel, metersPerUnit, _unit.Abbreviation());
+        ClearBar();
     }
 
     private void ClearBar()

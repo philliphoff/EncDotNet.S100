@@ -79,9 +79,8 @@ internal sealed class SettingsViewModel : ViewModelBase
     public static DistanceUnit[] AvailableDistanceUnits { get; } =
     [
         EncDotNet.S100.Viewer.DistanceUnit.NauticalMiles,
-        EncDotNet.S100.Viewer.DistanceUnit.Kilometers,
+        EncDotNet.S100.Viewer.DistanceUnit.Metric,
         EncDotNet.S100.Viewer.DistanceUnit.Miles,
-        EncDotNet.S100.Viewer.DistanceUnit.Meters,
     ];
 
     private DistanceUnit _distanceUnit;
