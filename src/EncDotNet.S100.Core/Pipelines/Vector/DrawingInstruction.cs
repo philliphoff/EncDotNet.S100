@@ -86,6 +86,15 @@ public sealed class PointInstruction : DrawingInstruction
     /// </summary>
     public double? LinePlacementPosition { get; init; }
 
+    /// <summary>
+    /// Optional explicit (latitude, longitude) anchor that overrides the
+    /// feature's geometry-derived anchor.  Set by the S-100 Part 9 §11.5
+    /// <c>AugmentedPoint</c> primitive in <c>GeographicCRS</c> mode
+    /// (e.g. used by S-101 SOUNDG03 to place each sounding of a MultiPoint
+    /// feature at its own coordinate).
+    /// </summary>
+    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
+
     internal override int TypeSortOrder => 2;
 }
 
@@ -214,6 +223,13 @@ public sealed class TextInstruction : DrawingInstruction
 
     /// <summary>Mode used to interpret <see cref="LineStartOffset"/> / <see cref="LineEndOffset"/>.</summary>
     public LinePlacementMode? LineOffsetMode { get; init; }
+
+    /// <summary>
+    /// Optional explicit (latitude, longitude) anchor that overrides the
+    /// feature's geometry-derived anchor (S-100 Part 9 §11.5 <c>AugmentedPoint</c>
+    /// in <c>GeographicCRS</c> mode).
+    /// </summary>
+    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
 
     internal override int TypeSortOrder => 3;
 }

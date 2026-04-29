@@ -366,11 +366,21 @@ public sealed class MapsuiDisplayListRenderer
         MapsuiDisplayListRenderer renderer)
     {
         var coords = geometry.Coordinates;
-        if (coords.Count == 0)
-            return null;
 
-        // Use first coordinate as the point location
-        var (lat, lon) = coords[0];
+        // S-100 Part 9 §11.5 AugmentedPoint (GeographicCRS) lets a rule
+        // override the per-instruction anchor — e.g. SOUNDG03 places each
+        // sounding of a MultiPoint feature at its own coordinate.
+        double lat, lon;
+        if (instruction.CoordinateOverride is { } anchor)
+        {
+            (lat, lon) = (anchor.Latitude, anchor.Longitude);
+        }
+        else
+        {
+            if (coords.Count == 0)
+                return null;
+            (lat, lon) = coords[0];
+        }
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
         var feature = new PointFeature(mx, my);
@@ -446,19 +456,21 @@ public sealed class MapsuiDisplayListRenderer
         MapsuiDisplayListRenderer renderer)
     {
         var coords = geometry.Coordinates;
-        if (coords.Count == 0 || string.IsNullOrEmpty(instruction.Text))
+        if (string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        // Determine position from explicit instructions first; only fall back
-        // to per-primitive heuristics if the instruction is silent.
-        //   • LinePlacementPosition (S-100 Part 9 §11.4.2 textLine) on a
-        //     curve  → interpolate along the polyline at that fraction.
-        //   • LinePlacementPosition on a surface → centroid of the exterior
-        //     ring (line offsets are not meaningful on a polygon, but some
-        //     catalogues emit them anyway).
-        //   • Otherwise: curve → middle vertex; surface/point → first vertex.
+        // S-100 Part 9 §11.5 AugmentedPoint (GeographicCRS) anchor override
+        // takes precedence over any feature-derived anchor.
         double lat, lon;
-        if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
+        if (instruction.CoordinateOverride is { } anchor)
+        {
+            (lat, lon) = (anchor.Latitude, anchor.Longitude);
+        }
+        else if (coords.Count == 0)
+        {
+            return null;
+        }
+        else if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
             && geometry.Type == GeometryType.Curve)
         {
             (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);

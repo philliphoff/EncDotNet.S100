@@ -59,6 +59,14 @@ public static class DrawingInstructionParser
         TextHorizontalAlignment textHAlign = TextHorizontalAlignment.Center;
         TextVerticalAlignment textVAlign = TextVerticalAlignment.Center;
 
+        // Augmented-geometry state.  S-100 Part 9 §11.5 lets a Lua rule
+        // override the per-instruction anchor with AugmentedPoint, or build
+        // a synthetic line geometry from AugmentedRay/ArcByRadius/AugmentedPath.
+        // We currently support only the GeographicCRS anchor override; a
+        // following PointInstruction or TextInstruction is anchored at this
+        // explicit lat/lon instead of the feature's first vertex.
+        (double Latitude, double Longitude)? augmentedAnchor = null;
+
         var segments = instructionString.Split(';');
 
         foreach (var segment in segments)
@@ -196,6 +204,7 @@ public static class DrawingInstructionParser
                         LocalOffsetX = localOffsetX,
                         LocalOffsetY = localOffsetY,
                         LinePlacementPosition = linePlacementPosition,
+                        CoordinateOverride = augmentedAnchor,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
@@ -204,6 +213,7 @@ public static class DrawingInstructionParser
                     scaleFactor = 1.0;
                     localOffsetX = 0;
                     localOffsetY = 0;
+                    augmentedAnchor = null;
                     break;
 
                 case "LineInstruction":
@@ -272,6 +282,7 @@ public static class DrawingInstructionParser
                         VerticalAlignment = textVAlign,
                         OffsetXmm = localOffsetX != 0 ? localOffsetX : null,
                         OffsetYmm = localOffsetY != 0 ? localOffsetY : null,
+                        CoordinateOverride = augmentedAnchor,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
@@ -281,6 +292,7 @@ public static class DrawingInstructionParser
                     textVAlign = TextVerticalAlignment.Center;
                     localOffsetX = 0;
                     localOffsetY = 0;
+                    augmentedAnchor = null;
                     break;
 
                 case "NullInstruction":
@@ -300,11 +312,6 @@ public static class DrawingInstructionParser
                 case "AlertReference":
                 case "Hover":
                 case "SpatialReference":
-                case "ClearGeometry":
-                case "AugmentedPoint":
-                case "AugmentedRay":
-                case "AugmentedPath":
-                case "ArcByRadius":
                 case "AreaPlacement":
                 case "AreaCRS":
                 case "Date":
@@ -312,6 +319,38 @@ public static class DrawingInstructionParser
                 case "DateTime":
                 case "TimeValid":
                 case "ClearTime":
+                    // Recognised but not yet handled — skip silently
+                    break;
+
+                case "ClearGeometry":
+                    augmentedAnchor = null;
+                    break;
+
+                case "AugmentedPoint":
+                    {
+                        // AugmentedPoint:CRS,x,y
+                        // GeographicCRS: x = longitude, y = latitude
+                        // (S-101 SOUNDG03 emits feature.X (longitude) then feature.Y (latitude)).
+                        // LocalCRS / PortrayalCRS variants are not yet handled.
+                        var apParts = value.Split(',');
+                        if (apParts.Length >= 3 &&
+                            string.Equals(apParts[0], "GeographicCRS", StringComparison.OrdinalIgnoreCase) &&
+                            double.TryParse(apParts[1], CultureInfo.InvariantCulture, out var apLon) &&
+                            double.TryParse(apParts[2], CultureInfo.InvariantCulture, out var apLat))
+                        {
+                            augmentedAnchor = (apLat, apLon);
+                        }
+                    }
+                    break;
+
+                case "AugmentedRay":
+                case "AugmentedPath":
+                case "ArcByRadius":
+                    // Buffered synthetic line geometry: not yet supported.
+                    // Affects sector lights and all-around-light circles.
+                    WarnAugmentedLineGeometryOnce();
+                    break;
+
                 case "TextAlignHorizontal":
                     if (Enum.TryParse<TextHorizontalAlignment>(value, ignoreCase: true, out var parsedHAlign))
                         textHAlign = parsedHAlign;
@@ -362,6 +401,18 @@ public static class DrawingInstructionParser
         }
 
         return results;
+    }
+
+    private static int s_augmentedLineGeometryWarningCount;
+
+    private static void WarnAugmentedLineGeometryOnce()
+    {
+        if (System.Threading.Interlocked.Increment(ref s_augmentedLineGeometryWarningCount) == 1)
+        {
+            Console.Error.WriteLine(
+                "[S101] Augmented line geometry (AugmentedRay / ArcByRadius / AugmentedPath) " +
+                "is not yet rendered — sector lights and all-around-light circles will be incomplete.");
+        }
     }
 
     /// <summary>

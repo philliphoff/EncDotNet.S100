@@ -121,4 +121,50 @@ public class S101DrawingInstructionParserTests
         Assert.Equal(45, pt.Rotation);
         Assert.Equal("BOYLAT11", pt.SymbolReference);
     }
+
+    [Fact]
+    public void PointInstruction_AugmentedPointGeographicCrsOverridesAnchor()
+    {
+        // S-101 SOUNDG03 emits AugmentedPoint:GeographicCRS,longitude,latitude
+        // before the PointInstruction so each sounding of a MultiPoint feature
+        // is anchored at its own coordinate.
+        const string s =
+            "AugmentedPoint:GeographicCRS,24.5,60.25;PointInstruction:SOUNDG02";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+        var pt = Assert.Single(parsed.OfType<PointInstruction>());
+
+        Assert.NotNull(pt.CoordinateOverride);
+        Assert.Equal(60.25, pt.CoordinateOverride!.Value.Latitude);
+        Assert.Equal(24.5, pt.CoordinateOverride!.Value.Longitude);
+    }
+
+    [Fact]
+    public void PointInstruction_AugmentedPointResetsBetweenInstructions()
+    {
+        // SOUNDG03 emits AugmentedPoint per sounding so each PointInstruction
+        // gets its own anchor; without a fresh AugmentedPoint, the next
+        // emit must NOT inherit the previous override.
+        const string s =
+            "AugmentedPoint:GeographicCRS,1,2;PointInstruction:A;" +
+            "PointInstruction:B";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s).OfType<PointInstruction>().ToList();
+
+        Assert.Equal(2, parsed.Count);
+        Assert.NotNull(parsed[0].CoordinateOverride);
+        Assert.Null(parsed[1].CoordinateOverride);
+    }
+
+    [Fact]
+    public void ClearGeometry_ResetsPendingAugmentedAnchor()
+    {
+        const string s =
+            "AugmentedPoint:GeographicCRS,1,2;ClearGeometry;PointInstruction:X";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+        var pt = Assert.Single(parsed.OfType<PointInstruction>());
+
+        Assert.Null(pt.CoordinateOverride);
+    }
 }
