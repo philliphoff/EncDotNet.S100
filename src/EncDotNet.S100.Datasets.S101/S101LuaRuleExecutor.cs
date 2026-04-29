@@ -8,15 +8,18 @@ using EncDotNet.S100.Scripting;
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>
-/// Orchestrates the S-101 Lua portrayal pipeline as defined in S-100 Part 9A.
+/// Executes the S-101 Lua portrayal stage as defined in S-100 Part 9A.
 /// Creates a single Lua context, registers the Host API, loads the main.lua
 /// entry point (which requires the S-100 scripting framework), initialises
-/// context parameters, calls <c>PortrayalMain()</c>, and collects the emitted
-/// drawing instructions.
+/// context parameters, calls <c>PortrayalMain()</c>, parses the emitted
+/// instruction strings via <see cref="DrawingInstructionParser"/>, and applies
+/// S-101-specific post-processing (e.g. SAFCON contour-label merging) before
+/// returning typed drawing instructions to the unified vector pipeline.
 /// </summary>
-public sealed class S101LuaPortrayal
+public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 {
     private readonly ILuaEngine _luaEngine;
+    private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly FeatureCatalogue _featureCatalogue;
 
@@ -89,28 +92,52 @@ public sealed class S101LuaPortrayal
         end
         """;
 
-    public S101LuaPortrayal(
+    public S101LuaRuleExecutor(
         ILuaEngine luaEngine,
+        S101Dataset dataset,
         PortrayalCatalogueProvider provider,
         FeatureCatalogue featureCatalogue)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
+        ArgumentNullException.ThrowIfNull(dataset);
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
 
         _luaEngine = luaEngine;
+        _dataset = dataset;
         _provider = provider;
         _featureCatalogue = featureCatalogue;
     }
 
     /// <summary>
-    /// Runs the S-101 Lua portrayal pipeline for the given dataset.
-    /// Returns the raw emitted drawing instruction strings, keyed by feature reference.
+    /// Runs the S-101 Lua portrayal stage and returns typed drawing instructions
+    /// ready for the renderer. Equivalent to <see cref="ExecuteRaw"/> followed by
+    /// <see cref="DrawingInstructionParser.Parse"/> and
+    /// <see cref="S101SafconLabelMerger.Merge"/>.
     /// </summary>
-    public IReadOnlyList<EmittedInstruction> Execute(S101Dataset dataset, MarinerSettings mariner)
+    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner)
     {
-        ArgumentNullException.ThrowIfNull(dataset);
+        var emitted = ExecuteRaw(mariner);
+
+        var parsed = new List<DrawingInstruction>();
+        foreach (var e in emitted)
+        {
+            parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
+        }
+
+        return S101SafconLabelMerger.Merge(parsed);
+    }
+
+    /// <summary>
+    /// Runs the S-101 Lua portrayal pipeline for the bound dataset and returns
+    /// the raw emitted drawing-instruction strings keyed by feature reference.
+    /// Intended for diagnostics; production callers should prefer
+    /// <see cref="Execute(MarinerSettings)"/>, which returns typed instructions.
+    /// </summary>
+    public IReadOnlyList<EmittedInstruction> ExecuteRaw(MarinerSettings mariner)
+    {
         ArgumentNullException.ThrowIfNull(mariner);
+        var dataset = _dataset;
 
         var dataProvider = new S101LuaDataProvider(dataset, _featureCatalogue);
 

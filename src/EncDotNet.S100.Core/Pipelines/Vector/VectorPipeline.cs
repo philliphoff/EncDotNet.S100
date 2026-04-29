@@ -1,7 +1,5 @@
-using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Xsl;
-using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
@@ -11,18 +9,18 @@ namespace EncDotNet.S100.Pipelines.Vector;
 ///   <item>FeatureXML acquisition from <see cref="IFeatureXmlSource"/></item>
 ///   <item>Rule selection — match dataset feature types to catalogue rules</item>
 ///   <item>XSLT transformation — run applicable XSLT rules against the FeatureXML</item>
-///   <item>Lua execution — run applicable Lua rules with navigation context</item>
-///   <item>Drawing instruction assembly — parse XML output into typed objects</item>
+///   <item>Lua execution — delegate to <see cref="ILuaRuleExecutor"/> (Part 9A)</item>
+///   <item>Drawing instruction assembly — parse XSLT output into typed objects and append Lua output</item>
 ///   <item>Viewing group filtering and priority sorting</item>
 /// </list>
 /// </summary>
 public class VectorPipeline
 {
-    private readonly ILuaEngine? _luaEngine;
+    private readonly ILuaRuleExecutor? _luaExecutor;
 
-    public VectorPipeline(ILuaEngine? luaEngine = null)
+    public VectorPipeline(ILuaRuleExecutor? luaExecutor = null)
     {
-        _luaEngine = luaEngine;
+        _luaExecutor = luaExecutor;
     }
 
     public Task<IVectorLayer> ProcessAsync(
@@ -45,11 +43,16 @@ public class VectorPipeline
         // Stage 3 — XSLT transformation
         var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
 
-        // Stage 4 — Lua execution
-        RunLuaRules(drawingInstructionsDoc, applicableRules, catalogue, viewport, mariner);
+        // Stage 5 — assemble typed drawing instructions from the XSLT output
+        var instructions = AssembleInstructions(drawingInstructionsDoc, catalogue).ToList();
 
-        // Stage 5 — assemble typed drawing instructions
-        var instructions = AssembleInstructions(drawingInstructionsDoc, catalogue);
+        // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
+        // drawing instructions directly; append them to the XSLT-stage output
+        // before viewing-group filtering and priority sorting.
+        if (_luaExecutor is not null)
+        {
+            instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+        }
 
         // Stage 6 — viewing group filter + priority sort
         var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
@@ -121,90 +124,6 @@ public class VectorPipeline
         }
 
         return drawingInstructions;
-    }
-
-    // ── Stage 4: Lua execution ─────────────────────────────────────────
-
-    private void RunLuaRules(
-        XDocument drawingInstructionsDoc,
-        IReadOnlyList<PortrayalRule> rules,
-        IVectorPortrayalCatalogue catalogue,
-        Viewport? viewport,
-        MarinerSettings? mariner)
-    {
-        var luaRules = rules.Where(r => r.Type == PortrayalRuleType.Lua).ToList();
-        if (luaRules.Count == 0) return;
-
-        if (_luaEngine is null)
-        {
-            throw new InvalidOperationException(
-                "Lua rules are present but no ILuaEngine was provided to the pipeline.");
-        }
-
-        foreach (var rule in luaRules)
-        {
-            var script = catalogue.GetLuaScript(rule.Name);
-
-            using var lua = _luaEngine.CreateContext();
-
-            // Configure the S-100 host environment
-            var contextParams = new Dictionary<string, object?>();
-            if (mariner is not null)
-            {
-                contextParams["SafetyContour"] = mariner.SafetyContour;
-                contextParams["SafetyDepth"] = mariner.SafetyDepth;
-                contextParams["ShallowContour"] = mariner.ShallowContour;
-                contextParams["DeepContour"] = mariner.DeepContour;
-            }
-            if (viewport is not null)
-            {
-                contextParams["displayScale"] = viewport.ScaleDenominator;
-            }
-
-            S100LuaHost.Configure(
-                lua,
-                token => catalogue.ActivePalette.Resolve(token),
-                contextParams);
-
-            // Expose symbol lookup to Lua
-            lua.SetGlobal("getSymbol", (Func<string, string>)(name =>
-            {
-                var sym = catalogue.GetSymbol(name);
-                return sym.Name;
-            }));
-
-            // Execute the script to define its functions
-            lua.Execute(script.Source);
-
-            // Capture drawing instruction XML strings emitted by the script
-            var emittedInstructions = new List<string>();
-            lua.SetGlobal("_emitDrawingInstruction",
-                (Action<string>)(xml => emittedInstructions.Add(xml)));
-
-            // Provide an emit helper the script can call
-            lua.Execute("""
-                function emitDrawingInstruction(xml)
-                    _emitDrawingInstruction(xml)
-                end
-                """);
-
-            // Call the script's main entry point if it exists
-            lua.Call("main", drawingInstructionsDoc.Root?.ToString() ?? "");
-
-            // Merge emitted instructions into the accumulated document
-            foreach (var xml in emittedInstructions)
-            {
-                try
-                {
-                    var element = XElement.Parse(xml);
-                    drawingInstructionsDoc.Root!.Add(element);
-                }
-                catch (XmlException)
-                {
-                    // Skip malformed Lua output
-                }
-            }
-        }
     }
 
     // ── Stage 5: Drawing instruction assembly ──────────────────────────

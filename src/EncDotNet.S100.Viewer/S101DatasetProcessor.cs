@@ -42,121 +42,72 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
     {
         var mariner = MarinerSettings.Default;
 
-        // Try the Lua portrayal pipeline if a feature catalogue is available
-        using var fcStream = _featureCatalogueResolver("S-101");
-        if (fcStream is not null)
-        {
-            try
-            {
-                Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
-                var fc = FeatureCatalogueReader.Read(fcStream);
-                var portrayal = new S101LuaPortrayal(_luaEngine, _provider, fc);
-                var emitted = portrayal.Execute(_dataset, mariner);
-                Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");
+        using var fcStream = _featureCatalogueResolver("S-101")
+            ?? throw new InvalidOperationException(
+                "S-101 feature catalogue is required to render the dataset but none was provided.");
 
-                // Parse emitted instruction strings
-                var parsed = new List<DrawingInstruction>();
-                foreach (var e in emitted)
+        Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
+        var fc = FeatureCatalogueReader.Read(fcStream);
+        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, _provider, fc);
+        var prepared = executor.Execute(mariner);
+        Console.WriteLine($"[S101-Lua] Pipeline produced {prepared.Count} drawing instructions");
+
+        // Load the colour palette from the portrayal catalogue
+        var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
+        var paletteType = context?.Palette ?? PaletteType.Day;
+        s101Cat.SwitchPalette(paletteType);
+        var palette = s101Cat.ActivePalette;
+        Console.WriteLine($"[S101-Lua] Loaded {paletteType} palette with {palette.Colors.Count} colors");
+
+        // Render to Mapsui layer
+        var vectorRenderer = new MapsuiDisplayListRenderer
+        {
+            LayerName = $"S-101: {_fileName}",
+            Palette = palette,
+            SymbolScale = context?.SymbolScale ?? 1.0,
+            TextScale = context?.TextScale ?? 1.0,
+            SymbolProvider = symbolName =>
+            {
+                try
                 {
-                    parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
+                    var svg = s101Cat.GetSymbol(symbolName);
+                    return svg.SvgContent;
                 }
-                Console.WriteLine($"[S101-Lua] Parsed {parsed.Count} drawing instructions");
-
-                // Merge S-101 SAFCON contour-label sequences into single text instructions
-                var prepared = S101SafconLabelMerger.Merge(parsed);
-
-                // Load the colour palette from the portrayal catalogue
-                var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
-                var paletteType = context?.Palette ?? PaletteType.Day;
-                s101Cat.SwitchPalette(paletteType);
-                var palette = s101Cat.ActivePalette;
-                Console.WriteLine($"[S101-Lua] Loaded {paletteType} palette with {palette.Colors.Count} colors");
-
-                // Render to Mapsui layer
-                var vectorRenderer = new MapsuiDisplayListRenderer
+                catch
                 {
-                    LayerName = $"S-101: {_fileName}",
-                    Palette = palette,
-                    SymbolScale = context?.SymbolScale ?? 1.0,
-                    TextScale = context?.TextScale ?? 1.0,
-                    SymbolProvider = symbolName =>
-                    {
-                        try
-                        {
-                            var svg = s101Cat.GetSymbol(symbolName);
-                            return svg.SvgContent;
-                        }
-                        catch
-                        {
-                            return null;
-                        }
-                    },
-                    AreaFillProvider = fillName =>
-                    {
-                        try
-                        {
-                            return s101Cat.GetAreaFill(fillName);
-                        }
-                        catch
-                        {
-                            return null;
-                        }
-                    },
-                    LineStyleProvider = name =>
-                    {
-                        try { return s101Cat.GetLineStyle(name); }
-                        catch { return null; }
-                    },
-                };
-                var geometryProvider = new S101FeatureGeometryProvider(_dataset);
-                var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
-                var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
-                Console.WriteLine($"[S101-Lua] Rendered {prepared.Count} instructions to Mapsui layer");
-
-                var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
-                           $"{emitted.Count} emitted, {parsed.Count} instructions";
-
-                return new DatasetResult
-                {
-                    Layers = [mapLayer],
-                    Extent = layerExtent,
-                    Info = info,
-                    ProductSpec = "S-101",
-                };
-            }
-            catch (Exception ex)
+                    return null;
+                }
+            },
+            AreaFillProvider = fillName =>
             {
-                Console.WriteLine($"[S101-Lua] ERROR: {ex.Message}");
-                Console.WriteLine($"[S101-Lua] Falling back to legacy pipeline.");
-                // Fall through to legacy pipeline
-            }
-        }
-
-        // Fallback: use the legacy VectorPipeline (XSLT + per-rule Lua)
-        var featureXmlSource = new S101FeatureXmlSource(_dataset);
-        var catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
-
-        var pipeline = new VectorPipeline(_luaEngine);
-        var vectorLayer = pipeline.ProcessAsync(featureXmlSource, catalogue, viewport: null, mariner: mariner)
-            .GetAwaiter().GetResult();
-
-        var instructions = vectorLayer.Instructions;
-
-        var fallbackLayer = new MemoryLayer
-        {
-            Name = $"S-101: {_fileName}",
+                try
+                {
+                    return s101Cat.GetAreaFill(fillName);
+                }
+                catch
+                {
+                    return null;
+                }
+            },
+            LineStyleProvider = name =>
+            {
+                try { return s101Cat.GetLineStyle(name); }
+                catch { return null; }
+            },
         };
+        var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+        var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
+        var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
+        Console.WriteLine($"[S101-Lua] Rendered {prepared.Count} instructions to Mapsui layer");
 
-        var extent = ComputeDatasetExtent();
-
-        var fallbackInfo = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
-                   $"{instructions.Count} instructions";
+        var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
+                   $"{prepared.Count} instructions";
 
         return new DatasetResult
         {
-            Layers = [fallbackLayer],
-            Extent = extent,
-            Info = fallbackInfo,
+            Layers = [mapLayer],
+            Extent = layerExtent,
+            Info = info,
             ProductSpec = "S-101",
         };
     }
@@ -191,32 +142,5 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         foreach (var f in features)
             index[f.Id] = f;
         return index;
-    }
-
-    private MRect ComputeDatasetExtent()
-    {
-        double minX = double.MaxValue, minY = double.MaxValue;
-        double maxX = double.MinValue, maxY = double.MinValue;
-        bool any = false;
-
-        var vectorSource = new S101VectorSource(_dataset);
-        foreach (var feature in vectorSource.GetFeatures())
-        {
-            foreach (var (lat, lon) in feature.Coordinates)
-            {
-                any = true;
-                if (lon < minX) minX = lon;
-                if (lon > maxX) maxX = lon;
-                if (lat < minY) minY = lat;
-                if (lat > maxY) maxY = lat;
-            }
-        }
-
-        if (!any) return new MRect(0, 0, 0, 0);
-
-        // Convert to Mercator for Mapsui
-        var (mx1, my1) = Mapsui.Projections.SphericalMercator.FromLonLat(minX, minY);
-        var (mx2, my2) = Mapsui.Projections.SphericalMercator.FromLonLat(maxX, maxY);
-        return new MRect(mx1, my1, mx2, my2);
     }
 }

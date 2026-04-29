@@ -450,8 +450,8 @@ public class S101PatternFillDiagnosticTests
         var palette = catalogue.ActivePalette;
 
         // Run Lua portrayal
-        var portrayal = new S101LuaPortrayal(luaEngine, provider, fc);
-        var emitted = portrayal.Execute(dataset, MarinerSettings.Default);
+        var portrayal = new S101LuaRuleExecutor(luaEngine, dataset, provider, fc);
+        var emitted = portrayal.ExecuteRaw(MarinerSettings.Default);
 
         // Dump raw emit strings for key features
         var rawLines = new List<string> { "=== Raw Lua Emit Strings ===" };

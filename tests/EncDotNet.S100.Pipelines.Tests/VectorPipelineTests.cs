@@ -396,26 +396,6 @@ public class VectorPipelineTests
     }
 
     [Fact]
-    public async Task ProcessAsync_LuaRulesWithoutEngine_Throws()
-    {
-        var source = new FakeFeatureXmlSource(
-            featureTypes: ["Light"],
-            featureXml: "<Dataset><Feature id='1' type='Light'/></Dataset>");
-
-        var catalogue = new FakeVectorPortrayalCatalogue(
-        [
-            new PortrayalRule { Name = "LightRule", Type = PortrayalRuleType.Lua, ExecutionOrder = 1, AppliesTo = ["Light"] },
-        ],
-        xsltRules: new());
-
-        // No Lua engine provided
-        var pipeline = new VectorPipeline();
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => pipeline.ProcessAsync(source, catalogue));
-    }
-
-    [Fact]
     public async Task ProcessAsync_MultipleXsltRules_AccumulateInstructions()
     {
         var source = new FakeFeatureXmlSource(
