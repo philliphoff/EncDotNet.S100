@@ -233,23 +233,22 @@ public class VectorPipeline
     private static DrawingInstruction? AssemblePointInstruction(
         XElement element, IVectorPortrayalCatalogue catalogue)
     {
-        var symbolRef = element.Element("Symbol")?.Attribute("ref")?.Value;
+        var symbolElement = element.Element("Symbol");
+        var symbolRef = symbolElement?.Attribute("ref")?.Value;
         if (symbolRef is null) return null;
 
-        var position = element.Element("Position");
-        if (position is null) return null;
+        var rotationAttr = symbolElement?.Attribute("rotation")?.Value;
+        double? rotation = rotationAttr is not null ? ParseDouble(rotationAttr) : null;
 
         return new PointInstruction
         {
-            FeatureId = element.Attribute("id")?.Value ?? "",
+            FeatureReference = element.Attribute("id")?.Value ?? "",
             Plane = ParsePlane(element.Attribute("plane")?.Value),
             ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
             DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            Latitude = ParseDouble(position.Attribute("lat")?.Value),
-            Longitude = ParseDouble(position.Attribute("lon")?.Value),
-            Symbol = catalogue.GetSymbol(symbolRef),
-            Rotation = ParseDouble(element.Element("Symbol")?.Attribute("rotation")?.Value),
-            Scale = ParseDouble(element.Element("Symbol")?.Attribute("scale")?.Value, 1.0),
+            SymbolReference = symbolRef,
+            SymbolScale = ParseDouble(symbolElement?.Attribute("scale")?.Value, 1.0),
+            Rotation = rotation,
         };
     }
 
@@ -259,17 +258,13 @@ public class VectorPipeline
         var styleRef = element.Element("LineStyle")?.Attribute("ref")?.Value;
         if (styleRef is null) return null;
 
-        var geometryElement = element.Element("Geometry");
-        var coords = ParseCoordinates(geometryElement);
-
         return new LineInstruction
         {
-            FeatureId = element.Attribute("id")?.Value ?? "",
+            FeatureReference = element.Attribute("id")?.Value ?? "",
             Plane = ParsePlane(element.Attribute("plane")?.Value),
             ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
             DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            Geometry = coords,
-            LineStyle = catalogue.GetLineStyle(styleRef),
+            LineStyleReference = styleRef,
         };
     }
 
@@ -279,57 +274,39 @@ public class VectorPipeline
         var fillRef = element.Element("AreaFill")?.Attribute("ref")?.Value;
         if (fillRef is null) return null;
 
-        var rings = new List<IReadOnlyList<(double, double)>>();
-        foreach (var ringElement in element.Elements("Ring"))
-        {
-            rings.Add(ParseCoordinates(ringElement));
-        }
-
-        // If no Ring elements, try Geometry as a single ring
-        if (rings.Count == 0)
-        {
-            var geometry = element.Element("Geometry");
-            if (geometry is not null)
-            {
-                rings.Add(ParseCoordinates(geometry));
-            }
-        }
-
         var outlineRef = element.Element("OutlineStyle")?.Attribute("ref")?.Value;
 
         return new AreaInstruction
         {
-            FeatureId = element.Attribute("id")?.Value ?? "",
+            FeatureReference = element.Attribute("id")?.Value ?? "",
             Plane = ParsePlane(element.Attribute("plane")?.Value),
             ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
             DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            Rings = rings,
-            AreaFill = catalogue.GetAreaFill(fillRef),
-            OutlineStyle = outlineRef is not null ? catalogue.GetLineStyle(outlineRef) : null,
+            AreaFillReference = fillRef,
+            OutlineStyleReference = outlineRef,
         };
     }
 
     private static DrawingInstruction? AssembleTextInstruction(XElement element)
     {
-        var position = element.Element("Position");
         var textContent = element.Element("Text")?.Value;
-        if (position is null || textContent is null) return null;
+        if (textContent is null) return null;
 
         var textStyle = element.Element("TextStyle");
+        var rotationAttr = element.Attribute("rotation")?.Value;
+        double? rotation = rotationAttr is not null ? ParseDouble(rotationAttr) : null;
 
         return new TextInstruction
         {
-            FeatureId = element.Attribute("id")?.Value ?? "",
+            FeatureReference = element.Attribute("id")?.Value ?? "",
             Plane = ParsePlane(element.Attribute("plane")?.Value),
             ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
             DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            Latitude = ParseDouble(position.Attribute("lat")?.Value),
-            Longitude = ParseDouble(position.Attribute("lon")?.Value),
             Text = textContent,
-            FontRef = textStyle?.Attribute("ref")?.Value,
+            FontReference = textStyle?.Attribute("ref")?.Value,
             FontSize = ParseDouble(textStyle?.Attribute("fontSize")?.Value, 10.0),
-            Color = textStyle?.Attribute("color")?.Value ?? "#000000",
-            Rotation = ParseDouble(element.Attribute("rotation")?.Value),
+            FontColor = textStyle?.Attribute("color")?.Value ?? "CHBLK",
+            Rotation = rotation,
         };
     }
 
@@ -359,18 +336,6 @@ public class VectorPipeline
     }
 
     // ── Parsing helpers ────────────────────────────────────────────────
-
-    private static IReadOnlyList<(double Latitude, double Longitude)> ParseCoordinates(
-        XElement? container)
-    {
-        if (container is null) return [];
-
-        return container.Elements("Point")
-            .Select(p => (
-                Latitude: ParseDouble(p.Attribute("lat")?.Value),
-                Longitude: ParseDouble(p.Attribute("lon")?.Value)))
-            .ToList();
-    }
 
     private static DisplayPlane ParsePlane(string? value)
     {

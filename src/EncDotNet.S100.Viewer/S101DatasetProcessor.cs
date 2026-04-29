@@ -67,7 +67,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
                 Console.WriteLine($"[S101-Lua] PortrayalMain completed: {emitted.Count} emitted instructions");
 
                 // Parse emitted instruction strings
-                var parsed = new List<ParsedDrawingInstruction>();
+                var parsed = new List<DrawingInstruction>();
                 foreach (var e in emitted)
                 {
                     parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
@@ -150,7 +150,7 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
             Name = $"S-101: {_fileName}",
         };
 
-        var extent = ComputeVectorExtent(instructions);
+        var extent = ComputeDatasetExtent();
 
         var fallbackInfo = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
                    $"{instructions.Count} instructions";
@@ -196,31 +196,22 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         return index;
     }
 
-    private static MRect ComputeVectorExtent(IReadOnlyList<DrawingInstruction> instructions)
+    private MRect ComputeDatasetExtent()
     {
         double minX = double.MaxValue, minY = double.MaxValue;
         double maxX = double.MinValue, maxY = double.MinValue;
         bool any = false;
 
-        foreach (var instr in instructions)
+        var vectorSource = new S101VectorSource(_dataset);
+        foreach (var feature in vectorSource.GetFeatures())
         {
-            switch (instr)
+            foreach (var (lat, lon) in feature.Coordinates)
             {
-                case PointInstruction pt:
-                    Expand(pt.Longitude, pt.Latitude);
-                    break;
-                case TextInstruction txt:
-                    Expand(txt.Longitude, txt.Latitude);
-                    break;
-                case LineInstruction line:
-                    foreach (var (lon, lat) in line.Geometry)
-                        Expand(lon, lat);
-                    break;
-                case AreaInstruction area:
-                    foreach (var ring in area.Rings)
-                        foreach (var (lon, lat) in ring)
-                            Expand(lon, lat);
-                    break;
+                any = true;
+                if (lon < minX) minX = lon;
+                if (lon > maxX) maxX = lon;
+                if (lat < minY) minY = lat;
+                if (lat > maxY) maxY = lat;
             }
         }
 
@@ -230,14 +221,5 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         var (mx1, my1) = Mapsui.Projections.SphericalMercator.FromLonLat(minX, minY);
         var (mx2, my2) = Mapsui.Projections.SphericalMercator.FromLonLat(maxX, maxY);
         return new MRect(mx1, my1, mx2, my2);
-
-        void Expand(double lon, double lat)
-        {
-            any = true;
-            if (lon < minX) minX = lon;
-            if (lon > maxX) maxX = lon;
-            if (lat < minY) minY = lat;
-            if (lat > maxY) maxY = lat;
-        }
     }
 }

@@ -1,37 +1,40 @@
 using System.Globalization;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>
 /// Parses the semicolon-separated key:value drawing instruction strings
-/// emitted by the S-101 Lua portrayal pipeline into structured
-/// <see cref="ParsedDrawingInstruction"/> objects.
+/// emitted by the S-101 Lua portrayal pipeline into the unified
+/// <see cref="DrawingInstruction"/> hierarchy.
 /// </summary>
 /// <remarks>
 /// The instruction string is a stateful sequence: property-setting commands
 /// (ViewingGroup, DrawingPriority, DisplayPlane, font/style settings) establish
 /// state that applies to subsequent rendering commands (PointInstruction,
 /// LineInstruction, AreaFillReference, ColorFill, TextInstruction, etc.).
-/// Geometry is NOT encoded in the string — the host resolves it from the
-/// feature's spatial associations.
+/// Geometry is NOT encoded in the string — the renderer resolves it from the
+/// feature's spatial associations using the instruction's
+/// <see cref="DrawingInstruction.FeatureReference"/>.
 /// </remarks>
 public static class DrawingInstructionParser
 {
     /// <summary>
     /// Parses a single emitted instruction string into zero or more
-    /// <see cref="ParsedDrawingInstruction"/> instances.
+    /// <see cref="DrawingInstruction"/> instances.
     /// </summary>
-    public static List<ParsedDrawingInstruction> Parse(string featureRef, string instructionString)
+    public static List<DrawingInstruction> Parse(string featureRef, string instructionString)
     {
         if (string.IsNullOrEmpty(instructionString))
             return [];
 
-        var results = new List<ParsedDrawingInstruction>();
+        var results = new List<DrawingInstruction>();
 
         // Current state — accumulated as we scan through commands
         int viewingGroup = 0;
         int drawingPriority = 0;
-        string displayPlane = "UnderRadar";
+        DisplayPlane displayPlane = DisplayPlane.UnderRadar;
         double? scaleMinimum = null;
         double? scaleMaximum = null;
 
@@ -87,7 +90,8 @@ public static class DrawingInstructionParser
                     break;
 
                 case "DisplayPlane":
-                    displayPlane = value;
+                    if (Enum.TryParse<DisplayPlane>(value, ignoreCase: true, out var parsedPlane))
+                        displayPlane = parsedPlane;
                     break;
 
                 case "ScaleMinimum":
@@ -162,16 +166,15 @@ public static class DrawingInstructionParser
 
                 // ── Rendering commands (emit a parsed instruction) ──
                 case "PointInstruction":
-                    results.Add(new ParsedDrawingInstruction
+                    results.Add(new PointInstruction
                     {
-                        FeatureRef = featureRef,
-                        Type = InstructionType.Point,
-                        SymbolRef = value,
+                        FeatureReference = featureRef,
+                        SymbolReference = value,
                         ViewingGroup = viewingGroup,
                         DrawingPriority = drawingPriority,
-                        DisplayPlane = displayPlane,
+                        Plane = displayPlane,
                         Rotation = rotation,
-                        ScaleFactor = scaleFactor,
+                        SymbolScale = scaleFactor,
                         LocalOffsetX = localOffsetX,
                         LocalOffsetY = localOffsetY,
                         LinePlacementPosition = linePlacementPosition,
@@ -187,14 +190,13 @@ public static class DrawingInstructionParser
 
                 case "LineInstruction":
                 case "LineInstructionUnsuppressed":
-                    results.Add(new ParsedDrawingInstruction
+                    results.Add(new LineInstruction
                     {
-                        FeatureRef = featureRef,
-                        Type = InstructionType.Line,
-                        SymbolRef = value,
+                        FeatureReference = featureRef,
+                        LineStyleReference = string.IsNullOrEmpty(value) ? lineStyleRef : value,
                         ViewingGroup = viewingGroup,
                         DrawingPriority = drawingPriority,
-                        DisplayPlane = displayPlane,
+                        Plane = displayPlane,
                         LineWidth = lineWidth,
                         LineColor = lineColor,
                         Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
@@ -207,15 +209,13 @@ public static class DrawingInstructionParser
 
                 case "ColorFill":
                     var cfParts = value.Split(',');
-                    results.Add(new ParsedDrawingInstruction
+                    results.Add(new AreaInstruction
                     {
-                        FeatureRef = featureRef,
-                        Type = InstructionType.AreaFill,
-                        SymbolRef = cfParts[0],
+                        FeatureReference = featureRef,
+                        FillColor = cfParts[0],
                         ViewingGroup = viewingGroup,
                         DrawingPriority = drawingPriority,
-                        DisplayPlane = displayPlane,
-                        IsColorFill = true,
+                        Plane = displayPlane,
                         Transparency = cfParts.Length > 1 &&
                             double.TryParse(cfParts[1], CultureInfo.InvariantCulture, out var tr) ? tr : null,
                         ScaleMinimum = scaleMinimum,
@@ -224,30 +224,29 @@ public static class DrawingInstructionParser
                     break;
 
                 case "AreaFillReference":
-                    results.Add(new ParsedDrawingInstruction
+                    results.Add(new AreaInstruction
                     {
-                        FeatureRef = featureRef,
-                        Type = InstructionType.AreaFill,
-                        SymbolRef = value,
+                        FeatureReference = featureRef,
+                        AreaFillReference = value,
                         ViewingGroup = viewingGroup,
                         DrawingPriority = drawingPriority,
-                        DisplayPlane = displayPlane,
+                        Plane = displayPlane,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
                     break;
 
                 case "TextInstruction":
-                    results.Add(new ParsedDrawingInstruction
+                    results.Add(new TextInstruction
                     {
-                        FeatureRef = featureRef,
-                        Type = InstructionType.Text,
+                        FeatureReference = featureRef,
                         Text = DefDecode(value),
                         ViewingGroup = viewingGroup,
                         DrawingPriority = drawingPriority,
-                        DisplayPlane = displayPlane,
+                        Plane = displayPlane,
                         FontSize = fontSize,
                         FontColor = fontColor,
+                        LinePlacementPosition = linePlacementPosition,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
@@ -320,61 +319,4 @@ public static class DrawingInstructionParser
             .Replace("&s", ";")
             .Replace("&a", "&");
     }
-}
-
-/// <summary>
-/// The type of rendering instruction.
-/// </summary>
-public enum InstructionType
-{
-    Point,
-    Line,
-    AreaFill,
-    Text,
-}
-
-/// <summary>
-/// A parsed drawing instruction extracted from the Lua portrayal emit string.
-/// Contains the instruction type, symbol reference, and accumulated display properties.
-/// </summary>
-public sealed class ParsedDrawingInstruction
-{
-    public required string FeatureRef { get; init; }
-    public required InstructionType Type { get; init; }
-    public required int ViewingGroup { get; init; }
-    public required int DrawingPriority { get; init; }
-    public required string DisplayPlane { get; init; }
-
-    // Symbol/style reference — meaning depends on Type
-    public string? SymbolRef { get; init; }
-
-    // Text content (for TextInstruction)
-    public string? Text { get; init; }
-
-    // Point properties
-    public double? Rotation { get; init; }
-    public double ScaleFactor { get; init; } = 1.0;
-    public double LocalOffsetX { get; init; }
-    public double LocalOffsetY { get; init; }
-
-    // Line properties
-    public double LineWidth { get; init; }
-    public string? LineColor { get; init; }
-    public List<(double Offset, double Length)>? Dashes { get; init; }
-
-    // Area fill properties
-    public bool IsColorFill { get; init; }
-    public double? Transparency { get; init; }
-
-    // Text properties
-    public double FontSize { get; init; } = 10;
-    public string FontColor { get; init; } = "CHBLK";
-
-    // Line placement: when set, the symbol/text should be placed at this
-    // relative position (0.0–1.0) along the feature's curve geometry.
-    public double? LinePlacementPosition { get; init; }
-
-    // Scale visibility
-    public double? ScaleMinimum { get; init; }
-    public double? ScaleMaximum { get; init; }
 }

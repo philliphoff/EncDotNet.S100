@@ -70,10 +70,8 @@ public class S101PipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<PointInstruction>(layer.Instructions[0]);
-        Assert.Equal("42", inst.FeatureId);
-        Assert.Equal(47.6, inst.Latitude);
-        Assert.Equal(-122.3, inst.Longitude);
-        Assert.Equal("BOYLAT01", inst.Symbol.Name);
+        Assert.Equal("42", inst.FeatureReference);
+        Assert.Equal("BOYLAT01", inst.SymbolReference);
         Assert.Equal(17020, inst.ViewingGroup);
     }
 
@@ -136,11 +134,9 @@ public class S101PipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<AreaInstruction>(layer.Instructions[0]);
-        Assert.Equal("100", inst.FeatureId);
+        Assert.Equal("100", inst.FeatureReference);
         Assert.Equal(DisplayPlane.UnderRadar, inst.Plane);
-        Assert.Single(inst.Rings);
-        Assert.Equal(4, inst.Rings[0].Count);
-        Assert.Equal("DEPARE01", inst.AreaFill.Name);
+        Assert.Equal("DEPARE01", inst.AreaFillReference);
     }
 
     /// <summary>

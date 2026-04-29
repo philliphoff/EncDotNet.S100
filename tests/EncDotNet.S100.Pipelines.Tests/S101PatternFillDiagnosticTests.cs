@@ -46,32 +46,30 @@ public class S101PatternFillDiagnosticTests
         var (parsed, _, _) = RunLuaPipeline();
 
         // Filter to area fill instructions only
-        var areaFills = parsed
-            .Where(p => p.Type == InstructionType.AreaFill)
-            .ToList();
+        var areaFills = parsed.OfType<AreaInstruction>().ToList();
 
         var lines = new List<string>
         {
             $"Dataset: {TestDataset}",
             $"Total parsed instructions: {parsed.Count}",
             $"Area fill instructions: {areaFills.Count}",
-            $"  ColorFills: {areaFills.Count(a => a.IsColorFill)}",
-            $"  PatternFills: {areaFills.Count(a => !a.IsColorFill)}",
+            $"  ColorFills: {areaFills.Count(a => a.FillColor is not null)}",
+            $"  PatternFills: {areaFills.Count(a => a.AreaFillReference is not null)}",
             "",
             "=== Area Fill Instructions (sorted by DrawingPriority) ===",
         };
 
-        foreach (var af in areaFills.OrderBy(a => a.DrawingPriority).ThenBy(a => a.IsColorFill ? 0 : 1))
+        foreach (var af in areaFills.OrderBy(a => a.DrawingPriority).ThenBy(a => a.FillColor is not null ? 0 : 1))
         {
-            lines.Add($"  Feature={af.FeatureRef} Priority={af.DrawingPriority} " +
-                       $"Type={( af.IsColorFill ? "ColorFill" : "Pattern" )} " +
-                       $"SymbolRef={af.SymbolRef} " +
+            lines.Add($"  Feature={af.FeatureReference} Priority={af.DrawingPriority} " +
+                       $"Type={(af.FillColor is not null ? "ColorFill" : "Pattern")} " +
+                       $"SymbolRef={af.FillColor ?? af.AreaFillReference} " +
                        $"Transparency={af.Transparency?.ToString(CultureInfo.InvariantCulture) ?? "none"} " +
-                       $"Plane={af.DisplayPlane}");
+                       $"Plane={af.Plane}");
         }
 
         // Group by unique feature to show multi-instruction features
-        var byFeature = areaFills.GroupBy(a => a.FeatureRef).Where(g => g.Count() > 1);
+        var byFeature = areaFills.GroupBy(a => a.FeatureReference).Where(g => g.Count() > 1);
         lines.Add("");
         lines.Add("=== Features with multiple area fills ===");
         foreach (var group in byFeature)
@@ -79,19 +77,19 @@ public class S101PatternFillDiagnosticTests
             lines.Add($"  Feature {group.Key}:");
             foreach (var af in group)
             {
-                lines.Add($"    {(af.IsColorFill ? "ColorFill" : "Pattern")}:{af.SymbolRef} pri={af.DrawingPriority}");
+                lines.Add($"    {(af.FillColor is not null ? "ColorFill" : "Pattern")}:{af.FillColor ?? af.AreaFillReference} pri={af.DrawingPriority}");
             }
         }
 
         // Group by pattern name to show overlap
-        var patternGroups = areaFills.Where(a => !a.IsColorFill)
-            .GroupBy(a => a.SymbolRef)
+        var patternGroups = areaFills.Where(a => a.AreaFillReference is not null)
+            .GroupBy(a => a.AreaFillReference)
             .OrderByDescending(g => g.Count());
         lines.Add("");
         lines.Add("=== Pattern names and feature counts ===");
         foreach (var g in patternGroups)
         {
-            lines.Add($"  {g.Key}: {g.Count()} features ({string.Join(", ", g.Select(a => a.FeatureRef))})");
+            lines.Add($"  {g.Key}: {g.Count()} features ({string.Join(", ", g.Select(a => a.FeatureReference))})");
         }
 
         var report = string.Join(Environment.NewLine, lines);
@@ -114,8 +112,9 @@ public class S101PatternFillDiagnosticTests
         var (parsed, palette, catalogue) = RunLuaPipeline();
 
         var patternFills = parsed
-            .Where(p => p.Type == InstructionType.AreaFill && !p.IsColorFill)
-            .Select(p => p.SymbolRef!)
+            .OfType<AreaInstruction>()
+            .Where(p => p.AreaFillReference is not null)
+            .Select(p => p.AreaFillReference!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -264,10 +263,10 @@ public class S101PatternFillDiagnosticTests
 
         // Sort area fills like the renderer does
         var areaFills = parsed
-            .Where(p => p.Type == InstructionType.AreaFill)
-            .OrderBy(p => p.DisplayPlane == "OverRadar" ? 1 : 0)
+            .OfType<AreaInstruction>()
+            .OrderBy(p => p.Plane == Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
             .ThenBy(p => p.DrawingPriority)
-            .ThenBy(p => p.IsColorFill ? 0 : 1) // Color fills BEFORE patterns
+            .ThenBy(p => p.FillColor is not null ? 0 : 1) // Color fills BEFORE patterns
             .ToList();
 
         // Cache pattern tiles
@@ -276,9 +275,9 @@ public class S101PatternFillDiagnosticTests
         int colorFillCount = 0, patternFillCount = 0;
 
         // --- Phase 1: Draw all color fills ---
-        foreach (var af in areaFills.Where(a => a.IsColorFill))
+        foreach (var af in areaFills.Where(a => a.FillColor is not null))
         {
-            if (!featureGeom.TryGetValue(af.FeatureRef, out var coords) || coords.Count < 3)
+            if (!featureGeom.TryGetValue(af.FeatureReference, out var coords) || coords.Count < 3)
                 continue;
 
             colorFillCount++;
@@ -289,7 +288,7 @@ public class S101PatternFillDiagnosticTests
             path.Close();
 
             SKColor fillColor = SKColors.LightBlue;
-            if (af.SymbolRef is not null && palette.TryResolve(af.SymbolRef, out var hex))
+            if (af.FillColor is not null && palette.TryResolve(af.FillColor, out var hex))
             {
                 fillColor = SKColor.Parse(hex);
             }
@@ -310,14 +309,14 @@ public class S101PatternFillDiagnosticTests
 
         // --- Phase 2: Group pattern fills by (symbolRef, priority) ---
         var patternGroups = new List<(string SymbolRef, int Priority, SKPath CombinedPath)>();
-        foreach (var group in areaFills.Where(a => !a.IsColorFill)
-            .GroupBy(a => (a.SymbolRef!, a.DrawingPriority))
+        foreach (var group in areaFills.Where(a => a.AreaFillReference is not null)
+            .GroupBy(a => (a.AreaFillReference!, a.DrawingPriority))
             .OrderBy(g => g.Key.DrawingPriority))
         {
             var combinedPath = new SKPath();
             foreach (var af in group)
             {
-                if (!featureGeom.TryGetValue(af.FeatureRef, out var coords) || coords.Count < 3)
+                if (!featureGeom.TryGetValue(af.FeatureReference, out var coords) || coords.Count < 3)
                     continue;
 
                 var polyPath = new SKPath();
@@ -432,7 +431,7 @@ public class S101PatternFillDiagnosticTests
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private (List<ParsedDrawingInstruction> Parsed, ColorPalette Palette, S101PortrayalCatalogue Catalogue) RunLuaPipeline()
+    private (List<DrawingInstruction> Parsed, ColorPalette Palette, S101PortrayalCatalogue Catalogue) RunLuaPipeline()
     {
         var datasetPath = Path.Combine(DatasetDir, TestDataset);
         var dataset = S101Dataset.Open(datasetPath);
@@ -515,7 +514,7 @@ public class S101PatternFillDiagnosticTests
             string.Join(Environment.NewLine, rawLines));
 
         // Parse
-        var parsed = new List<ParsedDrawingInstruction>();
+        var parsed = new List<DrawingInstruction>();
         foreach (var e in emitted)
         {
             parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));

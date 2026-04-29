@@ -53,11 +53,9 @@ public class VectorPipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<PointInstruction>(layer.Instructions[0]);
-        Assert.Equal("1", inst.FeatureId);
+        Assert.Equal("1", inst.FeatureReference);
         Assert.Equal(DisplayPlane.OverRadar, inst.Plane);
-        Assert.Equal(47.6, inst.Latitude);
-        Assert.Equal(-122.3, inst.Longitude);
-        Assert.Equal("BOYLAT01", inst.Symbol.Name);
+        Assert.Equal("BOYLAT01", inst.SymbolReference);
     }
 
     [Fact]
@@ -104,10 +102,9 @@ public class VectorPipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<LineInstruction>(layer.Instructions[0]);
-        Assert.Equal("2", inst.FeatureId);
+        Assert.Equal("2", inst.FeatureReference);
         Assert.Equal(DisplayPlane.UnderRadar, inst.Plane);
-        Assert.Equal(2, inst.Geometry.Count);
-        Assert.Equal("DEPCNT02", inst.LineStyle.Name);
+        Assert.Equal("DEPCNT02", inst.LineStyleReference);
     }
 
     [Fact]
@@ -152,10 +149,8 @@ public class VectorPipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<AreaInstruction>(layer.Instructions[0]);
-        Assert.Equal("3", inst.FeatureId);
-        Assert.Single(inst.Rings);
-        Assert.Equal(4, inst.Rings[0].Count);
-        Assert.Equal("LANDF", inst.AreaFill.Name);
+        Assert.Equal("3", inst.FeatureReference);
+        Assert.Equal("LANDF", inst.AreaFillReference);
     }
 
     [Fact]
@@ -196,7 +191,7 @@ public class VectorPipelineTests
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<TextInstruction>(layer.Instructions[0]);
-        Assert.Equal("4", inst.FeatureId);
+        Assert.Equal("4", inst.FeatureReference);
         Assert.Equal("12.5", inst.Text);
         Assert.Equal(12.0, inst.FontSize);
     }
@@ -247,7 +242,7 @@ public class VectorPipelineTests
 
         // Only the land rule should have produced output
         Assert.Single(layer.Instructions);
-        Assert.Equal("1", layer.Instructions[0].FeatureId);
+        Assert.Equal("1", layer.Instructions[0].FeatureReference);
     }
 
     [Fact]
@@ -287,7 +282,7 @@ public class VectorPipelineTests
         var layer = await pipeline.ProcessAsync(source, catalogue);
 
         Assert.Single(layer.Instructions);
-        Assert.Equal("meta", layer.Instructions[0].FeatureId);
+        Assert.Equal("meta", layer.Instructions[0].FeatureReference);
     }
 
     [Fact]
