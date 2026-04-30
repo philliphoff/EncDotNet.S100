@@ -12,9 +12,9 @@ using EncDotNet.S100.Scripting;
 using Mapsui;
 using Mapsui.Layers;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.DatasetPipelines;
 
-internal sealed class S101DatasetProcessor : IDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;

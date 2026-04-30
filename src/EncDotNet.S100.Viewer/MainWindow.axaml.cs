@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using Mapsui.Manipulations;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.DatasetPipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;

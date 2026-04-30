@@ -8,9 +8,9 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
 using Mapsui;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.DatasetPipelines;
 
-internal sealed class S102DatasetProcessor : IDatasetProcessor
+public sealed class S102DatasetProcessor : IDatasetProcessor
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;

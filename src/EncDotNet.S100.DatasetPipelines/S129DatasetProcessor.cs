@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -11,42 +11,46 @@ using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.DatasetPipelines;
 
-internal sealed class S124DatasetProcessor : IDatasetProcessor
+public sealed class S129DatasetProcessor : IDatasetProcessor
 {
-    private readonly S124Dataset _dataset;
+    private readonly S129Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-124";
+    public string ProductSpec => "S-129";
 
-    public S124DatasetProcessor(
+    public S129DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager)
     {
         _fileName = Path.GetFileName(path);
-        _provider = catalogueManager.GetProvider("S-124");
-        _dataset = S124Dataset.Open(path);
+        _provider = catalogueManager.GetProvider("S-129");
+        _dataset = S129Dataset.Open(path);
     }
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        var catalogue = new S124PortrayalCatalogue(_provider);
+        var catalogue = new S129PortrayalCatalogue(_provider);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // 1. Run the S-100 Part 9 vector portrayal pipeline.
-        var featureSource = new S124FeatureXmlSource(_dataset);
+        var featureSource = new S129FeatureXmlSource(_dataset);
         var pipeline = new PortrayalPipeline();
         var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
         var instructions = ((IVectorLayer)portrayalLayer).Instructions;
-        Console.WriteLine($"[S124] {_fileName}: {_dataset.Features.Length} features, "
+
+        // Apply S-129-specific feature-type-based fill colour fallback for area
+        // instructions that the XSLT does not annotate with an explicit colour.
+        instructions = ApplyAreaFillFallback(instructions);
+
+        Console.WriteLine($"[S129] {_fileName}: {_dataset.Features.Length} features, "
             + $"{instructions.Count} drawing instructions");
 
-        // 2. Hand off to the unified Mapsui display-list renderer.
         var renderer = new MapsuiDisplayListRenderer
         {
-            LayerName = $"S-124: {_fileName}",
+            LayerName = $"S-129: {_fileName}",
             Palette = catalogue.ActivePalette,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
@@ -67,11 +71,11 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
             },
         };
 
-        var geometryProvider = new S124FeatureGeometryProvider(_dataset);
+        var geometryProvider = new S129FeatureGeometryProvider(_dataset);
         var layer = renderer.Render(instructions, geometryProvider);
 
         var featureTypes = featureSource.FeatureTypesPresent;
-        var info = $"S-124 Navigational Warnings — {_fileName}\n"
+        var info = $"S-129 Under Keel Clearance Management — {_fileName}\n"
             + $"Features: {_dataset.Features.Length} ({string.Join(", ", featureTypes)})\n"
             + $"Drawing instructions: {instructions.Count}";
 
@@ -80,7 +84,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
             Layers = [layer],
             Extent = ComputeExtent(),
             Info = info,
-            ProductSpec = "S-124",
+            ProductSpec = "S-129",
         };
     }
 
@@ -105,6 +109,47 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         };
     }
 
+    private List<DrawingInstruction> ApplyAreaFillFallback(IReadOnlyList<DrawingInstruction> instructions)
+    {
+        var byId = new Dictionary<string, S129Feature>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in _dataset.Features) byId[f.Id] = f;
+
+        var result = new List<DrawingInstruction>(instructions.Count);
+        foreach (var instr in instructions)
+        {
+            if (instr is AreaInstruction { FillColor: null, AreaFillReference: null } area
+                && byId.TryGetValue(area.FeatureReference, out var feature))
+            {
+                var token = feature.FeatureType switch
+                {
+                    var t when string.Equals(t, "UnderKeelClearanceNonNavigableArea", StringComparison.OrdinalIgnoreCase)
+                        => "RED",
+                    var t when string.Equals(t, "UnderKeelClearanceAlmostNonNavigableArea", StringComparison.OrdinalIgnoreCase)
+                        => "GOLDN",
+                    _ => "CHMGD",
+                };
+
+                result.Add(new AreaInstruction
+                {
+                    FeatureReference = area.FeatureReference,
+                    ViewingGroup = area.ViewingGroup,
+                    DrawingPriority = area.DrawingPriority,
+                    Plane = area.Plane,
+                    ScaleMinimum = area.ScaleMinimum,
+                    ScaleMaximum = area.ScaleMaximum,
+                    AreaFillReference = area.AreaFillReference,
+                    FillColor = token,
+                    Transparency = 0.7,
+                });
+            }
+            else
+            {
+                result.Add(instr);
+            }
+        }
+        return result;
+    }
+
     private MRect ComputeExtent()
     {
         double minLon = double.MaxValue, minLat = double.MaxValue;
@@ -122,13 +167,10 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
 
         foreach (var feature in _dataset.Features)
         {
-            foreach (var (lat, lon) in feature.Points)
-                Expand(lat, lon);
+            foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
             foreach (var curve in feature.Curves)
-                foreach (var (lat, lon) in curve)
-                    Expand(lat, lon);
-            foreach (var (lat, lon) in feature.ExteriorRing)
-                Expand(lat, lon);
+                foreach (var (lat, lon) in curve) Expand(lat, lon);
+            foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
         }
 
         if (!any) return new MRect(0, 0, 0, 0);

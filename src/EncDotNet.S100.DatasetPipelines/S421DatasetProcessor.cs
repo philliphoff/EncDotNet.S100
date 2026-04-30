@@ -7,9 +7,9 @@ using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.DatasetPipelines;
 
-internal sealed class S421DatasetProcessor : IDatasetProcessor
+public sealed class S421DatasetProcessor : IDatasetProcessor
 {
     private readonly S421Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
