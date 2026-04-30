@@ -590,9 +590,22 @@ public partial class MainWindow : ShadUI.Window
             return;
 
         var viewport = navigator.Viewport;
-        var dx = e.Delta.X * viewport.Resolution * 50;
-        var dy = e.Delta.Y * viewport.Resolution * 50;
-        navigator.CenterOn(viewport.CenterX - dx, viewport.CenterY + dy);
+
+        // Pan vector in the unrotated (screen-aligned) world frame: dragging
+        // the content right/up (Delta.X/Y > 0) moves the viewport center
+        // left/up by the same amount.
+        var dxScreen = -e.Delta.X * viewport.Resolution * 50;
+        var dyScreen = e.Delta.Y * viewport.Resolution * 50;
+
+        // Rotate the screen-space delta into world space by the viewport
+        // rotation so swipes always agree with the on-screen orientation.
+        var rad = viewport.Rotation * Math.PI / 180.0;
+        var sin = Math.Sin(rad);
+        var cos = Math.Cos(rad);
+        var dxWorld = dxScreen * cos - dyScreen * sin;
+        var dyWorld = dxScreen * sin + dyScreen * cos;
+
+        navigator.CenterOn(viewport.CenterX + dxWorld, viewport.CenterY + dyWorld);
         e.Handled = true;
     }
 
