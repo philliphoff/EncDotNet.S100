@@ -4,7 +4,7 @@ namespace EncDotNet.S100.Pipelines.Coverage;
 /// Bundles sampled coverage data with its portrayal rules,
 /// ready to be handed to a renderer.
 /// </summary>
-public sealed class StyledCoverageLayer
+public sealed class StyledCoverageLayer : IPortrayalLayer
 {
     /// <summary>The sampled coverage grid data.</summary>
     public required SampledCoverage Coverage { get; init; }

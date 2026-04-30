@@ -53,9 +53,10 @@ internal sealed class S102DatasetProcessor : IDatasetProcessor
             ScaleDenominator = 50_000,
         };
 
-        var pipeline = new CoveragePipeline();
-        var styledLayer = pipeline.ProcessAsync(_source, _catalogue, MarinerSettings.Default)
+        var pipeline = new PortrayalPipeline();
+        var layer = pipeline.ProcessAsync(_source, _catalogue, MarinerSettings.Default)
             .GetAwaiter().GetResult();
+        var styledLayer = (StyledCoverageLayer)layer;
 
         var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
         {

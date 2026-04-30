@@ -1,5 +1,3 @@
-using System.Xml;
-using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -31,8 +29,11 @@ internal sealed class S421DatasetProcessor : IDatasetProcessor
         var catalogue = new S421PortrayalCatalogue(_provider);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
-        // 1. Run the XSLT portrayal pipeline to produce an S-100 Part 9 display list.
-        var instructions = RunXsltPortrayal(catalogue);
+        // 1. Run the S-100 Part 9 vector portrayal pipeline.
+        var featureSource = new S421FeatureXmlSource(_dataset);
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
+        var instructions = ((IVectorLayer)portrayalLayer).Instructions;
         Console.WriteLine($"[S421] {_fileName}: {_dataset.Features.Length} features, "
             + $"{instructions.Count} drawing instructions");
 
@@ -64,7 +65,7 @@ internal sealed class S421DatasetProcessor : IDatasetProcessor
         var layer = renderer.Render(instructions, geometryProvider);
 
         var info = $"S-421 Route Plan — {_fileName}\n"
-            + $"Features: {_dataset.Features.Length} ({string.Join(", ", new S421FeatureXmlSource(_dataset).FeatureTypesPresent)})\n"
+            + $"Features: {_dataset.Features.Length} ({string.Join(", ", featureSource.FeatureTypesPresent)})\n"
             + $"Information types: {_dataset.InformationTypes.Length}\n"
             + $"Drawing instructions: {instructions.Count}";
 
@@ -75,36 +76,6 @@ internal sealed class S421DatasetProcessor : IDatasetProcessor
             Info = info,
             ProductSpec = "S-421",
         };
-    }
-
-    private IReadOnlyList<DrawingInstruction> RunXsltPortrayal(S421PortrayalCatalogue catalogue)
-    {
-        var mainRule = catalogue.Rules.FirstOrDefault();
-        if (mainRule is null) return [];
-
-        var featureSource = new S421FeatureXmlSource(_dataset);
-        XDocument featureDoc;
-        using (var reader = featureSource.GetFeatureXml())
-        {
-            featureDoc = XDocument.Load(reader);
-        }
-
-        try
-        {
-            var transform = catalogue.GetCompiledRule(mainRule.Name);
-            var resultDoc = new XDocument();
-            using (var inputReader = featureDoc.CreateReader())
-            using (var writer = resultDoc.CreateWriter())
-            {
-                transform.Transform(inputReader, writer);
-            }
-            return Part9DisplayListReader.Read(resultDoc);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[S421] XSLT execution failed: {ex.Message}");
-            return [];
-        }
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef)

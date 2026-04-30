@@ -44,7 +44,8 @@ public class VectorPipeline
         var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
 
         // Stage 5 — assemble typed drawing instructions from the XSLT output
-        var instructions = AssembleInstructions(drawingInstructionsDoc, catalogue).ToList();
+        // using the canonical S-100 Part 9 lower-camel-case display-list reader.
+        var instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
 
         // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
         // drawing instructions directly; append them to the XSLT-stage output
@@ -126,114 +127,6 @@ public class VectorPipeline
         return drawingInstructions;
     }
 
-    // ── Stage 5: Drawing instruction assembly ──────────────────────────
-
-    private static IReadOnlyList<DrawingInstruction> AssembleInstructions(
-        XDocument drawingInstructionsDoc,
-        IVectorPortrayalCatalogue catalogue)
-    {
-        var instructions = new List<DrawingInstruction>();
-
-        foreach (var element in drawingInstructionsDoc.Root?.Elements() ?? [])
-        {
-            var instruction = element.Name.LocalName switch
-            {
-                "PointInstruction" => AssemblePointInstruction(element, catalogue),
-                "LineInstruction" => AssembleLineInstruction(element, catalogue),
-                "AreaInstruction" => AssembleAreaInstruction(element, catalogue),
-                "TextInstruction" => AssembleTextInstruction(element),
-                _ => null,
-            };
-
-            if (instruction is not null)
-            {
-                instructions.Add(instruction);
-            }
-        }
-
-        return instructions;
-    }
-
-    private static DrawingInstruction? AssemblePointInstruction(
-        XElement element, IVectorPortrayalCatalogue catalogue)
-    {
-        var symbolElement = element.Element("Symbol");
-        var symbolRef = symbolElement?.Attribute("ref")?.Value;
-        if (symbolRef is null) return null;
-
-        var rotationAttr = symbolElement?.Attribute("rotation")?.Value;
-        double? rotation = rotationAttr is not null ? ParseDouble(rotationAttr) : null;
-
-        return new PointInstruction
-        {
-            FeatureReference = element.Attribute("id")?.Value ?? "",
-            Plane = ParsePlane(element.Attribute("plane")?.Value),
-            ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
-            DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            SymbolReference = symbolRef,
-            SymbolScale = ParseDouble(symbolElement?.Attribute("scale")?.Value, 1.0),
-            Rotation = rotation,
-        };
-    }
-
-    private static DrawingInstruction? AssembleLineInstruction(
-        XElement element, IVectorPortrayalCatalogue catalogue)
-    {
-        var styleRef = element.Element("LineStyle")?.Attribute("ref")?.Value;
-        if (styleRef is null) return null;
-
-        return new LineInstruction
-        {
-            FeatureReference = element.Attribute("id")?.Value ?? "",
-            Plane = ParsePlane(element.Attribute("plane")?.Value),
-            ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
-            DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            LineStyleReference = styleRef,
-        };
-    }
-
-    private static DrawingInstruction? AssembleAreaInstruction(
-        XElement element, IVectorPortrayalCatalogue catalogue)
-    {
-        var fillRef = element.Element("AreaFill")?.Attribute("ref")?.Value;
-        if (fillRef is null) return null;
-
-        var outlineRef = element.Element("OutlineStyle")?.Attribute("ref")?.Value;
-
-        return new AreaInstruction
-        {
-            FeatureReference = element.Attribute("id")?.Value ?? "",
-            Plane = ParsePlane(element.Attribute("plane")?.Value),
-            ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
-            DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            AreaFillReference = fillRef,
-            OutlineStyleReference = outlineRef,
-        };
-    }
-
-    private static DrawingInstruction? AssembleTextInstruction(XElement element)
-    {
-        var textContent = element.Element("Text")?.Value;
-        if (textContent is null) return null;
-
-        var textStyle = element.Element("TextStyle");
-        var rotationAttr = element.Attribute("rotation")?.Value;
-        double? rotation = rotationAttr is not null ? ParseDouble(rotationAttr) : null;
-
-        return new TextInstruction
-        {
-            FeatureReference = element.Attribute("id")?.Value ?? "",
-            Plane = ParsePlane(element.Attribute("plane")?.Value),
-            ViewingGroup = ParseInt(element.Attribute("viewingGroup")?.Value),
-            DrawingPriority = ParseInt(element.Attribute("priority")?.Value),
-            Text = textContent,
-            FontReference = textStyle?.Attribute("ref")?.Value,
-            FontSize = ParseDouble(textStyle?.Attribute("fontSize")?.Value, 10.0),
-            FontColor = textStyle?.Attribute("color")?.Value ?? "CHBLK",
-            Rotation = rotation,
-        };
-    }
-
     // ── Stage 6: Viewing group filtering and sort ──────────────────────
 
     private static IReadOnlyList<DrawingInstruction> ApplyViewingGroups(
@@ -258,32 +151,13 @@ public class VectorPipeline
             .ThenBy(i => i.TypeSortOrder)
             .ToList();
     }
-
-    // ── Parsing helpers ────────────────────────────────────────────────
-
-    private static DisplayPlane ParsePlane(string? value)
-    {
-        if (value is not null && Enum.TryParse<DisplayPlane>(value, ignoreCase: true, out var plane))
-            return plane;
-        return DisplayPlane.OverRadar;
-    }
-
-    private static int ParseInt(string? value, int defaultValue = 0) =>
-        int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var result)
-            ? result
-            : defaultValue;
-
-    private static double ParseDouble(string? value, double defaultValue = 0.0) =>
-        double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var result)
-            ? result
-            : defaultValue;
 }
 
 /// <summary>
 /// A styled vector layer carrying ordered drawing instructions produced
 /// by portrayal rule evaluation, ready for rendering.
 /// </summary>
-public interface IVectorLayer
+public interface IVectorLayer : IPortrayalLayer
 {
     /// <summary>Drawing instructions in back-to-front render order.</summary>
     IReadOnlyList<DrawingInstruction> Instructions { get; }

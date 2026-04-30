@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -36,8 +35,11 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         var catalogue = new S124PortrayalCatalogue(_provider);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
-        // 1. Run the XSLT portrayal pipeline to produce an S-100 Part 9 display list.
-        var instructions = RunXsltPortrayal(catalogue);
+        // 1. Run the S-100 Part 9 vector portrayal pipeline.
+        var featureSource = new S124FeatureXmlSource(_dataset);
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
+        var instructions = ((IVectorLayer)portrayalLayer).Instructions;
         Console.WriteLine($"[S124] {_fileName}: {_dataset.Features.Length} features, "
             + $"{instructions.Count} drawing instructions");
 
@@ -68,7 +70,7 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
         var geometryProvider = new S124FeatureGeometryProvider(_dataset);
         var layer = renderer.Render(instructions, geometryProvider);
 
-        var featureTypes = new S124FeatureXmlSource(_dataset).FeatureTypesPresent;
+        var featureTypes = featureSource.FeatureTypesPresent;
         var info = $"S-124 Navigational Warnings — {_fileName}\n"
             + $"Features: {_dataset.Features.Length} ({string.Join(", ", featureTypes)})\n"
             + $"Drawing instructions: {instructions.Count}";
@@ -101,38 +103,6 @@ internal sealed class S124DatasetProcessor : IDatasetProcessor
             FeatureType = feature.FeatureType,
             Attributes = attrs,
         };
-    }
-
-    private IReadOnlyList<DrawingInstruction> RunXsltPortrayal(S124PortrayalCatalogue catalogue)
-    {
-        var mainRule = catalogue.Rules.FirstOrDefault();
-        if (mainRule is null) return [];
-
-        var featureSource = new S124FeatureXmlSource(_dataset);
-        XDocument featureDoc;
-        using (var reader = featureSource.GetFeatureXml())
-        {
-            featureDoc = XDocument.Load(reader);
-        }
-
-        try
-        {
-            var transform = catalogue.GetCompiledRule(mainRule.Name);
-            var resultDoc = new XDocument();
-
-            using (var inputReader = featureDoc.CreateReader())
-            using (var writer = resultDoc.CreateWriter())
-            {
-                transform.Transform(inputReader, writer);
-            }
-
-            return Part9DisplayListReader.Read(resultDoc);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[S124] XSLT execution failed: {ex.Message}");
-            return [];
-        }
     }
 
     private MRect ComputeExtent()

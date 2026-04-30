@@ -20,18 +20,21 @@ public class VectorPipelineTests
                 </Dataset>
                 """);
 
-        // XSLT rule that emits a PointInstruction for each Buoy feature
+        // XSLT rule that emits a pointInstruction for each Buoy feature
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
+                <displayList>
                   <xsl:for-each select="//Feature[@type='Buoy']">
-                    <PointInstruction id="{@id}" priority="8" viewingGroup="21010" plane="OverRadar">
-                      <Position lat="{Position/@lat}" lon="{Position/@lon}"/>
-                      <Symbol ref="BOYLAT01" rotation="0"/>
-                    </PointInstruction>
+                    <pointInstruction>
+                      <featureReference><xsl:value-of select="@id"/></featureReference>
+                      <drawingPriority>8</drawingPriority>
+                      <viewingGroup>21010</viewingGroup>
+                      <displayPlane>OverRadar</displayPlane>
+                      <symbol reference="BOYLAT01"><rotation>0</rotation></symbol>
+                    </pointInstruction>
                   </xsl:for-each>
-                </DrawingInstructions>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -72,15 +75,15 @@ public class VectorPipelineTests
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <LineInstruction id="2" priority="4" viewingGroup="23010" plane="UnderRadar">
-                    <Geometry>
-                      <Point lat="47.6" lon="-122.4"/>
-                      <Point lat="47.5" lon="-122.3"/>
-                    </Geometry>
-                    <LineStyle ref="DEPCNT02"/>
-                  </LineInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <lineInstruction>
+                    <featureReference>2</featureReference>
+                    <drawingPriority>4</drawingPriority>
+                    <viewingGroup>23010</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <lineStyleReference reference="DEPCNT02"/>
+                  </lineInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -117,17 +120,15 @@ public class VectorPipelineTests
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <AreaInstruction id="3" priority="2" viewingGroup="12410" plane="UnderRadar">
-                    <Ring>
-                      <Point lat="47.5" lon="-122.4"/>
-                      <Point lat="47.6" lon="-122.4"/>
-                      <Point lat="47.6" lon="-122.3"/>
-                      <Point lat="47.5" lon="-122.3"/>
-                    </Ring>
-                    <AreaFill ref="LANDF"/>
-                  </AreaInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <areaInstruction>
+                    <featureReference>3</featureReference>
+                    <drawingPriority>2</drawingPriority>
+                    <viewingGroup>12410</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <areaFillReference reference="LANDF"/>
+                  </areaInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -163,13 +164,16 @@ public class VectorPipelineTests
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <TextInstruction id="4" priority="9" viewingGroup="33010" plane="OverRadar">
-                    <Position lat="47.55" lon="-122.35"/>
-                    <Text>12.5</Text>
-                    <TextStyle ref="TEXTA01" fontSize="12" color="#000000"/>
-                  </TextInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <textInstruction>
+                    <featureReference>4</featureReference>
+                    <drawingPriority>9</drawingPriority>
+                    <viewingGroup>33010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <text>12.5</text>
+                    <font><size>12</size></font>
+                  </textInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -208,11 +212,14 @@ public class VectorPipelineTests
         var buoyXslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <PointInstruction id="SHOULD_NOT_APPEAR" priority="1" viewingGroup="1">
-                    <Position lat="0" lon="0"/><Symbol ref="BOYLAT01"/>
-                  </PointInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>SHOULD_NOT_APPEAR</featureReference>
+                    <drawingPriority>1</drawingPriority>
+                    <viewingGroup>1</viewingGroup>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -220,12 +227,15 @@ public class VectorPipelineTests
         var landXslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <AreaInstruction id="1" priority="2" viewingGroup="12410" plane="UnderRadar">
-                    <Geometry><Point lat="47.5" lon="-122.4"/></Geometry>
-                    <AreaFill ref="LANDF"/>
-                  </AreaInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <areaInstruction>
+                    <featureReference>1</featureReference>
+                    <drawingPriority>2</drawingPriority>
+                    <viewingGroup>12410</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <areaFillReference reference="LANDF"/>
+                  </areaInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -255,11 +265,15 @@ public class VectorPipelineTests
         var metaXslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <PointInstruction id="meta" priority="0" viewingGroup="10000" plane="UnderRadar">
-                    <Position lat="0" lon="0"/><Symbol ref="META01"/>
-                  </PointInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>meta</featureReference>
+                    <drawingPriority>0</drawingPriority>
+                    <viewingGroup>10000</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <symbol reference="META01"/>
+                  </pointInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -331,25 +345,43 @@ public class VectorPipelineTests
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <PointInstruction id="buoy" priority="5" viewingGroup="21010" plane="OverRadar">
-                    <Position lat="47.6" lon="-122.3"/><Symbol ref="BOYLAT01"/>
-                  </PointInstruction>
-                  <AreaInstruction id="area" priority="5" viewingGroup="13010" plane="OverRadar">
-                    <Geometry><Point lat="47.5" lon="-122.4"/></Geometry>
-                    <AreaFill ref="DEPARE"/>
-                  </AreaInstruction>
-                  <LineInstruction id="contour" priority="5" viewingGroup="23010" plane="OverRadar">
-                    <Geometry><Point lat="47.6" lon="-122.4"/><Point lat="47.5" lon="-122.3"/></Geometry>
-                    <LineStyle ref="DEPCNT02"/>
-                  </LineInstruction>
-                  <TextInstruction id="sounding" priority="5" viewingGroup="33010" plane="OverRadar">
-                    <Position lat="47.55" lon="-122.35"/><Text>12.5</Text>
-                  </TextInstruction>
-                  <PointInstruction id="under_point" priority="3" viewingGroup="21010" plane="UnderRadar">
-                    <Position lat="47.6" lon="-122.3"/><Symbol ref="BOYLAT01"/>
-                  </PointInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>buoy</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>21010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                  <areaInstruction>
+                    <featureReference>area</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>13010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <areaFillReference reference="DEPARE"/>
+                  </areaInstruction>
+                  <lineInstruction>
+                    <featureReference>contour</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>23010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <lineStyleReference reference="DEPCNT02"/>
+                  </lineInstruction>
+                  <textInstruction>
+                    <featureReference>sounding</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>33010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <text>12.5</text>
+                  </textInstruction>
+                  <pointInstruction>
+                    <featureReference>under_point</featureReference>
+                    <drawingPriority>3</drawingPriority>
+                    <viewingGroup>21010</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -405,11 +437,15 @@ public class VectorPipelineTests
         var buoyXslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <PointInstruction id="buoy1" priority="8" viewingGroup="21010" plane="OverRadar">
-                    <Position lat="47.6" lon="-122.3"/><Symbol ref="BOYLAT01"/>
-                  </PointInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>buoy1</featureReference>
+                    <drawingPriority>8</drawingPriority>
+                    <viewingGroup>21010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -417,12 +453,15 @@ public class VectorPipelineTests
         var landXslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <AreaInstruction id="land1" priority="2" viewingGroup="12410" plane="UnderRadar">
-                    <Geometry><Point lat="47.5" lon="-122.4"/></Geometry>
-                    <AreaFill ref="LANDF"/>
-                  </AreaInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <areaInstruction>
+                    <featureReference>land1</featureReference>
+                    <drawingPriority>2</drawingPriority>
+                    <viewingGroup>12410</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <areaFillReference reference="LANDF"/>
+                  </areaInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);

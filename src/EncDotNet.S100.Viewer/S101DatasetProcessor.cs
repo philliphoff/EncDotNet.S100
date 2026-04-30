@@ -46,18 +46,27 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
             ?? throw new InvalidOperationException(
                 "S-101 feature catalogue is required to render the dataset but none was provided.");
 
-        Console.WriteLine("[S101-Lua] Starting Lua portrayal pipeline...");
+        Console.WriteLine("[S101] Starting Part 9 vector portrayal pipeline...");
         var fc = FeatureCatalogueReader.Read(fcStream);
-        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, _provider, fc);
-        var prepared = executor.Execute(mariner);
-        Console.WriteLine($"[S101-Lua] Pipeline produced {prepared.Count} drawing instructions");
 
-        // Load the colour palette from the portrayal catalogue
+        // Build the S-101 portrayal catalogue and switch palette before the
+        // pipeline runs so XSLT rules (if any) see the active colour profile.
         var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
         var paletteType = context?.Palette ?? PaletteType.Day;
         s101Cat.SwitchPalette(paletteType);
         var palette = s101Cat.ActivePalette;
-        Console.WriteLine($"[S101-Lua] Loaded {paletteType} palette with {palette.Colors.Count} colors");
+        Console.WriteLine($"[S101] Loaded {paletteType} palette with {palette.Colors.Count} colors");
+
+        // Drive the unified VectorPipeline with the S-101 Lua rule executor
+        // (Part 9A). XSLT rules in the S-101 catalogue (if any) are also
+        // honoured by the pipeline.
+        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, _provider, fc);
+        var featureSource = new S101FeatureXmlSource(_dataset);
+        var pipeline = new PortrayalPipeline(executor);
+        var portrayalLayer = pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner)
+            .GetAwaiter().GetResult();
+        var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+        Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
 
         // Render to Mapsui layer
         var vectorRenderer = new MapsuiDisplayListRenderer

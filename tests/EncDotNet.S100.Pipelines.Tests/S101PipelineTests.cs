@@ -41,14 +41,17 @@ public class S101PipelineTests
                 xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
                 xmlns:S100="http://www.iho.int/s100/5.0">
               <xsl:template match="/">
-                <DrawingInstructions>
+                <displayList>
                   <xsl:for-each select="//S100:Feature[@type='BOYLAT']">
-                    <PointInstruction id="{@id}" priority="8" viewingGroup="17020" plane="OverRadar">
-                      <Position lat="{S100:Geometry/S100:Point/@lat}" lon="{S100:Geometry/S100:Point/@lon}"/>
-                      <Symbol ref="BOYLAT01"/>
-                    </PointInstruction>
+                    <pointInstruction>
+                      <featureReference><xsl:value-of select="@id"/></featureReference>
+                      <drawingPriority>8</drawingPriority>
+                      <viewingGroup>17020</viewingGroup>
+                      <displayPlane>OverRadar</displayPlane>
+                      <symbol reference="BOYLAT01"/>
+                    </pointInstruction>
                   </xsl:for-each>
-                </DrawingInstructions>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -107,18 +110,17 @@ public class S101PipelineTests
                 xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
                 xmlns:S100="http://www.iho.int/s100/5.0">
               <xsl:template match="/">
-                <DrawingInstructions>
+                <displayList>
                   <xsl:for-each select="//S100:Feature[@type='DEPARE']">
-                    <AreaInstruction id="{@id}" priority="2" viewingGroup="13010" plane="UnderRadar">
-                      <Ring>
-                        <xsl:for-each select="S100:Geometry/S100:Surface/S100:Ring[@type='exterior']/S100:Point">
-                          <Point lat="{@lat}" lon="{@lon}"/>
-                        </xsl:for-each>
-                      </Ring>
-                      <AreaFill ref="DEPARE01"/>
-                    </AreaInstruction>
+                    <areaInstruction>
+                      <featureReference><xsl:value-of select="@id"/></featureReference>
+                      <drawingPriority>2</drawingPriority>
+                      <viewingGroup>13010</viewingGroup>
+                      <displayPlane>UnderRadar</displayPlane>
+                      <areaFillReference reference="DEPARE01"/>
+                    </areaInstruction>
                   </xsl:for-each>
-                </DrawingInstructions>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
@@ -152,19 +154,29 @@ public class S101PipelineTests
         var xslt = CompileXslt("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:template match="/">
-                <DrawingInstructions>
-                  <PointInstruction id="buoy" priority="5" viewingGroup="17020" plane="OverRadar">
-                    <Position lat="47.6" lon="-122.3"/><Symbol ref="BOYLAT01"/>
-                  </PointInstruction>
-                  <LineInstruction id="contour" priority="5" viewingGroup="33020" plane="OverRadar">
-                    <Geometry><Point lat="47.6" lon="-122.4"/><Point lat="47.5" lon="-122.3"/></Geometry>
-                    <LineStyle ref="DEPCNT02"/>
-                  </LineInstruction>
-                  <AreaInstruction id="deparea" priority="5" viewingGroup="13010" plane="OverRadar">
-                    <Geometry><Point lat="47.5" lon="-122.4"/></Geometry>
-                    <AreaFill ref="DEPARE01"/>
-                  </AreaInstruction>
-                </DrawingInstructions>
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>buoy</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>17020</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                  <lineInstruction>
+                    <featureReference>contour</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>33020</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <lineStyleReference reference="DEPCNT02"/>
+                  </lineInstruction>
+                  <areaInstruction>
+                    <featureReference>deparea</featureReference>
+                    <drawingPriority>5</drawingPriority>
+                    <viewingGroup>13010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <areaFillReference reference="DEPARE01"/>
+                  </areaInstruction>
+                </displayList>
               </xsl:template>
             </xsl:stylesheet>
             """);
