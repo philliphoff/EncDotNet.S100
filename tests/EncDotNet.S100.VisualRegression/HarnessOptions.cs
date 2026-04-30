@@ -1,6 +1,6 @@
 using EncDotNet.S100.Pipelines;
 
-namespace EncDotNet.S100.Testing.Rendering;
+namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>
 /// Controls how <see cref="RenderHarness"/> rasterises a dataset.

@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace EncDotNet.S100.Testing.Rendering;
+namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>
 /// Compares two PNG (or any SkiaSharp-decodable) images pixel-by-pixel using a

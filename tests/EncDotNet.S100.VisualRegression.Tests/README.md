@@ -1,10 +1,10 @@
-# EncDotNet.S100.Rendering.Tests
+# EncDotNet.S100.VisualRegression.Tests
 
 Visual regression tests for the S-100 rendering pipelines. Each test runs a
 representative dataset through its production pipeline + renderer, captures
 the output as a PNG, and compares it against a checked-in baseline.
 
-Built on the [`EncDotNet.S100.Testing.Rendering`](../EncDotNet.S100.Testing.Rendering/)
+Built on the [`EncDotNet.S100.VisualRegression`](../EncDotNet.S100.VisualRegression/)
 harness (which uses `Mapsui.Rendering.Skia` headlessly for vector products and
 `SkiaCoverageRenderer` directly for coverage products) and
 [Verify.Xunit](https://github.com/VerifyTests/Verify) for snapshot management.
@@ -29,7 +29,7 @@ writes a sibling `*.received.png` (the new output) and the harness writes a
 ## Running
 
 ```bash
-dotnet test tests/EncDotNet.S100.Rendering.Tests
+dotnet test tests/EncDotNet.S100.VisualRegression.Tests
 ```
 
 Tests use `[SkippableFact]` / `[SkippableTheory]` so they auto-skip when the

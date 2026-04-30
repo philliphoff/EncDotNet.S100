@@ -13,7 +13,7 @@ using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using SkiaSharp;
 
-namespace EncDotNet.S100.Testing.Rendering;
+namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>
 /// Headless rendering harness for S-100 datasets. Drives the same pipelines and

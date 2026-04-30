@@ -45,8 +45,8 @@ jobs:
         with:
           name: rendering-snapshots
           path: |
-            tests/EncDotNet.S100.Rendering.Tests/Snapshots/**/*.received.png
-            tests/EncDotNet.S100.Rendering.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
           if-no-files-found: ignore
 
       - name: Pack NuGet packages

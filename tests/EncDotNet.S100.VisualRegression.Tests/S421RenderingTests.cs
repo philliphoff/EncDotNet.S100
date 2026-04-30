@@ -1,6 +1,6 @@
-using EncDotNet.S100.Testing.Rendering;
+using EncDotNet.S100.VisualRegression;
 
-namespace EncDotNet.S100.Rendering.Tests;
+namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>Visual regression tests for S-421 route plan rendering.</summary>
 public sealed class S421RenderingTests

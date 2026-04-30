@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace EncDotNet.S100.Testing.Rendering;
+namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>
 /// Produces a "diff image" highlighting pixels where two images disagree, for

@@ -1,7 +1,7 @@
 using SkiaSharp;
 using VerifyTests;
 
-namespace EncDotNet.S100.Testing.Rendering;
+namespace EncDotNet.S100.VisualRegression;
 
 /// <summary>
 /// Glue between <see cref="PerceptualImageComparer"/> /

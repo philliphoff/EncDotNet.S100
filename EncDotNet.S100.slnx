@@ -22,8 +22,8 @@
   <Folder Name="/tests/">
     <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Rendering.Tests/EncDotNet.S100.Rendering.Tests.csproj" />
-    <Project Path="tests/EncDotNet.S100.Testing.Rendering/EncDotNet.S100.Testing.Rendering.csproj" />
+    <Project Path="tests/EncDotNet.S100.VisualRegression.Tests/EncDotNet.S100.VisualRegression.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.VisualRegression/EncDotNet.S100.VisualRegression.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S104.Tests/EncDotNet.S100.Datasets.S104.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S111.Tests/EncDotNet.S100.Datasets.S111.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S124.Tests/EncDotNet.S100.Datasets.S124.Tests.csproj" />

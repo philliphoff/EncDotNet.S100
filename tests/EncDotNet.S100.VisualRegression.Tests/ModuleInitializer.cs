@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
-using EncDotNet.S100.Testing.Rendering;
+using EncDotNet.S100.VisualRegression;
 using VerifyTests;
 
-namespace EncDotNet.S100.Rendering.Tests;
+namespace EncDotNet.S100.VisualRegression.Tests;
 
 internal static class ModuleInitializer
 {

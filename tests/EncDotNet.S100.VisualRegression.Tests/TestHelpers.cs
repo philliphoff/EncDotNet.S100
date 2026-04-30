@@ -1,7 +1,7 @@
 using SkiaSharp;
 using VerifyTests;
 
-namespace EncDotNet.S100.Rendering.Tests;
+namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>
 /// Helpers shared by all spec rendering tests.

@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\EncDotNet.S100.Testing.Rendering\EncDotNet.S100.Testing.Rendering.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.VisualRegression\EncDotNet.S100.VisualRegression.csproj" />
   </ItemGroup>
 
   <ItemGroup>

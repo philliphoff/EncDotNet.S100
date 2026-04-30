@@ -1,7 +1,7 @@
-using EncDotNet.S100.Testing.Rendering;
+using EncDotNet.S100.VisualRegression;
 using VerifyTests;
 
-namespace EncDotNet.S100.Rendering.Tests;
+namespace EncDotNet.S100.VisualRegression.Tests;
 
 /// <summary>
 /// Visual regression tests for S-102 bathymetric surface rendering.
