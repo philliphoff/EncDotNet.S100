@@ -1,0 +1,42 @@
+# S-57 Object Class (OBJL) → S-101 Feature Catalogue code.
+#
+# Source: IHO S-57 Edition 3.1 Appendix A "ENC Use of the Object Catalogue"
+# for the OBJL → S-57 acronym mapping; IHO S-57 to S-101 conversion guidance
+# for the S-57 → S-101 code mapping.
+#
+# v1 covers a breadth-first subset of the most common feature classes. Add
+# rows here to extend coverage; unrecognised OBJL values cause the feature
+# to be skipped during translation.
+#
+# Format: objl,s57Acronym,s101Code
+2,AIRARE,AirportAirfield
+3,ACHBRT,AnchorBerth
+4,ACHARE,AnchorageArea
+17,BCNCAR,CardinalBeacon
+18,BCNISD,IsolatedDangerBeacon
+19,BCNLAT,LateralBeacon
+20,BCNSAW,SafeWaterBeacon
+21,BCNSPP,SpecialPurposeGeneralBeacon
+27,BOYCAR,CardinalBuoy
+28,BOYINB,InstallationBuoy
+29,BOYISD,IsolatedDangerBuoy
+30,BOYLAT,LateralBuoy
+31,BOYSAW,SafeWaterBuoy
+32,BOYSPP,SpecialPurposeGeneralBuoy
+36,BUAARE,BuiltUpArea
+42,COALNE,Coastline
+44,BRIDGE,Bridge
+49,DEPARE,DepthArea
+50,DEPCNT,DepthContour
+56,DRGARE,DredgedArea
+65,FAIRWY,Fairway
+71,LIGHTS,LightAllAround
+86,OBSTRN,Obstruction
+113,RESARE,RestrictedArea
+116,LNDARE,LandArea
+121,SOUNDG,Sounding
+129,UWTROC,UnderwaterAwashRock
+145,WRECKS,Wreck
+150,NAVLNE,NavigationLine
+153,ROADWY,Road
+154,RAILWY,Railway

@@ -1,0 +1,45 @@
+# S-57 Attribute (ATTL) → S-101 Feature Catalogue attribute code.
+#
+# Source: IHO S-57 Edition 3.1 Appendix A "ENC Use of the Object Catalogue"
+# for the ATTL → S-57 attribute acronym mapping; IHO S-57 to S-101 conversion
+# guidance for the S-57 → S-101 attribute mapping.
+#
+# v1 covers a breadth-first subset of the most common attributes. Listed-value
+# remapping (S-57 enum codes to S-101 enum codes) is not yet performed:
+# string attribute values pass through unchanged, which is sufficient for
+# many but not all conditional portrayal rules.
+#
+# Format: attl,s57Acronym,s101Code
+75,COLOUR,colour
+76,COLPAT,colourPattern
+84,DRVAL1,depthRangeValue1
+85,DRVAL2,depthRangeValue2
+86,DUNITS,depthUnits
+116,OBJNAM,objectName
+133,SCAMIN,scaleMinimum
+135,STATUS,status
+156,VALSOU,valueOfSounding
+178,WATLEV,waterLevelEffect
+107,NATSUR,natureOfSurface
+113,NOBJNM,nationalObjectName
+22,CATBOY,categoryOfBuoy
+21,CATBCN,categoryOfBeacon
+33,CATLAM,categoryOfLateralMark
+35,CATLIT,categoryOfLight
+57,CONRAD,radarConspicuous
+72,CONVIS,visuallyConspicuous
+73,COMCHA,communicationChannel
+93,EXPSOU,exposition
+163,VERLEN,verticalLength
+174,VERCSA,verticalClearanceSafe
+175,VERCCL,verticalClearanceClosed
+176,VERCOP,verticalClearanceOpen
+177,VERCLR,verticalClearance
+108,NATCON,natureOfConstruction
+30,CATCAM,categoryOfCardinalMark
+36,CATMFA,categoryOfMarineFarmCulture
+40,CATOBS,categoryOfObstruction
+49,CATROD,categoryOfRoad
+51,CATSIT,categoryOfSignalStation
+56,CATWRK,categoryOfWreck
+70,COLOUR2,colour
