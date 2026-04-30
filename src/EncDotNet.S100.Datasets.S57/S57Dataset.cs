@@ -37,4 +37,26 @@ public sealed class S57Dataset
         var doc = S57DocumentReader.ReadFromStream(stream);
         return new S57Dataset(doc);
     }
+
+    /// <summary>
+    /// Returns <c>true</c> when the file at <paramref name="path"/> appears to
+    /// be an S-57 dataset (heuristic: the ISO 8211 DDR contains a <c>DSPM</c>
+    /// field, which is unique to S-57 and not present in S-101). Returns
+    /// <c>false</c> for non-ISO 8211 files or files lacking <c>DSPM</c>.
+    /// </summary>
+    public static bool IsS57File(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        try
+        {
+            var iso = EncDotNet.Iso8211.Iso8211DocumentReader.ReadFromFile(path);
+            if (iso.DataDescriptiveRecord is null) return false;
+            var ddr = EncDotNet.Iso8211.Iso8211DataDescriptiveRecordReader.Read(iso.DataDescriptiveRecord);
+            return ddr.GetFieldDefinition("DSPM") is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

@@ -57,9 +57,20 @@ internal sealed class DatasetPipelineFactory
             return DetectHdf5ProductSpec(path);
         }
 
-        // S-101: ISO 8211 files
+        // S-101: ISO 8211 files (also S-57 — distinguished by content below).
         if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
         {
+            // S-57 datasets carry a DSPM field in their ISO 8211 DDR which is
+            // not present in S-101 datasets; use that as the discriminator.
+            try
+            {
+                if (EncDotNet.S100.Datasets.S57.S57Dataset.IsS57File(path))
+                    return "S-57";
+            }
+            catch
+            {
+                // Fall through and treat as S-101.
+            }
             return "S-101";
         }
 
@@ -188,6 +199,7 @@ internal sealed class DatasetPipelineFactory
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
             "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueResolver),
+            "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueResolver),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
