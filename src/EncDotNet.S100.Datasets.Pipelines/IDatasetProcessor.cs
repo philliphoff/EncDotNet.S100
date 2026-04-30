@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.DatasetPipelines;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Processes a dataset file and renders it into Mapsui layers.

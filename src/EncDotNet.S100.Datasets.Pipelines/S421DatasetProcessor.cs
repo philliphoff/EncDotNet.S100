@@ -7,7 +7,7 @@ using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 
-namespace EncDotNet.S100.DatasetPipelines;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 public sealed class S421DatasetProcessor : IDatasetProcessor
 {

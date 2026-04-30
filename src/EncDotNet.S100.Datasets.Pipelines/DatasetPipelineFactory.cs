@@ -6,7 +6,7 @@ using EncDotNet.S100.Scripting;
 using Mapsui;
 using Mapsui.Layers;
 
-namespace EncDotNet.S100.DatasetPipelines;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Result of processing a dataset through the portrayal pipeline.

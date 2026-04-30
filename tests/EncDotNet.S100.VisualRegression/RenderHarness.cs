@@ -1,6 +1,6 @@
 using System.Reflection;
 using EncDotNet.S100.Core;
-using EncDotNet.S100.DatasetPipelines;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;

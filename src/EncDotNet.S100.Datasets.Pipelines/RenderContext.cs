@@ -1,7 +1,7 @@
 using System;
 using EncDotNet.S100.Pipelines;
 
-namespace EncDotNet.S100.DatasetPipelines;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Base class for spec-specific render contexts passed to dataset processors.

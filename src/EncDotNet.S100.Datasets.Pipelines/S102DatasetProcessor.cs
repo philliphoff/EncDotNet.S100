@@ -8,7 +8,7 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
 using Mapsui;
 
-namespace EncDotNet.S100.DatasetPipelines;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 public sealed class S102DatasetProcessor : IDatasetProcessor
 {
