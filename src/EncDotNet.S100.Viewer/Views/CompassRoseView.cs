@@ -96,7 +96,6 @@ internal sealed class CompassRoseView : Control
         var tickOuterRadius = outerRadius - tickPadding;
         var minorLength = Math.Max(1.5, size * 0.05);
         var cardinalLength = Math.Max(3.0, size * 0.14);
-        var northLength = Math.Max(4.0, size * 0.20);
 
         // Minor ticks every 30 degrees, skipping the cardinals (which are
         // drawn as triangles below).
@@ -113,13 +112,13 @@ internal sealed class CompassRoseView : Control
             context.DrawLine(pen, p1, p2);
         }
 
-        // Cardinal ticks rendered as thin inward-pointing triangles. North is
-        // larger and rendered in the accent color.
+        // Cardinal ticks rendered as thin inward-pointing triangles. The
+        // north tick uses the accent color but is otherwise the same size as
+        // the other cardinals.
         for (var a = 0; a < 360; a += 90)
         {
             var isNorth = a == 0;
-            var tickLen = isNorth ? northLength : cardinalLength;
-            var halfBase = isNorth ? Math.Max(2.0, size * 0.07) : Math.Max(1.5, size * 0.05);
+            var halfBase = Math.Max(1.5, size * 0.05);
             IBrush fill = isNorth ? palette.North : palette.Tick;
 
             var rad = (rotation + a) * Math.PI / 180.0;
@@ -131,8 +130,8 @@ internal sealed class CompassRoseView : Control
             var ty = sin;
 
             var tip = new Point(cx + sin * tickOuterRadius, cy - cos * tickOuterRadius);
-            var basePx = cx + sin * (tickOuterRadius - tickLen);
-            var basePy = cy - cos * (tickOuterRadius - tickLen);
+            var basePx = cx + sin * (tickOuterRadius - cardinalLength);
+            var basePy = cy - cos * (tickOuterRadius - cardinalLength);
             var b1 = new Point(basePx + tx * halfBase, basePy + ty * halfBase);
             var b2 = new Point(basePx - tx * halfBase, basePy - ty * halfBase);
 
