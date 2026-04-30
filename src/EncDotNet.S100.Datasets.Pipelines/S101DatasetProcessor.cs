@@ -12,16 +12,16 @@ using EncDotNet.S100.Scripting;
 using Mapsui;
 using Mapsui.Layers;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
-internal sealed class S101DatasetProcessor : IDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly ILuaEngine _luaEngine;
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
-    private Dictionary<long, Pipelines.Vector.Feature>? _featureIndex;
+    private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
 
     public string ProductSpec => "S-101";
 
@@ -143,11 +143,11 @@ internal sealed class S101DatasetProcessor : IDatasetProcessor
         };
     }
 
-    private Dictionary<long, Pipelines.Vector.Feature> BuildFeatureIndex()
+    private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature> BuildFeatureIndex()
     {
         var vectorSource = new S101VectorSource(_dataset);
         var features = vectorSource.GetFeatures();
-        var index = new Dictionary<long, Pipelines.Vector.Feature>(features.Count);
+        var index = new Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>(features.Count);
         foreach (var f in features)
             index[f.Id] = f;
         return index;

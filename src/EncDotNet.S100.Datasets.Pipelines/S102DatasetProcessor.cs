@@ -8,9 +8,9 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
 using Mapsui;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
-internal sealed class S102DatasetProcessor : IDatasetProcessor
+public sealed class S102DatasetProcessor : IDatasetProcessor
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -42,7 +42,7 @@ internal sealed class S102DatasetProcessor : IDatasetProcessor
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
         var metadata = _source.Metadata;
 
-        var viewport = new Pipelines.Viewport
+        var viewport = new EncDotNet.S100.Pipelines.Viewport
         {
             MinLatitude = metadata.Extent.SouthLatitude,
             MaxLatitude = metadata.Extent.NorthLatitude,

@@ -1,11 +1,11 @@
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Processes a dataset file and renders it into Mapsui layers.
 /// Constructed once per file; <see cref="Render"/> may be called
 /// multiple times with different spec-specific contexts.
 /// </summary>
-internal interface IDatasetProcessor
+public interface IDatasetProcessor
 {
     string ProductSpec { get; }
 
@@ -22,7 +22,7 @@ internal interface IDatasetProcessor
 /// <summary>
 /// Feature information returned by a pick/identify operation.
 /// </summary>
-internal sealed class FeatureInfo
+public sealed class FeatureInfo
 {
     /// <summary>The feature reference string (dataset-specific ID).</summary>
     public required string FeatureRef { get; init; }

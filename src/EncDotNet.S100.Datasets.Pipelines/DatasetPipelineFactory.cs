@@ -6,12 +6,12 @@ using EncDotNet.S100.Scripting;
 using Mapsui;
 using Mapsui.Layers;
 
-namespace EncDotNet.S100.Viewer;
+namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Result of processing a dataset through the portrayal pipeline.
 /// </summary>
-internal sealed class DatasetResult
+public sealed class DatasetResult
 {
     public required IReadOnlyList<ILayer> Layers { get; init; }
     public required MRect Extent { get; init; }
@@ -23,7 +23,7 @@ internal sealed class DatasetResult
 /// Detects dataset type from file extension and creates
 /// the appropriate <see cref="IDatasetProcessor"/>.
 /// </summary>
-internal sealed class DatasetPipelineFactory
+public sealed class DatasetPipelineFactory
 {
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly ILuaEngine _luaEngine;

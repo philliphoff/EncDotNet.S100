@@ -39,6 +39,16 @@ jobs:
           name: test-results
           path: TestResults/*.trx
 
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendering-snapshots
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
       - name: Pack NuGet packages
         run: |
           dotnet pack src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj --no-build --configuration Release --output nupkgs
