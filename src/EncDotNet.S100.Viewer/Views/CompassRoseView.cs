@@ -159,7 +159,13 @@ internal sealed class CompassRoseView : Control
             typeface,
             fontSize,
             palette.Foreground);
-        var origin = new Point(cx - formatted.Width / 2.0, cy - formatted.Height / 2.0);
+        // Center the visible glyph (not the full text box) on the compass.
+        // FormattedText positions by the box top-left and the cap-height sits
+        // above the baseline, so use Baseline + an approximate cap-height to
+        // center vertically without drift toward the top.
+        var capHeight = fontSize * 0.72;
+        var baselineY = cy + capHeight / 2.0;
+        var origin = new Point(cx - formatted.Width / 2.0, baselineY - formatted.Baseline);
         context.DrawText(formatted, origin);
     }
 
