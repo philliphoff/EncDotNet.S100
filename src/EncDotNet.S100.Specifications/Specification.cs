@@ -14,7 +14,7 @@ public static class Specification
     /// <summary>
     /// Product specifications that have bundled assets in this assembly.
     /// </summary>
-    public static IReadOnlyList<string> AvailableSpecs { get; } = ["S-101", "S-102", "S-104", "S-111", "S-124", "S-129", "S-421"];
+    public static IReadOnlyList<string> AvailableSpecs { get; } = ["S-101", "S-102", "S-104", "S-111", "S-124", "S-129", "S-411", "S-421"];
 
     /// <summary>
     /// Opens the bundled Feature Catalogue XML for the given product specification as a readable stream.
