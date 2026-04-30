@@ -9,37 +9,40 @@
 # string attribute values pass through unchanged, which is sufficient for
 # many but not all conditional portrayal rules.
 #
+# Notes:
+# - Some S-57 attributes have no flat S-101 equivalent and require complex
+#   attributes (e.g. OBJNAM/NOBJNM → featureName with sub-attributes); those
+#   are intentionally omitted from this mapping until v2.
+# - Listed-value codes (enums) are not remapped here; S-57 numeric codes are
+#   passed through as strings, which matches S-101 numeric codes for many
+#   but not all enumerations.
+#
 # Format: attl,s57Acronym,s101Code
+70,CONDTN,condition
+72,CONVIS,visualProminence
 75,COLOUR,colour
 76,COLPAT,colourPattern
-84,DRVAL1,depthRangeValue1
-85,DRVAL2,depthRangeValue2
-86,DUNITS,depthUnits
-116,OBJNAM,objectName
+84,DRVAL1,depthRangeMinimumValue
+85,DRVAL2,depthRangeMaximumValue
+87,VALDCO,valueOfDepthContour
+93,EXPSOU,expositionOfSounding
+107,NATSUR,natureOfSurface
+108,NATCON,natureOfConstruction
 133,SCAMIN,scaleMinimum
 135,STATUS,status
 156,VALSOU,valueOfSounding
 178,WATLEV,waterLevelEffect
-107,NATSUR,natureOfSurface
-113,NOBJNM,nationalObjectName
-22,CATBOY,categoryOfBuoy
-21,CATBCN,categoryOfBeacon
+30,CATCAM,categoryOfCardinalMark
 33,CATLAM,categoryOfLateralMark
 35,CATLIT,categoryOfLight
+36,CATMFA,categoryOfMarineFarmCulture
+40,CATOBS,categoryOfObstruction
+49,CATROD,categoryOfRoad
+56,CATWRK,categoryOfWreck
 57,CONRAD,radarConspicuous
-72,CONVIS,visuallyConspicuous
 73,COMCHA,communicationChannel
-93,EXPSOU,exposition
 163,VERLEN,verticalLength
 174,VERCSA,verticalClearanceSafe
 175,VERCCL,verticalClearanceClosed
 176,VERCOP,verticalClearanceOpen
-177,VERCLR,verticalClearance
-108,NATCON,natureOfConstruction
-30,CATCAM,categoryOfCardinalMark
-36,CATMFA,categoryOfMarineFarmCulture
-40,CATOBS,categoryOfObstruction
-49,CATROD,categoryOfRoad
-51,CATSIT,categoryOfSignalStation
-56,CATWRK,categoryOfWreck
-70,COLOUR2,colour
+177,VERCLR,verticalClearanceValue

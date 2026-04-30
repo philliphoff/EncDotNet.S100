@@ -21,10 +21,14 @@ public class S57S101MappingTests
     {
         var m = S57S101Mapping.Default;
 
-        Assert.Equal("depthRangeValue1", m.ResolveAttributeCode(84));
-        Assert.Equal("depthRangeValue2", m.ResolveAttributeCode(85));
+        Assert.Equal("depthRangeMinimumValue", m.ResolveAttributeCode(84));
+        Assert.Equal("depthRangeMaximumValue", m.ResolveAttributeCode(85));
         Assert.Equal("valueOfSounding", m.ResolveAttributeCode(156));
-        Assert.Equal("objectName", m.ResolveAttributeCode(116));
+        Assert.Equal("valueOfDepthContour", m.ResolveAttributeCode(87));
+        Assert.Equal("expositionOfSounding", m.ResolveAttributeCode(93));
+        Assert.Equal("verticalClearanceValue", m.ResolveAttributeCode(177));
+        // OBJNAM (116) intentionally has no flat mapping — featureName is a complex attribute.
+        Assert.Null(m.ResolveAttributeCode(116));
     }
 
     [Fact]
