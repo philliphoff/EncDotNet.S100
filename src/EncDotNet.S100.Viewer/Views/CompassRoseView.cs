@@ -92,9 +92,9 @@ internal sealed class CompassRoseView : Control
 
         var rotation = MapRotation;
         // Inset the tick ring so ticks don't touch the compass edge.
-        var tickPadding = Math.Max(2.0, size * 0.06);
+        var tickPadding = Math.Max(3.0, size * 0.10);
         var tickOuterRadius = outerRadius - tickPadding;
-        var minorLength = Math.Max(2.0, size * 0.08);
+        var minorLength = Math.Max(1.5, size * 0.05);
         var cardinalLength = Math.Max(3.0, size * 0.14);
         var northLength = Math.Max(4.0, size * 0.20);
 
