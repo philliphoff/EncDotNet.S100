@@ -1,48 +1,43 @@
 # S-57 Attribute (ATTL) → S-101 Feature Catalogue attribute code.
 #
-# Source: IHO S-57 Edition 3.1 Appendix A "ENC Use of the Object Catalogue"
-# for the ATTL → S-57 attribute acronym mapping; IHO S-57 to S-101 conversion
-# guidance for the S-57 → S-101 attribute mapping.
-#
-# v1 covers a breadth-first subset of the most common attributes. Listed-value
-# remapping (S-57 enum codes to S-101 enum codes) is not yet performed:
-# string attribute values pass through unchanged, which is sufficient for
-# many but not all conditional portrayal rules.
+# ATTL numeric codes per IHO S-57 Appendix A "Use of the Object Catalogue
+# for ENC" (Edition 3.1). Verified against the IHO Attribute Catalogue and
+# the GDAL S-57 driver's reference table.
 #
 # Notes:
 # - Some S-57 attributes have no flat S-101 equivalent and require complex
 #   attributes (e.g. OBJNAM/NOBJNM → featureName with sub-attributes); those
-#   are intentionally omitted from this mapping until v2.
+#   are intentionally omitted from this mapping until a later iteration.
 # - Listed-value codes (enums) are not remapped here; S-57 numeric codes are
 #   passed through as strings, which matches S-101 numeric codes for many
 #   but not all enumerations.
 #
 # Format: attl,s57Acronym,s101Code
-70,CONDTN,condition
-72,CONVIS,visualProminence
+13,CATCAM,categoryOfCardinalMark
+36,CATLAM,categoryOfLateralMark
+37,CATLIT,categoryOfLight
+38,CATMFA,categoryOfMarineFarmCulture
+42,CATOBS,categoryOfObstruction
+57,CATROD,categoryOfRoad
+71,CATWRK,categoryOfWreck
 75,COLOUR,colour
 76,COLPAT,colourPattern
-84,DRVAL1,depthRangeMinimumValue
-85,DRVAL2,depthRangeMaximumValue
-87,VALDCO,valueOfDepthContour
+77,COMCHA,communicationChannel
+81,CONDTN,condition
+82,CONRAD,radarConspicuous
+83,CONVIS,visualProminence
+87,DRVAL1,depthRangeMinimumValue
+88,DRVAL2,depthRangeMaximumValue
 93,EXPSOU,expositionOfSounding
-107,NATSUR,natureOfSurface
-108,NATCON,natureOfConstruction
+112,NATCON,natureOfConstruction
+113,NATSUR,natureOfSurface
 133,SCAMIN,scaleMinimum
-135,STATUS,status
-156,VALSOU,valueOfSounding
-178,WATLEV,waterLevelEffect
-30,CATCAM,categoryOfCardinalMark
-33,CATLAM,categoryOfLateralMark
-35,CATLIT,categoryOfLight
-36,CATMFA,categoryOfMarineFarmCulture
-40,CATOBS,categoryOfObstruction
-49,CATROD,categoryOfRoad
-56,CATWRK,categoryOfWreck
-57,CONRAD,radarConspicuous
-73,COMCHA,communicationChannel
-163,VERLEN,verticalLength
-174,VERCSA,verticalClearanceSafe
-175,VERCCL,verticalClearanceClosed
-176,VERCOP,verticalClearanceOpen
-177,VERCLR,verticalClearanceValue
+149,STATUS,status
+174,VALDCO,valueOfDepthContour
+179,VALSOU,valueOfSounding
+181,VERCLR,verticalClearanceValue
+182,VERCCL,verticalClearanceClosed
+183,VERCOP,verticalClearanceOpen
+184,VERCSA,verticalClearanceSafe
+186,VERLEN,verticalLength
+187,WATLEV,waterLevelEffect

@@ -112,7 +112,7 @@ public class S57ToS101TranslatorTests
         {
             RecordId = 1,
             Primitive = 1,
-            ObjectClass = 17, // BCNCAR → CardinalBeacon
+            ObjectClass = 5, // BCNCAR → CardinalBeacon
             ProducingAgency = 540,
             FeatureIdentificationNumber = 1,
             FeatureIdentificationSubdivision = 0,
@@ -144,7 +144,7 @@ public class S57ToS101TranslatorTests
         {
             RecordId = 1,
             Primitive = 2,
-            ObjectClass = 42, // COALNE → Coastline
+            ObjectClass = 30, // COALNE → Coastline
             ProducingAgency = 540,
             FeatureIdentificationNumber = 1,
             FeatureIdentificationSubdivision = 0,
@@ -180,13 +180,13 @@ public class S57ToS101TranslatorTests
         {
             RecordId = 1,
             Primitive = 3,
-            ObjectClass = 49, // DEPARE → DepthArea
+            ObjectClass = 42, // DEPARE → DepthArea
             ProducingAgency = 540,
             FeatureIdentificationNumber = 1,
             FeatureIdentificationSubdivision = 0,
             Attributes = ImmutableArray.Create(
-                new S57Attribute(84, "10"),
-                new S57Attribute(85, "20")),
+                new S57Attribute(87, "10"),
+                new S57Attribute(88, "20")),
             SpatialPointers = ImmutableArray.Create(
                 new S57FeatureSpatialPointer(RcnmEdge, 10, 1, 1, 0),
                 new S57FeatureSpatialPointer(RcnmEdge, 11, 1, 1, 0),
@@ -236,7 +236,7 @@ public class S57ToS101TranslatorTests
         {
             RecordId = 1,
             Primitive = 1,
-            ObjectClass = 121, // SOUNDG
+            ObjectClass = 129, // SOUNDG
             ProducingAgency = 540,
             FeatureIdentificationNumber = 1,
             FeatureIdentificationSubdivision = 0,

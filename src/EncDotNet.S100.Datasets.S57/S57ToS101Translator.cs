@@ -44,7 +44,7 @@ public sealed class S57ToS101Translator
     private const byte TopologyBegin = 1;
     private const byte TopologyEnd = 2;
 
-    private const ushort SoundingObjl = 121;
+    private const ushort SoundingObjl = 129;
     private const string SoundingS101Code = "Sounding";
     private const string SoundingValueAttribute = "valueOfSounding";
 
@@ -239,7 +239,7 @@ public sealed class S57ToS101Translator
                 var typeCode = GetOrAssignFeatureTypeCode(s101Code);
                 var attributes = TranslateAttributes(feat.Attributes);
                 var spatials = TranslateSpatialPointers(feat);
-                if (spatials.Length == 0 && feat.Primitive != 255) continue;
+                if (spatials.Length == 0) continue;
 
                 Features.Add(new S101FeatureRecord
                 {
