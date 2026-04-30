@@ -45,29 +45,29 @@ internal static class S57DocumentReader
 
         foreach (var record in iso.DataRecords)
         {
-            var firstTag = record.Fields.Count > 0 ? record.Fields[0].Tag : "";
-
-            switch (firstTag)
+            // ISO 8211 data records often begin with a `0001` leader field;
+            // identify the record type by which S-57 tag is present.
+            if (record.GetFieldByTag("DSID") is not null)
             {
-                case "DSID":
-                    dsid = ParseDsid(record, ddr);
-                    break;
-
-                case "DSPM":
+                dsid = ParseDsid(record, ddr);
+                if (record.GetFieldByTag("DSPM") is not null)
                     dspm = ParseDspm(record, ddr);
-                    break;
-
-                case "VRID":
-                    var vr = ParseVectorRecord(record, ddr);
-                    if (vr is not null)
-                        vectorRecords[new S57Name(vr.RecordName, vr.RecordId)] = vr;
-                    break;
-
-                case "FRID":
-                    var fr = ParseFeatureRecord(record, ddr);
-                    if (fr is not null)
-                        features.Add(fr);
-                    break;
+            }
+            else if (record.GetFieldByTag("DSPM") is not null)
+            {
+                dspm = ParseDspm(record, ddr);
+            }
+            else if (record.GetFieldByTag("VRID") is not null)
+            {
+                var vr = ParseVectorRecord(record, ddr);
+                if (vr is not null)
+                    vectorRecords[new S57Name(vr.RecordName, vr.RecordId)] = vr;
+            }
+            else if (record.GetFieldByTag("FRID") is not null)
+            {
+                var fr = ParseFeatureRecord(record, ddr);
+                if (fr is not null)
+                    features.Add(fr);
             }
         }
 
