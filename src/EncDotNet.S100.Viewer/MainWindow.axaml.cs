@@ -333,10 +333,13 @@ public partial class MainWindow : ShadUI.Window
             return;
         }
 
-        // S-104 ships a built-in portrayal catalogue; all others need an external one.
-        if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
+        // S-104 ships a built-in portrayal catalogue. S-57 datasets reuse the
+        // S-101 portrayal catalogue (translation is performed by the
+        // processor). All others require an external catalogue for their spec.
+        var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
+        if (requiredCatalogue != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
-            _viewModel.StatusText = $"Please select a portrayal catalogue for {spec} first.";
+            _viewModel.StatusText = $"Please select a portrayal catalogue for {requiredCatalogue} first.";
             return;
         }
 
