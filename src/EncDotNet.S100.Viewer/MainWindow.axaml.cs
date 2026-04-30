@@ -217,6 +217,9 @@ public partial class MainWindow : ShadUI.Window
         // Enable pinch-to-zoom on the map control via trackpad magnify gesture
         MapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
 
+        // Enable trackpad rotate gesture to rotate the map
+        MapControl.AddHandler(Gestures.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
+
         // Enable double-tap to zoom in
         MapControl.DoubleTapped += OnMapDoubleTapped;
 
@@ -239,6 +242,10 @@ public partial class MainWindow : ShadUI.Window
             scaleNav.ViewportChanged += OnViewportChangedForScaleBar;
             UpdateScaleBar(scaleNav.Viewport);
         }
+
+        // Drive the map rotation from compass-rose drag gestures.
+        CompassRose.RotationRequested += OnCompassRotationRequested;
+        CompassRose.RotationResetRequested += OnCompassRotationReset;
 
         // Apply CLI options
         _screenshotPath = options?.ScreenshotPath;
@@ -518,6 +525,7 @@ public partial class MainWindow : ShadUI.Window
     private void UpdateScaleBar(Mapsui.Viewport viewport)
     {
         ScaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
+        CompassRose.UpdateForViewport(viewport.Rotation);
     }
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e)
@@ -541,15 +549,63 @@ public partial class MainWindow : ShadUI.Window
         e.Handled = true;
     }
 
+    private void OnMapRotateGesture(object? sender, PointerDeltaEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+
+        // macOS reports the rotation delta in degrees (counter-clockwise positive).
+        // Mapsui's viewport rotation is clockwise positive, so negate.
+        var deltaDegrees = -e.Delta.X;
+        if (deltaDegrees == 0)
+            return;
+
+        var newRotation = navigator.Viewport.Rotation + deltaDegrees;
+        // Normalize to [0, 360).
+        newRotation = ((newRotation % 360.0) + 360.0) % 360.0;
+        navigator.RotateTo(newRotation);
+        e.Handled = true;
+    }
+
+    private void OnCompassRotationRequested(double rotationDegrees)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+        navigator.RotateTo(rotationDegrees);
+    }
+
+    private void OnCompassRotationReset()
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return;
+        // Pick the equivalent rotation closest to 0 to avoid spinning the long way.
+        var current = navigator.Viewport.Rotation;
+        var target = current > 180.0 ? 360.0 : 0.0;
+        navigator.RotateTo(target, 250);
+    }
+
     private void OnMapPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         if (MapControl.Map?.Navigator is not { } navigator)
             return;
 
         var viewport = navigator.Viewport;
-        var dx = e.Delta.X * viewport.Resolution * 50;
-        var dy = e.Delta.Y * viewport.Resolution * 50;
-        navigator.CenterOn(viewport.CenterX - dx, viewport.CenterY + dy);
+
+        // Pan vector in the unrotated (screen-aligned) world frame: dragging
+        // the content right/up (Delta.X/Y > 0) moves the viewport center
+        // left/up by the same amount.
+        var dxScreen = -e.Delta.X * viewport.Resolution * 50;
+        var dyScreen = e.Delta.Y * viewport.Resolution * 50;
+
+        // Rotate the screen-space delta into world space by the viewport
+        // rotation so swipes always agree with the on-screen orientation.
+        var rad = viewport.Rotation * Math.PI / 180.0;
+        var sin = Math.Sin(rad);
+        var cos = Math.Cos(rad);
+        var dxWorld = dxScreen * cos - dyScreen * sin;
+        var dyWorld = dxScreen * sin + dyScreen * cos;
+
+        navigator.CenterOn(viewport.CenterX + dxWorld, viewport.CenterY + dyWorld);
         e.Handled = true;
     }
 

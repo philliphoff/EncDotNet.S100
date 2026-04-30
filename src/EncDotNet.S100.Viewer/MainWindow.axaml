@@ -249,6 +249,10 @@
                             Classes="Icon">
                         <ic:FluentIcon Icon="Subtract" IconVariant="Regular" FontSize="16" />
                     </Button>
+                    <views:CompassRoseView x:Name="CompassRose"
+                                           Margin="0,4,0,0"
+                                           Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
+                                           Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
             </Grid>
         </Grid>
