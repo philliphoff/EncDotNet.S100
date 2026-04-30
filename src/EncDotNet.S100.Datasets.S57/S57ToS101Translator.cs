@@ -229,7 +229,12 @@ public sealed class S57ToS101Translator
             {
                 if (feat.ObjectClass == SoundingObjl)
                 {
-                    ExplodeSounding(feat);
+                    // S-101 Sounding portrayal expects a PointSet (multi-point)
+                    // geometry; exploding S-57 SG3D triples into individual
+                    // single-point Sounding features fails the Lua primitive-type
+                    // check and produces thousands of default-symbology fallbacks
+                    // that dominate render time. Skip soundings until proper
+                    // PointSet support is added.
                     continue;
                 }
 

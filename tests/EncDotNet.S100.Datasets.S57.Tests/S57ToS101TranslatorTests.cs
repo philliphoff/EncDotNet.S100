@@ -217,8 +217,12 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_SoundingNode_ExplodesIntoIndividualFeatures()
+    public void Translate_SoundingNode_IsSkipped()
     {
+        // Soundings are intentionally skipped during translation until
+        // PointSet (multipoint) geometry is supported by the target S-101
+        // pipeline; otherwise they fall through to default-symbology
+        // fallbacks at render time.
         var soundingNode = new S57VectorRecord
         {
             RecordName = RcnmIsolatedNode,
@@ -253,16 +257,7 @@ public class S57ToS101TranslatorTests
 
         var s101 = new S57ToS101Translator().Translate(doc);
 
-        Assert.Equal(3, s101.Features.Length);
-        Assert.All(s101.Features, f =>
-            Assert.Equal("Sounding", s101.FeatureTypeCatalogue[f.FeatureTypeCode]));
-
-        var depths = s101.Features
-            .Select(f => f.Attributes.Single().Value)
-            .ToList();
-        Assert.Contains("5", depths);
-        Assert.Contains("7.5", depths);
-        Assert.Contains("10", depths);
+        Assert.Empty(s101.Features);
     }
 
     [Fact]
