@@ -57,12 +57,12 @@ for missing fixtures.
 | Setting | Default | Meaning |
 |---|---|---|
 | `MaxChannelDelta` | 4 | Max absolute per-channel (R/G/B/A) diff before a pixel counts as different |
-| `MaxDifferentPixelFraction` | 0.001 | Max fraction (0.1 %) of pixels that may differ |
+| `MaxDifferentPixelFraction` | 0.05 | Max fraction (5 %) of pixels that may differ |
 
-These are tuned to absorb minor anti-aliasing / font-hinting drift between
-platforms while still catching real rendering regressions. Adjust per-test
-via `PerceptualImageComparer` constructor parameters or by setting
-`HarnessOptions` to a smaller, less-text-heavy viewport.
+These are tuned to absorb sub-pixel anti-aliasing and **cross-platform font
+hinting drift** (the same dataset rendered on macOS vs Linux can disagree on
+~1–2 % of pixels in label glyphs alone) while still catching real rendering
+regressions in geometry, colour, or symbology.
 
 ## Adding a new test
 
