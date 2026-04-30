@@ -44,7 +44,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         new(_engine, _provider) { FourShades = fourShades };
 
     [Fact]
-    public async Task EndToEnd_ReadsHdf5_ProducesColoredLayer()
+    public async Task EndToEnd_ReadsHdf5_ProducesStyledLayer()
     {
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
@@ -54,9 +54,10 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
 
-        // 31 rows × 21 columns = 651 cells
-        Assert.Equal(651, layer.CellColors.Count);
-        Assert.Equal("S-102", layer.Metadata.ProductSpec);
+        // 31 rows × 21 columns = 651 cells in the sampled grid
+        Assert.Equal(31, layer.Coverage.Metadata.NumRows);
+        Assert.Equal(21, layer.Coverage.Metadata.NumColumns);
+        Assert.Equal("depth", layer.ColorScheme.FieldName);
     }
 
     [Fact]
@@ -76,17 +77,26 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var pipeline = new CoveragePipeline();
         var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
 
-        // The test file has real depths 4.44–8m, all in [ShallowContour=2, SafetyContour=30) → DEPMS
-        // and fill-value cells (1000000) → null (no-data)
-        var nonNull = layer.CellColors.Where(c => c is not null).ToList();
-        Assert.NotEmpty(nonNull);
+        // The test file has real depths 4.44–8m — all in [ShallowContour=2, SafetyContour=30) → DEPMS.
+        // Walk the depth field and verify each non-fill cell maps to DEPMS via the resolved scheme.
+        var depths = layer.Coverage.GetField("depth");
+        int rows = depths.GetLength(0);
+        int cols = depths.GetLength(1);
+        int realCells = 0;
+        for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+        {
+            float v = depths[r, c];
+            if (v == layer.NoDataValue) continue;
+            realCells++;
+            Assert.Equal(DEPMS, layer.ColorScheme.Resolve(v));
+        }
 
-        // All real depth values (4.44 to ~8m) fall in DEPMS [2, 30)
-        Assert.All(nonNull, color => Assert.Equal(DEPMS, color));
+        Assert.True(realCells > 0, "Expected some real depth cells in the test file");
     }
 
     [Fact]
-    public async Task EndToEnd_FillValues_ProduceNullColors()
+    public async Task EndToEnd_FillValues_AreMarkedAsNoData()
     {
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
@@ -96,16 +106,21 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
 
-        // The file has fill value = 1000000 for no-data cells.
-        // The source maps NoDataValue=NaN, so fill-value cells won't match NaN.
-        // However, 1000000 is outside all color bands → CoverageColorScheme.Resolve returns null.
-        // Either way, no-data cells should appear null.
-        var nullCount = layer.CellColors.Count(c => c is null);
-        var nonNullCount = layer.CellColors.Count(c => c is not null);
+        // S-102 uses the sentinel fill value 1,000,000f (not NaN).
+        Assert.Equal(S102CoverageSource.FillValue, layer.NoDataValue);
 
-        // Both should be present (the file has a mix of real and fill values)
-        Assert.True(nullCount > 0, "Expected some no-data/out-of-range cells");
-        Assert.True(nonNullCount > 0, "Expected some colored cells");
+        var depths = layer.Coverage.GetField("depth");
+        int fillCount = 0;
+        int realCount = 0;
+        for (int r = 0; r < depths.GetLength(0); r++)
+        for (int c = 0; c < depths.GetLength(1); c++)
+        {
+            if (depths[r, c] == layer.NoDataValue) fillCount++;
+            else realCount++;
+        }
+
+        Assert.True(fillCount > 0, "Expected some no-data cells in the test file");
+        Assert.True(realCount > 0, "Expected some real-depth cells in the test file");
     }
 
     [Fact]
@@ -119,10 +134,11 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
 
-        Assert.Equal(31, layer.Grid.NumRows);
-        Assert.Equal(21, layer.Grid.NumColumns);
-        Assert.Equal(16.0, layer.Grid.SpacingLatitudinal);
-        Assert.Equal(16.0, layer.Grid.SpacingLongitudinal);
+        var grid = layer.Coverage.Metadata;
+        Assert.Equal(31, grid.NumRows);
+        Assert.Equal(21, grid.NumColumns);
+        Assert.Equal(16.0, grid.SpacingLatitudinal);
+        Assert.Equal(16.0, grid.SpacingLongitudinal);
     }
 
     [Fact]
@@ -140,12 +156,19 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var pipeline = new CoveragePipeline();
         var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
 
-        var nonNull = layer.CellColors.Where(c => c is not null).ToList();
-        Assert.NotEmpty(nonNull);
+        // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW. All real values 4–8m → DEPVS.
+        var depths = layer.Coverage.GetField("depth");
+        int realCells = 0;
+        for (int r = 0; r < depths.GetLength(0); r++)
+        for (int c = 0; c < depths.GetLength(1); c++)
+        {
+            float v = depths[r, c];
+            if (v == layer.NoDataValue) continue;
+            realCells++;
+            Assert.Equal(DEPVS, layer.ColorScheme.Resolve(v));
+        }
 
-        // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW
-        // All real values 4–8m → DEPVS
-        Assert.All(nonNull, color => Assert.Equal(DEPVS, color));
+        Assert.True(realCells > 0);
     }
 
     [Fact]

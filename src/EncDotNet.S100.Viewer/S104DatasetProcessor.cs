@@ -68,18 +68,9 @@ internal sealed class S104DatasetProcessor : IDatasetProcessor
             ScaleDenominator = 50_000,
         };
 
-        var colorScheme = _catalogue.ResolveColorScheme(MarinerSettings.Default);
-        var sampled = _source.Sample(GridRegion.Full);
-
-        var styledLayer = new StyledCoverageLayer
-        {
-            Coverage = sampled,
-            ColorScheme = colorScheme,
-            NoDataValue = S104CoverageSource.FillValue,
-            Georeferencer = new GridGeoreferencer(
-                metadata.GridMetadata,
-                metadata.HorizontalCRS),
-        };
+        var pipeline = new CoveragePipeline();
+        var styledLayer = pipeline.ProcessAsync(_source, _catalogue, MarinerSettings.Default)
+            .GetAwaiter().GetResult();
 
         var colorRenderer = new MapsuiCoverageRenderer(_crsTransformFactory)
         {

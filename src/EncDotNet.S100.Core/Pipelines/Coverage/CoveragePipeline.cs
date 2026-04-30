@@ -1,62 +1,43 @@
 namespace EncDotNet.S100.Pipelines.Coverage;
 
+/// <summary>
+/// Assembles a <see cref="StyledCoverageLayer"/> from a coverage source and
+/// portrayal catalogue: resolves the catalogue's colour and (optional) symbol
+/// schemes against the supplied <see cref="MarinerSettings"/>, samples the
+/// full grid, and bundles the result with the source's georeferencing.
+/// Pixel-level colorization and any reprojection are deferred to the renderer,
+/// since coverage grids are typically authored in a non-display CRS
+/// (e.g. UTM for S-102) that requires per-pixel reprojection at render time.
+/// </summary>
 public class CoveragePipeline
 {
-    public Task<ICoverageLayer> ProcessAsync(
+    public Task<StyledCoverageLayer> ProcessAsync(
         ICoverageSource source,
         ICoveragePortrayalCatalogue catalogue,
-        MarinerSettings? mariner = null
-    )
+        MarinerSettings? mariner = null)
     {
-        var metadata = source.Metadata;
-        var colorScheme = catalogue.ResolveColorScheme(mariner ?? MarinerSettings.Default);
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(catalogue);
 
-        // Sample the full grid (viewport clipping can narrow this later)
+        var settings = mariner ?? MarinerSettings.Default;
+        var metadata = source.Metadata;
+
+        var colorScheme = catalogue.ResolveColorScheme(settings);
+        var symbolScheme = catalogue.ResolveSymbolScheme(settings);
         var sampled = source.Sample(GridRegion.Full);
 
-        // Colorize each cell using the catalogue's color scheme
-        var fieldData = sampled.GetField(colorScheme.FieldName);
-        int rows = fieldData.GetLength(0);
-        int cols = fieldData.GetLength(1);
-        var cellColors = new string?[rows * cols];
-
-        for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
+        var layer = new StyledCoverageLayer
         {
-            float value = fieldData[r, c];
-            bool isNoData = float.IsNaN(metadata.NoDataValue)
-                ? float.IsNaN(value)
-                : value == metadata.NoDataValue;
-            cellColors[r * cols + c] = isNoData ? null : colorScheme.Resolve(value);
-        }
-
-        // Extract contour lines if the catalogue defines them
-        var contours = ExtractContours(sampled, catalogue.Contours);
-
-        ICoverageLayer layer = new DefaultCoverageLayer
-        {
-            Metadata = metadata,
-            Extent = new BoundingBox(
-                sampled.Metadata.OriginLatitude,
-                sampled.Metadata.OriginLongitude,
-                sampled.Metadata.OriginLatitude + sampled.Metadata.SpacingLatitudinal * sampled.Metadata.NumRows,
-                sampled.Metadata.OriginLongitude + sampled.Metadata.SpacingLongitudinal * sampled.Metadata.NumColumns),
-            Grid = sampled.Metadata,
-            CellColors = cellColors,
-            Contours = contours,
+            Coverage = sampled,
+            ColorScheme = colorScheme,
+            NoDataValue = metadata.NoDataValue,
+            Georeferencer = new GridGeoreferencer(
+                metadata.GridMetadata,
+                metadata.HorizontalCRS),
+            SymbolScheme = symbolScheme,
         };
 
         return Task.FromResult(layer);
-    }
-
-    private static List<ContourLine> ExtractContours(
-        SampledCoverage sampled,
-        IReadOnlyList<ContourStyle> contourStyles)
-    {
-        // TODO: Implement marching-squares contour extraction.
-        // For each ContourStyle, trace isolines through the grid at the
-        // specified depth value and produce ContourLine geometries.
-        return [];
     }
 }
 
@@ -167,48 +148,4 @@ public class SampledCoverage
         double lon = Metadata.OriginLongitude + col * Metadata.SpacingLongitudinal;
         return (lon, lat);
     }
-}
-
-/// <summary>
-/// A styled coverage grid ready for rendering as a raster tile.
-/// Product-agnostic: carries coloured cells plus optional contour lines,
-/// regardless of whether the source was S-102, S-111, S-104, etc.
-/// </summary>
-public interface ICoverageLayer
-{
-    /// <summary>Metadata describing the source coverage.</summary>
-    CoverageMetadata Metadata { get; }
-
-    /// <summary>Geographic extent of this layer.</summary>
-    BoundingBox Extent { get; }
-
-    /// <summary>Grid dimensions and spacing for the styled output.</summary>
-    GridMetadata Grid { get; }
-
-    /// <summary>
-    /// The colour assigned to each cell, row-major order.
-    /// Null entries represent no-data cells (transparent).
-    /// </summary>
-    IReadOnlyList<string?> CellColors { get; }
-
-    /// <summary>
-    /// Optional contour line geometries extracted from the coverage.
-    /// Empty when a catalogue specifies no contours.
-    /// </summary>
-    IReadOnlyList<ContourLine> Contours { get; }
-}
-
-/// <summary>
-/// A single contour line extracted from a coverage grid.
-/// </summary>
-public sealed class ContourLine
-{
-    /// <summary>The depth/value this contour represents.</summary>
-    public required float Value { get; init; }
-
-    /// <summary>Ordered vertices forming the contour polyline (lat/lon pairs).</summary>
-    public required IReadOnlyList<(double Latitude, double Longitude)> Vertices { get; init; }
-
-    /// <summary>The style to apply when rendering this contour.</summary>
-    public required ContourStyle Style { get; init; }
 }

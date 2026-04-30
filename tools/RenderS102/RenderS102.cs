@@ -59,22 +59,9 @@ var pipeline = new CoveragePipeline();
 
 // 3. Run the pipeline
 Console.WriteLine("Running coverage pipeline...");
-var layer = await pipeline.ProcessAsync(source, catalogue);
+var styledLayer = await pipeline.ProcessAsync(source, catalogue);
 
-// 4. Build the styled layer for rendering
-var colorScheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
-
-var styledLayer = new StyledCoverageLayer
-{
-    Coverage = source.Sample(GridRegion.Full),
-    ColorScheme = colorScheme,
-    NoDataValue = S102CoverageSource.FillValue,
-    Georeferencer = new GridGeoreferencer(
-        source.Metadata.GridMetadata,
-        source.Metadata.HorizontalCRS),
-};
-
-// 5. Render to bitmap
+// 4. Render to bitmap
 Console.WriteLine("Rendering...");
 var renderer = new SkiaCoverageRenderer();
 var viewport = new Viewport
@@ -90,7 +77,7 @@ var viewport = new Viewport
 
 using var bitmap = renderer.Render(styledLayer, viewport);
 
-// 6. Encode and save
+// 5. Encode and save
 using var image = SKImage.FromBitmap(bitmap);
 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
 using var stream = File.OpenWrite(outputPath);

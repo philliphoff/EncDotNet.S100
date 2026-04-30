@@ -128,7 +128,7 @@ public class S111CoverageSourceTests : IDisposable
     }
 
     [SkippableFact]
-    public async Task CoveragePipeline_ProducesColoredLayer()
+    public async Task CoveragePipeline_ProducesStyledLayer()
     {
         SkipIfNoTestData();
 
@@ -144,15 +144,13 @@ public class S111CoverageSourceTests : IDisposable
 
         var layer = await pipeline.ProcessAsync(source, catalogue);
 
-        Assert.Equal("S-111", layer.Metadata.ProductSpec);
-        Assert.NotEmpty(layer.CellColors);
+        // Pipeline assembled the styled layer from the source's metadata.
+        Assert.Equal(source.Metadata.NoDataValue, layer.NoDataValue);
+        Assert.NotNull(layer.ColorScheme);
+        Assert.NotEmpty(layer.Coverage.Values);
 
-        // Should have some non-null (colored) cells and some null (no-data) cells
-        var nonNull = layer.CellColors.Where(c => c is not null).ToList();
-        var nullCount = layer.CellColors.Count(c => c is null);
-
-        Assert.NotEmpty(nonNull);
-        Assert.True(nullCount > 0, "Expected some no-data cells in the coastal current grid");
+        // S-111 catalogue defines a symbol scheme for current arrows.
+        Assert.NotNull(layer.SymbolScheme);
     }
 
     [Fact]
