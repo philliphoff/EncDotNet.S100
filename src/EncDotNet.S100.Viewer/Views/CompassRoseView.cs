@@ -118,7 +118,8 @@ internal sealed class CompassRoseView : Control
         for (var a = 0; a < 360; a += 90)
         {
             var isNorth = a == 0;
-            var halfBase = Math.Max(1.5, size * 0.05);
+            var halfBase = isNorth ? Math.Max(2.0, size * 0.065) : Math.Max(1.5, size * 0.05);
+            var tickLen = isNorth ? cardinalLength * 1.10 : cardinalLength;
             IBrush fill = isNorth ? palette.North : palette.Tick;
 
             var rad = (rotation + a) * Math.PI / 180.0;
@@ -130,8 +131,8 @@ internal sealed class CompassRoseView : Control
             var ty = sin;
 
             var tip = new Point(cx + sin * tickOuterRadius, cy - cos * tickOuterRadius);
-            var basePx = cx + sin * (tickOuterRadius - cardinalLength);
-            var basePy = cy - cos * (tickOuterRadius - cardinalLength);
+            var basePx = cx + sin * (tickOuterRadius - tickLen);
+            var basePy = cy - cos * (tickOuterRadius - tickLen);
             var b1 = new Point(basePx + tx * halfBase, basePy + ty * halfBase);
             var b2 = new Point(basePx - tx * halfBase, basePy - ty * halfBase);
 
