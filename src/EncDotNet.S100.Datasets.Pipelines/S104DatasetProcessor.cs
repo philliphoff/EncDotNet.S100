@@ -57,7 +57,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
 
         var metadata = _source.Metadata;
 
-        var viewport = new Pipelines.Viewport
+        var viewport = new EncDotNet.S100.Pipelines.Viewport
         {
             MinLatitude = metadata.Extent.SouthLatitude,
             MaxLatitude = metadata.Extent.NorthLatitude,
