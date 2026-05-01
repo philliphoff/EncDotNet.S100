@@ -184,12 +184,14 @@
             </DockPanel>
         </Border>
 
-        <!-- Activity pane + splitter + map in a resizable grid -->
+        <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600" />
             </Grid.ColumnDefinitions>
 
             <!-- Activity pane -->
@@ -241,6 +243,28 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
+                    <ToggleButton x:Name="PickModeButton"
+                                  IsChecked="{Binding IsPickModeActive, Mode=TwoWay}"
+                                  ToolTip.Tip="Pick Mode (I) — single-tap to identify features"
+                                  Width="32" Height="32"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  Background="{DynamicResource BackgroundColor}"
+                                  BorderBrush="{DynamicResource BorderColor}"
+                                  BorderThickness="1">
+                        <ToggleButton.Styles>
+                            <Style Selector="ToggleButton#PickModeButton">
+                                <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+                            </Style>
+                            <Style Selector="ToggleButton#PickModeButton:checked">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                        </ToggleButton.Styles>
+                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16"
+                                       Foreground="{Binding $parent[ToggleButton].Foreground}" />
+                    </ToggleButton>
                     <Button x:Name="ZoomInButton"
                             Classes="Icon">
                         <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
@@ -255,6 +279,110 @@
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
             </Grid>
+
+            <!-- Resize grip between map and pick panel -->
+            <GridSplitter Grid.Column="3"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding IsPickPanelVisible}"
+                          Name="PickPanelSplitter" />
+
+            <!-- Pick Report (Object Information) panel -->
+            <Border Grid.Column="4"
+                    Background="{DynamicResource BackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsPickPanelVisible}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="OBJECT INFORMATION"
+                                       FontSize="11"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1"
+                                    Command="{Binding PickReport.ClearCommand}"
+                                    ToolTip.Tip="Close"
+                                    Width="22" Height="22"
+                                    Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center">
+                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="12,4,12,12">
+                        <StackPanel Spacing="10" DataContext="{Binding PickReport}">
+                            <!-- Header block: feature type + identity -->
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding FeatureType}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold" />
+                                <TextBlock FontSize="11" Opacity="0.7">
+                                    <Run Text="ID:" />
+                                    <Run Text="{Binding FeatureRef}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding ProductSpec, StringFormat='Spec: {0}'}" />
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding DatasetFileName, StringFormat='Source: {0}'}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <!-- Attribute list -->
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="0,8,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="ATTRIBUTES"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <ItemsControl ItemsSource="{Binding Attributes}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickAttribute">
+                                                <Grid Margin="0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="140" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               Opacity="0.7"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Value}"
+                                                               FontSize="12"
+                                                               TextWrapping="Wrap" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="(no attributes)"
+                                               FontSize="12"
+                                               FontStyle="Italic"
+                                               Opacity="0.6"
+                                               IsVisible="{Binding !HasAttributes}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </shadui:Window>

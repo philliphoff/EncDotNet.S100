@@ -40,6 +40,31 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 |---|---|
 | **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
 
+### Pick / Object Information
+
+Picking is performed in an ECDIS-style **Pick Mode**: toggle the cross-hair
+button on the map toolbar (or **View → Appearance → Pick Mode**, or press
+**`I`**) and then click any vector feature on the map to open the **Object
+Information** panel on the right side of the window — a "pick report"
+showing the feature's class, identifier, source dataset, and full attribute
+list. Press **`Esc`** to leave Pick Mode. While Pick Mode is active the
+double-tap-to-zoom gesture is suppressed so that successive taps each
+register as a pick.
+
+On macOS, a **force click** (Force Touch trackpad) acts as a one-shot pick
+regardless of whether Pick Mode is active — useful for an occasional
+identify without leaving navigation mode.
+
+Click empty water (or the close button on the panel) to dismiss the
+report. Use **View → Appearance → Pick Report** to disable the panel
+entirely; the status bar will continue to show a one-line summary of each
+pick.
+
+The pick report supports vector products (S-101, S-122, S-124, S-125,
+S-127, S-129, S-411, S-421). Coverage products (S-102, S-104, S-111)
+report layer-level information in the status bar but do not currently
+produce per-cell pick reports.
+
 ## Screenshots
 
 The cross-platform viewer rendering various S-100 dataset types:

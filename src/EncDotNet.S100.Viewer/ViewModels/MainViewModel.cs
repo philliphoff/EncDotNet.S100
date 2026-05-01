@@ -14,6 +14,7 @@ internal sealed class MainViewModel : ViewModelBase
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
     public SettingsViewModel Settings { get; }
+    public PickReportViewModel PickReport { get; }
 
     private ActivityKind? _selectedActivity;
     public ActivityKind? SelectedActivity
@@ -86,6 +87,54 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleStatusBarCommand { get; }
 
+    private bool _isPickPanelEnabled;
+    /// <summary>
+    /// User preference for whether the pick panel is allowed to auto-open
+    /// when a feature is picked. Persisted to <see cref="ViewerSettings"/>.
+    /// </summary>
+    public bool IsPickPanelEnabled
+    {
+        get => _isPickPanelEnabled;
+        set
+        {
+            if (SetProperty(ref _isPickPanelEnabled, value))
+            {
+                _settings.IsPickPanelVisible = value;
+                _settings.Save();
+                OnPropertyChanged(nameof(IsPickPanelVisible));
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when the pick panel should be displayed: a pick is active and
+    /// the user hasn't disabled the panel via the View menu.
+    /// </summary>
+    public bool IsPickPanelVisible => _isPickPanelEnabled && PickReport.HasPick;
+
+    public ICommand TogglePickPanelCommand { get; }
+
+    private bool _isPickModeActive;
+    /// <summary>
+    /// True when the user has activated the ECDIS-style "Cursor Pick" tool.
+    /// While active, single-taps on the map perform a pick and the
+    /// double-tap-to-zoom gesture is suppressed. This is transient state
+    /// and is not persisted between sessions.
+    /// </summary>
+    public bool IsPickModeActive
+    {
+        get => _isPickModeActive;
+        set => SetProperty(ref _isPickModeActive, value);
+    }
+
+    public ICommand TogglePickModeCommand { get; }
+
+    /// <summary>
+    /// Convenience command that exits Pick Mode (no-op when already off).
+    /// Wired to the <c>Esc</c> key on the main window.
+    /// </summary>
+    public ICommand ExitPickModeCommand { get; }
+
     private bool _isDarkTheme = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
     public bool IsDarkTheme
     {
@@ -103,6 +152,12 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
         Datasets = new DatasetsViewModel();
         Settings = new SettingsViewModel(settings);
+        PickReport = new PickReportViewModel();
+        PickReport.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PickReportViewModel.HasPick))
+                OnPropertyChanged(nameof(IsPickPanelVisible));
+        };
 
         SelectFeatureCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.FeatureCatalogues);
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
@@ -137,6 +192,12 @@ internal sealed class MainViewModel : ViewModelBase
         _isStatusBarVisible = settings.IsStatusBarVisible;
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
+
+        _isPickPanelEnabled = settings.IsPickPanelVisible;
+        TogglePickPanelCommand = new RelayCommand(() => IsPickPanelEnabled = !IsPickPanelEnabled);
+
+        TogglePickModeCommand = new RelayCommand(() => IsPickModeActive = !IsPickModeActive);
+        ExitPickModeCommand = new RelayCommand(() => IsPickModeActive = false);
 
         ToggleThemeCommand = new RelayCommand(() =>
         {

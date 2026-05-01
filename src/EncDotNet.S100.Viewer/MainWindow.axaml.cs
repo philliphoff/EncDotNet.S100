@@ -40,6 +40,26 @@ public partial class MainWindow : ShadUI.Window
     private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
+    private double _lastPickPanelWidth = 360;
+
+    private void ApplyPickPanelColumnState()
+    {
+        // Pick panel lives in column index 4; the splitter is column index 3.
+        var col = ContentGrid.ColumnDefinitions[4];
+        if (_viewModel.IsPickPanelVisible)
+        {
+            col.Width = new GridLength(_lastPickPanelWidth, GridUnitType.Pixel);
+            col.MinWidth = 240;
+            col.MaxWidth = 600;
+        }
+        else
+        {
+            _lastPickPanelWidth = col.Width.IsAbsolute ? col.Width.Value : 360;
+            col.Width = new GridLength(0);
+            col.MinWidth = 0;
+            col.MaxWidth = 0;
+        }
+    }
 
     public MainWindow() : this(null) { }
 
@@ -130,9 +150,39 @@ public partial class MainWindow : ShadUI.Window
                 statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
         };
 
+        var pickPanelItem = new NativeMenuItem("Pick Report")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsPickPanelEnabled,
+        };
+        pickPanelItem.Click += (_, _) => _viewModel.TogglePickPanelCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickPanelEnabled))
+                pickPanelItem.IsChecked = _viewModel.IsPickPanelEnabled;
+        };
+
+        var pickModeItem = new NativeMenuItem("Pick Mode")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsPickModeActive,
+            Gesture = new KeyGesture(Key.I),
+        };
+        pickModeItem.Click += (_, _) => _viewModel.TogglePickModeCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
+            {
+                pickModeItem.IsChecked = _viewModel.IsPickModeActive;
+                ApplyPickModeCursor();
+            }
+        };
+
         var appearanceMenu = new NativeMenuItem("Appearance")
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
         };
 
         var viewMenu = new NativeMenuItem("View")
@@ -200,6 +250,14 @@ public partial class MainWindow : ShadUI.Window
             }
         };
 
+        // Pick panel column starts collapsed; expand only when a pick is shown.
+        ApplyPickPanelColumnState();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickPanelVisible))
+                ApplyPickPanelColumnState();
+        };
+
         // Wire up dataset load requests
         _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
 
@@ -229,6 +287,17 @@ public partial class MainWindow : ShadUI.Window
 
         // Enable single-tap feature identify (pick report)
         MapControl.MapTapped += OnMapTapped;
+
+        // Force-click (macOS Force Touch trackpad ≥ stage 1, or any device
+        // reporting pressure ≥ 0.5) is always a one-shot pick regardless of
+        // Pick Mode. Tunneling lets us intercept before MapControl handles it.
+        MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressed, RoutingStrategies.Tunnel);
+
+        // Esc exits Pick Mode.
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+
+        // Apply the cursor that matches the current mode.
+        ApplyPickModeCursor();
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -627,6 +696,14 @@ public partial class MainWindow : ShadUI.Window
 
     private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // In Pick Mode the double-tap zoom is suppressed so that successive
+        // taps on adjacent features each register as picks rather than zooms.
+        if (_viewModel.IsPickModeActive)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (MapControl.Map?.Navigator is not { } navigator)
             return;
 
@@ -643,10 +720,85 @@ public partial class MainWindow : ShadUI.Window
         if (e.GestureType != GestureType.SingleTap)
             return;
 
+        // Outside Pick Mode, single-tap is a no-op so it doesn't fight with
+        // double-tap-to-zoom (the first tap of a double-tap also fires here).
+        if (!_viewModel.IsPickModeActive)
+            return;
+
+        PerformPickAt(e);
+    }
+
+    /// <summary>
+    /// Handles pointer-pressed events on the map to detect macOS Force Touch
+    /// "force clicks" (or any pointer device reporting pressure ≥ 0.5). A
+    /// force click is treated as a one-shot pick regardless of Pick Mode.
+    /// </summary>
+    private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var props = e.GetCurrentPoint(MapControl).Properties;
+
+        // Pressure is normalized to [0, 1]; macOS reports ~0.5 for first-stage
+        // force click and ~1.0 for second-stage. Treat anything ≥ 0.5 as a
+        // force click. Devices that don't report pressure usually report 0.5
+        // as the default for the primary button, so additionally require the
+        // pressure to be strictly greater than 0.5 to avoid false positives
+        // on every left click. macOS specifically reports 0.0..1.0 with a
+        // jump above 0.5 only when the user actually force-presses.
+        if (!props.IsLeftButtonPressed)
+            return;
+
+        if (props.Pressure <= 0.5f)
+            return;
+
+        e.Handled = true;
+        PerformPickAt(e);
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _viewModel.IsPickModeActive)
+        {
+            _viewModel.ExitPickModeCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Updates the map's cursor to reflect Pick Mode (cross-hair) vs. the
+    /// default panning cursor.
+    /// </summary>
+    private void ApplyPickModeCursor()
+    {
+        MapControl.Cursor = _viewModel.IsPickModeActive
+            ? new Cursor(StandardCursorType.Cross)
+            : Cursor.Default;
+    }
+
+    private void PerformPickAt(BaseEventArgs e)
+    {
         var datasetLayers = _entryLayers.Values.SelectMany(l => l);
         var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
+        DispatchPick(mapInfo);
+    }
+
+    private void PerformPickAt(PointerPressedEventArgs e)
+    {
+        // Translate the Avalonia pointer position to a Mapsui MapInfo by
+        // delegating to the MapControl's hit-test plumbing.
+        var pos = e.GetPosition(MapControl);
+        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
+        var mapInfo = MapControl.GetMapInfo(new ScreenPosition(pos.X, pos.Y), datasetLayers);
+        DispatchPick(mapInfo);
+    }
+
+    private void DispatchPick(MapInfo? mapInfo)
+    {
         if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
+        {
+            // Tap on empty map: clear any active pick so the panel hides.
+            _viewModel.PickReport.Clear();
             return;
+        }
 
         if (hitFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
             return;
@@ -668,17 +820,19 @@ public partial class MainWindow : ShadUI.Window
         var info = processor.GetFeatureInfo(featureRef);
         if (info is null)
         {
+            _viewModel.PickReport.Clear();
             _viewModel.StatusText = $"Feature {featureRef} (no details available)";
             return;
         }
 
-        var attrs = string.Join(", ", info.Attributes
-            .Where(a => a.Value is not null)
-            .Select(a => $"{a.Key}={a.Value}"));
+        _viewModel.PickReport.SetPick(
+            featureType: info.FeatureType,
+            featureRef: info.FeatureRef,
+            datasetFileName: owningEntry.DisplayName,
+            productSpec: processor.ProductSpec,
+            attributes: info.Attributes);
 
-        _viewModel.StatusText = string.IsNullOrEmpty(attrs)
-            ? $"{info.FeatureType} [{info.FeatureRef}]"
-            : $"{info.FeatureType} [{info.FeatureRef}]: {attrs}";
+        _viewModel.StatusText = $"{info.FeatureType} [{info.FeatureRef}]";
     }
 
     private NativeMenuItem BuildFileMenu()

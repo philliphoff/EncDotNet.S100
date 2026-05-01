@@ -35,5 +35,6 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S125.Tests/EncDotNet.S100.Datasets.S125.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S127.Tests/EncDotNet.S100.Datasets.S127.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S421.Tests/EncDotNet.S100.Datasets.S421.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />
   </Folder>
 </Solution>
