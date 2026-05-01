@@ -51,9 +51,11 @@ list. Press **`Esc`** to leave Pick Mode. While Pick Mode is active the
 double-tap-to-zoom gesture is suppressed so that successive taps each
 register as a pick.
 
-On macOS, a **force click** (Force Touch trackpad) acts as a one-shot pick
-regardless of whether Pick Mode is active — useful for an occasional
-identify without leaving navigation mode.
+On macOS, **Cmd-click** (and **Ctrl-click** on Windows / Linux) acts as a
+one-shot pick regardless of whether Pick Mode is active. A
+**press-and-hold** of about half a second on any map location is also
+treated as a one-shot pick — useful for an occasional identify without
+leaving navigation mode.
 
 Click empty water (or the close button on the panel) to dismiss the
 report. Use **View → Appearance → Pick Report** to disable the panel

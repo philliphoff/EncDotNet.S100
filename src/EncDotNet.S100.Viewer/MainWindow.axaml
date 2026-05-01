@@ -244,22 +244,33 @@
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
                     <ToggleButton x:Name="PickModeButton"
+                                  Classes="Icon"
                                   IsChecked="{Binding IsPickModeActive, Mode=TwoWay}"
-                                  ToolTip.Tip="Pick Mode (I) — single-tap to identify features"
-                                  Width="32" Height="32"
-                                  Padding="0"
-                                  HorizontalContentAlignment="Center"
-                                  VerticalContentAlignment="Center"
-                                  Background="{DynamicResource BackgroundColor}"
-                                  BorderBrush="{DynamicResource BorderColor}"
-                                  BorderThickness="1">
+                                  ToolTip.Tip="Pick Mode (I) — single-tap to identify features">
                         <ToggleButton.Styles>
+                            <!--
+                              Match the zoom buttons' resting appearance: muted
+                              icon, transparent background. ShadUI's Button.Icon
+                              class doesn't apply to ToggleButton, so replicate
+                              the relevant bits here.
+                            -->
                             <Style Selector="ToggleButton#PickModeButton">
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="0" />
                                 <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+                                <Setter Property="Padding" Value="8" />
+                                <Setter Property="Opacity" Value="0.65" />
+                            </Style>
+                            <Style Selector="ToggleButton#PickModeButton:pointerover">
+                                <Setter Property="Opacity" Value="1.0" />
                             </Style>
                             <Style Selector="ToggleButton#PickModeButton:checked">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="Foreground" Value="White" />
+                                <Setter Property="Opacity" Value="1.0" />
+                            </Style>
+                            <Style Selector="ToggleButton#PickModeButton:checked:pointerover /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                             </Style>
                         </ToggleButton.Styles>
                         <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16"

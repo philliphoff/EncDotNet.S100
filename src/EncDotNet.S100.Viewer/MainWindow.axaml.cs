@@ -42,6 +42,30 @@ public partial class MainWindow : ShadUI.Window
     private double _lastPaneWidth = 320;
     private double _lastPickPanelWidth = 360;
 
+    /// <summary>
+    /// Threshold (milliseconds) for treating a press-and-hold as a long-press
+    /// pick gesture. Mirrors typical touch UI conventions and ECDIS
+    /// "press to identify" behavior.
+    /// </summary>
+    private const int LongPressMillis = 500;
+
+    /// <summary>
+    /// Maximum movement (in pixels) tolerated during a long-press before the
+    /// gesture is cancelled (the user is panning, not picking).
+    /// </summary>
+    private const double LongPressMoveTolerance = 6.0;
+
+    private DispatcherTimer? _longPressTimer;
+    private Avalonia.Point? _longPressOrigin;
+    private bool _longPressFired;
+
+    /// <summary>
+    /// Modifier state captured at the most recent pointer-press on the map,
+    /// used by <see cref="OnMapTapped"/> to detect modifier-click since the
+    /// Mapsui tap event doesn't carry keyboard modifiers itself.
+    /// </summary>
+    private KeyModifiers _lastPressedModifiers = KeyModifiers.None;
+
     private void ApplyPickPanelColumnState()
     {
         // Pick panel lives in column index 4; the splitter is column index 3.
@@ -288,10 +312,13 @@ public partial class MainWindow : ShadUI.Window
         // Enable single-tap feature identify (pick report)
         MapControl.MapTapped += OnMapTapped;
 
-        // Force-click (macOS Force Touch trackpad ≥ stage 1, or any device
-        // reporting pressure ≥ 0.5) is always a one-shot pick regardless of
-        // Pick Mode. Tunneling lets us intercept before MapControl handles it.
+        // Long-press (~500ms hold without moving) is always a one-shot pick
+        // regardless of Pick Mode. Tunneling lets us see the press before
+        // MapControl handles it.
         MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressed, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
 
         // Esc exits Pick Mode.
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
@@ -720,8 +747,26 @@ public partial class MainWindow : ShadUI.Window
         if (e.GestureType != GestureType.SingleTap)
             return;
 
-        // Outside Pick Mode, single-tap is a no-op so it doesn't fight with
-        // double-tap-to-zoom (the first tap of a double-tap also fires here).
+        // A long-press already produced a pick at PointerPressed → release time;
+        // suppress the synthesized SingleTap that follows so we don't pick twice
+        // (or, worse, show then immediately clear the panel).
+        if (_longPressFired)
+        {
+            _longPressFired = false;
+            return;
+        }
+
+        // Modifier-click is always a one-shot pick regardless of Pick Mode:
+        // Cmd-click on macOS, Ctrl-click on Windows / Linux.
+        if (IsPickModifierActive())
+        {
+            PerformPickAt(e);
+            return;
+        }
+
+        // Outside Pick Mode, plain single-tap is a no-op so it doesn't fight
+        // with double-tap-to-zoom (the first tap of a double-tap also fires
+        // here).
         if (!_viewModel.IsPickModeActive)
             return;
 
@@ -729,29 +774,95 @@ public partial class MainWindow : ShadUI.Window
     }
 
     /// <summary>
-    /// Handles pointer-pressed events on the map to detect macOS Force Touch
-    /// "force clicks" (or any pointer device reporting pressure ≥ 0.5). A
-    /// force click is treated as a one-shot pick regardless of Pick Mode.
+    /// Returns true when the modifier state captured at the most recent
+    /// pointer-press matches the platform's pick modifier: <c>Cmd</c> (Meta)
+    /// on macOS, <c>Ctrl</c> on Windows and Linux.
+    /// </summary>
+    private bool IsPickModifierActive()
+    {
+        if (OperatingSystem.IsMacOS())
+            return (_lastPressedModifiers & KeyModifiers.Meta) != 0;
+        return (_lastPressedModifiers & KeyModifiers.Control) != 0;
+    }
+
+    /// <summary>
+    /// Starts the long-press timer when the primary pointer button is pressed.
     /// </summary>
     private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         var props = e.GetCurrentPoint(MapControl).Properties;
-
-        // Pressure is normalized to [0, 1]; macOS reports ~0.5 for first-stage
-        // force click and ~1.0 for second-stage. Treat anything ≥ 0.5 as a
-        // force click. Devices that don't report pressure usually report 0.5
-        // as the default for the primary button, so additionally require the
-        // pressure to be strictly greater than 0.5 to avoid false positives
-        // on every left click. macOS specifically reports 0.0..1.0 with a
-        // jump above 0.5 only when the user actually force-presses.
         if (!props.IsLeftButtonPressed)
             return;
 
-        if (props.Pressure <= 0.5f)
+        // Capture modifier state for OnMapTapped's modifier-click test (the
+        // Mapsui tap event doesn't carry keyboard modifiers).
+        _lastPressedModifiers = e.KeyModifiers;
+
+        // Modifier-click is handled in OnMapTapped (where we have a MapInfo
+        // resolver); skip the long-press timer for that case.
+        if (IsPickModifierActive())
             return;
 
-        e.Handled = true;
-        PerformPickAt(e);
+        _longPressOrigin = e.GetPosition(MapControl);
+        _longPressFired = false;
+
+        _longPressTimer?.Stop();
+        _longPressTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(LongPressMillis),
+        };
+        _longPressTimer.Tick += OnLongPressElapsed;
+        _longPressTimer.Start();
+    }
+
+    private void OnMapPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_longPressTimer is null || _longPressOrigin is not { } origin)
+            return;
+
+        var current = e.GetPosition(MapControl);
+        var dx = current.X - origin.X;
+        var dy = current.Y - origin.Y;
+        if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
+            CancelLongPress();
+    }
+
+    private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        CancelLongPress();
+    }
+
+    private void OnMapPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CancelLongPress();
+    }
+
+    private void CancelLongPress()
+    {
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+        _longPressOrigin = null;
+    }
+
+    private void OnLongPressElapsed(object? sender, EventArgs e)
+    {
+        if (_longPressOrigin is not { } origin)
+        {
+            CancelLongPress();
+            return;
+        }
+
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+
+        // Translate the press position to a Mapsui MapInfo and dispatch the
+        // pick. Setting _longPressFired suppresses the SingleTap that will be
+        // synthesized when the user lifts their finger.
+        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
+        var mapInfo = MapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
+        _longPressOrigin = null;
+        _longPressFired = true;
+        DispatchPick(mapInfo);
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -778,16 +889,6 @@ public partial class MainWindow : ShadUI.Window
     {
         var datasetLayers = _entryLayers.Values.SelectMany(l => l);
         var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
-        DispatchPick(mapInfo);
-    }
-
-    private void PerformPickAt(PointerPressedEventArgs e)
-    {
-        // Translate the Avalonia pointer position to a Mapsui MapInfo by
-        // delegating to the MapControl's hit-test plumbing.
-        var pos = e.GetPosition(MapControl);
-        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
-        var mapInfo = MapControl.GetMapInfo(new ScreenPosition(pos.X, pos.Y), datasetLayers);
         DispatchPick(mapInfo);
     }
 
