@@ -179,8 +179,14 @@ public static class Part9DisplayListReader
         var colorFillEl = element.Element("colorFill");
         if (colorFillEl is not null)
         {
-            fillColor = colorFillEl.Element("color")?.Value;
-            var transp = colorFillEl.Element("transparency")?.Value;
+            var colorEl = colorFillEl.Element("color");
+            fillColor = colorEl?.Value;
+            // S-100 Part 9A allows transparency as either a child <transparency>
+            // element or an attribute on <color> (e.g. <color transparency="0.30">CHGRN</color>),
+            // and the bundled S-122/S-124/S-128 portrayal catalogues all use the
+            // attribute form. Accept both, preferring the attribute if present.
+            var transp = colorEl?.Attribute("transparency")?.Value
+                ?? colorFillEl.Element("transparency")?.Value;
             transparency = ParseNullableDouble(transp);
         }
 

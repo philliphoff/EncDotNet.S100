@@ -141,4 +141,55 @@ public class Part9DisplayListReaderTests
 
         Assert.Equal(0.5, text.LinePlacementPosition);
     }
+
+    [Fact]
+    public void ReadArea_TransparencyOnColorAttribute_IsCaptured()
+    {
+        // S-100 Part 9A allows transparency as an attribute on <color>; the
+        // bundled S-122/S-124/S-128 portrayal catalogues all use this form
+        // (e.g. <color transparency="0.30">CHGRN</color>). Regression test
+        // for area fills appearing fully opaque.
+        var doc = XDocument.Parse(
+            """
+            <displayList>
+              <areaInstruction>
+                <featureReference>F1</featureReference>
+                <viewingGroup>31000</viewingGroup>
+                <displayPlane>OVERRADAR</displayPlane>
+                <drawingPriority>15</drawingPriority>
+                <colorFill>
+                  <color transparency="0.30">CHGRN</color>
+                </colorFill>
+              </areaInstruction>
+            </displayList>
+            """);
+
+        var area = Assert.IsType<AreaInstruction>(Assert.Single(Part9DisplayListReader.Read(doc)));
+        Assert.Equal("CHGRN", area.FillColor);
+        Assert.Equal(0.30, area.Transparency);
+    }
+
+    [Fact]
+    public void ReadArea_TransparencyAsChildElement_IsCaptured()
+    {
+        var doc = XDocument.Parse(
+            """
+            <displayList>
+              <areaInstruction>
+                <featureReference>F1</featureReference>
+                <viewingGroup>31000</viewingGroup>
+                <displayPlane>OVERRADAR</displayPlane>
+                <drawingPriority>15</drawingPriority>
+                <colorFill>
+                  <color>CHGRN</color>
+                  <transparency>0.50</transparency>
+                </colorFill>
+              </areaInstruction>
+            </displayList>
+            """);
+
+        var area = Assert.IsType<AreaInstruction>(Assert.Single(Part9DisplayListReader.Read(doc)));
+        Assert.Equal("CHGRN", area.FillColor);
+        Assert.Equal(0.50, area.Transparency);
+    }
 }
