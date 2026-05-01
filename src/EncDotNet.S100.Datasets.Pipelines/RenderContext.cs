@@ -28,6 +28,8 @@ public sealed record S104RenderContext(DateTime? TimeStep = null) : RenderContex
 
 public sealed record S124RenderContext : RenderContext;
 
+public sealed record S127RenderContext : RenderContext;
+
 public sealed record S129RenderContext : RenderContext;
 
 public sealed record S411RenderContext : RenderContext;
