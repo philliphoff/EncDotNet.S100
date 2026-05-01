@@ -82,6 +82,8 @@ GML-encoded navigational warnings rendered via XSLT portrayal, highlighting haza
 
 ### S-125 — Marine Aids to Navigation
 
+![S-125 Marine Aids to Navigation](readme/S125Screenshot.png)
+
 GML-encoded marine aids to navigation (lights, buoys, beacons, daymarks, AIS aids) rendered via XSLT portrayal, including AtoN status indication symbology.
 
 ### S-129 — Under Keel Clearance Management
