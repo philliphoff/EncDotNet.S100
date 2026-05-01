@@ -15,6 +15,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-111** | Surface Currents — HDF5 encoded current speed/direction grids |
 | **S-124** | Navigational Warnings — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
+| **S-411** | Sea Ice Information — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-421** | Route Plans (IEC 63173-2) — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **ISO 8211** | Record format used by S-101 datasets; read via `EncDotNet.Iso8211` NuGet package |
 | **ISO 19110** | Feature Catalogue schema; parsed by `EncDotNet.S100.Features` |
@@ -37,6 +38,7 @@ src/
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
+  EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
   EncDotNet.S100.Renderers.Mapsui/   # Mapsui layer renderer with CRS projection (ProjNet/EPSG:3857)
@@ -121,6 +123,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-111, surface currents, current speed/direction | `s111-surface-currents` |
   | S-124, navigational warnings, GML, XSLT portrayal | `s124-nav-warnings` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
+  | S-411, sea ice, ice information, icebergs, ice edges | `s411-sea-ice` |
   | S-421, route plans, voyage plans, waypoints, route legs | `s421-route-plans` |
 
 - For **cross-spec** features (e.g. a change to `CoveragePipeline` affecting S-102/S-104/S-111), load all affected spec skills and reconcile their guidance before writing code.

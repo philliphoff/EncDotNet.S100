@@ -3,11 +3,12 @@
 [![CI](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml/badge.svg)](https://github.com/philliphoff/EncDotNet.S100/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/philliphoff/EncDotNet.S100)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/philliphoff/EncDotNet.S100?label=release&sort=semver)](https://github.com/philliphoff/EncDotNet.S100/releases)
+[![.NET](https://img.shields.io/badge/.NET-8-512bd4)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-10-512bd4)](https://dotnet.microsoft.com/)
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
 
-A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, and S-111 Surface Currents.
+A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-124 Navigational Warnings, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
 
 ## Libraries
 
@@ -79,6 +80,8 @@ Under keel clearance data for safe navigation in shallow or restricted waterways
 ### S-411 — Sea Ice
 
 GML-encoded sea-ice and lake-ice information (concentration, stage of development, ice edges, icebergs) rendered via XSLT portrayal.
+
+![S-411 Sea Ice](readme/S411Screenshot.png)
 
 ### S-421 — Route Plans
 
