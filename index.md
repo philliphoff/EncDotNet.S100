@@ -10,6 +10,7 @@ A .NET library suite for manipulating S-100 based nautical charts.
 | **EncDotNet.S100.Datasets.S101** | Support for S-101 Electronic Navigational Chart datasets |
 | **EncDotNet.S100.Datasets.S102** | Support for S-102 Bathymetric Surface datasets |
 | **EncDotNet.S100.Datasets.S111** | Support for S-111 Surface Currents datasets |
+| **EncDotNet.S100.Datasets.S125** | Support for S-125 Marine Aids to Navigation datasets |
 | **EncDotNet.S100.ExchangeSets** | Reading and writing S-100 exchange sets |
 | **EncDotNet.S100.Features** | S-100 feature model and catalog support |
 | **EncDotNet.S100.Hdf5.PureHdf** | HDF5 file access via PureHDF |
