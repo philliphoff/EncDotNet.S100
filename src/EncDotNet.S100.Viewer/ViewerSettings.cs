@@ -45,6 +45,36 @@ internal sealed class ViewerSettings
 
     public bool IsStatusBarVisible { get; set; } = true;
 
+    /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
+    public const int MaxRecentDatasets = 10;
+
+    /// <summary>
+    /// Most-recently-opened dataset file paths, ordered most-recent first.
+    /// Capped at <see cref="MaxRecentDatasets"/>.
+    /// </summary>
+    public List<string> RecentDatasetPaths { get; set; } = new();
+
+    /// <summary>
+    /// Records <paramref name="path"/> as the most-recently-opened dataset, removing any
+    /// prior occurrence and trimming the list to <see cref="MaxRecentDatasets"/>.
+    /// </summary>
+    public void AddRecentDataset(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        RecentDatasetPaths.Insert(0, path);
+
+        if (RecentDatasetPaths.Count > MaxRecentDatasets)
+        {
+            RecentDatasetPaths.RemoveRange(MaxRecentDatasets, RecentDatasetPaths.Count - MaxRecentDatasets);
+        }
+    }
+
+    /// <summary>Clears the recently-opened dataset list.</summary>
+    public void ClearRecentDatasets() => RecentDatasetPaths.Clear();
+
     public static ViewerSettings Load()
     {
         try

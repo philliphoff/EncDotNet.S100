@@ -36,6 +36,8 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
+    private readonly NativeMenu _openRecentMenu = new();
+    private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
 
@@ -138,8 +140,9 @@ public partial class MainWindow : ShadUI.Window
             Menu = new NativeMenu { appearanceMenu },
         };
 
-        var nativeMenu = new NativeMenu { viewMenu };
+        var nativeMenu = new NativeMenu { BuildFileMenu(), viewMenu };
         NativeMenu.SetMenu(this, nativeMenu);
+        RebuildOpenRecentMenu();
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -370,6 +373,10 @@ public partial class MainWindow : ShadUI.Window
             entry.IsLoaded = true;
             entry.Info = result.Info;
             _viewModel.StatusText = result.Info;
+
+            _settings.AddRecentDataset(entry.FilePath);
+            _settings.Save();
+            RebuildOpenRecentMenu();
 
             // Populate time steps for S-111 datasets
             if (processor is S111DatasetProcessor s111)
@@ -666,6 +673,132 @@ public partial class MainWindow : ShadUI.Window
         _viewModel.StatusText = string.IsNullOrEmpty(attrs)
             ? $"{info.FeatureType} [{info.FeatureRef}]"
             : $"{info.FeatureType} [{info.FeatureRef}]: {attrs}";
+    }
+
+    private NativeMenuItem BuildFileMenu()
+    {
+        var openItem = new NativeMenuItem("Open Dataset...")
+        {
+            Gesture = new KeyGesture(Key.O, KeyModifiers.Meta),
+        };
+        openItem.Click += (_, _) => _ = OpenDatasetAsync();
+
+        _openRecentMenuItem = new NativeMenuItem("Open Recent")
+        {
+            Menu = _openRecentMenu,
+        };
+
+        return new NativeMenuItem("File")
+        {
+            Menu = new NativeMenu { openItem, _openRecentMenuItem },
+        };
+    }
+
+    private void RebuildOpenRecentMenu()
+    {
+        _openRecentMenu.Items.Clear();
+
+        var paths = _settings.RecentDatasetPaths;
+        if (paths.Count == 0)
+        {
+            var empty = new NativeMenuItem("(No recent datasets)") { IsEnabled = false };
+            _openRecentMenu.Items.Add(empty);
+            if (_openRecentMenuItem is not null)
+                _openRecentMenuItem.IsEnabled = false;
+            return;
+        }
+
+        if (_openRecentMenuItem is not null)
+            _openRecentMenuItem.IsEnabled = true;
+
+        foreach (var path in paths)
+        {
+            var label = Path.GetFileName(path);
+            var item = new NativeMenuItem(label)
+            {
+                ToolTip = path,
+                IsEnabled = File.Exists(path),
+            };
+            var captured = path;
+            item.Click += async (_, _) => await OpenRecentAsync(captured);
+            _openRecentMenu.Items.Add(item);
+        }
+
+        _openRecentMenu.Items.Add(new NativeMenuItemSeparator());
+        var clear = new NativeMenuItem("Clear Recently Opened");
+        clear.Click += (_, _) =>
+        {
+            _settings.ClearRecentDatasets();
+            _settings.Save();
+            RebuildOpenRecentMenu();
+        };
+        _openRecentMenu.Items.Add(clear);
+    }
+
+    private async Task OpenDatasetAsync()
+    {
+        var picker = StorageProvider;
+        if (picker is null)
+            return;
+
+        var fileTypes = new List<FilePickerFileType>
+        {
+            new("S-100 Datasets")
+            {
+                Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
+            },
+            FilePickerFileTypes.All,
+        };
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Dataset",
+            AllowMultiple = true,
+            FileTypeFilter = fileTypes,
+        });
+
+        if (files is null || files.Count == 0)
+            return;
+
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (path is null || !File.Exists(path))
+                continue;
+
+            await LoadDatasetFromPathAsync(path);
+        }
+    }
+
+    private async Task OpenRecentAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            _viewModel.StatusText = $"File no longer exists: {path}";
+            // Drop the missing entry so the menu reflects reality.
+            _settings.RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+            _settings.Save();
+            RebuildOpenRecentMenu();
+            return;
+        }
+
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        await LoadDatasetFromPathAsync(path);
+    }
+
+    private async Task LoadDatasetFromPathAsync(string path)
+    {
+        var spec = DatasetPipelineFactory.DetectProductSpec(path);
+        if (spec is null)
+        {
+            _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(path)}";
+            return;
+        }
+
+        var entry = _viewModel.Datasets.Add(path, spec);
+        await LoadDatasetAsync(entry);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
