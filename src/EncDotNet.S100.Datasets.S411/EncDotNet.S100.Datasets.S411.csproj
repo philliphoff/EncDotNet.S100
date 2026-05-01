@@ -10,4 +10,8 @@
     <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Adapter\main.xsl" />
+  </ItemGroup>
+
 </Project>

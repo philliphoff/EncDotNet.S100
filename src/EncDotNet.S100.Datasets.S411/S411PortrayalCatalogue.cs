@@ -159,12 +159,41 @@ public sealed class S411PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         if (_compiledXslt.TryGetValue(ruleName, out var cached)) return cached;
 
+        // The official S-411 1.2.1 catalogue's mainRule emits a display-list
+        // dialect incompatible with this codebase's Part9DisplayListReader.
+        // Substitute the library's bundled adapter, which produces the
+        // expected display-list shape and handles both real-world S-411 GML
+        // shapes (JCOMM ice: namespace and IHO 1.2.1 sample bare-Dataset).
+        if (ruleName.Equals(DefaultTopLevelRuleId, StringComparison.OrdinalIgnoreCase))
+        {
+            var adapter = LoadAdapterRule();
+            _compiledXslt[ruleName] = adapter;
+            return adapter;
+        }
+
         var ruleFile = _provider.Catalogue.RuleFiles
             .FirstOrDefault(r => r.Id.Equals(ruleName, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Rule '{ruleName}' not found in the portrayal catalogue.");
 
         var transform = LoadXsltRule(ruleFile);
         _compiledXslt[ruleName] = transform;
+        return transform;
+    }
+
+    private static XslCompiledTransform LoadAdapterRule()
+    {
+        var asm = typeof(S411PortrayalCatalogue).Assembly;
+        const string resourceName = "EncDotNet.S100.Datasets.S411.Adapter.main.xsl";
+        using var stream = asm.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded resource '{resourceName}' not found in {asm.GetName().Name}. " +
+                "Verify Adapter/main.xsl is registered as an EmbeddedResource in the .csproj.");
+
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
+        using var reader = XmlReader.Create(stream, settings);
+
+        var transform = new XslCompiledTransform();
+        transform.Load(reader);
         return transform;
     }
 
@@ -261,6 +290,15 @@ public sealed class S411PortrayalCatalogue : IVectorPortrayalCatalogue
     /// An <see cref="XmlResolver"/> that resolves xsl:include/import URIs
     /// against the portrayal catalogue's embedded assets.
     /// </summary>
+    /// <remarks>
+    /// First tries to match the requested filename against the catalogue's
+    /// registered <c>RuleFiles</c>. If no match is found, falls back to a
+    /// bare-filename lookup against the <c>Rules/</c> subdirectory of the
+    /// asset source — this lets shared sub-templates that the upstream IHO
+    /// portrayal catalogue does not register as <c>&lt;ruleFile&gt;</c>
+    /// entries (such as <c>pointSimpleSymbolTemplate.xsl</c>) resolve the
+    /// same way they would on a filesystem-relative <c>xsl:import</c>.
+    /// </remarks>
     private sealed class AssetSourceXmlResolver : XmlResolver
     {
         private readonly PortrayalCatalogueProvider _provider;
@@ -282,7 +320,14 @@ public sealed class S411PortrayalCatalogue : IVectorPortrayalCatalogue
                 return _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
             }
 
-            return null;
+            try
+            {
+                return _provider.FetchRuleAsync(fileName).GetAwaiter().GetResult();
+            }
+            catch (FileNotFoundException)
+            {
+                return null;
+            }
         }
     }
 }

@@ -133,18 +133,19 @@ public sealed class DatasetPipelineFactory
                         return "S-421";
                     }
 
-                    // S-411 datasets typically don't declare an S-411 namespace
-                    // on the root; they advertise themselves through the
-                    // <S100:productIdentifier>S-411</S100:productIdentifier>
-                    // element. Sniff the first ~8KB of the document for that
-                    // marker; checking the namespace URI / local name first
-                    // covers any future encoding that does declare a namespace.
-                    if (reader.NamespaceURI.Contains("S-411", StringComparison.OrdinalIgnoreCase)
+                    // S-411 — JCOMM operational shape: root element is
+                    // <ice:IceDataSet xmlns:ice="http://www.jcomm.info/ice">.
+                    if (reader.LocalName.Equals("IceDataSet", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Equals("http://www.jcomm.info/ice", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S-411", StringComparison.OrdinalIgnoreCase)
                         || reader.NamespaceURI.Contains("S411", StringComparison.OrdinalIgnoreCase)
                         || reader.LocalName.Contains("S411", StringComparison.OrdinalIgnoreCase))
                     {
                         return "S-411";
                     }
+                    // S-411 — IHO 1.2.1 sample shape: bare <Dataset> root with
+                    // no S-411 application-schema namespace; the spec is
+                    // declared via <S100:productIdentifier>S-411</S100:productIdentifier>.
                     if (xml.Length > 0 && ContainsProductIdentifier(xml, "S-411"))
                     {
                         return "S-411";

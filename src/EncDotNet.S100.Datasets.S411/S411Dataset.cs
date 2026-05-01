@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Xml.Linq;
 
 namespace EncDotNet.S100.Datasets.S411;
 
@@ -21,6 +22,16 @@ public sealed class S411Dataset
 
     /// <summary>Feature instances contained in the dataset.</summary>
     public required ImmutableArray<S411Feature> Features { get; init; }
+
+    /// <summary>
+    /// The original GML document the dataset was parsed from. Preserved so
+    /// the XSLT portrayal pipeline can run the official S-411 stylesheets
+    /// directly against the source XML — the stylesheets target the
+    /// <c>ice:IceDataSet</c> / <c>ice:IceFeatureMember</c> / <c>ice:&lt;class&gt;</c>
+    /// shape used by JCOMM operational producers, not a synthesised
+    /// projection.
+    /// </summary>
+    public required XDocument SourceDocument { get; init; }
 
     /// <summary>Opens an S-411 dataset from a file path.</summary>
     public static S411Dataset Open(string path)
