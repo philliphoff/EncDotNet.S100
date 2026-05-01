@@ -30,6 +30,8 @@ public sealed record S122RenderContext : RenderContext;
 
 public sealed record S124RenderContext : RenderContext;
 
+public sealed record S127RenderContext : RenderContext;
+
 public sealed record S129RenderContext : RenderContext;
 
 public sealed record S411RenderContext : RenderContext;

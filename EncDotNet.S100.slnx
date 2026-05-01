@@ -7,6 +7,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S111/EncDotNet.S100.Datasets.S111.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S122/EncDotNet.S100.Datasets.S122.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S124/EncDotNet.S100.Datasets.S124.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.S127/EncDotNet.S100.Datasets.S127.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S129/EncDotNet.S100.Datasets.S129.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S411/EncDotNet.S100.Datasets.S411.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S421/EncDotNet.S100.Datasets.S421.csproj" />
@@ -30,6 +31,7 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S111.Tests/EncDotNet.S100.Datasets.S111.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S122.Tests/EncDotNet.S100.Datasets.S122.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S124.Tests/EncDotNet.S100.Datasets.S124.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.S127.Tests/EncDotNet.S100.Datasets.S127.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S421.Tests/EncDotNet.S100.Datasets.S421.Tests.csproj" />
   </Folder>
 </Solution>
