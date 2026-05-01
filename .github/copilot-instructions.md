@@ -17,6 +17,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-124** | Navigational Warnings — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-125** | Marine Aids to Navigation — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-127** | Marine Resources and Services — GML encoded (S-100 Part 10b), XSLT portrayal |
+| **S-128** | Catalogue of Nautical Products — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
 | **S-411** | Sea Ice Information — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-421** | Route Plans (IEC 63173-2) — GML encoded (S-100 Part 10b), XSLT portrayal |
@@ -43,6 +44,7 @@ src/
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S125/      # S-125 marine aids to navigation reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S127/      # S-127 marine resources & services reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.S128/      # S-128 catalogue of nautical products reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
   EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
@@ -133,6 +135,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-125, AtoN, marine aids to navigation, lights, buoys, beacons | `s125-aton` |
   | S-122, marine protected areas, restricted areas, VTS, GML, XSLT portrayal | `s122-marine-protected-areas` |
   | S-127, marine resources and services, pilot boarding, routeing measures, vessel traffic services | `s127-marine-services` |
+  | S-128, catalogue of nautical products, electronic products, physical products, S-100 services | `s128-catalogue` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
   | S-411, sea ice, ice information, icebergs, ice edges | `s411-sea-ice` |
   | S-421, route plans, voyage plans, waypoints, route legs | `s421-route-plans` |

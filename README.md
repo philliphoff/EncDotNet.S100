@@ -8,7 +8,7 @@
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
 
-A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-122 Marine Protected Areas, S-124 Navigational Warnings, S-127 Marine Resources and Services, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
+A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-122 Marine Protected Areas, S-124 Navigational Warnings, S-127 Marine Resources and Services, S-128 Catalogue of Nautical Products, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
 
 ## Libraries
 
@@ -27,6 +27,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S124** | Reader and XSLT portrayal pipeline for S-124 Navigational Warnings datasets. |
 | **EncDotNet.S100.Datasets.S125** | Reader and XSLT portrayal pipeline for S-125 Marine Aids to Navigation datasets. |
 | **EncDotNet.S100.Datasets.S127** | Reader and XSLT portrayal pipeline for S-127 Marine Resources and Services datasets. |
+| **EncDotNet.S100.Datasets.S128** | Reader and XSLT portrayal pipeline for S-128 Catalogue of Nautical Products datasets. |
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
 | **EncDotNet.S100.Datasets.S411** | Reader and XSLT portrayal pipeline for S-411 Sea Ice datasets. |
 | **EncDotNet.S100.Datasets.S421** | Reader and XSLT portrayal pipeline for S-421 Route Plan datasets. |
