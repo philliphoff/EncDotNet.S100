@@ -133,6 +133,24 @@ public sealed class DatasetPipelineFactory
                         return "S-421";
                     }
 
+                    // S-411 — JCOMM operational shape: root element is
+                    // <ice:IceDataSet xmlns:ice="http://www.jcomm.info/ice">.
+                    if (reader.LocalName.Equals("IceDataSet", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Equals("http://www.jcomm.info/ice", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S-411", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S411", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S411", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-411";
+                    }
+                    // S-411 — IHO 1.2.1 sample shape: bare <Dataset> root with
+                    // no S-411 application-schema namespace; the spec is
+                    // declared via <S100:productIdentifier>S-411</S100:productIdentifier>.
+                    if (xml.Length > 0 && ContainsProductIdentifier(xml, "S-411"))
+                    {
+                        return "S-411";
+                    }
+
                     // Generic GML DataSet fallback — inspect declared namespaces
                     if (reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
                     {
@@ -157,6 +175,12 @@ public sealed class DatasetPipelineFactory
                                 {
                                     return "S-421";
                                 }
+
+                                if (reader.Value.Contains("S411", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-411", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-411";
+                                }
                             } while (reader.MoveToNextAttribute());
                         }
 
@@ -173,6 +197,20 @@ public sealed class DatasetPipelineFactory
         }
 
         return null;
+    }
+
+    private static bool ContainsProductIdentifier(string xml, string productId)
+    {
+        // Sniff the first 8KB of the document for an S-100
+        // <productIdentifier>{productId}</productIdentifier> element.
+        // Used for product specs (e.g. S-411 1.2.1 samples) that don't declare
+        // an application-schema namespace on the dataset root.
+        var span = xml.AsSpan(0, Math.Min(xml.Length, 8192));
+        var marker = "productIdentifier".AsSpan();
+        var idx = span.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return false;
+        var rest = span[(idx + marker.Length)..];
+        return rest.IndexOf(productId.AsSpan(), StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     /// <summary>
@@ -192,6 +230,7 @@ public sealed class DatasetPipelineFactory
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager),
+            "S-411" => new S411DatasetProcessor(path, _catalogueManager),
             "S-421" => new S421DatasetProcessor(path, _catalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
