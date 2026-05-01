@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<?pcbinfo name="S-125_ENC Product Specification_NewSyms" fieldOfApplication="WithNewSyms" scope="Testing" versionDate="2014-07-01T18:56:34+0000" user="Test User" organization="IHO-Test"?>
+<portrayalCatalog xmlns:xsl="http://www.w3.org/2001/XMLSchema" productId="S-125" version="1.0.0">
+	<pixmaps/>
+	<colorProfiles>
+		<colorProfile id="colorProfiles">
+			<description>
+				<name>colorProfiles</name>
+				<description>color profile with day colors for testing</description>
+				<language>eng</language>
+			</description>
+			<fileName>colorProfile.xml</fileName>
+			<fileType>ColorProfile</fileType>
+			<fileFormat>XML</fileFormat>
+		</colorProfile>
+	</colorProfiles>
+	<symbols>
+		<symbol id="QUESMRK1">
+			<description>
+				<name>QUESMRK1</name>
+				<description>Question Mark</description>
+				<language>eng</language>
+			</description>
+			<fileName>QUESMRK1.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGAC01">
+			<description>
+				<name>CHNGAC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGAC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGCC01">
+			<description>
+				<name>CHNGCC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGCC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>		
+		<symbol id="CHNGDC01">
+			<description>
+				<name>CHNGDC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGDC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGPC01">
+			<description>
+				<name>CHNGPC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGPC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGSC01">
+			<description>
+				<name>CHNGSC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGSC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>		
+		<symbol id="CHNGTC01">
+			<description>
+				<name>CHNGTC01</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGTC01.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGAC02">
+			<description>
+				<name>CHNGAC02</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGAC02.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGDC02">
+			<description>
+				<name>CHNGDC02</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGDC02.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGPC02">
+			<description>
+				<name>CHNGPC02</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGPC02.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+		<symbol id="CHNGSC02">
+			<description>
+				<name>CHNGSC02</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGSC02.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>				
+		<symbol id="CHNGTC02">
+			<description>
+				<name>CHNGTC02</name>
+				<description> </description>
+				<language>eng</language>
+			</description>
+			<fileName>CHNGTC02.svg</fileName>
+			<fileType>Symbol</fileType>
+			<fileFormat>SVG</fileFormat>
+		</symbol>
+	</symbols>
+	<styleSheets>
+		<styleSheet id="daySvgStyle.css">
+			<description>
+				<name>Day</name>
+				<description>CSS file for day palette</description>
+				<language>eng</language>
+			</description>
+			<fileName>daySvgStyle.css</fileName>
+			<fileType>StyleSheet</fileType>
+			<fileFormat>CSS</fileFormat>
+		</styleSheet>
+		<styleSheet id="duskSvgStyle">
+			<description>
+				<name>Dusk</name>
+				<description>CSS file for dusk palette</description>
+				<language>eng</language>
+			</description>
+			<fileName>duskSvgStyle.css</fileName>
+			<fileType>StyleSheet</fileType>
+			<fileFormat>CSS</fileFormat>
+		</styleSheet>
+		<styleSheet id="nightSvgStyle">
+			<description>
+				<name>Night</name>
+				<description>CSS file for night palette</description>
+				<language>eng</language>
+			</description>
+			<fileName>nightSvgStyle.css</fileName>
+			<fileType>StyleSheet</fileType>
+			<fileFormat>CSS</fileFormat>
+		</styleSheet>
+	</styleSheets>
+	<lineStyles/>
+	<areaFills/>
+	<fonts/>
+	<viewingGroups/>
+	<displayModes>
+		<displayMode id="1">
+			<description>
+				<name>Display Base</name>
+				<description>Always on display</description>
+				<language>eng</language>
+			</description>
+			<viewingGroupLayer>1</viewingGroupLayer>
+		</displayMode>
+		<displayMode id="2">
+			<description>
+				<name>Standard Display</name>
+				<description>ECDIS default display</description>
+				<language>eng</language>
+			</description>
+			<viewingGroupLayer>2</viewingGroupLayer>
+		</displayMode>
+		<displayMode id="3">
+			<description>
+				<name>Other Information</name>
+				<description>All other objects in the SENC</description>
+				<language>eng</language>
+			</description>
+			<viewingGroupLayer>3</viewingGroupLayer>
+		</displayMode>
+		<displayMode id="4">
+			<description>
+				<name>Mariners</name>
+				<description>Display Mariner's Objects</description>
+				<language>eng</language>
+			</description>
+			<viewingGroupLayer>4</viewingGroupLayer>
+		</displayMode>
+	</displayModes>
+	<displayPlane>
+		<displayPlane id="1">
+			<description>
+				<name>overRadar</name>
+				<description>Content displayed on top of Radar image</description>
+				<language>eng</language>
+			</description>
+		</displayPlane>
+		<displayPlane id="2">
+			<description>
+				<name>underRadar</name>
+				<description>Content displayed underneath Radar image</description>
+				<language>eng</language>
+			</description>
+		</displayPlane>
+	</displayPlane>
+	<context>
+		<parameter id="ATON_STATUS_SYMBOL_MODE">
+			<description>
+				<name>ATON_STATUS_SYMBOL_MODE</name>
+				<description>ATON_STATUS_SYMBOL_MODE</description>
+				<language>eng</language>
+			</description>
+			<type>Boolean</type>
+			<default>true</default>
+		</parameter>
+	</context>
+	<rules>
+		<ruleFile id="1">
+			<description>
+				<name>main</name>
+				<description>main</description>
+				<language>eng</language>
+			</description>
+			<fileName>main.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>TopLevelTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="2">
+			<description>
+				<name>AtoNStatusIndication</name>
+				<description>AtoNStatusIndication</description>
+				<language>eng</language>
+			</description>
+			<fileName>AtoNStatusIndication.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+	</rules>
+</portrayalCatalog>

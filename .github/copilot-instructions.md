@@ -15,6 +15,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-111** | Surface Currents — HDF5 encoded current speed/direction grids |
 | **S-122** | Marine Protected Areas — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-124** | Navigational Warnings — GML encoded (S-100 Part 10b), XSLT portrayal |
+| **S-125** | Marine Aids to Navigation — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-127** | Marine Resources and Services — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
 | **S-411** | Sea Ice Information — GML encoded (S-100 Part 10b), XSLT portrayal |
@@ -40,6 +41,7 @@ src/
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
   EncDotNet.S100.Datasets.S122/      # S-122 marine protected areas reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.S125/      # S-125 marine aids to navigation reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S127/      # S-127 marine resources & services reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
   EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
@@ -51,6 +53,7 @@ tests/
   EncDotNet.S100.Datasets.S104.Tests/
   EncDotNet.S100.Datasets.S111.Tests/
   EncDotNet.S100.Datasets.S124.Tests/
+  EncDotNet.S100.Datasets.S125.Tests/
   EncDotNet.S100.Datasets.S421.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
@@ -81,6 +84,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 - **Abstraction-first**: concrete I/O implementations (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`, `ZipAssetSource`) are hidden behind interfaces defined in `EncDotNet.S100.Core` and injected by callers.
 - **Two pipeline types**:
   - *Coverage pipeline* — `ICoverageSource` → `CoveragePipeline` → `ICoverageRenderer<T>` (used by S-102, S-104, S-111).
+  - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-125, S-421).
   - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-127, S-421).
 - **Bundled specifications**: `EncDotNet.S100.Specifications` embeds official FCs/PCs and exposes them via `Specification.OpenFeatureCatalogueAsync()` / `Specification.CreatePortrayalCatalogueSource()`.
 
@@ -126,6 +130,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-104, water level, tide grids | `s104-water-level` |
   | S-111, surface currents, current speed/direction | `s111-surface-currents` |
   | S-124, navigational warnings, GML, XSLT portrayal | `s124-nav-warnings` |
+  | S-125, AtoN, marine aids to navigation, lights, buoys, beacons | `s125-aton` |
   | S-122, marine protected areas, restricted areas, VTS, GML, XSLT portrayal | `s122-marine-protected-areas` |
   | S-127, marine resources and services, pilot boarding, routeing measures, vessel traffic services | `s127-marine-services` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
