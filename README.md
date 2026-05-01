@@ -66,6 +66,12 @@ Gridded water level data for surface navigation, showing tidal and non-tidal wat
 
 Gridded surface current data showing current speed and direction.
 
+### S-122 — Marine Protected Areas
+
+![S-122 Marine Protected Areas](readme/S122Screenshot.png)
+
+GML-encoded marine protected areas, restricted areas, and vessel traffic service areas rendered via XSLT portrayal. Shown above: UK MPAs around the Solent and Isle of Wight from the UKHO trial dataset.
+
 ### S-124 — Navigational Warnings
 
 ![S-124 Navigational Warnings](readme/S124Screenshot.png)
