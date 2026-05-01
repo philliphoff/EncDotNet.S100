@@ -116,6 +116,14 @@ public sealed class DatasetPipelineFactory
                         return "S-124";
                     }
 
+                    // S-125 datasets use namespace http://www.iho.int/S125/1.0
+                    if (reader.NamespaceURI.Contains("S-125", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S125", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S125", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-125";
+                    }
+
                     // S-129 datasets have a root element in the S-129 namespace
                     if (reader.NamespaceURI.Contains("S-129", StringComparison.OrdinalIgnoreCase)
                         || reader.NamespaceURI.Contains("S129", StringComparison.OrdinalIgnoreCase)
@@ -168,6 +176,12 @@ public sealed class DatasetPipelineFactory
                                     || reader.Value.Contains("S-124", StringComparison.OrdinalIgnoreCase))
                                 {
                                     return "S-124";
+                                }
+
+                                if (reader.Value.Contains("S125", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-125", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-125";
                                 }
 
                                 if (reader.Value.Contains("S421", StringComparison.OrdinalIgnoreCase)
@@ -229,6 +243,7 @@ public sealed class DatasetPipelineFactory
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
+            "S-125" => new S125DatasetProcessor(path, _catalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager),
             "S-411" => new S411DatasetProcessor(path, _catalogueManager),
             "S-421" => new S421DatasetProcessor(path, _catalogueManager),

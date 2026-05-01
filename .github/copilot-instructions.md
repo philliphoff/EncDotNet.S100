@@ -14,6 +14,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-104** | Water Level Information — HDF5 encoded water-level time-step grids |
 | **S-111** | Surface Currents — HDF5 encoded current speed/direction grids |
 | **S-124** | Navigational Warnings — GML encoded (S-100 Part 10b), XSLT portrayal |
+| **S-125** | Marine Aids to Navigation — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
 | **S-421** | Route Plans (IEC 63173-2) — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **ISO 8211** | Record format used by S-101 datasets; read via `EncDotNet.Iso8211` NuGet package |
@@ -36,6 +37,7 @@ src/
   EncDotNet.S100.Datasets.S104/      # S-104 water level reader + coverage pipeline
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.S125/      # S-125 marine aids to navigation reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
@@ -75,7 +77,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 - **Abstraction-first**: concrete I/O implementations (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`, `ZipAssetSource`) are hidden behind interfaces defined in `EncDotNet.S100.Core` and injected by callers.
 - **Two pipeline types**:
   - *Coverage pipeline* — `ICoverageSource` → `CoveragePipeline` → `ICoverageRenderer<T>` (used by S-102, S-104, S-111).
-  - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-421).
+  - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-125, S-421).
 - **Bundled specifications**: `EncDotNet.S100.Specifications` embeds official FCs/PCs and exposes them via `Specification.OpenFeatureCatalogueAsync()` / `Specification.CreatePortrayalCatalogueSource()`.
 
 ## Requirements for changes
@@ -120,6 +122,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-104, water level, tide grids | `s104-water-level` |
   | S-111, surface currents, current speed/direction | `s111-surface-currents` |
   | S-124, navigational warnings, GML, XSLT portrayal | `s124-nav-warnings` |
+  | S-125, AtoN, marine aids to navigation, lights, buoys, beacons | `s125-aton` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
   | S-421, route plans, voyage plans, waypoints, route legs | `s421-route-plans` |
 
