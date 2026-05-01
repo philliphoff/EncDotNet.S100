@@ -12,6 +12,7 @@ A .NET library suite for manipulating S-100 based nautical charts.
 | **EncDotNet.S100.Datasets.S104** | Support for S-104 Water Level Information datasets |
 | **EncDotNet.S100.Datasets.S111** | Support for S-111 Surface Currents datasets |
 | **EncDotNet.S100.Datasets.S124** | Support for S-124 Navigational Warnings datasets |
+| **EncDotNet.S100.Datasets.S125** | Support for S-125 Marine Aids to Navigation datasets |
 | **EncDotNet.S100.Datasets.S129** | Support for S-129 Under Keel Clearance Management datasets |
 | **EncDotNet.S100.Datasets.S411** | Support for S-411 Sea Ice datasets |
 | **EncDotNet.S100.Datasets.S421** | Support for S-421 Route Plan datasets |

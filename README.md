@@ -25,6 +25,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S111** | Reader and coverage portrayal pipeline for S-111 Surface Current datasets. |
 | **EncDotNet.S100.Datasets.S122** | Reader and XSLT portrayal pipeline for S-122 Marine Protected Areas datasets. |
 | **EncDotNet.S100.Datasets.S124** | Reader and XSLT portrayal pipeline for S-124 Navigational Warnings datasets. |
+| **EncDotNet.S100.Datasets.S125** | Reader and XSLT portrayal pipeline for S-125 Marine Aids to Navigation datasets. |
 | **EncDotNet.S100.Datasets.S127** | Reader and XSLT portrayal pipeline for S-127 Marine Resources and Services datasets. |
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
 | **EncDotNet.S100.Datasets.S411** | Reader and XSLT portrayal pipeline for S-411 Sea Ice datasets. |
@@ -37,7 +38,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-127, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
 
 ## Screenshots
 
@@ -78,6 +79,10 @@ GML-encoded marine protected areas, restricted areas, and vessel traffic service
 ![S-124 Navigational Warnings](readme/S124Screenshot.png)
 
 GML-encoded navigational warnings rendered via XSLT portrayal, highlighting hazards and notices to mariners.
+
+### S-125 — Marine Aids to Navigation
+
+GML-encoded marine aids to navigation (lights, buoys, beacons, daymarks, AIS aids) rendered via XSLT portrayal, including AtoN status indication symbology.
 
 ### S-129 — Under Keel Clearance Management
 
