@@ -8,7 +8,7 @@
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
 
-A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-124 Navigational Warnings, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
+A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-122 Marine Protected Areas, S-124 Navigational Warnings, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
 
 ## Libraries
 
@@ -23,6 +23,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S102** | Reader and coverage portrayal pipeline for S-102 Bathymetric Surface datasets. |
 | **EncDotNet.S100.Datasets.S104** | Reader and coverage portrayal pipeline for S-104 Water Level Information for Surface Navigation datasets. |
 | **EncDotNet.S100.Datasets.S111** | Reader and coverage portrayal pipeline for S-111 Surface Current datasets. |
+| **EncDotNet.S100.Datasets.S122** | Reader and XSLT portrayal pipeline for S-122 Marine Protected Areas datasets. |
 | **EncDotNet.S100.Datasets.S124** | Reader and XSLT portrayal pipeline for S-124 Navigational Warnings datasets. |
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
 | **EncDotNet.S100.Datasets.S411** | Reader and XSLT portrayal pipeline for S-411 Sea Ice datasets. |
@@ -35,7 +36,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-124, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
 
 ## Screenshots
 
@@ -64,6 +65,12 @@ Gridded water level data for surface navigation, showing tidal and non-tidal wat
 ![S-111 Surface Currents](readme/S111Screenshot.png)
 
 Gridded surface current data showing current speed and direction.
+
+### S-122 — Marine Protected Areas
+
+![S-122 Marine Protected Areas](readme/S122Screenshot.png)
+
+GML-encoded marine protected areas, restricted areas, and vessel traffic service areas rendered via XSLT portrayal. Shown above: UK MPAs around the Solent and Isle of Wight from the UKHO trial dataset.
 
 ### S-124 — Navigational Warnings
 
