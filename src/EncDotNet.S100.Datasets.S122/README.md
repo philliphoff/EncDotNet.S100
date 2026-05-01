@@ -28,6 +28,15 @@ Key types include:
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` is **lat lon** for `EPSG:4326` (S-100 Part 10b convention).
 - The reader tolerates the s100gml namespace variants found across S-122 sample releases (`http://www.iho.int/s100gml/1.0`, `http://www.iho.int/S100/profile/s100gml/1.0`, `http://www.iho.int/s100gml/5.0`) and falls back to scanning the document's namespace declarations.
 - Both the standard `<member>`/`<imember>` wrappers and the inline `<members>`/`<imembers>` containers used by some sample datasets are supported.
+- **Palette switching is currently a no-op for S-122.** The bundled v2.0.0
+  Portrayal Catalogue ships only a `Day` `<palette>` block in
+  `colorProfile.xml`, even though `duskSvgStyle.css` and `nightSvgStyle.css`
+  are present in `Symbols/`. As a result, requesting `Dusk` or `Night`
+  through `SwitchPalette` silently leaves `ActivePalette = Day` and the
+  renderer keeps resolving colour tokens to their Day sRGB values.
+  TODO: synthesise Dusk / Night palettes locally (e.g. from the S-101 PC
+  or via the ship-provided CSS files) so the viewer can offer night-mode
+  S-122 portrayal until upstream publishes the missing palette blocks.
 
 ## Installation
 

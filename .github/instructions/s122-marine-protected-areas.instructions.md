@@ -39,3 +39,8 @@ When modifying S-122 code or its bundled portrayal assets:
   doc comments when adding spec-derived constants or element names.
 - Any new public API requires a matching xunit test using the official
   sample under `tests/datasets/S122/`.
+- The bundled v2.0.0 PC ships only a `Day` `<palette>` block in
+  `colorProfile.xml`, so palette switching to Dusk/Night is a no-op for
+  S-122 today. Do not modify the upstream `colorProfile.xml`; if local
+  Dusk/Night palettes are needed before upstream publishes them, add a
+  synthesised palette in code and document it explicitly.

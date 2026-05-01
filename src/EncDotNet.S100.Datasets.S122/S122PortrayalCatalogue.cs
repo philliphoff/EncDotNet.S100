@@ -46,6 +46,14 @@ public sealed class S122PortrayalCatalogue : IVectorPortrayalCatalogue
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     /// <summary>Switches the active color palette to the given type.</summary>
+    /// <remarks>
+    /// The S-122 v2.0.0 Portrayal Catalogue ships only a <c>Day</c>
+    /// <c>&lt;palette&gt;</c> block in <c>colorProfile.xml</c>, so requests
+    /// for <see cref="PaletteType.Dusk"/> or <see cref="PaletteType.Night"/>
+    /// currently leave <see cref="ActivePalette"/> unchanged (set to Day).
+    /// TODO: synthesise Dusk/Night palettes locally until upstream
+    /// publishes the missing blocks. See the project README.
+    /// </remarks>
     public void SwitchPalette(PaletteType type)
     {
         EnsurePalettesLoaded();
