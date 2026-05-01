@@ -230,4 +230,23 @@ public class S127DatasetReaderTests
             S127GeometryType.Curve,
             ds.Features.First(f => f.Id == "f3").GeometryType);
     }
+
+    [Fact]
+    public void MixedNamespaceDataset_ParsesFeaturesWithDifferentNamespaceFromRoot()
+    {
+        // The IIC test dataset (127IIC0GB4XTEST8.GML) declares the dataset
+        // root in `http://www.iho.int/S127/gml/1.0` but uses a different
+        // prefix bound to `http://www.iho.int/S127/gml/cs0/1.0` for the
+        // feature children. Both are application schemas (not GML/S-100
+        // infrastructure), so the reader must accept them.
+        var ds = LoadTestData("marine_mixed_namespaces.gml");
+
+        Assert.Equal(2, ds.Features.Length);
+        Assert.Equal(
+            S127GeometryType.Point,
+            ds.Features.First(f => f.Id == "f1").GeometryType);
+        Assert.Equal(
+            S127GeometryType.Surface,
+            ds.Features.First(f => f.Id == "f2").GeometryType);
+    }
 }

@@ -309,15 +309,25 @@ internal static class S127DatasetReader
     }
 
     /// <summary>
-    /// True when the element name lives in the dataset's application schema,
-    /// i.e. it is a candidate feature or information type wrapper rather than
-    /// GML or S-100-base infrastructure.
+    /// True when the element name lives in an application schema (i.e. an
+    /// S-127 feature or information type wrapper) rather than GML or S-100
+    /// base infrastructure.
     /// </summary>
+    /// <remarks>
+    /// Some upstream samples mix namespaces — for example a dataset whose
+    /// root is in <c>http://www.iho.int/S127/gml/1.0</c> but whose feature
+    /// children are in <c>http://www.iho.int/S127/gml/cs0/1.0</c> via a
+    /// different prefix declaration. The dataset namespace is therefore
+    /// treated as informational only; any namespace that is not GML and is
+    /// not an S-100 GML base namespace is accepted as application schema.
+    /// </remarks>
     private static bool IsApplicationSchema(XName name, XNamespace datasetNs)
     {
+        _ = datasetNs;
         if (name.Namespace == GmlNs) return false;
-        if (name.Namespace == S100Ns5 || name.Namespace == S100Ns1) return false;
-        return name.Namespace == datasetNs || name.Namespace == XNamespace.None;
+        if (name.Namespace.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
     }
 
     /// <summary>
