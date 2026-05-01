@@ -1,5 +1,5 @@
 ---
-applyTo: "src/EncDotNet.S100.Datasets.S125/**,tests/EncDotNet.S100.Datasets.S125.Tests/**"
+applyTo: "src/EncDotNet.S100.Datasets.S125/**,tests/EncDotNet.S100.Datasets.S125.Tests/**,src/EncDotNet.S100.Datasets.Pipelines/S125DatasetProcessor.cs,src/EncDotNet.S100.Specifications/content/S125/**"
 ---
 
 # S-125 editing rules
