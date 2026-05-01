@@ -164,9 +164,20 @@ internal static class S127DatasetReader
         return (geometryType, points, curves, exteriorRing, interiorRings);
     }
 
-    private static XElement? FindS100Element(XElement container, string localName) =>
-        container.Element(S100Ns5 + localName)
-            ?? container.Element(S100Ns1 + localName);
+    private static XElement? FindS100Element(XElement container, string localName)
+    {
+        // S-100 Part 10b GML uses (5.0) http://www.iho.int/s100gml/5.0 and
+        // older datasets use (1.0) either http://www.iho.int/S100/profile/s100gml/1.0
+        // or http://www.iho.int/s100gml/1.0. Match on local name and any
+        // namespace whose absolute URI ends in "s100gml/<version>" so all three
+        // shapes (and any forward-compatible minor versions) are accepted.
+        return container.Elements()
+            .FirstOrDefault(e =>
+                e.Name.LocalName == localName &&
+                (e.Name.Namespace == S100Ns5 ||
+                 e.Name.Namespace == S100Ns1 ||
+                 e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
+    }
 
     private static (double Latitude, double Longitude)? ParsePointDescendant(XElement element)
     {

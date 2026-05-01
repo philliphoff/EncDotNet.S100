@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Reflection;
 using EncDotNet.S100.Core;
 
@@ -43,6 +44,23 @@ public sealed class EmbeddedAssetSource : IAssetSource
         string resourceName = _resourcePrefix + "." + relativePath.Replace('/', '.').Replace('\\', '.');
 
         Stream? stream = _assembly.GetManifestResourceStream(resourceName);
+
+        if (stream is null)
+        {
+            // Fall back to a case-insensitive lookup. Some upstream IHO portrayal
+            // catalogues (e.g. S-127 Edition 2.0.0) reference XSL sub-templates
+            // with filename casing that differs from the actual files on disk —
+            // the upstream repo only works on case-insensitive filesystems
+            // (macOS, Windows) but breaks here because embedded resource names
+            // are case-sensitive. This fallback keeps the bundled assets
+            // byte-identical to upstream while still resolving correctly.
+            var match = _assembly.GetManifestResourceNames()
+                .FirstOrDefault(n => string.Equals(n, resourceName, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                stream = _assembly.GetManifestResourceStream(match);
+            }
+        }
 
         if (stream is null)
         {

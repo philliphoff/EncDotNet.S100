@@ -207,4 +207,27 @@ public class S127DatasetReaderTests
         Assert.True(f5.Curves.IsDefaultOrEmpty);
         Assert.True(f5.ExteriorRing.IsDefaultOrEmpty);
     }
+
+    // ── Legacy S-100 GML 1.0 namespace shape (Edition 1.0.1, 2019) ──
+
+    [Fact]
+    public void LegacyDataset_ParsesAllThreeGeometryKinds()
+    {
+        // The 2019 S-127 Edition 1.0.1 reference dataset declares the S-100
+        // GML namespace as `http://www.iho.int/s100gml/1.0` (no `/profile/`)
+        // and uses an unprefixed `<geometry>` wrapper. The reader must
+        // tolerate both 5.0 and the two 1.0 spellings.
+        var ds = LoadTestData("marine_legacy_s100gml1.gml");
+
+        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(
+            S127GeometryType.Point,
+            ds.Features.First(f => f.Id == "f1").GeometryType);
+        Assert.Equal(
+            S127GeometryType.Surface,
+            ds.Features.First(f => f.Id == "f2").GeometryType);
+        Assert.Equal(
+            S127GeometryType.Curve,
+            ds.Features.First(f => f.Id == "f3").GeometryType);
+    }
 }
