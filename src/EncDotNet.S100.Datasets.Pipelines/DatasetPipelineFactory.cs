@@ -159,6 +159,19 @@ public sealed class DatasetPipelineFactory
                         return "S-411";
                     }
 
+                    // S-122 — Marine Protected Areas. The 2.0.0 sample dataset
+                    // is mis-labelled with the S-123 namespace
+                    // (xmlns:S123="http://www.iho.int/S123/gml/1.0") but its
+                    // <S100:productIdentifier> is "INT.IHO.S-122.x.y.z", so we
+                    // fall back to sniffing the productIdentifier element.
+                    if (reader.NamespaceURI.Contains("S-122", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S122", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S122", StringComparison.OrdinalIgnoreCase)
+                        || ContainsProductIdentifier(xml, "S-122"))
+                    {
+                        return "S-122";
+                    }
+
                     // Generic GML DataSet fallback — inspect declared namespaces
                     if (reader.LocalName.Equals("DataSet", StringComparison.OrdinalIgnoreCase))
                     {
@@ -194,6 +207,12 @@ public sealed class DatasetPipelineFactory
                                     || reader.Value.Contains("S-411", StringComparison.OrdinalIgnoreCase))
                                 {
                                     return "S-411";
+                                }
+
+                                if (reader.Value.Contains("S122", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-122", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-122";
                                 }
                             } while (reader.MoveToNextAttribute());
                         }
@@ -242,6 +261,7 @@ public sealed class DatasetPipelineFactory
             "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueResolver),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
+            "S-122" => new S122DatasetProcessor(path, _catalogueManager),
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
             "S-127" => new S127DatasetProcessor(path, _catalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager),

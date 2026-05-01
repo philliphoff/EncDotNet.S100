@@ -13,6 +13,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-102** | Bathymetric Surfaces — HDF5 encoded depth/uncertainty grids |
 | **S-104** | Water Level Information — HDF5 encoded water-level time-step grids |
 | **S-111** | Surface Currents — HDF5 encoded current speed/direction grids |
+| **S-122** | Marine Protected Areas — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-124** | Navigational Warnings — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-127** | Marine Resources and Services — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
@@ -37,6 +38,7 @@ src/
   EncDotNet.S100.Datasets.S102/      # S-102 bathymetry reader + coverage pipeline
   EncDotNet.S100.Datasets.S104/      # S-104 water level reader + coverage pipeline
   EncDotNet.S100.Datasets.S111/      # S-111 surface currents reader + coverage pipeline
+  EncDotNet.S100.Datasets.S122/      # S-122 marine protected areas reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S127/      # S-127 marine resources & services reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
@@ -124,6 +126,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-104, water level, tide grids | `s104-water-level` |
   | S-111, surface currents, current speed/direction | `s111-surface-currents` |
   | S-124, navigational warnings, GML, XSLT portrayal | `s124-nav-warnings` |
+  | S-122, marine protected areas, restricted areas, VTS, GML, XSLT portrayal | `s122-marine-protected-areas` |
   | S-127, marine resources and services, pilot boarding, routeing measures, vessel traffic services | `s127-marine-services` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
   | S-411, sea ice, ice information, icebergs, ice edges | `s411-sea-ice` |
