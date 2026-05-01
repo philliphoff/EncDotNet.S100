@@ -87,6 +87,12 @@ GML-encoded navigational warnings rendered via XSLT portrayal, highlighting haza
 
 GML-encoded marine aids to navigation (lights, buoys, beacons, daymarks, AIS aids) rendered via XSLT portrayal, including AtoN status indication symbology.
 
+### S-128 — Catalogue of Nautical Products
+
+![S-128 Catalogue of Nautical Products](readme/S128Screenshot.png)
+
+GML-encoded catalogue of available nautical products rendered via XSLT portrayal, with electronic products (yellow), physical products (green), and S-100 services (magenta) shown as semi-transparent coverage areas. Shown above: the official IHO 2.0.0 sample dataset covering East Asia.
+
 ### S-129 — Under Keel Clearance Management
 
 ![S-129 Under Keel Clearance](readme/S129Screenshot.png)
