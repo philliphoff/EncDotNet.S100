@@ -47,6 +47,7 @@ tests/
   EncDotNet.S100.Datasets.S104.Tests/
   EncDotNet.S100.Datasets.S111.Tests/
   EncDotNet.S100.Datasets.S124.Tests/
+  EncDotNet.S100.Datasets.S125.Tests/
   EncDotNet.S100.Datasets.S421.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
