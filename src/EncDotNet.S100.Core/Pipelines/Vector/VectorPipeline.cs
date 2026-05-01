@@ -99,6 +99,15 @@ public class VectorPipeline
             // Pass colour palette tokens as XSLT parameters
             foreach (var (token, color) in catalogue.ActivePalette.Colors)
             {
+                // Some product specs (e.g. S-122) include colour tokens whose
+                // names are not valid XML NCNames (e.g. "00011"). XSLT
+                // parameter names must be NCNames, so skip any that aren't —
+                // the XSLT cannot reference them by name in any case.
+                if (!IsValidNCName(token))
+                {
+                    continue;
+                }
+
                 args.AddParam(token, string.Empty, color);
             }
 
@@ -125,6 +134,20 @@ public class VectorPipeline
         }
 
         return drawingInstructions;
+    }
+
+    private static bool IsValidNCName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        try
+        {
+            System.Xml.XmlConvert.VerifyNCName(name);
+            return true;
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
     }
 
     // ── Stage 6: Viewing group filtering and sort ──────────────────────
