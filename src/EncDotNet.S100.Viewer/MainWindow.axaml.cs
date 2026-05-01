@@ -317,6 +317,8 @@ public partial class MainWindow : ShadUI.Window
                 => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             S102DatasetProcessor
                 => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S122DatasetProcessor
+                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             S124DatasetProcessor
                 => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             S129DatasetProcessor
