@@ -106,4 +106,73 @@ public class S122DatasetReaderTests
         var ds = LoadSample();
         Assert.Empty(ds.InformationTypes);
     }
+
+    /// <summary>
+    /// Verifies the producer-bug detection: when a dataset's posList is
+    /// emitted in lon-lat order (as in the UK trial dataset GBNPI12200002045)
+    /// while the bounding envelope is correctly lat-lon, the reader detects
+    /// the mismatch and swaps axes so coords end up in the spec-mandated
+    /// lat-lon orientation.
+    /// </summary>
+    [Fact]
+    public void Reader_SwapsAxes_WhenPosListIsLonLatButEnvelopeIsLatLon()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <S122:Dataset xmlns:S122="http://www.iho.int/S122/gml/1.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/1.0"
+                          gml:id="TEST">
+              <gml:boundedBy>
+                <gml:Envelope srsName="EPSG:4326">
+                  <gml:lowerCorner>50.20 -3.00</gml:lowerCorner>
+                  <gml:upperCorner>51.00  0.00</gml:upperCorner>
+                </gml:Envelope>
+              </gml:boundedBy>
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-122</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <member>
+                <S122:MarineProtectedArea gml:id="F1">
+                  <geometry><S100:surfaceProperty><gml:Surface gml:id="s1">
+                    <gml:patches><gml:PolygonPatch>
+                      <gml:exterior><gml:LinearRing>
+                        <gml:posList>-2.0 50.4 -2.0 50.8 -1.0 50.8 -1.0 50.4 -2.0 50.4</gml:posList>
+                      </gml:LinearRing></gml:exterior>
+                    </gml:PolygonPatch></gml:patches>
+                  </gml:Surface></S100:surfaceProperty></geometry>
+                </S122:MarineProtectedArea>
+              </member>
+            </S122:Dataset>
+            """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
+        var ds = S122Dataset.Open(stream);
+
+        Assert.Single(ds.Features);
+        var ring = ds.Features[0].ExteriorRing;
+        // After swap: lat in [50.4, 50.8], lon in [-2.0, -1.0] (UK / Solent).
+        Assert.All(ring, p =>
+        {
+            Assert.InRange(p.Latitude, 50.0, 51.0);
+            Assert.InRange(p.Longitude, -3.0, 0.0);
+        });
+    }
+
+    /// <summary>
+    /// Confirms the spec-conformant sample is *not* swapped — its coords
+    /// already fall inside the (synthesised) envelope and the heuristic must
+    /// be conservative enough to leave them alone.
+    /// </summary>
+    [Fact]
+    public void Reader_DoesNotSwap_WhenPosListIsAlreadyLatLon()
+    {
+        var ds = LoadSample();
+        // The sample's MPA at (lat≈-32.52, lon≈60.97) — the heuristic must
+        // not corrupt this even though the values look unusual, because
+        // there is no envelope to compare against in the sample file.
+        var ring = ds.Features.First(f => f.GeometryType == S122GeometryType.Surface).ExteriorRing;
+        Assert.NotEmpty(ring);
+        Assert.InRange(ring[0].Latitude, -33.0, -32.0);
+        Assert.InRange(ring[0].Longitude, 60.0, 61.0);
+    }
 }

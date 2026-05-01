@@ -97,6 +97,22 @@ internal static class S122DatasetReader
             }
         }
 
+        // Some real-world S-122 datasets (e.g. the UK trial dataset
+        // GBNPI12200002045) violate the S-100 Part 10b spec by emitting
+        // <gml:posList> values in lon-lat order even though the spec
+        // mandates lat-lon for EPSG:4326. Detect this by sampling parsed
+        // coordinates against the dataset's bounding envelope (which we
+        // observe is consistently lat-lon) and rebuild features with
+        // swapped axes when the lon-lat interpretation clearly fits better.
+        var envelope = ParseEnvelope(root);
+        if (envelope is not null && ShouldSwapAxes(features, envelope.Value))
+        {
+            var swapped = ImmutableArray.CreateBuilder<S122Feature>();
+            foreach (var f in features)
+                swapped.Add(SwapFeatureAxes(f));
+            features = swapped;
+        }
+
         return new S122Dataset
         {
             ProductIdentifier = productId ?? "S-122",
@@ -104,6 +120,102 @@ internal static class S122DatasetReader
             Features = features.ToImmutable(),
             InformationTypes = informationTypes.ToImmutable(),
         };
+    }
+
+    private static (double MinLat, double MinLon, double MaxLat, double MaxLon)? ParseEnvelope(XElement root)
+    {
+        var envelope = root.Descendants(GmlNs + "Envelope").FirstOrDefault();
+        if (envelope is null) return null;
+
+        var lower = envelope.Element(GmlNs + "lowerCorner")?.Value;
+        var upper = envelope.Element(GmlNs + "upperCorner")?.Value;
+        if (lower is null || upper is null) return null;
+
+        var lo = ParsePos(lower);
+        var hi = ParsePos(upper);
+        if (lo is null || hi is null) return null;
+
+        // Validate corners are plausible lat-lon values; otherwise the
+        // envelope itself may use a non-spec axis order and we can't trust
+        // it as ground truth.
+        if (Math.Abs(lo.Value.Latitude) > 90 || Math.Abs(hi.Value.Latitude) > 90 ||
+            Math.Abs(lo.Value.Longitude) > 180 || Math.Abs(hi.Value.Longitude) > 180)
+            return null;
+
+        return (
+            Math.Min(lo.Value.Latitude, hi.Value.Latitude),
+            Math.Min(lo.Value.Longitude, hi.Value.Longitude),
+            Math.Max(lo.Value.Latitude, hi.Value.Latitude),
+            Math.Max(lo.Value.Longitude, hi.Value.Longitude));
+    }
+
+    private static bool ShouldSwapAxes(
+        IEnumerable<S122Feature> features,
+        (double MinLat, double MinLon, double MaxLat, double MaxLon) env)
+    {
+        // Pad the envelope slightly (~5%) to absorb minor producer rounding.
+        var latPad = Math.Max(0.001, (env.MaxLat - env.MinLat) * 0.05);
+        var lonPad = Math.Max(0.001, (env.MaxLon - env.MinLon) * 0.05);
+        double minLat = env.MinLat - latPad, maxLat = env.MaxLat + latPad;
+        double minLon = env.MinLon - lonPad, maxLon = env.MaxLon + lonPad;
+
+        int asIs = 0, swapped = 0, total = 0;
+        foreach (var f in features)
+        {
+            foreach (var p in EnumerateCoords(f))
+            {
+                total++;
+                if (p.lat >= minLat && p.lat <= maxLat && p.lon >= minLon && p.lon <= maxLon)
+                    asIs++;
+                if (p.lon >= minLat && p.lon <= maxLat && p.lat >= minLon && p.lat <= maxLon)
+                    swapped++;
+            }
+        }
+
+        if (total == 0) return false;
+        // Swap only when the as-is interpretation is clearly wrong and the
+        // swapped one is clearly right.
+        return asIs * 4 < total && swapped * 4 > total * 3;
+    }
+
+    private static IEnumerable<(double lat, double lon)> EnumerateCoords(S122Feature f)
+    {
+        foreach (var p in f.Points) yield return p;
+        foreach (var c in f.Curves)
+            foreach (var p in c) yield return p;
+        foreach (var p in f.ExteriorRing) yield return p;
+        foreach (var ring in f.InteriorRings)
+            foreach (var p in ring) yield return p;
+    }
+
+    private static S122Feature SwapFeatureAxes(S122Feature f) => new()
+    {
+        Id = f.Id,
+        FeatureType = f.FeatureType,
+        GeometryType = f.GeometryType,
+        Points = SwapMany(f.Points),
+        Curves = SwapRings(f.Curves),
+        ExteriorRing = SwapMany(f.ExteriorRing),
+        InteriorRings = SwapRings(f.InteriorRings),
+        Attributes = f.Attributes,
+        ComplexAttributes = f.ComplexAttributes,
+    };
+
+    private static ImmutableArray<(double, double)> SwapMany(ImmutableArray<(double, double)> src)
+    {
+        if (src.IsDefaultOrEmpty) return src;
+        var b = ImmutableArray.CreateBuilder<(double, double)>(src.Length);
+        foreach (var (a, c) in src) b.Add((c, a));
+        return b.ToImmutable();
+    }
+
+    private static ImmutableArray<ImmutableArray<(double, double)>> SwapRings(
+        ImmutableArray<ImmutableArray<(double, double)>> src)
+    {
+        if (src.IsDefaultOrEmpty) return src;
+        var b = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>(src.Length);
+        foreach (var ring in src) b.Add(SwapMany(ring));
+        return b.ToImmutable();
     }
 
     private static XNamespace DetectS100Namespace(XElement root)
