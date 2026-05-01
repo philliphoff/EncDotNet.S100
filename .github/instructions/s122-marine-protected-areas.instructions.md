@@ -21,6 +21,21 @@ When modifying S-122 code or its bundled portrayal assets:
   detection helper in `S122DatasetReader.DetectS100Namespace`.
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` is **lat lon**
   for `EPSG:4326` (S-100 Part 10b convention).
+- **Producer-bug compensation already in `S122DatasetReader`.** Two
+  real-world quirks are auto-corrected; new geometry parsing code must
+  preserve both:
+  1. *lon-lat posList vs. lat-lon envelope.* The UKHO trial dataset
+     emits `<gml:posList>` in lon-lat order while keeping the
+     `<gml:Envelope>` corners correctly in lat-lon. The reader samples
+     parsed coords against the declared envelope and swaps every
+     feature when the as-parsed interpretation clearly falls outside
+     but the swapped one fits. Keep the heuristic conservative
+     (≤25 % as-is fit, ≥75 % swapped fit) so spec-conformant samples
+     are untouched.
+  2. *Comma-separated tuples in `posList`.* Some producers emit
+     `lon,lat lon,lat …` tokens (the `gml:coordinates` convention)
+     instead of all-whitespace. `ParsePos` / `ParsePosList` treat both
+     whitespace and commas as separators — do not regress that.
 - Both the standard `<member>`/`<imember>` wrappers and the inline
   `<members>`/`<imembers>` containers must be supported. Iterate
   descendants of the dataset root and match by feature/info type code.

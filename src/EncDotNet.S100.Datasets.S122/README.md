@@ -26,6 +26,19 @@ Key types include:
 ## Notes
 
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` is **lat lon** for `EPSG:4326` (S-100 Part 10b convention).
+- **Producer-bug compensation: lon-lat axis order.** Some S-122 producers
+  (notably the UKHO trial dataset `GBNPI12200002045.gml`) emit `<gml:posList>`
+  in lon-lat order while keeping `<gml:Envelope>` corners correctly in
+  lat-lon. The reader detects this by sampling parsed feature coords against
+  the declared envelope; if the as-parsed interpretation clearly falls
+  outside but the swapped interpretation clearly falls inside, every
+  feature's coordinates are swapped before they reach the pipeline.
+  Spec-conformant datasets are left untouched.
+- **Producer-bug compensation: comma-separated tuples in `posList`.**
+  GML 3.2 mandates whitespace-only separators inside `<gml:posList>`, but
+  some S-122 producers emit `lon,lat lon,lat ...` tokens (the older
+  `gml:coordinates` convention). The reader treats both whitespace and
+  commas as coordinate separators so either shape parses correctly.
 - The reader tolerates the s100gml namespace variants found across S-122 sample releases (`http://www.iho.int/s100gml/1.0`, `http://www.iho.int/S100/profile/s100gml/1.0`, `http://www.iho.int/s100gml/5.0`) and falls back to scanning the document's namespace declarations.
 - Both the standard `<member>`/`<imember>` wrappers and the inline `<members>`/`<imembers>` containers used by some sample datasets are supported.
 - **Palette switching is currently a no-op for S-122.** The bundled v2.0.0

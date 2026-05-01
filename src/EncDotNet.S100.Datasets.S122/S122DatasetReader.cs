@@ -447,9 +447,17 @@ internal static class S122DatasetReader
         return (exteriorRing, interiorRings.ToImmutable());
     }
 
+    // Tokenises a coordinate string. Per GML 3.2 <gml:posList>/<gml:pos>
+    // numbers are whitespace-separated, but some real-world S-122 producers
+    // (e.g. UKHO trial datasets) emit lon,lat tuples with commas inside a
+    // tuple and whitespace between tuples — i.e. the gml:coordinates
+    // convention smuggled into a posList element. Treating both whitespace
+    // and commas as delimiters handles either shape transparently.
+    private static readonly char[] CoordSeparators = [' ', '\t', '\n', '\r', ','];
+
     private static (double Latitude, double Longitude)? ParsePos(string posValue)
     {
-        var parts = posValue.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = posValue.Split(CoordSeparators, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 2 &&
             double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
             double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
@@ -461,7 +469,7 @@ internal static class S122DatasetReader
 
     private static ImmutableArray<(double Latitude, double Longitude)> ParsePosList(string posListValue)
     {
-        var parts = posListValue.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var parts = posListValue.Split(CoordSeparators, StringSplitOptions.RemoveEmptyEntries);
         var coords = ImmutableArray.CreateBuilder<(double, double)>();
 
         for (int i = 0; i + 1 < parts.Length; i += 2)

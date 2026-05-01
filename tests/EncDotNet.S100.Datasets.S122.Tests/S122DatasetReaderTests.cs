@@ -175,4 +175,55 @@ public class S122DatasetReaderTests
         Assert.InRange(ring[0].Latitude, -33.0, -32.0);
         Assert.InRange(ring[0].Longitude, 60.0, 61.0);
     }
+
+    /// <summary>
+    /// Verifies the comma-tuple posList variant: UKHO's S-122 trial data
+    /// emits <c>lon,lat lon,lat</c> tokens (the gml:coordinates convention)
+    /// inside <c>&lt;gml:posList&gt;</c>. The reader must accept both
+    /// commas and whitespace as coordinate separators.
+    /// </summary>
+    [Fact]
+    public void Reader_ParsesPosList_WithCommaSeparatedTuples()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <S122:Dataset xmlns:S122="http://www.iho.int/S122/gml/1.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/1.0"
+                          gml:id="TEST">
+              <gml:boundedBy>
+                <gml:Envelope srsName="EPSG:4326">
+                  <gml:lowerCorner>50.20 -3.00</gml:lowerCorner>
+                  <gml:upperCorner>51.00  0.00</gml:upperCorner>
+                </gml:Envelope>
+              </gml:boundedBy>
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-122</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <member>
+                <S122:MarineProtectedArea gml:id="F1">
+                  <geometry><S100:surfaceProperty><gml:Surface gml:id="s1">
+                    <gml:patches><gml:PolygonPatch>
+                      <gml:exterior><gml:LinearRing>
+                        <gml:posList>-2.0,50.4 -2.0,50.8 -1.0,50.8 -1.0,50.4 -2.0,50.4</gml:posList>
+                      </gml:LinearRing></gml:exterior>
+                    </gml:PolygonPatch></gml:patches>
+                  </gml:Surface></S100:surfaceProperty></geometry>
+                </S122:MarineProtectedArea>
+              </member>
+            </S122:Dataset>
+            """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
+        var ds = S122Dataset.Open(stream);
+
+        var ring = ds.Features.Single().ExteriorRing;
+        Assert.Equal(5, ring.Length);
+        // After axis-swap (lon,lat token order is detected as wrong vs the
+        // lat-lon envelope), each point ends up in (lat, lon) form.
+        Assert.All(ring, p =>
+        {
+            Assert.InRange(p.Latitude, 50.0, 51.0);
+            Assert.InRange(p.Longitude, -3.0, 0.0);
+        });
+    }
 }
