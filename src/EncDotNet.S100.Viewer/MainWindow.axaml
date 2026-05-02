@@ -201,12 +201,14 @@
             </DockPanel>
         </Border>
 
-        <!-- Activity pane + splitter + map in a resizable grid -->
+        <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600" />
             </Grid.ColumnDefinitions>
 
             <!-- Activity pane -->
@@ -260,6 +262,49 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
+                    <Button x:Name="PickModeButton"
+                            Classes="Icon"
+                            Click="OnPickModeButtonClick"
+                            ToolTip.Tip="Pick Mode (I) — single-tap to identify features">
+                        <Button.Styles>
+                            <!--
+                              When pick mode is active we add the "pickActive"
+                              class from code-behind; this fills the button with
+                              the accent color so the user can tell at a glance.
+                              Using Button (not ToggleButton) lets us keep the
+                              exact resting appearance of the adjacent zoom
+                              buttons — ShadUI's `Classes="Icon"` only styles
+                              Button, not ToggleButton.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <!--
+                              ShadUI's Button.Icon template stacks a separate
+                              Border#HoverBackground on top of the base whose
+                              Background is bound to ButtonAssist.HoverBackground
+                              (default GhostColor). Override it so the active
+                              fill stays accent-colored on hover.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <!--
+                                  Pin opacity to 1 so the 0→1 fade-in transition
+                                  doesn't briefly blend with the base layer when
+                                  the cursor enters the button.
+                                -->
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
+                    </Button>
                     <Button x:Name="ZoomInButton"
                             Classes="Icon">
                         <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
@@ -274,6 +319,117 @@
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
             </Grid>
+
+            <!-- Resize grip between map and pick panel -->
+            <GridSplitter Grid.Column="3"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding IsPickPanelVisible}"
+                          Name="PickPanelSplitter" />
+
+            <!-- Pick Report (Object Information) panel -->
+            <Border Grid.Column="4"
+                    Background="{DynamicResource BackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1,0,0,0"
+                    IsVisible="{Binding IsPickPanelVisible}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="OBJECT INFORMATION"
+                                       FontSize="11"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1"
+                                    Command="{Binding PickReport.ClearCommand}"
+                                    ToolTip.Tip="Close"
+                                    Width="22" Height="22"
+                                    Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center">
+                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="12,4,12,12">
+                        <StackPanel Spacing="10" DataContext="{Binding PickReport}">
+                            <!-- Header block: feature type + identity -->
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding FeatureType}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold" />
+                                <TextBlock FontSize="11" Opacity="0.7">
+                                    <Run Text="ID:" />
+                                    <Run Text="{Binding FeatureRef}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding ProductSpec, StringFormat='Spec: {0}'}" />
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding DatasetFileName, StringFormat='Source: {0}'}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <!-- Attribute list -->
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="0,8,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="ATTRIBUTES"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <ItemsControl ItemsSource="{Binding Attributes}"
+                                                  Grid.IsSharedSizeScope="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickAttribute">
+                                                <Grid Margin="0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" SharedSizeGroup="PickName" />
+                                                        <ColumnDefinition Width="8" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="PickValue" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               Opacity="0.7"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding Name}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding Value}"
+                                                               FontSize="12"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="220"
+                                                               ToolTip.Tip="{Binding Value}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="(no attributes)"
+                                               FontSize="12"
+                                               FontStyle="Italic"
+                                               Opacity="0.6"
+                                               IsVisible="{Binding !HasAttributes}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </shadui:Window>

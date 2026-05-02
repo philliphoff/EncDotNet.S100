@@ -43,6 +43,50 @@ public partial class MainWindow : ShadUI.Window
     private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
+    private double _lastPickPanelWidth = 360;
+
+    /// <summary>
+    /// Threshold (milliseconds) for treating a press-and-hold as a long-press
+    /// pick gesture. Mirrors typical touch UI conventions and ECDIS
+    /// "press to identify" behavior.
+    /// </summary>
+    private const int LongPressMillis = 500;
+
+    /// <summary>
+    /// Maximum movement (in pixels) tolerated during a long-press before the
+    /// gesture is cancelled (the user is panning, not picking).
+    /// </summary>
+    private const double LongPressMoveTolerance = 6.0;
+
+    private DispatcherTimer? _longPressTimer;
+    private Avalonia.Point? _longPressOrigin;
+    private bool _longPressFired;
+
+    /// <summary>
+    /// Modifier state captured at the most recent pointer-press on the map,
+    /// used by <see cref="OnMapTapped"/> to detect modifier-click since the
+    /// Mapsui tap event doesn't carry keyboard modifiers itself.
+    /// </summary>
+    private KeyModifiers _lastPressedModifiers = KeyModifiers.None;
+
+    private void ApplyPickPanelColumnState()
+    {
+        // Pick panel lives in column index 4; the splitter is column index 3.
+        var col = ContentGrid.ColumnDefinitions[4];
+        if (_viewModel.IsPickPanelVisible)
+        {
+            col.Width = new GridLength(_lastPickPanelWidth, GridUnitType.Pixel);
+            col.MinWidth = 240;
+            col.MaxWidth = 600;
+        }
+        else
+        {
+            _lastPickPanelWidth = col.Width.IsAbsolute ? col.Width.Value : 360;
+            col.Width = new GridLength(0);
+            col.MinWidth = 0;
+            col.MaxWidth = 0;
+        }
+    }
 
     public MainWindow() : this(null) { }
 
@@ -138,9 +182,40 @@ public partial class MainWindow : ShadUI.Window
                 statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
         };
 
+        var pickPanelItem = new NativeMenuItem("Pick Report")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsPickPanelEnabled,
+        };
+        pickPanelItem.Click += (_, _) => _viewModel.TogglePickPanelCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickPanelEnabled))
+                pickPanelItem.IsChecked = _viewModel.IsPickPanelEnabled;
+        };
+
+        var pickModeItem = new NativeMenuItem("Pick Mode")
+        {
+            ToggleType = NativeMenuItemToggleType.CheckBox,
+            IsChecked = _viewModel.IsPickModeActive,
+            Gesture = new KeyGesture(Key.I),
+        };
+        pickModeItem.Click += (_, _) => _viewModel.TogglePickModeCommand.Execute(null);
+
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
+            {
+                pickModeItem.IsChecked = _viewModel.IsPickModeActive;
+                ApplyPickModeCursor();
+                ApplyPickModeButtonState();
+            }
+        };
+
         var appearanceMenu = new NativeMenuItem("Appearance")
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
         };
 
         var viewMenu = new NativeMenuItem("View")
@@ -208,6 +283,14 @@ public partial class MainWindow : ShadUI.Window
             }
         };
 
+        // Pick panel column starts collapsed; expand only when a pick is shown.
+        ApplyPickPanelColumnState();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickPanelVisible))
+                ApplyPickPanelColumnState();
+        };
+
         // Wire up dataset load requests
         _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
 
@@ -254,6 +337,20 @@ public partial class MainWindow : ShadUI.Window
 
         // Enable single-tap feature identify (pick report)
         MapControl.MapTapped += OnMapTapped;
+
+        // Long-press (~500ms hold without moving) is always a one-shot pick
+        // regardless of Pick Mode. Tunneling lets us see the press before
+        // MapControl handles it.
+        MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressed, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
+        MapControl.AddHandler(PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
+
+        // Esc exits Pick Mode.
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+
+        // Apply the cursor that matches the current mode.
+        ApplyPickModeCursor();
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -658,6 +755,14 @@ public partial class MainWindow : ShadUI.Window
 
     private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // In Pick Mode the double-tap zoom is suppressed so that successive
+        // taps on adjacent features each register as picks rather than zooms.
+        if (_viewModel.IsPickModeActive)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (MapControl.Map?.Navigator is not { } navigator)
             return;
 
@@ -674,10 +779,194 @@ public partial class MainWindow : ShadUI.Window
         if (e.GestureType != GestureType.SingleTap)
             return;
 
+        // A long-press already produced a pick at PointerPressed → release time;
+        // suppress the synthesized SingleTap that follows so we don't pick twice
+        // (or, worse, show then immediately clear the panel).
+        if (_longPressFired)
+        {
+            _longPressFired = false;
+            return;
+        }
+
+        // Modifier-click is always a one-shot pick regardless of Pick Mode:
+        // Cmd-click on macOS, Ctrl-click on Windows / Linux.
+        if (IsPickModifierActive())
+        {
+            PerformPickAt(e);
+            return;
+        }
+
+        // Outside Pick Mode, plain single-tap is a no-op so it doesn't fight
+        // with double-tap-to-zoom (the first tap of a double-tap also fires
+        // here).
+        if (!_viewModel.IsPickModeActive)
+            return;
+
+        PerformPickAt(e);
+    }
+
+    /// <summary>
+    /// Returns true when the modifier state captured at the most recent
+    /// pointer-press matches the platform's pick modifier: <c>Cmd</c> (Meta)
+    /// on macOS, <c>Ctrl</c> on Windows and Linux.
+    /// </summary>
+    private bool IsPickModifierActive()
+    {
+        if (OperatingSystem.IsMacOS())
+            return (_lastPressedModifiers & KeyModifiers.Meta) != 0;
+        return (_lastPressedModifiers & KeyModifiers.Control) != 0;
+    }
+
+    /// <summary>
+    /// Starts the long-press timer when the primary pointer button is pressed.
+    /// </summary>
+    private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var props = e.GetCurrentPoint(MapControl).Properties;
+        if (!props.IsLeftButtonPressed)
+            return;
+
+        // Capture modifier state for OnMapTapped's modifier-click test (the
+        // Mapsui tap event doesn't carry keyboard modifiers).
+        _lastPressedModifiers = e.KeyModifiers;
+
+        // Modifier-click is handled in OnMapTapped (where we have a MapInfo
+        // resolver); skip the long-press timer for that case.
+        if (IsPickModifierActive())
+            return;
+
+        _longPressOrigin = e.GetPosition(MapControl);
+        _longPressFired = false;
+
+        _longPressTimer?.Stop();
+        _longPressTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(LongPressMillis),
+        };
+        _longPressTimer.Tick += OnLongPressElapsed;
+        _longPressTimer.Start();
+    }
+
+    private void OnMapPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_longPressTimer is null || _longPressOrigin is not { } origin)
+            return;
+
+        var current = e.GetPosition(MapControl);
+        var dx = current.X - origin.X;
+        var dy = current.Y - origin.Y;
+        if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
+            CancelLongPress();
+    }
+
+    private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        CancelLongPress();
+    }
+
+    private void OnMapPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CancelLongPress();
+    }
+
+    private void CancelLongPress()
+    {
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+        _longPressOrigin = null;
+    }
+
+    private void OnLongPressElapsed(object? sender, EventArgs e)
+    {
+        if (_longPressOrigin is not { } origin)
+        {
+            CancelLongPress();
+            return;
+        }
+
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+
+        // Translate the press position to a Mapsui MapInfo and dispatch the
+        // pick. Setting _longPressFired suppresses the SingleTap that will be
+        // synthesized when the user lifts their finger.
+        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
+        var mapInfo = MapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
+        _longPressOrigin = null;
+        _longPressFired = true;
+        DispatchPick(mapInfo);
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _viewModel.IsPickModeActive)
+        {
+            _viewModel.ExitPickModeCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Updates the map's cursor to reflect Pick Mode (cross-hair) vs. the
+    /// default panning cursor.
+    /// </summary>
+    private void ApplyPickModeCursor()
+    {
+        MapControl.Cursor = _viewModel.IsPickModeActive
+            ? new Cursor(StandardCursorType.Cross)
+            : Cursor.Default;
+    }
+
+    /// <summary>
+    /// Toggles a CSS-style "pickActive" class on the Pick Mode button so the
+    /// XAML style selectors can light it up with the accent color.
+    /// </summary>
+    private void ApplyPickModeButtonState()
+    {
+        const string activeClass = "pickActive";
+        if (_viewModel.IsPickModeActive)
+        {
+            PickModeButton.Classes.Add(activeClass);
+            // Set Background as a local value so it beats ShadUI's Button.Icon
+            // :pointerover style (local values outrank all style setters).
+            if (this.TryFindResource("AccentBrush", out var brush) && brush is IBrush accent)
+            {
+                PickModeButton.Background = accent;
+                PickModeButton.BorderBrush = accent;
+            }
+        }
+        else
+        {
+            PickModeButton.Classes.Remove(activeClass);
+            PickModeButton.ClearValue(Button.BackgroundProperty);
+            PickModeButton.ClearValue(Button.BorderBrushProperty);
+        }
+    }
+
+    /// <summary>
+    /// Click handler for the Pick Mode toolbar button — flips the view-model
+    /// flag, which in turn updates cursor + button styling via PropertyChanged.
+    /// </summary>
+    private void OnPickModeButtonClick(object? sender, RoutedEventArgs e)
+    {
+        _viewModel.TogglePickModeCommand.Execute(null);
+    }
+
+    private void PerformPickAt(BaseEventArgs e)
+    {
         var datasetLayers = _entryLayers.Values.SelectMany(l => l);
         var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
+        DispatchPick(mapInfo);
+    }
+
+    private void DispatchPick(MapInfo? mapInfo)
+    {
         if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
+        {
+            // Tap on empty map: clear any active pick so the panel hides.
+            _viewModel.PickReport.Clear();
             return;
+        }
 
         if (hitFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
             return;
@@ -699,17 +988,19 @@ public partial class MainWindow : ShadUI.Window
         var info = processor.GetFeatureInfo(featureRef);
         if (info is null)
         {
+            _viewModel.PickReport.Clear();
             _viewModel.StatusText = $"Feature {featureRef} (no details available)";
             return;
         }
 
-        var attrs = string.Join(", ", info.Attributes
-            .Where(a => a.Value is not null)
-            .Select(a => $"{a.Key}={a.Value}"));
+        _viewModel.PickReport.SetPick(
+            featureType: info.FeatureType,
+            featureRef: info.FeatureRef,
+            datasetFileName: owningEntry.DisplayName,
+            productSpec: processor.ProductSpec,
+            attributes: info.Attributes);
 
-        _viewModel.StatusText = string.IsNullOrEmpty(attrs)
-            ? $"{info.FeatureType} [{info.FeatureRef}]"
-            : $"{info.FeatureType} [{info.FeatureRef}]: {attrs}";
+        _viewModel.StatusText = $"{info.FeatureType} [{info.FeatureRef}]";
     }
 
     private NativeMenuItem BuildFileMenu()

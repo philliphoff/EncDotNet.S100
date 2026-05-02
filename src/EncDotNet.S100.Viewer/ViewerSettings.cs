@@ -45,6 +45,13 @@ internal sealed class ViewerSettings
 
     public bool IsStatusBarVisible { get; set; } = true;
 
+    /// <summary>
+    /// Whether the Pick Report (Object Information) side panel auto-opens
+    /// when a feature is picked. The user can also explicitly hide it via
+    /// the View menu.
+    /// </summary>
+    public bool IsPickPanelVisible { get; set; } = true;
+
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;
 
