@@ -2,18 +2,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogPanelView"
              x:DataType="vm:CatalogPanelViewModel">
 
     <UserControl.Styles>
-        <!-- Accent color on details splitter hover/drag (matches main pane splitter). -->
-        <Style Selector="GridSplitter#DetailsSplitter">
+        <!--
+          Mirror of the main window's `GridSplitter.PaneSplitter` style so
+          the catalog details splitter looks and behaves identically. Kept
+          local because UserControls don't inherit window-scoped styles.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
-        <Style Selector="GridSplitter#DetailsSplitter:pointerover">
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <Style Selector="GridSplitter#DetailsSplitter:pressed">
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
     </UserControl.Styles>
@@ -130,12 +137,10 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <!-- Resizable splitter between list and details. Row is sized to 6px
-             (a touch target); the visual line is a 1px Border centered in the
-             row, and the GridSplitter overlays it. The splitter background
-             switches to the accent brush on hover/drag (matches the main
-             pane splitter). The splitter must be a direct child of the
-             outer Grid so it can resize its rows. -->
+        <!-- Resizable splitter between list and details. The visible
+             1px hairline is a separate Border centered in the row; the
+             GridSplitter overlays it with the standard 4px hit-target
+             from the shared `PaneSplitter` style class. -->
         <Border Grid.Row="1"
                 Height="1"
                 HorizontalAlignment="Stretch"
@@ -144,12 +149,13 @@
                 Background="{DynamicResource BorderColor}" />
         <GridSplitter Grid.Row="1"
                       Name="DetailsSplitter"
-                      Height="6"
-                      Background="Transparent"
+                      Classes="PaneSplitter"
+                      Height="4"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Center"
                       ResizeDirection="Rows"
-                      ResizeBehavior="PreviousAndNext" />
+                      ResizeBehavior="PreviousAndNext"
+                      bh:HoverDelay.DelayMilliseconds="500" />
 
         <!-- Details panel. The header (title + status badge, or placeholder
              when no row is selected) is "sticky" and lives outside the
@@ -163,7 +169,7 @@
                 <Panel>
                     <!-- Placeholder when no row is selected -->
                     <TextBlock IsVisible="{Binding !HasSelection}"
-                               Text="Select a catalogue entry to view its properties."
+                               Text="{x:Static loc:Strings.Catalog_SelectEntryPlaceholder}"
                                Opacity="0.6"
                                TextWrapping="Wrap"
                                HorizontalAlignment="Center"
@@ -217,7 +223,7 @@
                                            FontSize="20"
                                            Foreground="#8B4513"
                                            VerticalAlignment="Center" />
-                            <TextBlock Text="Not for navigation"
+                            <TextBlock Text="{x:Static loc:Strings.Catalog_NotForNavigation}"
                                        FontWeight="SemiBold"
                                        Foreground="#8B4513"
                                        VerticalAlignment="Center" />
@@ -228,19 +234,19 @@
                          vertical breathing room. -->
                     <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                           RowSpacing="6" ColumnSpacing="12">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Spec" Opacity="0.6" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_Spec}" Opacity="0.6" />
                         <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedEntry.ProductSpec}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Edition" Opacity="0.6" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_Edition}" Opacity="0.6" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.EditionNumber}" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Update" Opacity="0.6" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_Update}" Opacity="0.6" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.UpdateNumber}" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Issued" Opacity="0.6" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_Issued}" Opacity="0.6" />
                         <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedEntry.IssueDate}" />
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Updated" Opacity="0.6" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_Updated}" Opacity="0.6" />
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedEntry.UpdateDate}" />
                     </Grid>
 
@@ -248,11 +254,11 @@
                           RowSpacing="6" ColumnSpacing="12"
                           IsVisible="{Binding SelectedEntry.HasCoverage, FallbackValue=False}">
                         <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
-                                   Text="Coverage" Opacity="0.6" />
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="NE" Opacity="0.6" Margin="12,0,0,0" />
+                                   Text="{x:Static loc:Strings.Catalog_Field_Coverage}" Opacity="0.6" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_NorthEast}" Opacity="0.6" Margin="12,0,0,0" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.CoverageNorthEast}"
                                    FontFamily="Consolas,Menlo,Monaco,monospace" />
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="SW" Opacity="0.6" Margin="12,0,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Catalog_Field_SouthWest}" Opacity="0.6" Margin="12,0,0,0" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.CoverageSouthWest}"
                                    FontFamily="Consolas,Menlo,Monaco,monospace" />
                     </Grid>
@@ -262,7 +268,7 @@
                          to confuse the ScrollViewer's height calculation. -->
                     <StackPanel Spacing="6"
                                 IsVisible="{Binding SelectedEntry.HasExtendedProperties, FallbackValue=False}">
-                        <TextBlock Text="Source properties"
+                        <TextBlock Text="{x:Static loc:Strings.Catalog_SourceProperties}"
                                    FontWeight="SemiBold"
                                    Opacity="0.8" />
                         <ItemsControl ItemsSource="{Binding SelectedEntry.ExtendedPropertyList}"

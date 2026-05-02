@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Styling;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -49,11 +50,11 @@ internal sealed class MainViewModel : ViewModelBase
 
     public string PaneTitle => _selectedActivity switch
     {
-        ActivityKind.FeatureCatalogues => "FEATURE CATALOGUES",
-        ActivityKind.PortrayalCatalogues => "PORTRAYAL CATALOGUES",
-        ActivityKind.Datasets => "DATASETS",
-        ActivityKind.Catalog => "DATASET CATALOG",
-        ActivityKind.Settings => "SETTINGS",
+        ActivityKind.FeatureCatalogues => Strings.Pane_FeatureCatalogues,
+        ActivityKind.PortrayalCatalogues => Strings.Pane_PortrayalCatalogues,
+        ActivityKind.Datasets => Strings.Pane_Datasets,
+        ActivityKind.Catalog => Strings.Pane_Catalog,
+        ActivityKind.Settings => Strings.Pane_Settings,
         _ => string.Empty,
     };
 

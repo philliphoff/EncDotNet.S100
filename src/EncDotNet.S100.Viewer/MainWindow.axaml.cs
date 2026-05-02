@@ -21,6 +21,7 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
@@ -156,7 +157,7 @@ public partial class MainWindow : ShadUI.Window
         _catalogAggregator.Add(_s128CatalogSource);
 
         // Build native menu bar
-        var sideBarItem = new NativeMenuItem("Primary Side Bar")
+        var sideBarItem = new NativeMenuItem(Strings.Menu_PrimarySideBar)
         {
             ToggleType = NativeMenuItemToggleType.CheckBox,
             IsChecked = _viewModel.IsPaneVisible,
@@ -169,7 +170,7 @@ public partial class MainWindow : ShadUI.Window
                 sideBarItem.IsChecked = _viewModel.IsPaneVisible;
         };
 
-        var statusBarItem = new NativeMenuItem("Status Bar")
+        var statusBarItem = new NativeMenuItem(Strings.Menu_StatusBar)
         {
             ToggleType = NativeMenuItemToggleType.CheckBox,
             IsChecked = _viewModel.IsStatusBarVisible,
@@ -182,7 +183,7 @@ public partial class MainWindow : ShadUI.Window
                 statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
         };
 
-        var pickPanelItem = new NativeMenuItem("Pick Report")
+        var pickPanelItem = new NativeMenuItem(Strings.Menu_PickReport)
         {
             ToggleType = NativeMenuItemToggleType.CheckBox,
             IsChecked = _viewModel.IsPickPanelEnabled,
@@ -195,7 +196,7 @@ public partial class MainWindow : ShadUI.Window
                 pickPanelItem.IsChecked = _viewModel.IsPickPanelEnabled;
         };
 
-        var pickModeItem = new NativeMenuItem("Pick Mode")
+        var pickModeItem = new NativeMenuItem(Strings.Menu_PickMode)
         {
             ToggleType = NativeMenuItemToggleType.CheckBox,
             IsChecked = _viewModel.IsPickModeActive,
@@ -213,12 +214,12 @@ public partial class MainWindow : ShadUI.Window
             }
         };
 
-        var appearanceMenu = new NativeMenuItem("Appearance")
+        var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
             Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
         };
 
-        var viewMenu = new NativeMenuItem("View")
+        var viewMenu = new NativeMenuItem(Strings.Menu_View)
         {
             Menu = new NativeMenu { appearanceMenu },
         };
@@ -230,11 +231,11 @@ public partial class MainWindow : ShadUI.Window
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, "(built-in)", ReadBuiltInFeatureCatalogueVersion(spec));
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInFeatureCatalogueVersion(spec));
 
             if (Specifications.Specification.HasPortrayalCatalogue(spec))
             {
-                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, "(built-in)", ReadBuiltInPortrayalCatalogueVersion(spec));
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInPortrayalCatalogueVersion(spec));
             }
         }
 
@@ -463,18 +464,18 @@ public partial class MainWindow : ShadUI.Window
         var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
         if (spec is null)
         {
-            _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(entry.FilePath)}";
+            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath));
             return;
         }
 
         // S-104 ships a built-in portrayal catalogue; all others need an external one.
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
         {
-            _viewModel.StatusText = $"Please select a portrayal catalogue for {spec} first.";
+            _viewModel.StatusText = string.Format(Strings.Status_SelectPortrayalCatalogue, spec);
             return;
         }
 
-        _viewModel.StatusText = $"Loading {Path.GetFileName(entry.FilePath)}...";
+        _viewModel.StatusText = string.Format(Strings.Status_LoadingFile, Path.GetFileName(entry.FilePath));
 
         try
         {
@@ -540,7 +541,7 @@ public partial class MainWindow : ShadUI.Window
         }
         catch (Exception ex)
         {
-            _viewModel.StatusText = $"Error: {ex.Message}";
+            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
             Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
         }
     }
@@ -555,7 +556,7 @@ public partial class MainWindow : ShadUI.Window
         if (times is null || idx < 0 || idx >= times.Count)
             return;
 
-        _viewModel.StatusText = $"Rendering time step {idx + 1}/{times.Count}...";
+        _viewModel.StatusText = string.Format(Strings.Status_RenderingTimeStep, idx + 1, times.Count);
 
         try
         {
@@ -575,7 +576,7 @@ public partial class MainWindow : ShadUI.Window
         }
         catch (Exception ex)
         {
-            _viewModel.StatusText = $"Error: {ex.Message}";
+            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
             Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
         }
     }
@@ -583,7 +584,7 @@ public partial class MainWindow : ShadUI.Window
     private async Task ReRenderAllDatasetsAsync()
     {
         var palette = _viewModel.Settings.SelectedPalette;
-        _viewModel.StatusText = $"Switching to {palette} palette...";
+        _viewModel.StatusText = string.Format(Strings.Status_SwitchingPalette, palette);
 
         foreach (var (entry, proc) in _processors.ToArray())
         {
@@ -616,7 +617,7 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
-        _viewModel.StatusText = $"{palette} palette applied.";
+        _viewModel.StatusText = string.Format(Strings.Status_PaletteApplied, palette);
     }
 
     private void CaptureScreenshot(string outputPath)
@@ -989,7 +990,7 @@ public partial class MainWindow : ShadUI.Window
         if (info is null)
         {
             _viewModel.PickReport.Clear();
-            _viewModel.StatusText = $"Feature {featureRef} (no details available)";
+            _viewModel.StatusText = string.Format(Strings.Status_FeatureNoDetails, featureRef);
             return;
         }
 
@@ -1000,23 +1001,23 @@ public partial class MainWindow : ShadUI.Window
             productSpec: processor.ProductSpec,
             attributes: info.Attributes);
 
-        _viewModel.StatusText = $"{info.FeatureType} [{info.FeatureRef}]";
+        _viewModel.StatusText = string.Format(Strings.Status_FeatureSummary, info.FeatureType, info.FeatureRef);
     }
 
     private NativeMenuItem BuildFileMenu()
     {
-        var openItem = new NativeMenuItem("Open Dataset...")
+        var openItem = new NativeMenuItem(Strings.Menu_OpenDataset)
         {
             Gesture = new KeyGesture(Key.O, KeyModifiers.Meta),
         };
         openItem.Click += (_, _) => _ = OpenDatasetAsync();
 
-        _openRecentMenuItem = new NativeMenuItem("Open Recent")
+        _openRecentMenuItem = new NativeMenuItem(Strings.Menu_OpenRecent)
         {
             Menu = _openRecentMenu,
         };
 
-        return new NativeMenuItem("File")
+        return new NativeMenuItem(Strings.Menu_File)
         {
             Menu = new NativeMenu { openItem, _openRecentMenuItem },
         };
@@ -1029,7 +1030,7 @@ public partial class MainWindow : ShadUI.Window
         var paths = _settings.RecentDatasetPaths;
         if (paths.Count == 0)
         {
-            var empty = new NativeMenuItem("(No recent datasets)") { IsEnabled = false };
+            var empty = new NativeMenuItem(Strings.Menu_NoRecentDatasets) { IsEnabled = false };
             _openRecentMenu.Items.Add(empty);
             if (_openRecentMenuItem is not null)
                 _openRecentMenuItem.IsEnabled = false;
@@ -1053,7 +1054,7 @@ public partial class MainWindow : ShadUI.Window
         }
 
         _openRecentMenu.Items.Add(new NativeMenuItemSeparator());
-        var clear = new NativeMenuItem("Clear Recently Opened");
+        var clear = new NativeMenuItem(Strings.Menu_ClearRecentlyOpened);
         clear.Click += (_, _) =>
         {
             _settings.ClearRecentDatasets();
@@ -1071,7 +1072,7 @@ public partial class MainWindow : ShadUI.Window
 
         var fileTypes = new List<FilePickerFileType>
         {
-            new("S-100 Datasets")
+            new(Strings.FilePicker_S100DatasetsType)
             {
                 Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
             },
@@ -1080,7 +1081,7 @@ public partial class MainWindow : ShadUI.Window
 
         var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open Dataset",
+            Title = Strings.FilePicker_OpenDatasetTitle,
             AllowMultiple = true,
             FileTypeFilter = fileTypes,
         });
@@ -1104,7 +1105,7 @@ public partial class MainWindow : ShadUI.Window
     {
         if (!File.Exists(path))
         {
-            _viewModel.StatusText = $"File no longer exists: {path}";
+            _viewModel.StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
             // Drop the missing entry so the menu reflects reality.
             _settings.RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
             _settings.Save();
@@ -1121,7 +1122,7 @@ public partial class MainWindow : ShadUI.Window
         var spec = DatasetPipelineFactory.DetectProductSpec(path);
         if (spec is null)
         {
-            _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(path)}";
+            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
             return;
         }
 
@@ -1145,7 +1146,7 @@ public partial class MainWindow : ShadUI.Window
             var spec = DatasetPipelineFactory.DetectProductSpec(path);
             if (spec is null)
             {
-                _viewModel.StatusText = $"Unrecognized file type: {Path.GetExtension(path)}";
+                _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
                 continue;
             }
 

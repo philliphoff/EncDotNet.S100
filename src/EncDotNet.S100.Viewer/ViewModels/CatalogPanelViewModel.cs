@@ -5,6 +5,7 @@ using System.Linq;
 using Avalonia.Media;
 using Avalonia.Threading;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -175,8 +176,7 @@ internal sealed class CatalogPanelViewModel : ViewModelBase
 
     public bool IsEmpty => Entries.Count == 0;
 
-    public string EmptyMessage =>
-        "No catalogues found.\nOpen an S-128 dataset to populate this panel.";
+    public string EmptyMessage => Strings.Catalog_EmptyMessage;
 
     public CatalogPanelViewModel(IDatasetCatalogSource source)
     {

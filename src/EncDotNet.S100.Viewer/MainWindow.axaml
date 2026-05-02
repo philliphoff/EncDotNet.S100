@@ -5,12 +5,14 @@
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
+        xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+        xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
         x:Class="EncDotNet.S100.Viewer.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="S-100 Viewer"
+        Title="{x:Static loc:Strings.Window_Title}"
         Width="1100" Height="700"
         IsTitleBarVisible="True"
         ShowBottomBorder="True">
@@ -51,14 +53,29 @@
             <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
         </Style>
 
-        <!-- Accent color on pane splitter hover/drag -->
-        <Style Selector="GridSplitter#PaneSplitter">
+        <!--
+          Shared GridSplitter look-and-feel. Apply via Classes="PaneSplitter"
+          to every splitter in the viewer (main pane, pick panel, catalog
+          details). The splitter itself stays transparent at rest so it
+          blends with its surroundings; the accent color appears only on
+          hover or while the user is actively dragging.
+        -->
+        <!--
+          The splitter is transparent at rest. The shared `HoverDelay`
+          attached behavior (set on each splitter individually) waits
+          500ms after pointer-enter before adding the `hovered` class,
+          so a quick pass-through never reveals the accent. Exit is
+          immediate. While dragging, `:pressed` keeps the accent
+          regardless of pointer position.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
-        <Style Selector="GridSplitter#PaneSplitter:pointerover">
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <Style Selector="GridSplitter#PaneSplitter:pressed">
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
 
@@ -66,7 +83,7 @@
 
     <shadui:Window.RightWindowTitleBarContent>
         <Button Command="{Binding ToggleThemeCommand}"
-                ToolTip.Tip="Toggle Light/Dark Theme"
+                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                 Width="32" Height="28"
                 Padding="0"
                 HorizontalContentAlignment="Center"
@@ -118,7 +135,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
                                       Command="{Binding SelectSettingsCommand}"
-                                      ToolTip.Tip="Settings"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Settings}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -138,7 +155,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
                                       Command="{Binding SelectFeatureCataloguesCommand}"
-                                      ToolTip.Tip="Feature Catalogues"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FeatureCatalogues}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -155,7 +172,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
                                       Command="{Binding SelectPortrayalCataloguesCommand}"
-                                      ToolTip.Tip="Portrayal Catalogues"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalCatalogues}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -172,7 +189,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
                                       Command="{Binding SelectDatasetsCommand}"
-                                      ToolTip.Tip="Datasets"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Datasets}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -189,7 +206,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsCatalogSelected, Mode=OneWay}"
                                       Command="{Binding SelectCatalogCommand}"
-                                      ToolTip.Tip="Dataset Catalog"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Catalog}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -214,8 +231,6 @@
             <!-- Activity pane -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="0,0,1,0"
                     IsVisible="{Binding IsPaneVisible}">
                 <DockPanel>
                     <!-- Pane header -->
@@ -245,9 +260,11 @@
 
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
+                          Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
                           IsVisible="{Binding IsPaneVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
@@ -265,7 +282,7 @@
                     <Button x:Name="PickModeButton"
                             Classes="Icon"
                             Click="OnPickModeButtonClick"
-                            ToolTip.Tip="Pick Mode (I) — single-tap to identify features">
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
                         <Button.Styles>
                             <!--
                               When pick mode is active we add the "pickActive"
@@ -284,6 +301,16 @@
                             <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <!--
+                              Force the FluentIcon child to inherit the
+                              button's Foreground so the toggled-on state
+                              actually paints the icon white. (The default
+                              FluentIcon Foreground is bound to the theme
+                              text color and would otherwise stay dark.)
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
                             </Style>
                             <!--
                               ShadUI's Button.Icon template stacks a separate
@@ -306,11 +333,13 @@
                         <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <Button x:Name="ZoomInButton"
-                            Classes="Icon">
+                            Classes="Icon"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
                         <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <Button x:Name="ZoomOutButton"
-                            Classes="Icon">
+                            Classes="Icon"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
                         <ic:FluentIcon Icon="Subtract" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <views:CompassRoseView x:Name="CompassRose"
@@ -322,16 +351,16 @@
 
             <!-- Resize grip between map and pick panel -->
             <GridSplitter Grid.Column="3"
+                          Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
                           IsVisible="{Binding IsPickPanelVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 
             <!-- Pick Report (Object Information) panel -->
             <Border Grid.Column="4"
                     Background="{DynamicResource BackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="1,0,0,0"
                     IsVisible="{Binding IsPickPanelVisible}">
                 <DockPanel>
                     <Border DockPanel.Dock="Top"
@@ -342,14 +371,14 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0"
-                                       Text="OBJECT INFORMATION"
+                                       Text="{x:Static loc:Strings.Pick_PanelTitle}"
                                        FontSize="11"
                                        FontWeight="Normal"
                                        LetterSpacing="1"
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
                                     Command="{Binding PickReport.ClearCommand}"
-                                    ToolTip.Tip="Close"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
                                     Width="22" Height="22"
                                     Padding="0"
                                     Background="Transparent"
@@ -371,13 +400,13 @@
                                            FontSize="14"
                                            FontWeight="SemiBold" />
                                 <TextBlock FontSize="11" Opacity="0.7">
-                                    <Run Text="ID:" />
+                                    <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
                                     <Run Text="{Binding FeatureRef}" />
                                 </TextBlock>
                                 <TextBlock FontSize="11" Opacity="0.7"
-                                           Text="{Binding ProductSpec, StringFormat='Spec: {0}'}" />
+                                           Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
                                 <TextBlock FontSize="11" Opacity="0.7"
-                                           Text="{Binding DatasetFileName, StringFormat='Source: {0}'}"
+                                           Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
                                            TextWrapping="Wrap" />
                             </StackPanel>
 
@@ -386,7 +415,7 @@
                                     BorderThickness="0,1,0,0"
                                     Padding="0,8,0,0">
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="ATTRIBUTES"
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
                                                FontSize="10"
                                                FontWeight="Normal"
                                                LetterSpacing="1"
@@ -419,7 +448,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <TextBlock Text="(no attributes)"
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
                                                FontSize="12"
                                                FontStyle="Italic"
                                                Opacity="0.6"
