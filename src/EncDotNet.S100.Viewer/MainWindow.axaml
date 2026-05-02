@@ -372,23 +372,30 @@
                                                FontWeight="Normal"
                                                LetterSpacing="1"
                                                Opacity="0.7" />
-                                    <ItemsControl ItemsSource="{Binding Attributes}">
+                                    <ItemsControl ItemsSource="{Binding Attributes}"
+                                                  Grid.IsSharedSizeScope="True">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PickAttribute">
                                                 <Grid Margin="0,2">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="140" />
-                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" SharedSizeGroup="PickName" />
+                                                        <ColumnDefinition Width="8" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="PickValue" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0"
                                                                Text="{Binding Name}"
                                                                FontSize="12"
                                                                Opacity="0.7"
-                                                               TextWrapping="Wrap" />
-                                                    <TextBlock Grid.Column="1"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding Name}" />
+                                                    <TextBlock Grid.Column="2"
                                                                Text="{Binding Value}"
                                                                FontSize="12"
-                                                               TextWrapping="Wrap" />
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="220"
+                                                               ToolTip.Tip="{Binding Value}" />
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
