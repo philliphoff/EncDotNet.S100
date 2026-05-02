@@ -180,6 +180,23 @@
                             <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22" />
                         </ToggleButton>
                     </Grid>
+
+                    <!-- Dataset Catalog -->
+                    <Grid>
+                        <Border Width="3" HorizontalAlignment="Left"
+                                Background="{DynamicResource AccentBrush}"
+                                IsVisible="{Binding IsCatalogSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsCatalogSelected, Mode=OneWay}"
+                                      Command="{Binding SelectCatalogCommand}"
+                                      ToolTip.Tip="Dataset Catalog"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Library" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -218,6 +235,8 @@
                                                        IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
                         <views:DatasetsView DataContext="{Binding Datasets}"
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
+                        <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
+                                                IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
                         <views:SettingsView DataContext="{Binding Settings}"
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
                     </Panel>

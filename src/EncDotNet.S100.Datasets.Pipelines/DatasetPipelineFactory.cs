@@ -124,6 +124,16 @@ public sealed class DatasetPipelineFactory
                         return "S-125";
                     }
 
+                    // S-128 — Catalogue of Nautical Products. Application
+                    // namespace is "http://www.iho.int/S128/2.0".
+                    if (reader.NamespaceURI.Contains("S-128", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S128", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S128", StringComparison.OrdinalIgnoreCase)
+                        || ContainsProductIdentifier(xml, "S-128"))
+                    {
+                        return "S-128";
+                    }
+
                     // S-127 datasets declare the namespace "http://www.iho.int/S127/2.0".
                     if (reader.NamespaceURI.Contains("S-127", StringComparison.OrdinalIgnoreCase)
                         || reader.NamespaceURI.Contains("S127", StringComparison.OrdinalIgnoreCase)
@@ -205,6 +215,12 @@ public sealed class DatasetPipelineFactory
                                     return "S-125";
                                 }
 
+                                if (reader.Value.Contains("S128", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-128", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-128";
+                                }
+
                                 if (reader.Value.Contains("S127", StringComparison.OrdinalIgnoreCase)
                                     || reader.Value.Contains("S-127", StringComparison.OrdinalIgnoreCase))
                                 {
@@ -279,6 +295,7 @@ public sealed class DatasetPipelineFactory
             "S-124" => new S124DatasetProcessor(path, _catalogueManager),
             "S-125" => new S125DatasetProcessor(path, _catalogueManager),
             "S-127" => new S127DatasetProcessor(path, _catalogueManager),
+            "S-128" => new S128DatasetProcessor(path, _catalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager),
             "S-411" => new S411DatasetProcessor(path, _catalogueManager),
             "S-421" => new S421DatasetProcessor(path, _catalogueManager),

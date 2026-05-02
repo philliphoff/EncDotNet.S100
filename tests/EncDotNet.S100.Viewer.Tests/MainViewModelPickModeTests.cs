@@ -1,10 +1,21 @@
+using System;
+using System.Collections.Generic;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
 public class MainViewModelPickModeTests
 {
+    private sealed class EmptyCatalogSource : IDatasetCatalogSource
+    {
+        public string Id => "test";
+        public string DisplayName => "Test";
+        public IReadOnlyList<DatasetCatalogEntry> Entries => Array.Empty<DatasetCatalogEntry>();
+        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
+    }
+
     private static MainViewModel CreateViewModel()
     {
         // Construct in-memory settings (without invoking Save()) and a
@@ -13,7 +24,8 @@ public class MainViewModelPickModeTests
         // mode commands never do.
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
-        return new MainViewModel(settings, catalogues);
+        var catalogSource = new EmptyCatalogSource();
+        return new MainViewModel(settings, catalogues, catalogSource);
     }
 
     [Fact]

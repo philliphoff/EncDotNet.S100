@@ -20,6 +20,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
@@ -36,6 +37,8 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
+    private readonly DatasetCatalogAggregator _catalogAggregator = new();
+    private readonly S128DatasetCatalogSource _s128CatalogSource = new();
     private readonly NativeMenu _openRecentMenu = new();
     private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
@@ -144,8 +147,13 @@ public partial class MainWindow : ShadUI.Window
                   : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
                   : Specifications.Specification.TryOpenFeatureCatalogue(spec));
 
-        _viewModel = new MainViewModel(_settings, _catalogueManager);
+        _viewModel = new MainViewModel(_settings, _catalogueManager, _catalogAggregator);
         DataContext = _viewModel;
+
+        // Register catalog sources. The S-128 source receives parsed datasets
+        // as they are loaded into the viewer; future sources (online, JSON)
+        // can be registered here without changes to the panel.
+        _catalogAggregator.Add(_s128CatalogSource);
 
         // Build native menu bar
         var sideBarItem = new NativeMenuItem("Primary Side Bar")
@@ -295,11 +303,28 @@ public partial class MainWindow : ShadUI.Window
                 {
                     RemoveEntryLayers(removed);
                     _processors.Remove(removed);
+                    _s128CatalogSource.RemoveDataset(removed.DisplayName);
                 }
             }
         };
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
+        // narrow viewports during resize, and the exception is raised on the
+        // render thread where we cannot intercept it.
+        Mapsui.Widgets.InfoWidgets.LoggingWidget.ShowLoggingInMap = Mapsui.Widgets.ActiveMode.No;
+        if (MapControl.Map is { } mapForWidgets)
+        {
+            var remaining = mapForWidgets.Widgets
+                .Where(w => w is not Mapsui.Widgets.InfoWidgets.LoggingWidget)
+                .ToArray();
+            mapForWidgets.Widgets.Clear();
+            foreach (var w in remaining)
+            {
+                mapForWidgets.Widgets.Enqueue(w);
+            }
+        }
 
         // Enable pinch-to-zoom on the map control via trackpad magnify gesture
         MapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
@@ -455,6 +480,12 @@ public partial class MainWindow : ShadUI.Window
         {
             var processor = await Task.Run(() => _pipelineFactory.CreateProcessor(entry.FilePath));
             _processors[entry] = processor;
+
+            // Surface S-128 catalogues into the Dataset Catalog panel.
+            if (processor is S128DatasetProcessor s128)
+            {
+                _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
+            }
 
             var palette = _viewModel.Settings.SelectedPalette;
             var initialContext = CreateRenderContext(processor);

@@ -29,11 +29,21 @@ internal sealed class ViewerCommand : Command<ViewerCommandSettings>
     {
         App.StartupOptions = settings;
 
-        AppBuilder.Configure<App>()
-            .UsePlatformDetect()
-            .WithInterFont()
-            .LogToTrace()
-            .StartWithClassicDesktopLifetime([]);
+        try
+        {
+            AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .WithInterFont()
+                .LogToTrace()
+                .StartWithClassicDesktopLifetime([]);
+        }
+        catch (System.Exception ex)
+        {
+            System.Console.Error.WriteLine($"[FATAL] {ex}");
+            try { System.IO.File.AppendAllText("/tmp/viewer-crash.log", $"{System.DateTime.Now:O}\n{ex}\n\n"); }
+            catch { }
+            throw;
+        }
 
         return 0;
     }

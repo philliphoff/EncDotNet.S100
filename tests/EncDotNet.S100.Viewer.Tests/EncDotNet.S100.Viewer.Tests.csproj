@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <!-- The viewer targets osx-arm64 for SelfContained publish; the tests
+         only consume managed types and do not need a RID-specific build. -->
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +22,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EncDotNet.S100.Viewer\EncDotNet.S100.Viewer.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
