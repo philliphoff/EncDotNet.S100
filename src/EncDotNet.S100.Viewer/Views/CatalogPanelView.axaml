@@ -1,0 +1,290 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             x:Class="EncDotNet.S100.Viewer.Views.CatalogPanelView"
+             x:DataType="vm:CatalogPanelViewModel">
+
+    <UserControl.Styles>
+        <!-- Accent color on details splitter hover/drag (matches main pane splitter). -->
+        <Style Selector="GridSplitter#DetailsSplitter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="GridSplitter#DetailsSplitter:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter#DetailsSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- Empty state — a completely separate tree from the populated
+             state so it cannot interact with the grid star-sizing of the
+             master/detail layout. -->
+        <Border IsVisible="{Binding IsEmpty}"
+                Padding="16"
+                VerticalAlignment="Center">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <ic:FluentIcon Icon="Library"
+                               IconVariant="Regular"
+                               FontSize="32"
+                               Opacity="0.4"
+                               HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding EmptyMessage}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Opacity="0.6"
+                           FontSize="12" />
+            </StackPanel>
+        </Border>
+
+        <!-- Populated state — master/detail with resizable splitter. -->
+        <Grid IsVisible="{Binding !IsEmpty}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="2*" MinHeight="80" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+        <!-- Entry list (master). ListBox.Padding=0 and ListBoxItem.Margin=0
+             ensure the whole row width/height is hit-testable for selection;
+             visual spacing is supplied by the ListBoxItem's Padding (which
+             lives INSIDE the row's hit area). -->
+        <ListBox Grid.Row="0"
+                 x:Name="EntryList"
+                 ItemsSource="{Binding Entries}"
+                 SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 Padding="0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.Styles>
+                <!-- Suppress the default ShadUI ListBoxItem chrome (including the
+                     selection check icon) and use our own minimal selection look. -->
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <!-- Transparent (not null) background so the entire row hit-tests,
+                         not just the text glyph runs. -->
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Template">
+                        <ControlTemplate>
+                            <Border Name="PART_Container"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalAlignment="Stretch"
+                                                  HorizontalContentAlignment="Stretch" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter>
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected TextBlock">
+                    <Setter Property="Foreground" Value="White" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:CatalogEntryViewModel">
+                    <!-- Background=Transparent makes the entire row (including
+                         empty space between the text and the badge) hit-testable
+                         so click-to-select fires reliably regardless of where
+                         within the row the user clicks. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"
+                          Background="Transparent">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="{Binding Title}"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}"
+                                       FontSize="11"
+                                       Opacity="0.7"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Border Grid.Column="1"
+                                Background="{Binding StatusBrush}"
+                                BorderBrush="{Binding StatusBorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="9"
+                                Padding="10,4"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding StatusText}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Resizable splitter between list and details. Row is sized to 6px
+             (a touch target); the visual line is a 1px Border centered in the
+             row, and the GridSplitter overlays it. The splitter background
+             switches to the accent brush on hover/drag (matches the main
+             pane splitter). The splitter must be a direct child of the
+             outer Grid so it can resize its rows. -->
+        <Border Grid.Row="1"
+                Height="1"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Center"
+                IsHitTestVisible="False"
+                Background="{DynamicResource BorderColor}" />
+        <GridSplitter Grid.Row="1"
+                      Name="DetailsSplitter"
+                      Height="6"
+                      Background="Transparent"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      ResizeDirection="Rows"
+                      ResizeBehavior="PreviousAndNext" />
+
+        <!-- Details panel. The header (title + status badge, or placeholder
+             when no row is selected) is "sticky" and lives outside the
+             ScrollViewer; everything else scrolls beneath it. -->
+        <Border Grid.Row="2"
+                ClipToBounds="True">
+            <DockPanel LastChildFill="True">
+
+            <!-- Sticky header -->
+            <Border DockPanel.Dock="Top" Padding="8,8,8,4">
+                <Panel>
+                    <!-- Placeholder when no row is selected -->
+                    <TextBlock IsVisible="{Binding !HasSelection}"
+                               Text="Select a catalogue entry to view its properties."
+                               Opacity="0.6"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center" />
+
+                    <!-- Title + status badge -->
+                    <Grid IsVisible="{Binding HasSelection}"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding SelectedEntry.Title}"
+                                   FontWeight="SemiBold"
+                                   FontSize="13"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                        <Border Grid.Column="1"
+                                Background="{Binding SelectedEntry.StatusBrush}"
+                                BorderBrush="{Binding SelectedEntry.StatusBorderBrush}"
+                                BorderThickness="1.5"
+                                CornerRadius="9"
+                                Padding="10,4"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SelectedEntry.StatusText}"
+                                       FontSize="10"
+                                       FontWeight="Bold"
+                                       Foreground="White"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center" />
+                        </Border>
+                    </Grid>
+                </Panel>
+            </Border>
+
+            <!-- Scrolling rest fills the remaining DockPanel area -->
+            <ScrollViewer IsVisible="{Binding HasSelection}"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="12" Margin="8,4,8,8">
+
+                    <!-- "Not for navigation" warning banner. Orange fill with
+                         darker amber border and a warning glyph. -->
+                    <Border IsVisible="{Binding SelectedEntry.NotForNavigation, FallbackValue=False}"
+                            Background="#FFE4B5"
+                            BorderBrush="#B8860B"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="10,8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Warning"
+                                           IconVariant="Filled"
+                                           FontSize="20"
+                                           Foreground="#8B4513"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="Not for navigation"
+                                       FontWeight="SemiBold"
+                                       Foreground="#8B4513"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Property grid. Default font size; per-row spacing for
+                         vertical breathing room. -->
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                          RowSpacing="6" ColumnSpacing="12">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Spec" Opacity="0.6" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedEntry.ProductSpec}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Edition" Opacity="0.6" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.EditionNumber}" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Update" Opacity="0.6" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.UpdateNumber}" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Issued" Opacity="0.6" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedEntry.IssueDate}" />
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Updated" Opacity="0.6" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedEntry.UpdateDate}" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="6" ColumnSpacing="12"
+                          IsVisible="{Binding SelectedEntry.HasCoverage, FallbackValue=False}">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                                   Text="Coverage" Opacity="0.6" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="NE" Opacity="0.6" Margin="12,0,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.CoverageNorthEast}"
+                                   FontFamily="Consolas,Menlo,Monaco,monospace" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="SW" Opacity="0.6" Margin="12,0,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.CoverageSouthWest}"
+                                   FontFamily="Consolas,Menlo,Monaco,monospace" />
+                    </Grid>
+
+                    <!-- "Source properties" section header + property list.
+                         Was previously an Expander, but the Expander seemed
+                         to confuse the ScrollViewer's height calculation. -->
+                    <StackPanel Spacing="6"
+                                IsVisible="{Binding SelectedEntry.HasExtendedProperties, FallbackValue=False}">
+                        <TextBlock Text="Source properties"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.8" />
+                        <ItemsControl ItemsSource="{Binding SelectedEntry.ExtendedPropertyList}"
+                                      Grid.IsSharedSizeScope="True">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnSpacing="12" Margin="0,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="ExtPropKey" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Key}" Opacity="0.6" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+            </DockPanel>
+        </Border>
+        </Grid>
+    </Panel>
+</UserControl>
