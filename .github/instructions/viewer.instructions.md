@@ -41,15 +41,29 @@ When modifying viewer code:
 
 - All `GridSplitter` instances use the shared style class
   `PaneSplitter` (transparent background, `BorderThickness=0`,
-  accent brush on `:pointerover` and `:pressed`) and a thickness of
-  4 (Width for vertical splitters, Height for horizontal).
+  accent brush on the `.hovered` and `:pressed` states) and a
+  thickness of 4 (Width for vertical splitters, Height for
+  horizontal). The 500ms hover delay is implemented by the
+  `Behaviors.HoverDelay` attached property — set
+  `bh:HoverDelay.DelayMilliseconds="500"` on each splitter. The
+  behavior wires `PointerEntered`/`Exited` and toggles the
+  `hovered` style class via a `DispatcherTimer`, so a brief
+  pass-through never flashes the accent and pointer-leave clears
+  it instantly. Avalonia's `BrushTransition` with `Delay` does not
+  reliably gate quick mouse pass-throughs, hence the timer-based
+  behavior.
+- Side panels adjacent to a splitter must NOT draw their own
+  `BorderBrush`/`BorderThickness` on the splitter-facing edge — the
+  splitter is intentionally invisible at rest and a static panel
+  border would defeat that.
 - The style is defined in `MainWindow.axaml`'s `<Window.Styles>`. A
   duplicate copy lives in `Views/CatalogPanelView.axaml`'s
   `<UserControl.Styles>` because Avalonia styles defined on a Window
   do not propagate into UserControl logical sub-trees.
-- When adding a new splitter, set `Classes="PaneSplitter"` and
-  `Width="4"` or `Height="4"` — do not introduce a per-splitter
-  style block.
+- When adding a new splitter, set `Classes="PaneSplitter"`,
+  `Width="4"` or `Height="4"`, and
+  `bh:HoverDelay.DelayMilliseconds="500"` — do not introduce a
+  per-splitter style block.
 
 ## Pick mode button
 

@@ -3,6 +3,7 @@
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogPanelView"
              x:DataType="vm:CatalogPanelViewModel">
 
@@ -16,7 +17,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
-        <Style Selector="GridSplitter.PaneSplitter:pointerover">
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
         <Style Selector="GridSplitter.PaneSplitter:pressed">
@@ -153,7 +154,8 @@
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Center"
                       ResizeDirection="Rows"
-                      ResizeBehavior="PreviousAndNext" />
+                      ResizeBehavior="PreviousAndNext"
+                      bh:HoverDelay.DelayMilliseconds="500" />
 
         <!-- Details panel. The header (title + status badge, or placeholder
              when no row is selected) is "sticky" and lives outside the

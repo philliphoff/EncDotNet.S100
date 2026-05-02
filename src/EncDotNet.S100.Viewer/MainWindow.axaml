@@ -6,6 +6,7 @@
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+        xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
@@ -59,11 +60,19 @@
           blends with its surroundings; the accent color appears only on
           hover or while the user is actively dragging.
         -->
+        <!--
+          The splitter is transparent at rest. The shared `HoverDelay`
+          attached behavior (set on each splitter individually) waits
+          500ms after pointer-enter before adding the `hovered` class,
+          so a quick pass-through never reveals the accent. Exit is
+          immediate. While dragging, `:pressed` keeps the accent
+          regardless of pointer position.
+        -->
         <Style Selector="GridSplitter.PaneSplitter">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
-        <Style Selector="GridSplitter.PaneSplitter:pointerover">
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
         <Style Selector="GridSplitter.PaneSplitter:pressed">
@@ -222,8 +231,6 @@
             <!-- Activity pane -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="0,0,1,0"
                     IsVisible="{Binding IsPaneVisible}">
                 <DockPanel>
                     <!-- Pane header -->
@@ -257,6 +264,7 @@
                           Width="4"
                           ResizeDirection="Columns"
                           IsVisible="{Binding IsPaneVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
@@ -347,13 +355,12 @@
                           Width="4"
                           ResizeDirection="Columns"
                           IsVisible="{Binding IsPickPanelVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 
             <!-- Pick Report (Object Information) panel -->
             <Border Grid.Column="4"
                     Background="{DynamicResource BackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="1,0,0,0"
                     IsVisible="{Binding IsPickPanelVisible}">
                 <DockPanel>
                     <Border DockPanel.Dock="Top"

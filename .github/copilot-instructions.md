@@ -155,4 +155,6 @@ When editing `src/EncDotNet.S100.Viewer/**`, follow the rules in
   (use `string.Format` for parameterized status text). No hardcoded
   user-facing strings in views, view-models, or code-behind.
 - Every button must have a meaningful `ToolTip.Tip`.
-- All `GridSplitter`s use `Classes="PaneSplitter"` with thickness 4.
+- All `GridSplitter`s use `Classes="PaneSplitter"` with thickness 4
+  and a 500ms hover delay before the accent shows. Adjacent panels
+  must not draw their own border on the splitter-facing edge.
