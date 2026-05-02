@@ -201,6 +201,7 @@ public partial class MainWindow : ShadUI.Window
             {
                 pickModeItem.IsChecked = _viewModel.IsPickModeActive;
                 ApplyPickModeCursor();
+                ApplyPickModeButtonState();
             }
         };
 
@@ -883,6 +884,41 @@ public partial class MainWindow : ShadUI.Window
         MapControl.Cursor = _viewModel.IsPickModeActive
             ? new Cursor(StandardCursorType.Cross)
             : Cursor.Default;
+    }
+
+    /// <summary>
+    /// Toggles a CSS-style "pickActive" class on the Pick Mode button so the
+    /// XAML style selectors can light it up with the accent color.
+    /// </summary>
+    private void ApplyPickModeButtonState()
+    {
+        const string activeClass = "pickActive";
+        if (_viewModel.IsPickModeActive)
+        {
+            PickModeButton.Classes.Add(activeClass);
+            // Set Background as a local value so it beats ShadUI's Button.Icon
+            // :pointerover style (local values outrank all style setters).
+            if (this.TryFindResource("AccentBrush", out var brush) && brush is IBrush accent)
+            {
+                PickModeButton.Background = accent;
+                PickModeButton.BorderBrush = accent;
+            }
+        }
+        else
+        {
+            PickModeButton.Classes.Remove(activeClass);
+            PickModeButton.ClearValue(Button.BackgroundProperty);
+            PickModeButton.ClearValue(Button.BorderBrushProperty);
+        }
+    }
+
+    /// <summary>
+    /// Click handler for the Pick Mode toolbar button — flips the view-model
+    /// flag, which in turn updates cursor + button styling via PropertyChanged.
+    /// </summary>
+    private void OnPickModeButtonClick(object? sender, RoutedEventArgs e)
+    {
+        _viewModel.TogglePickModeCommand.Execute(null);
     }
 
     private void PerformPickAt(BaseEventArgs e)

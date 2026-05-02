@@ -243,39 +243,49 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
-                    <ToggleButton x:Name="PickModeButton"
-                                  Classes="Icon"
-                                  IsChecked="{Binding IsPickModeActive, Mode=TwoWay}"
-                                  ToolTip.Tip="Pick Mode (I) — single-tap to identify features">
-                        <ToggleButton.Styles>
+                    <Button x:Name="PickModeButton"
+                            Classes="Icon"
+                            Click="OnPickModeButtonClick"
+                            ToolTip.Tip="Pick Mode (I) — single-tap to identify features">
+                        <Button.Styles>
                             <!--
-                              Match the zoom buttons' resting appearance: muted
-                              icon, transparent background. ShadUI's Button.Icon
-                              class doesn't apply to ToggleButton, so replicate
-                              the relevant bits here.
+                              When pick mode is active we add the "pickActive"
+                              class from code-behind; this fills the button with
+                              the accent color so the user can tell at a glance.
+                              Using Button (not ToggleButton) lets us keep the
+                              exact resting appearance of the adjacent zoom
+                              buttons — ShadUI's `Classes="Icon"` only styles
+                              Button, not ToggleButton.
                             -->
-                            <Style Selector="ToggleButton#PickModeButton">
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="BorderThickness" Value="0" />
-                                <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
-                                <Setter Property="Padding" Value="8" />
-                                <Setter Property="Opacity" Value="0.65" />
-                            </Style>
-                            <Style Selector="ToggleButton#PickModeButton:pointerover">
-                                <Setter Property="Opacity" Value="1.0" />
-                            </Style>
-                            <Style Selector="ToggleButton#PickModeButton:checked">
+                            <Style Selector="Button#PickModeButton.pickActive">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="Foreground" Value="White" />
-                                <Setter Property="Opacity" Value="1.0" />
                             </Style>
-                            <Style Selector="ToggleButton#PickModeButton:checked:pointerover /template/ ContentPresenter">
+                            <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                             </Style>
-                        </ToggleButton.Styles>
-                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16"
-                                       Foreground="{Binding $parent[ToggleButton].Foreground}" />
-                    </ToggleButton>
+                            <!--
+                              ShadUI's Button.Icon template stacks a separate
+                              Border#HoverBackground on top of the base whose
+                              Background is bound to ButtonAssist.HoverBackground
+                              (default GhostColor). Override it so the active
+                              fill stays accent-colored on hover.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <!--
+                                  Pin opacity to 1 so the 0→1 fade-in transition
+                                  doesn't briefly blend with the base layer when
+                                  the cursor enters the button.
+                                -->
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
+                    </Button>
                     <Button x:Name="ZoomInButton"
                             Classes="Icon">
                         <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
