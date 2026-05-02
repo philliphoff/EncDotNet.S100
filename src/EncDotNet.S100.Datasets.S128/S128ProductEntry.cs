@@ -105,6 +105,22 @@ public sealed class S128ProductEntry
         }
     }
 
+    /// <summary>
+    /// The version of the referenced product specification (e.g. <c>"1.4.1"</c>),
+    /// parsed from the <c>productSpecification/version</c> complex sub-attribute.
+    /// (S-128 § 12.)
+    /// </summary>
+    public string? ProductSpecificationVersion
+    {
+        get
+        {
+            var ps = Feature.ComplexAttributes
+                .FirstOrDefault(c => c.Code.Equals("productSpecification", StringComparison.OrdinalIgnoreCase));
+            if (ps is null) return null;
+            return ps.SubAttributes.TryGetValue("version", out var v) ? v : null;
+        }
+    }
+
     /// <summary>The catalogue element classification text (S-128 § 12 <c>catalogueElementClassification</c>).</summary>
     public string? Classification =>
         Feature.Attributes.TryGetValue("catalogueElementClassification", out var v) ? v : null;

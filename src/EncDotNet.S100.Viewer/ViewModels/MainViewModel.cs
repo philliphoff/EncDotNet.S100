@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Styling;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Catalogs;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -13,6 +14,7 @@ internal sealed class MainViewModel : ViewModelBase
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
+    public CatalogPanelViewModel CatalogPanel { get; }
     public SettingsViewModel Settings { get; }
 
     private ActivityKind? _selectedActivity;
@@ -32,6 +34,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
                 OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
                 OnPropertyChanged(nameof(IsDatasetsSelected));
+                OnPropertyChanged(nameof(IsCatalogSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
 
                 // Persist the last selected activity (Settings is transient, don't remember it)
@@ -48,6 +51,7 @@ internal sealed class MainViewModel : ViewModelBase
         ActivityKind.FeatureCatalogues => "FEATURE CATALOGUES",
         ActivityKind.PortrayalCatalogues => "PORTRAYAL CATALOGUES",
         ActivityKind.Datasets => "DATASETS",
+        ActivityKind.Catalog => "DATASET CATALOG",
         ActivityKind.Settings => "SETTINGS",
         _ => string.Empty,
     };
@@ -55,11 +59,13 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsFeatureCataloguesSelected => _selectedActivity == ActivityKind.FeatureCatalogues;
     public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
     public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
+    public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
     public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
 
     public ICommand SelectFeatureCataloguesCommand { get; }
     public ICommand SelectPortrayalCataloguesCommand { get; }
     public ICommand SelectDatasetsCommand { get; }
+    public ICommand SelectCatalogCommand { get; }
     public ICommand SelectSettingsCommand { get; }
     public ICommand TogglePrimarySideBarCommand { get; }
 
@@ -95,18 +101,20 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
-    public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager)
+    public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager, IDatasetCatalogSource catalogSource)
     {
         _settings = settings;
 
         FeatureCatalogues = new FeatureCataloguesViewModel(settings);
         PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
         Datasets = new DatasetsViewModel();
+        CatalogPanel = new CatalogPanelViewModel(catalogSource);
         Settings = new SettingsViewModel(settings);
 
         SelectFeatureCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.FeatureCatalogues);
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
+        SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
@@ -131,6 +139,7 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
             OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
             OnPropertyChanged(nameof(IsDatasetsSelected));
+            OnPropertyChanged(nameof(IsCatalogSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
         });
 

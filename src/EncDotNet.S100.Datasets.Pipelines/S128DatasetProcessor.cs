@@ -21,6 +21,9 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
 
     public string ProductSpec => "S-128";
 
+    /// <summary>The parsed S-128 dataset backing this processor.</summary>
+    public S128Dataset Dataset => _dataset;
+
     public S128DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager)
