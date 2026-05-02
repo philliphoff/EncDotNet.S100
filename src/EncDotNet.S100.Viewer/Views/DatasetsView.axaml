@@ -2,13 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
                 Classes="Outline"
-                Content="Open Dataset..."
+                Content="{x:Static loc:Strings.Button_OpenDataset}"
+                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
                 HorizontalAlignment="Stretch"
                 Margin="8"
                 x:Name="AddButton" />
@@ -43,7 +45,8 @@
                                         Margin="0,4,0,0"
                                         Spacing="4">
                                 <Button Classes="Icon" Padding="2"
-                                        Command="{Binding PreviousTimeStepCommand}">
+                                        Command="{Binding PreviousTimeStepCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_PreviousTimeStep}">
                                     <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="12" />
                                 </Button>
                                 <ComboBox ItemsSource="{Binding TimeStepLabels}"
@@ -53,7 +56,8 @@
                                           MinHeight="0"
                                           VerticalAlignment="Center" />
                                 <Button Classes="Icon" Padding="2"
-                                        Command="{Binding NextTimeStepCommand}">
+                                        Command="{Binding NextTimeStepCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NextTimeStep}">
                                     <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="12" />
                                 </Button>
                             </StackPanel>
@@ -62,6 +66,7 @@
                                 Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
                                 VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                         </Button>

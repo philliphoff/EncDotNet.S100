@@ -2,20 +2,21 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:viewer="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
     <ScrollViewer HorizontalScrollBarVisibility="Auto"
                    VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="12" Spacing="16">
-            <TextBlock Text="Application Settings"
+            <TextBlock Text="{x:Static loc:Strings.Settings_Heading}"
                        FontSize="14"
                        FontWeight="SemiBold"
                        Opacity="0.7" />
 
             <!-- Accent Color -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Accent Color"
+                <TextBlock Text="{x:Static loc:Strings.Settings_AccentColor}"
                            FontSize="12"
                            FontWeight="SemiBold" />
                 <ColorPicker Color="{Binding AccentColor}"
@@ -25,25 +26,31 @@
 
             <!-- Color Profile -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Color Profile"
+                <TextBlock Text="{x:Static loc:Strings.Settings_ColorProfile}"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <TextBlock Text="Controls the Day/Dusk/Night color palette used across all datasets."
+                <TextBlock Text="{x:Static loc:Strings.Settings_ColorProfile_Help}"
                            FontSize="11"
                            Opacity="0.6"
                            TextWrapping="Wrap" />
                 <ComboBox ItemsSource="{Binding AvailablePalettes}"
                           SelectedItem="{Binding SelectedPalette}"
                           MinWidth="140"
-                          HorizontalAlignment="Left" />
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:PaletteTypeNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </StackPanel>
 
             <!-- Symbol Scale -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Symbol Scale"
+                <TextBlock Text="{x:Static loc:Strings.Settings_SymbolScale}"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <TextBlock Text="Adjusts the size of all point symbols."
+                <TextBlock Text="{x:Static loc:Strings.Settings_SymbolScale_Help}"
                            FontSize="11"
                            Opacity="0.6"
                            TextWrapping="Wrap" />
@@ -65,10 +72,10 @@
 
             <!-- Text Scale -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Text Scale"
+                <TextBlock Text="{x:Static loc:Strings.Settings_TextScale}"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <TextBlock Text="Adjusts the size of all text labels."
+                <TextBlock Text="{x:Static loc:Strings.Settings_TextScale_Help}"
                            FontSize="11"
                            Opacity="0.6"
                            TextWrapping="Wrap" />
@@ -90,10 +97,10 @@
 
             <!-- Distance Unit -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Distance Units"
+                <TextBlock Text="{x:Static loc:Strings.Settings_DistanceUnits}"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <TextBlock Text="Units used by the map scale bar."
+                <TextBlock Text="{x:Static loc:Strings.Settings_DistanceUnits_Help}"
                            FontSize="11"
                            Opacity="0.6"
                            TextWrapping="Wrap" />

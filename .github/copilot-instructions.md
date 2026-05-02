@@ -143,3 +143,16 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
 - For **cross-spec** features (e.g. a change to `CoveragePipeline` affecting S-102/S-104/S-111), load all affected spec skills and reconcile their guidance before writing code.
 - When delegating exploration via `search_subagent`, prefer one subagent per affected `src/EncDotNet.S100.Datasets.Sxxx/` project so each runs with its spec context isolated.
 - Cite the relevant spec section number(s) in PR descriptions and in XML doc comments for spec-derived constants, enums, attribute names, and group paths.
+
+## Viewer UI
+
+When editing `src/EncDotNet.S100.Viewer/**`, follow the rules in
+`.github/instructions/viewer.instructions.md`. In particular:
+
+- Every UI-visible string lives in `Resources/Strings.resx` with a
+  matching property in `Resources/Strings.cs`. XAML references via
+  `{x:Static loc:Strings.Key}`; code references via `Strings.Key`
+  (use `string.Format` for parameterized status text). No hardcoded
+  user-facing strings in views, view-models, or code-behind.
+- Every button must have a meaningful `ToolTip.Tip`.
+- All `GridSplitter`s use `Classes="PaneSplitter"` with thickness 4.
