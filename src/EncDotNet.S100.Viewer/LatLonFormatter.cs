@@ -18,13 +18,14 @@ internal static class LatLonFormatter
 
     /// <summary>
     /// Formats a (latitude, longitude) pair in degrees-decimal-minutes form.
-    /// Latitude is rendered with two integer degree digits, longitude with
-    /// three.
+    /// Degrees are space-padded (latitude to two characters, longitude to
+    /// three) so that the readout occupies a stable width without using
+    /// leading zeros.
     /// </summary>
     public static string Format(double latitude, double longitude) =>
         $"{FormatDegMin(latitude, 'N', 'S', 2)}  {FormatDegMin(longitude, 'E', 'W', 3)}";
 
-    private static string FormatDegMin(double value, char positive, char negative, int degDigits)
+    private static string FormatDegMin(double value, char positive, char negative, int degWidth)
     {
         var hemi = value >= 0 ? positive : negative;
         var abs = Math.Abs(value);
@@ -37,9 +38,9 @@ internal static class LatLonFormatter
             min = 0.0;
         }
 
-        var degFmt = "D" + degDigits;
+        var degText = deg.ToString(CultureInfo.InvariantCulture).PadLeft(degWidth);
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"{deg.ToString(degFmt, CultureInfo.InvariantCulture)}°{min.ToString("00.000", CultureInfo.InvariantCulture)}'{hemi}");
+            $"{degText}°{min.ToString("00.000", CultureInfo.InvariantCulture)}'{hemi}");
     }
 }
