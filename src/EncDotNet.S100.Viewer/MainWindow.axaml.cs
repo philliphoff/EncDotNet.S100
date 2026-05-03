@@ -26,6 +26,7 @@ using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
+using Mapsui.Projections;
 using Mapsui.Tiling;
 
 namespace EncDotNet.S100.Viewer;
@@ -45,6 +46,7 @@ public partial class MainWindow : ShadUI.Window
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
     private double _lastPickPanelWidth = 360;
+    private Point? _lastMouseScreenPos;
 
     /// <summary>
     /// Threshold (milliseconds) for treating a press-and-hold as a long-press
@@ -346,6 +348,7 @@ public partial class MainWindow : ShadUI.Window
         MapControl.AddHandler(PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
         MapControl.AddHandler(PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
         MapControl.AddHandler(PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
+        MapControl.PointerExited += OnMapPointerExited;
 
         // Esc exits Pick Mode.
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
@@ -367,6 +370,7 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map?.Navigator is { } scaleNav)
         {
             scaleNav.ViewportChanged += OnViewportChangedForScaleBar;
+            scaleNav.ViewportChanged += OnViewportChangedForMouseLatLon;
             UpdateScaleBar(scaleNav.Viewport);
         }
 
@@ -850,6 +854,8 @@ public partial class MainWindow : ShadUI.Window
 
     private void OnMapPointerMoved(object? sender, PointerEventArgs e)
     {
+        UpdateMouseLatLon(e);
+
         if (_longPressTimer is null || _longPressOrigin is not { } origin)
             return;
 
@@ -858,6 +864,63 @@ public partial class MainWindow : ShadUI.Window
         var dy = current.Y - origin.Y;
         if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
             CancelLongPress();
+    }
+
+    private void OnMapPointerExited(object? sender, PointerEventArgs e)
+    {
+        _lastMouseScreenPos = null;
+        _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+    }
+
+    private void OnViewportChangedForMouseLatLon(object? sender, EventArgs e)
+    {
+        // Pan/zoom can move the world under a stationary cursor (common with
+        // trackpad gestures), so refresh the readout whenever the viewport
+        // changes — but only if the cursor is currently over the map.
+        if (_lastMouseScreenPos is not { } pos)
+            return;
+
+        Dispatcher.UIThread.Post(() => UpdateMouseLatLonFromScreen(pos));
+    }
+
+    private void UpdateMouseLatLon(PointerEventArgs e)
+    {
+        var position = e.GetPosition(MapControl);
+        var bounds = MapControl.Bounds;
+        if (position.X < 0 || position.Y < 0 ||
+            position.X > bounds.Width || position.Y > bounds.Height)
+        {
+            _lastMouseScreenPos = null;
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        _lastMouseScreenPos = position;
+        UpdateMouseLatLonFromScreen(position);
+    }
+
+    private void UpdateMouseLatLonFromScreen(Point position)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+        {
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        var world = navigator.Viewport.ScreenToWorld(position.X, position.Y);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon) ||
+            double.IsInfinity(lat) || double.IsInfinity(lon) ||
+            lat < -90.0 || lat > 90.0)
+        {
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        // Normalize longitude into the canonical [-180, 180] range so that
+        // panning past the antimeridian still produces sensible readings.
+        lon = ((lon + 540.0) % 360.0) - 180.0;
+        _viewModel.MouseLatLonText = LatLonFormatter.Format(lat, lon);
     }
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
