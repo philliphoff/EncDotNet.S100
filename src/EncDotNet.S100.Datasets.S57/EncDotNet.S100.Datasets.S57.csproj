@@ -14,8 +14,4 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="Mapping\*.csv" />
-  </ItemGroup>
-
 </Project>
