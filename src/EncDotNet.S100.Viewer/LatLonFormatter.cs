@@ -12,9 +12,10 @@ internal static class LatLonFormatter
 {
     /// <summary>
     /// Placeholder used when no coordinate is available (e.g. the cursor is
-    /// not over the map).
+    /// not over the map). Empty so the status bar simply shows nothing in
+    /// that state.
     /// </summary>
-    public const string Placeholder = "—";
+    public const string Placeholder = "";
 
     /// <summary>
     /// Formats a (latitude, longitude) pair in degrees-decimal-minutes form.

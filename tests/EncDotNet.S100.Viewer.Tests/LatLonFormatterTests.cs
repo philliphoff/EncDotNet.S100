@@ -49,8 +49,8 @@ public class LatLonFormatterTests
     }
 
     [Fact]
-    public void Placeholder_IsEmDash()
+    public void Placeholder_IsEmpty()
     {
-        Assert.Equal("—", LatLonFormatter.Placeholder);
+        Assert.Equal(string.Empty, LatLonFormatter.Placeholder);
     }
 }
