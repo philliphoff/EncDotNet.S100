@@ -46,6 +46,7 @@ public partial class MainWindow : ShadUI.Window
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
     private double _lastPickPanelWidth = 360;
+    private Point? _lastMouseScreenPos;
 
     /// <summary>
     /// Threshold (milliseconds) for treating a press-and-hold as a long-press
@@ -369,6 +370,7 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map?.Navigator is { } scaleNav)
         {
             scaleNav.ViewportChanged += OnViewportChangedForScaleBar;
+            scaleNav.ViewportChanged += OnViewportChangedForMouseLatLon;
             UpdateScaleBar(scaleNav.Viewport);
         }
 
@@ -866,21 +868,40 @@ public partial class MainWindow : ShadUI.Window
 
     private void OnMapPointerExited(object? sender, PointerEventArgs e)
     {
+        _lastMouseScreenPos = null;
         _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+    }
+
+    private void OnViewportChangedForMouseLatLon(object? sender, EventArgs e)
+    {
+        // Pan/zoom can move the world under a stationary cursor (common with
+        // trackpad gestures), so refresh the readout whenever the viewport
+        // changes — but only if the cursor is currently over the map.
+        if (_lastMouseScreenPos is not { } pos)
+            return;
+
+        Dispatcher.UIThread.Post(() => UpdateMouseLatLonFromScreen(pos));
     }
 
     private void UpdateMouseLatLon(PointerEventArgs e)
     {
-        if (MapControl.Map?.Navigator is not { } navigator)
-        {
-            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
-            return;
-        }
-
         var position = e.GetPosition(MapControl);
         var bounds = MapControl.Bounds;
         if (position.X < 0 || position.Y < 0 ||
             position.X > bounds.Width || position.Y > bounds.Height)
+        {
+            _lastMouseScreenPos = null;
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        _lastMouseScreenPos = position;
+        UpdateMouseLatLonFromScreen(position);
+    }
+
+    private void UpdateMouseLatLonFromScreen(Point position)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
         {
             _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
             return;
