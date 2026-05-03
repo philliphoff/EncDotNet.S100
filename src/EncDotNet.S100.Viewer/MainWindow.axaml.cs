@@ -185,7 +185,7 @@ public partial class MainWindow : ShadUI.Window
         // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
         // sync, and the zoom in/out overlay buttons.
         new MapInteractionController(_viewModel, _pickService, _loader)
-            .Attach(MapControl, ZoomInButton, ZoomOutButton, ScaleBar, CompassRose);
+            .Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
 
         // Apply the cursor that matches the current mode and keep it in sync
         // with the view-model.

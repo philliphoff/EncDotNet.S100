@@ -48,6 +48,7 @@ internal static class Strings
     public static string Tooltip_PickMode => Get(nameof(Tooltip_PickMode));
     public static string Tooltip_ZoomIn => Get(nameof(Tooltip_ZoomIn));
     public static string Tooltip_ZoomOut => Get(nameof(Tooltip_ZoomOut));
+    public static string Tooltip_ZoomToExtent => Get(nameof(Tooltip_ZoomToExtent));
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
     public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
