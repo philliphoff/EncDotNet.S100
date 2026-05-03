@@ -10,7 +10,7 @@
     <PackageReference Include="Mapsui" />
     <PackageReference Include="Mapsui.Rendering.Skia" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="Verify.Xunit" />
   </ItemGroup>
 

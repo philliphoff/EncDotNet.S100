@@ -298,7 +298,9 @@ public sealed class S129PortrayalCatalogue : IVectorPortrayalCatalogue
             // trailing segments (e.g. "templates/TextTemplate.xsl").
             // FetchRuleAsync only prepends "Rules/" for bare filenames, so we
             // construct the full "Rules/..." path when sub-paths are involved.
-            var segments = absoluteUri.LocalPath.Split('/');
+            // Normalize to forward slashes so this works on Windows where
+            // Uri.LocalPath uses backslashes.
+            var segments = absoluteUri.LocalPath.Replace('\\', '/').Split('/');
             for (int i = 0; i < segments.Length; i++)
             {
                 if (segments[i].Equals("templates", StringComparison.OrdinalIgnoreCase))

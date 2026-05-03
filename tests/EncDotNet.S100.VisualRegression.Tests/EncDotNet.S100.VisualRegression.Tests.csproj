@@ -12,7 +12,7 @@
     <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="Verify.Xunit" />
     <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
 
   <ItemGroup>

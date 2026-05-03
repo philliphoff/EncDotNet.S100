@@ -69,6 +69,42 @@ jobs:
           name: nupkgs
           path: nupkgs/*.nupkg
 
+  test-arm64:
+    strategy:
+      matrix:
+        include:
+          - os: windows-11-arm
+            name: win-arm64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.name }}
+          path: TestResults/*.trx
+
   publish:
     needs: build
     strategy:
@@ -80,9 +116,15 @@ jobs:
           - os: windows-latest
             rid: win-x64
             artifact: Viewer-win-x64
+          - os: windows-11-arm
+            rid: win-arm64
+            artifact: Viewer-win-arm64
           - os: ubuntu-latest
             rid: linux-x64
             artifact: Viewer-linux-x64
+          - os: ubuntu-22.04-arm
+            rid: linux-arm64
+            artifact: Viewer-linux-arm64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
