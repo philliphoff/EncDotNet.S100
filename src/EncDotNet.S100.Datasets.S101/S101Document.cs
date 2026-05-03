@@ -29,6 +29,14 @@ public sealed class S101Document
     /// <summary>Point spatial records keyed by record id (RCNM = 110).</summary>
     public required ImmutableDictionary<uint, S101PointRecord> Points { get; init; }
 
+    /// <summary>
+    /// Multi-point spatial records keyed by record id (RCNM = 115). Used by features
+    /// such as <c>Sounding</c> whose portrayal expects a single feature with many
+    /// 3D points.
+    /// </summary>
+    public ImmutableDictionary<uint, S101MultiPointRecord> MultiPoints { get; init; }
+        = ImmutableDictionary<uint, S101MultiPointRecord>.Empty;
+
     /// <summary>Curve segment records keyed by record id (RCNM = 120).</summary>
     public required ImmutableDictionary<uint, S101CurveSegmentRecord> CurveSegments { get; init; }
 
@@ -118,6 +126,21 @@ public sealed class S101PointRecord
 
     /// <summary>X coordinate (longitude × CMFX).</summary>
     public int X { get; init; }
+}
+
+/// <summary>
+/// MPID + C3IL — Multi-point spatial record carrying many 3D coordinate triples.
+/// Used by S-101 features whose portrayal pipeline expects a <c>MultiPoint</c>
+/// primitive type, most notably <c>Sounding</c>.
+/// </summary>
+public sealed class S101MultiPointRecord
+{
+    /// <summary>Record identification number.</summary>
+    public uint RecordId { get; init; }
+
+    /// <summary>3D coordinates: Y (× CMFY), X (× CMFX), Z (× CMFZ) — typically depth.</summary>
+    public ImmutableArray<(int Y, int X, int Z)> Points { get; init; }
+        = ImmutableArray<(int, int, int)>.Empty;
 }
 
 /// <summary>CRID + PTAS + C2IL — Curve segment with start/end point refs and intermediate coordinates.</summary>

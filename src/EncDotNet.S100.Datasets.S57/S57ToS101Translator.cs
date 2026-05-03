@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
 
 namespace EncDotNet.S100.Datasets.S57;
@@ -22,9 +21,10 @@ namespace EncDotNet.S100.Datasets.S57;
 ///   <item>S-57 area features have their FSPT edge ring wrapped into a
 ///   single composite curve and referenced from a synthesised S-101 Surface
 ///   record.</item>
-///   <item>S-57 multi-point soundings (<c>SOUNDG</c>) are exploded so each
-///   <c>(Y, X, Z)</c> triple becomes a separate S-101 Sounding feature with
-///   a single point geometry and a <c>valueOfSounding</c> attribute.</item>
+///   <item>S-57 multi-point soundings (<c>SOUNDG</c>) are translated into a single
+///   S-101 <c>Sounding</c> feature backed by a multi-point spatial record
+///   (RCNM = 115); the depth values live on the points within that record and
+///   are read by the <c>SOUNDG03</c> portrayal rule as <c>point.ScaledZ</c>.</item>
 ///   <item>Listed-value remap (S-57 enum codes to S-101 enum codes) is not
 ///   yet performed; string attribute values pass through unchanged.</item>
 /// </list>
@@ -33,6 +33,7 @@ namespace EncDotNet.S100.Datasets.S57;
 public sealed class S57ToS101Translator
 {
     private const byte S101RcnmPoint = 110;
+    private const byte S101RcnmMultiPoint = 115;
     private const byte S101RcnmCurveSegment = 120;
     private const byte S101RcnmCompositeCurve = 125;
     private const byte S101RcnmSurface = 130;
@@ -46,7 +47,6 @@ public sealed class S57ToS101Translator
 
     private const ushort SoundingObjl = 129;
     private const string SoundingS101Code = "Sounding";
-    private const string SoundingValueAttribute = "valueOfSounding";
 
     private readonly S57S101Mapping _mapping;
 
@@ -101,11 +101,14 @@ public sealed class S57ToS101Translator
             {
                 CoordinateMultiplicationFactorX = cmf,
                 CoordinateMultiplicationFactorY = cmf,
-                CoordinateMultiplicationFactorZ = s57.Parameters.SoundingMultiplicationFactor,
+                CoordinateMultiplicationFactorZ = s57.Parameters.SoundingMultiplicationFactor == 0
+                ? 10u
+                : s57.Parameters.SoundingMultiplicationFactor,
             },
             FeatureTypeCatalogue = ctx.FeatureTypeCatalogue.ToImmutable(),
             AttributeTypeCatalogue = ctx.AttributeTypeCatalogue.ToImmutable(),
             Points = ctx.Points.ToImmutable(),
+            MultiPoints = ctx.MultiPoints.ToImmutable(),
             CurveSegments = ctx.CurveSegments.ToImmutable(),
             CompositeCurves = ctx.CompositeCurves.ToImmutable(),
             Surfaces = ctx.Surfaces.ToImmutable(),
@@ -129,6 +132,7 @@ public sealed class S57ToS101Translator
         private readonly Dictionary<S57Name, uint> _nodeIdMap = new();
         private readonly Dictionary<uint, uint> _edgeIdMap = new();
         private uint _nextPointId = 1;
+        private uint _nextMultiPointId = 1;
         private uint _nextCurveId = 1;
         private uint _nextCompositeId = 1;
         private uint _nextSurfaceId = 1;
@@ -140,6 +144,8 @@ public sealed class S57ToS101Translator
 
         public ImmutableDictionary<uint, S101PointRecord>.Builder Points { get; }
             = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
+        public ImmutableDictionary<uint, S101MultiPointRecord>.Builder MultiPoints { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101MultiPointRecord>();
         public ImmutableDictionary<uint, S101CurveSegmentRecord>.Builder CurveSegments { get; }
             = ImmutableDictionary.CreateBuilder<uint, S101CurveSegmentRecord>();
         public ImmutableDictionary<uint, S101CompositeCurveRecord>.Builder CompositeCurves { get; }
@@ -229,12 +235,7 @@ public sealed class S57ToS101Translator
             {
                 if (feat.ObjectClass == SoundingObjl)
                 {
-                    // S-101 Sounding portrayal expects a PointSet (multi-point)
-                    // geometry; exploding S-57 SG3D triples into individual
-                    // single-point Sounding features fails the Lua primitive-type
-                    // check and produces thousands of default-symbology fallbacks
-                    // that dominate render time. Skip soundings until proper
-                    // PointSet support is added.
+                    EmitSoundingMultiPoint(feat);
                     continue;
                 }
 
@@ -262,42 +263,50 @@ public sealed class S57ToS101Translator
             }
         }
 
-        private void ExplodeSounding(S57FeatureRecord feat)
+        /// <summary>
+        /// S-57 SOUNDG (OBJL=129) features carry many depth measurements via SG3D
+        /// triples on one or more vector records. The S-101 portrayal pipeline
+        /// expects <c>Sounding</c> features whose <c>PrimitiveType</c> is
+        /// <c>MultiPoint</c>; emit a single S-101 Sounding feature backed by an
+        /// S-101 multi-point record (RCNM=115) so the SOUNDG03 rule can iterate
+        /// the points and draw symbolised depth values.
+        /// </summary>
+        private void EmitSoundingMultiPoint(S57FeatureRecord feat)
         {
-            var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
-            var attrCode = GetOrAssignAttributeCode(SoundingValueAttribute);
-            var somf = _s57.Parameters.SoundingMultiplicationFactor;
-            if (somf == 0) somf = 10;
-
-            // Each sounding feature in S-57 references one or more vector
-            // records carrying SG3D triples. Explode every triple into its
-            // own S-101 Sounding feature.
+            var triples = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
             foreach (var ptr in feat.SpatialPointers)
             {
                 if (!_s57.VectorRecords.TryGetValue(new S57Name(ptr.RecordName, ptr.RecordId), out var vr))
                     continue;
-
-                foreach (var (y, x, z) in vr.Coordinates3D)
-                {
-                    var pid = _nextPointId++;
-                    Points[pid] = new S101PointRecord { RecordId = pid, Y = y, X = x };
-
-                    var depth = (z / (double)somf).ToString("0.###", CultureInfo.InvariantCulture);
-                    Features.Add(new S101FeatureRecord
-                    {
-                        RecordId = _nextFeatureId++,
-                        FeatureTypeCode = typeCode,
-                        ProducingAgency = feat.ProducingAgency,
-                        FeatureIdentificationNumber = feat.FeatureIdentificationNumber,
-                        FeatureIdentificationSubdivision = feat.FeatureIdentificationSubdivision,
-                        Attributes = ImmutableArray.Create(new S101Attribute(attrCode, 1, depth)),
-                        SpatialAssociations = ImmutableArray.Create(
-                            new S101SpatialAssociation(S101RcnmPoint, pid, OrientationForward)),
-                        FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-                        InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
-                    });
-                }
+                triples.AddRange(vr.Coordinates3D);
             }
+
+            if (triples.Count == 0) return;
+
+            var mpid = _nextMultiPointId++;
+            MultiPoints[mpid] = new S101MultiPointRecord
+            {
+                RecordId = mpid,
+                Points = triples.ToImmutable(),
+            };
+
+            var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
+            Features.Add(new S101FeatureRecord
+            {
+                RecordId = _nextFeatureId++,
+                FeatureTypeCode = typeCode,
+                ProducingAgency = feat.ProducingAgency,
+                FeatureIdentificationNumber = feat.FeatureIdentificationNumber,
+                FeatureIdentificationSubdivision = feat.FeatureIdentificationSubdivision,
+                // The S-101 Sounding feature carries no attributes — depth values
+                // live on the individual points within the MultiPoint geometry,
+                // which the SOUNDG03 portrayal rule reads as point.ScaledZ.
+                Attributes = ImmutableArray<S101Attribute>.Empty,
+                SpatialAssociations = ImmutableArray.Create(
+                    new S101SpatialAssociation(S101RcnmMultiPoint, mpid, OrientationForward)),
+                FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
+                InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            });
         }
 
         private ImmutableArray<S101Attribute> TranslateAttributes(

@@ -56,6 +56,13 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 
             if data.RecordType == 'Point' then
                 return CreatePoint(data.X, data.Y)
+            elseif data.RecordType == 'MultiPoint' then
+                local points = {}
+                for _, pt in ipairs(data.Points) do
+                    points[#points + 1] = CreatePoint(pt.X, pt.Y, pt.Z)
+                end
+                points.Type = 'array:Spatial'
+                return CreateMultiPoint(points)
             elseif data.RecordType == 'Curve' then
                 local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
                 local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')

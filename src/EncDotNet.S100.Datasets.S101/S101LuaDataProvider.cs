@@ -13,6 +13,7 @@ namespace EncDotNet.S100.Datasets.S101;
 public sealed class S101LuaDataProvider
 {
     private const byte RcnmPoint = 110;
+    private const byte RcnmMultiPoint = 115;
     private const byte RcnmCurveSegment = 120;
     private const byte RcnmCompositeCurve = 125;
     private const byte RcnmSurface = 130;
@@ -503,6 +504,7 @@ public sealed class S101LuaDataProvider
         return rcnm switch
         {
             RcnmPoint => "Point",
+            RcnmMultiPoint => "MultiPoint",
             RcnmCurveSegment => "Curve",
             RcnmCompositeCurve => "CompositeCurve",
             RcnmSurface => "Surface",
@@ -529,8 +531,12 @@ public sealed class S101LuaDataProvider
         var (rcnm, rcid) = ParseSpatialId(spatialId);
         double cmfx = _doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = _doc.StructureInfo.CoordinateMultiplicationFactorY;
+        double cmfz = _doc.StructureInfo.CoordinateMultiplicationFactorZ;
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
+        // CMFZ defaults to S-57 SOMF (10) when zero; S-101 datasets that encode Z
+        // explicitly should populate this via the DSSI record.
+        if (cmfz == 0) cmfz = 10;
 
         if (rcnm == RcnmPoint && _doc.Points.TryGetValue(rcid, out var pt))
         {
@@ -539,6 +545,26 @@ public sealed class S101LuaDataProvider
                 ["RecordType"] = "Point",
                 ["X"] = (pt.X / cmfx).ToString(CultureInfo.InvariantCulture),
                 ["Y"] = (pt.Y / cmfy).ToString(CultureInfo.InvariantCulture),
+            };
+        }
+
+        if (rcnm == RcnmMultiPoint && _doc.MultiPoints.TryGetValue(rcid, out var mp))
+        {
+            var points = new List<object>(mp.Points.Length);
+            foreach (var (y, x, z) in mp.Points)
+            {
+                points.Add(new Dictionary<string, object?>
+                {
+                    ["X"] = (x / cmfx).ToString(CultureInfo.InvariantCulture),
+                    ["Y"] = (y / cmfy).ToString(CultureInfo.InvariantCulture),
+                    ["Z"] = (z / cmfz).ToString(CultureInfo.InvariantCulture),
+                });
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "MultiPoint",
+                ["Points"] = points,
             };
         }
 

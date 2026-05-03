@@ -217,12 +217,11 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_SoundingNode_IsSkipped()
+    public void Translate_SoundingFeature_BecomesMultiPointSounding()
     {
-        // Soundings are intentionally skipped during translation until
-        // PointSet (multipoint) geometry is supported by the target S-101
-        // pipeline; otherwise they fall through to default-symbology
-        // fallbacks at render time.
+        // S-57 SOUNDG (OBJL=129) features are translated into a single S-101
+        // Sounding feature backed by a multi-point spatial record (RCNM=115).
+        // The depth values live on the points within that record.
         var soundingNode = new S57VectorRecord
         {
             RecordName = RcnmIsolatedNode,
@@ -257,7 +256,76 @@ public class S57ToS101TranslatorTests
 
         var s101 = new S57ToS101Translator().Translate(doc);
 
-        Assert.Empty(s101.Features);
+        var s101Feature = Assert.Single(s101.Features);
+        var soundingTypeCode = s101.FeatureTypeCatalogue
+            .First(kv => kv.Value == "Sounding").Key;
+        Assert.Equal(soundingTypeCode, s101Feature.FeatureTypeCode);
+        Assert.Empty(s101Feature.Attributes);
+
+        var spa = Assert.Single(s101Feature.SpatialAssociations);
+        Assert.Equal((byte)115, spa.RecordName);
+
+        var mp = Assert.Single(s101.MultiPoints.Values);
+        Assert.Equal(spa.RecordId, mp.RecordId);
+        Assert.Equal(3, mp.Points.Length);
+        Assert.Equal((10, 20, 50), mp.Points[0]);
+        Assert.Equal((30, 40, 75), mp.Points[1]);
+        Assert.Equal((50, 60, 100), mp.Points[2]);
+
+        // Soundings must not pollute the Point record table — only the
+        // MultiPoint record is emitted for them.
+        Assert.Empty(s101.Points);
+
+        // CMFZ defaults to SOMF (10) so consumers can recover real depth.
+        Assert.Equal(10u, s101.StructureInfo.CoordinateMultiplicationFactorZ);
+    }
+
+    [Fact]
+    public void Translate_SoundingFeature_AcrossMultipleNodes_AggregatesAllPoints()
+    {
+        var sn1 = new S57VectorRecord
+        {
+            RecordName = RcnmIsolatedNode,
+            RecordId = 1,
+            Pointers = ImmutableArray<S57VectorPointer>.Empty,
+            Coordinates2D = ImmutableArray<(int, int)>.Empty,
+            Coordinates3D = ImmutableArray.Create((1, 2, 3), (4, 5, 6)),
+            Attributes = ImmutableArray<S57Attribute>.Empty,
+        };
+        var sn2 = new S57VectorRecord
+        {
+            RecordName = RcnmIsolatedNode,
+            RecordId = 2,
+            Pointers = ImmutableArray<S57VectorPointer>.Empty,
+            Coordinates2D = ImmutableArray<(int, int)>.Empty,
+            Coordinates3D = ImmutableArray.Create((7, 8, 9)),
+            Attributes = ImmutableArray<S57Attribute>.Empty,
+        };
+
+        var feature = new S57FeatureRecord
+        {
+            RecordId = 1,
+            Primitive = 1,
+            ObjectClass = 129,
+            ProducingAgency = 540,
+            FeatureIdentificationNumber = 1,
+            FeatureIdentificationSubdivision = 0,
+            Attributes = ImmutableArray<S57Attribute>.Empty,
+            SpatialPointers = ImmutableArray.Create(
+                new S57FeatureSpatialPointer(RcnmIsolatedNode, 1, 1, 0, 0),
+                new S57FeatureSpatialPointer(RcnmIsolatedNode, 2, 1, 0, 0)),
+        };
+
+        var doc = BuildDocument(
+            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
+                .Add(new S57Name(RcnmIsolatedNode, 1), sn1)
+                .Add(new S57Name(RcnmIsolatedNode, 2), sn2),
+            features: ImmutableArray.Create(feature));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var mp = Assert.Single(s101.MultiPoints.Values);
+        Assert.Equal(3, mp.Points.Length);
     }
 
     [Fact]
