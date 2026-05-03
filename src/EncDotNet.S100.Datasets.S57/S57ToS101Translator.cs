@@ -238,11 +238,12 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
-                var s101Code = _mapping.ResolveFeatureCode(feat.ObjectClass);
-                if (s101Code is null) continue;
+                var acronymView = _mapping.BuildAcronymView(feat.Attributes);
+                var resolved = _mapping.ResolveFeature(feat.ObjectClass, acronymView);
+                if (resolved is null) continue;
 
-                var typeCode = GetOrAssignFeatureTypeCode(s101Code);
-                var attributes = TranslateAttributes(feat.Attributes);
+                var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
+                var attributes = TranslateAttributes(feat.Attributes, resolved);
                 var spatials = TranslateSpatialPointers(feat);
                 if (spatials.Length == 0) continue;
 
@@ -299,17 +300,23 @@ public sealed class S57ToS101Translator
             }
         }
 
-        private ImmutableArray<S101Attribute> TranslateAttributes(ImmutableArray<S57Attribute> attrs)
+        private ImmutableArray<S101Attribute> TranslateAttributes(
+            ImmutableArray<S57Attribute> attrs,
+            ResolvedFeature feature)
         {
             if (attrs.Length == 0) return ImmutableArray<S101Attribute>.Empty;
 
             var builder = ImmutableArray.CreateBuilder<S101Attribute>();
             foreach (var a in attrs)
             {
-                var s101Code = _mapping.ResolveAttributeCode(a.Code);
-                if (s101Code is null) continue;
-                var numeric = GetOrAssignAttributeCode(s101Code);
-                builder.Add(new S101Attribute(numeric, 1, a.Value));
+                if (!_mapping.AttributeRules.TryGetValue(a.Code, out var attrRule))
+                    continue;
+
+                var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
+                if (resolved is null) continue;
+
+                var numeric = GetOrAssignAttributeCode(resolved.S101Code);
+                builder.Add(new S101Attribute(numeric, 1, resolved.Value));
             }
             return builder.ToImmutable();
         }
