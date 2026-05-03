@@ -68,6 +68,9 @@
   <data name="Tooltip_ZoomOut" xml:space="preserve">
     <value>Zoom Out</value>
   </data>
+  <data name="Tooltip_ZoomToExtent" xml:space="preserve">
+    <value>Zoom to Extent</value>
+  </data>
   <data name="Tooltip_ClosePickPanel" xml:space="preserve">
     <value>Close</value>
   </data>

@@ -84,6 +84,22 @@
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
 
+        <!--
+          Map overlay buttons (Pick Mode, Zoom In/Out/Extent) sit on top
+          of the map. The default ShadUI Icon foreground uses MutedColor
+          which is hard to read against the chart canvas — bump these
+          buttons to the full ForegroundColor at rest so the icons are
+          legible. (Background is left at the ShadUI default to avoid
+          the hover-overlay shimmer that occurs when the resting fill
+          and the GhostColor hover overlay differ.)
+        -->
+        <Style Selector="Button.MapOverlay">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.MapOverlay ic|FluentIcon">
+            <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}" />
+        </Style>
+
     </shadui:Window.Styles>
 
     <shadui:Window.RightWindowTitleBarContent>
@@ -304,7 +320,7 @@
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
                     <Button x:Name="PickModeButton"
-                            Classes="Icon"
+                            Classes="Icon MapOverlay"
                             Classes.pickActive="{Binding IsPickModeActive}"
                             Command="{Binding TogglePickModeCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
@@ -357,16 +373,29 @@
                         </Button.Styles>
                         <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
                     </Button>
-                    <Button x:Name="ZoomInButton"
-                            Classes="Icon"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
-                        <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
-                    </Button>
-                    <Button x:Name="ZoomOutButton"
-                            Classes="Icon"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
-                        <ic:FluentIcon Icon="Subtract" IconVariant="Regular" FontSize="16" />
-                    </Button>
+                    <!--
+                      Zoom in / out / to-extent group. Wrapping in an inner
+                      StackPanel with vertical margin gives the cluster its
+                      own visual grouping (separated from the Pick Mode
+                      button above and the compass rose below).
+                    -->
+                    <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
+                        <Button x:Name="ZoomInButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
+                            <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomOutButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
+                            <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomToExtentButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
+                            <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                    </StackPanel>
                     <views:CompassRoseView x:Name="CompassRose"
                                            Margin="0,4,0,0"
                                            Width="{Binding Bounds.Width, ElementName=ZoomInButton}"

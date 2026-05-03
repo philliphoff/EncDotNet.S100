@@ -80,12 +80,14 @@ internal sealed class MapInteractionController
         MapControl mapControl,
         Button zoomInButton,
         Button zoomOutButton,
+        Button zoomToExtentButton,
         ScaleBarView scaleBar,
         CompassRoseView compassRose)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(zoomInButton);
         ArgumentNullException.ThrowIfNull(zoomOutButton);
+        ArgumentNullException.ThrowIfNull(zoomToExtentButton);
         ArgumentNullException.ThrowIfNull(scaleBar);
         ArgumentNullException.ThrowIfNull(compassRose);
 
@@ -112,6 +114,7 @@ internal sealed class MapInteractionController
         // Zoom in/out overlay buttons.
         zoomInButton.Click += OnZoomInClick;
         zoomOutButton.Click += OnZoomOutClick;
+        zoomToExtentButton.Click += OnZoomToExtentClick;
 
         // Compass-rose drag drives map rotation.
         compassRose.RotationRequested += OnCompassRotationRequested;
@@ -139,6 +142,26 @@ internal sealed class MapInteractionController
         if (_mapControl?.Map?.Navigator is not { } navigator)
             return;
         navigator.ZoomTo(navigator.Viewport.Resolution * 2, 250);
+    }
+
+    /// <summary>
+    /// Zooms out to the combined extent of all loaded layers (the union
+    /// reported by <see cref="Mapsui.Map.Extent"/>) so the user can see
+    /// every loaded dataset at once without repeatedly clicking
+    /// Zoom Out.
+    /// </summary>
+    private void OnZoomToExtentClick(object? sender, RoutedEventArgs e)
+    {
+        if (_mapControl?.Map is not { } map || map.Navigator is not { } navigator)
+            return;
+
+        var extent = map.Extent;
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
+            return;
+
+        // Match DatasetLoaderService.ZoomToExtent: pad by 10% so features
+        // at the edges aren't flush against the viewport border.
+        navigator.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
     }
 
     private void HandleViewportChangedForScaleBar(ScaleBarView scaleBar, CompassRoseView compassRose)
