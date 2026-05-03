@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
@@ -40,11 +42,42 @@ internal static class DefaultRules
         yield return F(18, "BOYSAW", "SafeWaterBuoy");
         yield return F(19, "BOYSPP", "SpecialPurposeGeneralBuoy");
         yield return F(30, "COALNE", "Coastline");
+        // CTRPNT — IHO Conversion Guidance § 4.3: drop in general; redirect
+        // CATCTR ∈ {1, 5} to Landmark with value-remapped categoryOfLandmark.
+        yield return new S57FeatureRule
+        {
+            Objl = 33,
+            S57Acronym = "CTRPNT",
+            DefaultS101Code = null,
+            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            {
+                ConditionAttribute = "CATCTR",
+                ConditionValues = ImmutableArray.Create("1", "5"),
+                TargetS101Code = "Landmark",
+                AttributeOverrides = ImmutableDictionary.CreateRange(
+                    StringComparer.OrdinalIgnoreCase,
+                    new[]
+                    {
+                        new KeyValuePair<string, S57AttributeOverride>(
+                            "CATCTR",
+                            new S57AttributeOverride
+                            {
+                                S101Code = "categoryOfLandmark",
+                                ValueRemap = ImmutableDictionary.CreateRange(new[]
+                                {
+                                    new KeyValuePair<string, string?>("1", "22"), // triangulation mark
+                                    new KeyValuePair<string, string?>("5", "23"), // boundary mark
+                                }),
+                            }),
+                    }),
+            }),
+        };
         yield return F(42, "DEPARE", "DepthArea");
         yield return F(43, "DEPCNT", "DepthContour");
         yield return F(46, "DRGARE", "DredgedArea");
         yield return F(51, "FAIRWY", "Fairway");
         yield return F(71, "LNDARE", "LandArea");
+        yield return F(74, "LNDMRK", "Landmark");
         yield return F(75, "LIGHTS", "LightAllAround");
         yield return F(85, "NAVLNE", "NavigationLine");
         yield return F(86, "OBSTRN", "Obstruction");
@@ -60,6 +93,10 @@ internal static class DefaultRules
     {
         // Format: A(ATTL, S57 acronym, S-101 attribute name).
         yield return A(13, "CATCAM", "categoryOfCardinalMark");
+        // CATCTR: appears on CTRPNT only, which is dropped in S-101 unless
+        // redirected to Landmark (see CTRPNT feature rule). The default
+        // mapping is therefore null; the redirect supplies the override.
+        yield return A(16, "CATCTR", null);
         yield return A(36, "CATLAM", "categoryOfLateralMark");
         yield return A(37, "CATLIT", "categoryOfLight");
         yield return A(38, "CATMFA", "categoryOfMarineFarmCulture");

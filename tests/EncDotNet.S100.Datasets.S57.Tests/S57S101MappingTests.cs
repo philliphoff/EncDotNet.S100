@@ -197,4 +197,61 @@ public class S57S101MappingTests
         Assert.Equal("10.0", view["DRVAL2"]);
         Assert.False(view.ContainsKey("UNKNOWN"));
     }
+
+    // ── IHO Conversion Guidance § 4.3 — CTRPNT → Landmark ──────────────
+
+    [Fact]
+    public void Ctrpnt_WithCatctr1_RedirectsToLandmark_TriangulationMark()
+    {
+        var m = S57S101Mapping.Default;
+        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "1") }); // CATCTR=1
+
+        var resolved = m.ResolveFeature(33, attrs); // CTRPNT
+        Assert.NotNull(resolved);
+        Assert.Equal("Landmark", resolved!.S101Code);
+
+        var attr = m.ResolveAttribute("CATCTR", "1", resolved);
+        Assert.NotNull(attr);
+        Assert.Equal("categoryOfLandmark", attr!.S101Code);
+        Assert.Equal("22", attr.Value);
+    }
+
+    [Fact]
+    public void Ctrpnt_WithCatctr5_RedirectsToLandmark_BoundaryMark()
+    {
+        var m = S57S101Mapping.Default;
+        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "5") });
+
+        var resolved = m.ResolveFeature(33, attrs);
+        Assert.NotNull(resolved);
+        Assert.Equal("Landmark", resolved!.S101Code);
+
+        var attr = m.ResolveAttribute("CATCTR", "5", resolved);
+        Assert.NotNull(attr);
+        Assert.Equal("categoryOfLandmark", attr!.S101Code);
+        Assert.Equal("23", attr.Value);
+    }
+
+    [Fact]
+    public void Ctrpnt_WithOtherCatctr_IsDropped()
+    {
+        var m = S57S101Mapping.Default;
+        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "2") });
+
+        Assert.Null(m.ResolveFeature(33, attrs));
+    }
+
+    [Fact]
+    public void Ctrpnt_WithoutCatctr_IsDropped()
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Null(m.ResolveFeature(33, ImmutableDictionary<string, string>.Empty));
+    }
+
+    [Fact]
+    public void Lndmrk_MapsToLandmark()
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal("Landmark", m.ResolveFeatureCode(74));
+    }
 }
