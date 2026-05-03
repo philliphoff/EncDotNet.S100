@@ -58,7 +58,8 @@ public class MainViewModelPickModeTests
             catalogPanel: new CatalogPanelViewModel(catalogSource),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
-            themeService: new StubThemeService());
+            themeService: new StubThemeService(),
+            recentFiles: new StubRecentFilesService());
     }
 
     [Fact]

@@ -22,7 +22,6 @@ internal sealed class NativeMenuBuilder
     private readonly NativeMenu _openRecentMenu = new();
     private NativeMenuItem? _openRecentMenuItem;
     private Func<Task>? _openDatasetAsync;
-    private Func<string, Task>? _openRecentAsync;
 
     public NativeMenuBuilder(MainViewModel viewModel, IRecentFilesService recentFiles)
     {
@@ -40,18 +39,14 @@ internal sealed class NativeMenuBuilder
     /// </summary>
     /// <param name="window">The window to attach the menu to.</param>
     /// <param name="openDatasetAsync">Invoked when the user selects File › Open Dataset…</param>
-    /// <param name="openRecentAsync">Invoked when the user selects a path from the Recent submenu.</param>
     public void Attach(
         Window window,
-        Func<Task> openDatasetAsync,
-        Func<string, Task> openRecentAsync)
+        Func<Task> openDatasetAsync)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(openDatasetAsync);
-        ArgumentNullException.ThrowIfNull(openRecentAsync);
 
         _openDatasetAsync = openDatasetAsync;
-        _openRecentAsync = openRecentAsync;
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
@@ -172,7 +167,7 @@ internal sealed class NativeMenuBuilder
                 IsEnabled = File.Exists(path),
             };
             var captured = path;
-            item.Click += async (_, _) => await _openRecentAsync!.Invoke(captured);
+            item.Click += (_, _) => _viewModel.OpenRecentCommand.Execute(captured);
             _openRecentMenu.Items.Add(item);
         }
 

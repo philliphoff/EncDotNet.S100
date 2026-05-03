@@ -147,8 +147,7 @@ public partial class MainWindow : ShadUI.Window
         // PropertyChanged subscriptions for the lifetime of this window.
         new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
             window: this,
-            openDatasetAsync: OpenDatasetAsync,
-            openRecentAsync: OpenRecentAsync);
+            openDatasetAsync: OpenDatasetAsync);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -341,20 +340,6 @@ public partial class MainWindow : ShadUI.Window
 
             await _viewModel.Datasets.LoadFromPathAsync(path);
         }
-    }
-
-    private async Task OpenRecentAsync(string path)
-    {
-        if (!File.Exists(path))
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
-            // Drop the missing entry so the menu reflects reality.
-            _recentFiles.Remove(path);
-            return;
-        }
-
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-        await _viewModel.Datasets.LoadFromPathAsync(path);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

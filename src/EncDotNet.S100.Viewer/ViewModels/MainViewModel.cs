@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Portrayals;
@@ -12,6 +14,7 @@ internal sealed class MainViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
     private readonly IThemeService _theme;
+    private readonly IRecentFilesService _recentFiles;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -165,6 +168,13 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
+    /// <summary>
+    /// Opens a dataset that the user has previously loaded. If the file is
+    /// no longer at the recorded path the entry is dropped from the recent
+    /// list and a status message is shown.
+    /// </summary>
+    public IAsyncRelayCommand<string> OpenRecentCommand { get; }
+
     public MainViewModel(
         ViewerSettings settings,
         FeatureCataloguesViewModel featureCatalogues,
@@ -173,7 +183,8 @@ internal sealed class MainViewModel : ViewModelBase
         CatalogPanelViewModel catalogPanel,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
-        IThemeService themeService)
+        IThemeService themeService,
+        IRecentFilesService recentFiles)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -183,9 +194,11 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(themeService);
+        ArgumentNullException.ThrowIfNull(recentFiles);
 
         _settings = settings;
         _theme = themeService;
+        _recentFiles = recentFiles;
         _isDarkTheme = themeService.IsDarkTheme;
 
         FeatureCatalogues = featureCatalogues;
@@ -244,11 +257,30 @@ internal sealed class MainViewModel : ViewModelBase
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
+        OpenRecentCommand = new AsyncRelayCommand<string>(OpenRecentAsync);
+
         // Restore last selected activity (set field directly to avoid re-saving)
         if (settings.LastSelectedActivity is { } last
             && Enum.TryParse<ActivityKind>(last, out var restored))
         {
             _selectedActivity = restored;
         }
+    }
+
+    private async Task OpenRecentAsync(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        if (!File.Exists(path))
+        {
+            StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
+            // Drop the missing entry so the menu reflects reality.
+            _recentFiles.Remove(path);
+            return;
+        }
+
+        SelectedActivity = ActivityKind.Datasets;
+        await Datasets.LoadFromPathAsync(path);
     }
 }
