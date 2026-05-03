@@ -35,8 +35,6 @@ public partial class MainWindow : ShadUI.Window
     private readonly IFileDialogService _fileDialog;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
-    private readonly NativeMenu _openRecentMenu = new();
-    private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
     private double _lastPaneWidth = 320;
     private double _lastPickPanelWidth = 360;
@@ -151,7 +149,8 @@ public partial class MainWindow : ShadUI.Window
         _fileDialog = fileDialog;
 
         // Hand the loader a map host now that the Mapsui control exists, and
-        // seed catalogues / build the pipeline factory from CLI options.
+        // seed catalogues / build the pipeline factory from CLI options. The
+        // loader subscribes to its own settings dependencies internally.
         _loader.Initialize(new MapsuiMapHost(MapControl), options);
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
@@ -168,78 +167,18 @@ public partial class MainWindow : ShadUI.Window
 
         DataContext = _viewModel;
 
-        // Build native menu bar
-        var sideBarItem = new NativeMenuItem(Strings.Menu_PrimarySideBar)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPaneVisible,
-        };
-        sideBarItem.Click += (_, _) => _viewModel.TogglePrimarySideBarCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
-                sideBarItem.IsChecked = _viewModel.IsPaneVisible;
-        };
-
-        var statusBarItem = new NativeMenuItem(Strings.Menu_StatusBar)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsStatusBarVisible,
-        };
-        statusBarItem.Click += (_, _) => _viewModel.ToggleStatusBarCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsStatusBarVisible))
-                statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
-        };
-
-        var pickPanelItem = new NativeMenuItem(Strings.Menu_PickReport)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPickPanelEnabled,
-        };
-        pickPanelItem.Click += (_, _) => _viewModel.TogglePickPanelCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickPanelEnabled))
-                pickPanelItem.IsChecked = _viewModel.IsPickPanelEnabled;
-        };
-
-        var pickModeItem = new NativeMenuItem(Strings.Menu_PickMode)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPickModeActive,
-            Gesture = new KeyGesture(Key.I),
-        };
-        pickModeItem.Click += (_, _) => _viewModel.TogglePickModeCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
+        // Build the native menu bar (File / View › Appearance) and keep its
+        // toggle items mirrored against the view-model. The builder owns the
+        // PropertyChanged subscriptions for the lifetime of this window.
+        new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
+            window: this,
+            openDatasetAsync: OpenDatasetAsync,
+            openRecentAsync: OpenRecentAsync,
+            onPickModeToggled: () =>
             {
-                pickModeItem.IsChecked = _viewModel.IsPickModeActive;
                 ApplyPickModeCursor();
                 ApplyPickModeButtonState();
-            }
-        };
-
-        var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
-        {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
-        };
-
-        var viewMenu = new NativeMenuItem(Strings.Menu_View)
-        {
-            Menu = new NativeMenu { appearanceMenu },
-        };
-
-        var nativeMenu = new NativeMenu { BuildFileMenu(), viewMenu };
-        NativeMenu.SetMenu(this, nativeMenu);
-        RebuildOpenRecentMenu();
-        _recentFiles.Changed += RebuildOpenRecentMenu;
+            });
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -256,15 +195,13 @@ public partial class MainWindow : ShadUI.Window
         ApplyAccentColor(_viewModel.Settings.AccentColor);
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
 
-        // Re-render all loaded datasets when the color profile changes
-        _viewModel.Settings.PaletteChanged += palette => _ = _loader.ReRenderAllAsync();
-
-        // Re-render all loaded datasets when symbol or text scale changes
-        _viewModel.Settings.DisplayScaleChanged += () => _ = _loader.ReRenderAllAsync();
-
         // Apply persisted scale-bar distance unit and react to changes.
         ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
         _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
+
+        // Surface DatasetsViewModel rejection of unknown file extensions.
+        _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
+            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
 
         // If no pane is initially selected, start collapsed
         if (!_viewModel.IsPaneVisible)
@@ -824,61 +761,6 @@ public partial class MainWindow : ShadUI.Window
         return result;
     }
 
-    private NativeMenuItem BuildFileMenu()
-    {
-        var openItem = new NativeMenuItem(Strings.Menu_OpenDataset)
-        {
-            Gesture = new KeyGesture(Key.O, KeyModifiers.Meta),
-        };
-        openItem.Click += (_, _) => _ = OpenDatasetAsync();
-
-        _openRecentMenuItem = new NativeMenuItem(Strings.Menu_OpenRecent)
-        {
-            Menu = _openRecentMenu,
-        };
-
-        return new NativeMenuItem(Strings.Menu_File)
-        {
-            Menu = new NativeMenu { openItem, _openRecentMenuItem },
-        };
-    }
-
-    private void RebuildOpenRecentMenu()
-    {
-        _openRecentMenu.Items.Clear();
-
-        var paths = _recentFiles.Items;
-        if (paths.Count == 0)
-        {
-            var empty = new NativeMenuItem(Strings.Menu_NoRecentDatasets) { IsEnabled = false };
-            _openRecentMenu.Items.Add(empty);
-            if (_openRecentMenuItem is not null)
-                _openRecentMenuItem.IsEnabled = false;
-            return;
-        }
-
-        if (_openRecentMenuItem is not null)
-            _openRecentMenuItem.IsEnabled = true;
-
-        foreach (var path in paths)
-        {
-            var label = Path.GetFileName(path);
-            var item = new NativeMenuItem(label)
-            {
-                ToolTip = path,
-                IsEnabled = File.Exists(path),
-            };
-            var captured = path;
-            item.Click += async (_, _) => await OpenRecentAsync(captured);
-            _openRecentMenu.Items.Add(item);
-        }
-
-        _openRecentMenu.Items.Add(new NativeMenuItemSeparator());
-        var clear = new NativeMenuItem(Strings.Menu_ClearRecentlyOpened);
-        clear.Click += (_, _) => _recentFiles.Clear();
-        _openRecentMenu.Items.Add(clear);
-    }
-
     private async Task OpenDatasetAsync()
     {
         var paths = await _fileDialog.OpenDatasetsAsync(this, allowMultiple: true);
@@ -892,7 +774,7 @@ public partial class MainWindow : ShadUI.Window
             if (!File.Exists(path))
                 continue;
 
-            await LoadDatasetFromPathAsync(path);
+            await _viewModel.Datasets.LoadFromPathAsync(path);
         }
     }
 
@@ -907,20 +789,7 @@ public partial class MainWindow : ShadUI.Window
         }
 
         _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-        await LoadDatasetFromPathAsync(path);
-    }
-
-    private async Task LoadDatasetFromPathAsync(string path)
-    {
-        var spec = DatasetPipelineFactory.DetectProductSpec(path);
-        if (spec is null)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
-            return;
-        }
-
-        var entry = _viewModel.Datasets.Add(path, spec);
-        await _loader.LoadAsync(entry);
+        await _viewModel.Datasets.LoadFromPathAsync(path);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
@@ -936,7 +805,7 @@ public partial class MainWindow : ShadUI.Window
             if (path is null || !File.Exists(path))
                 continue;
 
-            await LoadDatasetFromPathAsync(path);
+            await _viewModel.Datasets.LoadFromPathAsync(path);
         }
     }
 }

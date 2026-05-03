@@ -95,6 +95,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             spec => transientFcPaths.TryGetValue(spec, out var p) ? File.OpenRead(p)
                   : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
                   : Specifications.Specification.TryOpenFeatureCatalogue(spec));
+
+        // Re-render every loaded dataset whenever the user changes a setting
+        // that affects portrayal output (palette / display scale). These are
+        // wired here, not in the window, so the loader fully owns its
+        // re-render lifecycle.
+        _settingsVm.PaletteChanged += palette => _ = ReRenderAllAsync();
+        _settingsVm.DisplayScaleChanged += () => _ = ReRenderAllAsync();
     }
 
     public async Task LoadAsync(DatasetEntry entry)

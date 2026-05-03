@@ -107,6 +107,13 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }
 
+    /// <summary>
+    /// Raised when <see cref="LoadFromPathAsync"/> rejects a file because
+    /// no S-100 product specification recognised its extension. The window
+    /// surfaces this as a status-bar message.
+    /// </summary>
+    public event Action<string>? UnrecognizedFileEncountered;
+
     public DatasetsViewModel(IDatasetLoaderService loader)
     {
         ArgumentNullException.ThrowIfNull(loader);
@@ -131,6 +138,28 @@ internal sealed class DatasetsViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(entry);
         _ = _loader.LoadAsync(entry);
+    }
+
+    /// <summary>
+    /// Detects the product spec for <paramref name="path"/>, adds an entry,
+    /// and asks the loader to render it. If the file extension is not
+    /// recognised, raises <see cref="UnrecognizedFileEncountered"/> with the
+    /// extension and returns <c>null</c>.
+    /// </summary>
+    public async Task<DatasetEntry?> LoadFromPathAsync(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var spec = Datasets.Pipelines.DatasetPipelineFactory.DetectProductSpec(path);
+        if (spec is null)
+        {
+            UnrecognizedFileEncountered?.Invoke(System.IO.Path.GetExtension(path));
+            return null;
+        }
+
+        var entry = Add(path, spec);
+        await _loader.LoadAsync(entry);
+        return entry;
     }
 
     private void Remove(DatasetEntry? entry)
