@@ -24,8 +24,8 @@
     <PackageVersion Include="ProjNet" Version="2.0.0" />
     <PackageVersion Include="PureHDF" Version="2.1.2" />
     <PackageVersion Include="ShadUI" Version="0.1.6" />
-    <PackageVersion Include="SkiaSharp" Version="3.119.4-preview.1.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4-preview.1.1" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.50.0" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
