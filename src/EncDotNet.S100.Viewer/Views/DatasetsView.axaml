@@ -39,28 +39,17 @@
                                        Opacity="0.5"
                                        IsVisible="{Binding IsLoaded}"
                                        TextWrapping="Wrap" />
-                            <!-- Time step controls (S-111) -->
-                            <StackPanel Orientation="Horizontal"
-                                        IsVisible="{Binding HasTimeSteps}"
-                                        Margin="0,4,0,0"
-                                        Spacing="4">
-                                <Button Classes="Icon" Padding="2"
-                                        Command="{Binding PreviousTimeStepCommand}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_PreviousTimeStep}">
-                                    <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="12" />
-                                </Button>
-                                <ComboBox ItemsSource="{Binding TimeStepLabels}"
-                                          SelectedIndex="{Binding SelectedTimeIndex}"
-                                          FontSize="11"
-                                          Padding="4,2"
-                                          MinHeight="0"
-                                          VerticalAlignment="Center" />
-                                <Button Classes="Icon" Padding="2"
-                                        Command="{Binding NextTimeStepCommand}"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NextTimeStep}">
-                                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="12" />
-                                </Button>
-                            </StackPanel>
+                            <!--
+                              Time-aware datasets show a read-only label of
+                              the timestamp the global time slider has
+                              snapped them to. The slider itself lives in
+                              the bottom timeline panel.
+                            -->
+                            <TextBlock Text="{Binding CurrentTimeLabel}"
+                                       FontSize="11"
+                                       Opacity="0.7"
+                                       Margin="0,2,0,0"
+                                       IsVisible="{Binding HasTimeSteps}" />
                         </StackPanel>
                         <Button Grid.Column="1"
                                 Classes="Icon"

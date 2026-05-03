@@ -22,6 +22,7 @@ internal sealed class MainViewModel : ViewModelBase
     public CatalogPanelViewModel CatalogPanel { get; }
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
+    public TimelineViewModel Timeline { get; }
 
     private ActivityKind? _selectedActivity;
     public ActivityKind? SelectedActivity
@@ -183,6 +184,7 @@ internal sealed class MainViewModel : ViewModelBase
         CatalogPanelViewModel catalogPanel,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
+        TimelineViewModel timeline,
         IThemeService themeService,
         IRecentFilesService recentFiles)
     {
@@ -193,6 +195,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(catalogPanel);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
+        ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
 
@@ -207,6 +210,7 @@ internal sealed class MainViewModel : ViewModelBase
         CatalogPanel = catalogPanel;
         Settings = settingsViewModel;
         PickReport = pickReport;
+        Timeline = timeline;
         PickReport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickReportViewModel.HasPick))

@@ -101,6 +101,7 @@ internal static class S411DatasetReader
     private static S411Dataset ReadIceDataSet(XDocument doc, XElement root)
     {
         string? datasetId = root.Attribute(GmlNs + "id")?.Value;
+        var issueDate = ParseIceIssueDate(root);
 
         var features = ImmutableArray.CreateBuilder<S411Feature>();
 
@@ -130,9 +131,25 @@ internal static class S411DatasetReader
         {
             ProductIdentifier = "S-411",
             DatasetIdentifier = datasetId,
+            IssueDate = issueDate,
             Features = features.ToImmutable(),
             SourceDocument = doc,
         };
+    }
+
+    private static DateTime? ParseIceIssueDate(XElement root)
+    {
+        // Probe well-known JCOMM/CIS timestamp element names, in order of
+        // specificity. Datetime variants take precedence over date-only.
+        string[] candidates = ["issueDateTime", "issueDate", "observationDateTime", "observationDate"];
+        foreach (var local in candidates)
+        {
+            var el = root.Element(IceNs + local);
+            if (el is null || string.IsNullOrWhiteSpace(el.Value)) continue;
+            if (TryParseDateTime(el.Value, out var dt))
+                return dt;
+        }
+        return null;
     }
 
     private static S411Feature ParseIceFeature(XElement element)
@@ -214,11 +231,18 @@ internal static class S411DatasetReader
 
         string? datasetId = root.Attribute(GmlNs + "id")?.Value;
         string? productId = null;
+        DateTime? issueDate = null;
 
         var dsInfo = root.Element(s100Ns + "DatasetIdentificationInformation");
         if (dsInfo is not null)
         {
             productId = dsInfo.Element(s100Ns + "productIdentifier")?.Value;
+            // S-100 Part 17 dataset identification metadata (encoded per
+            // Part 10b §C.4); a date-only or a full xs:dateTime are both
+            // accepted by the spec.
+            var refDate = dsInfo.Element(s100Ns + "datasetReferenceDate")?.Value;
+            if (!string.IsNullOrWhiteSpace(refDate) && TryParseDateTime(refDate, out var dt))
+                issueDate = dt;
         }
 
         var features = ImmutableArray.CreateBuilder<S411Feature>();
@@ -235,6 +259,7 @@ internal static class S411DatasetReader
         {
             ProductIdentifier = productId ?? "S-411",
             DatasetIdentifier = datasetId,
+            IssueDate = issueDate,
             Features = features.ToImmutable(),
             SourceDocument = doc,
         };
@@ -486,5 +511,24 @@ internal static class S411DatasetReader
         }
 
         return coords.ToImmutable();
+    }
+
+    /// <summary>
+    /// Parses an xs:dateTime or xs:date timestamp into UTC, accepting any
+    /// of the formats S-100 Part 17 / Part 10b allow for dataset metadata.
+    /// </summary>
+    private static bool TryParseDateTime(string value, out DateTime result)
+    {
+        var trimmed = value.Trim();
+        if (DateTime.TryParse(
+                trimmed,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out result))
+        {
+            return true;
+        }
+        result = default;
+        return false;
     }
 }

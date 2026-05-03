@@ -20,6 +20,27 @@ public sealed class S411Dataset
     /// <summary>The dataset identifier (gml:id of the dataset root).</summary>
     public string? DatasetIdentifier { get; init; }
 
+    /// <summary>
+    /// The dataset's reference / issue timestamp, if one was carried in the
+    /// source GML. For the IHO 1.2.1 sample shape this is parsed from
+    /// <c>S100:DatasetIdentificationInformation/S100:datasetReferenceDate</c>
+    /// (S-100 Part 17 dataset identification metadata, encoded per
+    /// S-100 Part 10b §C.4 and §C.6). For the JCOMM operational shape the
+    /// reader probes a small set of well-known issue/observation timestamp
+    /// elements (<c>ice:issueDateTime</c>, <c>ice:issueDate</c>,
+    /// <c>ice:observationDateTime</c>, <c>ice:observationDate</c>) that
+    /// real-world Canadian-Ice-Service feeds have been observed to use.
+    /// May be <c>null</c> when no recognised timestamp element is present.
+    /// </summary>
+    /// <remarks>
+    /// S-411 Edition 1.2.1 datasets represent a single issue snapshot of
+    /// the ice picture, so this single value is sufficient — there are no
+    /// per-feature time-step samples like S-104 / S-111. Callers that
+    /// participate in the viewer's global time slider treat this as the
+    /// "snapshot at-or-before T" boundary.
+    /// </remarks>
+    public DateTime? IssueDate { get; init; }
+
     /// <summary>Feature instances contained in the dataset.</summary>
     public required ImmutableArray<S411Feature> Features { get; init; }
 

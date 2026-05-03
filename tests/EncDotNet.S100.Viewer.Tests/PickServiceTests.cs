@@ -36,7 +36,7 @@ public class PickServiceTests
         public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry) => Task.CompletedTask;
-        public Task ReRenderTimeStepAsync(DatasetEntry entry) => Task.CompletedTask;
+        public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
     }
@@ -53,6 +53,7 @@ public class PickServiceTests
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
+            timeline: new TimelineViewModel(new GlobalTimeService()),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService());
     }

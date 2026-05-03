@@ -26,7 +26,7 @@ public class DatasetsViewModelTests
             LoadCalls.Add(entry);
             return Task.CompletedTask;
         }
-        public Task ReRenderTimeStepAsync(DatasetEntry entry) => Task.CompletedTask;
+        public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
     }

@@ -55,8 +55,7 @@ internal static class Strings
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
-    public static string Tooltip_PreviousTimeStep => Get(nameof(Tooltip_PreviousTimeStep));
-    public static string Tooltip_NextTimeStep => Get(nameof(Tooltip_NextTimeStep));
+    public static string Tooltip_TimelineSlider => Get(nameof(Tooltip_TimelineSlider));
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
 
     // Buttons / actions
@@ -134,9 +133,18 @@ internal static class Strings
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_Error => Get(nameof(Status_Error));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
+    public static string Status_RenderingAtTime => Get(nameof(Status_RenderingAtTime));
     public static string Status_SwitchingPalette => Get(nameof(Status_SwitchingPalette));
     public static string Status_PaletteApplied => Get(nameof(Status_PaletteApplied));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
+
+    // Dataset entry
+    public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));
+
+    // Timeline panel
+    public static string TimelinePanel_Title => Get(nameof(TimelinePanel_Title));
+    public static string TimelinePanel_Range => Get(nameof(TimelinePanel_Range));
+    public static string TimelinePanel_NoData => Get(nameof(TimelinePanel_NoData));
 }

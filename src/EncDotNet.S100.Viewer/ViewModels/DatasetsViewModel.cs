@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -29,7 +31,13 @@ internal sealed class DatasetEntry : ViewModelBase
         set => SetProperty(ref _info, value);
     }
 
-    // --- Time step support (S-111) ---
+    // ── Time-aware participation ──────────────────────────────────────
+    //
+    // Time-step navigation is global: per-entry prev/next/ComboBox
+    // controls were replaced by a single timeline panel beneath the
+    // map (TimelineView). Each entry exposes only:
+    //   • the time samples the loader discovered for this dataset, and
+    //   • the timestamp it is currently rendered at (a read-only label).
 
     private IReadOnlyList<DateTime>? _availableTimes;
     public IReadOnlyList<DateTime>? AvailableTimes
@@ -38,63 +46,44 @@ internal sealed class DatasetEntry : ViewModelBase
         set
         {
             if (SetProperty(ref _availableTimes, value))
-            {
                 OnPropertyChanged(nameof(HasTimeSteps));
-                OnPropertyChanged(nameof(TimeStepMax));
-                OnPropertyChanged(nameof(TimeStepLabels));
-                OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.NotifyCanExecuteChanged();
-                _nextTimeStepCommand.NotifyCanExecuteChanged();
-            }
         }
     }
 
-    public bool HasTimeSteps => _availableTimes is { Count: > 1 };
+    /// <summary>True when this dataset has at least one time sample.</summary>
+    public bool HasTimeSteps => _availableTimes is { Count: > 0 };
 
-    public int TimeStepMax => _availableTimes is { Count: > 0 } ? _availableTimes.Count - 1 : 0;
-
-    private int _selectedTimeIndex;
-    public int SelectedTimeIndex
+    private DateTime? _currentTime;
+    /// <summary>
+    /// The timestamp this dataset is currently rendered at, or
+    /// <c>null</c> when the dataset is not time-aware or has not yet
+    /// been rendered. Set by <see cref="IDatasetLoaderService"/>.
+    /// </summary>
+    public DateTime? CurrentTime
     {
-        get => _selectedTimeIndex;
+        get => _currentTime;
         set
         {
-            if (SetProperty(ref _selectedTimeIndex, value))
-            {
-                OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.NotifyCanExecuteChanged();
-                _nextTimeStepCommand.NotifyCanExecuteChanged();
-            }
+            if (SetProperty(ref _currentTime, value))
+                OnPropertyChanged(nameof(CurrentTimeLabel));
         }
     }
 
-    public IReadOnlyList<string>? TimeStepLabels =>
-        _availableTimes?.Select((t, i) => $"{i + 1}/{_availableTimes.Count}: {t:u}").ToList();
-
-    public string TimeStepLabel =>
-        _availableTimes is { Count: > 0 }
-            ? $"{_selectedTimeIndex + 1}/{_availableTimes.Count}: {_availableTimes[_selectedTimeIndex]:u}"
-            : "";
-
-    private readonly RelayCommand _previousTimeStepCommand;
-    private readonly RelayCommand _nextTimeStepCommand;
-
-    public ICommand PreviousTimeStepCommand => _previousTimeStepCommand;
-    public ICommand NextTimeStepCommand => _nextTimeStepCommand;
+    /// <summary>
+    /// Display label for <see cref="CurrentTime"/>, or empty when no
+    /// time has been assigned. Formatted via
+    /// <see cref="Strings.DatasetEntry_CurrentTimeFormat"/>.
+    /// </summary>
+    public string CurrentTimeLabel =>
+        _currentTime is { } t
+            ? string.Format(CultureInfo.CurrentCulture, Strings.DatasetEntry_CurrentTimeFormat, t)
+            : string.Empty;
 
     public DatasetEntry(string filePath, string productSpec)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
         DisplayName = System.IO.Path.GetFileName(filePath);
-
-        _previousTimeStepCommand = new RelayCommand(
-            () => { if (_selectedTimeIndex > 0) SelectedTimeIndex--; },
-            () => _selectedTimeIndex > 0);
-
-        _nextTimeStepCommand = new RelayCommand(
-            () => { if (_availableTimes is not null && _selectedTimeIndex < _availableTimes.Count - 1) SelectedTimeIndex++; },
-            () => _availableTimes is not null && _selectedTimeIndex < _availableTimes.Count - 1);
     }
 }
 
@@ -114,13 +103,17 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     public event Action<string>? UnrecognizedFileEncountered;
 
-    public DatasetsViewModel(IDatasetLoaderService loader)
+    public DatasetsViewModel(IDatasetLoaderService loader, GlobalTimeService? globalTime = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
 
         AddCommand = new RelayCommand<string?>(_ => { });
         RemoveCommand = new RelayCommand<DatasetEntry>(Remove);
+
+        // Auto-unregister entries from the global time service when they
+        // are removed from the collection.
+        globalTime?.AttachTo(this);
     }
 
     public DatasetEntry Add(string filePath, string productSpec)

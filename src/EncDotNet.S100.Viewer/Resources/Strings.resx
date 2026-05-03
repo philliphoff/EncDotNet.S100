@@ -89,11 +89,8 @@
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
-  <data name="Tooltip_PreviousTimeStep" xml:space="preserve">
-    <value>Previous time step</value>
-  </data>
-  <data name="Tooltip_NextTimeStep" xml:space="preserve">
-    <value>Next time step</value>
+  <data name="Tooltip_TimelineSlider" xml:space="preserve">
+    <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>
 
   <!-- Buttons / actions -->
@@ -284,6 +281,9 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_RenderingTimeStep" xml:space="preserve">
     <value>Rendering time step {0}/{1}...</value>
   </data>
+  <data name="Status_RenderingAtTime" xml:space="preserve">
+    <value>Rendering at {0:u}...</value>
+  </data>
   <data name="Status_SwitchingPalette" xml:space="preserve">
     <value>Switching to {0} palette...</value>
   </data>
@@ -298,6 +298,22 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
+  </data>
+
+  <!-- Dataset entry -->
+  <data name="DatasetEntry_CurrentTimeFormat" xml:space="preserve">
+    <value>At {0:u}</value>
+  </data>
+
+  <!-- Timeline panel -->
+  <data name="TimelinePanel_Title" xml:space="preserve">
+    <value>TIMELINE</value>
+  </data>
+  <data name="TimelinePanel_Range" xml:space="preserve">
+    <value>{0} steps from {1:u} to {2:u}</value>
+  </data>
+  <data name="TimelinePanel_NoData" xml:space="preserve">
+    <value>No time-varying datasets loaded.</value>
   </data>
 
   <!-- Tooltips for status bar elements -->
