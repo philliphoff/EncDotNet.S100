@@ -1,14 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class RecentFilesServiceTests
+public class RecentFilesServiceTests : IDisposable
 {
-    private static (RecentFilesService Service, ViewerSettings Settings) Create()
+    private readonly string _tempSettingsPath;
+
+    public RecentFilesServiceTests()
     {
-        var settings = new ViewerSettings();
+        // Each test file gets its own temp settings path so Save() doesn't
+        // touch the real per-user settings.json under ApplicationData.
+        _tempSettingsPath = Path.Combine(
+            Path.GetTempPath(),
+            $"viewer-settings-test-{Guid.NewGuid():N}.json");
+    }
+
+    public void Dispose()
+    {
+        if (File.Exists(_tempSettingsPath))
+            File.Delete(_tempSettingsPath);
+    }
+
+    private (RecentFilesService Service, ViewerSettings Settings) Create()
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         return (new RecentFilesService(settings), settings);
     }
 
@@ -85,5 +103,30 @@ public class RecentFilesServiceTests
 
         Assert.Empty(svc.Items);
         Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Constructor_PrunesEntriesPointingToMissingFiles()
+    {
+        // Pre-seed settings with a mix of existing and missing files, then
+        // confirm the service drops the missing ones at construction time.
+        var existing = Path.Combine(Path.GetTempPath(), $"viewer-test-{Guid.NewGuid():N}.tmp");
+        File.WriteAllText(existing, "stub");
+        try
+        {
+            var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+            settings.RecentDatasetPaths.Add("/tmp/does-not-exist-xyzzy");
+            settings.RecentDatasetPaths.Add(existing);
+            settings.RecentDatasetPaths.Add("");
+            settings.RecentDatasetPaths.Add("/another/missing");
+
+            var svc = new RecentFilesService(settings);
+
+            Assert.Equal(new[] { existing }, svc.Items);
+        }
+        finally
+        {
+            File.Delete(existing);
+        }
     }
 }

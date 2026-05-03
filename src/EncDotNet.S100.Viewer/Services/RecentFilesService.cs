@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -16,6 +17,16 @@ internal sealed class RecentFilesService : IRecentFilesService
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;
+
+        // Drop entries that no longer exist on disk so the recent menu
+        // reflects reality on each launch. Persist if anything changed,
+        // but don't raise Changed — there are no subscribers yet.
+        var pruned = _settings.RecentDatasetPaths.RemoveAll(p =>
+            string.IsNullOrWhiteSpace(p) || !File.Exists(p));
+        if (pruned > 0)
+        {
+            _settings.Save();
+        }
     }
 
     public IReadOnlyList<string> Items => _settings.RecentDatasetPaths;
