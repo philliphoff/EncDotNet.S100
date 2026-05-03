@@ -14,6 +14,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Mapsui.Manipulations;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
@@ -34,13 +35,13 @@ namespace EncDotNet.S100.Viewer;
 public partial class MainWindow : ShadUI.Window
 {
     private readonly ViewerSettings _settings;
-    private readonly PortrayalCatalogueManager _catalogueManager = new();
+    private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
-    private readonly DatasetCatalogAggregator _catalogAggregator = new();
-    private readonly S128DatasetCatalogSource _s128CatalogSource = new();
+    private readonly DatasetCatalogAggregator _catalogAggregator;
+    private readonly S128DatasetCatalogSource _s128CatalogSource;
     private readonly NativeMenu _openRecentMenu = new();
     private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
@@ -93,11 +94,57 @@ public partial class MainWindow : ShadUI.Window
 
     public MainWindow() : this(null) { }
 
+    /// <summary>
+    /// Legacy constructor retained for the Avalonia design-time previewer
+    /// and for callers that pre-DI created their own instance. Falls through
+    /// to the dependency-injected constructor by resolving services from
+    /// <see cref="App.Services"/> if available, else newing up defaults.
+    /// </summary>
     internal MainWindow(ViewerCommandSettings? options)
+        : this(
+            options,
+            ResolveOrFallback<ViewerSettings>(ViewerSettings.Load),
+            ResolveOrFallback<PortrayalCatalogueManager>(static () => new PortrayalCatalogueManager()),
+            ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
+            ResolveOrFallback<S128DatasetCatalogSource>(static () => new S128DatasetCatalogSource()),
+            ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
+                "MainViewModel cannot be resolved without the application service provider.")))
     {
+    }
+
+    private static T ResolveOrFallback<T>(Func<T> fallback) where T : class
+    {
+        try
+        {
+            return App.Services.GetRequiredService<T>();
+        }
+        catch (InvalidOperationException)
+        {
+            return fallback();
+        }
+    }
+
+    internal MainWindow(
+        ViewerCommandSettings? options,
+        ViewerSettings settings,
+        PortrayalCatalogueManager catalogueManager,
+        DatasetCatalogAggregator catalogAggregator,
+        S128DatasetCatalogSource s128CatalogSource,
+        MainViewModel viewModel)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(catalogueManager);
+        ArgumentNullException.ThrowIfNull(catalogAggregator);
+        ArgumentNullException.ThrowIfNull(s128CatalogSource);
+        ArgumentNullException.ThrowIfNull(viewModel);
+
         InitializeComponent();
 
-        _settings = ViewerSettings.Load();
+        _settings = settings;
+        _catalogueManager = catalogueManager;
+        _catalogAggregator = catalogAggregator;
+        _s128CatalogSource = s128CatalogSource;
+        _viewModel = viewModel;
 
         // Seed catalogue manager from persisted settings
         foreach (var (spec, path) in _settings.CataloguePaths)
@@ -150,7 +197,7 @@ public partial class MainWindow : ShadUI.Window
                   : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
                   : Specifications.Specification.TryOpenFeatureCatalogue(spec));
 
-        _viewModel = new MainViewModel(_settings, _catalogueManager, _catalogAggregator);
+        _viewModel = viewModel;
         DataContext = _viewModel;
 
         // Register catalog sources. The S-128 source receives parsed datasets

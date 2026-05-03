@@ -2,6 +2,7 @@ using System;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Styling;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
@@ -164,16 +165,31 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
-    public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager, IDatasetCatalogSource catalogSource)
+    public MainViewModel(
+        ViewerSettings settings,
+        FeatureCataloguesViewModel featureCatalogues,
+        PortrayalCataloguesViewModel portrayalCatalogues,
+        DatasetsViewModel datasets,
+        CatalogPanelViewModel catalogPanel,
+        SettingsViewModel settingsViewModel,
+        PickReportViewModel pickReport)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(featureCatalogues);
+        ArgumentNullException.ThrowIfNull(portrayalCatalogues);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(catalogPanel);
+        ArgumentNullException.ThrowIfNull(settingsViewModel);
+        ArgumentNullException.ThrowIfNull(pickReport);
+
         _settings = settings;
 
-        FeatureCatalogues = new FeatureCataloguesViewModel(settings);
-        PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
-        Datasets = new DatasetsViewModel();
-        CatalogPanel = new CatalogPanelViewModel(catalogSource);
-        Settings = new SettingsViewModel(settings);
-        PickReport = new PickReportViewModel();
+        FeatureCatalogues = featureCatalogues;
+        PortrayalCatalogues = portrayalCatalogues;
+        Datasets = datasets;
+        CatalogPanel = catalogPanel;
+        Settings = settingsViewModel;
+        PickReport = pickReport;
         PickReport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickReportViewModel.HasPick))

@@ -25,7 +25,14 @@ public class MainViewModelPickModeTests
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
         var catalogSource = new EmptyCatalogSource();
-        return new MainViewModel(settings, catalogues, catalogSource);
+        return new MainViewModel(
+            settings,
+            featureCatalogues: new FeatureCataloguesViewModel(settings),
+            portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
+            datasets: new DatasetsViewModel(),
+            catalogPanel: new CatalogPanelViewModel(catalogSource),
+            settingsViewModel: new SettingsViewModel(settings),
+            pickReport: new PickReportViewModel());
     }
 
     [Fact]

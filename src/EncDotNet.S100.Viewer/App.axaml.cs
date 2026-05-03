@@ -3,12 +3,27 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer;
 
 public partial class App : Application
 {
     internal static ViewerCommandSettings? StartupOptions { get; set; }
+
+    private static IServiceProvider? s_services;
+
+    /// <summary>
+    /// Application-wide service container. Populated during
+    /// <see cref="OnFrameworkInitializationCompleted"/>; throws if accessed
+    /// before the framework is initialized.
+    /// </summary>
+    internal static IServiceProvider Services =>
+        s_services ?? throw new InvalidOperationException(
+            "Service provider has not been initialized yet.");
 
     public override void Initialize()
     {
@@ -30,12 +45,52 @@ public partial class App : Application
             e.Handled = true;
         };
 
+        s_services = ConfigureServices();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow(StartupOptions);
+            desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static IServiceProvider ConfigureServices()
+    {
+        var services = new ServiceCollection();
+
+        // Persisted user settings
+        services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());
+
+        // Shared application-level state
+        services.AddSingleton<PortrayalCatalogueManager>();
+        services.AddSingleton<DatasetCatalogAggregator>();
+        services.AddSingleton<S128DatasetCatalogSource>();
+        services.AddSingleton<IDatasetCatalogSource>(
+            sp => sp.GetRequiredService<DatasetCatalogAggregator>());
+
+        // View models
+        services.AddSingleton<FeatureCataloguesViewModel>();
+        services.AddSingleton<PortrayalCataloguesViewModel>();
+        services.AddSingleton<DatasetsViewModel>();
+        services.AddSingleton<CatalogPanelViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<PickReportViewModel>();
+        services.AddSingleton<MainViewModel>();
+
+        // Main window — receives StartupOptions (CLI args parsed by Spectre)
+        // along with services it still owns directly. Phase 2 will move
+        // dataset orchestration etc. behind dedicated services so this
+        // factory can shrink.
+        services.AddSingleton<MainWindow>(sp => new MainWindow(
+            StartupOptions,
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetRequiredService<PortrayalCatalogueManager>(),
+            sp.GetRequiredService<DatasetCatalogAggregator>(),
+            sp.GetRequiredService<S128DatasetCatalogSource>(),
+            sp.GetRequiredService<MainViewModel>()));
+
+        return services.BuildServiceProvider();
     }
 
     private static void LogCrash(string label, string message)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -40,8 +41,8 @@ internal sealed class DatasetEntry : ViewModelBase
                 OnPropertyChanged(nameof(TimeStepMax));
                 OnPropertyChanged(nameof(TimeStepLabels));
                 OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.RaiseCanExecuteChanged();
-                _nextTimeStepCommand.RaiseCanExecuteChanged();
+                _previousTimeStepCommand.NotifyCanExecuteChanged();
+                _nextTimeStepCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -59,8 +60,8 @@ internal sealed class DatasetEntry : ViewModelBase
             if (SetProperty(ref _selectedTimeIndex, value))
             {
                 OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.RaiseCanExecuteChanged();
-                _nextTimeStepCommand.RaiseCanExecuteChanged();
+                _previousTimeStepCommand.NotifyCanExecuteChanged();
+                _nextTimeStepCommand.NotifyCanExecuteChanged();
             }
         }
     }
