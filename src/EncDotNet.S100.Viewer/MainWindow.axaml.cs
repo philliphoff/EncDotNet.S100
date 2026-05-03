@@ -9,13 +9,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Mapsui.Manipulations;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
@@ -23,6 +20,7 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
@@ -36,6 +34,9 @@ public partial class MainWindow : ShadUI.Window
 {
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager;
+    private readonly PortrayalCatalogueSeeder _catalogueSeeder;
+    private readonly IRecentFilesService _recentFiles;
+    private readonly ScreenshotService _screenshotService;
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly MainViewModel _viewModel;
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
@@ -108,7 +109,12 @@ public partial class MainWindow : ShadUI.Window
             ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
             ResolveOrFallback<S128DatasetCatalogSource>(static () => new S128DatasetCatalogSource()),
             ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
-                "MainViewModel cannot be resolved without the application service provider.")))
+                "MainViewModel cannot be resolved without the application service provider.")),
+            ResolveOrFallback<PortrayalCatalogueSeeder>(static () => throw new InvalidOperationException(
+                "PortrayalCatalogueSeeder cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
+                "IRecentFilesService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<ScreenshotService>(static () => new ScreenshotService()))
     {
     }
 
@@ -130,13 +136,19 @@ public partial class MainWindow : ShadUI.Window
         PortrayalCatalogueManager catalogueManager,
         DatasetCatalogAggregator catalogAggregator,
         S128DatasetCatalogSource s128CatalogSource,
-        MainViewModel viewModel)
+        MainViewModel viewModel,
+        PortrayalCatalogueSeeder catalogueSeeder,
+        IRecentFilesService recentFiles,
+        ScreenshotService screenshotService)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
         ArgumentNullException.ThrowIfNull(s128CatalogSource);
         ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(catalogueSeeder);
+        ArgumentNullException.ThrowIfNull(recentFiles);
+        ArgumentNullException.ThrowIfNull(screenshotService);
 
         InitializeComponent();
 
@@ -145,49 +157,14 @@ public partial class MainWindow : ShadUI.Window
         _catalogAggregator = catalogAggregator;
         _s128CatalogSource = s128CatalogSource;
         _viewModel = viewModel;
+        _catalogueSeeder = catalogueSeeder;
+        _recentFiles = recentFiles;
+        _screenshotService = screenshotService;
 
-        // Seed catalogue manager from persisted settings
-        foreach (var (spec, path) in _settings.CataloguePaths)
-        {
-            if (Directory.Exists(path))
-            {
-                _catalogueManager.SetPath(spec, path);
-            }
-        }
-
-        // Apply CLI portrayal catalogues (transient — not persisted)
-        if (options?.PortrayalCatalogues is { } cliPcs)
-        {
-            foreach (var pcPath in cliPcs)
-            {
-                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
-                {
-                    _catalogueManager.SetPath(pcSpec, pcPath);
-                }
-            }
-        }
-
-        // Collect CLI feature catalogues (transient — not persisted)
-        var transientFcPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (options?.FeatureCatalogues is { } cliFcs)
-        {
-            foreach (var fcPath in cliFcs)
-            {
-                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
-                {
-                    transientFcPaths[fcSpec] = fcPath;
-                }
-            }
-        }
-
-        // Register bundled portrayal catalogues as fallback for any spec not yet configured
-        foreach (var spec in Specifications.Specification.AvailableSpecs)
-        {
-            if (!_catalogueManager.HasCatalogue(spec) && Specifications.Specification.HasPortrayalCatalogue(spec))
-            {
-                _catalogueManager.SetSource(spec, Specifications.Specification.CreatePortrayalCatalogueSource(spec));
-            }
-        }
+        // Seed catalogues from settings + CLI args + bundled fallbacks; the
+        // returned map captures CLI feature-catalogue paths for the pipeline
+        // factory below (transient — not persisted).
+        var transientFcPaths = _catalogueSeeder.Seed(options);
 
         _pipelineFactory = new DatasetPipelineFactory(
             _catalogueManager,
@@ -197,7 +174,6 @@ public partial class MainWindow : ShadUI.Window
                   : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
                   : Specifications.Specification.TryOpenFeatureCatalogue(spec));
 
-        _viewModel = viewModel;
         DataContext = _viewModel;
 
         // Register catalog sources. The S-128 source receives parsed datasets
@@ -276,15 +252,16 @@ public partial class MainWindow : ShadUI.Window
         var nativeMenu = new NativeMenu { BuildFileMenu(), viewMenu };
         NativeMenu.SetMenu(this, nativeMenu);
         RebuildOpenRecentMenu();
+        _recentFiles.Changed += RebuildOpenRecentMenu;
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInFeatureCatalogueVersion(spec));
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInFeatureCatalogueVersion(spec));
 
             if (Specifications.Specification.HasPortrayalCatalogue(spec))
             {
-                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInPortrayalCatalogueVersion(spec));
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInPortrayalCatalogueVersion(spec));
             }
         }
 
@@ -433,7 +410,7 @@ public partial class MainWindow : ShadUI.Window
         {
             foreach (var pcPath in pcArgs)
             {
-                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                if (Directory.Exists(pcPath) && CatalogueSpecDetection.DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
                 {
                     _viewModel.PortrayalCatalogues.AddTransient(pcSpec, pcPath);
                 }
@@ -445,7 +422,7 @@ public partial class MainWindow : ShadUI.Window
         {
             foreach (var fcPath in fcArgs)
             {
-                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
+                if (File.Exists(fcPath) && CatalogueSpecDetection.DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
                 {
                     _viewModel.FeatureCatalogues.AddTransient(fcSpec, fcPath);
                 }
@@ -560,9 +537,7 @@ public partial class MainWindow : ShadUI.Window
             entry.Info = result.Info;
             _viewModel.StatusText = result.Info;
 
-            _settings.AddRecentDataset(entry.FilePath);
-            _settings.Save();
-            RebuildOpenRecentMenu();
+            _recentFiles.Add(entry.FilePath);
 
             // Populate time steps for S-111 datasets
             if (processor is S111DatasetProcessor s111)
@@ -673,25 +648,7 @@ public partial class MainWindow : ShadUI.Window
 
     private void CaptureScreenshot(string outputPath)
     {
-        try
-        {
-            var pixelSize = new PixelSize((int)MapControl.Bounds.Width, (int)MapControl.Bounds.Height);
-            if (pixelSize.Width <= 0 || pixelSize.Height <= 0)
-            {
-                Console.Error.WriteLine($"[Screenshot] Map control has zero size, skipping.");
-                return;
-            }
-
-            using var bitmap = new RenderTargetBitmap(pixelSize);
-            bitmap.Render(MapControl);
-            bitmap.Save(outputPath);
-
-            Console.WriteLine($"[Screenshot] Saved {pixelSize.Width}x{pixelSize.Height} to {outputPath}");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Screenshot] Failed: {ex.Message}");
-        }
+        _screenshotService.Capture(MapControl, outputPath);
     }
 
     private void OnZoomInClick(object? sender, RoutedEventArgs e)
@@ -1137,7 +1094,7 @@ public partial class MainWindow : ShadUI.Window
     {
         _openRecentMenu.Items.Clear();
 
-        var paths = _settings.RecentDatasetPaths;
+        var paths = _recentFiles.Items;
         if (paths.Count == 0)
         {
             var empty = new NativeMenuItem(Strings.Menu_NoRecentDatasets) { IsEnabled = false };
@@ -1165,12 +1122,7 @@ public partial class MainWindow : ShadUI.Window
 
         _openRecentMenu.Items.Add(new NativeMenuItemSeparator());
         var clear = new NativeMenuItem(Strings.Menu_ClearRecentlyOpened);
-        clear.Click += (_, _) =>
-        {
-            _settings.ClearRecentDatasets();
-            _settings.Save();
-            RebuildOpenRecentMenu();
-        };
+        clear.Click += (_, _) => _recentFiles.Clear();
         _openRecentMenu.Items.Add(clear);
     }
 
@@ -1217,9 +1169,7 @@ public partial class MainWindow : ShadUI.Window
         {
             _viewModel.StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
             // Drop the missing entry so the menu reflects reality.
-            _settings.RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-            _settings.Save();
-            RebuildOpenRecentMenu();
+            _recentFiles.Remove(path);
             return;
         }
 
@@ -1278,70 +1228,6 @@ public partial class MainWindow : ShadUI.Window
             }
 
             _entryLayers.Remove(entry);
-        }
-    }
-
-    private static string? DetectPortrayalCatalogueSpec(string folderPath)
-    {
-        try
-        {
-            var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
-            if (!File.Exists(cataloguePath)) return null;
-
-            using var stream = File.OpenRead(cataloguePath);
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static readonly Regex SpecPattern = new(@"S-\d+", RegexOptions.Compiled);
-
-    private static string? DetectFeatureCatalogueSpec(string filePath)
-    {
-        try
-        {
-            using var stream = File.OpenRead(filePath);
-            var catalogue = FeatureCatalogueReader.Read(stream);
-            var match = SpecPattern.Match(catalogue.Name);
-            return match.Success ? match.Value : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadBuiltInFeatureCatalogueVersion(string spec)
-    {
-        try
-        {
-            using var stream = Specifications.Specification.TryOpenFeatureCatalogue(spec);
-            if (stream is null) return null;
-            var catalogue = FeatureCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadBuiltInPortrayalCatalogueVersion(string spec)
-    {
-        try
-        {
-            using var source = Specifications.Specification.CreatePortrayalCatalogueSource(spec);
-            using var stream = source.OpenAsync("portrayal_catalogue.xml").GetAwaiter().GetResult();
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.Version) ? null : catalogue.Version;
-        }
-        catch
-        {
-            return null;
         }
     }
 }

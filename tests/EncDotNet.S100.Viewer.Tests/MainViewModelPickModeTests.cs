@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -14,6 +15,12 @@ public class MainViewModelPickModeTests
         public string DisplayName => "Test";
         public IReadOnlyList<DatasetCatalogEntry> Entries => Array.Empty<DatasetCatalogEntry>();
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
+    }
+
+    private sealed class StubThemeService : IThemeService
+    {
+        public bool IsDarkTheme { get; private set; }
+        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; return IsDarkTheme; }
     }
 
     private static MainViewModel CreateViewModel()
@@ -32,7 +39,8 @@ public class MainViewModelPickModeTests
             datasets: new DatasetsViewModel(),
             catalogPanel: new CatalogPanelViewModel(catalogSource),
             settingsViewModel: new SettingsViewModel(settings),
-            pickReport: new PickReportViewModel());
+            pickReport: new PickReportViewModel(),
+            themeService: new StubThemeService());
     }
 
     [Fact]

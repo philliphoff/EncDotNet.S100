@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -69,6 +70,12 @@ public partial class App : Application
         services.AddSingleton<IDatasetCatalogSource>(
             sp => sp.GetRequiredService<DatasetCatalogAggregator>());
 
+        // Leaf services extracted in phase 2
+        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IRecentFilesService, RecentFilesService>();
+        services.AddSingleton<PortrayalCatalogueSeeder>();
+        services.AddSingleton<ScreenshotService>();
+
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
         services.AddSingleton<PortrayalCataloguesViewModel>();
@@ -79,16 +86,18 @@ public partial class App : Application
         services.AddSingleton<MainViewModel>();
 
         // Main window — receives StartupOptions (CLI args parsed by Spectre)
-        // along with services it still owns directly. Phase 2 will move
-        // dataset orchestration etc. behind dedicated services so this
-        // factory can shrink.
+        // along with services it still owns directly. Phase 3 will move the
+        // dataset-loader and pick-service concerns out next.
         services.AddSingleton<MainWindow>(sp => new MainWindow(
             StartupOptions,
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<PortrayalCatalogueManager>(),
             sp.GetRequiredService<DatasetCatalogAggregator>(),
             sp.GetRequiredService<S128DatasetCatalogSource>(),
-            sp.GetRequiredService<MainViewModel>()));
+            sp.GetRequiredService<MainViewModel>(),
+            sp.GetRequiredService<PortrayalCatalogueSeeder>(),
+            sp.GetRequiredService<IRecentFilesService>(),
+            sp.GetRequiredService<ScreenshotService>()));
 
         return services.BuildServiceProvider();
     }

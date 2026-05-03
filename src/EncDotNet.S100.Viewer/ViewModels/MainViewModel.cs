@@ -1,17 +1,17 @@
 using System;
 using System.Windows.Input;
-using Avalonia;
-using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class MainViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
+    private readonly IThemeService _theme;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -156,7 +156,7 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public ICommand ExitPickModeCommand { get; }
 
-    private bool _isDarkTheme = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
+    private bool _isDarkTheme;
     public bool IsDarkTheme
     {
         get => _isDarkTheme;
@@ -172,7 +172,8 @@ internal sealed class MainViewModel : ViewModelBase
         DatasetsViewModel datasets,
         CatalogPanelViewModel catalogPanel,
         SettingsViewModel settingsViewModel,
-        PickReportViewModel pickReport)
+        PickReportViewModel pickReport,
+        IThemeService themeService)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -181,8 +182,11 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(catalogPanel);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
+        ArgumentNullException.ThrowIfNull(themeService);
 
         _settings = settings;
+        _theme = themeService;
+        _isDarkTheme = themeService.IsDarkTheme;
 
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
@@ -238,17 +242,7 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => IsPickModeActive = !IsPickModeActive);
         ExitPickModeCommand = new RelayCommand(() => IsPickModeActive = false);
 
-        ToggleThemeCommand = new RelayCommand(() =>
-        {
-            if (Application.Current is { } app)
-            {
-                var next = app.ActualThemeVariant == ThemeVariant.Dark
-                    ? ThemeVariant.Light
-                    : ThemeVariant.Dark;
-                app.RequestedThemeVariant = next;
-                IsDarkTheme = next == ThemeVariant.Dark;
-            }
-        });
+        ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
         // Restore last selected activity (set field directly to avoid re-saving)
         if (settings.LastSelectedActivity is { } last
