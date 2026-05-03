@@ -1,16 +1,20 @@
 using System;
+using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Input;
-using Avalonia;
-using Avalonia.Styling;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class MainViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
+    private readonly IThemeService _theme;
+    private readonly IRecentFilesService _recentFiles;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -155,7 +159,7 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public ICommand ExitPickModeCommand { get; }
 
-    private bool _isDarkTheme = Application.Current?.ActualThemeVariant == ThemeVariant.Dark;
+    private bool _isDarkTheme;
     public bool IsDarkTheme
     {
         get => _isDarkTheme;
@@ -164,16 +168,45 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
-    public MainViewModel(ViewerSettings settings, PortrayalCatalogueManager catalogueManager, IDatasetCatalogSource catalogSource)
-    {
-        _settings = settings;
+    /// <summary>
+    /// Opens a dataset that the user has previously loaded. If the file is
+    /// no longer at the recorded path the entry is dropped from the recent
+    /// list and a status message is shown.
+    /// </summary>
+    public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
-        FeatureCatalogues = new FeatureCataloguesViewModel(settings);
-        PortrayalCatalogues = new PortrayalCataloguesViewModel(settings, catalogueManager);
-        Datasets = new DatasetsViewModel();
-        CatalogPanel = new CatalogPanelViewModel(catalogSource);
-        Settings = new SettingsViewModel(settings);
-        PickReport = new PickReportViewModel();
+    public MainViewModel(
+        ViewerSettings settings,
+        FeatureCataloguesViewModel featureCatalogues,
+        PortrayalCataloguesViewModel portrayalCatalogues,
+        DatasetsViewModel datasets,
+        CatalogPanelViewModel catalogPanel,
+        SettingsViewModel settingsViewModel,
+        PickReportViewModel pickReport,
+        IThemeService themeService,
+        IRecentFilesService recentFiles)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(featureCatalogues);
+        ArgumentNullException.ThrowIfNull(portrayalCatalogues);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(catalogPanel);
+        ArgumentNullException.ThrowIfNull(settingsViewModel);
+        ArgumentNullException.ThrowIfNull(pickReport);
+        ArgumentNullException.ThrowIfNull(themeService);
+        ArgumentNullException.ThrowIfNull(recentFiles);
+
+        _settings = settings;
+        _theme = themeService;
+        _recentFiles = recentFiles;
+        _isDarkTheme = themeService.IsDarkTheme;
+
+        FeatureCatalogues = featureCatalogues;
+        PortrayalCatalogues = portrayalCatalogues;
+        Datasets = datasets;
+        CatalogPanel = catalogPanel;
+        Settings = settingsViewModel;
+        PickReport = pickReport;
         PickReport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickReportViewModel.HasPick))
@@ -222,17 +255,9 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => IsPickModeActive = !IsPickModeActive);
         ExitPickModeCommand = new RelayCommand(() => IsPickModeActive = false);
 
-        ToggleThemeCommand = new RelayCommand(() =>
-        {
-            if (Application.Current is { } app)
-            {
-                var next = app.ActualThemeVariant == ThemeVariant.Dark
-                    ? ThemeVariant.Light
-                    : ThemeVariant.Dark;
-                app.RequestedThemeVariant = next;
-                IsDarkTheme = next == ThemeVariant.Dark;
-            }
-        });
+        ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
+
+        OpenRecentCommand = new AsyncRelayCommand<string>(OpenRecentAsync);
 
         // Restore last selected activity (set field directly to avoid re-saving)
         if (settings.LastSelectedActivity is { } last
@@ -240,5 +265,22 @@ internal sealed class MainViewModel : ViewModelBase
         {
             _selectedActivity = restored;
         }
+    }
+
+    private async Task OpenRecentAsync(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        if (!File.Exists(path))
+        {
+            StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
+            // Drop the missing entry so the menu reflects reality.
+            _recentFiles.Remove(path);
+            return;
+        }
+
+        SelectedActivity = ActivityKind.Datasets;
+        await Datasets.LoadFromPathAsync(path);
     }
 }

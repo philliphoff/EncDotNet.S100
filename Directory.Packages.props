@@ -11,6 +11,10 @@
     <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.10" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.10" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.10" />
+    <!-- MVVM / DI -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
     <!-- EncDotNet -->
     <PackageVersion Include="EncDotNet.Iso8211" Version="0.4.0" />
     <!-- Mapping / rendering -->

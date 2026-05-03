@@ -9,22 +9,17 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Mapsui.Extensions;
 using Mapsui.Manipulations;
-using System.Text.RegularExpressions;
-using EncDotNet.S100.Features;
+using Microsoft.Extensions.DependencyInjection;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
-using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Tiling;
@@ -33,211 +28,114 @@ namespace EncDotNet.S100.Viewer;
 
 public partial class MainWindow : ShadUI.Window
 {
-    private readonly ViewerSettings _settings;
-    private readonly PortrayalCatalogueManager _catalogueManager = new();
-    private readonly DatasetPipelineFactory _pipelineFactory;
+    private readonly IRecentFilesService _recentFiles;
+    private readonly ScreenshotService _screenshotService;
+    private readonly IDatasetLoaderService _loader;
+    private readonly IPickService _pickService;
+    private readonly IFileDialogService _fileDialog;
     private readonly MainViewModel _viewModel;
-    private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
-    private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
-    private readonly DatasetCatalogAggregator _catalogAggregator = new();
-    private readonly S128DatasetCatalogSource _s128CatalogSource = new();
-    private readonly NativeMenu _openRecentMenu = new();
-    private NativeMenuItem? _openRecentMenuItem;
+    private readonly DatasetCatalogAggregator _catalogAggregator;
     private string? _screenshotPath;
-    private double _lastPaneWidth = 320;
-    private double _lastPickPanelWidth = 360;
-    private Point? _lastMouseScreenPos;
-
-    /// <summary>
-    /// Threshold (milliseconds) for treating a press-and-hold as a long-press
-    /// pick gesture. Mirrors typical touch UI conventions and ECDIS
-    /// "press to identify" behavior.
-    /// </summary>
-    private const int LongPressMillis = 500;
-
-    /// <summary>
-    /// Maximum movement (in pixels) tolerated during a long-press before the
-    /// gesture is cancelled (the user is panning, not picking).
-    /// </summary>
-    private const double LongPressMoveTolerance = 6.0;
-
-    private DispatcherTimer? _longPressTimer;
-    private Avalonia.Point? _longPressOrigin;
-    private bool _longPressFired;
-
-    /// <summary>
-    /// Modifier state captured at the most recent pointer-press on the map,
-    /// used by <see cref="OnMapTapped"/> to detect modifier-click since the
-    /// Mapsui tap event doesn't carry keyboard modifiers itself.
-    /// </summary>
-    private KeyModifiers _lastPressedModifiers = KeyModifiers.None;
-
-    private void ApplyPickPanelColumnState()
-    {
-        // Pick panel lives in column index 4; the splitter is column index 3.
-        var col = ContentGrid.ColumnDefinitions[4];
-        if (_viewModel.IsPickPanelVisible)
-        {
-            col.Width = new GridLength(_lastPickPanelWidth, GridUnitType.Pixel);
-            col.MinWidth = 240;
-            col.MaxWidth = 600;
-        }
-        else
-        {
-            _lastPickPanelWidth = col.Width.IsAbsolute ? col.Width.Value : 360;
-            col.Width = new GridLength(0);
-            col.MinWidth = 0;
-            col.MaxWidth = 0;
-        }
-    }
 
     public MainWindow() : this(null) { }
 
+    /// <summary>
+    /// Legacy constructor retained for the Avalonia design-time previewer
+    /// and for callers that pre-DI created their own instance. Falls through
+    /// to the dependency-injected constructor by resolving services from
+    /// <see cref="App.Services"/> if available, else newing up defaults.
+    /// </summary>
     internal MainWindow(ViewerCommandSettings? options)
+        : this(
+            options,
+            ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
+                "MainViewModel cannot be resolved without the application service provider.")),
+            ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
+            ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
+                "IRecentFilesService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<ScreenshotService>(static () => new ScreenshotService()),
+            ResolveOrFallback<IDatasetLoaderService>(static () => throw new InvalidOperationException(
+                "IDatasetLoaderService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
+                "IPickService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()))
     {
+    }
+
+    private static T ResolveOrFallback<T>(Func<T> fallback) where T : class
+    {
+        try
+        {
+            return App.Services.GetRequiredService<T>();
+        }
+        catch (InvalidOperationException)
+        {
+            return fallback();
+        }
+    }
+
+    internal MainWindow(
+        ViewerCommandSettings? options,
+        MainViewModel viewModel,
+        DatasetCatalogAggregator catalogAggregator,
+        IRecentFilesService recentFiles,
+        ScreenshotService screenshotService,
+        IDatasetLoaderService loader,
+        IPickService pickService,
+        IFileDialogService fileDialog)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(catalogAggregator);
+        ArgumentNullException.ThrowIfNull(recentFiles);
+        ArgumentNullException.ThrowIfNull(screenshotService);
+        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(fileDialog);
+
         InitializeComponent();
 
-        _settings = ViewerSettings.Load();
+        _viewModel = viewModel;
+        _catalogAggregator = catalogAggregator;
+        _recentFiles = recentFiles;
+        _screenshotService = screenshotService;
+        _loader = loader;
+        _pickService = pickService;
+        _fileDialog = fileDialog;
 
-        // Seed catalogue manager from persisted settings
-        foreach (var (spec, path) in _settings.CataloguePaths)
+        // Hand the loader a map host now that the Mapsui control exists, and
+        // seed catalogues / build the pipeline factory from CLI options. The
+        // loader subscribes to its own settings dependencies internally.
+        _loader.Initialize(new MapsuiMapHost(MapControl), options);
+        _loader.StatusChanged += text => _viewModel.StatusText = text;
+        _loader.DatasetLoaded += entry =>
         {
-            if (Directory.Exists(path))
+            if (_screenshotPath is not null)
             {
-                _catalogueManager.SetPath(spec, path);
-            }
-        }
-
-        // Apply CLI portrayal catalogues (transient — not persisted)
-        if (options?.PortrayalCatalogues is { } cliPcs)
-        {
-            foreach (var pcPath in cliPcs)
-            {
-                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                _ = Dispatcher.UIThread.InvokeAsync(async () =>
                 {
-                    _catalogueManager.SetPath(pcSpec, pcPath);
-                }
+                    await Task.Delay(2000);
+                    CaptureScreenshot(_screenshotPath);
+                });
             }
-        }
+        };
 
-        // Collect CLI feature catalogues (transient — not persisted)
-        var transientFcPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (options?.FeatureCatalogues is { } cliFcs)
-        {
-            foreach (var fcPath in cliFcs)
-            {
-                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
-                {
-                    transientFcPaths[fcSpec] = fcPath;
-                }
-            }
-        }
-
-        // Register bundled portrayal catalogues as fallback for any spec not yet configured
-        foreach (var spec in Specifications.Specification.AvailableSpecs)
-        {
-            if (!_catalogueManager.HasCatalogue(spec) && Specifications.Specification.HasPortrayalCatalogue(spec))
-            {
-                _catalogueManager.SetSource(spec, Specifications.Specification.CreatePortrayalCatalogueSource(spec));
-            }
-        }
-
-        _pipelineFactory = new DatasetPipelineFactory(
-            _catalogueManager,
-            new MoonSharpLuaEngine(),
-            new ProjNetCrsTransformFactory(),
-            spec => transientFcPaths.TryGetValue(spec, out var p) ? File.OpenRead(p)
-                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
-                  : Specifications.Specification.TryOpenFeatureCatalogue(spec));
-
-        _viewModel = new MainViewModel(_settings, _catalogueManager, _catalogAggregator);
         DataContext = _viewModel;
 
-        // Register catalog sources. The S-128 source receives parsed datasets
-        // as they are loaded into the viewer; future sources (online, JSON)
-        // can be registered here without changes to the panel.
-        _catalogAggregator.Add(_s128CatalogSource);
-
-        // Build native menu bar
-        var sideBarItem = new NativeMenuItem(Strings.Menu_PrimarySideBar)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPaneVisible,
-        };
-        sideBarItem.Click += (_, _) => _viewModel.TogglePrimarySideBarCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
-                sideBarItem.IsChecked = _viewModel.IsPaneVisible;
-        };
-
-        var statusBarItem = new NativeMenuItem(Strings.Menu_StatusBar)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsStatusBarVisible,
-        };
-        statusBarItem.Click += (_, _) => _viewModel.ToggleStatusBarCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsStatusBarVisible))
-                statusBarItem.IsChecked = _viewModel.IsStatusBarVisible;
-        };
-
-        var pickPanelItem = new NativeMenuItem(Strings.Menu_PickReport)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPickPanelEnabled,
-        };
-        pickPanelItem.Click += (_, _) => _viewModel.TogglePickPanelCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickPanelEnabled))
-                pickPanelItem.IsChecked = _viewModel.IsPickPanelEnabled;
-        };
-
-        var pickModeItem = new NativeMenuItem(Strings.Menu_PickMode)
-        {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
-            IsChecked = _viewModel.IsPickModeActive,
-            Gesture = new KeyGesture(Key.I),
-        };
-        pickModeItem.Click += (_, _) => _viewModel.TogglePickModeCommand.Execute(null);
-
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
-            {
-                pickModeItem.IsChecked = _viewModel.IsPickModeActive;
-                ApplyPickModeCursor();
-                ApplyPickModeButtonState();
-            }
-        };
-
-        var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
-        {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
-        };
-
-        var viewMenu = new NativeMenuItem(Strings.Menu_View)
-        {
-            Menu = new NativeMenu { appearanceMenu },
-        };
-
-        var nativeMenu = new NativeMenu { BuildFileMenu(), viewMenu };
-        NativeMenu.SetMenu(this, nativeMenu);
-        RebuildOpenRecentMenu();
+        // Build the native menu bar (File / View › Appearance) and keep its
+        // toggle items mirrored against the view-model. The builder owns the
+        // PropertyChanged subscriptions for the lifetime of this window.
+        new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
+            window: this,
+            openDatasetAsync: OpenDatasetAsync);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInFeatureCatalogueVersion(spec));
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInFeatureCatalogueVersion(spec));
 
             if (Specifications.Specification.HasPortrayalCatalogue(spec))
             {
-                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, ReadBuiltInPortrayalCatalogueVersion(spec));
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInPortrayalCatalogueVersion(spec));
             }
         }
 
@@ -245,68 +143,22 @@ public partial class MainWindow : ShadUI.Window
         ApplyAccentColor(_viewModel.Settings.AccentColor);
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
 
-        // Re-render all loaded datasets when the color profile changes
-        _viewModel.Settings.PaletteChanged += palette => _ = ReRenderAllDatasetsAsync();
-
-        // Re-render all loaded datasets when symbol or text scale changes
-        _viewModel.Settings.DisplayScaleChanged += () => _ = ReRenderAllDatasetsAsync();
-
         // Apply persisted scale-bar distance unit and react to changes.
         ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
         _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
 
-        // If no pane is initially selected, start collapsed
-        if (!_viewModel.IsPaneVisible)
-        {
-            var col = ContentGrid.ColumnDefinitions[0];
-            col.Width = new GridLength(0);
-            col.MinWidth = 0;
-            col.MaxWidth = 0;
-        }
+        // Surface DatasetsViewModel rejection of unknown file extensions.
+        _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
+            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
 
-        // Collapse/expand the pane column when visibility changes
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
-            {
-                var col = ContentGrid.ColumnDefinitions[0];
-                if (_viewModel.IsPaneVisible)
-                {
-                    col.Width = new GridLength(_lastPaneWidth, GridUnitType.Pixel);
-                    col.MinWidth = 200;
-                    col.MaxWidth = 600;
-                }
-                else
-                {
-                    _lastPaneWidth = col.Width.IsAbsolute ? col.Width.Value : 320;
-                    col.Width = new GridLength(0);
-                    col.MinWidth = 0;
-                    col.MaxWidth = 0;
-                }
-            }
-        };
-
-        // Pick panel column starts collapsed; expand only when a pick is shown.
-        ApplyPickPanelColumnState();
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickPanelVisible))
-                ApplyPickPanelColumnState();
-        };
-
-        // Wire up dataset load requests
-        _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
-
-        // Clean up layers when a dataset entry is removed from the list
+        // Clean up layers when a dataset entry is removed from the list.
         _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
         {
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems is not null)
             {
                 foreach (DatasetEntry removed in e.OldItems)
                 {
-                    RemoveEntryLayers(removed);
-                    _processors.Remove(removed);
-                    _s128CatalogSource.RemoveDataset(removed.DisplayName);
+                    _loader.RemoveEntry(removed);
                 }
             }
         };
@@ -329,54 +181,23 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
-        // Enable pinch-to-zoom on the map control via trackpad magnify gesture
-        MapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
+        // Enable trackpad pan/pinch/rotate gestures, single/double-tap pick,
+        // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
+        // sync, and the zoom in/out overlay buttons.
+        new MapInteractionController(_viewModel, _pickService, _loader)
+            .Attach(MapControl, ZoomInButton, ZoomOutButton, ScaleBar, CompassRose);
 
-        // Enable trackpad rotate gesture to rotate the map
-        MapControl.AddHandler(Gestures.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
-
-        // Enable double-tap to zoom in
-        MapControl.DoubleTapped += OnMapDoubleTapped;
-
-        // Enable single-tap feature identify (pick report)
-        MapControl.MapTapped += OnMapTapped;
-
-        // Long-press (~500ms hold without moving) is always a one-shot pick
-        // regardless of Pick Mode. Tunneling lets us see the press before
-        // MapControl handles it.
-        MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressed, RoutingStrategies.Tunnel);
-        MapControl.AddHandler(PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
-        MapControl.AddHandler(PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
-        MapControl.AddHandler(PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
-        MapControl.PointerExited += OnMapPointerExited;
-
-        // Esc exits Pick Mode.
-        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
-
-        // Apply the cursor that matches the current mode.
+        // Apply the cursor that matches the current mode and keep it in sync
+        // with the view-model.
         ApplyPickModeCursor();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
+                ApplyPickModeCursor();
+        };
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
-
-        // Enable trackpad scroll/swipe to pan the map (tunnel phase to intercept before MapControl)
-        MapControl.AddHandler(PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
-
-        // Zoom in/out overlay buttons
-        ZoomInButton.Click += OnZoomInClick;
-        ZoomOutButton.Click += OnZoomOutClick;
-
-        // Keep the scale bar in sync with the viewport.
-        if (MapControl.Map?.Navigator is { } scaleNav)
-        {
-            scaleNav.ViewportChanged += OnViewportChangedForScaleBar;
-            scaleNav.ViewportChanged += OnViewportChangedForMouseLatLon;
-            UpdateScaleBar(scaleNav.Viewport);
-        }
-
-        // Drive the map rotation from compass-rose drag gestures.
-        CompassRose.RotationRequested += OnCompassRotationRequested;
-        CompassRose.RotationResetRequested += OnCompassRotationReset;
 
         // Apply CLI options
         _screenshotPath = options?.ScreenshotPath;
@@ -386,7 +207,7 @@ public partial class MainWindow : ShadUI.Window
         {
             foreach (var pcPath in pcArgs)
             {
-                if (Directory.Exists(pcPath) && DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                if (Directory.Exists(pcPath) && CatalogueSpecDetection.DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
                 {
                     _viewModel.PortrayalCatalogues.AddTransient(pcSpec, pcPath);
                 }
@@ -398,7 +219,7 @@ public partial class MainWindow : ShadUI.Window
         {
             foreach (var fcPath in fcArgs)
             {
-                if (File.Exists(fcPath) && DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
+                if (File.Exists(fcPath) && CatalogueSpecDetection.DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
                 {
                     _viewModel.FeatureCatalogues.AddTransient(fcSpec, fcPath);
                 }
@@ -416,7 +237,7 @@ public partial class MainWindow : ShadUI.Window
                 {
                     var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath) ?? "S-101";
                     var entry = _viewModel.Datasets.Add(datasetPath, spec);
-                    await LoadDatasetAsync(entry);
+                    await _loader.LoadAsync(entry);
                 }
             };
         }
@@ -427,552 +248,15 @@ public partial class MainWindow : ShadUI.Window
         Resources["AccentBrush"] = new SolidColorBrush(color);
     }
 
-    private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
-    {
-        var palette = _viewModel.Settings.SelectedPalette;
-        var symbolScale = _viewModel.Settings.SymbolScale;
-        var textScale = _viewModel.Settings.TextScale;
-
-        return processor switch
-        {
-            S104DatasetProcessor when timeStep is not null
-                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S104DatasetProcessor
-                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S111DatasetProcessor when timeStep is not null
-                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S111DatasetProcessor
-                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S101DatasetProcessor
-                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S102DatasetProcessor
-                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S122DatasetProcessor
-                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S124DatasetProcessor
-                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S125DatasetProcessor
-                => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S127DatasetProcessor
-                => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S129DatasetProcessor
-                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S411DatasetProcessor
-                => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-        };
-    }
-
-    private async Task LoadDatasetAsync(DatasetEntry entry)
-    {
-        var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
-        if (spec is null)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath));
-            return;
-        }
-
-        // S-104 ships a built-in portrayal catalogue; all others need an external one.
-        if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_SelectPortrayalCatalogue, spec);
-            return;
-        }
-
-        _viewModel.StatusText = string.Format(Strings.Status_LoadingFile, Path.GetFileName(entry.FilePath));
-
-        try
-        {
-            var processor = await Task.Run(() => _pipelineFactory.CreateProcessor(entry.FilePath));
-            _processors[entry] = processor;
-
-            // Surface S-128 catalogues into the Dataset Catalog panel.
-            if (processor is S128DatasetProcessor s128)
-            {
-                _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
-            }
-
-            var palette = _viewModel.Settings.SelectedPalette;
-            var initialContext = CreateRenderContext(processor);
-            var result = await Task.Run(() => processor.Render(initialContext));
-
-            RemoveEntryLayers(entry);
-            var layers = result.Layers.ToList();
-            _entryLayers[entry] = layers;
-            foreach (var layer in layers)
-            {
-                MapControl.Map?.Layers.Add(layer);
-            }
-
-            if (MapControl.Map?.Navigator is { } nav)
-            {
-                nav.ZoomToBox(result.Extent.Grow(result.Extent.Width * 0.1, result.Extent.Height * 0.1));
-            }
-
-            entry.IsLoaded = true;
-            entry.Info = result.Info;
-            _viewModel.StatusText = result.Info;
-
-            _settings.AddRecentDataset(entry.FilePath);
-            _settings.Save();
-            RebuildOpenRecentMenu();
-
-            // Populate time steps for S-111 datasets
-            if (processor is S111DatasetProcessor s111)
-            {
-                entry.AvailableTimes = s111.AvailableTimes;
-                // SelectedTimeIndex defaults to 0, matching the initial render
-            }
-
-            // Populate time steps for S-104 datasets
-            if (processor is S104DatasetProcessor s104)
-            {
-                entry.AvailableTimes = s104.AvailableTimes;
-            }
-
-            // Re-render when the user changes the time step
-            entry.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(DatasetEntry.SelectedTimeIndex))
-                    _ = ReRenderTimeStepAsync(entry);
-            };
-
-            if (_screenshotPath is not null)
-            {
-                await Task.Delay(2000);
-                await Dispatcher.UIThread.InvokeAsync(() => CaptureScreenshot(_screenshotPath));
-            }
-        }
-        catch (Exception ex)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
-            Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
-        }
-    }
-
-    private async Task ReRenderTimeStepAsync(DatasetEntry entry)
-    {
-        if (!_processors.TryGetValue(entry, out var proc))
-            return;
-
-        var times = entry.AvailableTimes;
-        var idx = entry.SelectedTimeIndex;
-        if (times is null || idx < 0 || idx >= times.Count)
-            return;
-
-        _viewModel.StatusText = string.Format(Strings.Status_RenderingTimeStep, idx + 1, times.Count);
-
-        try
-        {
-            var context = CreateRenderContext(proc, times[idx]);
-            var result = await Task.Run(() => proc.Render(context));
-
-            RemoveEntryLayers(entry);
-            var layers = result.Layers.ToList();
-            _entryLayers[entry] = layers;
-            foreach (var layer in layers)
-            {
-                MapControl.Map?.Layers.Add(layer);
-            }
-
-            entry.Info = result.Info;
-            _viewModel.StatusText = result.Info;
-        }
-        catch (Exception ex)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
-            Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
-        }
-    }
-
-    private async Task ReRenderAllDatasetsAsync()
-    {
-        var palette = _viewModel.Settings.SelectedPalette;
-        _viewModel.StatusText = string.Format(Strings.Status_SwitchingPalette, palette);
-
-        foreach (var (entry, proc) in _processors.ToArray())
-        {
-            if (!entry.IsLoaded) continue;
-
-            try
-            {
-                // Build a context that preserves the current time step (if any)
-                var times = entry.AvailableTimes;
-                var idx = entry.SelectedTimeIndex;
-
-                DateTime? timeStep = times is not null && idx >= 0 && idx < times.Count ? times[idx] : null;
-                var context = CreateRenderContext(proc, timeStep);
-
-                var result = await Task.Run(() => proc.Render(context));
-
-                RemoveEntryLayers(entry);
-                var layers = result.Layers.ToList();
-                _entryLayers[entry] = layers;
-                foreach (var layer in layers)
-                {
-                    MapControl.Map?.Layers.Add(layer);
-                }
-
-                entry.Info = result.Info;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} with {palette} palette:\n{ex}");
-            }
-        }
-
-        _viewModel.StatusText = string.Format(Strings.Status_PaletteApplied, palette);
-    }
-
     private void CaptureScreenshot(string outputPath)
     {
-        try
-        {
-            var pixelSize = new PixelSize((int)MapControl.Bounds.Width, (int)MapControl.Bounds.Height);
-            if (pixelSize.Width <= 0 || pixelSize.Height <= 0)
-            {
-                Console.Error.WriteLine($"[Screenshot] Map control has zero size, skipping.");
-                return;
-            }
-
-            using var bitmap = new RenderTargetBitmap(pixelSize);
-            bitmap.Render(MapControl);
-            bitmap.Save(outputPath);
-
-            Console.WriteLine($"[Screenshot] Saved {pixelSize.Width}x{pixelSize.Height} to {outputPath}");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[Screenshot] Failed: {ex.Message}");
-        }
-    }
-
-    private void OnZoomInClick(object? sender, RoutedEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        navigator.ZoomTo(navigator.Viewport.Resolution / 2, 250);
-    }
-
-    private void OnViewportChangedForScaleBar(object? sender, Mapsui.ViewportChangedEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } nav)
-            return;
-
-        var viewport = nav.Viewport;
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
-        {
-            UpdateScaleBar(viewport);
-        }
-        else
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => UpdateScaleBar(viewport));
-        }
-    }
-
-    private void UpdateScaleBar(Mapsui.Viewport viewport)
-    {
-        ScaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
-        CompassRose.UpdateForViewport(viewport.Rotation);
-    }
-
-    private void OnZoomOutClick(object? sender, RoutedEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        navigator.ZoomTo(navigator.Viewport.Resolution * 2, 250);
-    }
-
-    private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        var resolution = navigator.Viewport.Resolution;
-        var newResolution = resolution / (1 + e.Delta.Y);
-        var position = e.GetPosition(MapControl);
-        var center = new ScreenPosition(position.X, position.Y);
-        navigator.ZoomTo(newResolution, center);
-        e.Handled = true;
-    }
-
-    private void OnMapRotateGesture(object? sender, PointerDeltaEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        // macOS reports the rotation delta in degrees (counter-clockwise positive).
-        // Mapsui's viewport rotation is clockwise positive, so negate.
-        var deltaDegrees = -e.Delta.X;
-        if (deltaDegrees == 0)
-            return;
-
-        var newRotation = navigator.Viewport.Rotation + deltaDegrees;
-        // Normalize to [0, 360).
-        newRotation = ((newRotation % 360.0) + 360.0) % 360.0;
-        navigator.RotateTo(newRotation);
-        e.Handled = true;
-    }
-
-    private void OnCompassRotationRequested(double rotationDegrees)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-        navigator.RotateTo(rotationDegrees);
-    }
-
-    private void OnCompassRotationReset()
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-        // Pick the equivalent rotation closest to 0 to avoid spinning the long way.
-        var current = navigator.Viewport.Rotation;
-        var target = current > 180.0 ? 360.0 : 0.0;
-        navigator.RotateTo(target, 250);
-    }
-
-    private void OnMapPointerWheelChanged(object? sender, PointerWheelEventArgs e)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        var viewport = navigator.Viewport;
-
-        // Pan vector in the unrotated (screen-aligned) world frame: dragging
-        // the content right/up (Delta.X/Y > 0) moves the viewport center
-        // left/up by the same amount.
-        var dxScreen = -e.Delta.X * viewport.Resolution * 50;
-        var dyScreen = e.Delta.Y * viewport.Resolution * 50;
-
-        // Rotate the screen-space delta into world space by the viewport
-        // rotation so swipes always agree with the on-screen orientation.
-        var rad = viewport.Rotation * Math.PI / 180.0;
-        var sin = Math.Sin(rad);
-        var cos = Math.Cos(rad);
-        var dxWorld = dxScreen * cos - dyScreen * sin;
-        var dyWorld = dxScreen * sin + dyScreen * cos;
-
-        navigator.CenterOn(viewport.CenterX + dxWorld, viewport.CenterY + dyWorld);
-        e.Handled = true;
-    }
-
-    private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
-    {
-        // In Pick Mode the double-tap zoom is suppressed so that successive
-        // taps on adjacent features each register as picks rather than zooms.
-        if (_viewModel.IsPickModeActive)
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (MapControl.Map?.Navigator is not { } navigator)
-            return;
-
-        var resolution = navigator.Viewport.Resolution;
-        var newResolution = resolution / 2;
-        var position = e.GetPosition(MapControl);
-        var center = new ScreenPosition(position.X, position.Y);
-        navigator.ZoomTo(newResolution, center, 250);
-        e.Handled = true;
-    }
-
-    private void OnMapTapped(object? sender, BaseEventArgs e)
-    {
-        if (e.GestureType != GestureType.SingleTap)
-            return;
-
-        // A long-press already produced a pick at PointerPressed → release time;
-        // suppress the synthesized SingleTap that follows so we don't pick twice
-        // (or, worse, show then immediately clear the panel).
-        if (_longPressFired)
-        {
-            _longPressFired = false;
-            return;
-        }
-
-        // Modifier-click is always a one-shot pick regardless of Pick Mode:
-        // Cmd-click on macOS, Ctrl-click on Windows / Linux.
-        if (IsPickModifierActive())
-        {
-            PerformPickAt(e);
-            return;
-        }
-
-        // Outside Pick Mode, plain single-tap is a no-op so it doesn't fight
-        // with double-tap-to-zoom (the first tap of a double-tap also fires
-        // here).
-        if (!_viewModel.IsPickModeActive)
-            return;
-
-        PerformPickAt(e);
-    }
-
-    /// <summary>
-    /// Returns true when the modifier state captured at the most recent
-    /// pointer-press matches the platform's pick modifier: <c>Cmd</c> (Meta)
-    /// on macOS, <c>Ctrl</c> on Windows and Linux.
-    /// </summary>
-    private bool IsPickModifierActive()
-    {
-        if (OperatingSystem.IsMacOS())
-            return (_lastPressedModifiers & KeyModifiers.Meta) != 0;
-        return (_lastPressedModifiers & KeyModifiers.Control) != 0;
-    }
-
-    /// <summary>
-    /// Starts the long-press timer when the primary pointer button is pressed.
-    /// </summary>
-    private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        var props = e.GetCurrentPoint(MapControl).Properties;
-        if (!props.IsLeftButtonPressed)
-            return;
-
-        // Capture modifier state for OnMapTapped's modifier-click test (the
-        // Mapsui tap event doesn't carry keyboard modifiers).
-        _lastPressedModifiers = e.KeyModifiers;
-
-        // Modifier-click is handled in OnMapTapped (where we have a MapInfo
-        // resolver); skip the long-press timer for that case.
-        if (IsPickModifierActive())
-            return;
-
-        _longPressOrigin = e.GetPosition(MapControl);
-        _longPressFired = false;
-
-        _longPressTimer?.Stop();
-        _longPressTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(LongPressMillis),
-        };
-        _longPressTimer.Tick += OnLongPressElapsed;
-        _longPressTimer.Start();
-    }
-
-    private void OnMapPointerMoved(object? sender, PointerEventArgs e)
-    {
-        UpdateMouseLatLon(e);
-
-        if (_longPressTimer is null || _longPressOrigin is not { } origin)
-            return;
-
-        var current = e.GetPosition(MapControl);
-        var dx = current.X - origin.X;
-        var dy = current.Y - origin.Y;
-        if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
-            CancelLongPress();
-    }
-
-    private void OnMapPointerExited(object? sender, PointerEventArgs e)
-    {
-        _lastMouseScreenPos = null;
-        _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
-    }
-
-    private void OnViewportChangedForMouseLatLon(object? sender, EventArgs e)
-    {
-        // Pan/zoom can move the world under a stationary cursor (common with
-        // trackpad gestures), so refresh the readout whenever the viewport
-        // changes — but only if the cursor is currently over the map.
-        if (_lastMouseScreenPos is not { } pos)
-            return;
-
-        Dispatcher.UIThread.Post(() => UpdateMouseLatLonFromScreen(pos));
-    }
-
-    private void UpdateMouseLatLon(PointerEventArgs e)
-    {
-        var position = e.GetPosition(MapControl);
-        var bounds = MapControl.Bounds;
-        if (position.X < 0 || position.Y < 0 ||
-            position.X > bounds.Width || position.Y > bounds.Height)
-        {
-            _lastMouseScreenPos = null;
-            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
-            return;
-        }
-
-        _lastMouseScreenPos = position;
-        UpdateMouseLatLonFromScreen(position);
-    }
-
-    private void UpdateMouseLatLonFromScreen(Point position)
-    {
-        if (MapControl.Map?.Navigator is not { } navigator)
-        {
-            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
-            return;
-        }
-
-        var world = navigator.Viewport.ScreenToWorld(position.X, position.Y);
-        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
-        if (double.IsNaN(lat) || double.IsNaN(lon) ||
-            double.IsInfinity(lat) || double.IsInfinity(lon) ||
-            lat < -90.0 || lat > 90.0)
-        {
-            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
-            return;
-        }
-
-        // Normalize longitude into the canonical [-180, 180] range so that
-        // panning past the antimeridian still produces sensible readings.
-        lon = ((lon + 540.0) % 360.0) - 180.0;
-        _viewModel.MouseLatLonText = LatLonFormatter.Format(lat, lon);
-    }
-
-    private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        CancelLongPress();
-    }
-
-    private void OnMapPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-    {
-        CancelLongPress();
-    }
-
-    private void CancelLongPress()
-    {
-        _longPressTimer?.Stop();
-        _longPressTimer = null;
-        _longPressOrigin = null;
-    }
-
-    private void OnLongPressElapsed(object? sender, EventArgs e)
-    {
-        if (_longPressOrigin is not { } origin)
-        {
-            CancelLongPress();
-            return;
-        }
-
-        _longPressTimer?.Stop();
-        _longPressTimer = null;
-
-        // Translate the press position to a Mapsui MapInfo and dispatch the
-        // pick. Setting _longPressFired suppresses the SingleTap that will be
-        // synthesized when the user lifts their finger.
-        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
-        var mapInfo = MapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
-        _longPressOrigin = null;
-        _longPressFired = true;
-        DispatchPick(mapInfo);
-    }
-
-    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape && _viewModel.IsPickModeActive)
-        {
-            _viewModel.ExitPickModeCommand.Execute(null);
-            e.Handled = true;
-        }
+        _screenshotService.Capture(MapControl, outputPath);
     }
 
     /// <summary>
     /// Updates the map's cursor to reflect Pick Mode (cross-hair) vs. the
-    /// default panning cursor.
+    /// default panning cursor. Called once at startup and again whenever
+    /// <see cref="MainViewModel.IsPickModeActive"/> changes.
     /// </summary>
     private void ApplyPickModeCursor()
     {
@@ -981,216 +265,21 @@ public partial class MainWindow : ShadUI.Window
             : Cursor.Default;
     }
 
-    /// <summary>
-    /// Toggles a CSS-style "pickActive" class on the Pick Mode button so the
-    /// XAML style selectors can light it up with the accent color.
-    /// </summary>
-    private void ApplyPickModeButtonState()
+    private async Task OpenDatasetAsync()
     {
-        const string activeClass = "pickActive";
-        if (_viewModel.IsPickModeActive)
-        {
-            PickModeButton.Classes.Add(activeClass);
-            // Set Background as a local value so it beats ShadUI's Button.Icon
-            // :pointerover style (local values outrank all style setters).
-            if (this.TryFindResource("AccentBrush", out var brush) && brush is IBrush accent)
-            {
-                PickModeButton.Background = accent;
-                PickModeButton.BorderBrush = accent;
-            }
-        }
-        else
-        {
-            PickModeButton.Classes.Remove(activeClass);
-            PickModeButton.ClearValue(Button.BackgroundProperty);
-            PickModeButton.ClearValue(Button.BorderBrushProperty);
-        }
-    }
-
-    /// <summary>
-    /// Click handler for the Pick Mode toolbar button — flips the view-model
-    /// flag, which in turn updates cursor + button styling via PropertyChanged.
-    /// </summary>
-    private void OnPickModeButtonClick(object? sender, RoutedEventArgs e)
-    {
-        _viewModel.TogglePickModeCommand.Execute(null);
-    }
-
-    private void PerformPickAt(BaseEventArgs e)
-    {
-        var datasetLayers = _entryLayers.Values.SelectMany(l => l);
-        var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
-        DispatchPick(mapInfo);
-    }
-
-    private void DispatchPick(MapInfo? mapInfo)
-    {
-        if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
-        {
-            // Tap on empty map: clear any active pick so the panel hides.
-            _viewModel.PickReport.Clear();
-            return;
-        }
-
-        if (hitFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
-            return;
-
-        // Find which dataset entry owns the hit layer
-        DatasetEntry? owningEntry = null;
-        foreach (var (entry, layers) in _entryLayers)
-        {
-            if (layers.Contains(hitLayer))
-            {
-                owningEntry = entry;
-                break;
-            }
-        }
-
-        if (owningEntry is null || !_processors.TryGetValue(owningEntry, out var processor))
-            return;
-
-        var info = processor.GetFeatureInfo(featureRef);
-        if (info is null)
-        {
-            _viewModel.PickReport.Clear();
-            _viewModel.StatusText = string.Format(Strings.Status_FeatureNoDetails, featureRef);
-            return;
-        }
-
-        _viewModel.PickReport.SetPick(
-            featureType: info.FeatureType,
-            featureRef: info.FeatureRef,
-            datasetFileName: owningEntry.DisplayName,
-            productSpec: processor.ProductSpec,
-            attributes: info.Attributes);
-
-        _viewModel.StatusText = string.Format(Strings.Status_FeatureSummary, info.FeatureType, info.FeatureRef);
-    }
-
-    private NativeMenuItem BuildFileMenu()
-    {
-        var openItem = new NativeMenuItem(Strings.Menu_OpenDataset)
-        {
-            Gesture = new KeyGesture(Key.O, KeyModifiers.Meta),
-        };
-        openItem.Click += (_, _) => _ = OpenDatasetAsync();
-
-        _openRecentMenuItem = new NativeMenuItem(Strings.Menu_OpenRecent)
-        {
-            Menu = _openRecentMenu,
-        };
-
-        return new NativeMenuItem(Strings.Menu_File)
-        {
-            Menu = new NativeMenu { openItem, _openRecentMenuItem },
-        };
-    }
-
-    private void RebuildOpenRecentMenu()
-    {
-        _openRecentMenu.Items.Clear();
-
-        var paths = _settings.RecentDatasetPaths;
+        var paths = await _fileDialog.OpenDatasetsAsync(this, allowMultiple: true);
         if (paths.Count == 0)
-        {
-            var empty = new NativeMenuItem(Strings.Menu_NoRecentDatasets) { IsEnabled = false };
-            _openRecentMenu.Items.Add(empty);
-            if (_openRecentMenuItem is not null)
-                _openRecentMenuItem.IsEnabled = false;
             return;
-        }
 
-        if (_openRecentMenuItem is not null)
-            _openRecentMenuItem.IsEnabled = true;
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
 
         foreach (var path in paths)
         {
-            var label = Path.GetFileName(path);
-            var item = new NativeMenuItem(label)
-            {
-                ToolTip = path,
-                IsEnabled = File.Exists(path),
-            };
-            var captured = path;
-            item.Click += async (_, _) => await OpenRecentAsync(captured);
-            _openRecentMenu.Items.Add(item);
-        }
-
-        _openRecentMenu.Items.Add(new NativeMenuItemSeparator());
-        var clear = new NativeMenuItem(Strings.Menu_ClearRecentlyOpened);
-        clear.Click += (_, _) =>
-        {
-            _settings.ClearRecentDatasets();
-            _settings.Save();
-            RebuildOpenRecentMenu();
-        };
-        _openRecentMenu.Items.Add(clear);
-    }
-
-    private async Task OpenDatasetAsync()
-    {
-        var picker = StorageProvider;
-        if (picker is null)
-            return;
-
-        var fileTypes = new List<FilePickerFileType>
-        {
-            new(Strings.FilePicker_S100DatasetsType)
-            {
-                Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
-            },
-            FilePickerFileTypes.All,
-        };
-
-        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = Strings.FilePicker_OpenDatasetTitle,
-            AllowMultiple = true,
-            FileTypeFilter = fileTypes,
-        });
-
-        if (files is null || files.Count == 0)
-            return;
-
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-
-        foreach (var file in files)
-        {
-            var path = file.TryGetLocalPath();
-            if (path is null || !File.Exists(path))
+            if (!File.Exists(path))
                 continue;
 
-            await LoadDatasetFromPathAsync(path);
+            await _viewModel.Datasets.LoadFromPathAsync(path);
         }
-    }
-
-    private async Task OpenRecentAsync(string path)
-    {
-        if (!File.Exists(path))
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
-            // Drop the missing entry so the menu reflects reality.
-            _settings.RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-            _settings.Save();
-            RebuildOpenRecentMenu();
-            return;
-        }
-
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-        await LoadDatasetFromPathAsync(path);
-    }
-
-    private async Task LoadDatasetFromPathAsync(string path)
-    {
-        var spec = DatasetPipelineFactory.DetectProductSpec(path);
-        if (spec is null)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
-            return;
-        }
-
-        var entry = _viewModel.Datasets.Add(path, spec);
-        await LoadDatasetAsync(entry);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
@@ -1206,95 +295,7 @@ public partial class MainWindow : ShadUI.Window
             if (path is null || !File.Exists(path))
                 continue;
 
-            var spec = DatasetPipelineFactory.DetectProductSpec(path);
-            if (spec is null)
-            {
-                _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
-                continue;
-            }
-
-            var entry = _viewModel.Datasets.Add(path, spec);
-            await LoadDatasetAsync(entry);
-        }
-    }
-
-    private void RemoveEntryLayers(DatasetEntry entry)
-    {
-        if (MapControl.Map is not { } map)
-            return;
-
-        if (_entryLayers.TryGetValue(entry, out var oldLayers))
-        {
-            foreach (var layer in oldLayers)
-            {
-                map.Layers.Remove(layer);
-            }
-
-            _entryLayers.Remove(entry);
-        }
-    }
-
-    private static string? DetectPortrayalCatalogueSpec(string folderPath)
-    {
-        try
-        {
-            var cataloguePath = Path.Combine(folderPath, "portrayal_catalogue.xml");
-            if (!File.Exists(cataloguePath)) return null;
-
-            using var stream = File.OpenRead(cataloguePath);
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.ProductId) ? null : catalogue.ProductId;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static readonly Regex SpecPattern = new(@"S-\d+", RegexOptions.Compiled);
-
-    private static string? DetectFeatureCatalogueSpec(string filePath)
-    {
-        try
-        {
-            using var stream = File.OpenRead(filePath);
-            var catalogue = FeatureCatalogueReader.Read(stream);
-            var match = SpecPattern.Match(catalogue.Name);
-            return match.Success ? match.Value : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadBuiltInFeatureCatalogueVersion(string spec)
-    {
-        try
-        {
-            using var stream = Specifications.Specification.TryOpenFeatureCatalogue(spec);
-            if (stream is null) return null;
-            var catalogue = FeatureCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? ReadBuiltInPortrayalCatalogueVersion(string spec)
-    {
-        try
-        {
-            using var source = Specifications.Specification.CreatePortrayalCatalogueSource(spec);
-            using var stream = source.OpenAsync("portrayal_catalogue.xml").GetAwaiter().GetResult();
-            var catalogue = PortrayalCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.Version) ? null : catalogue.Version;
-        }
-        catch
-        {
-            return null;
+            await _viewModel.Datasets.LoadFromPathAsync(path);
         }
     }
 }

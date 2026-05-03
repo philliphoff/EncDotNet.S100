@@ -26,6 +26,11 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
     </shadui:Window.Resources>
 
+    <shadui:Window.KeyBindings>
+        <!-- Esc exits Pick Mode. -->
+        <KeyBinding Gesture="Escape" Command="{Binding ExitPickModeCommand}" />
+    </shadui:Window.KeyBindings>
+
     <shadui:Window.Styles>
         <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
         <Style Selector="ToggleButton.ActivityIcon">
@@ -232,11 +237,19 @@
         <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
+                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPaneVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="320"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="200"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPickPanelVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="360"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="240"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
             </Grid.ColumnDefinitions>
 
             <!-- Activity pane -->
@@ -292,7 +305,8 @@
                             Margin="0,12,12,0">
                     <Button x:Name="PickModeButton"
                             Classes="Icon"
-                            Click="OnPickModeButtonClick"
+                            Classes.pickActive="{Binding IsPickModeActive}"
+                            Command="{Binding TogglePickModeCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
                         <Button.Styles>
                             <!--
