@@ -97,6 +97,17 @@ public sealed record S57AttributeOverride
     public string? S101Code { get; init; }
 
     /// <summary>
+    /// Per-source-value override of the target S-101 attribute name. When the
+    /// S-57 value matches a key, the redirect attribute name takes precedence
+    /// over both <see cref="S101Code"/> and the rule-level default. Used to
+    /// model conditional cross-attribute mapping such as
+    /// <c>COALNE/CATCOA</c> selectively redirecting to <c>natureOfSurface</c>
+    /// (IHO Conversion Guidance § 4.5.1).
+    /// </summary>
+    public ImmutableDictionary<string, string> S101CodeByValue { get; init; }
+        = ImmutableDictionary<string, string>.Empty;
+
+    /// <summary>
     /// Per-value remap. A key with a non-null value rewrites the S-57 value
     /// to the given S-101 value. A key with a <c>null</c> value drops the
     /// attribute entirely. Missing keys leave the value unchanged.

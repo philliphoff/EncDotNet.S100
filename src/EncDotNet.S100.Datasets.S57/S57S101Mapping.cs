@@ -140,6 +140,10 @@ public sealed class S57S101Mapping
         if (feature.AttributeOverrides.TryGetValue(s57Acronym, out var ov))
         {
             if (ov.S101Code is not null) s101Code = ov.S101Code;
+            // Per-value code override wins over both rule default and the
+            // override's S101Code.
+            if (ov.S101CodeByValue.TryGetValue(value, out var perValueCode))
+                s101Code = perValueCode;
             if (ov.ValueRemap.Count > 0)
                 valueRemap = MergeValueRemap(valueRemap, ov.ValueRemap);
         }

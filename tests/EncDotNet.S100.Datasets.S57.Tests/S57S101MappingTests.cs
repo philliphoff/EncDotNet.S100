@@ -254,4 +254,83 @@ public class S57S101MappingTests
         var m = S57S101Mapping.Default;
         Assert.Equal("Landmark", m.ResolveFeatureCode(74));
     }
+
+    // ── IHO Conversion Guidance § 4.5.1 — COALNE/CATCOA → natureOfSurface ──
+
+    [Theory]
+    [InlineData("3", "4")]   // sandy shore → sand
+    [InlineData("4", "5")]   // stony shore → stone
+    [InlineData("5", "7")]   // shingly shore → pebbles
+    [InlineData("9", "14")]  // coral reef → coral
+    [InlineData("11", "17")] // shelly shore → shells
+    public void Coalne_CatcoaSurfaceValues_RedirectToNatureOfSurface(string s57Value, string expectedS101Value)
+    {
+        var m = S57S101Mapping.Default;
+        var attrs = m.BuildAcronymView(new[] { new S57Attribute(15, s57Value) }); // CATCOA
+
+        var resolved = m.ResolveFeature(30, attrs); // COALNE
+        Assert.NotNull(resolved);
+        Assert.Equal("Coastline", resolved!.S101Code);
+
+        var attr = m.ResolveAttribute("CATCOA", s57Value, resolved);
+        Assert.NotNull(attr);
+        Assert.Equal("natureOfSurface", attr!.S101Code);
+        Assert.Equal(expectedS101Value, attr.Value);
+    }
+
+    [Fact]
+    public void Coalne_OtherCatcoaValues_FallThroughToCategoryOfCoastline()
+    {
+        var m = S57S101Mapping.Default;
+        var attrs = m.BuildAcronymView(new[] { new S57Attribute(15, "1") });
+
+        var resolved = m.ResolveFeature(30, attrs)!;
+        var attr = m.ResolveAttribute("CATCOA", "1", resolved);
+
+        Assert.NotNull(attr);
+        Assert.Equal("categoryOfCoastline", attr!.S101Code);
+        Assert.Equal("1", attr.Value); // value passed through unchanged
+    }
+
+    [Fact]
+    public void Coalne_WithoutCatcoa_StillResolvesToCoastline()
+    {
+        var m = S57S101Mapping.Default;
+        var resolved = m.ResolveFeature(30, ImmutableDictionary<string, string>.Empty);
+        Assert.NotNull(resolved);
+        Assert.Equal("Coastline", resolved!.S101Code);
+    }
+
+    // ── New v3.4 feature classes (§ 4.5/4.6/4.7 1:1 mappings) ───────────
+
+    [Theory]
+    [InlineData(10, "Berth")]
+    [InlineData(28, "Checkpoint")]
+    [InlineData(35, "Crane")]
+    [InlineData(44, "DistanceMark")]
+    [InlineData(45, "DockArea")]
+    [InlineData(47, "DryDock")]
+    [InlineData(57, "FloatingDock")]
+    [InlineData(61, "Gate")]
+    [InlineData(62, "Gridiron")]
+    [InlineData(64, "HarbourFacility")]
+    [InlineData(65, "Hulk")]
+    [InlineData(69, "Lake")]
+    [InlineData(72, "LandElevation")]
+    [InlineData(73, "LandRegion")]
+    [InlineData(79, "LockBasin")]
+    [InlineData(90, "Pile")]
+    [InlineData(95, "Pontoon")]
+    [InlineData(107, "Rapids")]
+    [InlineData(114, "River")]
+    [InlineData(122, "ShorelineConstruction")]
+    [InlineData(126, "SlopeTopline")]
+    [InlineData(127, "SlopingGround")]
+    [InlineData(128, "SmallCraftFacility")]
+    [InlineData(157, "Waterfall")]
+    public void NewFeatureClasses_MapToExpectedS101Code(ushort objl, string expected)
+    {
+        var m = S57S101Mapping.Default;
+        Assert.Equal(expected, m.ResolveFeatureCode(objl));
+    }
 }
