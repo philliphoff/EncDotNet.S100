@@ -148,12 +148,7 @@ public partial class MainWindow : ShadUI.Window
         new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
             window: this,
             openDatasetAsync: OpenDatasetAsync,
-            openRecentAsync: OpenRecentAsync,
-            onPickModeToggled: () =>
-            {
-                ApplyPickModeCursor();
-                ApplyPickModeButtonState();
-            });
+            openRecentAsync: OpenRecentAsync);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -253,11 +248,14 @@ public partial class MainWindow : ShadUI.Window
         new MapInteractionController(_viewModel, _pickService, _loader)
             .Attach(MapControl, ZoomInButton, ZoomOutButton, ScaleBar, CompassRose);
 
-        // Esc exits Pick Mode.
-        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
-
-        // Apply the cursor that matches the current mode.
+        // Apply the cursor that matches the current mode and keep it in sync
+        // with the view-model.
         ApplyPickModeCursor();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
+                ApplyPickModeCursor();
+        };
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -316,59 +314,16 @@ public partial class MainWindow : ShadUI.Window
         _screenshotService.Capture(MapControl, outputPath);
     }
 
-    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape && _viewModel.IsPickModeActive)
-        {
-            _viewModel.ExitPickModeCommand.Execute(null);
-            e.Handled = true;
-        }
-    }
-
     /// <summary>
     /// Updates the map's cursor to reflect Pick Mode (cross-hair) vs. the
-    /// default panning cursor.
+    /// default panning cursor. Called once at startup and again whenever
+    /// <see cref="MainViewModel.IsPickModeActive"/> changes.
     /// </summary>
     private void ApplyPickModeCursor()
     {
         MapControl.Cursor = _viewModel.IsPickModeActive
             ? new Cursor(StandardCursorType.Cross)
             : Cursor.Default;
-    }
-
-    /// <summary>
-    /// Toggles a CSS-style "pickActive" class on the Pick Mode button so the
-    /// XAML style selectors can light it up with the accent color.
-    /// </summary>
-    private void ApplyPickModeButtonState()
-    {
-        const string activeClass = "pickActive";
-        if (_viewModel.IsPickModeActive)
-        {
-            PickModeButton.Classes.Add(activeClass);
-            // Set Background as a local value so it beats ShadUI's Button.Icon
-            // :pointerover style (local values outrank all style setters).
-            if (this.TryFindResource("AccentBrush", out var brush) && brush is IBrush accent)
-            {
-                PickModeButton.Background = accent;
-                PickModeButton.BorderBrush = accent;
-            }
-        }
-        else
-        {
-            PickModeButton.Classes.Remove(activeClass);
-            PickModeButton.ClearValue(Button.BackgroundProperty);
-            PickModeButton.ClearValue(Button.BorderBrushProperty);
-        }
-    }
-
-    /// <summary>
-    /// Click handler for the Pick Mode toolbar button — flips the view-model
-    /// flag, which in turn updates cursor + button styling via PropertyChanged.
-    /// </summary>
-    private void OnPickModeButtonClick(object? sender, RoutedEventArgs e)
-    {
-        _viewModel.TogglePickModeCommand.Execute(null);
     }
 
     private async Task OpenDatasetAsync()

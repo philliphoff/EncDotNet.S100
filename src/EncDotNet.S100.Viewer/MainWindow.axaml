@@ -26,6 +26,11 @@
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
     </shadui:Window.Resources>
 
+    <shadui:Window.KeyBindings>
+        <!-- Esc exits Pick Mode. -->
+        <KeyBinding Gesture="Escape" Command="{Binding ExitPickModeCommand}" />
+    </shadui:Window.KeyBindings>
+
     <shadui:Window.Styles>
         <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
         <Style Selector="ToggleButton.ActivityIcon">
@@ -292,7 +297,8 @@
                             Margin="0,12,12,0">
                     <Button x:Name="PickModeButton"
                             Classes="Icon"
-                            Click="OnPickModeButtonClick"
+                            Classes.pickActive="{Binding IsPickModeActive}"
+                            Command="{Binding TogglePickModeCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
                         <Button.Styles>
                             <!--

@@ -23,7 +23,6 @@ internal sealed class NativeMenuBuilder
     private NativeMenuItem? _openRecentMenuItem;
     private Func<Task>? _openDatasetAsync;
     private Func<string, Task>? _openRecentAsync;
-    private Action? _onPickModeToggled;
 
     public NativeMenuBuilder(MainViewModel viewModel, IRecentFilesService recentFiles)
     {
@@ -42,21 +41,17 @@ internal sealed class NativeMenuBuilder
     /// <param name="window">The window to attach the menu to.</param>
     /// <param name="openDatasetAsync">Invoked when the user selects File › Open Dataset…</param>
     /// <param name="openRecentAsync">Invoked when the user selects a path from the Recent submenu.</param>
-    /// <param name="onPickModeToggled">Invoked after the Pick Mode toggle command runs so the window can refresh its cursor / button styling.</param>
     public void Attach(
         Window window,
         Func<Task> openDatasetAsync,
-        Func<string, Task> openRecentAsync,
-        Action onPickModeToggled)
+        Func<string, Task> openRecentAsync)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(openDatasetAsync);
         ArgumentNullException.ThrowIfNull(openRecentAsync);
-        ArgumentNullException.ThrowIfNull(onPickModeToggled);
 
         _openDatasetAsync = openDatasetAsync;
         _openRecentAsync = openRecentAsync;
-        _onPickModeToggled = onPickModeToggled;
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
@@ -85,8 +80,7 @@ internal sealed class NativeMenuBuilder
             execute: () => _viewModel.TogglePickModeCommand.Execute(null),
             propertyName: nameof(MainViewModel.IsPickModeActive),
             checkedSelector: () => _viewModel.IsPickModeActive,
-            gesture: new KeyGesture(Key.I),
-            postChangeCallback: _onPickModeToggled);
+            gesture: new KeyGesture(Key.I));
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
@@ -113,8 +107,7 @@ internal sealed class NativeMenuBuilder
         Action execute,
         string propertyName,
         Func<bool> checkedSelector,
-        KeyGesture? gesture = null,
-        Action? postChangeCallback = null)
+        KeyGesture? gesture = null)
     {
         var item = new NativeMenuItem(label)
         {
@@ -129,7 +122,6 @@ internal sealed class NativeMenuBuilder
         {
             if (e.PropertyName != propertyName) return;
             item.IsChecked = checkedSelector();
-            postChangeCallback?.Invoke();
         };
 
         return item;
