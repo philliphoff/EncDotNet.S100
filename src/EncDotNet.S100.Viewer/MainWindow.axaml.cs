@@ -36,27 +36,6 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private string? _screenshotPath;
-    private double _lastPaneWidth = 320;
-    private double _lastPickPanelWidth = 360;
-
-    private void ApplyPickPanelColumnState()
-    {
-        // Pick panel lives in column index 4; the splitter is column index 3.
-        var col = ContentGrid.ColumnDefinitions[4];
-        if (_viewModel.IsPickPanelVisible)
-        {
-            col.Width = new GridLength(_lastPickPanelWidth, GridUnitType.Pixel);
-            col.MinWidth = 240;
-            col.MaxWidth = 600;
-        }
-        else
-        {
-            _lastPickPanelWidth = col.Width.IsAbsolute ? col.Width.Value : 360;
-            col.Width = new GridLength(0);
-            col.MinWidth = 0;
-            col.MaxWidth = 0;
-        }
-    }
 
     public MainWindow() : this(null) { }
 
@@ -171,45 +150,6 @@ public partial class MainWindow : ShadUI.Window
         // Surface DatasetsViewModel rejection of unknown file extensions.
         _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
             _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
-
-        // If no pane is initially selected, start collapsed
-        if (!_viewModel.IsPaneVisible)
-        {
-            var col = ContentGrid.ColumnDefinitions[0];
-            col.Width = new GridLength(0);
-            col.MinWidth = 0;
-            col.MaxWidth = 0;
-        }
-
-        // Collapse/expand the pane column when visibility changes
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPaneVisible))
-            {
-                var col = ContentGrid.ColumnDefinitions[0];
-                if (_viewModel.IsPaneVisible)
-                {
-                    col.Width = new GridLength(_lastPaneWidth, GridUnitType.Pixel);
-                    col.MinWidth = 200;
-                    col.MaxWidth = 600;
-                }
-                else
-                {
-                    _lastPaneWidth = col.Width.IsAbsolute ? col.Width.Value : 320;
-                    col.Width = new GridLength(0);
-                    col.MinWidth = 0;
-                    col.MaxWidth = 0;
-                }
-            }
-        };
-
-        // Pick panel column starts collapsed; expand only when a pick is shown.
-        ApplyPickPanelColumnState();
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickPanelVisible))
-                ApplyPickPanelColumnState();
-        };
 
         // Clean up layers when a dataset entry is removed from the list.
         _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>

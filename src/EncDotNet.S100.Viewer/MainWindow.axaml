@@ -237,11 +237,19 @@
         <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
+                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPaneVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="320"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="200"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPickPanelVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="360"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="240"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
             </Grid.ColumnDefinitions>
 
             <!-- Activity pane -->
