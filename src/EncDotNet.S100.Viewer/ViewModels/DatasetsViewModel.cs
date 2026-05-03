@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -98,15 +100,18 @@ internal sealed class DatasetEntry : ViewModelBase
 
 internal sealed class DatasetsViewModel : ViewModelBase
 {
+    private readonly IDatasetLoaderService _loader;
+
     public ObservableCollection<DatasetEntry> Entries { get; } = new();
 
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }
 
-    public event Action<DatasetEntry>? LoadRequested;
-
-    public DatasetsViewModel()
+    public DatasetsViewModel(IDatasetLoaderService loader)
     {
+        ArgumentNullException.ThrowIfNull(loader);
+        _loader = loader;
+
         AddCommand = new RelayCommand<string?>(_ => { });
         RemoveCommand = new RelayCommand<DatasetEntry>(Remove);
     }
@@ -118,9 +123,14 @@ internal sealed class DatasetsViewModel : ViewModelBase
         return entry;
     }
 
+    /// <summary>
+    /// Loads the supplied entry through the dataset loader. Fire-and-forget;
+    /// errors are surfaced via <see cref="IDatasetLoaderService.StatusChanged"/>.
+    /// </summary>
     public void RequestLoad(DatasetEntry entry)
     {
-        LoadRequested?.Invoke(entry);
+        ArgumentNullException.ThrowIfNull(entry);
+        _ = _loader.LoadAsync(entry);
     }
 
     private void Remove(DatasetEntry? entry)

@@ -10,7 +10,7 @@ using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class MainViewModelPickModeTests
+public class PickServiceTests
 {
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
     {
@@ -26,7 +26,7 @@ public class MainViewModelPickModeTests
         public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; return IsDarkTheme; }
     }
 
-    private sealed class StubDatasetLoaderService : IDatasetLoaderService
+    private sealed class StubLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
             = new Dictionary<DatasetEntry, IDatasetProcessor>();
@@ -41,72 +41,48 @@ public class MainViewModelPickModeTests
         public void RemoveEntry(DatasetEntry entry) { }
     }
 
-    private static MainViewModel CreateViewModel()
+    private static MainViewModel CreateMainViewModel()
     {
-        // Construct in-memory settings (without invoking Save()) and a
-        // throwaway catalogue manager. MainViewModel only touches the
-        // settings file when Save() is called via a setter, which the pick
-        // mode commands never do.
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
-        var catalogSource = new EmptyCatalogSource();
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: new DatasetsViewModel(new StubDatasetLoaderService()),
-            catalogPanel: new CatalogPanelViewModel(catalogSource),
+            datasets: new DatasetsViewModel(new StubLoader()),
+            catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             themeService: new StubThemeService());
     }
 
     [Fact]
-    public void IsPickModeActive_DefaultsToFalse()
+    public void HandlePick_NullMapInfo_ClearsPickReport()
     {
-        var vm = CreateViewModel();
-        Assert.False(vm.IsPickModeActive);
+        var viewModel = CreateMainViewModel();
+        // Seed with an active pick so we can verify it gets cleared.
+        viewModel.PickReport.SetPick(
+            featureType: "DepthArea",
+            featureRef: "FRID#1",
+            datasetFileName: "test.000",
+            productSpec: "S-101",
+            attributes: new Dictionary<string, string?>());
+        Assert.True(viewModel.PickReport.HasPick);
+
+        var service = new PickService(new StubLoader(), viewModel);
+        service.HandlePick(null);
+
+        Assert.False(viewModel.PickReport.HasPick);
     }
 
     [Fact]
-    public void TogglePickModeCommand_FlipsState()
+    public void HandlePick_NullMapInfo_NoPriorPick_StaysCleared()
     {
-        var vm = CreateViewModel();
+        var viewModel = CreateMainViewModel();
+        var service = new PickService(new StubLoader(), viewModel);
 
-        vm.TogglePickModeCommand.Execute(null);
-        Assert.True(vm.IsPickModeActive);
+        service.HandlePick(null);
 
-        vm.TogglePickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void ExitPickModeCommand_TurnsOffAndIsIdempotent()
-    {
-        var vm = CreateViewModel();
-        vm.IsPickModeActive = true;
-
-        vm.ExitPickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-
-        vm.ExitPickModeCommand.Execute(null);
-        Assert.False(vm.IsPickModeActive);
-    }
-
-    [Fact]
-    public void IsPickModeActive_RaisesPropertyChanged()
-    {
-        var vm = CreateViewModel();
-        var fired = 0;
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
-                fired++;
-        };
-
-        vm.TogglePickModeCommand.Execute(null);
-        vm.TogglePickModeCommand.Execute(null);
-
-        Assert.Equal(2, fired);
+        Assert.False(viewModel.PickReport.HasPick);
     }
 }

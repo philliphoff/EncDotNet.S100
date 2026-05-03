@@ -1,9 +1,11 @@
+using System.IO;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -19,25 +21,12 @@ public partial class DatasetsView : UserControl
     {
         if (DataContext is not DatasetsViewModel vm) return;
 
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel is null) return;
+        var fileDialog = App.Services.GetRequiredService<IFileDialogService>();
+        var paths = await fileDialog.OpenDatasetsAsync(TopLevel.GetTopLevel(this), allowMultiple: false);
+        if (paths.Count == 0) return;
 
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open S-100 Dataset",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("S-101 Files (ISO 8211)") { Patterns = ["*.000"] },
-                new FilePickerFileType("S-100 HDF5 Files (S-102, S-104, S-111)") { Patterns = ["*.h5", "*.H5", "*.hdf5"] },
-                new FilePickerFileType("All Files") { Patterns = ["*"] },
-            ],
-        });
-
-        if (files.Count == 0) return;
-
-        var path = files[0].TryGetLocalPath();
-        if (path is null) return;
+        var path = paths[0];
+        if (!File.Exists(path)) return;
 
         var spec = DatasetPipelineFactory.DetectProductSpec(path);
         if (spec is null) return;

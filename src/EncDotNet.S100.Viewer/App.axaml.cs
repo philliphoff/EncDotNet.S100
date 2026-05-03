@@ -48,6 +48,11 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        // Wire the S-128 catalog source into the aggregator. Done here (and
+        // not in MainWindow) so the registration is independent of the view.
+        s_services.GetRequiredService<DatasetCatalogAggregator>()
+            .Add(s_services.GetRequiredService<S128DatasetCatalogSource>());
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
@@ -76,6 +81,11 @@ public partial class App : Application
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<ScreenshotService>();
 
+        // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
+        services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
+        services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<IFileDialogService, FileDialogService>();
+
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
         services.AddSingleton<PortrayalCataloguesViewModel>();
@@ -85,19 +95,18 @@ public partial class App : Application
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<MainViewModel>();
 
-        // Main window — receives StartupOptions (CLI args parsed by Spectre)
-        // along with services it still owns directly. Phase 3 will move the
-        // dataset-loader and pick-service concerns out next.
+        // Main window — receives only the StartupOptions plus the small set
+        // of cross-cutting services it still owns directly. Per-dataset
+        // orchestration lives in IDatasetLoaderService / IPickService.
         services.AddSingleton<MainWindow>(sp => new MainWindow(
             StartupOptions,
-            sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<PortrayalCatalogueManager>(),
-            sp.GetRequiredService<DatasetCatalogAggregator>(),
-            sp.GetRequiredService<S128DatasetCatalogSource>(),
             sp.GetRequiredService<MainViewModel>(),
-            sp.GetRequiredService<PortrayalCatalogueSeeder>(),
+            sp.GetRequiredService<DatasetCatalogAggregator>(),
             sp.GetRequiredService<IRecentFilesService>(),
-            sp.GetRequiredService<ScreenshotService>()));
+            sp.GetRequiredService<ScreenshotService>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<IPickService>(),
+            sp.GetRequiredService<IFileDialogService>()));
 
         return services.BuildServiceProvider();
     }

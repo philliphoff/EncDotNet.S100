@@ -11,19 +11,15 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Mapsui.Extensions;
 using Mapsui.Manipulations;
 using Microsoft.Extensions.DependencyInjection;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
-using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Tiling;
@@ -32,17 +28,13 @@ namespace EncDotNet.S100.Viewer;
 
 public partial class MainWindow : ShadUI.Window
 {
-    private readonly ViewerSettings _settings;
-    private readonly PortrayalCatalogueManager _catalogueManager;
-    private readonly PortrayalCatalogueSeeder _catalogueSeeder;
     private readonly IRecentFilesService _recentFiles;
     private readonly ScreenshotService _screenshotService;
-    private readonly DatasetPipelineFactory _pipelineFactory;
+    private readonly IDatasetLoaderService _loader;
+    private readonly IPickService _pickService;
+    private readonly IFileDialogService _fileDialog;
     private readonly MainViewModel _viewModel;
-    private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
-    private readonly Dictionary<DatasetEntry, List<ILayer>> _entryLayers = new();
     private readonly DatasetCatalogAggregator _catalogAggregator;
-    private readonly S128DatasetCatalogSource _s128CatalogSource;
     private readonly NativeMenu _openRecentMenu = new();
     private NativeMenuItem? _openRecentMenuItem;
     private string? _screenshotPath;
@@ -104,17 +96,17 @@ public partial class MainWindow : ShadUI.Window
     internal MainWindow(ViewerCommandSettings? options)
         : this(
             options,
-            ResolveOrFallback<ViewerSettings>(ViewerSettings.Load),
-            ResolveOrFallback<PortrayalCatalogueManager>(static () => new PortrayalCatalogueManager()),
-            ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
-            ResolveOrFallback<S128DatasetCatalogSource>(static () => new S128DatasetCatalogSource()),
             ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
                 "MainViewModel cannot be resolved without the application service provider.")),
-            ResolveOrFallback<PortrayalCatalogueSeeder>(static () => throw new InvalidOperationException(
-                "PortrayalCatalogueSeeder cannot be resolved without the application service provider.")),
+            ResolveOrFallback<DatasetCatalogAggregator>(static () => new DatasetCatalogAggregator()),
             ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
                 "IRecentFilesService cannot be resolved without the application service provider.")),
-            ResolveOrFallback<ScreenshotService>(static () => new ScreenshotService()))
+            ResolveOrFallback<ScreenshotService>(static () => new ScreenshotService()),
+            ResolveOrFallback<IDatasetLoaderService>(static () => throw new InvalidOperationException(
+                "IDatasetLoaderService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
+                "IPickService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()))
     {
     }
 
@@ -132,54 +124,49 @@ public partial class MainWindow : ShadUI.Window
 
     internal MainWindow(
         ViewerCommandSettings? options,
-        ViewerSettings settings,
-        PortrayalCatalogueManager catalogueManager,
-        DatasetCatalogAggregator catalogAggregator,
-        S128DatasetCatalogSource s128CatalogSource,
         MainViewModel viewModel,
-        PortrayalCatalogueSeeder catalogueSeeder,
+        DatasetCatalogAggregator catalogAggregator,
         IRecentFilesService recentFiles,
-        ScreenshotService screenshotService)
+        ScreenshotService screenshotService,
+        IDatasetLoaderService loader,
+        IPickService pickService,
+        IFileDialogService fileDialog)
     {
-        ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(catalogueManager);
-        ArgumentNullException.ThrowIfNull(catalogAggregator);
-        ArgumentNullException.ThrowIfNull(s128CatalogSource);
         ArgumentNullException.ThrowIfNull(viewModel);
-        ArgumentNullException.ThrowIfNull(catalogueSeeder);
+        ArgumentNullException.ThrowIfNull(catalogAggregator);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(screenshotService);
+        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(fileDialog);
 
         InitializeComponent();
 
-        _settings = settings;
-        _catalogueManager = catalogueManager;
-        _catalogAggregator = catalogAggregator;
-        _s128CatalogSource = s128CatalogSource;
         _viewModel = viewModel;
-        _catalogueSeeder = catalogueSeeder;
+        _catalogAggregator = catalogAggregator;
         _recentFiles = recentFiles;
         _screenshotService = screenshotService;
+        _loader = loader;
+        _pickService = pickService;
+        _fileDialog = fileDialog;
 
-        // Seed catalogues from settings + CLI args + bundled fallbacks; the
-        // returned map captures CLI feature-catalogue paths for the pipeline
-        // factory below (transient — not persisted).
-        var transientFcPaths = _catalogueSeeder.Seed(options);
-
-        _pipelineFactory = new DatasetPipelineFactory(
-            _catalogueManager,
-            new MoonSharpLuaEngine(),
-            new ProjNetCrsTransformFactory(),
-            spec => transientFcPaths.TryGetValue(spec, out var p) ? File.OpenRead(p)
-                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
-                  : Specifications.Specification.TryOpenFeatureCatalogue(spec));
+        // Hand the loader a map host now that the Mapsui control exists, and
+        // seed catalogues / build the pipeline factory from CLI options.
+        _loader.Initialize(new MapsuiMapHost(MapControl), options);
+        _loader.StatusChanged += text => _viewModel.StatusText = text;
+        _loader.DatasetLoaded += entry =>
+        {
+            if (_screenshotPath is not null)
+            {
+                _ = Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    await Task.Delay(2000);
+                    CaptureScreenshot(_screenshotPath);
+                });
+            }
+        };
 
         DataContext = _viewModel;
-
-        // Register catalog sources. The S-128 source receives parsed datasets
-        // as they are loaded into the viewer; future sources (online, JSON)
-        // can be registered here without changes to the panel.
-        _catalogAggregator.Add(_s128CatalogSource);
 
         // Build native menu bar
         var sideBarItem = new NativeMenuItem(Strings.Menu_PrimarySideBar)
@@ -270,10 +257,10 @@ public partial class MainWindow : ShadUI.Window
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
 
         // Re-render all loaded datasets when the color profile changes
-        _viewModel.Settings.PaletteChanged += palette => _ = ReRenderAllDatasetsAsync();
+        _viewModel.Settings.PaletteChanged += palette => _ = _loader.ReRenderAllAsync();
 
         // Re-render all loaded datasets when symbol or text scale changes
-        _viewModel.Settings.DisplayScaleChanged += () => _ = ReRenderAllDatasetsAsync();
+        _viewModel.Settings.DisplayScaleChanged += () => _ = _loader.ReRenderAllAsync();
 
         // Apply persisted scale-bar distance unit and react to changes.
         ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
@@ -318,19 +305,14 @@ public partial class MainWindow : ShadUI.Window
                 ApplyPickPanelColumnState();
         };
 
-        // Wire up dataset load requests
-        _viewModel.Datasets.LoadRequested += entry => _ = LoadDatasetAsync(entry);
-
-        // Clean up layers when a dataset entry is removed from the list
+        // Clean up layers when a dataset entry is removed from the list.
         _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
         {
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems is not null)
             {
                 foreach (DatasetEntry removed in e.OldItems)
                 {
-                    RemoveEntryLayers(removed);
-                    _processors.Remove(removed);
-                    _s128CatalogSource.RemoveDataset(removed.DisplayName);
+                    _loader.RemoveEntry(removed);
                 }
             }
         };
@@ -440,7 +422,7 @@ public partial class MainWindow : ShadUI.Window
                 {
                     var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath) ?? "S-101";
                     var entry = _viewModel.Datasets.Add(datasetPath, spec);
-                    await LoadDatasetAsync(entry);
+                    await _loader.LoadAsync(entry);
                 }
             };
         }
@@ -449,201 +431,6 @@ public partial class MainWindow : ShadUI.Window
     private void ApplyAccentColor(Color color)
     {
         Resources["AccentBrush"] = new SolidColorBrush(color);
-    }
-
-    private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
-    {
-        var palette = _viewModel.Settings.SelectedPalette;
-        var symbolScale = _viewModel.Settings.SymbolScale;
-        var textScale = _viewModel.Settings.TextScale;
-
-        return processor switch
-        {
-            S104DatasetProcessor when timeStep is not null
-                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S104DatasetProcessor
-                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S111DatasetProcessor when timeStep is not null
-                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S111DatasetProcessor
-                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S101DatasetProcessor
-                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S102DatasetProcessor
-                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S122DatasetProcessor
-                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S124DatasetProcessor
-                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S125DatasetProcessor
-                => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S127DatasetProcessor
-                => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S129DatasetProcessor
-                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            S411DatasetProcessor
-                => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-        };
-    }
-
-    private async Task LoadDatasetAsync(DatasetEntry entry)
-    {
-        var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
-        if (spec is null)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath));
-            return;
-        }
-
-        // S-104 ships a built-in portrayal catalogue; all others need an external one.
-        if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_SelectPortrayalCatalogue, spec);
-            return;
-        }
-
-        _viewModel.StatusText = string.Format(Strings.Status_LoadingFile, Path.GetFileName(entry.FilePath));
-
-        try
-        {
-            var processor = await Task.Run(() => _pipelineFactory.CreateProcessor(entry.FilePath));
-            _processors[entry] = processor;
-
-            // Surface S-128 catalogues into the Dataset Catalog panel.
-            if (processor is S128DatasetProcessor s128)
-            {
-                _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
-            }
-
-            var palette = _viewModel.Settings.SelectedPalette;
-            var initialContext = CreateRenderContext(processor);
-            var result = await Task.Run(() => processor.Render(initialContext));
-
-            RemoveEntryLayers(entry);
-            var layers = result.Layers.ToList();
-            _entryLayers[entry] = layers;
-            foreach (var layer in layers)
-            {
-                MapControl.Map?.Layers.Add(layer);
-            }
-
-            if (MapControl.Map?.Navigator is { } nav)
-            {
-                nav.ZoomToBox(result.Extent.Grow(result.Extent.Width * 0.1, result.Extent.Height * 0.1));
-            }
-
-            entry.IsLoaded = true;
-            entry.Info = result.Info;
-            _viewModel.StatusText = result.Info;
-
-            _recentFiles.Add(entry.FilePath);
-
-            // Populate time steps for S-111 datasets
-            if (processor is S111DatasetProcessor s111)
-            {
-                entry.AvailableTimes = s111.AvailableTimes;
-                // SelectedTimeIndex defaults to 0, matching the initial render
-            }
-
-            // Populate time steps for S-104 datasets
-            if (processor is S104DatasetProcessor s104)
-            {
-                entry.AvailableTimes = s104.AvailableTimes;
-            }
-
-            // Re-render when the user changes the time step
-            entry.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(DatasetEntry.SelectedTimeIndex))
-                    _ = ReRenderTimeStepAsync(entry);
-            };
-
-            if (_screenshotPath is not null)
-            {
-                await Task.Delay(2000);
-                await Dispatcher.UIThread.InvokeAsync(() => CaptureScreenshot(_screenshotPath));
-            }
-        }
-        catch (Exception ex)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
-            Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
-        }
-    }
-
-    private async Task ReRenderTimeStepAsync(DatasetEntry entry)
-    {
-        if (!_processors.TryGetValue(entry, out var proc))
-            return;
-
-        var times = entry.AvailableTimes;
-        var idx = entry.SelectedTimeIndex;
-        if (times is null || idx < 0 || idx >= times.Count)
-            return;
-
-        _viewModel.StatusText = string.Format(Strings.Status_RenderingTimeStep, idx + 1, times.Count);
-
-        try
-        {
-            var context = CreateRenderContext(proc, times[idx]);
-            var result = await Task.Run(() => proc.Render(context));
-
-            RemoveEntryLayers(entry);
-            var layers = result.Layers.ToList();
-            _entryLayers[entry] = layers;
-            foreach (var layer in layers)
-            {
-                MapControl.Map?.Layers.Add(layer);
-            }
-
-            entry.Info = result.Info;
-            _viewModel.StatusText = result.Info;
-        }
-        catch (Exception ex)
-        {
-            _viewModel.StatusText = string.Format(Strings.Status_Error, ex.Message);
-            Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
-        }
-    }
-
-    private async Task ReRenderAllDatasetsAsync()
-    {
-        var palette = _viewModel.Settings.SelectedPalette;
-        _viewModel.StatusText = string.Format(Strings.Status_SwitchingPalette, palette);
-
-        foreach (var (entry, proc) in _processors.ToArray())
-        {
-            if (!entry.IsLoaded) continue;
-
-            try
-            {
-                // Build a context that preserves the current time step (if any)
-                var times = entry.AvailableTimes;
-                var idx = entry.SelectedTimeIndex;
-
-                DateTime? timeStep = times is not null && idx >= 0 && idx < times.Count ? times[idx] : null;
-                var context = CreateRenderContext(proc, timeStep);
-
-                var result = await Task.Run(() => proc.Render(context));
-
-                RemoveEntryLayers(entry);
-                var layers = result.Layers.ToList();
-                _entryLayers[entry] = layers;
-                foreach (var layer in layers)
-                {
-                    MapControl.Map?.Layers.Add(layer);
-                }
-
-                entry.Info = result.Info;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} with {palette} palette:\n{ex}");
-            }
-        }
-
-        _viewModel.StatusText = string.Format(Strings.Status_PaletteApplied, palette);
     }
 
     private void CaptureScreenshot(string outputPath)
@@ -958,11 +745,11 @@ public partial class MainWindow : ShadUI.Window
         // Translate the press position to a Mapsui MapInfo and dispatch the
         // pick. Setting _longPressFired suppresses the SingleTap that will be
         // synthesized when the user lifts their finger.
-        var datasetLayers = _entryLayers.Values.SelectMany(l => l).ToList();
+        var datasetLayers = GetDatasetLayers();
         var mapInfo = MapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
         _longPressOrigin = null;
         _longPressFired = true;
-        DispatchPick(mapInfo);
+        _pickService.HandlePick(mapInfo);
     }
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -1022,53 +809,19 @@ public partial class MainWindow : ShadUI.Window
 
     private void PerformPickAt(BaseEventArgs e)
     {
-        var datasetLayers = _entryLayers.Values.SelectMany(l => l);
+        var datasetLayers = GetDatasetLayers();
         var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
-        DispatchPick(mapInfo);
+        _pickService.HandlePick(mapInfo);
     }
 
-    private void DispatchPick(MapInfo? mapInfo)
+    private List<ILayer> GetDatasetLayers()
     {
-        if (mapInfo?.Feature is not { } hitFeature || mapInfo.Layer is not { } hitLayer)
+        var result = new List<ILayer>();
+        foreach (var layers in _loader.EntryLayers.Values)
         {
-            // Tap on empty map: clear any active pick so the panel hides.
-            _viewModel.PickReport.Clear();
-            return;
+            result.AddRange(layers);
         }
-
-        if (hitFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
-            return;
-
-        // Find which dataset entry owns the hit layer
-        DatasetEntry? owningEntry = null;
-        foreach (var (entry, layers) in _entryLayers)
-        {
-            if (layers.Contains(hitLayer))
-            {
-                owningEntry = entry;
-                break;
-            }
-        }
-
-        if (owningEntry is null || !_processors.TryGetValue(owningEntry, out var processor))
-            return;
-
-        var info = processor.GetFeatureInfo(featureRef);
-        if (info is null)
-        {
-            _viewModel.PickReport.Clear();
-            _viewModel.StatusText = string.Format(Strings.Status_FeatureNoDetails, featureRef);
-            return;
-        }
-
-        _viewModel.PickReport.SetPick(
-            featureType: info.FeatureType,
-            featureRef: info.FeatureRef,
-            datasetFileName: owningEntry.DisplayName,
-            productSpec: processor.ProductSpec,
-            attributes: info.Attributes);
-
-        _viewModel.StatusText = string.Format(Strings.Status_FeatureSummary, info.FeatureType, info.FeatureRef);
+        return result;
     }
 
     private NativeMenuItem BuildFileMenu()
@@ -1128,35 +881,15 @@ public partial class MainWindow : ShadUI.Window
 
     private async Task OpenDatasetAsync()
     {
-        var picker = StorageProvider;
-        if (picker is null)
-            return;
-
-        var fileTypes = new List<FilePickerFileType>
-        {
-            new(Strings.FilePicker_S100DatasetsType)
-            {
-                Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
-            },
-            FilePickerFileTypes.All,
-        };
-
-        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = Strings.FilePicker_OpenDatasetTitle,
-            AllowMultiple = true,
-            FileTypeFilter = fileTypes,
-        });
-
-        if (files is null || files.Count == 0)
+        var paths = await _fileDialog.OpenDatasetsAsync(this, allowMultiple: true);
+        if (paths.Count == 0)
             return;
 
         _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
 
-        foreach (var file in files)
+        foreach (var path in paths)
         {
-            var path = file.TryGetLocalPath();
-            if (path is null || !File.Exists(path))
+            if (!File.Exists(path))
                 continue;
 
             await LoadDatasetFromPathAsync(path);
@@ -1187,7 +920,7 @@ public partial class MainWindow : ShadUI.Window
         }
 
         var entry = _viewModel.Datasets.Add(path, spec);
-        await LoadDatasetAsync(entry);
+        await _loader.LoadAsync(entry);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
@@ -1203,31 +936,7 @@ public partial class MainWindow : ShadUI.Window
             if (path is null || !File.Exists(path))
                 continue;
 
-            var spec = DatasetPipelineFactory.DetectProductSpec(path);
-            if (spec is null)
-            {
-                _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(path));
-                continue;
-            }
-
-            var entry = _viewModel.Datasets.Add(path, spec);
-            await LoadDatasetAsync(entry);
-        }
-    }
-
-    private void RemoveEntryLayers(DatasetEntry entry)
-    {
-        if (MapControl.Map is not { } map)
-            return;
-
-        if (_entryLayers.TryGetValue(entry, out var oldLayers))
-        {
-            foreach (var layer in oldLayers)
-            {
-                map.Layers.Remove(layer);
-            }
-
-            _entryLayers.Remove(entry);
+            await LoadDatasetFromPathAsync(path);
         }
     }
 }
