@@ -112,10 +112,20 @@
                 Padding="8,3"
                 Height="26"
                 IsVisible="{Binding IsStatusBarVisible}">
-            <TextBlock Text="{Binding StatusText}"
-                       FontSize="12"
-                       Opacity="0.7"
-                       VerticalAlignment="Center" />
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding MouseLatLonText}"
+                           FontSize="12"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                <TextBlock Text="{Binding StatusText}"
+                           FontSize="12"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </DockPanel>
         </Border>
 
         <!-- Activity bar (narrow icon strip on far left) -->

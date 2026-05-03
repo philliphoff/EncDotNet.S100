@@ -26,6 +26,7 @@ using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
+using Mapsui.Projections;
 using Mapsui.Tiling;
 
 namespace EncDotNet.S100.Viewer;
@@ -346,6 +347,7 @@ public partial class MainWindow : ShadUI.Window
         MapControl.AddHandler(PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
         MapControl.AddHandler(PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
         MapControl.AddHandler(PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
+        MapControl.PointerExited += OnMapPointerExited;
 
         // Esc exits Pick Mode.
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
@@ -850,6 +852,8 @@ public partial class MainWindow : ShadUI.Window
 
     private void OnMapPointerMoved(object? sender, PointerEventArgs e)
     {
+        UpdateMouseLatLon(e);
+
         if (_longPressTimer is null || _longPressOrigin is not { } origin)
             return;
 
@@ -858,6 +862,44 @@ public partial class MainWindow : ShadUI.Window
         var dy = current.Y - origin.Y;
         if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
             CancelLongPress();
+    }
+
+    private void OnMapPointerExited(object? sender, PointerEventArgs e)
+    {
+        _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+    }
+
+    private void UpdateMouseLatLon(PointerEventArgs e)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+        {
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        var position = e.GetPosition(MapControl);
+        var bounds = MapControl.Bounds;
+        if (position.X < 0 || position.Y < 0 ||
+            position.X > bounds.Width || position.Y > bounds.Height)
+        {
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        var world = navigator.Viewport.ScreenToWorld(position.X, position.Y);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon) ||
+            double.IsInfinity(lat) || double.IsInfinity(lon) ||
+            lat < -90.0 || lat > 90.0)
+        {
+            _viewModel.MouseLatLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        // Normalize longitude into the canonical [-180, 180] range so that
+        // panning past the antimeridian still produces sensible readings.
+        lon = ((lon + 540.0) % 360.0) - 180.0;
+        _viewModel.MouseLatLonText = LatLonFormatter.Format(lat, lon);
     }
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)

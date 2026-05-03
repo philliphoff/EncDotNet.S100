@@ -56,6 +56,7 @@ internal static class Strings
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_PreviousTimeStep => Get(nameof(Tooltip_PreviousTimeStep));
     public static string Tooltip_NextTimeStep => Get(nameof(Tooltip_NextTimeStep));
+    public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));

@@ -296,4 +296,9 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
   </data>
+
+  <!-- Tooltips for status bar elements -->
+  <data name="Tooltip_MouseLatLon" xml:space="preserve">
+    <value>Latitude and longitude of the cursor on the map</value>
+  </data>
 </root>

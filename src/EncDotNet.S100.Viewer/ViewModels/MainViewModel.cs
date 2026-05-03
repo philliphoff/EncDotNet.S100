@@ -94,6 +94,19 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleStatusBarCommand { get; }
 
+    private string _mouseLatLonText = LatLonFormatter.Placeholder;
+    /// <summary>
+    /// Lat/long of the mouse cursor when it is over the map, formatted in
+    /// degrees-decimal-minutes (mariner-friendly). Set to
+    /// <see cref="LatLonFormatter.Placeholder"/> when the cursor is not over
+    /// the map.
+    /// </summary>
+    public string MouseLatLonText
+    {
+        get => _mouseLatLonText;
+        set => SetProperty(ref _mouseLatLonText, value);
+    }
+
     private bool _isPickPanelEnabled;
     /// <summary>
     /// User preference for whether the pick panel is allowed to auto-open
