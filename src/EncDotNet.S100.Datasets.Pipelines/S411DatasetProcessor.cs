@@ -21,6 +21,15 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
 
     public string ProductSpec => "S-411";
 
+    /// <summary>
+    /// Time samples this dataset can be rendered at. S-411 datasets are
+    /// snapshot-per-file; this is either a single-element list with the
+    /// dataset's <see cref="S411Dataset.IssueDate"/> or empty when the
+    /// source GML carried no recognised timestamp.
+    /// </summary>
+    public IReadOnlyList<DateTime> AvailableTimes =>
+        _dataset.IssueDate is { } dt ? [dt] : Array.Empty<DateTime>();
+
     public S411DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager)
@@ -32,8 +41,29 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        var s411Context = context as S411RenderContext;
+        var palette = context?.Palette ?? PaletteType.Day;
+        var symbolScale = context?.SymbolScale ?? 1.0;
+        var textScale = context?.TextScale ?? 1.0;
+
+        // Snapshot semantics: hide the dataset if the global clock is before
+        // the dataset's issue time. The user has scrubbed to "before this
+        // ice picture existed" — return an empty layer set.
+        if (s411Context?.TimeStep is { } t
+            && _dataset.IssueDate is { } issued
+            && t < issued)
+        {
+            return new DatasetResult
+            {
+                Layers = Array.Empty<ILayer>(),
+                Extent = ComputeExtent(),
+                Info = $"S-411 Sea Ice — {_fileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})",
+                ProductSpec = "S-411",
+            };
+        }
+
         var catalogue = new S411PortrayalCatalogue(_provider);
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        catalogue.SwitchPalette(palette);
 
         // 1. Run the S-100 Part 9 vector portrayal pipeline.
         var featureSource = new S411FeatureXmlSource(_dataset);
@@ -48,8 +78,8 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
         {
             LayerName = $"S-411: {_fileName}",
             Palette = catalogue.ActivePalette,
-            SymbolScale = context?.SymbolScale ?? 1.0,
-            TextScale = context?.TextScale ?? 1.0,
+            SymbolScale = symbolScale,
+            TextScale = textScale,
             SymbolProvider = symbolName =>
             {
                 try { return catalogue.GetSymbol(symbolName).SvgContent; }
@@ -71,9 +101,11 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
         var layer = renderer.Render(instructions, geometryProvider);
 
         var featureTypes = featureSource.FeatureTypesPresent;
+        var timeInfo = _dataset.IssueDate is { } d ? $"\nIssued: {d:u}" : string.Empty;
         var info = $"S-411 Sea Ice — {_fileName}\n"
             + $"Features: {_dataset.Features.Length} ({string.Join(", ", featureTypes)})\n"
-            + $"Drawing instructions: {instructions.Count}";
+            + $"Drawing instructions: {instructions.Count}"
+            + timeInfo;
 
         return new DatasetResult
         {

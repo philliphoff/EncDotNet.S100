@@ -322,7 +322,17 @@
                           Name="PaneSplitter" />
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
-            <Grid Grid.Column="2" DragDrop.AllowDrop="True">
+            <!-- Map column wrapped in a row-grid so a timeline panel can dock at the bottom -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="100" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="120" MinHeight="100"
+                                   bh:CollapsibleRow.IsVisible="{Binding IsTimelineVisible}"
+                                   bh:CollapsibleRow.ExpandedHeight="120"
+                                   bh:CollapsibleRow.MinHeightWhenVisible="100" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" DragDrop.AllowDrop="True">
                 <mapsui:MapControl x:Name="MapControl" />
                 <views:ScaleBarView x:Name="ScaleBar"
                                     HorizontalAlignment="Center"
@@ -447,9 +457,25 @@
                                            Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
-            </Grid>
+                </Grid>
 
-            <!-- Resize grip between map and pick panel -->
+                <!-- Resize grip between map and timeline panel -->
+                <GridSplitter Grid.Row="1"
+                              Classes="PaneSplitter"
+                              Height="4"
+                              ResizeDirection="Rows"
+                              IsVisible="{Binding IsTimelineVisible}"
+                              bh:HoverDelay.DelayMilliseconds="500"
+                              Name="TimelineSplitter" />
+
+                <!-- Global time slider for time-varying datasets (S-104, S-111, S-411) -->
+                <Border Grid.Row="2"
+                        x:Name="TimelinePanel"
+                        Background="{DynamicResource BackgroundColor}"
+                        IsVisible="{Binding IsTimelineVisible}">
+                    <views:TimelineView DataContext="{Binding Timeline}" />
+                </Border>
+            </Grid>
             <GridSplitter Grid.Column="3"
                           Classes="PaneSplitter"
                           Width="4"

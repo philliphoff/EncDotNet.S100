@@ -23,6 +23,7 @@ internal sealed class MainViewModel : ViewModelBase
     public CatalogPanelViewModel CatalogPanel { get; }
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
+    public TimelineViewModel Timeline { get; }
 
     private ActivityKind? _selectedActivity;
     public ActivityKind? SelectedActivity
@@ -98,6 +99,28 @@ internal sealed class MainViewModel : ViewModelBase
     }
 
     public ICommand ToggleStatusBarCommand { get; }
+
+    private bool _isTimelineVisible;
+    /// <summary>
+    /// User preference for whether the bottom timeline panel is
+    /// shown. When false, the timeline is hidden regardless of
+    /// whether time-varying datasets are loaded. Persisted to
+    /// <see cref="ViewerSettings"/>.
+    /// </summary>
+    public bool IsTimelineVisible
+    {
+        get => _isTimelineVisible;
+        set
+        {
+            if (SetProperty(ref _isTimelineVisible, value))
+            {
+                _settings.IsTimelineVisible = value;
+                _settings.Save();
+            }
+        }
+    }
+
+    public ICommand ToggleTimelineCommand { get; }
 
     private string _mouseLatLonText = LatLonFormatter.Placeholder;
     /// <summary>
@@ -234,6 +257,7 @@ internal sealed class MainViewModel : ViewModelBase
         CatalogPanelViewModel catalogPanel,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
+        TimelineViewModel timeline,
         IThemeService themeService,
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance)
@@ -245,6 +269,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(catalogPanel);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
+        ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(measureAppearance);
@@ -263,6 +288,8 @@ internal sealed class MainViewModel : ViewModelBase
         CatalogPanel = catalogPanel;
         Settings = settingsViewModel;
         PickReport = pickReport;
+        Timeline = timeline;
+        Timeline.CloseRequested += () => IsTimelineVisible = false;
         PickReport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickReportViewModel.HasPick))
@@ -304,6 +331,9 @@ internal sealed class MainViewModel : ViewModelBase
         _isStatusBarVisible = settings.IsStatusBarVisible;
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
+
+        _isTimelineVisible = settings.IsTimelineVisible;
+        ToggleTimelineCommand = new RelayCommand(() => IsTimelineVisible = !IsTimelineVisible);
 
         _isPickPanelEnabled = settings.IsPickPanelVisible;
         TogglePickPanelCommand = new RelayCommand(() => IsPickPanelEnabled = !IsPickPanelEnabled);

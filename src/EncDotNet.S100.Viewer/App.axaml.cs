@@ -83,6 +83,7 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
+        services.AddSingleton<GlobalTimeService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
@@ -94,6 +95,7 @@ public partial class App : Application
         services.AddSingleton<CatalogPanelViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<PickReportViewModel>();
+        services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // Main window — receives only the StartupOptions plus the small set

@@ -62,6 +62,13 @@ internal sealed class NativeMenuBuilder
             propertyName: nameof(MainViewModel.IsStatusBarVisible),
             checkedSelector: () => _viewModel.IsStatusBarVisible);
 
+        var timelineItem = BuildToggleItem(
+            Strings.Menu_Timeline,
+            initiallyChecked: _viewModel.IsTimelineVisible,
+            execute: () => _viewModel.ToggleTimelineCommand.Execute(null),
+            propertyName: nameof(MainViewModel.IsTimelineVisible),
+            checkedSelector: () => _viewModel.IsTimelineVisible);
+
         var pickPanelItem = BuildToggleItem(
             Strings.Menu_PickReport,
             initiallyChecked: _viewModel.IsPickPanelEnabled,
@@ -87,7 +94,7 @@ internal sealed class NativeMenuBuilder
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem, measureModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)

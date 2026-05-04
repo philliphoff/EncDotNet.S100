@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             x:Class="EncDotNet.S100.Viewer.Views.TimelineView"
+             x:DataType="vm:TimelineViewModel">
+
+    <UserControl.Styles>
+        <!--
+          Restyle the Fluent Slider so the filled track and thumb adopt
+          the viewer's AccentBrush (#007ACC). The Fluent control template
+          paints the filled portion via a RepeatButton named
+          PART_DecreaseButton and the handle via a Thumb. Tick marks
+          (TickBar) are deliberately left at their default theme colour
+          so that the ticks remain visible against any background.
+        -->
+        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider.timeline /template/ Thumb">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider.timeline /template/ Thumb:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider.timeline /template/ Thumb:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{DynamicResource BackgroundColor}"
+            Padding="12,8"
+            VerticalAlignment="Stretch">
+        <DockPanel LastChildFill="True"
+                   VerticalAlignment="Top">
+
+            <!-- Title row — always visible so the close button is
+                 reachable even when no time-varying dataset is loaded. -->
+            <Grid DockPanel.Dock="Top"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
+                  Margin="0,0,0,4">
+                <TextBlock Grid.Column="0"
+                           Text="{x:Static loc:Strings.TimelinePanel_Title}"
+                           FontSize="11"
+                           FontWeight="Normal"
+                           LetterSpacing="1"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2"
+                           Text="{Binding CurrentTimeLabel}"
+                           FontSize="12"
+                           FontFamily="Menlo, Consolas, monospace"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"
+                           IsVisible="{Binding IsActive}" />
+                <Button Grid.Column="3"
+                        Command="{Binding CloseCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
+                        Width="22" Height="22"
+                        Padding="0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+
+            <!-- Body: either the slider/range (when active) or the
+                 empty-state message (when no dataset registered). -->
+            <Panel>
+                <!-- Active state: timeline has at least one registered dataset. -->
+                <DockPanel LastChildFill="False"
+                           VerticalAlignment="Top"
+                           IsVisible="{Binding IsActive}">
+
+                    <!-- Slider plus prev/next step buttons grouped at the right.
+                         Buttons surface only when ticks correspond to real
+                         sample times (discrete-stop mode). -->
+                    <Grid DockPanel.Dock="Top"
+                          ColumnDefinitions="*,Auto">
+                        <Slider Grid.Column="0"
+                                Classes="timeline"
+                                Foreground="{DynamicResource AccentBrush}"
+                                Minimum="{Binding SliderMinimum, Mode=OneWay}"
+                                Maximum="{Binding SliderMaximum, Mode=OneWay}"
+                                Value="{Binding SliderValue, Mode=TwoWay}"
+                                Ticks="{Binding Ticks, Mode=OneWay}"
+                                TickFrequency="{Binding TickFrequency, Mode=OneWay}"
+                                IsSnapToTickEnabled="{Binding IsSnapToTickEnabled, Mode=OneWay}"
+                                TickPlacement="BottomRight"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Spacing="2"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding AreStepButtonsVisible}">
+                            <Button Classes="Icon"
+                                    Command="{Binding PreviousStepCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                                <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Classes="Icon"
+                                    Command="{Binding NextStepCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                                <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Range summary -->
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{Binding RangeLabel}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               Margin="0,4,0,0" />
+                </DockPanel>
+
+                <!-- Empty state: timeline pane is open but no time-varying
+                     dataset is loaded. -->
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="6"
+                            IsVisible="{Binding !IsActive}">
+                    <ic:FluentIcon Icon="Clock"
+                                   IconVariant="Regular"
+                                   FontSize="28"
+                                   Opacity="0.45"
+                                   HorizontalAlignment="Center" />
+                    <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyTitle}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               Opacity="0.7" />
+                    <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyDescription}"
+                               FontSize="11"
+                               Opacity="0.55"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Panel>
+        </DockPanel>
+    </Border>
+</UserControl>
+

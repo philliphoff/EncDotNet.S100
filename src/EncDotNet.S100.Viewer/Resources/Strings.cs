@@ -50,13 +50,15 @@ internal static class Strings
     public static string Tooltip_ZoomOut => Get(nameof(Tooltip_ZoomOut));
     public static string Tooltip_ZoomToExtent => Get(nameof(Tooltip_ZoomToExtent));
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
+    public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
     public static string Tooltip_OpenDataset => Get(nameof(Tooltip_OpenDataset));
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
-    public static string Tooltip_PreviousTimeStep => Get(nameof(Tooltip_PreviousTimeStep));
-    public static string Tooltip_NextTimeStep => Get(nameof(Tooltip_NextTimeStep));
+    public static string Tooltip_TimelineSlider => Get(nameof(Tooltip_TimelineSlider));
+    public static string Tooltip_TimelinePreviousStep => Get(nameof(Tooltip_TimelinePreviousStep));
+    public static string Tooltip_TimelineNextStep => Get(nameof(Tooltip_TimelineNextStep));
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
 
     // Buttons / actions
@@ -74,6 +76,7 @@ internal static class Strings
     public static string Menu_Appearance => Get(nameof(Menu_Appearance));
     public static string Menu_PrimarySideBar => Get(nameof(Menu_PrimarySideBar));
     public static string Menu_StatusBar => Get(nameof(Menu_StatusBar));
+    public static string Menu_Timeline => Get(nameof(Menu_Timeline));
     public static string Menu_PickReport => Get(nameof(Menu_PickReport));
     public static string Menu_PickMode => Get(nameof(Menu_PickMode));
 
@@ -134,11 +137,22 @@ internal static class Strings
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_Error => Get(nameof(Status_Error));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
+    public static string Status_RenderingAtTime => Get(nameof(Status_RenderingAtTime));
     public static string Status_SwitchingPalette => Get(nameof(Status_SwitchingPalette));
     public static string Status_PaletteApplied => Get(nameof(Status_PaletteApplied));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
+
+    // Dataset entry
+    public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));
+
+    // Timeline panel
+    public static string TimelinePanel_Title => Get(nameof(TimelinePanel_Title));
+    public static string TimelinePanel_Range => Get(nameof(TimelinePanel_Range));
+    public static string TimelinePanel_NoData => Get(nameof(TimelinePanel_NoData));
+    public static string TimelinePanel_EmptyTitle => Get(nameof(TimelinePanel_EmptyTitle));
+    public static string TimelinePanel_EmptyDescription => Get(nameof(TimelinePanel_EmptyDescription));
 
     // Measure Mode
     public static string Tooltip_MeasureMode => Get(nameof(Tooltip_MeasureMode));

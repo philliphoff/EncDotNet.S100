@@ -55,6 +55,15 @@ internal sealed class ViewerSettings
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
+    /// User preference for whether the bottom timeline panel is shown.
+    /// When true the panel surfaces (in either an empty state or with
+    /// a global slider, depending on whether any time-varying dataset
+    /// is loaded). When false the panel is hidden regardless of
+    /// dataset state.
+    /// </summary>
+    public bool IsTimelineVisible { get; set; } = true;
+
+    /// <summary>
     /// Whether the Pick Report (Object Information) side panel auto-opens
     /// when a feature is picked. The user can also explicitly hide it via
     /// the View menu.

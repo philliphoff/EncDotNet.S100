@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
@@ -29,6 +30,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly IRecentFilesService _recentFiles;
     private readonly S128DatasetCatalogSource _s128CatalogSource;
     private readonly SettingsViewModel _settingsVm;
+    private readonly GlobalTimeService _globalTime;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -38,13 +40,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private IMapHost? _mapHost;
     private DatasetPipelineFactory? _pipelineFactory;
 
+    // Coalesce slider scrubs into a single render pass after the user has
+    // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
+    // debounce + render so we never queue dozens of stale renders behind
+    // the latest mouse position.
+    private static readonly TimeSpan ScrubDebounceWindow = TimeSpan.FromMilliseconds(100);
+    private CancellationTokenSource? _scrubCts;
+
     public DatasetLoaderService(
         ViewerSettings settings,
         PortrayalCatalogueManager catalogueManager,
         PortrayalCatalogueSeeder catalogueSeeder,
         IRecentFilesService recentFiles,
         S128DatasetCatalogSource s128CatalogSource,
-        SettingsViewModel settingsVm)
+        SettingsViewModel settingsVm,
+        GlobalTimeService globalTime)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -52,6 +62,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(s128CatalogSource);
         ArgumentNullException.ThrowIfNull(settingsVm);
+        ArgumentNullException.ThrowIfNull(globalTime);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -59,9 +70,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _recentFiles = recentFiles;
         _s128CatalogSource = s128CatalogSource;
         _settingsVm = settingsVm;
+        _globalTime = globalTime;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
+
+        _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
     }
 
     public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors => _processorsView;
@@ -138,7 +152,23 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 _s128CatalogSource.AddDataset(entry.DisplayName, s128.Dataset);
             }
 
-            var initialContext = CreateRenderContext(processor);
+            // Discover time samples from the processor (S-104, S-111, S-411).
+            // The adapter wraps the processor in a spec-agnostic view used
+            // by the global time slider.
+            var adapter = TimeAwareDatasetAdapter.TryCreate(processor, () => entry.CurrentTime);
+            if (adapter is not null)
+            {
+                entry.AvailableTimes = adapter.AvailableTimes;
+            }
+
+            // Pick the initial render time. If the global slider already
+            // has a clock, snap this dataset to it; otherwise let the
+            // processor pick its default (typically the first sample).
+            DateTime? initialTime = null;
+            if (adapter is not null && _globalTime.CurrentTime is { } globalNow)
+                initialTime = adapter.SnapTo(globalNow);
+
+            var initialContext = CreateRenderContext(processor, initialTime);
             var result = await Task.Run(() => processor.Render(initialContext));
 
             ReplaceLayers(entry, result.Layers.ToList());
@@ -146,28 +176,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             entry.IsLoaded = true;
             entry.Info = result.Info;
+            entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
             SetStatus(result.Info);
 
             _recentFiles.Add(entry.FilePath);
 
-            // Populate time steps for S-111 datasets
-            if (processor is S111DatasetProcessor s111)
+            // Register with the global time service after the entry's
+            // CurrentTime has been set so the first slider snap reflects
+            // the actual rendered state.
+            if (adapter is not null && adapter.AvailableTimes.Count > 0)
             {
-                entry.AvailableTimes = s111.AvailableTimes;
+                _globalTime.Register(entry, adapter);
             }
-
-            // Populate time steps for S-104 datasets
-            if (processor is S104DatasetProcessor s104)
-            {
-                entry.AvailableTimes = s104.AvailableTimes;
-            }
-
-            // Re-render when the user changes the time step
-            entry.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(DatasetEntry.SelectedTimeIndex))
-                    _ = ReRenderTimeStepAsync(entry);
-            };
 
             DatasetLoaded?.Invoke(entry);
         }
@@ -178,34 +198,52 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
     }
 
-    public async Task ReRenderTimeStepAsync(DatasetEntry entry)
+    public async Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(entry);
-
-        if (!_processors.TryGetValue(entry, out var proc))
-            return;
-
-        var times = entry.AvailableTimes;
-        var idx = entry.SelectedTimeIndex;
-        if (times is null || idx < 0 || idx >= times.Count)
-            return;
-
-        SetStatus(string.Format(Strings.Status_RenderingTimeStep, idx + 1, times.Count));
+        // Cancel any in-flight scrub render and start a fresh debounce
+        // window. The token passed in is honoured in addition to the
+        // internal debounce token so callers can cancel from outside
+        // (e.g. on shutdown).
+        _scrubCts?.Cancel();
+        var localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _scrubCts = localCts;
+        var token = localCts.Token;
 
         try
         {
-            var context = CreateRenderContext(proc, times[idx]);
-            var result = await Task.Run(() => proc.Render(context));
-
-            ReplaceLayers(entry, result.Layers.ToList());
-
-            entry.Info = result.Info;
-            SetStatus(result.Info);
+            await Task.Delay(ScrubDebounceWindow, token).ConfigureAwait(true);
         }
-        catch (Exception ex)
+        catch (TaskCanceledException)
         {
-            SetStatus(string.Format(Strings.Status_Error, ex.Message));
-            Console.Error.WriteLine($"Failed to re-render time step:\n{ex}");
+            return;
+        }
+
+        if (token.IsCancellationRequested) return;
+
+        SetStatus(string.Format(Strings.Status_RenderingAtTime, t));
+
+        foreach (var (entry, adapter) in _globalTime.Adapters.ToArray())
+        {
+            if (token.IsCancellationRequested) return;
+            if (!_processors.TryGetValue(entry, out var proc)) continue;
+
+            var snapped = adapter.SnapTo(t);
+            if (snapped == entry.CurrentTime && entry.IsLoaded) continue;
+
+            try
+            {
+                var context = CreateRenderContext(proc, snapped);
+                var result = await Task.Run(() => proc.Render(context), token).ConfigureAwait(true);
+
+                ReplaceLayers(entry, result.Layers.ToList());
+                entry.Info = result.Info;
+                entry.CurrentTime = snapped;
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to re-render {entry.FilePath} at {t:u}:\n{ex}");
+            }
         }
     }
 
@@ -220,11 +258,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             try
             {
-                var times = entry.AvailableTimes;
-                var idx = entry.SelectedTimeIndex;
-
-                DateTime? timeStep = times is not null && idx >= 0 && idx < times.Count ? times[idx] : null;
-                var context = CreateRenderContext(proc, timeStep);
+                var context = CreateRenderContext(proc, entry.CurrentTime);
 
                 var result = await Task.Run(() => proc.Render(context));
 
@@ -246,6 +280,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
         RemoveEntryLayers(entry);
         _processors.Remove(entry);
+        _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
     }
 
@@ -279,6 +314,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             S129DatasetProcessor
                 => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            S411DatasetProcessor when timeStep is not null
+                => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             S411DatasetProcessor
                 => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
             _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -26,11 +27,13 @@ internal interface IDatasetLoaderService
     Task LoadAsync(DatasetEntry entry);
 
     /// <summary>
-    /// Re-renders only the time step indicated by
-    /// <see cref="DatasetEntry.SelectedTimeIndex"/>. Used by S-104 / S-111
-    /// time-stepped datasets; a no-op for other product specs.
+    /// Re-renders every loaded time-aware dataset at the supplied global
+    /// time, using each adapter's snap rule (nearest for S-104/S-111;
+    /// at-or-before for S-411). Calls are debounced with a short
+    /// trailing window so rapid slider scrubs collapse into a single
+    /// render pass; previously-queued scrubs are cancelled.
     /// </summary>
-    Task ReRenderTimeStepAsync(DatasetEntry entry);
+    Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken);
 
     /// <summary>
     /// Re-renders every loaded dataset, preserving its current time step
