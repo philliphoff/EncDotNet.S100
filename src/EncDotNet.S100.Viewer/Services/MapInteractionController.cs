@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 using Mapsui;
@@ -57,6 +58,25 @@ internal sealed class MapInteractionController
     private KeyModifiers _lastPressedModifiers = KeyModifiers.None;
 
     private Point? _lastMouseScreenPos;
+
+    /// <summary>
+    /// Active map-tool registry. Pointer / double-tap events are offered to
+    /// the active tool first; if the tool marks the event handled the
+    /// existing pick / pan logic is skipped for that gesture.
+    /// </summary>
+    private MapToolController? _toolController;
+
+    /// <summary>
+    /// Called by <see cref="MainWindow"/> after construction to inject the
+    /// tool controller. Kept as a setter (rather than a constructor param)
+    /// because the controller is owned by the view-model and the
+    /// interaction-controller is built before the view-model is fully wired.
+    /// </summary>
+    public void SetToolController(MapToolController controller)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        _toolController = controller;
+    }
 
     public MapInteractionController(
         MainViewModel viewModel,
@@ -261,6 +281,13 @@ internal sealed class MapInteractionController
 
     private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
     {
+        // Active tool gets first refusal (e.g. measure-mode finalises on double-tap).
+        if (_toolController?.OnDoubleTapped(e) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
         // In Pick Mode the double-tap zoom is suppressed so that successive
         // taps on adjacent features each register as picks rather than zooms.
         if (_viewModel.IsPickModeActive)
@@ -328,6 +355,15 @@ internal sealed class MapInteractionController
         if (_mapControl is null)
             return;
 
+        // Offer the gesture to the active tool first (e.g. measure-mode
+        // begins drag-vs-click tracking here). If the tool handles it,
+        // skip the long-press / pick wiring entirely.
+        if (_toolController?.OnPointerPressed(e) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
         var props = e.GetCurrentPoint(_mapControl).Properties;
         if (!props.IsLeftButtonPressed)
             return;
@@ -356,6 +392,14 @@ internal sealed class MapInteractionController
     private void OnMapPointerMoved(object? sender, PointerEventArgs e)
     {
         UpdateMouseLatLon(e);
+
+        // Forward to active tool (e.g. measure-mode rubber-band update).
+        // Move events are advisory: tools may set Handled but we still want
+        // the lat/lon readout updated above.
+        if (_toolController?.OnPointerMoved(e) == true)
+        {
+            e.Handled = true;
+        }
 
         if (_longPressTimer is null || _longPressOrigin is not { } origin || _mapControl is null)
             return;
@@ -429,6 +473,10 @@ internal sealed class MapInteractionController
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_toolController?.OnPointerReleased(e) == true)
+        {
+            e.Handled = true;
+        }
         CancelLongPress();
     }
 

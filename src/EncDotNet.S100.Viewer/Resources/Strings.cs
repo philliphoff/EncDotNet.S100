@@ -139,4 +139,12 @@ internal static class Strings
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
+
+    // Measure Mode
+    public static string Tooltip_MeasureMode => Get(nameof(Tooltip_MeasureMode));
+    public static string Menu_MeasureMode => Get(nameof(Menu_MeasureMode));
+    public static string Status_MeasureLeg => Get(nameof(Status_MeasureLeg));
+    public static string Status_MeasureTotal => Get(nameof(Status_MeasureTotal));
+    public static string Status_MeasureNoData => Get(nameof(Status_MeasureNoData));
+    public static string Status_MeasureLegLabel => Get(nameof(Status_MeasureLegLabel));
 }

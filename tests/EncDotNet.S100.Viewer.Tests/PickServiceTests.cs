@@ -54,7 +54,8 @@ public class PickServiceTests
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService());
+            recentFiles: new StubRecentFilesService(),
+            measureAppearance: new StubMeasureOverlayAppearanceProvider());
     }
 
     [Fact]

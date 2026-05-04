@@ -76,7 +76,8 @@ public class MainViewModelOpenRecentTests : IDisposable
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             themeService: new StubThemeService(),
-            recentFiles: recent);
+            recentFiles: recent,
+            measureAppearance: new StubMeasureOverlayAppearanceProvider());
     }
 
     [Fact]
