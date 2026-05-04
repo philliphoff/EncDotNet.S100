@@ -12,7 +12,7 @@ public sealed class S101Dataset
     }
 
     /// <summary>The underlying parsed S-101 document.</summary>
-    internal S101Document Document { get; }
+    public S101Document Document { get; }
 
     /// <summary>Dataset name from the DSID record.</summary>
     public string DatasetName => Document.Identification.DatasetName;
@@ -40,5 +40,20 @@ public sealed class S101Dataset
         ArgumentNullException.ThrowIfNull(stream);
         var doc = S101DocumentReader.ReadFromStream(stream);
         return new S101Dataset(doc);
+    }
+
+    /// <summary>
+    /// Wraps an in-memory <see cref="S101Document"/> so it can be consumed by
+    /// the rest of the S-101 pipeline.
+    /// </summary>
+    /// <remarks>
+    /// Intended for adapters that translate from another product specification
+    /// (for example, S-57) into the S-101 in-memory model in order to reuse the
+    /// S-101 portrayal catalogue.
+    /// </remarks>
+    public static S101Dataset FromDocument(S101Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return new S101Dataset(document);
     }
 }

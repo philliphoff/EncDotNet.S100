@@ -10,6 +10,7 @@ namespace EncDotNet.S100.Datasets.S101;
 public sealed class S101VectorSource : IVectorSource
 {
     private const byte RcnmPoint = 110;
+    private const byte RcnmMultiPoint = 115;
     private const byte RcnmCurveSegment = 120;
     private const byte RcnmCompositeCurve = 125;
     private const byte RcnmSurface = 130;
@@ -73,6 +74,7 @@ public sealed class S101VectorSource : IVectorSource
         return first.RecordName switch
         {
             RcnmPoint => (GeometryType.Point, ResolvePointGeometry(feature, doc)),
+            RcnmMultiPoint => (GeometryType.Point, ResolveMultiPointGeometry(feature, doc)),
             RcnmCurveSegment => (GeometryType.Curve, ResolveCurveGeometry(feature, doc)),
             RcnmCompositeCurve => (GeometryType.Curve, ResolveCurveGeometry(feature, doc)),
             RcnmSurface => (GeometryType.Surface, ResolveSurfaceGeometry(feature, doc)),
@@ -94,6 +96,29 @@ public sealed class S101VectorSource : IVectorSource
             if (spa.RecordName == RcnmPoint && doc.Points.TryGetValue(spa.RecordId, out var pt))
             {
                 results.Add((pt.Y / cmfy, pt.X / cmfx));
+            }
+        }
+
+        return results;
+    }
+
+    private static IReadOnlyList<(double, double)> ResolveMultiPointGeometry(
+        S101FeatureRecord feature, S101Document doc)
+    {
+        var results = new List<(double, double)>();
+        double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
+        double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
+        if (cmfx == 0) cmfx = 10_000_000;
+        if (cmfy == 0) cmfy = 10_000_000;
+
+        foreach (var spa in feature.SpatialAssociations)
+        {
+            if (spa.RecordName != RcnmMultiPoint) continue;
+            if (!doc.MultiPoints.TryGetValue(spa.RecordId, out var mp)) continue;
+
+            foreach (var (y, x, _) in mp.Points)
+            {
+                results.Add((y / cmfy, x / cmfx));
             }
         }
 
@@ -234,6 +259,14 @@ public sealed class S101VectorSource : IVectorSource
         foreach (var pt in doc.Points.Values)
         {
             UpdateBounds(pt.Y / cmfy, pt.X / cmfx);
+        }
+
+        foreach (var mp in doc.MultiPoints.Values)
+        {
+            foreach (var (y, x, _) in mp.Points)
+            {
+                UpdateBounds(y / cmfy, x / cmfx);
+            }
         }
 
         if (!hasCoords)
