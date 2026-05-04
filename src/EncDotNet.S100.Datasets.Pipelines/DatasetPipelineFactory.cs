@@ -17,6 +17,17 @@ public sealed class DatasetResult
     public required MRect Extent { get; init; }
     public required string Info { get; init; }
     public required string ProductSpec { get; init; }
+
+    /// <summary>
+    /// Optional human-readable display names for each layer in
+    /// <see cref="Layers"/>, parallel by index. Processors that emit
+    /// more than one layer (e.g. S-111 with a colour band plus an
+    /// arrow overlay) populate this list so the UI can show
+    /// per-sub-layer toggles. Single-layer products leave it null
+    /// and the disclosure UI is hidden. When non-null, the list
+    /// length must match <see cref="Layers"/>.
+    /// </summary>
+    public IReadOnlyList<string>? LayerNames { get; init; }
 }
 
 /// <summary>

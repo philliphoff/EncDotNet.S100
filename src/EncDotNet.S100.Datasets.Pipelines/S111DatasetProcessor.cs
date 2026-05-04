@@ -127,6 +127,12 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Extent = extent,
             Info = info,
             ProductSpec = "S-111",
+            // Stable sub-layer keys; the viewer maps these to
+            // localized display names. The processor itself does not
+            // depend on UI string resources.
+            LayerNames = arrowLayer is not null
+                ? new[] { "s111.color-band", "s111.arrows" }
+                : new[] { "s111.color-band" },
         };
     }
 

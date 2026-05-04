@@ -15,6 +15,30 @@
                 Margin="8"
                 x:Name="AddButton" />
 
+        <!-- Bulk-action toolbar: applies to every loaded dataset.
+             "Isolate" is per-row (right-click context menu) because it
+             needs a target. -->
+        <StackPanel DockPanel.Dock="Top"
+                    Orientation="Horizontal"
+                    Spacing="2"
+                    Margin="8,4,8,0">
+            <Button Classes="Icon"
+                    Command="{Binding ShowAllCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
+                <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14" />
+            </Button>
+            <Button Classes="Icon"
+                    Command="{Binding HideAllCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_HideAllDatasets}">
+                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14" />
+            </Button>
+            <Button Classes="Icon"
+                    Command="{Binding ResetOpacityCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
+                <ic:FluentIcon Icon="ArrowReset" IconVariant="Regular" FontSize="14" />
+            </Button>
+        </StackPanel>
+
         <ScrollViewer>
         <ItemsControl ItemsSource="{Binding Entries}"
                       Margin="8,4"
@@ -27,39 +51,174 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:DatasetEntry">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding DisplayName}"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding ProductSpec}"
-                                       FontSize="11"
-                                       Opacity="0.6" />
-                            <TextBlock Text="{Binding Info}"
-                                       FontSize="11"
-                                       Opacity="0.5"
-                                       IsVisible="{Binding IsLoaded}"
-                                       TextWrapping="Wrap" />
-                            <!--
-                              Time-aware datasets show a read-only label of
-                              the timestamp the global time slider has
-                              snapped them to. The slider itself lives in
-                              the bottom timeline panel.
-                            -->
-                            <TextBlock Text="{Binding CurrentTimeLabel}"
-                                       FontSize="11"
-                                       Opacity="0.7"
-                                       Margin="0,2,0,0"
-                                       IsVisible="{Binding HasTimeSteps}" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                Classes="Icon"
-                                Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
-                                CommandParameter="{Binding}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
-                                VerticalAlignment="Center">
-                            <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
-                        </Button>
-                    </Grid>
+                    <Border Background="Transparent"
+                            Focusable="True">
+                        <Border.KeyBindings>
+                            <!-- Keyboard equivalents for the reorder
+                                 commands. Alt+Up/Alt+Down match the
+                                 platform convention used by other VS
+                                 Code-style list reorder UIs. -->
+                            <KeyBinding Gesture="Alt+Up"
+                                        Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                        CommandParameter="{Binding}" />
+                            <KeyBinding Gesture="Alt+Down"
+                                        Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                        CommandParameter="{Binding}" />
+                        </Border.KeyBindings>
+                        <Border.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="{x:Static loc:Strings.Menu_BringDatasetToFront}"
+                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).BringToFrontCommand}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetUp}"
+                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetDown}"
+                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="{x:Static loc:Strings.Menu_SendDatasetToBack}"
+                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
+                                          CommandParameter="{Binding}" />
+                                <Separator />
+                                <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
+                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
+                                          CommandParameter="{Binding}" />
+                            </ContextMenu>
+                        </Border.ContextMenu>
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto,Auto">
+                            <ToggleButton Grid.Row="0" Grid.Column="0"
+                                          Classes="Icon"
+                                          IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
+                                          VerticalAlignment="Top"
+                                          Margin="0,0,4,0">
+                                <Panel>
+                                    <ic:FluentIcon Icon="Eye"
+                                                   IconVariant="Regular"
+                                                   FontSize="16"
+                                                   IsVisible="{Binding IsVisible}" />
+                                    <ic:FluentIcon Icon="EyeOff"
+                                                   IconVariant="Regular"
+                                                   FontSize="16"
+                                                   IsVisible="{Binding !IsVisible}" />
+                                </Panel>
+                            </ToggleButton>
+                            <StackPanel Grid.Row="0" Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Opacity="{Binding RowOpacity}">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding ProductSpec}"
+                                           FontSize="11"
+                                           Opacity="0.6" />
+                                <TextBlock Text="{Binding Info}"
+                                           FontSize="11"
+                                           Opacity="0.5"
+                                           IsVisible="{Binding IsLoaded}"
+                                           TextWrapping="Wrap" />
+                                <!--
+                                  Time-aware datasets show a read-only label of
+                                  the timestamp the global time slider has
+                                  snapped them to. The slider itself lives in
+                                  the bottom timeline panel.
+                                -->
+                                <TextBlock Text="{Binding CurrentTimeLabel}"
+                                           FontSize="11"
+                                           Opacity="0.7"
+                                           Margin="0,2,0,0"
+                                           IsVisible="{Binding HasTimeSteps}" />
+                            </StackPanel>
+                            <Button Grid.Row="0" Grid.Column="2"
+                                    Classes="Icon"
+                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
+                                    VerticalAlignment="Top">
+                                <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Grid.Row="0" Grid.Column="3"
+                                    Classes="Icon"
+                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
+                                    VerticalAlignment="Top">
+                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Grid.Row="0" Grid.Column="4"
+                                    Classes="Icon"
+                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
+                                    VerticalAlignment="Top">
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <!-- Inline opacity slider, visible only when the
+                                 dataset has been loaded so users have something
+                                 to act on. -->
+                            <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
+                                    Minimum="0"
+                                    Maximum="1"
+                                    SmallChange="0.05"
+                                    LargeChange="0.1"
+                                    Value="{Binding Opacity, Mode=TwoWay}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_DatasetOpacity}"
+                                    IsVisible="{Binding IsLoaded}"
+                                    Margin="0,4,0,0" />
+                            <!-- Sub-layer disclosure: shown only when the
+                                 processor emitted more than one layer
+                                 (e.g. S-111 colour band + arrows).
+                                 Collapsed by default. -->
+                            <Expander Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5"
+                                      Header="{x:Static loc:Strings.Pane_SubLayers}"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_ExpandSubLayers}"
+                                      IsExpanded="False"
+                                      IsVisible="{Binding HasSubLayers}"
+                                      Margin="0,4,0,0">
+                                <ItemsControl ItemsSource="{Binding SubLayers}" Margin="16,4,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Spacing="4" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DatasetSubLayer">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                                                <ToggleButton Grid.Row="0" Grid.Column="0"
+                                                              Classes="Icon"
+                                                              IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
+                                                              VerticalAlignment="Center"
+                                                              Margin="0,0,4,0">
+                                                    <Panel>
+                                                        <ic:FluentIcon Icon="Eye"
+                                                                       IconVariant="Regular"
+                                                                       FontSize="14"
+                                                                       IsVisible="{Binding IsVisible}" />
+                                                        <ic:FluentIcon Icon="EyeOff"
+                                                                       IconVariant="Regular"
+                                                                       FontSize="14"
+                                                                       IsVisible="{Binding !IsVisible}" />
+                                                    </Panel>
+                                                </ToggleButton>
+                                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                                           Text="{Binding DisplayName}"
+                                                           FontSize="12"
+                                                           VerticalAlignment="Center" />
+                                                <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                                                        Minimum="0"
+                                                        Maximum="1"
+                                                        SmallChange="0.05"
+                                                        LargeChange="0.1"
+                                                        Value="{Binding Opacity, Mode=TwoWay}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_SubLayerOpacity}"
+                                                        Margin="0,2,0,0" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Expander>
+                        </Grid>
+                    </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

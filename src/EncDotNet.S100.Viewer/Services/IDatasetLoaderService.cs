@@ -47,6 +47,14 @@ internal interface IDatasetLoaderService
     /// </summary>
     void RemoveEntry(DatasetEntry entry);
 
+    /// <summary>
+    /// Reorders the dataset layers on the map to match the supplied
+    /// entry sequence. Lowest-indexed entry paints first (bottom of
+    /// the dataset stack). Entries not currently bound to layers are
+    /// skipped. The basemap and any tool overlays keep their positions.
+    /// </summary>
+    void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries);
+
     /// <summary>Read-only view of the active processors keyed by entry.</summary>
     IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
 

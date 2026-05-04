@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -34,6 +35,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
+    /// <summary>
+    /// Per-entry sub-layer keys, parallel by index to
+    /// <see cref="_entryLayers"/>. Null when the processor did not
+    /// supply per-layer names (single-layer products).
+    /// </summary>
+    private readonly Dictionary<DatasetEntry, IReadOnlyList<string>?> _entryLayerKeys = new();
+    private readonly HashSet<DatasetEntry> _subscribedEntries = new();
+    /// <summary>
+    /// Canonical paint-order of dataset entries. Mirrors the order the
+    /// user sees in the Datasets panel; index 0 is the TOP of the
+    /// paint stack (drawn last, on top of every other dataset) — the
+    /// Photoshop/QGIS convention. Mutated only by the loader so
+    /// palette/time re-renders don't disturb user-driven ordering.
+    /// </summary>
+    private readonly List<DatasetEntry> _entryOrder = new();
     private readonly ReadOnlyDictionary<DatasetEntry, IDatasetProcessor> _processorsView;
     private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
 
@@ -171,7 +187,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var initialContext = CreateRenderContext(processor, initialTime);
             var result = await Task.Run(() => processor.Render(initialContext));
 
-            ReplaceLayers(entry, result.Layers.ToList());
+            ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
             _mapHost!.ZoomToExtent(result.Extent);
 
             entry.IsLoaded = true;
@@ -235,7 +251,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var context = CreateRenderContext(proc, snapped);
                 var result = await Task.Run(() => proc.Render(context), token).ConfigureAwait(true);
 
-                ReplaceLayers(entry, result.Layers.ToList());
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
             }
@@ -262,7 +278,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 var result = await Task.Run(() => proc.Render(context));
 
-                ReplaceLayers(entry, result.Layers.ToList());
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
                 entry.Info = result.Info;
             }
             catch (Exception ex)
@@ -279,9 +295,48 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(entry);
 
         RemoveEntryLayers(entry);
+        UnsubscribeSubLayers(entry);
+        entry.SubLayers.Clear();
+        _entryLayerKeys.Remove(entry);
+        if (_subscribedEntries.Remove(entry))
+            entry.PropertyChanged -= OnEntryPropertyChanged;
         _processors.Remove(entry);
+        _entryOrder.Remove(entry);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
+    }
+
+    public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
+    {
+        ArgumentNullException.ThrowIfNull(orderedEntries);
+        if (_mapHost is null) return;
+
+        // Rebuild the canonical order from the supplied sequence,
+        // dropping any entries that are no longer bound to layers
+        // (e.g. removed concurrently).
+        _entryOrder.Clear();
+        foreach (var e in orderedEntries)
+        {
+            if (_entryLayers.ContainsKey(e))
+                _entryOrder.Add(e);
+        }
+        _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+    }
+
+    private List<ILayer> FlattenLayerOrder()
+    {
+        // _entryOrder is ordered top-of-stack-first (UI convention).
+        // MapsuiMapHost.ReorderDatasetLayers expects bottom-of-stack-
+        // first (lower indices in the layer collection are drawn
+        // earlier). Reverse here so the top-of-UI entry's layers end
+        // up at the highest layer index.
+        var list = new List<ILayer>();
+        for (int i = _entryOrder.Count - 1; i >= 0; i--)
+        {
+            if (_entryLayers.TryGetValue(_entryOrder[i], out var ls))
+                list.AddRange(ls);
+        }
+        return list;
     }
 
     private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
@@ -322,13 +377,184 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         };
     }
 
-    private void ReplaceLayers(DatasetEntry entry, IReadOnlyList<ILayer> layers)
+    private void ReplaceLayers(DatasetEntry entry, IReadOnlyList<ILayer> layers, IReadOnlyList<string>? layerKeys)
     {
+        bool isFirstLoad = !_entryOrder.Contains(entry);
+
         RemoveEntryLayers(entry);
         _entryLayers[entry] = layers;
+        _entryLayerKeys[entry] = layerKeys;
+
+        // Reconcile sub-layers (don't replace) so existing per-sub-layer
+        // visibility / opacity choices survive palette switches and
+        // time-scrub re-renders. Sub-layers are matched by stable key.
+        ReconcileSubLayers(entry, layerKeys);
+
+        // Re-apply effective display state (parent + sub-layer combined)
+        // to the freshly-produced layers. Each ReplaceLayers call creates
+        // new ILayer instances that default to Enabled=true / Opacity=1
+        // — without this step those defaults silently win.
+        ApplyDisplayState(entry);
+
+        // Subscribe lazily on first ReplaceLayers so that property
+        // changes raised by the UI propagate to the live ILayer
+        // instances. The subscription persists across re-renders.
+        if (_subscribedEntries.Add(entry))
+            entry.PropertyChanged += OnEntryPropertyChanged;
+
         foreach (var layer in layers)
         {
             _mapHost!.AddLayer(layer);
+        }
+
+        // First-time loads: the new entry goes to the TOP of the
+        // canonical order (matching DatasetsViewModel.Add which
+        // inserts at index 0). MapsuiMapHost already puts new layers
+        // on top of the dataset block by default, so a re-shuffle is
+        // only needed for re-renders.
+        if (isFirstLoad)
+        {
+            _entryOrder.Insert(0, entry);
+        }
+        else
+        {
+            _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
+        }
+    }
+
+    /// <summary>
+    /// Brings <see cref="DatasetEntry.SubLayers"/> in line with the
+    /// processor's freshly-emitted layer keys. Existing
+    /// <see cref="DatasetSubLayer"/> instances are reused (matched by
+    /// <see cref="DatasetSubLayer.Key"/>) so user toggles survive
+    /// re-renders. Single-layer datasets have an empty SubLayers
+    /// collection, which the UI treats as "no disclosure".
+    /// </summary>
+    private void ReconcileSubLayers(DatasetEntry entry, IReadOnlyList<string>? layerKeys)
+    {
+        // Single-layer datasets: clear any (stale) sub-layers and bail.
+        if (layerKeys is null || layerKeys.Count <= 1)
+        {
+            if (entry.SubLayers.Count > 0)
+            {
+                UnsubscribeSubLayers(entry);
+                entry.SubLayers.Clear();
+            }
+            return;
+        }
+
+        var existing = entry.SubLayers.ToDictionary(s => s.Key, s => s);
+        var seen = new HashSet<string>();
+        var orderedNew = new List<DatasetSubLayer>(layerKeys.Count);
+        foreach (var key in layerKeys)
+        {
+            // Suffix-resolve duplicate keys defensively (the contract
+            // expects unique keys; this just keeps a runtime collision
+            // from corrupting the SubLayers collection).
+            var k = key;
+            int n = 1;
+            while (!seen.Add(k))
+            {
+                k = $"{key}#{++n}";
+            }
+
+            if (existing.TryGetValue(k, out var sub))
+            {
+                orderedNew.Add(sub);
+            }
+            else
+            {
+                var displayName = ResolveSubLayerDisplayName(k);
+                sub = new DatasetSubLayer(k, displayName);
+                sub.PropertyChanged += OnSubLayerPropertyChanged;
+                orderedNew.Add(sub);
+            }
+        }
+
+        // Drop sub-layers that no longer correspond to any emitted
+        // layer (e.g. processor changed shape between renders).
+        foreach (var stale in existing.Values.Where(s => !seen.Contains(s.Key)))
+        {
+            stale.PropertyChanged -= OnSubLayerPropertyChanged;
+        }
+
+        entry.SubLayers.Clear();
+        foreach (var sub in orderedNew) entry.SubLayers.Add(sub);
+    }
+
+    private void UnsubscribeSubLayers(DatasetEntry entry)
+    {
+        foreach (var s in entry.SubLayers)
+            s.PropertyChanged -= OnSubLayerPropertyChanged;
+    }
+
+    /// <summary>
+    /// Maps stable processor-supplied sub-layer keys to localized
+    /// display names. Unknown keys fall back to the key itself so a
+    /// new processor that forgets to add a translation still shows
+    /// something readable.
+    /// </summary>
+    private static string ResolveSubLayerDisplayName(string key) => key switch
+    {
+        "s111.color-band" => Strings.SubLayer_S111_ColorBand,
+        "s111.arrows" => Strings.SubLayer_S111_Arrows,
+        _ => key,
+    };
+
+    private void ApplyDisplayState(DatasetEntry entry)
+    {
+        if (!_entryLayers.TryGetValue(entry, out var layers)) return;
+
+        // When the processor emitted sub-layer keys, fold the per-
+        // sub-layer state into the per-layer Enabled/Opacity values.
+        // Otherwise apply parent state uniformly.
+        _entryLayerKeys.TryGetValue(entry, out var keys);
+
+        var subLayerLookup = entry.SubLayers.Count > 0
+            ? entry.SubLayers.ToDictionary(s => s.Key, s => s)
+            : null;
+
+        for (int i = 0; i < layers.Count; i++)
+        {
+            var layer = layers[i];
+            DatasetSubLayer? sub = null;
+            if (subLayerLookup is not null && keys is not null && i < keys.Count)
+            {
+                subLayerLookup.TryGetValue(keys[i], out sub);
+            }
+
+            // AND visibility, multiply opacity. (Mapsui has a single
+            // scalar opacity per layer, so multiplication is the
+            // canonical way to express parent×sub.)
+            layer.Enabled = entry.IsVisible && (sub?.IsVisible ?? true);
+            layer.Opacity = entry.Opacity * (sub?.Opacity ?? 1.0);
+        }
+    }
+
+    private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not DatasetEntry entry) return;
+        if (e.PropertyName is not (nameof(DatasetEntry.IsVisible) or nameof(DatasetEntry.Opacity)))
+            return;
+        ApplyDisplayState(entry);
+    }
+
+    private void OnSubLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not DatasetSubLayer sub) return;
+        if (e.PropertyName is not (nameof(DatasetSubLayer.IsVisible) or nameof(DatasetSubLayer.Opacity)))
+            return;
+
+        // The sub-layer doesn't know its parent; find it by membership.
+        // The cost is bounded by the number of loaded datasets which is
+        // always small for an interactive viewer.
+        foreach (var (entry, _) in _entryLayers)
+        {
+            if (entry.SubLayers.Contains(sub))
+            {
+                ApplyDisplayState(entry);
+                break;
+            }
         }
     }
 
