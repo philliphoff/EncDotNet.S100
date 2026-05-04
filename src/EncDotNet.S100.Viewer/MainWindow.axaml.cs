@@ -307,23 +307,11 @@ public partial class MainWindow : ShadUI.Window
         // events are offered to the active tool first.
         interactionController.SetToolController(tools);
 
-        // Restore the last-active tool from settings if any. Skip the
-        // measure tool — it is a transient drawing mode, not a persistent
-        // mode the user expects to find themselves in on the next launch.
-        if (_viewModel.Settings.LastActiveToolId is { Length: > 0 } lastId
-            && !string.Equals(lastId, MeasureTool.ToolId, StringComparison.Ordinal))
-        {
-            tools.Activate(lastId);
-        }
-
-        // Persist the active-tool id whenever it changes, but never
-        // record the measure tool (so closing the app while measuring
-        // doesn't reopen into measure mode).
-        tools.ActiveToolChanged += t =>
-        {
-            if (t is null || !string.Equals(t.Id, MeasureTool.ToolId, StringComparison.Ordinal))
-                _viewModel.Settings.LastActiveToolId = t?.Id;
-        };
+        // Tool selection is never persisted across launches — entering
+        // Pick or Measure mode must be an explicit user action each
+        // session, so the viewer always opens with no tool active.
+        // (LastActiveToolId is retained on the settings type for now to
+        // preserve the JSON shape, but neither read nor written.)
     }
 
     /// <summary>
