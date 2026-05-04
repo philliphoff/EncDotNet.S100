@@ -486,4 +486,197 @@ public class S57ToS101TranslatorTests
         // Unknown attribute names are treated as unconstrained.
         Assert.True(allowed.IsAllowed("totallyMadeUpAttribute", "x"));
     }
+
+    // ── v3.4: INFORM/NINFOM/TXTDSC/NTXTDS → information complex attribute ──
+
+    private static IEnumerable<S101Attribute> InformationInstance(
+        S101Document doc,
+        ImmutableArray<S101Attribute> attrs,
+        int instanceIndex)
+    {
+        // Locate the n-th instance of `information` in the flat attr list and
+        // yield the marker + sub-attributes up to (but not including) the next
+        // `information` marker. (Mirrors the reading logic in S101LuaDataProvider.)
+        ushort? infoCode = null;
+        foreach (var (code, name) in doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(name, "information", StringComparison.OrdinalIgnoreCase))
+            {
+                infoCode = code;
+                break;
+            }
+        }
+        // No `information` ever emitted in this document → no instances.
+        if (infoCode is null) yield break;
+
+        int found = 0;
+        bool collecting = false;
+        foreach (var a in attrs)
+        {
+            if (a.NumericCode == infoCode && a.Index == 1)
+            {
+                if (collecting) break; // hit next instance
+                found++;
+                if (found == instanceIndex)
+                {
+                    collecting = true;
+                    yield return a;
+                    continue;
+                }
+            }
+            else if (collecting)
+            {
+                yield return a;
+            }
+        }
+    }
+
+    private static string? GetSubAttribute(
+        S101Document doc,
+        IEnumerable<S101Attribute> instance,
+        string subAttrCode)
+    {
+        ushort? code = null;
+        foreach (var (c, n) in doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(n, subAttrCode, StringComparison.OrdinalIgnoreCase))
+            {
+                code = c;
+                break;
+            }
+        }
+        if (code is null) return null;
+        foreach (var a in instance)
+            if (a.NumericCode == code && a.Index == 1)
+                return a.Value;
+        return null;
+    }
+
+    private static S57Document LandRegionWithS57Attributes(params S57Attribute[] attrs)
+    {
+        var (n1, r1) = Node(1, 1000, 2000);
+        var feature = new S57FeatureRecord
+        {
+            RecordId = 1,
+            Primitive = 1,
+            ObjectClass = 73, // LNDRGN → LandRegion
+            ProducingAgency = 540,
+            FeatureIdentificationNumber = 1,
+            FeatureIdentificationSubdivision = 0,
+            Attributes = attrs.ToImmutableArray(),
+            SpatialPointers = ImmutableArray.Create(
+                new S57FeatureSpatialPointer(RcnmConnectedNode, 1, 1, 0, 0)),
+        };
+        return BuildDocument(
+            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1),
+            features: ImmutableArray.Create(feature));
+    }
+
+    [Fact]
+    public void Translate_InformAttribute_BecomesInformationComplexAttribute_WithEnglish()
+    {
+        // INFORM (S-57 code 102) carries free English text; it should land as
+        // an `information` complex-attribute instance with text + language=eng.
+        var doc = LandRegionWithS57Attributes(
+            new S57Attribute(102, "Visible all around. Higher intensity on rangeline"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+
+        Assert.NotEmpty(instance);
+        Assert.Equal("Visible all around. Higher intensity on rangeline",
+            GetSubAttribute(s101, instance, "text"));
+        Assert.Equal("eng", GetSubAttribute(s101, instance, "language"));
+        Assert.Null(GetSubAttribute(s101, instance, "fileReference"));
+    }
+
+    [Fact]
+    public void Translate_TxtdscAttribute_BecomesFileReferenceWithEnglish()
+    {
+        // TXTDSC (S-57 code 158) carries an English-language text-file name
+        // and lands as `information.fileReference` with language=eng.
+        var doc = LandRegionWithS57Attributes(
+            new S57Attribute(158, "US5WA23A.TXT"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+
+        Assert.Equal("US5WA23A.TXT", GetSubAttribute(s101, instance, "fileReference"));
+        Assert.Equal("eng", GetSubAttribute(s101, instance, "language"));
+        Assert.Null(GetSubAttribute(s101, instance, "text"));
+    }
+
+    [Fact]
+    public void Translate_NinfomAttribute_BecomesInformationComplex_WithBlankLanguage()
+    {
+        // NINFOM (S-57 code 300) is national-language text; the FC requires a
+        // `language` sub-attribute but S-57 carries no language tag, so the
+        // value is left blank for Data Producers to populate later.
+        var doc = LandRegionWithS57Attributes(
+            new S57Attribute(300, "Información en español"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = InformationInstance(s101, feat.Attributes, 1).ToList();
+
+        Assert.Equal("Información en español", GetSubAttribute(s101, instance, "text"));
+        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+    }
+
+    [Fact]
+    public void Translate_InformAndNinfom_EmitTwoInformationInstances()
+    {
+        // English (INFORM/TXTDSC) and national (NINFOM/NTXTDS) text are
+        // grouped into separate `information` instances by language.
+        var doc = LandRegionWithS57Attributes(
+            new S57Attribute(102, "English text"),
+            new S57Attribute(300, "National text"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        var first = InformationInstance(s101, feat.Attributes, 1).ToList();
+        var second = InformationInstance(s101, feat.Attributes, 2).ToList();
+
+        Assert.Equal("English text", GetSubAttribute(s101, first, "text"));
+        Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
+        Assert.Equal("National text", GetSubAttribute(s101, second, "text"));
+        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+    }
+
+    [Fact]
+    public void Translate_InformAndTxtdscTogether_EmitOneInstanceWithBothSubAttrs()
+    {
+        // Both INFORM and TXTDSC are English; they collapse into a single
+        // `information` instance carrying both text and fileReference.
+        var doc = LandRegionWithS57Attributes(
+            new S57Attribute(102, "Inline note"),
+            new S57Attribute(158, "EXTRA.TXT"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        var first = InformationInstance(s101, feat.Attributes, 1).ToList();
+        Assert.Equal("Inline note", GetSubAttribute(s101, first, "text"));
+        Assert.Equal("EXTRA.TXT", GetSubAttribute(s101, first, "fileReference"));
+        Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
+
+        // Only one instance was emitted.
+        Assert.Empty(InformationInstance(s101, feat.Attributes, 2).ToList());
+    }
+
+    [Fact]
+    public void Translate_NoTextualAttributes_EmitsNoInformationInstance()
+    {
+        // Without any of the four textual attributes, no `information` complex
+        // attribute should be added.
+        var doc = LandRegionWithS57Attributes(new S57Attribute(34, "1"));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        Assert.Empty(InformationInstance(s101, feat.Attributes, 1).ToList());
+    }
 }

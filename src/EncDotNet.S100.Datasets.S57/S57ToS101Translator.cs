@@ -48,6 +48,30 @@ public sealed class S57ToS101Translator
     private const ushort SoundingObjl = 129;
     private const string SoundingS101Code = "Sounding";
 
+    // ── S-57 textual-info attribute codes (S-57 Appendix A Chapter 2) ──
+    // Per IHO S-57→S-101 Conversion Guidance §2.3, these four attributes
+    // do NOT pass through as simple S-101 attributes; instead they are
+    // grouped into one or more instances of the S-101 `information`
+    // complex attribute on the feature itself, with sub-attributes
+    // text / fileReference / language as appropriate.
+    private const ushort S57AttrInform = 102;   // INFORM  — free text (Eng.)
+    private const ushort S57AttrTxtdsc = 158;   // TXTDSC  — text-file ref (Eng.)
+    private const ushort S57AttrNinfom = 300;   // NINFOM  — free text (national)
+    private const ushort S57AttrNtxtds = 304;   // NTXTDS  — text-file ref (national)
+
+    // S-101 attribute codes for the `information` complex attribute and
+    // its sub-attributes (verified against the bundled FC).
+    private const string S101AttrInformation = "information";
+    private const string S101AttrText = "text";
+    private const string S101AttrFileReference = "fileReference";
+    private const string S101AttrLanguage = "language";
+
+    // ISO 639-3 language code used for the English-language INFORM/TXTDSC
+    // bucket. NINFOM/NTXTDS are emitted with an empty language string,
+    // since S-57 carries no language tag and Data Producers are expected
+    // to fill it in manually (Conversion Guidance §2.3).
+    private const string LanguageEng = "eng";
+
     private readonly S57S101Mapping _mapping;
     private readonly S101AllowedEnumValues? _allowedEnumValues;
 
@@ -327,9 +351,32 @@ public sealed class S57ToS101Translator
         {
             if (attrs.Length == 0) return ImmutableArray<S101Attribute>.Empty;
 
+            // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
+            // can emit them as one or more S-101 `information` complex-attribute
+            // instances (Conversion Guidance §2.3).
+            string? informText = null;
+            string? ninfomText = null;
+            string? txtdscFile = null;
+            string? ntxtdsFile = null;
+            foreach (var a in attrs)
+            {
+                switch (a.Code)
+                {
+                    case S57AttrInform: informText = a.Value; break;
+                    case S57AttrNinfom: ninfomText = a.Value; break;
+                    case S57AttrTxtdsc: txtdscFile = a.Value; break;
+                    case S57AttrNtxtds: ntxtdsFile = a.Value; break;
+                }
+            }
+
             var builder = ImmutableArray.CreateBuilder<S101Attribute>();
             foreach (var a in attrs)
             {
+                // Textual-info attributes are handled as a complex attribute
+                // group below — skip the per-attribute pass-through.
+                if (a.Code is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                    continue;
+
                 if (!_mapping.AttributeRules.TryGetValue(a.Code, out var attrRule))
                     continue;
 
@@ -345,7 +392,39 @@ public sealed class S57ToS101Translator
                 var numeric = GetOrAssignAttributeCode(resolved.S101Code);
                 builder.Add(new S101Attribute(numeric, 1, resolved.Value));
             }
+
+            // Append `information` complex-attribute instances. Each instance
+            // is (marker, text?, fileReference?, language) — language is
+            // mandatory in the S-101 FC's binding for `information`.
+            if (informText is not null || txtdscFile is not null)
+                AppendInformationInstance(builder, text: informText, fileReference: txtdscFile, language: LanguageEng);
+            if (ninfomText is not null || ntxtdsFile is not null)
+                AppendInformationInstance(builder, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+
             return builder.ToImmutable();
+        }
+
+        private void AppendInformationInstance(
+            ImmutableArray<S101Attribute>.Builder builder,
+            string? text,
+            string? fileReference,
+            string language)
+        {
+            var infoCode = GetOrAssignAttributeCode(S101AttrInformation);
+            // Marker entry — Index=1, value=empty — followed by sub-attributes.
+            builder.Add(new S101Attribute(infoCode, 1, string.Empty));
+            if (text is not null)
+            {
+                var textCode = GetOrAssignAttributeCode(S101AttrText);
+                builder.Add(new S101Attribute(textCode, 1, text));
+            }
+            if (fileReference is not null)
+            {
+                var fileRefCode = GetOrAssignAttributeCode(S101AttrFileReference);
+                builder.Add(new S101Attribute(fileRefCode, 1, fileReference));
+            }
+            var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
+            builder.Add(new S101Attribute(langCode, 1, language));
         }
 
         private ImmutableArray<S101SpatialAssociation> TranslateSpatialPointers(S57FeatureRecord feat)
