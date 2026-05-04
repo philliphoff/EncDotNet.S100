@@ -905,6 +905,12 @@ public sealed class MapsuiDisplayListRenderer
                 {
                     // Fall back to unclipped geometry
                 }
+                catch (ArgumentException)
+                {
+                    // NTS Difference rejects GeometryCollection arguments;
+                    // accumulated unions can degenerate to that shape.
+                    // Fall back to unclipped geometry.
+                }
             }
 
             // Subtract non-patterned color fill areas (e.g. land)
@@ -918,6 +924,10 @@ public sealed class MapsuiDisplayListRenderer
                 {
                     // Fall back to current clipped geometry
                 }
+                catch (ArgumentException)
+                {
+                    // GeometryCollection rejected by NTS Difference; keep current geometry.
+                }
             }
 
             result[i] = (tile, clipped);
@@ -930,6 +940,11 @@ public sealed class MapsuiDisplayListRenderer
             catch (TopologyException)
             {
                 // If union fails, keep the existing accumulated area
+            }
+            catch (ArgumentException)
+            {
+                // NTS Union rejects GeometryCollection LHS;
+                // keep existing accumulated area.
             }
         }
 
