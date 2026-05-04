@@ -361,4 +361,129 @@ public class S57ToS101TranslatorTests
         Assert.Equal(5_000_000u, s101.StructureInfo.CoordinateMultiplicationFactorY);
         Assert.Equal(100u, s101.StructureInfo.CoordinateMultiplicationFactorZ);
     }
+
+    // ── v3.5: S-101 FC allowable enum-value enforcement ──────────────
+
+    private static S57Document LandRegionDocWithCatlnd(string catlndValue)
+    {
+        var (n1, r1) = Node(1, 1000, 2000);
+        var feature = new S57FeatureRecord
+        {
+            RecordId = 1,
+            Primitive = 1,                      // Point
+            ObjectClass = 73,                   // LNDRGN → LandRegion
+            ProducingAgency = 540,
+            FeatureIdentificationNumber = 1,
+            FeatureIdentificationSubdivision = 0,
+            Attributes = ImmutableArray.Create(
+                new S57Attribute(34, catlndValue)),  // CATLND → categoryOfLandRegion (enum)
+            SpatialPointers = ImmutableArray.Create(
+                new S57FeatureSpatialPointer(RcnmConnectedNode, 1, 1, 0, 0)),
+        };
+        return BuildDocument(
+            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1),
+            features: ImmutableArray.Create(feature));
+    }
+
+    [Fact]
+    public void Translate_EnumAttribute_AllowedValue_IsEmitted()
+    {
+        // CATLND=1 ("fen") is in the S-101 FC's allowable list for
+        // categoryOfLandRegion, so the attribute survives translation.
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("1"));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("1", attr.Value);
+        var attrName = s101.AttributeTypeCatalogue[attr.NumericCode];
+        Assert.Equal("categoryOfLandRegion", attrName);
+    }
+
+    [Fact]
+    public void Translate_EnumAttribute_DisallowedValue_IsDropped()
+    {
+        // CATLND=99 is not in the S-101 FC's allowable list for
+        // categoryOfLandRegion, so the attribute is dropped per the
+        // IHO S-57→S-101 Conversion Guidance (Jan 2021).
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("99"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_EnumAttribute_DisallowedValue_PassesThroughWhenEnforcementDisabled()
+    {
+        // Passing null for the allowable-value lookup disables enforcement,
+        // so even invalid enum values survive translation. Useful for
+        // round-trip tests that don't want FC validation in the loop.
+        var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);
+        var s101 = translator.Translate(LandRegionDocWithCatlnd("99"));
+
+        var feat = Assert.Single(s101.Features);
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("99", attr.Value);
+    }
+
+    [Fact]
+    public void Translate_NonEnumAttribute_PassesThroughRegardlessOfValue()
+    {
+        // DRVAL1/DRVAL2 are real-typed S-101 attributes — no allowable list
+        // applies, so any numeric value (even one that would be nonsense as
+        // an enum code) must pass through.
+        var (n1, r1) = Node(1, 0, 0);
+        var (n2, r2) = Node(2, 0, 100);
+        var (n3, r3) = Node(3, 100, 50);
+        var (e1, e1r) = Edge(10, 1, 2);
+        var (e2, e2r) = Edge(11, 2, 3);
+        var (e3, e3r) = Edge(12, 3, 1);
+
+        var feature = new S57FeatureRecord
+        {
+            RecordId = 1,
+            Primitive = 3,
+            ObjectClass = 42,                   // DEPARE → DepthArea
+            ProducingAgency = 540,
+            FeatureIdentificationNumber = 1,
+            FeatureIdentificationSubdivision = 0,
+            Attributes = ImmutableArray.Create(
+                new S57Attribute(87, "999.9"),  // DRVAL1
+                new S57Attribute(88, "1234.5")), // DRVAL2
+            SpatialPointers = ImmutableArray.Create(
+                new S57FeatureSpatialPointer(RcnmEdge, 10, 1, 1, 0),
+                new S57FeatureSpatialPointer(RcnmEdge, 11, 1, 1, 0),
+                new S57FeatureSpatialPointer(RcnmEdge, 12, 1, 1, 0)),
+        };
+
+        var doc = BuildDocument(
+            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
+                .Add(n1, r1).Add(n2, r2).Add(n3, r3)
+                .Add(e1, e1r).Add(e2, e2r).Add(e3, e3r),
+            features: ImmutableArray.Create(feature));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Length);
+        var values = feat.Attributes.Select(a => a.Value).ToArray();
+        Assert.Contains("999.9", values);
+        Assert.Contains("1234.5", values);
+    }
+
+    [Fact]
+    public void S101AllowedEnumValues_Default_KnowsCommonEnumeratedAttributes()
+    {
+        var allowed = S101AllowedEnumValues.Default;
+
+        Assert.True(allowed.IsEnumerated("categoryOfLandRegion"));
+        Assert.True(allowed.IsAllowed("categoryOfLandRegion", "1"));
+        Assert.False(allowed.IsAllowed("categoryOfLandRegion", "99"));
+
+        // Non-enum attributes are unconstrained.
+        Assert.False(allowed.IsEnumerated("depthRangeMinimumValue"));
+        Assert.True(allowed.IsAllowed("depthRangeMinimumValue", "anything"));
+
+        // Unknown attribute names are treated as unconstrained.
+        Assert.True(allowed.IsAllowed("totallyMadeUpAttribute", "x"));
+    }
 }

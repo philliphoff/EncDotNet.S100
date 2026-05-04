@@ -49,15 +49,25 @@ public sealed class S57ToS101Translator
     private const string SoundingS101Code = "Sounding";
 
     private readonly S57S101Mapping _mapping;
+    private readonly S101AllowedEnumValues? _allowedEnumValues;
 
     /// <summary>Creates a translator using <see cref="S57S101Mapping.Default"/>.</summary>
-    public S57ToS101Translator() : this(S57S101Mapping.Default) { }
+    public S57ToS101Translator() : this(S57S101Mapping.Default, S101AllowedEnumValues.Default) { }
 
     /// <summary>Creates a translator using the supplied code mapping.</summary>
     public S57ToS101Translator(S57S101Mapping mapping)
+        : this(mapping, S101AllowedEnumValues.Default) { }
+
+    /// <summary>
+    /// Creates a translator using the supplied code mapping and the given
+    /// allowable-value lookup. Pass <c>null</c> for <paramref name="allowedEnumValues"/>
+    /// to disable enumerate-value enforcement (useful in tests).
+    /// </summary>
+    public S57ToS101Translator(S57S101Mapping mapping, S101AllowedEnumValues? allowedEnumValues)
     {
         ArgumentNullException.ThrowIfNull(mapping);
         _mapping = mapping;
+        _allowedEnumValues = allowedEnumValues;
     }
 
     /// <summary>
@@ -76,7 +86,7 @@ public sealed class S57ToS101Translator
     {
         ArgumentNullException.ThrowIfNull(s57);
 
-        var ctx = new TranslationContext(s57, _mapping);
+        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues);
         ctx.TranslateNodes();
         ctx.TranslateEdges();
         ctx.TranslateFeatures();
@@ -127,6 +137,7 @@ public sealed class S57ToS101Translator
     {
         private readonly S57Document _s57;
         private readonly S57S101Mapping _mapping;
+        private readonly S101AllowedEnumValues? _allowedEnumValues;
 
         // Mapping from S-57 (RCNM, RCID) to allocated S-101 IDs, per spatial kind.
         private readonly Dictionary<S57Name, uint> _nodeIdMap = new();
@@ -159,10 +170,11 @@ public sealed class S57ToS101Translator
         public ImmutableDictionary<ushort, string>.Builder AttributeTypeCatalogue { get; }
             = ImmutableDictionary.CreateBuilder<ushort, string>();
 
-        public TranslationContext(S57Document s57, S57S101Mapping mapping)
+        public TranslationContext(S57Document s57, S57S101Mapping mapping, S101AllowedEnumValues? allowedEnumValues)
         {
             _s57 = s57;
             _mapping = mapping;
+            _allowedEnumValues = allowedEnumValues;
         }
 
         // ── Spatial translation ─────────────────────────────────────────
@@ -323,6 +335,12 @@ public sealed class S57ToS101Translator
 
                 var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
                 if (resolved is null) continue;
+
+                // Drop S-57 enum values that aren't in the S-101 FC's allowable
+                // listed values (per IHO S-57→S-101 Conversion Guidance, Jan 2021).
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(resolved.S101Code, resolved.Value))
+                    continue;
 
                 var numeric = GetOrAssignAttributeCode(resolved.S101Code);
                 builder.Add(new S101Attribute(numeric, 1, resolved.Value));
