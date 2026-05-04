@@ -77,9 +77,17 @@ internal sealed class NativeMenuBuilder
             checkedSelector: () => _viewModel.IsPickModeActive,
             gesture: new KeyGesture(Key.I));
 
+        var measureModeItem = BuildToggleItem(
+            Strings.Menu_MeasureMode,
+            initiallyChecked: _viewModel.IsMeasureModeActive,
+            execute: () => _viewModel.ToggleMeasureModeCommand.Execute(null),
+            propertyName: nameof(MainViewModel.IsMeasureModeActive),
+            checkedSelector: () => _viewModel.IsMeasureModeActive,
+            gesture: new KeyGesture(Key.M, KeyModifiers.Meta));
+
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, pickPanelItem, pickModeItem, measureModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)

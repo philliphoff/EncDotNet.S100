@@ -7,6 +7,7 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Tools;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -145,19 +146,77 @@ internal sealed class MainViewModel : ViewModelBase
     /// double-tap-to-zoom gesture is suppressed. This is transient state
     /// and is not persisted between sessions.
     /// </summary>
+    /// <remarks>
+    /// Backed by <see cref="Tools"/>; reflects whether
+    /// <see cref="MapToolController.ActiveToolId"/> is the pick tool's id.
+    /// Setting this property activates / deactivates the pick tool in
+    /// the controller (deactivating any other tool that was active).
+    /// </remarks>
     public bool IsPickModeActive
     {
         get => _isPickModeActive;
-        set => SetProperty(ref _isPickModeActive, value);
+        set
+        {
+            if (_isPickModeActive == value) return;
+            // Drive the change through the controller so other tools are
+            // properly deactivated; the controller's ActiveToolChanged
+            // callback below will flip our backing flag.
+            Tools.Activate(value ? PickTool.ToolId : null);
+        }
     }
 
     public ICommand TogglePickModeCommand { get; }
 
     /// <summary>
-    /// Convenience command that exits Pick Mode (no-op when already off).
+    /// Convenience command that exits the active map tool (pick or measure).
     /// Wired to the <c>Esc</c> key on the main window.
     /// </summary>
     public ICommand ExitPickModeCommand { get; }
+
+    /// <summary>
+    /// True when the Measure Mode tool is active. Mirrors
+    /// <see cref="MapToolController.ActiveToolId"/> just like
+    /// <see cref="IsPickModeActive"/>.
+    /// </summary>
+    public bool IsMeasureModeActive => Tools.IsActive(MeasureTool.ToolId);
+
+    public ICommand ToggleMeasureModeCommand { get; }
+
+    /// <summary>
+    /// Discrete tool actions wired to keyboard accelerators; current
+    /// active tool decides what (if anything) to do.
+    /// </summary>
+    public ICommand ToolCommitCommand { get; }
+    public ICommand ToolBackstepCommand { get; }
+
+    /// <summary>
+    /// Status-bar summary owned by the active tool (e.g. measure-leg /
+    /// total). <c>null</c> when no tool is active or the tool has nothing
+    /// to display.
+    /// </summary>
+    public string? MeasureSummary
+    {
+        get => _measureSummary;
+        set => SetProperty(ref _measureSummary, value);
+    }
+    private string? _measureSummary;
+
+    /// <summary>
+    /// Map-tool registry / dispatcher. The pick tool is registered eagerly
+    /// here (it's a UI-free marker tool — gesture handling lives in
+    /// <see cref="Services.MapInteractionController"/>) so view-model-level
+    /// commands and tests work without the host having to register it.
+    /// UI-bearing tools (e.g. measure) are registered by the host once the
+    /// visual tree is up.
+    /// </summary>
+    public MapToolController Tools { get; } = CreateToolController();
+
+    private static MapToolController CreateToolController()
+    {
+        var c = new MapToolController();
+        c.Register(new PickTool());
+        return c;
+    }
 
     private bool _isDarkTheme;
     public bool IsDarkTheme
@@ -252,8 +311,25 @@ internal sealed class MainViewModel : ViewModelBase
         _isPickPanelEnabled = settings.IsPickPanelVisible;
         TogglePickPanelCommand = new RelayCommand(() => IsPickPanelEnabled = !IsPickPanelEnabled);
 
-        TogglePickModeCommand = new RelayCommand(() => IsPickModeActive = !IsPickModeActive);
-        ExitPickModeCommand = new RelayCommand(() => IsPickModeActive = false);
+        TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
+        ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
+        ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
+        ToolCommitCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Commit));
+        ToolBackstepCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Backstep));
+
+        // Mirror the controller's active-tool changes onto the legacy
+        // IsPickModeActive flag (kept so existing XAML/cursor wiring
+        // continues to function) and the IsMeasureModeActive property.
+        Tools.ActiveToolChanged += _ =>
+        {
+            var newPick = Tools.IsActive(PickTool.ToolId);
+            if (_isPickModeActive != newPick)
+            {
+                _isPickModeActive = newPick;
+                OnPropertyChanged(nameof(IsPickModeActive));
+            }
+            OnPropertyChanged(nameof(IsMeasureModeActive));
+        };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
