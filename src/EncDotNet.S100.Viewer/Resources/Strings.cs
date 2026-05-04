@@ -56,6 +56,8 @@ internal static class Strings
     public static string Tooltip_RemoveCatalogue => Get(nameof(Tooltip_RemoveCatalogue));
     public static string Tooltip_RemoveDataset => Get(nameof(Tooltip_RemoveDataset));
     public static string Tooltip_TimelineSlider => Get(nameof(Tooltip_TimelineSlider));
+    public static string Tooltip_TimelinePreviousStep => Get(nameof(Tooltip_TimelinePreviousStep));
+    public static string Tooltip_TimelineNextStep => Get(nameof(Tooltip_TimelineNextStep));
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
 
     // Buttons / actions
@@ -73,6 +75,7 @@ internal static class Strings
     public static string Menu_Appearance => Get(nameof(Menu_Appearance));
     public static string Menu_PrimarySideBar => Get(nameof(Menu_PrimarySideBar));
     public static string Menu_StatusBar => Get(nameof(Menu_StatusBar));
+    public static string Menu_Timeline => Get(nameof(Menu_Timeline));
     public static string Menu_PickReport => Get(nameof(Menu_PickReport));
     public static string Menu_PickMode => Get(nameof(Menu_PickMode));
 
@@ -147,4 +150,6 @@ internal static class Strings
     public static string TimelinePanel_Title => Get(nameof(TimelinePanel_Title));
     public static string TimelinePanel_Range => Get(nameof(TimelinePanel_Range));
     public static string TimelinePanel_NoData => Get(nameof(TimelinePanel_NoData));
+    public static string TimelinePanel_EmptyTitle => Get(nameof(TimelinePanel_EmptyTitle));
+    public static string TimelinePanel_EmptyDescription => Get(nameof(TimelinePanel_EmptyDescription));
 }

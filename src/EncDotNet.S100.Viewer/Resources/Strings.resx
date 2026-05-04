@@ -92,6 +92,12 @@
   <data name="Tooltip_TimelineSlider" xml:space="preserve">
     <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>
+  <data name="Tooltip_TimelinePreviousStep" xml:space="preserve">
+    <value>Step to the previous time sample</value>
+  </data>
+  <data name="Tooltip_TimelineNextStep" xml:space="preserve">
+    <value>Step to the next time sample</value>
+  </data>
 
   <!-- Buttons / actions -->
   <data name="Button_OpenDataset" xml:space="preserve">
@@ -131,6 +137,9 @@
   </data>
   <data name="Menu_StatusBar" xml:space="preserve">
     <value>Status Bar</value>
+  </data>
+  <data name="Menu_Timeline" xml:space="preserve">
+    <value>Timeline</value>
   </data>
   <data name="Menu_PickReport" xml:space="preserve">
     <value>Pick Report</value>
@@ -314,6 +323,12 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="TimelinePanel_NoData" xml:space="preserve">
     <value>No time-varying datasets loaded.</value>
+  </data>
+  <data name="TimelinePanel_EmptyTitle" xml:space="preserve">
+    <value>No time-varying datasets</value>
+  </data>
+  <data name="TimelinePanel_EmptyDescription" xml:space="preserve">
+    <value>Open an S-104 (water level), S-111 (surface currents) or S-411 (sea ice) dataset to see its timeline here.</value>
   </data>
 
   <!-- Tooltips for status bar elements -->

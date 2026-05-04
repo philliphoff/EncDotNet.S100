@@ -99,6 +99,28 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleStatusBarCommand { get; }
 
+    private bool _isTimelineVisible;
+    /// <summary>
+    /// User preference for whether the bottom timeline panel is
+    /// shown. When false, the timeline is hidden regardless of
+    /// whether time-varying datasets are loaded. Persisted to
+    /// <see cref="ViewerSettings"/>.
+    /// </summary>
+    public bool IsTimelineVisible
+    {
+        get => _isTimelineVisible;
+        set
+        {
+            if (SetProperty(ref _isTimelineVisible, value))
+            {
+                _settings.IsTimelineVisible = value;
+                _settings.Save();
+            }
+        }
+    }
+
+    public ICommand ToggleTimelineCommand { get; }
+
     private string _mouseLatLonText = LatLonFormatter.Placeholder;
     /// <summary>
     /// Lat/long of the mouse cursor when it is over the map, formatted in
@@ -252,6 +274,9 @@ internal sealed class MainViewModel : ViewModelBase
         _isStatusBarVisible = settings.IsStatusBarVisible;
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
+
+        _isTimelineVisible = settings.IsTimelineVisible;
+        ToggleTimelineCommand = new RelayCommand(() => IsTimelineVisible = !IsTimelineVisible);
 
         _isPickPanelEnabled = settings.IsPickPanelVisible;
         TogglePickPanelCommand = new RelayCommand(() => IsPickPanelEnabled = !IsPickPanelEnabled);

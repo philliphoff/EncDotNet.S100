@@ -2,43 +2,117 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              x:Class="EncDotNet.S100.Viewer.Views.TimelineView"
              x:DataType="vm:TimelineViewModel">
 
+    <UserControl.Resources>
+        <!--
+          Override Fluent slider theme resources so the filled track and
+          thumb adopt the viewer's AccentBrush. AccentBrush is defined
+          in MainWindow.axaml at the application scope so it resolves
+          here via DynamicResource.
+        -->
+        <SolidColorBrush x:Key="SliderTrackValueFill" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderTrackValueFillDisabled" Color="#80007ACC" />
+        <SolidColorBrush x:Key="SliderThumbBackground" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#007ACC" />
+        <SolidColorBrush x:Key="SliderTickBarFill" Color="#80007ACC" />
+    </UserControl.Resources>
+
     <Border Background="{DynamicResource BackgroundColor}"
-            Padding="12,8">
-        <DockPanel LastChildFill="True">
+            Padding="12,8"
+            VerticalAlignment="Stretch">
+        <Panel>
+            <!-- Active state: timeline has at least one registered dataset. -->
+            <DockPanel LastChildFill="False"
+                       VerticalAlignment="Top"
+                       IsVisible="{Binding IsActive}">
 
-            <!-- Title row -->
-            <Grid DockPanel.Dock="Top"
-                  ColumnDefinitions="Auto,*,Auto"
-                  Margin="0,0,0,4">
-                <TextBlock Grid.Column="0"
-                           Text="{x:Static loc:Strings.TimelinePanel_Title}"
+                <!-- Title row -->
+                <Grid DockPanel.Dock="Top"
+                      ColumnDefinitions="Auto,*,Auto"
+                      Margin="0,0,0,4">
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Static loc:Strings.TimelinePanel_Title}"
+                               FontSize="11"
+                               FontWeight="Normal"
+                               LetterSpacing="1" />
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding CurrentTimeLabel}"
+                               FontSize="12"
+                               FontFamily="Menlo, Consolas, monospace" />
+                </Grid>
+
+                <!-- Slider plus prev/next step buttons grouped at the right.
+                     Buttons surface only when ticks correspond to real
+                     sample times (discrete-stop mode). -->
+                <Grid DockPanel.Dock="Top"
+                      ColumnDefinitions="*,Auto">
+                    <Slider Grid.Column="0"
+                            Foreground="{DynamicResource AccentBrush}"
+                            Minimum="{Binding SliderMinimum, Mode=OneWay}"
+                            Maximum="{Binding SliderMaximum, Mode=OneWay}"
+                            Value="{Binding SliderValue, Mode=TwoWay}"
+                            Ticks="{Binding Ticks, Mode=OneWay}"
+                            TickFrequency="{Binding TickFrequency, Mode=OneWay}"
+                            IsSnapToTickEnabled="{Binding IsSnapToTickEnabled, Mode=OneWay}"
+                            TickPlacement="BottomRight"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="2"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding AreStepButtonsVisible}">
+                        <Button Classes="Icon"
+                                Command="{Binding PreviousStepCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                            <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                        <Button Classes="Icon"
+                                Command="{Binding NextStepCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                            <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Range summary -->
+                <TextBlock DockPanel.Dock="Top"
+                           Text="{Binding RangeLabel}"
                            FontSize="11"
-                           FontWeight="Normal"
-                           LetterSpacing="1" />
-                <TextBlock Grid.Column="2"
-                           Text="{Binding CurrentTimeLabel}"
-                           FontSize="12"
-                           FontFamily="Menlo, Consolas, monospace" />
-            </Grid>
+                           Opacity="0.6"
+                           Margin="0,4,0,0" />
+            </DockPanel>
 
-            <!-- Range summary -->
-            <TextBlock DockPanel.Dock="Bottom"
-                       Text="{Binding RangeLabel}"
-                       FontSize="11"
-                       Opacity="0.6"
-                       Margin="0,4,0,0" />
-
-            <!-- Slider -->
-            <Slider Minimum="{Binding SliderMinimum, Mode=OneWay}"
-                    Maximum="{Binding SliderMaximum, Mode=OneWay}"
-                    Value="{Binding SliderValue, Mode=TwoWay}"
-                    IsSnapToTickEnabled="False"
-                    TickPlacement="BottomRight"
-                    VerticalAlignment="Center"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
-        </DockPanel>
+            <!-- Empty state: timeline pane is open but no time-varying
+                 dataset is loaded. -->
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="6"
+                        IsVisible="{Binding !IsActive}">
+                <ic:FluentIcon Icon="Clock"
+                               IconVariant="Regular"
+                               FontSize="28"
+                               Opacity="0.45"
+                               HorizontalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyTitle}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Opacity="0.7" />
+                <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyDescription}"
+                           FontSize="11"
+                           Opacity="0.55"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           MaxWidth="500" />
+            </StackPanel>
+        </Panel>
     </Border>
 </UserControl>
+

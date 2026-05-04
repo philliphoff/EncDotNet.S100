@@ -309,7 +309,15 @@
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
             <!-- Map column wrapped in a row-grid so a timeline panel can dock at the bottom -->
-            <Grid Grid.Column="2" RowDefinitions="*,Auto,Auto">
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="100" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="120" MinHeight="100"
+                                   bh:CollapsibleRow.IsVisible="{Binding IsTimelineVisible}"
+                                   bh:CollapsibleRow.ExpandedHeight="120"
+                                   bh:CollapsibleRow.MinHeightWhenVisible="100" />
+                </Grid.RowDefinitions>
                 <Grid Grid.Row="0" DragDrop.AllowDrop="True">
                 <mapsui:MapControl x:Name="MapControl" />
                 <views:ScaleBarView x:Name="ScaleBar"
@@ -410,17 +418,15 @@
                               Classes="PaneSplitter"
                               Height="4"
                               ResizeDirection="Rows"
-                              IsVisible="{Binding Timeline.IsActive}"
+                              IsVisible="{Binding IsTimelineVisible}"
                               bh:HoverDelay.DelayMilliseconds="500"
                               Name="TimelineSplitter" />
 
                 <!-- Global time slider for time-varying datasets (S-104, S-111, S-411) -->
                 <Border Grid.Row="2"
                         x:Name="TimelinePanel"
-                        Height="120"
-                        MinHeight="80"
                         Background="{DynamicResource BackgroundColor}"
-                        IsVisible="{Binding Timeline.IsActive}">
+                        IsVisible="{Binding IsTimelineVisible}">
                     <views:TimelineView DataContext="{Binding Timeline}" />
                 </Border>
             </Grid>

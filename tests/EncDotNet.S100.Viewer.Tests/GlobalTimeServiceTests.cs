@@ -91,4 +91,64 @@ public class GlobalTimeServiceTests
         Assert.Equal(t1, s.MaxTime);
         Assert.Single(s.AllSamples);
     }
+
+    [Fact]
+    public void TimelineViewModel_uses_real_samples_as_ticks_when_few()
+    {
+        var s = new GlobalTimeService();
+        var t1 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var t2 = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+        var t3 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
+
+        var vm = new TimelineViewModel(s);
+
+        Assert.Equal(3, vm.Ticks.Count);
+        Assert.True(vm.IsSnapToTickEnabled);
+        Assert.Equal((double)t1.Ticks, vm.Ticks[0]);
+        Assert.Equal((double)t3.Ticks, vm.Ticks[2]);
+    }
+
+    [Fact]
+    public void TimelineViewModel_falls_back_to_evenly_spaced_ticks_when_dense()
+    {
+        var s = new GlobalTimeService();
+        var t0 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var samples = new DateTime[100];
+        for (var i = 0; i < samples.Length; i++) samples[i] = t0.AddMinutes(i);
+        s.Register(NewEntry(), new StubTimeAware(samples));
+
+        var vm = new TimelineViewModel(s);
+
+        Assert.Equal(11, vm.Ticks.Count); // EvenlySpacedTickCount + 1 endpoints
+        Assert.False(vm.IsSnapToTickEnabled);
+        Assert.False(vm.AreStepButtonsVisible);
+    }
+
+    [Fact]
+    public void TimelineViewModel_step_commands_advance_through_samples()
+    {
+        var s = new GlobalTimeService();
+        var t1 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var t2 = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+        var t3 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        s.Register(NewEntry(), new StubTimeAware(t1, t2, t3));
+
+        var vm = new TimelineViewModel(s);
+
+        // Initial state: at t1; only Next is enabled.
+        Assert.Equal(t1, s.CurrentTime);
+        Assert.True(vm.AreStepButtonsVisible);
+        Assert.False(vm.PreviousStepCommand.CanExecute(null));
+        Assert.True(vm.NextStepCommand.CanExecute(null));
+
+        vm.NextStepCommand.Execute(null);
+        Assert.Equal(t2, s.CurrentTime);
+        vm.NextStepCommand.Execute(null);
+        Assert.Equal(t3, s.CurrentTime);
+        Assert.False(vm.NextStepCommand.CanExecute(null));
+
+        vm.PreviousStepCommand.Execute(null);
+        Assert.Equal(t2, s.CurrentTime);
+    }
 }
