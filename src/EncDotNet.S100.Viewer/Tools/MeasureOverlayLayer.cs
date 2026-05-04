@@ -22,11 +22,33 @@ internal static class MeasureOverlayLayer
     /// <summary>Stable layer name; reused so the host can find/remove it.</summary>
     public const string LayerName = "Measure Overlay";
 
-    // High-contrast yellow with a black halo — chosen so the overlay stays
-    // legible against any of the Day/Dusk/Night/Bright dataset palettes.
-    private static readonly MapsuiColor LineColor = new(255, 224, 0);
-    private static readonly MapsuiColor HaloColor = new(0, 0, 0);
-    private static readonly MapsuiColor LabelBackground = new(0, 0, 0, 192);
+    /// <summary>
+    /// Default accent (matches <c>ViewerSettings.AccentColor</c> default
+    /// of <c>#007ACC</c>). Used when no accent has been pushed to the
+    /// overlay yet.
+    /// </summary>
+    public static readonly (byte R, byte G, byte B) DefaultAccent = (0x00, 0x7A, 0xCC);
+
+    // Line is a single stroke (no border casing) drawn in the accent
+    // colour, so the path reads as one continuous shape. Transparency is
+    // applied via Style.Opacity (NOT pen colour alpha — Mapsui 5.0.2
+    // pre-multiplies the alpha into the RGB and discards it for
+    // blending, which produces a darker fully-opaque stroke).
+    // Style.Opacity works correctly on a single VectorStyle; stacking
+    // two translucent styles composites toward opaque, so we
+    // intentionally avoid a separate border casing on the line.
+    private const float LineOpacity = 0.5f;
+
+    /// <summary>
+    /// Lightens an accent toward white so the waypoint disc fill stays
+    /// visually distinct from the (full-strength accent) outline. Mix
+    /// factor 0.55 keeps enough hue to read as the same family.
+    /// </summary>
+    private static MapsuiColor Lighten((byte R, byte G, byte B) c, float mix = 0.55f)
+    {
+        byte M(byte v) => (byte)(v + (255 - v) * mix);
+        return new MapsuiColor(M(c.R), M(c.G), M(c.B));
+    }
 
     /// <summary>Creates a fresh, empty overlay layer.</summary>
     public static MemoryLayer Create() => new()
@@ -38,12 +60,21 @@ internal static class MeasureOverlayLayer
 
     /// <summary>
     /// Replaces <paramref name="layer"/>'s features with a freshly built
-    /// representation of <paramref name="state"/>. Caller is responsible
-    /// for invalidating the map (e.g. via
+    /// representation of <paramref name="state"/>, drawn in the supplied
+    /// <paramref name="accent"/> colour. Caller is responsible for
+    /// invalidating the map (e.g. via
     /// <see cref="MapToolContext.RefreshGraphics"/>).
     /// </summary>
-    public static void Update(MemoryLayer layer, MeasurePathState state)
+    public static void Update(MemoryLayer layer, MeasurePathState state, (byte R, byte G, byte B) accent, bool isDarkTheme)
     {
+        var borderColor = new MapsuiColor(accent.R, accent.G, accent.B);
+        var fillColor = Lighten(accent);
+        var (labelBg, labelFg, labelHalo) = isDarkTheme
+            // Dark theme: chip surface + light text, dark halo for outline.
+            ? (new MapsuiColor(38, 38, 42, 235), new MapsuiColor(245, 245, 245), new MapsuiColor(0, 0, 0, 200))
+            // Light theme: light surface + dark text, light halo so the
+            // text stays legible over coloured basemap features.
+            : (new MapsuiColor(248, 248, 250, 235), new MapsuiColor(20, 20, 24), new MapsuiColor(255, 255, 255, 200));
         var features = new List<IFeature>();
 
         // Build the polyline(s) through finalised + rubber-band waypoints,
@@ -63,34 +94,41 @@ internal static class MeasureOverlayLayer
                 ? allPoints.GetRange(0, allPoints.Count - 1)
                 : allPoints;
             if (solidPoints.Count >= 2)
-                AddPolyline(features, solidPoints, dashed: false);
+                AddPolyline(features, solidPoints, dashed: false, borderColor);
 
             if (lastIsRubberBand)
             {
                 var tailStart = allPoints[^2];
                 var tailEnd = allPoints[^1];
-                AddPolyline(features, new[] { tailStart, tailEnd }, dashed: true);
+                AddPolyline(features, new[] { tailStart, tailEnd }, dashed: true, borderColor);
             }
         }
 
         // Per-segment midpoint label.
         foreach (var leg in state.ComputeLegs())
         {
-            AddLegLabel(features, leg);
+            AddLegLabel(features, leg, labelBg, labelFg, labelHalo);
         }
 
         // Waypoint markers with index numbers.
         for (int i = 0; i < state.Waypoints.Count; i++)
         {
             var (lat, lon) = state.Waypoints[i];
-            AddWaypointMarker(features, lat, lon, i + 1);
+            AddWaypointMarker(features, lat, lon, i + 1, fillColor, borderColor);
+        }
+
+        // Unnumbered preview marker at the rubber-band cursor so the user
+        // always sees a circle showing where the next click will land.
+        if (state.Phase == MeasurePathState.MeasurePhase.Drawing && state.RubberBand is { } rbMarker)
+        {
+            AddWaypointDisc(features, rbMarker.Lat, rbMarker.Lon, fillColor, borderColor);
         }
 
         layer.Features = features;
         layer.DataHasChanged();
     }
 
-    private static void AddPolyline(List<IFeature> features, IReadOnlyList<(double Lat, double Lon)> points, bool dashed)
+    private static void AddPolyline(List<IFeature> features, IReadOnlyList<(double Lat, double Lon)> points, bool dashed, MapsuiColor strokeColor)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
         {
@@ -103,23 +141,21 @@ internal static class MeasureOverlayLayer
             }
             var line = new LineString(coords);
 
-            // Halo first so the bright line draws on top.
-            var halo = new GeometryFeature(line);
-            halo.Styles.Add(new VectorStyle
-            {
-                Line = new Pen { Color = HaloColor, Width = 5.0 },
-            });
-            features.Add(halo);
-
+            // Border first so the bright fill draws on top — uses a darker
+            // yellow tone so the path reads as a single stroked line.
             var feature = new GeometryFeature(line);
-            var pen = new Pen { Color = LineColor, Width = 3.0 };
+            var pen = new Pen { Color = strokeColor, Width = 5.0 };
             if (dashed) pen.PenStyle = PenStyle.Dash;
-            feature.Styles.Add(new VectorStyle { Line = pen });
+            feature.Styles.Add(new VectorStyle
+            {
+                Line = pen,
+                Opacity = LineOpacity,
+            });
             features.Add(feature);
         }
     }
 
-    private static void AddLegLabel(List<IFeature> features, MeasureLeg leg)
+    private static void AddLegLabel(List<IFeature> features, MeasureLeg leg, MapsuiColor backgroundColor, MapsuiColor foregroundColor, MapsuiColor haloColor)
     {
         // Place the label at the midpoint in Mercator space (visually
         // centred on the rendered segment, even when geodetic midpoint
@@ -138,9 +174,9 @@ internal static class MeasureOverlayLayer
         {
             Text = text,
             Font = new Font { FontFamily = "Menlo,Consolas,Courier New,monospace", Size = 12 },
-            ForeColor = new MapsuiColor(255, 255, 255),
-            BackColor = new Brush(LabelBackground),
-            Halo = new Pen { Color = HaloColor, Width = 1.0 },
+            ForeColor = foregroundColor,
+            BackColor = new Brush(backgroundColor),
+            Halo = new Pen { Color = haloColor, Width = 2.5 },
             HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
             VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
             Offset = new Offset(0, -14),
@@ -148,21 +184,16 @@ internal static class MeasureOverlayLayer
         features.Add(feature);
     }
 
-    private static void AddWaypointMarker(List<IFeature> features, double lat, double lon, int index)
+    /// <summary>
+    /// Adds a numbered waypoint marker (filled disc with index label).
+    /// </summary>
+    private static void AddWaypointMarker(List<IFeature> features, double lat, double lon, int index, MapsuiColor fillColor, MapsuiColor borderColor)
     {
+        AddWaypointDisc(features, lat, lon, fillColor, borderColor);
+
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-        var feature = new GeometryFeature(new Point(mx, my));
-
-        // Filled disc with halo outline for legibility.
-        feature.Styles.Add(new SymbolStyle
-        {
-            SymbolType = SymbolType.Ellipse,
-            SymbolScale = 0.55,
-            Fill = new Brush { Color = LineColor },
-            Outline = new Pen { Color = HaloColor, Width = 1.5 },
-        });
-
-        feature.Styles.Add(new LabelStyle
+        var labelFeature = new GeometryFeature(new Point(mx, my));
+        labelFeature.Styles.Add(new LabelStyle
         {
             Text = index.ToString(CultureInfo.InvariantCulture),
             Font = new Font { FontFamily = "Menlo,Consolas,Courier New,monospace", Size = 11, Bold = true },
@@ -170,6 +201,21 @@ internal static class MeasureOverlayLayer
             BackColor = new Brush(MapsuiColor.Transparent),
             HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
             VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
+        });
+        features.Add(labelFeature);
+    }
+
+    private static void AddWaypointDisc(List<IFeature> features, double lat, double lon, MapsuiColor fillColor, MapsuiColor borderColor)
+    {
+        var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+        var feature = new GeometryFeature(new Point(mx, my));
+
+        feature.Styles.Add(new SymbolStyle
+        {
+            SymbolType = SymbolType.Ellipse,
+            SymbolScale = 0.9,
+            Fill = new Brush { Color = fillColor },
+            Outline = new Pen { Color = borderColor, Width = 2.0 },
         });
 
         features.Add(feature);

@@ -28,6 +28,28 @@ internal sealed class MeasureTool : IMapTool
     private MemoryLayer? _layer;
     private Point? _pressPosition;
     private bool _pressIsLeftButton;
+    private (byte R, byte G, byte B) _accent = MeasureOverlayLayer.DefaultAccent;
+    private bool _isDarkTheme;
+
+    /// <summary>
+    /// Updates the accent colour used to draw the overlay and refreshes
+    /// the layer if the tool is currently active.
+    /// </summary>
+    public void SetAccentColor(byte r, byte g, byte b)
+    {
+        _accent = (r, g, b);
+        if (_layer is not null) Refresh();
+    }
+
+    /// <summary>
+    /// Updates the cached light/dark theme flag (used to choose the
+    /// leg-label colour palette) and refreshes the overlay if active.
+    /// </summary>
+    public void SetIsDarkTheme(bool isDarkTheme)
+    {
+        _isDarkTheme = isDarkTheme;
+        if (_layer is not null) Refresh();
+    }
 
     /// <summary>Exposed for tests.</summary>
     internal MeasurePathState State => _state;
@@ -158,7 +180,7 @@ internal sealed class MeasureTool : IMapTool
     private void Refresh()
     {
         if (_layer is null || _context is null) return;
-        MeasureOverlayLayer.Update(_layer, _state);
+        MeasureOverlayLayer.Update(_layer, _state, _accent, _isDarkTheme);
         PushSummary();
         _context.RefreshGraphics();
     }
