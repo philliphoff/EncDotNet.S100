@@ -1,12 +1,14 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
-/// Translates a parsed <see cref="S57Document"/> into the S-101 in-memory
-/// document model so that the existing S-101 portrayal pipeline can drive
-/// rendering of S-57 ENC data.
+/// Translates a parsed S-57 <see cref="EncDotNet.S57.S57Document"/> (from the
+/// <c>EncDotNet.S57</c> NuGet package) into the S-101 in-memory document model
+/// so that the existing S-101 portrayal pipeline can drive rendering of S-57
+/// ENC data.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -95,7 +97,7 @@ public sealed class S57ToS101Translator
     }
 
     /// <summary>
-    /// Translates an <see cref="S57Document"/> into an <see cref="S101Document"/>.
+    /// Translates an <see cref="S57Dataset"/> into an <see cref="S101Document"/>.
     /// </summary>
     public S101Document Translate(S57Dataset dataset)
     {
@@ -104,19 +106,24 @@ public sealed class S57ToS101Translator
     }
 
     /// <summary>
-    /// Translates an <see cref="S57Document"/> into an <see cref="S101Document"/>.
+    /// Translates an <see cref="EncDotNet.S57.S57Document"/> into an
+    /// <see cref="S101Document"/>.
     /// </summary>
-    public S101Document Translate(S57Document s57)
+    public S101Document Translate(EncDotNet.S57.S57Document s57)
     {
         ArgumentNullException.ThrowIfNull(s57);
 
         var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues);
+        ctx.IndexVectorRecords();
         ctx.TranslateNodes();
         ctx.TranslateEdges();
         ctx.TranslateFeatures();
 
-        var cmf = s57.Parameters.CoordinateMultiplicationFactor;
-        if (cmf == 0) cmf = 10_000_000;
+        // S57Document.CoordinateMultiplicationFactor / SoundingMultiplicationFactor
+        // already supply the documented defaults (10_000_000 and 10).
+        var cmf = (uint)s57.CoordinateMultiplicationFactor;
+        var somf = (uint)s57.SoundingMultiplicationFactor;
+        var dsid = s57.DataSetIdentification;
 
         return new S101Document
         {
@@ -126,18 +133,16 @@ public sealed class S57ToS101Translator
                 RecordId = 1,
                 ProductSpecification = "S-101",
                 ProductSpecificationEdition = "1.0.0",
-                DatasetName = s57.Identification.DatasetName,
-                DatasetTitle = s57.Identification.DatasetName,
-                DatasetReferenceDate = s57.Identification.IssueDate,
+                DatasetName = dsid?.DataSetName ?? "",
+                DatasetTitle = dsid?.DataSetName ?? "",
+                DatasetReferenceDate = dsid?.IssueDate ?? "",
                 DatasetLanguage = "eng",
             },
             StructureInfo = new S101DatasetStructureInfo
             {
                 CoordinateMultiplicationFactorX = cmf,
                 CoordinateMultiplicationFactorY = cmf,
-                CoordinateMultiplicationFactorZ = s57.Parameters.SoundingMultiplicationFactor == 0
-                ? 10u
-                : s57.Parameters.SoundingMultiplicationFactor,
+                CoordinateMultiplicationFactorZ = somf,
             },
             FeatureTypeCatalogue = ctx.FeatureTypeCatalogue.ToImmutable(),
             AttributeTypeCatalogue = ctx.AttributeTypeCatalogue.ToImmutable(),
@@ -159,13 +164,17 @@ public sealed class S57ToS101Translator
 
     private sealed class TranslationContext
     {
-        private readonly S57Document _s57;
+        private readonly EncDotNet.S57.S57Document _s57;
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
 
+        // Index of the document's flat VectorRecords list, keyed by
+        // (RecordNameCode, RecordId) for fast lookup from spatial pointers.
+        private readonly Dictionary<(int rcnm, int rcid), EncDotNet.S57.S57VectorRecord> _vectorIndex = new();
+
         // Mapping from S-57 (RCNM, RCID) to allocated S-101 IDs, per spatial kind.
-        private readonly Dictionary<S57Name, uint> _nodeIdMap = new();
-        private readonly Dictionary<uint, uint> _edgeIdMap = new();
+        private readonly Dictionary<(int rcnm, int rcid), uint> _nodeIdMap = new();
+        private readonly Dictionary<int, uint> _edgeIdMap = new();
         private uint _nextPointId = 1;
         private uint _nextMultiPointId = 1;
         private uint _nextCurveId = 1;
@@ -194,53 +203,67 @@ public sealed class S57ToS101Translator
         public ImmutableDictionary<ushort, string>.Builder AttributeTypeCatalogue { get; }
             = ImmutableDictionary.CreateBuilder<ushort, string>();
 
-        public TranslationContext(S57Document s57, S57S101Mapping mapping, S101AllowedEnumValues? allowedEnumValues)
+        public TranslationContext(
+            EncDotNet.S57.S57Document s57,
+            S57S101Mapping mapping,
+            S101AllowedEnumValues? allowedEnumValues)
         {
             _s57 = s57;
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
         }
 
+        public void IndexVectorRecords()
+        {
+            foreach (var vr in _s57.VectorRecords)
+            {
+                var key = (vr.RecordName.RecordNameCode, vr.RecordName.RecordId);
+                _vectorIndex[key] = vr;
+            }
+        }
+
         // ── Spatial translation ─────────────────────────────────────────
 
         public void TranslateNodes()
         {
-            foreach (var (key, vr) in _s57.VectorRecords)
+            foreach (var vr in _s57.VectorRecords)
             {
-                if (vr.RecordName != S57DocumentReader.RcnmIsolatedNode
-                    && vr.RecordName != S57DocumentReader.RcnmConnectedNode)
+                var rcnm = vr.RecordName.RecordNameCode;
+                if (rcnm != S57RecordNameCodes.IsolatedNode
+                    && rcnm != S57RecordNameCodes.ConnectedNode)
                     continue;
 
                 // Skip multi-point sounding nodes here; they're exploded into
                 // features in TranslateFeatures().
-                if (vr.Coordinates3D.Length > 0) continue;
-                if (vr.Coordinates2D.Length == 0) continue;
+                if (vr.Soundings.Count > 0) continue;
+                if (vr.Coordinates2D.Count == 0) continue;
 
-                var (y, x) = vr.Coordinates2D[0];
+                var coord = vr.Coordinates2D[0];
                 var id = _nextPointId++;
-                Points[id] = new S101PointRecord { RecordId = id, Y = y, X = x };
-                _nodeIdMap[key] = id;
+                Points[id] = new S101PointRecord { RecordId = id, Y = coord.Y, X = coord.X };
+                _nodeIdMap[(rcnm, vr.RecordName.RecordId)] = id;
             }
         }
 
         public void TranslateEdges()
         {
-            foreach (var (key, vr) in _s57.VectorRecords)
+            foreach (var vr in _s57.VectorRecords)
             {
-                if (vr.RecordName != S57DocumentReader.RcnmEdge) continue;
+                if (vr.RecordName.RecordNameCode != S57RecordNameCodes.Edge) continue;
 
                 S101PointAssociation? begin = null;
                 S101PointAssociation? end = null;
-                foreach (var p in vr.Pointers)
+                foreach (var p in vr.VectorPointers)
                 {
-                    if (p.Topology == TopologyBegin)
+                    var topo = (int)p.Topology;
+                    if (topo == TopologyBegin)
                     {
-                        if (TryGetPointId(p.RecordName, p.RecordId, out var pid))
+                        if (TryGetPointId(p.Name, out var pid))
                             begin = new S101PointAssociation(S101RcnmPoint, pid, TopologyBegin);
                     }
-                    else if (p.Topology == TopologyEnd)
+                    else if (topo == TopologyEnd)
                     {
-                        if (TryGetPointId(p.RecordName, p.RecordId, out var pid))
+                        if (TryGetPointId(p.Name, out var pid))
                             end = new S101PointAssociation(S101RcnmPoint, pid, TopologyEnd);
                     }
                 }
@@ -249,34 +272,40 @@ public sealed class S57ToS101Translator
                 if (begin is not null) ptas.Add(begin.Value);
                 if (end is not null) ptas.Add(end.Value);
 
+                // Project package coords to (Y,X) tuples expected by the S-101 record.
+                var intermediates = ImmutableArray.CreateBuilder<(int Y, int X)>(vr.Coordinates2D.Count);
+                foreach (var c in vr.Coordinates2D)
+                    intermediates.Add((c.Y, c.X));
+
                 var id = _nextCurveId++;
                 CurveSegments[id] = new S101CurveSegmentRecord
                 {
                     RecordId = id,
                     PointAssociations = ptas.ToImmutable(),
-                    IntermediateCoordinates = vr.Coordinates2D,
+                    IntermediateCoordinates = intermediates.ToImmutable(),
                 };
-                _edgeIdMap[vr.RecordId] = id;
+                _edgeIdMap[vr.RecordName.RecordId] = id;
             }
         }
 
-        private bool TryGetPointId(byte rcnm, uint rcid, out uint id)
-            => _nodeIdMap.TryGetValue(new S57Name(rcnm, rcid), out id);
+        private bool TryGetPointId(S57RecordName name, out uint id)
+            => _nodeIdMap.TryGetValue((name.RecordNameCode, name.RecordId), out id);
 
         // ── Feature translation ─────────────────────────────────────────
 
         public void TranslateFeatures()
         {
-            foreach (var feat in _s57.Features)
+            foreach (var feat in _s57.FeatureRecords)
             {
-                if (feat.ObjectClass == SoundingObjl)
+                var objl = (ushort)(int)feat.ObjectCode;
+                if (objl == SoundingObjl)
                 {
                     EmitSoundingMultiPoint(feat);
                     continue;
                 }
 
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
-                var resolved = _mapping.ResolveFeature(feat.ObjectClass, acronymView);
+                var resolved = _mapping.ResolveFeature(objl, acronymView);
                 if (resolved is null) continue;
 
                 var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
@@ -288,9 +317,9 @@ public sealed class S57ToS101Translator
                 {
                     RecordId = _nextFeatureId++,
                     FeatureTypeCode = typeCode,
-                    ProducingAgency = feat.ProducingAgency,
-                    FeatureIdentificationNumber = feat.FeatureIdentificationNumber,
-                    FeatureIdentificationSubdivision = feat.FeatureIdentificationSubdivision,
+                    ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                    FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                    FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
                     Attributes = attributes,
                     SpatialAssociations = spatials,
                     FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
@@ -307,14 +336,17 @@ public sealed class S57ToS101Translator
         /// S-101 multi-point record (RCNM=115) so the SOUNDG03 rule can iterate
         /// the points and draw symbolised depth values.
         /// </summary>
-        private void EmitSoundingMultiPoint(S57FeatureRecord feat)
+        private void EmitSoundingMultiPoint(EncDotNet.S57.S57FeatureRecord feat)
         {
             var triples = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
             foreach (var ptr in feat.SpatialPointers)
             {
-                if (!_s57.VectorRecords.TryGetValue(new S57Name(ptr.RecordName, ptr.RecordId), out var vr))
+                if (!_vectorIndex.TryGetValue(
+                        (ptr.Name.RecordNameCode, ptr.Name.RecordId),
+                        out var vr))
                     continue;
-                triples.AddRange(vr.Coordinates3D);
+                foreach (var s in vr.Soundings)
+                    triples.Add((s.Y, s.X, s.Depth));
             }
 
             if (triples.Count == 0) return;
@@ -331,9 +363,9 @@ public sealed class S57ToS101Translator
             {
                 RecordId = _nextFeatureId++,
                 FeatureTypeCode = typeCode,
-                ProducingAgency = feat.ProducingAgency,
-                FeatureIdentificationNumber = feat.FeatureIdentificationNumber,
-                FeatureIdentificationSubdivision = feat.FeatureIdentificationSubdivision,
+                ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
                 // The S-101 Sounding feature carries no attributes — depth values
                 // live on the individual points within the MultiPoint geometry,
                 // which the SOUNDG03 portrayal rule reads as point.ScaledZ.
@@ -346,10 +378,10 @@ public sealed class S57ToS101Translator
         }
 
         private ImmutableArray<S101Attribute> TranslateAttributes(
-            ImmutableArray<S57Attribute> attrs,
+            IReadOnlyList<EncDotNet.S57.S57AttributeValue> attrs,
             ResolvedFeature feature)
         {
-            if (attrs.Length == 0) return ImmutableArray<S101Attribute>.Empty;
+            if (attrs.Count == 0) return ImmutableArray<S101Attribute>.Empty;
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
             // can emit them as one or more S-101 `information` complex-attribute
@@ -360,7 +392,7 @@ public sealed class S57ToS101Translator
             string? ntxtdsFile = null;
             foreach (var a in attrs)
             {
-                switch (a.Code)
+                switch (a.AttributeCode)
                 {
                     case S57AttrInform: informText = a.Value; break;
                     case S57AttrNinfom: ninfomText = a.Value; break;
@@ -374,10 +406,11 @@ public sealed class S57ToS101Translator
             {
                 // Textual-info attributes are handled as a complex attribute
                 // group below — skip the per-attribute pass-through.
-                if (a.Code is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
                     continue;
 
-                if (!_mapping.AttributeRules.TryGetValue(a.Code, out var attrRule))
+                var attl = (ushort)a.AttributeCode;
+                if (!_mapping.AttributeRules.TryGetValue(attl, out var attrRule))
                     continue;
 
                 var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
@@ -427,27 +460,26 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(langCode, 1, language));
         }
 
-        private ImmutableArray<S101SpatialAssociation> TranslateSpatialPointers(S57FeatureRecord feat)
+        private ImmutableArray<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)
         {
-            switch (feat.Primitive)
+            // S57GeometricPrimitive struct overlays an int (1=Point, 2=Line,
+            // 3=Area, 255=None) so casting to int recovers the wire value.
+            var prim = (int)feat.Primitive;
+            return prim switch
             {
-                case 1: // Point
-                    return TranslatePointSpatial(feat);
-                case 2: // Line
-                    return TranslateLineSpatial(feat);
-                case 3: // Area
-                    return TranslateAreaSpatial(feat);
-                default:
-                    return ImmutableArray<S101SpatialAssociation>.Empty;
-            }
+                1 => TranslatePointSpatial(feat),
+                2 => TranslateLineSpatial(feat),
+                3 => TranslateAreaSpatial(feat),
+                _ => ImmutableArray<S101SpatialAssociation>.Empty,
+            };
         }
 
-        private ImmutableArray<S101SpatialAssociation> TranslatePointSpatial(S57FeatureRecord feat)
+        private ImmutableArray<S101SpatialAssociation> TranslatePointSpatial(EncDotNet.S57.S57FeatureRecord feat)
         {
             // Point features reference a single isolated/connected node.
             foreach (var ptr in feat.SpatialPointers)
             {
-                if (TryGetPointId(ptr.RecordName, ptr.RecordId, out var pid))
+                if (TryGetPointId(ptr.Name, out var pid))
                 {
                     return ImmutableArray.Create(
                         new S101SpatialAssociation(S101RcnmPoint, pid, OrientationForward));
@@ -456,21 +488,21 @@ public sealed class S57ToS101Translator
             return ImmutableArray<S101SpatialAssociation>.Empty;
         }
 
-        private ImmutableArray<S101SpatialAssociation> TranslateLineSpatial(S57FeatureRecord feat)
+        private ImmutableArray<S101SpatialAssociation> TranslateLineSpatial(EncDotNet.S57.S57FeatureRecord feat)
         {
             // Line features reference one or more edges in traversal order.
             var builder = ImmutableArray.CreateBuilder<S101SpatialAssociation>();
             foreach (var ptr in feat.SpatialPointers)
             {
-                if (ptr.RecordName != S57DocumentReader.RcnmEdge) continue;
-                if (!_edgeIdMap.TryGetValue(ptr.RecordId, out var cid)) continue;
-                var ornt = ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
+                if (ptr.Name.RecordNameCode != S57RecordNameCodes.Edge) continue;
+                if (!_edgeIdMap.TryGetValue(ptr.Name.RecordId, out var cid)) continue;
+                var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
                 builder.Add(new S101SpatialAssociation(S101RcnmCurveSegment, cid, ornt));
             }
             return builder.ToImmutable();
         }
 
-        private ImmutableArray<S101SpatialAssociation> TranslateAreaSpatial(S57FeatureRecord feat)
+        private ImmutableArray<S101SpatialAssociation> TranslateAreaSpatial(EncDotNet.S57.S57FeatureRecord feat)
         {
             // Area features reference a ring of edges via FSPT. Group by
             // USAG (1 = exterior, 2 = interior) and wrap each group into a
@@ -481,12 +513,12 @@ public sealed class S57ToS101Translator
 
             foreach (var ptr in feat.SpatialPointers)
             {
-                if (ptr.RecordName != S57DocumentReader.RcnmEdge) continue;
-                if (!_edgeIdMap.TryGetValue(ptr.RecordId, out var cid)) continue;
-                var ornt = ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
+                if (ptr.Name.RecordNameCode != S57RecordNameCodes.Edge) continue;
+                if (!_edgeIdMap.TryGetValue(ptr.Name.RecordId, out var cid)) continue;
+                var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
                 var usage = new S101CurveUsage(S101RcnmCurveSegment, cid, ornt);
 
-                switch (ptr.Usage)
+                switch ((int)ptr.Usage)
                 {
                     case UsageInterior:
                         currentInterior ??= new List<S101CurveUsage>();

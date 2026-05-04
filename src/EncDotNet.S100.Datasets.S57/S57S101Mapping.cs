@@ -164,13 +164,13 @@ public sealed class S57S101Mapping
     /// suitable for passing to <see cref="ResolveFeature"/>. Values for
     /// attributes whose ATTL is unknown to this mapping are omitted.
     /// </summary>
-    public ImmutableDictionary<string, string> BuildAcronymView(IEnumerable<S57Attribute> attributes)
+    public ImmutableDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
         var b = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in attributes)
         {
-            if (AttributeRules.TryGetValue(a.Code, out var rule))
+            if (AttributeRules.TryGetValue((ushort)a.AttributeCode, out var rule))
                 b[rule.S57Acronym] = a.Value;
         }
         return b.ToImmutable();

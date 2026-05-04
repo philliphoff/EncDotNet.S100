@@ -189,9 +189,9 @@ public class S57S101MappingTests
         var m = S57S101Mapping.Default;
         var view = m.BuildAcronymView(new[]
         {
-            new S57Attribute(87, "5.0"),  // DRVAL1
-            new S57Attribute(88, "10.0"), // DRVAL2
-            new S57Attribute(9999, "x"),  // unknown — dropped
+            new EncDotNet.S57.S57AttributeValue { AttributeCode = 87, Value = "5.0" },  // DRVAL1
+            new EncDotNet.S57.S57AttributeValue { AttributeCode = 88, Value = "10.0" }, // DRVAL2
+            new EncDotNet.S57.S57AttributeValue { AttributeCode = 9999, Value = "x" },  // unknown — dropped
         });
         Assert.Equal("5.0", view["DRVAL1"]);
         Assert.Equal("10.0", view["DRVAL2"]);
@@ -204,7 +204,7 @@ public class S57S101MappingTests
     public void Ctrpnt_WithCatctr1_RedirectsToLandmark_TriangulationMark()
     {
         var m = S57S101Mapping.Default;
-        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "1") }); // CATCTR=1
+        var attrs = m.BuildAcronymView(new[] { new EncDotNet.S57.S57AttributeValue { AttributeCode = 16, Value = "1" } }); // CATCTR=1
 
         var resolved = m.ResolveFeature(33, attrs); // CTRPNT
         Assert.NotNull(resolved);
@@ -220,7 +220,7 @@ public class S57S101MappingTests
     public void Ctrpnt_WithCatctr5_RedirectsToLandmark_BoundaryMark()
     {
         var m = S57S101Mapping.Default;
-        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "5") });
+        var attrs = m.BuildAcronymView(new[] { new EncDotNet.S57.S57AttributeValue { AttributeCode = 16, Value = "5" } });
 
         var resolved = m.ResolveFeature(33, attrs);
         Assert.NotNull(resolved);
@@ -236,7 +236,7 @@ public class S57S101MappingTests
     public void Ctrpnt_WithOtherCatctr_IsDropped()
     {
         var m = S57S101Mapping.Default;
-        var attrs = m.BuildAcronymView(new[] { new S57Attribute(16, "2") });
+        var attrs = m.BuildAcronymView(new[] { new EncDotNet.S57.S57AttributeValue { AttributeCode = 16, Value = "2" } });
 
         Assert.Null(m.ResolveFeature(33, attrs));
     }
@@ -266,7 +266,7 @@ public class S57S101MappingTests
     public void Coalne_CatcoaSurfaceValues_RedirectToNatureOfSurface(string s57Value, string expectedS101Value)
     {
         var m = S57S101Mapping.Default;
-        var attrs = m.BuildAcronymView(new[] { new S57Attribute(15, s57Value) }); // CATCOA
+        var attrs = m.BuildAcronymView(new[] { new EncDotNet.S57.S57AttributeValue { AttributeCode = 15, Value = s57Value } }); // CATCOA
 
         var resolved = m.ResolveFeature(30, attrs); // COALNE
         Assert.NotNull(resolved);
@@ -282,7 +282,7 @@ public class S57S101MappingTests
     public void Coalne_OtherCatcoaValues_FallThroughToCategoryOfCoastline()
     {
         var m = S57S101Mapping.Default;
-        var attrs = m.BuildAcronymView(new[] { new S57Attribute(15, "1") });
+        var attrs = m.BuildAcronymView(new[] { new EncDotNet.S57.S57AttributeValue { AttributeCode = 15, Value = "1" } });
 
         var resolved = m.ResolveFeature(30, attrs)!;
         var attr = m.ResolveAttribute("CATCOA", "1", resolved);

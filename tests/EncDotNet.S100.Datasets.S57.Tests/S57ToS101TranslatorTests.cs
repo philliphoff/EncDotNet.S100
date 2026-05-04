@@ -1,79 +1,143 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
-using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;
 
 public class S57ToS101TranslatorTests
 {
+    // S-57 record-name codes; mirrored from EncDotNet.S57.S57RecordNameCodes
+    // so existing tests can use the short names without prefixing.
     private const byte RcnmIsolatedNode = 110;
     private const byte RcnmConnectedNode = 120;
     private const byte RcnmEdge = 130;
 
-    private static S57Document BuildDocument(
-        ImmutableDictionary<S57Name, S57VectorRecord>? vectorRecords = null,
-        ImmutableArray<S57FeatureRecord>? features = null,
+    // ── Builders that produce package S-57 types from primitive args ───
+
+    private static EncDotNet.S57.S57Document BuildDocument(
+        IEnumerable<EncDotNet.S57.S57VectorRecord>? vectorRecords = null,
+        IEnumerable<EncDotNet.S57.S57FeatureRecord>? features = null,
         uint comf = 10_000_000,
         uint somf = 10)
         => new()
         {
-            Identification = new S57DatasetIdentification
+            DataSetIdentification = new EncDotNet.S57.S57DataSetIdentification
             {
-                DatasetName = "TEST.000",
-                Edition = "1",
+                DataSetName = "TEST.000",
+                EditionNumber = "1",
                 UpdateNumber = "0",
                 IssueDate = "20240101",
             },
-            Parameters = new S57DatasetParameters
+            DataSetParameters = new EncDotNet.S57.S57DataSetParameters
             {
                 CompilationScale = 50_000,
-                CoordinateMultiplicationFactor = comf,
-                SoundingMultiplicationFactor = somf,
+                CoordinateMultiplicationFactor = (int)comf,
+                SoundingMultiplicationFactor = (int)somf,
             },
-            VectorRecords = vectorRecords ?? ImmutableDictionary<S57Name, S57VectorRecord>.Empty,
-            Features = features ?? ImmutableArray<S57FeatureRecord>.Empty,
+            VectorRecords = (vectorRecords ?? Array.Empty<EncDotNet.S57.S57VectorRecord>()).ToImmutableArray(),
+            FeatureRecords = (features ?? Array.Empty<EncDotNet.S57.S57FeatureRecord>()).ToImmutableArray(),
         };
 
-    private static (S57Name name, S57VectorRecord record) Node(uint id, int y, int x, byte rcnm = RcnmConnectedNode)
-    {
-        var rec = new S57VectorRecord
+    private static EncDotNet.S57.S57RecordName Name(byte rcnm, uint id)
+        => new() { RecordNameCode = rcnm, RecordId = (int)id };
+
+    private static EncDotNet.S57.S57VectorRecord Node(uint id, int y, int x, byte rcnm = RcnmConnectedNode)
+        => new()
         {
-            RecordName = rcnm,
-            RecordId = id,
-            Pointers = ImmutableArray<S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray.Create((y, x)),
-            Coordinates3D = ImmutableArray<(int, int, int)>.Empty,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
+            RecordName = Name(rcnm, id),
+            VectorPointers = ImmutableArray<EncDotNet.S57.S57VectorPointer>.Empty,
+            Coordinates2D = ImmutableArray.Create(
+                new EncDotNet.S57.S57Coordinate2D { X = x, Y = y }),
+            Soundings = ImmutableArray<EncDotNet.S57.S57Sounding>.Empty,
+            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
         };
-        return (new S57Name(rcnm, id), rec);
-    }
 
-    private static (S57Name name, S57VectorRecord record) Edge(
+    private static EncDotNet.S57.S57VectorRecord Edge(
         uint id, uint beginNodeId, uint endNodeId,
         params (int Y, int X)[] intermediates)
-    {
-        var rec = new S57VectorRecord
+        => new()
         {
-            RecordName = RcnmEdge,
-            RecordId = id,
-            Pointers = ImmutableArray.Create(
-                new S57VectorPointer(RcnmConnectedNode, beginNodeId, 1, 0, 1, 255),
-                new S57VectorPointer(RcnmConnectedNode, endNodeId, 1, 0, 2, 255)),
-            Coordinates2D = intermediates.Length == 0
-                ? ImmutableArray<(int, int)>.Empty
-                : intermediates.ToImmutableArray(),
-            Coordinates3D = ImmutableArray<(int, int, int)>.Empty,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
+            RecordName = Name(RcnmEdge, id),
+            VectorPointers = ImmutableArray.Create(
+                Vp(RcnmConnectedNode, beginNodeId, ornt: 1, usage: 0, topo: 1, mask: 255),
+                Vp(RcnmConnectedNode, endNodeId,   ornt: 1, usage: 0, topo: 2, mask: 255)),
+            Coordinates2D = intermediates
+                .Select(c => new EncDotNet.S57.S57Coordinate2D { X = c.X, Y = c.Y })
+                .ToImmutableArray(),
+            Soundings = ImmutableArray<EncDotNet.S57.S57Sounding>.Empty,
+            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
         };
-        return (new S57Name(RcnmEdge, id), rec);
-    }
+
+    private static EncDotNet.S57.S57VectorRecord SoundingNode(
+        uint id, params (int Y, int X, int Z)[] soundings)
+        => new()
+        {
+            RecordName = Name(RcnmIsolatedNode, id),
+            VectorPointers = ImmutableArray<EncDotNet.S57.S57VectorPointer>.Empty,
+            Coordinates2D = ImmutableArray<EncDotNet.S57.S57Coordinate2D>.Empty,
+            Soundings = soundings
+                .Select(s => new EncDotNet.S57.S57Sounding { X = s.X, Y = s.Y, Depth = s.Z })
+                .ToImmutableArray(),
+            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
+        };
+
+    private static EncDotNet.S57.S57VectorPointer Vp(
+        byte rcnm, uint id, byte ornt, byte usage, byte topo, byte mask)
+        => new()
+        {
+            Name = Name(rcnm, id),
+            Orientation = (EncDotNet.S57.S57Orientation)(int)ornt,
+            Usage = (EncDotNet.S57.S57UsageIndicator)(int)usage,
+            Topology = (EncDotNet.S57.S57TopologyIndicator)(int)topo,
+            Mask = (EncDotNet.S57.S57MaskingIndicator)(int)mask,
+        };
+
+    private static EncDotNet.S57.S57SpatialPointer Sp(
+        byte rcnm, uint id, byte ornt, byte usage, byte mask)
+        => new()
+        {
+            Name = Name(rcnm, id),
+            Orientation = (EncDotNet.S57.S57Orientation)(int)ornt,
+            Usage = (EncDotNet.S57.S57UsageIndicator)(int)usage,
+            Mask = (EncDotNet.S57.S57MaskingIndicator)(int)mask,
+        };
+
+    private static EncDotNet.S57.S57AttributeValue Attr(int code, string value)
+        => new() { AttributeCode = code, Value = value };
+
+    private static EncDotNet.S57.S57FeatureRecord Feat(
+        uint recordId,
+        byte primitive,
+        ushort objectClass,
+        ushort producingAgency = 540,
+        uint featureIdentificationNumber = 1,
+        ushort featureIdentificationSubdivision = 0,
+        IEnumerable<EncDotNet.S57.S57AttributeValue>? attributes = null,
+        IEnumerable<EncDotNet.S57.S57SpatialPointer>? spatialPointers = null)
+        => new()
+        {
+            RecordName = new EncDotNet.S57.S57RecordName
+            {
+                RecordNameCode = 100, // Feature
+                RecordId = (int)recordId,
+                AgencyCode = (int)producingAgency,
+                FeatureId = (int)featureIdentificationNumber,
+                FeatureSubdivision = (int)featureIdentificationSubdivision,
+            },
+            Primitive = (EncDotNet.S57.S57GeometricPrimitive)(int)primitive,
+            ObjectCode = (EncDotNet.S57.S57ObjectCode)(int)objectClass,
+            Attributes = (attributes ?? Array.Empty<EncDotNet.S57.S57AttributeValue>()).ToImmutableArray(),
+            NationalAttributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
+            SpatialPointers = (spatialPointers ?? Array.Empty<EncDotNet.S57.S57SpatialPointer>()).ToImmutableArray(),
+        };
+
+    // ── Tests ──────────────────────────────────────────────────────────
 
     [Fact]
     public void Translate_NodeBecomesPointRecord()
     {
-        var (n1, r1) = Node(1, 100, 200);
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1));
+        var n1 = Node(1, 100, 200);
+        var doc = BuildDocument(vectorRecords: new[] { n1 });
 
         var s101 = new S57ToS101Translator().Translate(doc);
 
@@ -86,14 +150,11 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_EdgeBecomesCurveSegmentWithBeginEndAssociations()
     {
-        var (n1, r1) = Node(1, 0, 0);
-        var (n2, r2) = Node(2, 100, 100);
-        var (e1, e1r) = Edge(10, 1, 2, (50, 50));
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 100, 100);
+        var e1 = Edge(10, 1, 2, (50, 50));
 
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(n1, r1).Add(n2, r2).Add(e1, e1r));
-
+        var doc = BuildDocument(vectorRecords: new[] { n1, n2, e1 });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         Assert.Equal(2, s101.Points.Count);
@@ -107,24 +168,12 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_PointFeature_ReferencesPoint()
     {
-        var (n1, r1) = Node(1, 100, 200);
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,
-            ObjectClass = 5, // BCNCAR → CardinalBeacon
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmConnectedNode, 1, 1, 0, 0)),
-        };
+        var n1 = Node(1, 100, 200);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 5, // BCNCAR → CardinalBeacon
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
 
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1),
-            features: ImmutableArray.Create(feature));
-
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var feat = Assert.Single(s101.Features);
@@ -136,28 +185,14 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_LineFeature_ReferencesCurveSegments()
     {
-        var (n1, r1) = Node(1, 0, 0);
-        var (n2, r2) = Node(2, 100, 100);
-        var (e1, e1r) = Edge(10, 1, 2);
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 100, 100);
+        var e1 = Edge(10, 1, 2);
+        var feature = Feat(
+            recordId: 1, primitive: 2, objectClass: 30, // COALNE → Coastline
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 0, 0) });
 
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 2,
-            ObjectClass = 30, // COALNE → Coastline
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmEdge, 10, 1, 0, 0)),
-        };
-
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(n1, r1).Add(n2, r2).Add(e1, e1r),
-            features: ImmutableArray.Create(feature));
-
+        var doc = BuildDocument(vectorRecords: new[] { n1, n2, e1 }, features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var feat = Assert.Single(s101.Features);
@@ -169,36 +204,26 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_AreaFeature_BuildsSurfaceWithCompositeCurveExterior()
     {
-        var (n1, r1) = Node(1, 0, 0);
-        var (n2, r2) = Node(2, 0, 100);
-        var (n3, r3) = Node(3, 100, 50);
-        var (e1, e1r) = Edge(10, 1, 2);
-        var (e2, e2r) = Edge(11, 2, 3);
-        var (e3, e3r) = Edge(12, 3, 1);
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
 
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 3,
-            ObjectClass = 42, // DEPARE → DepthArea
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray.Create(
-                new S57Attribute(87, "10"),
-                new S57Attribute(88, "20")),
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmEdge, 10, 1, 1, 0),
-                new S57FeatureSpatialPointer(RcnmEdge, 11, 1, 1, 0),
-                new S57FeatureSpatialPointer(RcnmEdge, 12, 1, 1, 0)),
-        };
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 42, // DEPARE → DepthArea
+            attributes: new[] { Attr(87, "10"), Attr(88, "20") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
 
         var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(n1, r1).Add(n2, r2).Add(n3, r3)
-                .Add(e1, e1r).Add(e2, e2r).Add(e3, e3r),
-            features: ImmutableArray.Create(feature));
-
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var feat = Assert.Single(s101.Features);
@@ -221,44 +246,16 @@ public class S57ToS101TranslatorTests
     {
         // S-57 SOUNDG (OBJL=129) features are translated into a single S-101
         // Sounding feature backed by a multi-point spatial record (RCNM=115).
-        // The depth values live on the points within that record.
-        var soundingNode = new S57VectorRecord
-        {
-            RecordName = RcnmIsolatedNode,
-            RecordId = 1,
-            Pointers = ImmutableArray<S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray<(int, int)>.Empty,
-            Coordinates3D = ImmutableArray.Create(
-                (10, 20, 50),
-                (30, 40, 75),
-                (50, 60, 100)),
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-        };
+        var sn = SoundingNode(1, (10, 20, 50), (30, 40, 75), (50, 60, 100));
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 129, // SOUNDG
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 1, 0, 0) });
 
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,
-            ObjectClass = 129, // SOUNDG
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmIsolatedNode, 1, 1, 0, 0)),
-        };
-
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(new S57Name(RcnmIsolatedNode, 1), soundingNode),
-            features: ImmutableArray.Create(feature),
-            somf: 10);
-
+        var doc = BuildDocument(vectorRecords: new[] { sn }, features: new[] { feature }, somf: 10);
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var s101Feature = Assert.Single(s101.Features);
-        var soundingTypeCode = s101.FeatureTypeCatalogue
-            .First(kv => kv.Value == "Sounding").Key;
+        var soundingTypeCode = s101.FeatureTypeCatalogue.First(kv => kv.Value == "Sounding").Key;
         Assert.Equal(soundingTypeCode, s101Feature.FeatureTypeCode);
         Assert.Empty(s101Feature.Attributes);
 
@@ -283,45 +280,17 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_SoundingFeature_AcrossMultipleNodes_AggregatesAllPoints()
     {
-        var sn1 = new S57VectorRecord
-        {
-            RecordName = RcnmIsolatedNode,
-            RecordId = 1,
-            Pointers = ImmutableArray<S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray<(int, int)>.Empty,
-            Coordinates3D = ImmutableArray.Create((1, 2, 3), (4, 5, 6)),
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-        };
-        var sn2 = new S57VectorRecord
-        {
-            RecordName = RcnmIsolatedNode,
-            RecordId = 2,
-            Pointers = ImmutableArray<S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray<(int, int)>.Empty,
-            Coordinates3D = ImmutableArray.Create((7, 8, 9)),
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-        };
+        var sn1 = SoundingNode(1, (1, 2, 3), (4, 5, 6));
+        var sn2 = SoundingNode(2, (7, 8, 9));
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 129,
+            spatialPointers: new[]
+            {
+                Sp(RcnmIsolatedNode, 1, 1, 0, 0),
+                Sp(RcnmIsolatedNode, 2, 1, 0, 0),
+            });
 
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,
-            ObjectClass = 129,
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmIsolatedNode, 1, 1, 0, 0),
-                new S57FeatureSpatialPointer(RcnmIsolatedNode, 2, 1, 0, 0)),
-        };
-
-        var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(new S57Name(RcnmIsolatedNode, 1), sn1)
-                .Add(new S57Name(RcnmIsolatedNode, 2), sn2),
-            features: ImmutableArray.Create(feature));
-
+        var doc = BuildDocument(vectorRecords: new[] { sn1, sn2 }, features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var mp = Assert.Single(s101.MultiPoints.Values);
@@ -331,19 +300,8 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_UnmappedFeatureClass_IsSkipped()
     {
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,
-            ObjectClass = 65535,
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S57Attribute>.Empty,
-            SpatialPointers = ImmutableArray<S57FeatureSpatialPointer>.Empty,
-        };
-
-        var doc = BuildDocument(features: ImmutableArray.Create(feature));
+        var feature = Feat(recordId: 1, primitive: 1, objectClass: 65535);
+        var doc = BuildDocument(features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         Assert.Empty(s101.Features);
@@ -364,32 +322,19 @@ public class S57ToS101TranslatorTests
 
     // ── v3.5: S-101 FC allowable enum-value enforcement ──────────────
 
-    private static S57Document LandRegionDocWithCatlnd(string catlndValue)
+    private static EncDotNet.S57.S57Document LandRegionDocWithCatlnd(string catlndValue)
     {
-        var (n1, r1) = Node(1, 1000, 2000);
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,                      // Point
-            ObjectClass = 73,                   // LNDRGN → LandRegion
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray.Create(
-                new S57Attribute(34, catlndValue)),  // CATLND → categoryOfLandRegion (enum)
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmConnectedNode, 1, 1, 0, 0)),
-        };
-        return BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1),
-            features: ImmutableArray.Create(feature));
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 73, // LNDRGN → LandRegion
+            attributes: new[] { Attr(34, catlndValue) }, // CATLND → categoryOfLandRegion (enum)
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
     }
 
     [Fact]
     public void Translate_EnumAttribute_AllowedValue_IsEmitted()
     {
-        // CATLND=1 ("fen") is in the S-101 FC's allowable list for
-        // categoryOfLandRegion, so the attribute survives translation.
         var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("1"));
 
         var feat = Assert.Single(s101.Features);
@@ -402,9 +347,6 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_EnumAttribute_DisallowedValue_IsDropped()
     {
-        // CATLND=99 is not in the S-101 FC's allowable list for
-        // categoryOfLandRegion, so the attribute is dropped per the
-        // IHO S-57→S-101 Conversion Guidance (Jan 2021).
         var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("99"));
 
         var feat = Assert.Single(s101.Features);
@@ -414,9 +356,6 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_EnumAttribute_DisallowedValue_PassesThroughWhenEnforcementDisabled()
     {
-        // Passing null for the allowable-value lookup disables enforcement,
-        // so even invalid enum values survive translation. Useful for
-        // round-trip tests that don't want FC validation in the loop.
         var translator = new S57ToS101Translator(S57S101Mapping.Default, allowedEnumValues: null);
         var s101 = translator.Translate(LandRegionDocWithCatlnd("99"));
 
@@ -428,39 +367,26 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_NonEnumAttribute_PassesThroughRegardlessOfValue()
     {
-        // DRVAL1/DRVAL2 are real-typed S-101 attributes — no allowable list
-        // applies, so any numeric value (even one that would be nonsense as
-        // an enum code) must pass through.
-        var (n1, r1) = Node(1, 0, 0);
-        var (n2, r2) = Node(2, 0, 100);
-        var (n3, r3) = Node(3, 100, 50);
-        var (e1, e1r) = Edge(10, 1, 2);
-        var (e2, e2r) = Edge(11, 2, 3);
-        var (e3, e3r) = Edge(12, 3, 1);
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var e1 = Edge(10, 1, 2);
+        var e2 = Edge(11, 2, 3);
+        var e3 = Edge(12, 3, 1);
 
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 3,
-            ObjectClass = 42,                   // DEPARE → DepthArea
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray.Create(
-                new S57Attribute(87, "999.9"),  // DRVAL1
-                new S57Attribute(88, "1234.5")), // DRVAL2
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmEdge, 10, 1, 1, 0),
-                new S57FeatureSpatialPointer(RcnmEdge, 11, 1, 1, 0),
-                new S57FeatureSpatialPointer(RcnmEdge, 12, 1, 1, 0)),
-        };
+        var feature = Feat(
+            recordId: 1, primitive: 3, objectClass: 42, // DEPARE → DepthArea
+            attributes: new[] { Attr(87, "999.9"), Attr(88, "1234.5") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
 
         var doc = BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty
-                .Add(n1, r1).Add(n2, r2).Add(n3, r3)
-                .Add(e1, e1r).Add(e2, e2r).Add(e3, e3r),
-            features: ImmutableArray.Create(feature));
-
+            vectorRecords: new[] { n1, n2, n3, e1, e2, e3 },
+            features: new[] { feature });
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var feat = Assert.Single(s101.Features);
@@ -479,11 +405,9 @@ public class S57ToS101TranslatorTests
         Assert.True(allowed.IsAllowed("categoryOfLandRegion", "1"));
         Assert.False(allowed.IsAllowed("categoryOfLandRegion", "99"));
 
-        // Non-enum attributes are unconstrained.
         Assert.False(allowed.IsEnumerated("depthRangeMinimumValue"));
         Assert.True(allowed.IsAllowed("depthRangeMinimumValue", "anything"));
 
-        // Unknown attribute names are treated as unconstrained.
         Assert.True(allowed.IsAllowed("totallyMadeUpAttribute", "x"));
     }
 
@@ -494,9 +418,6 @@ public class S57ToS101TranslatorTests
         ImmutableArray<S101Attribute> attrs,
         int instanceIndex)
     {
-        // Locate the n-th instance of `information` in the flat attr list and
-        // yield the marker + sub-attributes up to (but not including) the next
-        // `information` marker. (Mirrors the reading logic in S101LuaDataProvider.)
         ushort? infoCode = null;
         foreach (var (code, name) in doc.AttributeTypeCatalogue)
         {
@@ -506,7 +427,6 @@ public class S57ToS101TranslatorTests
                 break;
             }
         }
-        // No `information` ever emitted in this document → no instances.
         if (infoCode is null) yield break;
 
         int found = 0;
@@ -552,33 +472,21 @@ public class S57ToS101TranslatorTests
         return null;
     }
 
-    private static S57Document LandRegionWithS57Attributes(params S57Attribute[] attrs)
+    private static EncDotNet.S57.S57Document LandRegionWithS57Attributes(
+        params EncDotNet.S57.S57AttributeValue[] attrs)
     {
-        var (n1, r1) = Node(1, 1000, 2000);
-        var feature = new S57FeatureRecord
-        {
-            RecordId = 1,
-            Primitive = 1,
-            ObjectClass = 73, // LNDRGN → LandRegion
-            ProducingAgency = 540,
-            FeatureIdentificationNumber = 1,
-            FeatureIdentificationSubdivision = 0,
-            Attributes = attrs.ToImmutableArray(),
-            SpatialPointers = ImmutableArray.Create(
-                new S57FeatureSpatialPointer(RcnmConnectedNode, 1, 1, 0, 0)),
-        };
-        return BuildDocument(
-            vectorRecords: ImmutableDictionary<S57Name, S57VectorRecord>.Empty.Add(n1, r1),
-            features: ImmutableArray.Create(feature));
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 73, // LNDRGN → LandRegion
+            attributes: attrs,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
     }
 
     [Fact]
     public void Translate_InformAttribute_BecomesInformationComplexAttribute_WithEnglish()
     {
-        // INFORM (S-57 code 102) carries free English text; it should land as
-        // an `information` complex-attribute instance with text + language=eng.
-        var doc = LandRegionWithS57Attributes(
-            new S57Attribute(102, "Visible all around. Higher intensity on rangeline"));
+        var doc = LandRegionWithS57Attributes(Attr(102, "Visible all around. Higher intensity on rangeline"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
@@ -594,10 +502,7 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_TxtdscAttribute_BecomesFileReferenceWithEnglish()
     {
-        // TXTDSC (S-57 code 158) carries an English-language text-file name
-        // and lands as `information.fileReference` with language=eng.
-        var doc = LandRegionWithS57Attributes(
-            new S57Attribute(158, "US5WA23A.TXT"));
+        var doc = LandRegionWithS57Attributes(Attr(158, "US5WA23A.TXT"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
@@ -611,11 +516,7 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_NinfomAttribute_BecomesInformationComplex_WithBlankLanguage()
     {
-        // NINFOM (S-57 code 300) is national-language text; the FC requires a
-        // `language` sub-attribute but S-57 carries no language tag, so the
-        // value is left blank for Data Producers to populate later.
-        var doc = LandRegionWithS57Attributes(
-            new S57Attribute(300, "Información en español"));
+        var doc = LandRegionWithS57Attributes(Attr(300, "Información en español"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
@@ -628,11 +529,9 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_InformAndNinfom_EmitTwoInformationInstances()
     {
-        // English (INFORM/TXTDSC) and national (NINFOM/NTXTDS) text are
-        // grouped into separate `information` instances by language.
         var doc = LandRegionWithS57Attributes(
-            new S57Attribute(102, "English text"),
-            new S57Attribute(300, "National text"));
+            Attr(102, "English text"),
+            Attr(300, "National text"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
@@ -649,11 +548,9 @@ public class S57ToS101TranslatorTests
     [Fact]
     public void Translate_InformAndTxtdscTogether_EmitOneInstanceWithBothSubAttrs()
     {
-        // Both INFORM and TXTDSC are English; they collapse into a single
-        // `information` instance carrying both text and fileReference.
         var doc = LandRegionWithS57Attributes(
-            new S57Attribute(102, "Inline note"),
-            new S57Attribute(158, "EXTRA.TXT"));
+            Attr(102, "Inline note"),
+            Attr(158, "EXTRA.TXT"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);
@@ -663,16 +560,13 @@ public class S57ToS101TranslatorTests
         Assert.Equal("EXTRA.TXT", GetSubAttribute(s101, first, "fileReference"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
 
-        // Only one instance was emitted.
         Assert.Empty(InformationInstance(s101, feat.Attributes, 2).ToList());
     }
 
     [Fact]
     public void Translate_NoTextualAttributes_EmitsNoInformationInstance()
     {
-        // Without any of the four textual attributes, no `information` complex
-        // attribute should be added.
-        var doc = LandRegionWithS57Attributes(new S57Attribute(34, "1"));
+        var doc = LandRegionWithS57Attributes(Attr(34, "1"));
 
         var s101 = new S57ToS101Translator().Translate(doc);
         var feat = Assert.Single(s101.Features);

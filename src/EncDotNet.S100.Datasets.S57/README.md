@@ -4,17 +4,31 @@ Reader and S-101 translator for IHO S-57 Electronic Navigational Chart (ENC) dat
 
 ## Overview
 
-This library reads S-57 (Edition 3.1) ENC base cells encoded in ISO 8211 format and translates them into the S-101 in-memory document model so the existing S-100 Part 9A Lua portrayal pipeline (provided by `EncDotNet.S100.Datasets.S101`) can render them. This is **not** an S-52 implementation — symbology is whatever the S-101 portrayal catalogue produces when fed the translated data.
+This library reads S-57 (Edition 3.1) ENC base cells via the
+[`EncDotNet.S57`](https://www.nuget.org/packages/EncDotNet.S57) NuGet package
+(itself layered on top of `EncDotNet.Iso8211`) and translates the parsed
+records into the S-101 in-memory document model so the existing S-100 Part 9A
+Lua portrayal pipeline (provided by `EncDotNet.S100.Datasets.S101`) can render
+them. This is **not** an S-52 implementation — symbology is whatever the S-101
+portrayal catalogue produces when fed the translated data.
 
 Mappings follow the IHO *S-57 to S-101 Conversion Guidance* (S-101PT6 INF02A, draft 2021).
 
 Key types:
 
-- **`S57Dataset`** — entry point; opens a `.000` file and produces a parsed S-57 document.
-- **`S57Document`**, **`S57DocumentReader`** — low-level ISO 8211 record parsing (DSID, DSPM, FRID, FOID, ATTF, FSPT, VRID, VRPT, SG2D, SG3D).
-- **`S57ToS101Translator`** — translates an `S57Document` into an `S101Document` (`EncDotNet.S100.Datasets.S101`) by remapping object/attribute codes, exploding multi-point soundings, synthesising the `information` complex attribute from textual fields, and converting nodes/edges/area-rings into S-101 spatial primitives.
-- **`S57S101Mapping`** — embedded code-mapping table sourced from IHO's S-57 → S-101 conversion guidance.
-- **`S101AllowedEnumValues`** — lazy-loaded helper that consults the bundled S-101 Feature Catalogue to drop emitted enumerated attribute values that aren't permitted by the destination FC binding.
+- **`S57Dataset`** — entry point; opens a `.000` file and exposes the parsed
+  `EncDotNet.S57.S57Document` from the upstream package, plus a static
+  `IsS57File(path)` discriminator used by `EncDotNet.S100.Datasets.Pipelines`
+  to disambiguate `.000` files that could otherwise be S-101.
+- **`S57ToS101Translator`** — translates an `S57Document` (package type) into
+  an `S101Document` by remapping object/attribute codes, exploding multi-point
+  soundings, synthesising the `information` complex attribute from textual
+  fields, and converting nodes/edges/area-rings into S-101 spatial primitives.
+- **`S57S101Mapping`** — embedded code-mapping table sourced from IHO's S-57 →
+  S-101 conversion guidance.
+- **`S101AllowedEnumValues`** — lazy-loaded helper that consults the bundled
+  S-101 Feature Catalogue to drop emitted enumerated attribute values that
+  aren't permitted by the destination FC binding.
 
 ## Translation behaviour
 
