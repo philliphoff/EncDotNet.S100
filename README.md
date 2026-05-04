@@ -143,6 +143,10 @@ GML-encoded route plans rendered via XSLT portrayal, showing waypoints, route le
 
 Legacy ISO 8211-encoded S-57 (Edition 3.1) ENC cells are translated to the in-memory S-101 model and rendered through the existing S-101 Lua portrayal pipeline. Symbology is whatever the bundled S-101 portrayal catalogue produces; this is **not** an S-52 implementation, but it lets long-tail S-57 chart collections be viewed without commercial S-52 assets. Per-feature mappings follow the IHO *S-57 to S-101 Conversion Guidance* document, including transfer of `INFORM`/`NINFOM`/`TXTDSC`/`NTXTDS` into the S-101 `information` complex attribute.
 
+![S-57 chart rendered via the S-101 portrayal pipeline](docs/images/s57-viewer-us4fl1lt.png)
+
+*NOAA chart `US4FL1LT.000` (Caloosahatchee River, FL) — 1,889 features translated to S-101 producing 3,640 portrayal drawing instructions; the status bar marks the S-57 → S-101 translation explicitly.*
+
 ## Building
 
 ```sh
