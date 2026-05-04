@@ -274,7 +274,6 @@ public partial class MainWindow : ShadUI.Window
     private void InitializeMapTools(MapInteractionController interactionController)
     {
         var tools = _viewModel.Tools;
-        var measureTool = new MeasureTool();
 
         var context = new MapToolContext(
             mapControl: MapControl,
@@ -284,34 +283,16 @@ public partial class MainWindow : ShadUI.Window
             refreshGraphics: () => MapControl.RefreshGraphics(),
             screenToLatLon: ScreenToLatLon);
 
-        tools.Register(measureTool);
+        // Tools (pick, measure) were registered by the view-model in its
+        // constructor; here we just hand them an Avalonia-aware context.
         tools.Initialize(context);
-
-        // Push the persisted accent colour into the measure tool and
-        // keep it in sync so users see their preferred highlight tone.
-        var initialAccent = _viewModel.Settings.AccentColor;
-        measureTool.SetAccentColor(initialAccent.R, initialAccent.G, initialAccent.B);
-        _viewModel.Settings.AccentColorChanged += c => measureTool.SetAccentColor(c.R, c.G, c.B);
-
-        // Push the active light/dark theme so the leg-label palette
-        // matches the rest of the UI; subscribe so toggling theme
-        // recolours any in-progress measurement live.
-        measureTool.SetIsDarkTheme(_viewModel.IsDarkTheme);
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsDarkTheme))
-                measureTool.SetIsDarkTheme(_viewModel.IsDarkTheme);
-        };
 
         // Hand the same controller to the interaction controller so pointer
         // events are offered to the active tool first.
         interactionController.SetToolController(tools);
 
-        // Tool selection is never persisted across launches — entering
-        // Pick or Measure mode must be an explicit user action each
-        // session, so the viewer always opens with no tool active.
-        // (LastActiveToolId is retained on the settings type for now to
-        // preserve the JSON shape, but neither read nor written.)
+        // Tool selection is intentionally not persisted across launches —
+        // entering Pick or Measure mode must be an explicit user action.
     }
 
     /// <summary>

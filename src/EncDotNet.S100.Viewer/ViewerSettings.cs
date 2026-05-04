@@ -43,13 +43,6 @@ internal sealed class ViewerSettings
     /// <summary>Last selected activity pane, or null if none was open.</summary>
     public string? LastSelectedActivity { get; set; }
 
-    /// <summary>
-    /// Identifier of the most-recently-active map tool (e.g. "pick",
-    /// "measure"), or <c>null</c> when no tool was active. Restored on
-    /// startup so users return to the same tool they left in.
-    /// </summary>
-    public string? LastActiveToolId { get; set; }
-
     /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
     public double SymbolScale { get; set; } = 1.0;
 

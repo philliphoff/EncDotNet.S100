@@ -100,25 +100,6 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public event Action<DistanceUnit>? DistanceUnitChanged;
 
-    /// <summary>
-    /// Identifier of the most-recently-active map tool (e.g. "pick" or
-    /// "measure"), or <c>null</c> when no tool was active. Persisted across
-    /// sessions so the viewer reopens in whichever tool the user left in.
-    /// Setter writes-through to <see cref="ViewerSettings.Save"/>.
-    /// </summary>
-    public string? LastActiveToolId
-    {
-        get => _settings.LastActiveToolId;
-        set
-        {
-            if (string.Equals(_settings.LastActiveToolId, value, StringComparison.Ordinal))
-                return;
-            _settings.LastActiveToolId = value;
-            _settings.Save();
-            OnPropertyChanged();
-        }
-    }
-
     public SettingsViewModel(ViewerSettings settings)
     {
         _settings = settings;

@@ -24,31 +24,33 @@ internal sealed class MeasureTool : IMapTool
     private const double DragThresholdPx = 3.0;
 
     private readonly MeasurePathState _state = new();
+    private readonly IMeasureOverlayAppearanceProvider _appearance;
     private MapToolContext? _context;
     private MemoryLayer? _layer;
     private Point? _pressPosition;
     private bool _pressIsLeftButton;
-    private (byte R, byte G, byte B) _accent = MeasureOverlayLayer.DefaultAccent;
-    private bool _isDarkTheme;
 
     /// <summary>
-    /// Updates the accent colour used to draw the overlay and refreshes
-    /// the layer if the tool is currently active.
+    /// Creates a measure tool that draws its overlay using the appearance
+    /// supplied by <paramref name="appearance"/>. The tool subscribes to
+    /// <see cref="IMeasureOverlayAppearanceProvider.Changed"/> while
+    /// active so accent/theme updates are reflected live, and
+    /// unsubscribes on deactivation.
     /// </summary>
-    public void SetAccentColor(byte r, byte g, byte b)
+    public MeasureTool(IMeasureOverlayAppearanceProvider appearance)
     {
-        _accent = (r, g, b);
-        if (_layer is not null) Refresh();
+        ArgumentNullException.ThrowIfNull(appearance);
+        _appearance = appearance;
     }
 
-    /// <summary>
-    /// Updates the cached light/dark theme flag (used to choose the
-    /// leg-label colour palette) and refreshes the overlay if active.
-    /// </summary>
-    public void SetIsDarkTheme(bool isDarkTheme)
+    /// <summary>Test-only ctor that uses a stub appearance provider returning the default appearance.</summary>
+    internal MeasureTool() : this(new StaticAppearanceProvider(MeasureOverlayAppearance.Default)) { }
+
+    private sealed class StaticAppearanceProvider : IMeasureOverlayAppearanceProvider
     {
-        _isDarkTheme = isDarkTheme;
-        if (_layer is not null) Refresh();
+        public MeasureOverlayAppearance Current { get; }
+        public event EventHandler? Changed { add { } remove { } }
+        public StaticAppearanceProvider(MeasureOverlayAppearance value) => Current = value;
     }
 
     /// <summary>Exposed for tests.</summary>
@@ -67,11 +69,13 @@ internal sealed class MeasureTool : IMapTool
         _context = context;
         _layer = MeasureOverlayLayer.Create();
         context.AddLayer(_layer);
+        _appearance.Changed += OnAppearanceChanged;
         PushSummary();
     }
 
     public void OnDeactivated()
     {
+        _appearance.Changed -= OnAppearanceChanged;
         if (_context is not null && _layer is not null)
             _context.RemoveLayer(_layer);
         _layer = null;
@@ -79,6 +83,11 @@ internal sealed class MeasureTool : IMapTool
         _context = null;
         _state.Discard();
         _pressPosition = null;
+    }
+
+    private void OnAppearanceChanged(object? sender, EventArgs e)
+    {
+        if (_layer is not null) Refresh();
     }
 
     public bool OnPointerPressed(PointerPressedEventArgs e)
@@ -180,7 +189,7 @@ internal sealed class MeasureTool : IMapTool
     private void Refresh()
     {
         if (_layer is null || _context is null) return;
-        MeasureOverlayLayer.Update(_layer, _state, _accent, _isDarkTheme);
+        MeasureOverlayLayer.Update(_layer, _state, _appearance.Current);
         PushSummary();
         _context.RefreshGraphics();
     }

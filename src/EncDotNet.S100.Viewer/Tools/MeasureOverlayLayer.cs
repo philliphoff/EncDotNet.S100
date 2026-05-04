@@ -60,16 +60,17 @@ internal static class MeasureOverlayLayer
 
     /// <summary>
     /// Replaces <paramref name="layer"/>'s features with a freshly built
-    /// representation of <paramref name="state"/>, drawn in the supplied
-    /// <paramref name="accent"/> colour. Caller is responsible for
+    /// representation of <paramref name="state"/>, drawn using the
+    /// supplied <paramref name="appearance"/>. Caller is responsible for
     /// invalidating the map (e.g. via
     /// <see cref="MapToolContext.RefreshGraphics"/>).
     /// </summary>
-    public static void Update(MemoryLayer layer, MeasurePathState state, (byte R, byte G, byte B) accent, bool isDarkTheme)
+    public static void Update(MemoryLayer layer, MeasurePathState state, MeasureOverlayAppearance appearance)
     {
+        var accent = appearance.Accent;
         var borderColor = new MapsuiColor(accent.R, accent.G, accent.B);
         var fillColor = Lighten(accent);
-        var (labelBg, labelFg, labelHalo) = isDarkTheme
+        var (labelBg, labelFg, labelHalo) = appearance.IsDarkTheme
             // Dark theme: chip surface + light text, dark halo for outline.
             ? (new MapsuiColor(38, 38, 42, 235), new MapsuiColor(245, 245, 245), new MapsuiColor(0, 0, 0, 200))
             // Light theme: light surface + dark text, light halo so the

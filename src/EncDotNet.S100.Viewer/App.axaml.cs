@@ -80,6 +80,7 @@ public partial class App : Application
         services.AddSingleton<IRecentFilesService, RecentFilesService>();
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<ScreenshotService>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();

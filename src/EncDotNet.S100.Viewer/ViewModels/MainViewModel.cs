@@ -202,21 +202,13 @@ internal sealed class MainViewModel : ViewModelBase
     private string? _measureSummary;
 
     /// <summary>
-    /// Map-tool registry / dispatcher. The pick tool is registered eagerly
-    /// here (it's a UI-free marker tool — gesture handling lives in
-    /// <see cref="Services.MapInteractionController"/>) so view-model-level
-    /// commands and tests work without the host having to register it.
-    /// UI-bearing tools (e.g. measure) are registered by the host once the
-    /// visual tree is up.
+    /// Map-tool registry / dispatcher. Tools (pick, measure) are
+    /// registered from the constructor so view-model-level commands and
+    /// tests work without the host having to register anything.
+    /// <see cref="MapToolController.Initialize"/> is called by the view
+    /// layer once the visual tree is up.
     /// </summary>
-    public MapToolController Tools { get; } = CreateToolController();
-
-    private static MapToolController CreateToolController()
-    {
-        var c = new MapToolController();
-        c.Register(new PickTool());
-        return c;
-    }
+    public MapToolController Tools { get; } = new();
 
     private bool _isDarkTheme;
     public bool IsDarkTheme
@@ -243,7 +235,8 @@ internal sealed class MainViewModel : ViewModelBase
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
         IThemeService themeService,
-        IRecentFilesService recentFiles)
+        IRecentFilesService recentFiles,
+        IMeasureOverlayAppearanceProvider measureAppearance)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -254,11 +247,15 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
+        ArgumentNullException.ThrowIfNull(measureAppearance);
 
         _settings = settings;
         _theme = themeService;
         _recentFiles = recentFiles;
         _isDarkTheme = themeService.IsDarkTheme;
+
+        Tools.Register(new PickTool());
+        Tools.Register(new MeasureTool(measureAppearance));
 
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
