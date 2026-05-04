@@ -153,4 +153,12 @@ internal static class Strings
     public static string TimelinePanel_NoData => Get(nameof(TimelinePanel_NoData));
     public static string TimelinePanel_EmptyTitle => Get(nameof(TimelinePanel_EmptyTitle));
     public static string TimelinePanel_EmptyDescription => Get(nameof(TimelinePanel_EmptyDescription));
+
+    // Measure Mode
+    public static string Tooltip_MeasureMode => Get(nameof(Tooltip_MeasureMode));
+    public static string Menu_MeasureMode => Get(nameof(Menu_MeasureMode));
+    public static string Status_MeasureLeg => Get(nameof(Status_MeasureLeg));
+    public static string Status_MeasureTotal => Get(nameof(Status_MeasureTotal));
+    public static string Status_MeasureNoData => Get(nameof(Status_MeasureNoData));
+    public static string Status_MeasureLegLabel => Get(nameof(Status_MeasureLegLabel));
 }

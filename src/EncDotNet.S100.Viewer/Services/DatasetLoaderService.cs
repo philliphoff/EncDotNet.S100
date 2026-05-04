@@ -130,10 +130,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             return;
         }
 
-        // S-104 ships a built-in portrayal catalogue; all others need an external one.
-        if (spec != "S-104" && !_catalogueManager.HasCatalogue(spec))
+        // S-104 ships a built-in portrayal catalogue.
+        // S-57 datasets are translated to S-101 in-memory and rendered with the S-101 portrayal catalogue.
+        var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
+        if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
-            SetStatus(string.Format(Strings.Status_SelectPortrayalCatalogue, spec));
+            SetStatus(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
             return;
         }
 

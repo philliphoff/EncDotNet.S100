@@ -31,6 +31,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
 | **EncDotNet.S100.Datasets.S411** | Reader and XSLT portrayal pipeline for S-411 Sea Ice datasets. |
 | **EncDotNet.S100.Datasets.S421** | Reader and XSLT portrayal pipeline for S-421 Route Plan datasets. |
+| **EncDotNet.S100.Datasets.S57** | Reader for legacy IHO S-57 ENC base cells; translates them to the in-memory S-101 model so the S-101 portrayal pipeline can render them (best-effort, not S-52). |
 | **EncDotNet.S100.Scripting.MoonSharp** | Lua scripting engine implementation using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). |
 | **EncDotNet.S100.Renderers.Skia** | Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps. |
 | **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection. |
@@ -39,7 +40,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, and S-421 datasets and renders them on an interactive map. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, S-421, and legacy S-57 datasets and renders them on an interactive map. |
 
 ### Pick / Object Information
 
@@ -64,9 +65,9 @@ entirely; the status bar will continue to show a one-line summary of each
 pick.
 
 The pick report supports vector products (S-101, S-122, S-124, S-125,
-S-127, S-129, S-411, S-421). Coverage products (S-102, S-104, S-111)
-report layer-level information in the status bar but do not currently
-produce per-cell pick reports.
+S-127, S-129, S-411, S-421, and S-57 via S-101). Coverage products
+(S-102, S-104, S-111) report layer-level information in the status bar
+but do not currently produce per-cell pick reports.
 
 ### Time-varying datasets — global timeline
 
@@ -162,6 +163,14 @@ GML-encoded sea-ice and lake-ice information (concentration, stage of developmen
 ![S-421 Route Plan](readme/S421Screenshot.png)
 
 GML-encoded route plans rendered via XSLT portrayal, showing waypoints, route legs, and action points along a planned voyage.
+
+### S-57 — Legacy Electronic Navigational Charts (via S-101 portrayal)
+
+Legacy ISO 8211-encoded S-57 (Edition 3.1) ENC cells are translated to the in-memory S-101 model and rendered through the existing S-101 Lua portrayal pipeline. Symbology is whatever the bundled S-101 portrayal catalogue produces; this is **not** an S-52 implementation, but it lets long-tail S-57 chart collections be viewed without commercial S-52 assets. Per-feature mappings follow the IHO *S-57 to S-101 Conversion Guidance* document, including transfer of `INFORM`/`NINFOM`/`TXTDSC`/`NTXTDS` into the S-101 `information` complex attribute.
+
+![S-57 chart rendered via the S-101 portrayal pipeline](docs/images/s57-viewer-us4fl1lt.png)
+
+*NOAA chart `US4FL1LT.000` (Caloosahatchee River, FL) — 1,889 features translated to S-101 producing 3,640 portrayal drawing instructions; the status bar marks the S-57 → S-101 translation explicitly.*
 
 ## Building
 

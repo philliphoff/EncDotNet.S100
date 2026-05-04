@@ -27,8 +27,14 @@
     </shadui:Window.Resources>
 
     <shadui:Window.KeyBindings>
-        <!-- Esc exits Pick Mode. -->
+        <!-- Esc exits the active map tool (pick or measure). -->
         <KeyBinding Gesture="Escape" Command="{Binding ExitPickModeCommand}" />
+        <!-- Cmd+M / Ctrl+M toggles Measure Mode. -->
+        <KeyBinding Gesture="Cmd+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <KeyBinding Gesture="Ctrl+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <!-- Enter / Backspace are tool actions while a tool is active. -->
+        <KeyBinding Gesture="Enter" Command="{Binding ToolCommitCommand}" />
+        <KeyBinding Gesture="Back" Command="{Binding ToolBackstepCommand}" />
     </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
@@ -142,6 +148,14 @@
                            VerticalAlignment="Center"
                            Margin="12,0,0,0"
                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding MeasureSummary}"
+                           IsVisible="{Binding IsMeasureModeActive}"
+                           FontSize="12"
+                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           Opacity="0.85"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0" />
                 <TextBlock Text="{Binding StatusText}"
                            FontSize="12"
                            Opacity="0.7"
@@ -382,6 +396,38 @@
                             </Style>
                         </Button.Styles>
                         <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Measure Mode toggle button. Same accent-fill pattern
+                      as PickModeButton above; ruler icon distinguishes the
+                      two. Cmd/Ctrl+M is the keyboard accelerator (see the
+                      Window.KeyBindings block at the top of this file).
+                    -->
+                    <Button x:Name="MeasureModeButton"
+                            Classes="Icon MapOverlay"
+                            Classes.measureActive="{Binding IsMeasureModeActive}"
+                            Command="{Binding ToggleMeasureModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
+                        <Button.Styles>
+                            <Style Selector="Button#MeasureModeButton.measureActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <!--
                       Zoom in / out / to-extent group. Wrapping in an inner

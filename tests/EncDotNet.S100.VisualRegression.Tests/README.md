@@ -15,6 +15,8 @@ harness (which uses `Mapsui.Rendering.Skia` headlessly for vector products and
 Snapshots/
   S101RenderingTests/
     S101RenderingTests.EncCell_DayPalette.verified.png   ← committed baseline
+  S57RenderingTests/
+    S57RenderingTests.EncCell_DayPalette.verified.png    ← S-57 → S-101 translation path
   S102RenderingTests/
     S102RenderingTests.BathymetricSurface_DepthShading_DefaultPalette.verified.png
   S104RenderingTests/

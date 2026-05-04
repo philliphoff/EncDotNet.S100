@@ -338,4 +338,24 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_MouseLatLon" xml:space="preserve">
     <value>Latitude and longitude of the cursor on the map</value>
   </data>
+
+  <!-- Measure Mode -->
+  <data name="Tooltip_MeasureMode" xml:space="preserve">
+    <value>Measure distance and bearing (rhumb line)</value>
+  </data>
+  <data name="Menu_MeasureMode" xml:space="preserve">
+    <value>Measure Mode</value>
+  </data>
+  <data name="Status_MeasureLeg" xml:space="preserve">
+    <value>Leg {0}: {1:0.0} NM @ {2:000}°T</value>
+  </data>
+  <data name="Status_MeasureTotal" xml:space="preserve">
+    <value>Total: {0:0.0} NM</value>
+  </data>
+  <data name="Status_MeasureNoData" xml:space="preserve">
+    <value>Click on the map to start measuring; double-click or Enter to finish.</value>
+  </data>
+  <data name="Status_MeasureLegLabel" xml:space="preserve">
+    <value>{0:0.0} NM @ {1:000}°T</value>
+  </data>
 </root>

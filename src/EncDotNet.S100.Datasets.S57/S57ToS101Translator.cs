@@ -1,0 +1,598 @@
+using System.Collections.Immutable;
+using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S57;
+
+namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// Translates a parsed S-57 <see cref="EncDotNet.S57.S57Document"/> (from the
+/// <c>EncDotNet.S57</c> NuGet package) into the S-101 in-memory document model
+/// so that the existing S-101 portrayal pipeline can drive rendering of S-57
+/// ENC data.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The translation is intentionally lossy and breadth-first:
+/// <list type="bullet">
+///   <item>S-57 object/attribute numeric codes are remapped to S-101 Feature
+///   Catalogue acronyms via <see cref="S57S101Mapping"/>. Unmapped feature
+///   classes are skipped.</item>
+///   <item>S-57 isolated / connected nodes become S-101 Point records.</item>
+///   <item>S-57 edges become S-101 Curve Segment records with begin / end
+///   point associations and intermediate coordinates.</item>
+///   <item>S-57 area features have their FSPT edge ring wrapped into a
+///   single composite curve and referenced from a synthesised S-101 Surface
+///   record.</item>
+///   <item>S-57 multi-point soundings (<c>SOUNDG</c>) are translated into a single
+///   S-101 <c>Sounding</c> feature backed by a multi-point spatial record
+///   (RCNM = 115); the depth values live on the points within that record and
+///   are read by the <c>SOUNDG03</c> portrayal rule as <c>point.ScaledZ</c>.</item>
+///   <item>Listed-value remap (S-57 enum codes to S-101 enum codes) is not
+///   yet performed; string attribute values pass through unchanged.</item>
+/// </list>
+/// </para>
+/// </remarks>
+public sealed class S57ToS101Translator
+{
+    private const byte S101RcnmPoint = 110;
+    private const byte S101RcnmMultiPoint = 115;
+    private const byte S101RcnmCurveSegment = 120;
+    private const byte S101RcnmCompositeCurve = 125;
+    private const byte S101RcnmSurface = 130;
+
+    private const byte OrientationForward = 1;
+    private const byte OrientationReverse = 2;
+    private const byte UsageExterior = 1;
+    private const byte UsageInterior = 2;
+    private const byte TopologyBegin = 1;
+    private const byte TopologyEnd = 2;
+
+    private const ushort SoundingObjl = 129;
+    private const string SoundingS101Code = "Sounding";
+
+    // ── S-57 textual-info attribute codes (S-57 Appendix A Chapter 2) ──
+    // Per IHO S-57→S-101 Conversion Guidance §2.3, these four attributes
+    // do NOT pass through as simple S-101 attributes; instead they are
+    // grouped into one or more instances of the S-101 `information`
+    // complex attribute on the feature itself, with sub-attributes
+    // text / fileReference / language as appropriate.
+    private const ushort S57AttrInform = 102;   // INFORM  — free text (Eng.)
+    private const ushort S57AttrTxtdsc = 158;   // TXTDSC  — text-file ref (Eng.)
+    private const ushort S57AttrNinfom = 300;   // NINFOM  — free text (national)
+    private const ushort S57AttrNtxtds = 304;   // NTXTDS  — text-file ref (national)
+
+    // S-101 attribute codes for the `information` complex attribute and
+    // its sub-attributes (verified against the bundled FC).
+    private const string S101AttrInformation = "information";
+    private const string S101AttrText = "text";
+    private const string S101AttrFileReference = "fileReference";
+    private const string S101AttrLanguage = "language";
+
+    // ISO 639-3 language code used for the English-language INFORM/TXTDSC
+    // bucket. NINFOM/NTXTDS are emitted with an empty language string,
+    // since S-57 carries no language tag and Data Producers are expected
+    // to fill it in manually (Conversion Guidance §2.3).
+    private const string LanguageEng = "eng";
+
+    private readonly S57S101Mapping _mapping;
+    private readonly S101AllowedEnumValues? _allowedEnumValues;
+
+    /// <summary>Creates a translator using <see cref="S57S101Mapping.Default"/>.</summary>
+    public S57ToS101Translator() : this(S57S101Mapping.Default, S101AllowedEnumValues.Default) { }
+
+    /// <summary>Creates a translator using the supplied code mapping.</summary>
+    public S57ToS101Translator(S57S101Mapping mapping)
+        : this(mapping, S101AllowedEnumValues.Default) { }
+
+    /// <summary>
+    /// Creates a translator using the supplied code mapping and the given
+    /// allowable-value lookup. Pass <c>null</c> for <paramref name="allowedEnumValues"/>
+    /// to disable enumerate-value enforcement (useful in tests).
+    /// </summary>
+    public S57ToS101Translator(S57S101Mapping mapping, S101AllowedEnumValues? allowedEnumValues)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        _mapping = mapping;
+        _allowedEnumValues = allowedEnumValues;
+    }
+
+    /// <summary>
+    /// Translates an <see cref="S57Dataset"/> into an <see cref="S101Document"/>.
+    /// </summary>
+    public S101Document Translate(S57Dataset dataset)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        return Translate(dataset.Document);
+    }
+
+    /// <summary>
+    /// Translates an <see cref="EncDotNet.S57.S57Document"/> into an
+    /// <see cref="S101Document"/>.
+    /// </summary>
+    public S101Document Translate(EncDotNet.S57.S57Document s57)
+    {
+        ArgumentNullException.ThrowIfNull(s57);
+
+        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues);
+        ctx.IndexVectorRecords();
+        ctx.TranslateNodes();
+        ctx.TranslateEdges();
+        ctx.TranslateFeatures();
+
+        // S57Document.CoordinateMultiplicationFactor / SoundingMultiplicationFactor
+        // already supply the documented defaults (10_000_000 and 10).
+        var cmf = (uint)s57.CoordinateMultiplicationFactor;
+        var somf = (uint)s57.SoundingMultiplicationFactor;
+        var dsid = s57.DataSetIdentification;
+
+        return new S101Document
+        {
+            Identification = new S101DatasetIdentification
+            {
+                RecordName = 10,
+                RecordId = 1,
+                ProductSpecification = "S-101",
+                ProductSpecificationEdition = "1.0.0",
+                DatasetName = dsid?.DataSetName ?? "",
+                DatasetTitle = dsid?.DataSetName ?? "",
+                DatasetReferenceDate = dsid?.IssueDate ?? "",
+                DatasetLanguage = "eng",
+            },
+            StructureInfo = new S101DatasetStructureInfo
+            {
+                CoordinateMultiplicationFactorX = cmf,
+                CoordinateMultiplicationFactorY = cmf,
+                CoordinateMultiplicationFactorZ = somf,
+            },
+            FeatureTypeCatalogue = ctx.FeatureTypeCatalogue.ToImmutable(),
+            AttributeTypeCatalogue = ctx.AttributeTypeCatalogue.ToImmutable(),
+            Points = ctx.Points.ToImmutable(),
+            MultiPoints = ctx.MultiPoints.ToImmutable(),
+            CurveSegments = ctx.CurveSegments.ToImmutable(),
+            CompositeCurves = ctx.CompositeCurves.ToImmutable(),
+            Surfaces = ctx.Surfaces.ToImmutable(),
+            Features = ctx.Features.ToImmutable(),
+            InformationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+        };
+    }
+
+    // ── Translation context ─────────────────────────────────────────────
+
+    private sealed class TranslationContext
+    {
+        private readonly EncDotNet.S57.S57Document _s57;
+        private readonly S57S101Mapping _mapping;
+        private readonly S101AllowedEnumValues? _allowedEnumValues;
+
+        // Index of the document's flat VectorRecords list, keyed by
+        // (RecordNameCode, RecordId) for fast lookup from spatial pointers.
+        private readonly Dictionary<(int rcnm, int rcid), EncDotNet.S57.S57VectorRecord> _vectorIndex = new();
+
+        // Mapping from S-57 (RCNM, RCID) to allocated S-101 IDs, per spatial kind.
+        private readonly Dictionary<(int rcnm, int rcid), uint> _nodeIdMap = new();
+        private readonly Dictionary<int, uint> _edgeIdMap = new();
+        private uint _nextPointId = 1;
+        private uint _nextMultiPointId = 1;
+        private uint _nextCurveId = 1;
+        private uint _nextCompositeId = 1;
+        private uint _nextSurfaceId = 1;
+        private uint _nextFeatureId = 1;
+        private ushort _nextFeatureTypeCode = 1;
+        private ushort _nextAttributeCode = 1;
+        private readonly Dictionary<string, ushort> _featureTypeByName = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ushort> _attributeByName = new(StringComparer.OrdinalIgnoreCase);
+
+        public ImmutableDictionary<uint, S101PointRecord>.Builder Points { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
+        public ImmutableDictionary<uint, S101MultiPointRecord>.Builder MultiPoints { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101MultiPointRecord>();
+        public ImmutableDictionary<uint, S101CurveSegmentRecord>.Builder CurveSegments { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101CurveSegmentRecord>();
+        public ImmutableDictionary<uint, S101CompositeCurveRecord>.Builder CompositeCurves { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101CompositeCurveRecord>();
+        public ImmutableDictionary<uint, S101SurfaceRecord>.Builder Surfaces { get; }
+            = ImmutableDictionary.CreateBuilder<uint, S101SurfaceRecord>();
+        public ImmutableArray<S101FeatureRecord>.Builder Features { get; }
+            = ImmutableArray.CreateBuilder<S101FeatureRecord>();
+        public ImmutableDictionary<ushort, string>.Builder FeatureTypeCatalogue { get; }
+            = ImmutableDictionary.CreateBuilder<ushort, string>();
+        public ImmutableDictionary<ushort, string>.Builder AttributeTypeCatalogue { get; }
+            = ImmutableDictionary.CreateBuilder<ushort, string>();
+
+        public TranslationContext(
+            EncDotNet.S57.S57Document s57,
+            S57S101Mapping mapping,
+            S101AllowedEnumValues? allowedEnumValues)
+        {
+            _s57 = s57;
+            _mapping = mapping;
+            _allowedEnumValues = allowedEnumValues;
+        }
+
+        public void IndexVectorRecords()
+        {
+            foreach (var vr in _s57.VectorRecords)
+            {
+                var key = (vr.RecordName.RecordNameCode, vr.RecordName.RecordId);
+                _vectorIndex[key] = vr;
+            }
+        }
+
+        // ── Spatial translation ─────────────────────────────────────────
+
+        public void TranslateNodes()
+        {
+            foreach (var vr in _s57.VectorRecords)
+            {
+                var rcnm = vr.RecordName.RecordNameCode;
+                if (rcnm != S57RecordNameCodes.IsolatedNode
+                    && rcnm != S57RecordNameCodes.ConnectedNode)
+                    continue;
+
+                // Skip multi-point sounding nodes here; they're exploded into
+                // features in TranslateFeatures().
+                if (vr.Soundings.Count > 0) continue;
+                if (vr.Coordinates2D.Count == 0) continue;
+
+                var coord = vr.Coordinates2D[0];
+                var id = _nextPointId++;
+                Points[id] = new S101PointRecord { RecordId = id, Y = coord.Y, X = coord.X };
+                _nodeIdMap[(rcnm, vr.RecordName.RecordId)] = id;
+            }
+        }
+
+        public void TranslateEdges()
+        {
+            foreach (var vr in _s57.VectorRecords)
+            {
+                if (vr.RecordName.RecordNameCode != S57RecordNameCodes.Edge) continue;
+
+                S101PointAssociation? begin = null;
+                S101PointAssociation? end = null;
+                foreach (var p in vr.VectorPointers)
+                {
+                    var topo = (int)p.Topology;
+                    if (topo == TopologyBegin)
+                    {
+                        if (TryGetPointId(p.Name, out var pid))
+                            begin = new S101PointAssociation(S101RcnmPoint, pid, TopologyBegin);
+                    }
+                    else if (topo == TopologyEnd)
+                    {
+                        if (TryGetPointId(p.Name, out var pid))
+                            end = new S101PointAssociation(S101RcnmPoint, pid, TopologyEnd);
+                    }
+                }
+
+                var ptas = ImmutableArray.CreateBuilder<S101PointAssociation>();
+                if (begin is not null) ptas.Add(begin.Value);
+                if (end is not null) ptas.Add(end.Value);
+
+                // Project package coords to (Y,X) tuples expected by the S-101 record.
+                var intermediates = ImmutableArray.CreateBuilder<(int Y, int X)>(vr.Coordinates2D.Count);
+                foreach (var c in vr.Coordinates2D)
+                    intermediates.Add((c.Y, c.X));
+
+                var id = _nextCurveId++;
+                CurveSegments[id] = new S101CurveSegmentRecord
+                {
+                    RecordId = id,
+                    PointAssociations = ptas.ToImmutable(),
+                    IntermediateCoordinates = intermediates.ToImmutable(),
+                };
+                _edgeIdMap[vr.RecordName.RecordId] = id;
+            }
+        }
+
+        private bool TryGetPointId(S57RecordName name, out uint id)
+            => _nodeIdMap.TryGetValue((name.RecordNameCode, name.RecordId), out id);
+
+        // ── Feature translation ─────────────────────────────────────────
+
+        public void TranslateFeatures()
+        {
+            foreach (var feat in _s57.FeatureRecords)
+            {
+                var objl = (ushort)(int)feat.ObjectCode;
+                if (objl == SoundingObjl)
+                {
+                    EmitSoundingMultiPoint(feat);
+                    continue;
+                }
+
+                var acronymView = _mapping.BuildAcronymView(feat.Attributes);
+                var resolved = _mapping.ResolveFeature(objl, acronymView);
+                if (resolved is null) continue;
+
+                var typeCode = GetOrAssignFeatureTypeCode(resolved.S101Code);
+                var attributes = TranslateAttributes(feat.Attributes, resolved);
+                var spatials = TranslateSpatialPointers(feat);
+                if (spatials.Length == 0) continue;
+
+                Features.Add(new S101FeatureRecord
+                {
+                    RecordId = _nextFeatureId++,
+                    FeatureTypeCode = typeCode,
+                    ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                    FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                    FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
+                    Attributes = attributes,
+                    SpatialAssociations = spatials,
+                    FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
+                    InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+                });
+            }
+        }
+
+        /// <summary>
+        /// S-57 SOUNDG (OBJL=129) features carry many depth measurements via SG3D
+        /// triples on one or more vector records. The S-101 portrayal pipeline
+        /// expects <c>Sounding</c> features whose <c>PrimitiveType</c> is
+        /// <c>MultiPoint</c>; emit a single S-101 Sounding feature backed by an
+        /// S-101 multi-point record (RCNM=115) so the SOUNDG03 rule can iterate
+        /// the points and draw symbolised depth values.
+        /// </summary>
+        private void EmitSoundingMultiPoint(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            var triples = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
+            foreach (var ptr in feat.SpatialPointers)
+            {
+                if (!_vectorIndex.TryGetValue(
+                        (ptr.Name.RecordNameCode, ptr.Name.RecordId),
+                        out var vr))
+                    continue;
+                foreach (var s in vr.Soundings)
+                    triples.Add((s.Y, s.X, s.Depth));
+            }
+
+            if (triples.Count == 0) return;
+
+            var mpid = _nextMultiPointId++;
+            MultiPoints[mpid] = new S101MultiPointRecord
+            {
+                RecordId = mpid,
+                Points = triples.ToImmutable(),
+            };
+
+            var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
+            Features.Add(new S101FeatureRecord
+            {
+                RecordId = _nextFeatureId++,
+                FeatureTypeCode = typeCode,
+                ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
+                // The S-101 Sounding feature carries no attributes — depth values
+                // live on the individual points within the MultiPoint geometry,
+                // which the SOUNDG03 portrayal rule reads as point.ScaledZ.
+                Attributes = ImmutableArray<S101Attribute>.Empty,
+                SpatialAssociations = ImmutableArray.Create(
+                    new S101SpatialAssociation(S101RcnmMultiPoint, mpid, OrientationForward)),
+                FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
+                InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            });
+        }
+
+        private ImmutableArray<S101Attribute> TranslateAttributes(
+            IReadOnlyList<EncDotNet.S57.S57AttributeValue> attrs,
+            ResolvedFeature feature)
+        {
+            if (attrs.Count == 0) return ImmutableArray<S101Attribute>.Empty;
+
+            // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
+            // can emit them as one or more S-101 `information` complex-attribute
+            // instances (Conversion Guidance §2.3).
+            string? informText = null;
+            string? ninfomText = null;
+            string? txtdscFile = null;
+            string? ntxtdsFile = null;
+            foreach (var a in attrs)
+            {
+                switch (a.AttributeCode)
+                {
+                    case S57AttrInform: informText = a.Value; break;
+                    case S57AttrNinfom: ninfomText = a.Value; break;
+                    case S57AttrTxtdsc: txtdscFile = a.Value; break;
+                    case S57AttrNtxtds: ntxtdsFile = a.Value; break;
+                }
+            }
+
+            var builder = ImmutableArray.CreateBuilder<S101Attribute>();
+            foreach (var a in attrs)
+            {
+                // Textual-info attributes are handled as a complex attribute
+                // group below — skip the per-attribute pass-through.
+                if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds)
+                    continue;
+
+                var attl = (ushort)a.AttributeCode;
+                if (!_mapping.AttributeRules.TryGetValue(attl, out var attrRule))
+                    continue;
+
+                var resolved = _mapping.ResolveAttribute(attrRule.S57Acronym, a.Value, feature);
+                if (resolved is null) continue;
+
+                // Drop S-57 enum values that aren't in the S-101 FC's allowable
+                // listed values (per IHO S-57→S-101 Conversion Guidance, Jan 2021).
+                if (_allowedEnumValues is not null
+                    && !_allowedEnumValues.IsAllowed(resolved.S101Code, resolved.Value))
+                    continue;
+
+                var numeric = GetOrAssignAttributeCode(resolved.S101Code);
+                builder.Add(new S101Attribute(numeric, 1, resolved.Value));
+            }
+
+            // Append `information` complex-attribute instances. Each instance
+            // is (marker, text?, fileReference?, language) — language is
+            // mandatory in the S-101 FC's binding for `information`.
+            if (informText is not null || txtdscFile is not null)
+                AppendInformationInstance(builder, text: informText, fileReference: txtdscFile, language: LanguageEng);
+            if (ninfomText is not null || ntxtdsFile is not null)
+                AppendInformationInstance(builder, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+
+            return builder.ToImmutable();
+        }
+
+        private void AppendInformationInstance(
+            ImmutableArray<S101Attribute>.Builder builder,
+            string? text,
+            string? fileReference,
+            string language)
+        {
+            var infoCode = GetOrAssignAttributeCode(S101AttrInformation);
+            // Marker entry — Index=1, value=empty — followed by sub-attributes.
+            builder.Add(new S101Attribute(infoCode, 1, string.Empty));
+            if (text is not null)
+            {
+                var textCode = GetOrAssignAttributeCode(S101AttrText);
+                builder.Add(new S101Attribute(textCode, 1, text));
+            }
+            if (fileReference is not null)
+            {
+                var fileRefCode = GetOrAssignAttributeCode(S101AttrFileReference);
+                builder.Add(new S101Attribute(fileRefCode, 1, fileReference));
+            }
+            var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
+            builder.Add(new S101Attribute(langCode, 1, language));
+        }
+
+        private ImmutableArray<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            // S57GeometricPrimitive struct overlays an int (1=Point, 2=Line,
+            // 3=Area, 255=None) so casting to int recovers the wire value.
+            var prim = (int)feat.Primitive;
+            return prim switch
+            {
+                1 => TranslatePointSpatial(feat),
+                2 => TranslateLineSpatial(feat),
+                3 => TranslateAreaSpatial(feat),
+                _ => ImmutableArray<S101SpatialAssociation>.Empty,
+            };
+        }
+
+        private ImmutableArray<S101SpatialAssociation> TranslatePointSpatial(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            // Point features reference a single isolated/connected node.
+            foreach (var ptr in feat.SpatialPointers)
+            {
+                if (TryGetPointId(ptr.Name, out var pid))
+                {
+                    return ImmutableArray.Create(
+                        new S101SpatialAssociation(S101RcnmPoint, pid, OrientationForward));
+                }
+            }
+            return ImmutableArray<S101SpatialAssociation>.Empty;
+        }
+
+        private ImmutableArray<S101SpatialAssociation> TranslateLineSpatial(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            // Line features reference one or more edges in traversal order.
+            var builder = ImmutableArray.CreateBuilder<S101SpatialAssociation>();
+            foreach (var ptr in feat.SpatialPointers)
+            {
+                if (ptr.Name.RecordNameCode != S57RecordNameCodes.Edge) continue;
+                if (!_edgeIdMap.TryGetValue(ptr.Name.RecordId, out var cid)) continue;
+                var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
+                builder.Add(new S101SpatialAssociation(S101RcnmCurveSegment, cid, ornt));
+            }
+            return builder.ToImmutable();
+        }
+
+        private ImmutableArray<S101SpatialAssociation> TranslateAreaSpatial(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            // Area features reference a ring of edges via FSPT. Group by
+            // USAG (1 = exterior, 2 = interior) and wrap each group into a
+            // composite curve referenced from a synthesised surface record.
+            var exterior = ImmutableArray.CreateBuilder<S101CurveUsage>();
+            var interiors = new List<List<S101CurveUsage>>();
+            List<S101CurveUsage>? currentInterior = null;
+
+            foreach (var ptr in feat.SpatialPointers)
+            {
+                if (ptr.Name.RecordNameCode != S57RecordNameCodes.Edge) continue;
+                if (!_edgeIdMap.TryGetValue(ptr.Name.RecordId, out var cid)) continue;
+                var ornt = (int)ptr.Orientation == OrientationReverse ? OrientationReverse : OrientationForward;
+                var usage = new S101CurveUsage(S101RcnmCurveSegment, cid, ornt);
+
+                switch ((int)ptr.Usage)
+                {
+                    case UsageInterior:
+                        currentInterior ??= new List<S101CurveUsage>();
+                        currentInterior.Add(usage);
+                        break;
+                    case UsageExterior:
+                    case 3: // exterior truncated
+                    default:
+                        if (currentInterior is not null)
+                        {
+                            interiors.Add(currentInterior);
+                            currentInterior = null;
+                        }
+                        exterior.Add(usage);
+                        break;
+                }
+            }
+            if (currentInterior is not null) interiors.Add(currentInterior);
+            if (exterior.Count == 0) return ImmutableArray<S101SpatialAssociation>.Empty;
+
+            var rings = ImmutableArray.CreateBuilder<S101RingAssociation>();
+
+            // Exterior ring as one composite curve.
+            var extId = _nextCompositeId++;
+            CompositeCurves[extId] = new S101CompositeCurveRecord
+            {
+                RecordId = extId,
+                CurveComponents = exterior.ToImmutable(),
+            };
+            rings.Add(new S101RingAssociation(
+                S101RcnmCompositeCurve, extId, OrientationForward, UsageExterior));
+
+            // Interior rings each as their own composite curve.
+            foreach (var interior in interiors)
+            {
+                var intId = _nextCompositeId++;
+                CompositeCurves[intId] = new S101CompositeCurveRecord
+                {
+                    RecordId = intId,
+                    CurveComponents = interior.ToImmutableArray(),
+                };
+                rings.Add(new S101RingAssociation(
+                    S101RcnmCompositeCurve, intId, OrientationForward, UsageInterior));
+            }
+
+            var sid = _nextSurfaceId++;
+            Surfaces[sid] = new S101SurfaceRecord
+            {
+                RecordId = sid,
+                RingAssociations = rings.ToImmutable(),
+            };
+
+            return ImmutableArray.Create(
+                new S101SpatialAssociation(S101RcnmSurface, sid, OrientationForward));
+        }
+
+        // ── Catalogue interning ─────────────────────────────────────────
+
+        private ushort GetOrAssignFeatureTypeCode(string s101Code)
+        {
+            if (_featureTypeByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextFeatureTypeCode++;
+            _featureTypeByName[s101Code] = code;
+            FeatureTypeCatalogue[code] = s101Code;
+            return code;
+        }
+
+        private ushort GetOrAssignAttributeCode(string s101Code)
+        {
+            if (_attributeByName.TryGetValue(s101Code, out var existing)) return existing;
+            var code = _nextAttributeCode++;
+            _attributeByName[s101Code] = code;
+            AttributeTypeCatalogue[code] = s101Code;
+            return code;
+        }
+    }
+}

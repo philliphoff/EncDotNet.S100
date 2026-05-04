@@ -55,7 +55,8 @@ public class PickServiceTests
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService());
+            recentFiles: new StubRecentFilesService(),
+            measureAppearance: new StubMeasureOverlayAppearanceProvider());
     }
 
     [Fact]

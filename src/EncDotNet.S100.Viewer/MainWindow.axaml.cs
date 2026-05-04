@@ -18,6 +18,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
@@ -184,17 +185,18 @@ public partial class MainWindow : ShadUI.Window
         // Enable trackpad pan/pinch/rotate gestures, single/double-tap pick,
         // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
         // sync, and the zoom in/out overlay buttons.
-        new MapInteractionController(_viewModel, _pickService, _loader)
-            .Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
+        var interactionController = new MapInteractionController(_viewModel, _pickService, _loader);
+        interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
+
+        // Wire the map-tool controller to the map: tools are registered with
+        // the view-model's controller and pointer events are forwarded by
+        // the interaction controller.
+        InitializeMapTools(interactionController);
 
         // Apply the cursor that matches the current mode and keep it in sync
-        // with the view-model.
-        ApplyPickModeCursor();
-        _viewModel.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(MainViewModel.IsPickModeActive))
-                ApplyPickModeCursor();
-        };
+        // with the active tool.
+        ApplyToolCursor();
+        _viewModel.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -254,15 +256,70 @@ public partial class MainWindow : ShadUI.Window
     }
 
     /// <summary>
-    /// Updates the map's cursor to reflect Pick Mode (cross-hair) vs. the
-    /// default panning cursor. Called once at startup and again whenever
-    /// <see cref="MainViewModel.IsPickModeActive"/> changes.
+    /// Updates the map's cursor to reflect the active map tool (Pick Mode
+    /// cross-hair, Measure Mode cross-hair, etc.). Called once at startup
+    /// and again whenever the active tool changes.
     /// </summary>
-    private void ApplyPickModeCursor()
+    private void ApplyToolCursor()
     {
-        MapControl.Cursor = _viewModel.IsPickModeActive
-            ? new Cursor(StandardCursorType.Cross)
-            : Cursor.Default;
+        MapControl.Cursor = _viewModel.Tools.ActiveTool?.Cursor ?? Cursor.Default;
+    }
+
+    /// <summary>
+    /// Registers the available <see cref="IMapTool"/>s with the view-model's
+    /// <see cref="MapToolController"/>, then initialises the controller with
+    /// a context that knows how to add overlay layers, refresh graphics, and
+    /// project pointer positions to lat/lon.
+    /// </summary>
+    private void InitializeMapTools(MapInteractionController interactionController)
+    {
+        var tools = _viewModel.Tools;
+
+        var context = new MapToolContext(
+            mapControl: MapControl,
+            addLayer: layer => MapControl.Map?.Layers.Add(layer),
+            removeLayer: layer => MapControl.Map?.Layers.Remove(layer),
+            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
+            refreshGraphics: () => MapControl.RefreshGraphics(),
+            screenToLatLon: ScreenToLatLon);
+
+        // Tools (pick, measure) were registered by the view-model in its
+        // constructor; here we just hand them an Avalonia-aware context.
+        tools.Initialize(context);
+
+        // Hand the same controller to the interaction controller so pointer
+        // events are offered to the active tool first.
+        interactionController.SetToolController(tools);
+
+        // Tool selection is intentionally not persisted across launches —
+        // entering Pick or Measure mode must be an explicit user action.
+    }
+
+    /// <summary>
+    /// Converts a pointer position (in <see cref="MapControl"/> client
+    /// coordinates) to a WGS-84 lat/lon, or <c>null</c> when the pointer
+    /// projects to an invalid Mercator location. Mirrors the projection
+    /// math used by the mouse lat/lon readout in
+    /// <see cref="MapInteractionController"/>.
+    /// </summary>
+    private (double Lat, double Lon)? ScreenToLatLon(Point screen)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return null;
+
+        var world = navigator.Viewport.ScreenToWorld(screen.X, screen.Y);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon) ||
+            double.IsInfinity(lat) || double.IsInfinity(lon) ||
+            lat < -90.0 || lat > 90.0)
+        {
+            return null;
+        }
+
+        // Normalize longitude into the canonical (-180, 180] range so paths
+        // that cross the antimeridian render with consistent endpoints.
+        lon = ((lon + 540.0) % 360.0) - 180.0;
+        return (lat, lon);
     }
 
     private async Task OpenDatasetAsync()

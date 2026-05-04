@@ -77,7 +77,8 @@ public class MainViewModelOpenRecentTests : IDisposable
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             themeService: new StubThemeService(),
-            recentFiles: recent);
+            recentFiles: recent,
+            measureAppearance: new StubMeasureOverlayAppearanceProvider());
     }
 
     [Fact]
