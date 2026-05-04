@@ -68,6 +68,31 @@ S-127, S-129, S-411, S-421). Coverage products (S-102, S-104, S-111)
 report layer-level information in the status bar but do not currently
 produce per-cell pick reports.
 
+### Time-varying datasets — global timeline
+
+S-104 water levels, S-111 surface currents, and S-411 sea-ice
+information all carry timestamps. When one or more of these
+datasets is loaded, a **global timeline** appears at the bottom of
+the map and aggregates every time sample across the loaded
+datasets into a single slider.
+
+![Global timeline scrubbing across S-104 / S-111 / S-411](readme/TimelineScreenshot.png)
+
+Drag the thumb to scrub time; every participating dataset is
+re-rendered at the snapped sample (nearest neighbour for S-104 /
+S-111 grids, latest-issued sample for S-411 ice). When all loaded
+datasets share the same set of timestamps the slider shows
+discrete "stops" at each one, plus **previous / next** buttons for
+single-step navigation; otherwise it falls back to evenly-spaced
+guide ticks across the aggregate range.
+
+The panel can be hidden via **View → Appearance → Timeline** (or
+its close button) and re-opened from the same menu — useful when
+a time-varying dataset is loaded but you want the full map
+height. When the panel is open but no time-varying dataset is
+loaded, an empty-state message indicates which product types
+will populate it.
+
 ## Screenshots
 
 The cross-platform viewer rendering various S-100 dataset types:
