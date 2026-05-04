@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    UI strings for the S-100 Viewer. Every user-visible string in the viewer
+    must live here so that future translations are mechanical. Keys use a
+    "Section_PurposeOrControl" naming convention.
+  -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e087</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e087</value>
+  </resheader>
+
+  <!-- Window -->
+  <data name="Window_Title" xml:space="preserve">
+    <value>S-100 Viewer</value>
+  </data>
+
+  <!-- Activity / pane titles -->
+  <data name="Pane_FeatureCatalogues" xml:space="preserve">
+    <value>FEATURE CATALOGUES</value>
+  </data>
+  <data name="Pane_PortrayalCatalogues" xml:space="preserve">
+    <value>PORTRAYAL CATALOGUES</value>
+  </data>
+  <data name="Pane_Datasets" xml:space="preserve">
+    <value>DATASETS</value>
+  </data>
+  <data name="Pane_Catalog" xml:space="preserve">
+    <value>DATASET CATALOG</value>
+  </data>
+  <data name="Pane_Settings" xml:space="preserve">
+    <value>SETTINGS</value>
+  </data>
+
+  <!-- Tooltips -->
+  <data name="Tooltip_ToggleTheme" xml:space="preserve">
+    <value>Toggle Light/Dark Theme</value>
+  </data>
+  <data name="Tooltip_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Tooltip_FeatureCatalogues" xml:space="preserve">
+    <value>Feature Catalogues</value>
+  </data>
+  <data name="Tooltip_PortrayalCatalogues" xml:space="preserve">
+    <value>Portrayal Catalogues</value>
+  </data>
+  <data name="Tooltip_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Tooltip_Catalog" xml:space="preserve">
+    <value>Dataset Catalog</value>
+  </data>
+  <data name="Tooltip_PickMode" xml:space="preserve">
+    <value>Pick Mode (I) — single-tap to identify features</value>
+  </data>
+  <data name="Tooltip_ZoomIn" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="Tooltip_ZoomOut" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="Tooltip_ZoomToExtent" xml:space="preserve">
+    <value>Zoom to Extent</value>
+  </data>
+  <data name="Tooltip_ClosePickPanel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Tooltip_AddFeatureCatalogue" xml:space="preserve">
+    <value>Add a feature catalogue from disk</value>
+  </data>
+  <data name="Tooltip_AddPortrayalCatalogue" xml:space="preserve">
+    <value>Add a portrayal catalogue from disk</value>
+  </data>
+  <data name="Tooltip_OpenDataset" xml:space="preserve">
+    <value>Open an S-100 dataset from disk</value>
+  </data>
+  <data name="Tooltip_RemoveCatalogue" xml:space="preserve">
+    <value>Remove this catalogue</value>
+  </data>
+  <data name="Tooltip_RemoveDataset" xml:space="preserve">
+    <value>Remove this dataset</value>
+  </data>
+  <data name="Tooltip_PreviousTimeStep" xml:space="preserve">
+    <value>Previous time step</value>
+  </data>
+  <data name="Tooltip_NextTimeStep" xml:space="preserve">
+    <value>Next time step</value>
+  </data>
+
+  <!-- Buttons / actions -->
+  <data name="Button_OpenDataset" xml:space="preserve">
+    <value>Open Dataset...</value>
+  </data>
+  <data name="Button_AddFeatureCatalogue" xml:space="preserve">
+    <value>Add Feature Catalogue...</value>
+  </data>
+  <data name="Button_AddPortrayalCatalogue" xml:space="preserve">
+    <value>Add Portrayal Catalogue...</value>
+  </data>
+
+  <!-- Native menu -->
+  <data name="Menu_File" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Menu_OpenDataset" xml:space="preserve">
+    <value>Open Dataset...</value>
+  </data>
+  <data name="Menu_OpenRecent" xml:space="preserve">
+    <value>Open Recent</value>
+  </data>
+  <data name="Menu_NoRecentDatasets" xml:space="preserve">
+    <value>(No recent datasets)</value>
+  </data>
+  <data name="Menu_ClearRecentlyOpened" xml:space="preserve">
+    <value>Clear Recently Opened</value>
+  </data>
+  <data name="Menu_View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Menu_Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Menu_PrimarySideBar" xml:space="preserve">
+    <value>Primary Side Bar</value>
+  </data>
+  <data name="Menu_StatusBar" xml:space="preserve">
+    <value>Status Bar</value>
+  </data>
+  <data name="Menu_PickReport" xml:space="preserve">
+    <value>Pick Report</value>
+  </data>
+  <data name="Menu_PickMode" xml:space="preserve">
+    <value>Pick Mode</value>
+  </data>
+
+  <!-- File picker -->
+  <data name="FilePicker_OpenDatasetTitle" xml:space="preserve">
+    <value>Open Dataset</value>
+  </data>
+  <data name="FilePicker_S100DatasetsType" xml:space="preserve">
+    <value>S-100 Datasets</value>
+  </data>
+
+  <!-- Catalogue list -->
+  <data name="Catalogue_BuiltInLabel" xml:space="preserve">
+    <value>(built-in)</value>
+  </data>
+
+  <!-- Catalog (S-128) panel -->
+  <data name="Catalog_EmptyMessage" xml:space="preserve">
+    <value>No catalogues found.
+Open an S-128 dataset to populate this panel.</value>
+  </data>
+  <data name="Catalog_SelectEntryPlaceholder" xml:space="preserve">
+    <value>Select a catalogue entry to view its properties.</value>
+  </data>
+  <data name="Catalog_NotForNavigation" xml:space="preserve">
+    <value>Not for navigation</value>
+  </data>
+  <data name="Catalog_Field_Spec" xml:space="preserve">
+    <value>Spec</value>
+  </data>
+  <data name="Catalog_Field_Edition" xml:space="preserve">
+    <value>Edition</value>
+  </data>
+  <data name="Catalog_Field_Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Catalog_Field_Issued" xml:space="preserve">
+    <value>Issued</value>
+  </data>
+  <data name="Catalog_Field_Updated" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="Catalog_Field_Coverage" xml:space="preserve">
+    <value>Coverage</value>
+  </data>
+  <data name="Catalog_Field_NorthEast" xml:space="preserve">
+    <value>NE</value>
+  </data>
+  <data name="Catalog_Field_SouthWest" xml:space="preserve">
+    <value>SW</value>
+  </data>
+  <data name="Catalog_SourceProperties" xml:space="preserve">
+    <value>Source properties</value>
+  </data>
+
+  <!-- Pick (Object Information) panel -->
+  <data name="Pick_PanelTitle" xml:space="preserve">
+    <value>OBJECT INFORMATION</value>
+  </data>
+  <data name="Pick_IdLabel" xml:space="preserve">
+    <value>ID:</value>
+  </data>
+  <data name="Pick_SpecFormat" xml:space="preserve">
+    <value>Spec: {0}</value>
+  </data>
+  <data name="Pick_SourceFormat" xml:space="preserve">
+    <value>Source: {0}</value>
+  </data>
+  <data name="Pick_AttributesHeading" xml:space="preserve">
+    <value>ATTRIBUTES</value>
+  </data>
+  <data name="Pick_NoAttributes" xml:space="preserve">
+    <value>(no attributes)</value>
+  </data>
+
+  <!-- Settings -->
+  <data name="Settings_Heading" xml:space="preserve">
+    <value>Application Settings</value>
+  </data>
+  <data name="Settings_AccentColor" xml:space="preserve">
+    <value>Accent Color</value>
+  </data>
+  <data name="Settings_ColorProfile" xml:space="preserve">
+    <value>Color Profile</value>
+  </data>
+  <data name="Settings_ColorProfile_Help" xml:space="preserve">
+    <value>Controls the Day/Dusk/Night color palette used across all datasets.</value>
+  </data>
+  <data name="Settings_SymbolScale" xml:space="preserve">
+    <value>Symbol Scale</value>
+  </data>
+  <data name="Settings_SymbolScale_Help" xml:space="preserve">
+    <value>Adjusts the size of all point symbols.</value>
+  </data>
+  <data name="Settings_TextScale" xml:space="preserve">
+    <value>Text Scale</value>
+  </data>
+  <data name="Settings_TextScale_Help" xml:space="preserve">
+    <value>Adjusts the size of all text labels.</value>
+  </data>
+  <data name="Settings_DistanceUnits" xml:space="preserve">
+    <value>Distance Units</value>
+  </data>
+  <data name="Settings_DistanceUnits_Help" xml:space="preserve">
+    <value>Units used by the map scale bar.</value>
+  </data>
+
+  <!-- Distance unit display names -->
+  <data name="DistanceUnit_Metric" xml:space="preserve">
+    <value>Metric (km, m)</value>
+  </data>
+  <data name="DistanceUnit_Miles" xml:space="preserve">
+    <value>Miles (mi, ft)</value>
+  </data>
+  <data name="DistanceUnit_NauticalMiles" xml:space="preserve">
+    <value>Nautical miles (nm)</value>
+  </data>
+
+  <!-- Palette display names -->
+  <data name="Palette_Day" xml:space="preserve">
+    <value>Day</value>
+  </data>
+  <data name="Palette_Dusk" xml:space="preserve">
+    <value>Dusk</value>
+  </data>
+  <data name="Palette_Night" xml:space="preserve">
+    <value>Night</value>
+  </data>
+
+  <!-- Status messages. {0}/{1} placeholders are filled with string.Format. -->
+  <data name="Status_UnrecognizedFileType" xml:space="preserve">
+    <value>Unrecognized file type: {0}</value>
+  </data>
+  <data name="Status_SelectPortrayalCatalogue" xml:space="preserve">
+    <value>Please select a portrayal catalogue for {0} first.</value>
+  </data>
+  <data name="Status_LoadingFile" xml:space="preserve">
+    <value>Loading {0}...</value>
+  </data>
+  <data name="Status_Error" xml:space="preserve">
+    <value>Error: {0}</value>
+  </data>
+  <data name="Status_RenderingTimeStep" xml:space="preserve">
+    <value>Rendering time step {0}/{1}...</value>
+  </data>
+  <data name="Status_SwitchingPalette" xml:space="preserve">
+    <value>Switching to {0} palette...</value>
+  </data>
+  <data name="Status_PaletteApplied" xml:space="preserve">
+    <value>{0} palette applied.</value>
+  </data>
+  <data name="Status_FeatureNoDetails" xml:space="preserve">
+    <value>Feature {0} (no details available)</value>
+  </data>
+  <data name="Status_FeatureSummary" xml:space="preserve">
+    <value>{0} [{1}]</value>
+  </data>
+  <data name="Status_FileNoLongerExists" xml:space="preserve">
+    <value>File no longer exists: {0}</value>
+  </data>
+
+  <!-- Tooltips for status bar elements -->
+  <data name="Tooltip_MouseLatLon" xml:space="preserve">
+    <value>Latitude and longitude of the cursor on the map</value>
+  </data>
+
+  <!-- Measure Mode -->
+  <data name="Tooltip_MeasureMode" xml:space="preserve">
+    <value>Measure distance and bearing (rhumb line)</value>
+  </data>
+  <data name="Menu_MeasureMode" xml:space="preserve">
+    <value>Measure Mode</value>
+  </data>
+  <data name="Status_MeasureLeg" xml:space="preserve">
+    <value>Leg {0}: {1:0.0} NM @ {2:000}°T</value>
+  </data>
+  <data name="Status_MeasureTotal" xml:space="preserve">
+    <value>Total: {0:0.0} NM</value>
+  </data>
+  <data name="Status_MeasureNoData" xml:space="preserve">
+    <value>Click on the map to start measuring; double-click or Enter to finish.</value>
+  </data>
+  <data name="Status_MeasureLegLabel" xml:space="preserve">
+    <value>{0:0.0} NM @ {1:000}°T</value>
+  </data>
+</root>

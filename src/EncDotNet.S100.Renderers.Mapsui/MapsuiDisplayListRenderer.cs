@@ -247,9 +247,46 @@ public sealed class MapsuiDisplayListRenderer
         if (feature is not null)
         {
             feature[FeatureRefKey] = instruction.FeatureReference;
+            ApplyScaleVisibility(feature, instruction);
         }
 
         return feature;
+    }
+
+    /// <summary>
+    /// S-100 Part 9 scale denominator → Mapsui resolution (m/px in EPSG:3857)
+    /// at 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface,
+    /// so resolution ≈ scaleDenominator × 0.00028.
+    /// </summary>
+    private const double DenomToResolutionMetres = 0.00028;
+
+    /// <summary>
+    /// Maps the S-100 Part 9 §11.1 <see cref="DrawingInstruction.ScaleMinimum"/> /
+    /// <see cref="DrawingInstruction.ScaleMaximum"/> denominators on each
+    /// rendered style.  Per the field documentation in
+    /// <c>DrawingInstruction</c>, <c>ScaleMinimum</c> is the most zoomed-out
+    /// limit (largest allowed denominator) and maps to Mapsui's
+    /// <c>MaxVisible</c>; <c>ScaleMaximum</c> is the most zoomed-in limit
+    /// (smallest allowed denominator) and maps to <c>MinVisible</c>.
+    /// </summary>
+    private static void ApplyScaleVisibility(IFeature feature, DrawingInstruction instruction)
+    {
+        if (!instruction.ScaleMinimum.HasValue && !instruction.ScaleMaximum.HasValue)
+            return;
+
+        double? maxRes = instruction.ScaleMinimum.HasValue
+            ? instruction.ScaleMinimum.Value * DenomToResolutionMetres
+            : (double?)null;
+        double? minRes = instruction.ScaleMaximum.HasValue
+            ? instruction.ScaleMaximum.Value * DenomToResolutionMetres
+            : (double?)null;
+
+        foreach (var style in feature.Styles)
+        {
+            if (style is null) continue;
+            if (maxRes.HasValue) style.MaxVisible = maxRes.Value;
+            if (minRes.HasValue) style.MinVisible = minRes.Value;
+        }
     }
 
     private static IFeature? CreateAreaFeature(

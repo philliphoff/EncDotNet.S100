@@ -2,13 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.PortrayalCataloguesView"
              x:DataType="vm:PortrayalCataloguesViewModel">
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
                 Classes="Outline"
-                Content="Add Portrayal Catalogue..."
+                Content="{x:Static loc:Strings.Button_AddPortrayalCatalogue}"
+                ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddPortrayalCatalogue}"
                 HorizontalAlignment="Stretch"
                 Margin="8"
                 x:Name="AddButton" />
@@ -43,6 +45,7 @@
                                 Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:PortrayalCataloguesViewModel)DataContext).RemoveCommand}"
                                 CommandParameter="{Binding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
                                 IsVisible="{Binding !IsBuiltIn}"
                                 VerticalAlignment="Center">
                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />

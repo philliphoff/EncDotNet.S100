@@ -11,6 +11,10 @@
     <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.10" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="11.3.10" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.10" />
+    <!-- MVVM / DI -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
     <!-- EncDotNet -->
     <PackageVersion Include="EncDotNet.Iso8211" Version="0.4.0" />
     <!-- Mapping / rendering -->
@@ -25,7 +29,7 @@
     <PackageVersion Include="PureHDF" Version="2.1.2" />
     <PackageVersion Include="ShadUI" Version="0.1.6" />
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.50.0" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
@@ -35,6 +39,7 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />
+    <PackageVersion Include="Verify.Xunit" Version="31.12.5" />
   </ItemGroup>
 
 </Project>

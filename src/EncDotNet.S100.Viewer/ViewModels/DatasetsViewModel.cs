@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -40,8 +43,8 @@ internal sealed class DatasetEntry : ViewModelBase
                 OnPropertyChanged(nameof(TimeStepMax));
                 OnPropertyChanged(nameof(TimeStepLabels));
                 OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.RaiseCanExecuteChanged();
-                _nextTimeStepCommand.RaiseCanExecuteChanged();
+                _previousTimeStepCommand.NotifyCanExecuteChanged();
+                _nextTimeStepCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -59,8 +62,8 @@ internal sealed class DatasetEntry : ViewModelBase
             if (SetProperty(ref _selectedTimeIndex, value))
             {
                 OnPropertyChanged(nameof(TimeStepLabel));
-                _previousTimeStepCommand.RaiseCanExecuteChanged();
-                _nextTimeStepCommand.RaiseCanExecuteChanged();
+                _previousTimeStepCommand.NotifyCanExecuteChanged();
+                _nextTimeStepCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -97,15 +100,25 @@ internal sealed class DatasetEntry : ViewModelBase
 
 internal sealed class DatasetsViewModel : ViewModelBase
 {
+    private readonly IDatasetLoaderService _loader;
+
     public ObservableCollection<DatasetEntry> Entries { get; } = new();
 
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }
 
-    public event Action<DatasetEntry>? LoadRequested;
+    /// <summary>
+    /// Raised when <see cref="LoadFromPathAsync"/> rejects a file because
+    /// no S-100 product specification recognised its extension. The window
+    /// surfaces this as a status-bar message.
+    /// </summary>
+    public event Action<string>? UnrecognizedFileEncountered;
 
-    public DatasetsViewModel()
+    public DatasetsViewModel(IDatasetLoaderService loader)
     {
+        ArgumentNullException.ThrowIfNull(loader);
+        _loader = loader;
+
         AddCommand = new RelayCommand<string?>(_ => { });
         RemoveCommand = new RelayCommand<DatasetEntry>(Remove);
     }
@@ -117,9 +130,36 @@ internal sealed class DatasetsViewModel : ViewModelBase
         return entry;
     }
 
+    /// <summary>
+    /// Loads the supplied entry through the dataset loader. Fire-and-forget;
+    /// errors are surfaced via <see cref="IDatasetLoaderService.StatusChanged"/>.
+    /// </summary>
     public void RequestLoad(DatasetEntry entry)
     {
-        LoadRequested?.Invoke(entry);
+        ArgumentNullException.ThrowIfNull(entry);
+        _ = _loader.LoadAsync(entry);
+    }
+
+    /// <summary>
+    /// Detects the product spec for <paramref name="path"/>, adds an entry,
+    /// and asks the loader to render it. If the file extension is not
+    /// recognised, raises <see cref="UnrecognizedFileEncountered"/> with the
+    /// extension and returns <c>null</c>.
+    /// </summary>
+    public async Task<DatasetEntry?> LoadFromPathAsync(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var spec = Datasets.Pipelines.DatasetPipelineFactory.DetectProductSpec(path);
+        if (spec is null)
+        {
+            UnrecognizedFileEncountered?.Invoke(System.IO.Path.GetExtension(path));
+            return null;
+        }
+
+        var entry = Add(path, spec);
+        await _loader.LoadAsync(entry);
+        return entry;
     }
 
     private void Remove(DatasetEntry? entry)

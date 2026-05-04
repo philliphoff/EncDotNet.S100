@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- The viewer targets osx-arm64 for SelfContained publish; the tests
+         only consume managed types and do not need a RID-specific build. -->
+    <SelfContained>false</SelfContained>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Viewer\EncDotNet.S100.Viewer.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

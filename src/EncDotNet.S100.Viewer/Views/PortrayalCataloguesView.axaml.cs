@@ -1,9 +1,10 @@
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -19,18 +20,8 @@ public partial class PortrayalCataloguesView : UserControl
     {
         if (DataContext is not PortrayalCataloguesViewModel vm) return;
 
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel is null) return;
-
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select Portrayal Catalogue Folder",
-            AllowMultiple = false,
-        });
-
-        if (folders.Count == 0) return;
-
-        var folderPath = folders[0].TryGetLocalPath();
+        var fileDialog = App.Services.GetRequiredService<IFileDialogService>();
+        var folderPath = await fileDialog.OpenPortrayalCatalogueFolderAsync(TopLevel.GetTopLevel(this));
         if (folderPath is null) return;
 
         // Detect the product spec from the catalogue XML

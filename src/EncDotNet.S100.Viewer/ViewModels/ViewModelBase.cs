@@ -1,24 +1,11 @@
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal abstract class ViewModelBase : INotifyPropertyChanged
-{
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(field, value))
-            return false;
-
-        field = value;
-        OnPropertyChanged(propertyName);
-        return true;
-    }
-
-    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-}
+/// <summary>
+/// Base class for viewer view models. Inherits from
+/// <see cref="ObservableObject"/> from CommunityToolkit.Mvvm so derived types
+/// get <c>SetProperty</c>, <c>OnPropertyChanged</c>, and
+/// <see cref="System.ComponentModel.INotifyPropertyChanged"/> for free.
+/// </summary>
+internal abstract class ViewModelBase : ObservableObject;

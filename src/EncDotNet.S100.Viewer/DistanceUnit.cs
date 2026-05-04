@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer;
 
@@ -23,9 +24,9 @@ internal static class DistanceUnitExtensions
     /// <summary>Human-readable display name for use in settings UIs.</summary>
     public static string DisplayName(this DistanceUnit unit) => unit switch
     {
-        DistanceUnit.Metric => "Metric (km, m)",
-        DistanceUnit.Miles => "Miles (mi, ft)",
-        DistanceUnit.NauticalMiles => "Nautical miles (nm)",
+        DistanceUnit.Metric => Strings.DistanceUnit_Metric,
+        DistanceUnit.Miles => Strings.DistanceUnit_Miles,
+        DistanceUnit.NauticalMiles => Strings.DistanceUnit_NauticalMiles,
         _ => unit.ToString(),
     };
 

@@ -5,12 +5,14 @@
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
+        xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+        xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
         x:Class="EncDotNet.S100.Viewer.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="S-100 Viewer"
+        Title="{x:Static loc:Strings.Window_Title}"
         Width="1100" Height="700"
         IsTitleBarVisible="True"
         ShowBottomBorder="True">
@@ -23,6 +25,17 @@
     <shadui:Window.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
     </shadui:Window.Resources>
+
+    <shadui:Window.KeyBindings>
+        <!-- Esc exits the active map tool (pick or measure). -->
+        <KeyBinding Gesture="Escape" Command="{Binding ExitPickModeCommand}" />
+        <!-- Cmd+M / Ctrl+M toggles Measure Mode. -->
+        <KeyBinding Gesture="Cmd+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <KeyBinding Gesture="Ctrl+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <!-- Enter / Backspace are tool actions while a tool is active. -->
+        <KeyBinding Gesture="Enter" Command="{Binding ToolCommitCommand}" />
+        <KeyBinding Gesture="Back" Command="{Binding ToolBackstepCommand}" />
+    </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
         <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
@@ -51,22 +64,53 @@
             <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
         </Style>
 
-        <!-- Accent color on pane splitter hover/drag -->
-        <Style Selector="GridSplitter#PaneSplitter">
+        <!--
+          Shared GridSplitter look-and-feel. Apply via Classes="PaneSplitter"
+          to every splitter in the viewer (main pane, pick panel, catalog
+          details). The splitter itself stays transparent at rest so it
+          blends with its surroundings; the accent color appears only on
+          hover or while the user is actively dragging.
+        -->
+        <!--
+          The splitter is transparent at rest. The shared `HoverDelay`
+          attached behavior (set on each splitter individually) waits
+          500ms after pointer-enter before adding the `hovered` class,
+          so a quick pass-through never reveals the accent. Exit is
+          immediate. While dragging, `:pressed` keeps the accent
+          regardless of pointer position.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
-        <Style Selector="GridSplitter#PaneSplitter:pointerover">
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <Style Selector="GridSplitter#PaneSplitter:pressed">
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Map overlay buttons (Pick Mode, Zoom In/Out/Extent) sit on top
+          of the map. The default ShadUI Icon foreground uses MutedColor
+          which is hard to read against the chart canvas — bump these
+          buttons to the full ForegroundColor at rest so the icons are
+          legible. (Background is left at the ShadUI default to avoid
+          the hover-overlay shimmer that occurs when the resting fill
+          and the GhostColor hover overlay differ.)
+        -->
+        <Style Selector="Button.MapOverlay">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.MapOverlay ic|FluentIcon">
+            <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}" />
         </Style>
 
     </shadui:Window.Styles>
 
     <shadui:Window.RightWindowTitleBarContent>
         <Button Command="{Binding ToggleThemeCommand}"
-                ToolTip.Tip="Toggle Light/Dark Theme"
+                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                 Width="32" Height="28"
                 Padding="0"
                 HorizontalContentAlignment="Center"
@@ -95,10 +139,29 @@
                 Padding="8,3"
                 Height="26"
                 IsVisible="{Binding IsStatusBarVisible}">
-            <TextBlock Text="{Binding StatusText}"
-                       FontSize="12"
-                       Opacity="0.7"
-                       VerticalAlignment="Center" />
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding MouseLatLonText}"
+                           FontSize="12"
+                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding MeasureSummary}"
+                           IsVisible="{Binding IsMeasureModeActive}"
+                           FontSize="12"
+                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           Opacity="0.85"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0" />
+                <TextBlock Text="{Binding StatusText}"
+                           FontSize="12"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </DockPanel>
         </Border>
 
         <!-- Activity bar (narrow icon strip on far left) -->
@@ -118,7 +181,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
                                       Command="{Binding SelectSettingsCommand}"
-                                      ToolTip.Tip="Settings"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Settings}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -138,7 +201,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
                                       Command="{Binding SelectFeatureCataloguesCommand}"
-                                      ToolTip.Tip="Feature Catalogues"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FeatureCatalogues}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -155,7 +218,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
                                       Command="{Binding SelectPortrayalCataloguesCommand}"
-                                      ToolTip.Tip="Portrayal Catalogues"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalCatalogues}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -172,7 +235,7 @@
                         <ToggleButton Classes="ActivityIcon"
                                       IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
                                       Command="{Binding SelectDatasetsCommand}"
-                                      ToolTip.Tip="Datasets"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Datasets}"
                                       Height="48"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
@@ -180,23 +243,48 @@
                             <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22" />
                         </ToggleButton>
                     </Grid>
+
+                    <!-- Dataset Catalog -->
+                    <Grid>
+                        <Border Width="3" HorizontalAlignment="Left"
+                                Background="{DynamicResource AccentBrush}"
+                                IsVisible="{Binding IsCatalogSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsCatalogSelected, Mode=OneWay}"
+                                      Command="{Binding SelectCatalogCommand}"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Catalog}"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Library" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- Activity pane + splitter + map in a resizable grid -->
+        <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600" />
+                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPaneVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="320"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="200"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsPickPanelVisible}"
+                                  bh:CollapsibleColumn.ExpandedWidth="360"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="240"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
             </Grid.ColumnDefinitions>
 
             <!-- Activity pane -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="0,0,1,0"
                     IsVisible="{Binding IsPaneVisible}">
                 <DockPanel>
                     <!-- Pane header -->
@@ -216,6 +304,8 @@
                                                        IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
                         <views:DatasetsView DataContext="{Binding Datasets}"
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
+                        <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
+                                                IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
                         <views:SettingsView DataContext="{Binding Settings}"
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
                     </Panel>
@@ -224,9 +314,11 @@
 
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
+                          Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
                           IsVisible="{Binding IsPaneVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
             <!-- Map control fills remaining space, with zoom buttons overlaid -->
@@ -241,20 +333,232 @@
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Margin="0,12,12,0">
-                    <Button x:Name="ZoomInButton"
-                            Classes="Icon">
-                        <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
+                    <Button x:Name="PickModeButton"
+                            Classes="Icon MapOverlay"
+                            Classes.pickActive="{Binding IsPickModeActive}"
+                            Command="{Binding TogglePickModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
+                        <Button.Styles>
+                            <!--
+                              When pick mode is active we add the "pickActive"
+                              class from code-behind; this fills the button with
+                              the accent color so the user can tell at a glance.
+                              Using Button (not ToggleButton) lets us keep the
+                              exact resting appearance of the adjacent zoom
+                              buttons — ShadUI's `Classes="Icon"` only styles
+                              Button, not ToggleButton.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <!--
+                              Force the FluentIcon child to inherit the
+                              button's Foreground so the toggled-on state
+                              actually paints the icon white. (The default
+                              FluentIcon Foreground is bound to the theme
+                              text color and would otherwise stay dark.)
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <!--
+                              ShadUI's Button.Icon template stacks a separate
+                              Border#HoverBackground on top of the base whose
+                              Background is bound to ButtonAssist.HoverBackground
+                              (default GhostColor). Override it so the active
+                              fill stays accent-colored on hover.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <!--
+                                  Pin opacity to 1 so the 0→1 fade-in transition
+                                  doesn't briefly blend with the base layer when
+                                  the cursor enters the button.
+                                -->
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
                     </Button>
-                    <Button x:Name="ZoomOutButton"
-                            Classes="Icon">
-                        <ic:FluentIcon Icon="Subtract" IconVariant="Regular" FontSize="16" />
+                    <!--
+                      Measure Mode toggle button. Same accent-fill pattern
+                      as PickModeButton above; ruler icon distinguishes the
+                      two. Cmd/Ctrl+M is the keyboard accelerator (see the
+                      Window.KeyBindings block at the top of this file).
+                    -->
+                    <Button x:Name="MeasureModeButton"
+                            Classes="Icon MapOverlay"
+                            Classes.measureActive="{Binding IsMeasureModeActive}"
+                            Command="{Binding ToggleMeasureModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
+                        <Button.Styles>
+                            <Style Selector="Button#MeasureModeButton.measureActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                     </Button>
+                    <!--
+                      Zoom in / out / to-extent group. Wrapping in an inner
+                      StackPanel with vertical margin gives the cluster its
+                      own visual grouping (separated from the Pick Mode
+                      button above and the compass rose below).
+                    -->
+                    <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
+                        <Button x:Name="ZoomInButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
+                            <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomOutButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
+                            <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomToExtentButton"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
+                            <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                    </StackPanel>
                     <views:CompassRoseView x:Name="CompassRose"
                                            Margin="0,4,0,0"
                                            Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
             </Grid>
+
+            <!-- Resize grip between map and pick panel -->
+            <GridSplitter Grid.Column="3"
+                          Classes="PaneSplitter"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding IsPickPanelVisible}"
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          Name="PickPanelSplitter" />
+
+            <!-- Pick Report (Object Information) panel -->
+            <Border Grid.Column="4"
+                    Background="{DynamicResource BackgroundColor}"
+                    IsVisible="{Binding IsPickPanelVisible}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_PanelTitle}"
+                                       FontSize="11"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1"
+                                    Command="{Binding PickReport.ClearCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
+                                    Width="22" Height="22"
+                                    Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center">
+                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Padding="12,4,12,12">
+                        <StackPanel Spacing="10" DataContext="{Binding PickReport}">
+                            <!-- Header block: feature type + identity -->
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding FeatureType}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold" />
+                                <TextBlock FontSize="11" Opacity="0.7">
+                                    <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
+                                    <Run Text="{Binding FeatureRef}" />
+                                </TextBlock>
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
+                                <TextBlock FontSize="11" Opacity="0.7"
+                                           Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <!-- Attribute list -->
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="0,8,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <ItemsControl ItemsSource="{Binding Attributes}"
+                                                  Grid.IsSharedSizeScope="True">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickAttribute">
+                                                <Grid Margin="0,2">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" SharedSizeGroup="PickName" />
+                                                        <ColumnDefinition Width="8" />
+                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="PickValue" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               Opacity="0.7"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding Name}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding Value}"
+                                                               FontSize="12"
+                                                               TextWrapping="NoWrap"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="220"
+                                                               ToolTip.Tip="{Binding Value}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                               FontSize="12"
+                                               FontStyle="Italic"
+                                               Opacity="0.6"
+                                               IsVisible="{Binding !HasAttributes}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </shadui:Window>
