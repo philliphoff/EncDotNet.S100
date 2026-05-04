@@ -28,6 +28,7 @@ internal sealed class TimelineViewModel : ViewModelBase
 
         PreviousStepCommand = new RelayCommand(StepPrevious, CanStepPrevious);
         NextStepCommand = new RelayCommand(StepNext, CanStepNext);
+        CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
 
         _service.RangeChanged += OnRangeChanged;
         _service.CurrentTimeChanged += _ =>
@@ -38,6 +39,19 @@ internal sealed class TimelineViewModel : ViewModelBase
             ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
         };
     }
+
+    /// <summary>
+    /// Raised when the user activates <see cref="CloseCommand"/>.
+    /// <see cref="MainViewModel"/> subscribes to this and clears its
+    /// <c>IsTimelineVisible</c> flag so the user can re-open the
+    /// panel from the View menu.
+    /// </summary>
+    public event Action? CloseRequested;
+
+    /// <summary>
+    /// Closes the timeline panel via <see cref="CloseRequested"/>.
+    /// </summary>
+    public ICommand CloseCommand { get; }
 
     private void OnRangeChanged()
     {

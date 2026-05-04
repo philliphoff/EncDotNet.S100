@@ -233,6 +233,7 @@ internal sealed class MainViewModel : ViewModelBase
         Settings = settingsViewModel;
         PickReport = pickReport;
         Timeline = timeline;
+        Timeline.CloseRequested += () => IsTimelineVisible = false;
         PickReport.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PickReportViewModel.HasPick))
