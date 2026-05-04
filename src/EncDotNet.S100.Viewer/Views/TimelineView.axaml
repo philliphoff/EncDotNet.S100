@@ -146,8 +146,7 @@
                                FontSize="11"
                                Opacity="0.55"
                                HorizontalAlignment="Center"
-                               TextWrapping="Wrap"
-                               MaxWidth="500" />
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Panel>
         </DockPanel>
