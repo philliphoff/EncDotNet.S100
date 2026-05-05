@@ -36,6 +36,12 @@ internal static class Strings
     public static string Pane_PortrayalCatalogues => Get(nameof(Pane_PortrayalCatalogues));
     public static string Pane_Datasets => Get(nameof(Pane_Datasets));
     public static string Pane_DatasetOpacity => Get(nameof(Pane_DatasetOpacity));
+    public static string Pane_DatasetSelectPlaceholder => Get(nameof(Pane_DatasetSelectPlaceholder));
+    public static string Pane_DatasetField_Spec => Get(nameof(Pane_DatasetField_Spec));
+    public static string Pane_DatasetField_Time => Get(nameof(Pane_DatasetField_Time));
+    public static string Pane_DatasetTab_Dataset => Get(nameof(Pane_DatasetTab_Dataset));
+    public static string Pane_DatasetTab_Layers => Get(nameof(Pane_DatasetTab_Layers));
+    public static string Pane_DatasetTab_NoLayers => Get(nameof(Pane_DatasetTab_NoLayers));
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
 

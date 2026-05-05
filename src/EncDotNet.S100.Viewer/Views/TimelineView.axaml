@@ -8,34 +8,10 @@
 
     <UserControl.Styles>
         <!--
-          Restyle the Fluent Slider so the filled track and thumb adopt
-          the viewer's AccentBrush (#007ACC). The Fluent control template
-          paints the filled portion via a RepeatButton named
-          PART_DecreaseButton and the handle via a Thumb. Tick marks
-          (TickBar) are deliberately left at their default theme colour
-          so that the ticks remain visible against any background.
+          Slider accent styling now lives app-wide in App.axaml so every
+          slider in the viewer matches. No Timeline-specific styles
+          required here.
         -->
-        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        </Style>
-        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton:pointerover">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        </Style>
-        <Style Selector="Slider.timeline /template/ RepeatButton#PART_DecreaseButton:pressed">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        </Style>
-        <Style Selector="Slider.timeline /template/ Thumb">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        </Style>
-        <Style Selector="Slider.timeline /template/ Thumb:pointerover">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        </Style>
-        <Style Selector="Slider.timeline /template/ Thumb:pressed">
-            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        </Style>
     </UserControl.Styles>
 
     <Border Background="{DynamicResource BackgroundColor}"
@@ -89,7 +65,6 @@
                     <Grid DockPanel.Dock="Top"
                           ColumnDefinitions="*,Auto">
                         <Slider Grid.Column="0"
-                                Classes="timeline"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"

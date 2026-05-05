@@ -3,8 +3,87 @@
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
+
+    <UserControl.Styles>
+        <!--
+          Mirror of the main window's `GridSplitter.PaneSplitter` style.
+          UserControls don't inherit window-scoped styles, so we keep a
+          local copy here for the Datasets panel's master/detail
+          splitter.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          ShadUI's default TabControl template wraps the tab strip and
+          the content presenter in a StackPanel, which measures its
+          children with infinite height. That means a ScrollViewer
+          placed inside a TabItem never receives a bounded height and
+          so never scrolls — instead the StackPanel grows past the
+          available space and the bottom of the content is clipped.
+          We replace the template (only for `.CenteredTabs`) with a
+          DockPanel so the tab strip stays sticky at the top and the
+          ContentPresenter fills the remaining height, giving any
+          ScrollViewer inside a TabItem a bounded height to scroll
+          within. The inner Border centres the tab headers — replacing
+          the upstream HorizontalAlignment="Left" — without needing
+          the earlier `/template/ ... Border` selector workaround.
+        -->
+        <Style Selector="TabControl.CenteredTabs">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <DockPanel LastChildFill="True">
+                            <Border DockPanel.Dock="Top"
+                                    Background="{DynamicResource TabItemsBackgroundColor}"
+                                    CornerRadius="{DynamicResource LgCornerRadius}"
+                                    HorizontalAlignment="Center"
+                                    Padding="2,4,2,0"
+                                    Margin="0,0,0,8">
+                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                Name="PART_ItemsPresenter" />
+                            </Border>
+                            <ContentPresenter Content="{TemplateBinding SelectedContent}"
+                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}"
+                                              Name="PART_SelectedContentHost"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!--
+          Match the pane-title typography (see MainWindow.axaml's Pane
+          header) so the centred tab strip reads as a title strip.
+          LetterSpacing isn't a TabItem property, so we apply it via a
+          HeaderTemplate that wraps the header string in a TextBlock.
+        -->
+        <Style Selector="TabControl.CenteredTabs > TabItem">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HeaderTemplate">
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" LetterSpacing="1" />
+                </DataTemplate>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
@@ -20,7 +99,7 @@
              needs a target. -->
         <StackPanel DockPanel.Dock="Top"
                     Orientation="Horizontal"
-                    Spacing="2"
+                    Spacing="4"
                     Margin="8,4,8,0">
             <Button Classes="Icon"
                     Command="{Binding ShowAllCommand}"
@@ -39,189 +118,300 @@
             </Button>
         </StackPanel>
 
-        <ScrollViewer>
-        <ItemsControl ItemsSource="{Binding Entries}"
-                      Margin="8,4"
-                      x:Name="DatasetList"
-                      DoubleTapped="OnDatasetDoubleTapped">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Spacing="8" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:DatasetEntry">
-                    <Border Background="Transparent"
-                            Focusable="True">
-                        <Border.KeyBindings>
-                            <!-- Keyboard equivalents for the reorder
-                                 commands. Alt+Up/Alt+Down match the
-                                 platform convention used by other VS
-                                 Code-style list reorder UIs. -->
-                            <KeyBinding Gesture="Alt+Up"
-                                        Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
-                                        CommandParameter="{Binding}" />
-                            <KeyBinding Gesture="Alt+Down"
-                                        Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
-                                        CommandParameter="{Binding}" />
-                        </Border.KeyBindings>
-                        <Border.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="{x:Static loc:Strings.Menu_BringDatasetToFront}"
-                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).BringToFrontCommand}"
-                                          CommandParameter="{Binding}" />
-                                <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetUp}"
-                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
-                                          CommandParameter="{Binding}" />
-                                <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetDown}"
-                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
-                                          CommandParameter="{Binding}" />
-                                <MenuItem Header="{x:Static loc:Strings.Menu_SendDatasetToBack}"
-                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
-                                          CommandParameter="{Binding}" />
-                                <Separator />
-                                <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
-                                          Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
-                                          CommandParameter="{Binding}" />
-                            </ContextMenu>
-                        </Border.ContextMenu>
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto,Auto">
-                            <ToggleButton Grid.Row="0" Grid.Column="0"
-                                          Classes="Icon"
-                                          IsChecked="{Binding IsVisible, Mode=TwoWay}"
-                                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
-                                          VerticalAlignment="Top"
-                                          Margin="0,0,4,0">
-                                <Panel>
-                                    <ic:FluentIcon Icon="Eye"
-                                                   IconVariant="Regular"
-                                                   FontSize="16"
-                                                   IsVisible="{Binding IsVisible}" />
-                                    <ic:FluentIcon Icon="EyeOff"
-                                                   IconVariant="Regular"
-                                                   FontSize="16"
-                                                   IsVisible="{Binding !IsVisible}" />
-                                </Panel>
-                            </ToggleButton>
-                            <StackPanel Grid.Row="0" Grid.Column="1"
+        <!-- Master/detail layout: the dataset list takes the top portion
+             and the Properties sub-panel docks at the bottom, separated
+             by the standard PaneSplitter. The sub-panel collapses when
+             nothing is selected so the list takes the full height. -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="2*" MinHeight="80" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="80" />
+            </Grid.RowDefinitions>
+
+            <!-- Dataset list (master). ListBox lets a row be selected so
+                 the Properties sub-panel can target it. Padding/margin
+                 zeroed on items so the entire row hit-tests for click-
+                 to-select and right-click. -->
+            <ListBox Grid.Row="0"
+                     x:Name="DatasetList"
+                     ItemsSource="{Binding Entries}"
+                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0"
+                     Margin="8,4,8,0"
+                     DoubleTapped="OnDatasetDoubleTapped"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.Styles>
+                    <!-- Suppress the default ShadUI ListBoxItem chrome and
+                         use a minimal hover/selection look. -->
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="6,4" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Template">
+                            <ControlTemplate>
+                                <Border Name="PART_Container"
+                                        Background="{TemplateBinding Background}"
+                                        CornerRadius="4"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter Content="{TemplateBinding Content}"
+                                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                      HorizontalAlignment="Stretch"
+                                                      HorizontalContentAlignment="Stretch" />
+                                </Border>
+                            </ControlTemplate>
+                        </Setter>
+                    </Style>
+                    <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                        <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                    </Style>
+                    <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                    </Style>
+                    <Style Selector="ListBoxItem:selected TextBlock">
+                        <Setter Property="Foreground" Value="White" />
+                    </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DatasetEntry">
+                        <Border Background="Transparent" Focusable="True">
+                            <Border.KeyBindings>
+                                <KeyBinding Gesture="Alt+Up"
+                                            Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                            CommandParameter="{Binding}" />
+                                <KeyBinding Gesture="Alt+Down"
+                                            Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                            CommandParameter="{Binding}" />
+                            </Border.KeyBindings>
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_BringDatasetToFront}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).BringToFrontCommand}"
+                                              CommandParameter="{Binding}" />
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetUp}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                              CommandParameter="{Binding}" />
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetDown}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                              CommandParameter="{Binding}" />
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_SendDatasetToBack}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
+                                              CommandParameter="{Binding}" />
+                                    <Separator />
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
+                                              CommandParameter="{Binding}" />
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                                <Button Grid.Column="0"
+                                        Classes="Icon"
+                                        Command="{Binding ToggleVisibilityCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                         VerticalAlignment="Center"
-                                        Opacity="{Binding RowOpacity}">
-                                <TextBlock Text="{Binding DisplayName}"
-                                           FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding ProductSpec}"
-                                           FontSize="11"
-                                           Opacity="0.6" />
-                                <TextBlock Text="{Binding Info}"
-                                           FontSize="11"
-                                           Opacity="0.5"
-                                           IsVisible="{Binding IsLoaded}"
-                                           TextWrapping="Wrap" />
-                                <!--
-                                  Time-aware datasets show a read-only label of
-                                  the timestamp the global time slider has
-                                  snapped them to. The slider itself lives in
-                                  the bottom timeline panel.
-                                -->
-                                <TextBlock Text="{Binding CurrentTimeLabel}"
-                                           FontSize="11"
-                                           Opacity="0.7"
-                                           Margin="0,2,0,0"
-                                           IsVisible="{Binding HasTimeSteps}" />
-                            </StackPanel>
-                            <Button Grid.Row="0" Grid.Column="2"
-                                    Classes="Icon"
-                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
-                                    CommandParameter="{Binding}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
-                                    VerticalAlignment="Top">
-                                <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
-                            </Button>
-                            <Button Grid.Row="0" Grid.Column="3"
-                                    Classes="Icon"
-                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
-                                    CommandParameter="{Binding}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
-                                    VerticalAlignment="Top">
-                                <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
-                            </Button>
-                            <Button Grid.Row="0" Grid.Column="4"
-                                    Classes="Icon"
-                                    Command="{Binding $parent[ItemsControl].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
-                                    CommandParameter="{Binding}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
-                                    VerticalAlignment="Top">
-                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
-                            </Button>
-                            <!-- Inline opacity slider, visible only when the
-                                 dataset has been loaded so users have something
-                                 to act on. -->
-                            <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
-                                    Minimum="0"
-                                    Maximum="1"
-                                    SmallChange="0.05"
-                                    LargeChange="0.1"
-                                    Value="{Binding Opacity, Mode=TwoWay}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_DatasetOpacity}"
-                                    IsVisible="{Binding IsLoaded}"
-                                    Margin="0,4,0,0" />
-                            <!-- Sub-layer disclosure: shown only when the
-                                 processor emitted more than one layer
-                                 (e.g. S-111 colour band + arrows).
-                                 Collapsed by default. -->
-                            <Expander Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="5"
-                                      Header="{x:Static loc:Strings.Pane_SubLayers}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_ExpandSubLayers}"
-                                      IsExpanded="False"
-                                      IsVisible="{Binding HasSubLayers}"
-                                      Margin="0,4,0,0">
-                                <ItemsControl ItemsSource="{Binding SubLayers}" Margin="16,4,0,0">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <StackPanel Spacing="4" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:DatasetSubLayer">
-                                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
-                                                <ToggleButton Grid.Row="0" Grid.Column="0"
-                                                              Classes="Icon"
-                                                              IsChecked="{Binding IsVisible, Mode=TwoWay}"
-                                                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
-                                                              VerticalAlignment="Center"
-                                                              Margin="0,0,4,0">
-                                                    <Panel>
-                                                        <ic:FluentIcon Icon="Eye"
-                                                                       IconVariant="Regular"
-                                                                       FontSize="14"
-                                                                       IsVisible="{Binding IsVisible}" />
-                                                        <ic:FluentIcon Icon="EyeOff"
-                                                                       IconVariant="Regular"
-                                                                       FontSize="14"
-                                                                       IsVisible="{Binding !IsVisible}" />
-                                                    </Panel>
-                                                </ToggleButton>
-                                                <TextBlock Grid.Row="0" Grid.Column="1"
-                                                           Text="{Binding DisplayName}"
-                                                           FontSize="12"
-                                                           VerticalAlignment="Center" />
-                                                <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
-                                                        Minimum="0"
-                                                        Maximum="1"
-                                                        SmallChange="0.05"
-                                                        LargeChange="0.1"
-                                                        Value="{Binding Opacity, Mode=TwoWay}"
-                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_SubLayerOpacity}"
-                                                        Margin="0,2,0,0" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Expander>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        </ScrollViewer>
+                                        Margin="0,0,10,0">
+                                    <Panel>
+                                        <ic:FluentIcon Icon="Eye"
+                                                       IconVariant="Regular"
+                                                       FontSize="16"
+                                                       IsVisible="{Binding IsVisible}" />
+                                        <ic:FluentIcon Icon="EyeOff"
+                                                       IconVariant="Regular"
+                                                       FontSize="16"
+                                                       IsVisible="{Binding !IsVisible}" />
+                                    </Panel>
+                                </Button>
+                                <StackPanel Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            Opacity="{Binding RowOpacity}">
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding ProductSpec}"
+                                               FontSize="11"
+                                               Opacity="0.6" />
+                                </StackPanel>
+                                <Button Grid.Column="2"
+                                        Classes="Icon"
+                                        Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
+                                        VerticalAlignment="Center"
+                                        Margin="6,0,0,0">
+                                    <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
+                                </Button>
+                                <Button Grid.Column="3"
+                                        Classes="Icon"
+                                        Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
+                                        VerticalAlignment="Center"
+                                        Margin="2,0,0,0">
+                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14" />
+                                </Button>
+                                <Button Grid.Column="4"
+                                        Classes="Icon"
+                                        Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).RemoveCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_RemoveDataset}"
+                                        VerticalAlignment="Center"
+                                        Margin="2,0,0,0">
+                                    <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Splitter between list and properties. The 1px hairline is
+                 a separate non-hit-testing border; the GridSplitter sits
+                 on top with the standard 4px hit target. -->
+            <Border Grid.Row="1"
+                    Height="1"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False"
+                    Background="{DynamicResource BorderColor}" />
+            <GridSplitter Grid.Row="1"
+                          Classes="PaneSplitter"
+                          Height="4"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          bh:HoverDelay.DelayMilliseconds="500" />
+
+            <!-- Properties sub-panel. Tabbed: "Dataset" controls
+                 the dataset as a whole, "Layers" exposes per-sub-layer
+                 toggles and opacities. The dataset name is implicit
+                 from the list selection above; no header needed. -->
+            <Border Grid.Row="2" ClipToBounds="True">
+                <Panel>
+                    <!-- Empty-state placeholder -->
+                    <TextBlock IsVisible="{Binding !HasSelection}"
+                               Text="{x:Static loc:Strings.Pane_DatasetSelectPlaceholder}"
+                               Opacity="0.6"
+                               TextWrapping="Wrap"
+                               Margin="16"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               TextAlignment="Center" />
+
+                    <TabControl Classes="CenteredTabs"
+                                IsVisible="{Binding HasSelection}"
+                                Padding="0"
+                                Margin="0,8,0,0">
+                        <!-- Dataset-wide UX -->
+                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Dataset}">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="12" Margin="8,8,8,8">
+                                    <!-- Spec + per-step time label (read-only). -->
+                                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                                          RowSpacing="4" ColumnSpacing="12">
+                                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                                   Text="{x:Static loc:Strings.Pane_DatasetField_Spec}"
+                                                   Opacity="0.6" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                                   Text="{Binding SelectedEntry.ProductSpec}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                                   Text="{x:Static loc:Strings.Pane_DatasetField_Time}"
+                                                   Opacity="0.6"
+                                                   IsVisible="{Binding SelectedEntry.HasTimeSteps, FallbackValue=False}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                                   Text="{Binding SelectedEntry.CurrentTimeLabel}"
+                                                   IsVisible="{Binding SelectedEntry.HasTimeSteps, FallbackValue=False}" />
+                                    </Grid>
+
+                                    <!-- Loader status text (e.g. feature counts). -->
+                                    <TextBlock Text="{Binding SelectedEntry.Info}"
+                                               FontSize="12"
+                                               Opacity="0.7"
+                                               IsVisible="{Binding SelectedEntry.IsLoaded, FallbackValue=False}"
+                                               TextWrapping="Wrap" />
+
+                                    <!-- Opacity. -->
+                                    <StackPanel Spacing="4"
+                                                IsVisible="{Binding SelectedEntry.IsLoaded, FallbackValue=False}">
+                                        <TextBlock Text="{x:Static loc:Strings.Pane_DatasetOpacity}"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.8" />
+                                        <Slider Minimum="0"
+                                                Maximum="1"
+                                                SmallChange="0.05"
+                                                LargeChange="0.1"
+                                                Value="{Binding SelectedEntry.Opacity, Mode=TwoWay}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_DatasetOpacity}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <!-- Sub-layer UX. Always present so users learn
+                             where to look; an empty-state message covers
+                             single-layer products. -->
+                        <TabItem Header="{x:Static loc:Strings.Pane_DatasetTab_Layers}">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <Panel Margin="8,8,8,8">
+                                    <TextBlock IsVisible="{Binding !SelectedEntry.HasSubLayers, FallbackValue=True}"
+                                               Text="{x:Static loc:Strings.Pane_DatasetTab_NoLayers}"
+                                               Opacity="0.6"
+                                               TextWrapping="Wrap"
+                                               HorizontalAlignment="Center"
+                                               TextAlignment="Center" />
+                                    <ItemsControl IsVisible="{Binding SelectedEntry.HasSubLayers, FallbackValue=False}"
+                                                  ItemsSource="{Binding SelectedEntry.SubLayers}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Spacing="12" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DatasetSubLayer">
+                                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                                                      ColumnSpacing="6">
+                                                    <Button Grid.Row="0" Grid.Column="0"
+                                                            Classes="Icon"
+                                                            Command="{Binding ToggleVisibilityCommand}"
+                                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
+                                                            VerticalAlignment="Center">
+                                                        <Panel>
+                                                            <ic:FluentIcon Icon="Eye"
+                                                                           IconVariant="Regular"
+                                                                           FontSize="14"
+                                                                           IsVisible="{Binding IsVisible}" />
+                                                            <ic:FluentIcon Icon="EyeOff"
+                                                                           IconVariant="Regular"
+                                                                           FontSize="14"
+                                                                           IsVisible="{Binding !IsVisible}" />
+                                                        </Panel>
+                                                    </Button>
+                                                    <TextBlock Grid.Row="0" Grid.Column="1"
+                                                               Text="{Binding DisplayName}"
+                                                               FontSize="12"
+                                                               VerticalAlignment="Center" />
+                                                    <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                            Minimum="0"
+                                                            Maximum="1"
+                                                            SmallChange="0.05"
+                                                            LargeChange="0.1"
+                                                            Value="{Binding Opacity, Mode=TwoWay}"
+                                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_SubLayerOpacity}"
+                                                            Margin="0,2,0,0" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Panel>
+                            </ScrollViewer>
+                        </TabItem>
+                    </TabControl>
+                </Panel>
+            </Border>
+        </Grid>
     </DockPanel>
 </UserControl>

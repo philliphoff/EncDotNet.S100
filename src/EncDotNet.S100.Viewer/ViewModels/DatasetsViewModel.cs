@@ -67,6 +67,14 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public double RowOpacity => _isVisible ? 1.0 : 0.5;
 
+    /// <summary>
+    /// Flips <see cref="IsVisible"/>. Bound to the eye-icon button in
+    /// the Datasets list so the action behaves as a transient command
+    /// (icon swaps in response to state change) rather than a
+    /// persistent toggle button (which would render as accent-checked).
+    /// </summary>
+    public ICommand ToggleVisibilityCommand { get; }
+
     // ── Sub-layers ────────────────────────────────────────────────────
     //
     // Products that emit more than one Mapsui ILayer (S-111 colour
@@ -147,6 +155,7 @@ internal sealed class DatasetEntry : ViewModelBase
         FilePath = filePath;
         ProductSpec = productSpec;
         DisplayName = System.IO.Path.GetFileName(filePath);
+        ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
         _subLayers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubLayers));
     }
@@ -190,10 +199,17 @@ internal sealed class DatasetSubLayer : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Flips <see cref="IsVisible"/>. See the rationale on
+    /// <see cref="DatasetEntry.ToggleVisibilityCommand"/>.
+    /// </summary>
+    public ICommand ToggleVisibilityCommand { get; }
+
     public DatasetSubLayer(string key, string displayName)
     {
         Key = key;
         DisplayName = displayName;
+        ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
     }
 }
 
@@ -202,6 +218,29 @@ internal sealed class DatasetsViewModel : ViewModelBase
     private readonly IDatasetLoaderService _loader;
 
     public ObservableCollection<DatasetEntry> Entries { get; } = new();
+
+    private DatasetEntry? _selectedEntry;
+    /// <summary>
+    /// The dataset row currently highlighted in the panel. Drives the
+    /// Properties sub-panel (opacity slider + sub-layer list).
+    /// </summary>
+    public DatasetEntry? SelectedEntry
+    {
+        get => _selectedEntry;
+        set
+        {
+            if (!ReferenceEquals(_selectedEntry, value))
+            {
+                _selectedEntry = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasSelection));
+            }
+        }
+    }
+
+    /// <summary>True when a dataset row is selected; controls visibility
+    /// of the Properties sub-panel.</summary>
+    public bool HasSelection => _selectedEntry is not null;
 
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }

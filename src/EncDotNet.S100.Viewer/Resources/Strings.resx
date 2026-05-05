@@ -149,6 +149,24 @@
   <data name="Pane_DatasetOpacity" xml:space="preserve">
     <value>Opacity</value>
   </data>
+  <data name="Pane_DatasetSelectPlaceholder" xml:space="preserve">
+    <value>Select a dataset to view its properties.</value>
+  </data>
+  <data name="Pane_DatasetField_Spec" xml:space="preserve">
+    <value>Spec</value>
+  </data>
+  <data name="Pane_DatasetField_Time" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Pane_DatasetTab_Dataset" xml:space="preserve">
+    <value>DATASET</value>
+  </data>
+  <data name="Pane_DatasetTab_Layers" xml:space="preserve">
+    <value>LAYERS</value>
+  </data>
+  <data name="Pane_DatasetTab_NoLayers" xml:space="preserve">
+    <value>This dataset has no separately-controllable layers.</value>
+  </data>
   <data name="Tooltip_TimelineSlider" xml:space="preserve">
     <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>
