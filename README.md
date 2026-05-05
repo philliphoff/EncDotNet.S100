@@ -69,6 +69,29 @@ S-127, S-129, S-411, S-421, and S-57 via S-101). Coverage products
 (S-102, S-104, S-111) report layer-level information in the status bar
 but do not currently produce per-cell pick reports.
 
+### Datasets panel — layer controls
+
+Loaded datasets appear in the **Datasets** panel on the left side of the
+window. Each entry has an inline visibility toggle and **up / down**
+buttons that reorder the paint stack (the basemap stays at the bottom
+and overlays such as the measure tool stay at the top). Selecting an
+entry reveals a **Properties** sub-panel with two tabs:
+
+- **Dataset** — high-level information (product spec, current
+  timestamp for time-varying datasets, loader status) plus a
+  whole-dataset opacity slider.
+- **Layers** — for products that paint more than one layer (today
+  S-111 currents, which has a colour-band layer and an arrow layer)
+  this tab exposes per-sub-layer visibility toggles and opacity
+  sliders. Single-layer products show a short empty-state message.
+
+![Datasets panel with two S-111 datasets, the second selected and showing the Dataset properties tab](readme/DatasetsPanelScreenshot.png)
+
+Above the list, a small toolbar offers bulk **Show all**, **Hide
+all**, **Isolate selected**, and **Reset opacity** actions. All
+controls feed Mapsui's per-layer `Enabled` / `Opacity` so the changes
+are immediate and do not re-run the dataset pipeline.
+
 ### Time-varying datasets — global timeline
 
 S-104 water levels, S-111 surface currents, and S-411 sea-ice
