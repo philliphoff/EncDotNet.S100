@@ -92,6 +92,81 @@
   <data name="Tooltip_RemoveDataset" xml:space="preserve">
     <value>Remove this dataset</value>
   </data>
+  <data name="Tooltip_ToggleDatasetVisibility" xml:space="preserve">
+    <value>Show or hide this dataset on the map</value>
+  </data>
+  <data name="Tooltip_DatasetOpacity" xml:space="preserve">
+    <value>Adjust this dataset's opacity</value>
+  </data>
+  <data name="Tooltip_MoveDatasetUp" xml:space="preserve">
+    <value>Move this dataset up (paints over more layers)</value>
+  </data>
+  <data name="Tooltip_MoveDatasetDown" xml:space="preserve">
+    <value>Move this dataset down (paints behind more layers)</value>
+  </data>
+  <data name="Menu_BringDatasetToFront" xml:space="preserve">
+    <value>Bring to front</value>
+  </data>
+  <data name="Menu_SendDatasetToBack" xml:space="preserve">
+    <value>Send to back</value>
+  </data>
+  <data name="Menu_MoveDatasetUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Menu_MoveDatasetDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="SubLayer_S111_ColorBand" xml:space="preserve">
+    <value>Color band</value>
+  </data>
+  <data name="SubLayer_S111_Arrows" xml:space="preserve">
+    <value>Arrows</value>
+  </data>
+  <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
+    <value>Show or hide this sub-layer</value>
+  </data>
+  <data name="Tooltip_SubLayerOpacity" xml:space="preserve">
+    <value>Adjust this sub-layer's opacity (multiplied with the parent dataset's opacity)</value>
+  </data>
+  <data name="Tooltip_ExpandSubLayers" xml:space="preserve">
+    <value>Show or hide the per-sub-layer controls for this dataset</value>
+  </data>
+  <data name="Pane_SubLayers" xml:space="preserve">
+    <value>Sub-layers</value>
+  </data>
+  <data name="Tooltip_ShowAllDatasets" xml:space="preserve">
+    <value>Show every dataset</value>
+  </data>
+  <data name="Tooltip_HideAllDatasets" xml:space="preserve">
+    <value>Hide every dataset</value>
+  </data>
+  <data name="Menu_IsolateDataset" xml:space="preserve">
+    <value>Isolate (hide others)</value>
+  </data>
+  <data name="Tooltip_ResetDatasetOpacity" xml:space="preserve">
+    <value>Reset the opacity of every dataset and sub-layer to 100%</value>
+  </data>
+  <data name="Pane_DatasetOpacity" xml:space="preserve">
+    <value>Opacity</value>
+  </data>
+  <data name="Pane_DatasetSelectPlaceholder" xml:space="preserve">
+    <value>Select a dataset to view its properties.</value>
+  </data>
+  <data name="Pane_DatasetField_Spec" xml:space="preserve">
+    <value>Spec</value>
+  </data>
+  <data name="Pane_DatasetField_Time" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Pane_DatasetTab_Dataset" xml:space="preserve">
+    <value>DATASET</value>
+  </data>
+  <data name="Pane_DatasetTab_Layers" xml:space="preserve">
+    <value>LAYERS</value>
+  </data>
+  <data name="Pane_DatasetTab_NoLayers" xml:space="preserve">
+    <value>This dataset has no separately-controllable layers.</value>
+  </data>
   <data name="Tooltip_TimelineSlider" xml:space="preserve">
     <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>

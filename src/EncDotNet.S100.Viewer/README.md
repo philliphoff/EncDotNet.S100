@@ -3,6 +3,31 @@
 Cross-platform desktop viewer for IHO S-100 nautical chart data,
 built on Avalonia 11 + Mapsui 5.
 
+## Datasets panel — layer controls
+
+Loaded datasets appear in the **Datasets** panel on the left. Each
+entry exposes an inline visibility toggle and **up / down** buttons
+to reorder the paint stack; the basemap stays pinned to the bottom
+and map overlays (e.g. the measure tool) stay pinned to the top.
+
+Selecting an entry reveals a **Properties** sub-panel with two
+tabs:
+
+- **Dataset** — read-only metadata (product spec, current timestamp
+  for time-varying datasets, loader status) plus a whole-dataset
+  opacity slider.
+- **Layers** — for multi-layer products (today S-111 currents,
+  which paints a colour band and an arrow layer) this tab lists
+  each sub-layer with its own visibility toggle and opacity slider.
+  Single-layer products show a short empty-state message instead.
+
+Above the list, a small toolbar offers **Show all**, **Hide all**,
+**Isolate selected**, and **Reset opacity** bulk actions.
+
+All visibility / opacity / order changes drive Mapsui's per-layer
+`Enabled`, `Opacity`, and stack position directly — they apply
+immediately and do not re-run the dataset pipeline.
+
 ## Time-varying datasets and the global time slider
 
 Three product specifications carry a time dimension:

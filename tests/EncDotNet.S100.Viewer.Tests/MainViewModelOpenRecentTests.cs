@@ -57,6 +57,7 @@ public class MainViewModelOpenRecentTests : IDisposable
         public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
+        public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
     }
 
     private MainViewModel CreateViewModel(

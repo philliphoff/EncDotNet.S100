@@ -7,5 +7,34 @@
 
     <Application.Styles>
         <themes:ShadTheme />
+
+        <!--
+          App-wide Slider accent colour. ShadUI's Slider template sets
+          PART_DecreaseButton.Background and Thumb.Background as local
+          values inside the ControlTemplate, which sit at Avalonia's
+          "Template" binding priority. A plain Style selector targeting
+          a template part runs at "Style" priority (lower) and so loses
+          to the template-local value. A Style with a pseudo-class
+          qualifier runs at "StyleTrigger" priority (higher), which
+          wins. The :horizontal / :vertical qualifiers below are always
+          true for their respective orientations and are therefore the
+          minimal change needed to bump every state (idle, pointerover,
+          pressed) up to StyleTrigger priority. See:
+          https://github.com/AvaloniaUI/Avalonia/blob/master/src/Avalonia.Base/Data/BindingPriority.cs
+        -->
+        <Style Selector="Slider:horizontal /template/ RepeatButton#PART_DecreaseButton">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider:vertical /template/ RepeatButton#PART_DecreaseButton">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider:horizontal /template/ Thumb">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Slider:vertical /template/ Thumb">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
     </Application.Styles>
 </Application>
