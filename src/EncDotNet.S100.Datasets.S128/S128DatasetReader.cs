@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -44,6 +45,8 @@ internal static class S128DatasetReader
 
     public static S128Dataset Read(Stream stream)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-128");
         var doc = XDocument.Load(stream);
         var root = doc.Root
             ?? throw new InvalidOperationException("S-128 GML document has no root element.");

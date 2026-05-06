@@ -1,13 +1,16 @@
 using System;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer;
 
@@ -48,6 +51,39 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        // The viewer uses a plain ServiceCollection (no generic IHost),
+        // so the IHostedService registered by AddOpenTelemetry() never
+        // runs — meaning the TracerProvider / MeterProvider would
+        // otherwise stay un-built and no ActivityListener / MeterListener
+        // would ever subscribe. Resolving them here forces construction
+        // and wires up the OTel pipeline before any instrumented code
+        // runs (dataset open, pipeline process, render, etc.).
+        _ = s_services.GetService(typeof(OpenTelemetry.Trace.TracerProvider));
+        _ = s_services.GetService(typeof(OpenTelemetry.Metrics.MeterProvider));
+
+        // Hook the logger factory into the static BeginCommand path so
+        // each viewer command also emits a structured log entry.
+        ViewerObservability.AttachLoggerFactory(
+            s_services.GetRequiredService<ILoggerFactory>());
+
+        // Emit a startup span + log so the viewer always shows up in
+        // a connected OpenTelemetry collector even before the user
+        // performs any traceable action. Any subscribed exporter
+        // (e.g. the .NET Aspire dashboard launched via the AppHost
+        // project) will pick this up and confirm the OTEL_* wiring.
+        using (var startup = Telemetry.ActivitySource.StartActivity(
+                   "s100.viewer.startup", System.Diagnostics.ActivityKind.Internal))
+        {
+            startup?.SetTag("s100.viewer.version",
+                typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+            var logger = s_services
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("EncDotNet.S100.Viewer");
+            logger.LogInformation(
+                "EncDotNet.S100.Viewer started (version {Version}).",
+                typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+        }
+
         // Wire the S-128 catalog source into the aggregator. Done here (and
         // not in MainWindow) so the registration is independent of the view.
         s_services.GetRequiredService<DatasetCatalogAggregator>()
@@ -64,6 +100,9 @@ public partial class App : Application
     private static IServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
+
+        // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
+        services.AddS100Observability();
 
         // Persisted user settings
         services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());

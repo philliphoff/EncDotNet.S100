@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
+using EncDotNet.S100.Diagnostics;
+using EncDotNet.S100.Scripting.MoonSharp.Diagnostics;
 using MoonSharp.Interpreter;
 using MoonSharp.Interpreter.Loaders;
 
@@ -61,9 +64,30 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         if (fn.IsNil())
             throw new InvalidOperationException($"Lua global '{functionName}' is nil or not defined.");
 
-        var luaArgs = args.Select(MarshalToLua).ToArray();
-        var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
-        return MarshalFromLua(result);
+        // Per-call activities are gated by Source listening — when the host
+        // does not subscribe (the common case) StartActivity returns null and
+        // there is no overhead. Counter / histogram are similarly gated.
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.rule.invoke");
+        activity?.SetTag(TelemetryTags.LuaRule, functionName);
+        var start = Stopwatch.GetTimestamp();
+        var ruleTag = new KeyValuePair<string, object?>(TelemetryTags.LuaRule, functionName);
+        try
+        {
+            var luaArgs = args.Select(MarshalToLua).ToArray();
+            var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
+            Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "ok"));
+            return MarshalFromLua(result);
+        }
+        catch
+        {
+            Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "error"));
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            Telemetry.InvokeDuration.Record(GetElapsedMs(start), ruleTag);
+        }
     }
 
     /// <inheritdoc />
@@ -76,16 +100,38 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         if (fn.IsNil())
             throw new InvalidOperationException($"Lua global '{functionName}' is nil or not defined.");
 
-        var luaArgs = args.Select(MarshalToLua).ToArray();
-        var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
-
-        if (result.Type == DataType.Tuple)
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.rule.invoke");
+        activity?.SetTag(TelemetryTags.LuaRule, functionName);
+        var start = Stopwatch.GetTimestamp();
+        var ruleTag = new KeyValuePair<string, object?>(TelemetryTags.LuaRule, functionName);
+        try
         {
-            return result.Tuple.Select(MarshalFromLua).ToArray();
-        }
+            var luaArgs = args.Select(MarshalToLua).ToArray();
+            var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
 
-        return [MarshalFromLua(result)];
+            Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "ok"));
+
+            if (result.Type == DataType.Tuple)
+            {
+                return result.Tuple.Select(MarshalFromLua).ToArray();
+            }
+
+            return [MarshalFromLua(result)];
+        }
+        catch
+        {
+            Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "error"));
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            Telemetry.InvokeDuration.Record(GetElapsedMs(start), ruleTag);
+        }
     }
+
+    private static double GetElapsedMs(long startTimestamp) =>
+        (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
 
     /// <inheritdoc />
     public void Dispose()

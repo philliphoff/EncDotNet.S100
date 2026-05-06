@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.ExchangeSets.Diagnostics;
 
 namespace EncDotNet.S100.ExchangeSets;
 
@@ -13,12 +14,15 @@ public static class ExchangeCatalogueReader
 
     public static ExchangeCatalogue Read(Stream stream)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
         var doc = XDocument.Load(stream);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
     public static ExchangeCatalogue Read(string path)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.exchangeset.parse");
+        activity?.SetTag("s100.exchangeset.path", path);
         var doc = XDocument.Load(path);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }

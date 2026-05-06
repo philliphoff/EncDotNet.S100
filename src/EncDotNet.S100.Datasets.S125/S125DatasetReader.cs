@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using S100Diag = EncDotNet.S100.Datasets.S125.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S125;
 
@@ -63,6 +64,8 @@ internal static class S125DatasetReader
 
     public static S125Dataset Read(Stream stream)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-125");
         // Tolerate leading whitespace/BOM before the XML declaration.
         using var reader = new StreamReader(stream);
         var xml = reader.ReadToEnd().TrimStart();
