@@ -51,24 +51,25 @@
                  Padding="0">
             <ListBox.Styles>
                 <!--
-                    Match DatasetsView / CatalogPanelView: rows fill the
-                    panel width (HorizontalContentAlignment=Stretch),
-                    selection paints the accent across the whole row,
-                    and the default Fluent ListBoxItem checkmark is
-                    suppressed by overriding the
-                    ListBoxItem:selected/pointerover backgrounds via
-                    /template/ Border#PART_Container.
+                    ShadUI's ListBoxItem template (Controls/ListBox/
+                    ListBoxItem.axaml) layers three template borders —
+                    BaseBackground, HoverBackground, SelectionBackground —
+                    plus a PathIcon#CheckSelected that is shown on
+                    :selected. Override SelectionBackground to paint the
+                    configured accent across the whole row, and hide the
+                    check icon entirely so selected rows read as a solid
+                    coloured strip.
                 -->
                 <Style Selector="ListBoxItem">
                     <Setter Property="Padding" Value="12,6" />
                     <Setter Property="Margin" Value="0" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 </Style>
-                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
-                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-                </Style>
-                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                <Style Selector="ListBoxItem:selected /template/ Border#SelectionBackground">
                     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ PathIcon#CheckSelected">
+                    <Setter Property="IsVisible" Value="False" />
                 </Style>
                 <Style Selector="ListBoxItem:selected TextBlock">
                     <Setter Property="Foreground" Value="White" />
