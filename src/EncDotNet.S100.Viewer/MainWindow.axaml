@@ -521,6 +521,38 @@
                                   VerticalScrollBarVisibility="Auto"
                                   Padding="12,4,12,12">
                         <StackPanel Spacing="10" DataContext="{Binding PickReport}">
+                            <!-- Hit list (visible only when more than one feature is at this point) -->
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="0,0,0,8"
+                                    IsVisible="{Binding HasMultipleHits}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7"
+                                               Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
+                                    <ListBox ItemsSource="{Binding Hits}"
+                                             SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             Padding="0"
+                                             MaxHeight="180">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PickHit">
+                                                <TextBlock FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                                                    <Run Text="{Binding DisplayLabel}" />
+                                                    <Run Text=" — " FontWeight="Light" />
+                                                    <Run Text="{Binding FeatureRef}" FontStyle="Italic" />
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Header block: feature type + identity -->
                             <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding FeatureType}"

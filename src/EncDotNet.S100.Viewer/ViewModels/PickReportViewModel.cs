@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -14,10 +13,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// and attribute list.
 /// </summary>
 /// <remarks>
-/// As of milestone 1 of the pick roadmap, attribute rows carry FC-resolved
-/// names and (where applicable) decoded enumeration labels via
-/// <see cref="PickAttribute"/>. Multi-feature picks and xlink:href
-/// navigation are deferred to follow-up milestones.
+/// Milestone 1 introduced FC-resolved attribute decoding; milestone 2 adds
+/// multi-feature picks: <see cref="Hits"/> carries every overlapping feature
+/// at the click point, <see cref="SelectedHit"/> drives the detail view, and
+/// <see cref="HasMultipleHits"/> gates the hit-list UI. Picks with a single
+/// hit behave exactly like before (hit-list hidden).
 /// </remarks>
 internal sealed class PickReportViewModel : ViewModelBase
 {
@@ -27,6 +27,7 @@ internal sealed class PickReportViewModel : ViewModelBase
     private string? _datasetFileName;
     private string? _productSpec;
     private bool _hasPick;
+    private PickHit? _selectedHit;
 
     public PickReportViewModel()
     {
@@ -76,6 +77,36 @@ internal sealed class PickReportViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Ordered list of every feature the most recent pick gesture hit. The
+    /// first entry is selected by default (matching the legacy single-hit
+    /// behaviour); when <see cref="HasMultipleHits"/> is true the panel
+    /// renders a selectable list above the detail view.
+    /// </summary>
+    public ObservableCollection<PickHit> Hits { get; } = new();
+
+    /// <summary>
+    /// The hit currently shown in the detail view. Two-way bound to the
+    /// hit-list selection in the panel. Setting this property updates
+    /// <see cref="FeatureType"/>, <see cref="FeatureRef"/>,
+    /// <see cref="Attributes"/>, etc., to match the new selection.
+    /// </summary>
+    public PickHit? SelectedHit
+    {
+        get => _selectedHit;
+        set
+        {
+            if (ReferenceEquals(_selectedHit, value))
+                return;
+            _selectedHit = value;
+            OnPropertyChanged();
+            ApplyHitToDetailFields(value);
+        }
+    }
+
+    /// <summary>True when more than one feature was hit at the pick location.</summary>
+    public bool HasMultipleHits => Hits.Count > 1;
+
+    /// <summary>
     /// Attribute rows for the picked feature, decoded against the dataset's
     /// Feature Catalogue when one is available. Complex attributes nest their
     /// sub-rows via <see cref="PickAttribute.Children"/>; the panel renders
@@ -90,7 +121,36 @@ internal sealed class PickReportViewModel : ViewModelBase
     public ICommand ClearCommand { get; }
 
     /// <summary>
-    /// Replaces the current pick with the supplied feature.
+    /// Replaces the current pick with the supplied list of hits. The first
+    /// hit is selected by default. An empty list is equivalent to
+    /// <see cref="Clear"/>.
+    /// </summary>
+    public void SetPicks(IReadOnlyList<PickHit> hits)
+    {
+        ArgumentNullException.ThrowIfNull(hits);
+
+        Hits.Clear();
+        foreach (var hit in hits)
+            Hits.Add(hit);
+
+        if (hits.Count == 0)
+        {
+            Clear();
+            return;
+        }
+
+        // Setting SelectedHit propagates the values into the detail fields.
+        // Order matters: HasPick and HasMultipleHits must be observable
+        // before consumers react to SelectedHit changes.
+        HasPick = true;
+        OnPropertyChanged(nameof(HasMultipleHits));
+        SelectedHit = hits[0];
+    }
+
+    /// <summary>
+    /// Convenience overload that wraps a single-feature pick into the
+    /// multi-hit shape. Preserved for callers that haven't migrated to
+    /// <see cref="SetPicks"/>.
     /// </summary>
     public void SetPick(
         string featureType,
@@ -104,23 +164,33 @@ internal sealed class PickReportViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(featureRef);
         ArgumentNullException.ThrowIfNull(attributes);
 
-        FeatureType = featureType;
-        FeatureTypeName = featureTypeName;
-        FeatureRef = featureRef;
-        DatasetFileName = datasetFileName;
-        ProductSpec = productSpec;
-
-        Attributes.Clear();
-        foreach (var attr in attributes)
-            Attributes.Add(attr);
-
-        HasPick = true;
-        OnPropertyChanged(nameof(HasAttributes));
+        SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = featureType,
+                FeatureTypeName = featureTypeName,
+                FeatureRef = featureRef,
+                DatasetFileName = datasetFileName,
+                ProductSpec = productSpec,
+                Attributes = attributes,
+            },
+        });
     }
 
     /// <summary>Clears all pick state and sets <see cref="HasPick"/> to false.</summary>
     public void Clear()
     {
+        Hits.Clear();
+        // SelectedHit setter rejects identical references; clear the backing
+        // field directly so we always raise PropertyChanged when something
+        // was selected.
+        if (_selectedHit is not null)
+        {
+            _selectedHit = null;
+            OnPropertyChanged(nameof(SelectedHit));
+        }
+
         FeatureType = null;
         FeatureTypeName = null;
         FeatureRef = null;
@@ -128,6 +198,33 @@ internal sealed class PickReportViewModel : ViewModelBase
         ProductSpec = null;
         Attributes.Clear();
         HasPick = false;
+        OnPropertyChanged(nameof(HasAttributes));
+        OnPropertyChanged(nameof(HasMultipleHits));
+    }
+
+    private void ApplyHitToDetailFields(PickHit? hit)
+    {
+        if (hit is null)
+        {
+            FeatureType = null;
+            FeatureTypeName = null;
+            FeatureRef = null;
+            DatasetFileName = null;
+            ProductSpec = null;
+            Attributes.Clear();
+            OnPropertyChanged(nameof(HasAttributes));
+            return;
+        }
+
+        FeatureType = hit.FeatureType;
+        FeatureTypeName = hit.FeatureTypeName;
+        FeatureRef = hit.FeatureRef;
+        DatasetFileName = hit.DatasetFileName;
+        ProductSpec = hit.ProductSpec;
+
+        Attributes.Clear();
+        foreach (var attr in hit.Attributes)
+            Attributes.Add(attr);
         OnPropertyChanged(nameof(HasAttributes));
     }
 }

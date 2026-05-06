@@ -120,4 +120,125 @@ public class PickReportViewModelTests
 
         Assert.Equal(2, changed.Count);
     }
+
+    private static PickHit Hit(string type, string typeName, string id, params PickAttribute[] attrs) =>
+        new()
+        {
+            FeatureType = type,
+            FeatureTypeName = typeName,
+            FeatureRef = id,
+            DatasetFileName = "ds.gml",
+            ProductSpec = "S-101",
+            Attributes = attrs,
+        };
+
+    [Fact]
+    public void SetPicks_MultipleHits_PopulatesAndSelectsFirst()
+    {
+        var vm = new PickReportViewModel();
+
+        var hits = new[]
+        {
+            Hit("DepthArea", "Depth Area", "1", Leaf("DRVAL1", "10")),
+            Hit("LandArea", "Land Area", "2", Leaf("CATLAR", "1")),
+            Hit("BuoyLateral", "Lateral Buoy", "3"),
+        };
+
+        vm.SetPicks(hits);
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasMultipleHits);
+        Assert.Equal(3, vm.Hits.Count);
+        Assert.Same(hits[0], vm.SelectedHit);
+        Assert.Equal("DepthArea", vm.FeatureType);
+        Assert.Equal("Depth Area", vm.FeatureTypeName);
+        Assert.Equal("1", vm.FeatureRef);
+        Assert.Single(vm.Attributes);
+    }
+
+    [Fact]
+    public void SetPicks_SingleHit_HasMultipleHitsFalse()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { Hit("DepthArea", "Depth Area", "1") });
+
+        Assert.True(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Single(vm.Hits);
+    }
+
+    [Fact]
+    public void SetPicks_EmptyList_ClearsPanel()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[] { Hit("X", null!, "1") });
+        Assert.True(vm.HasPick);
+
+        vm.SetPicks(System.Array.Empty<PickHit>());
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Empty(vm.Hits);
+        Assert.Null(vm.SelectedHit);
+    }
+
+    [Fact]
+    public void SelectedHit_Change_UpdatesDetailFields()
+    {
+        var vm = new PickReportViewModel();
+        var hits = new[]
+        {
+            Hit("DepthArea", "Depth Area", "1", Leaf("DRVAL1", "10")),
+            Hit("LandArea", "Land Area", "2", Leaf("CATLAR", "1"), Leaf("OBJNAM", "Foo")),
+        };
+        vm.SetPicks(hits);
+
+        vm.SelectedHit = hits[1];
+
+        Assert.Equal("LandArea", vm.FeatureType);
+        Assert.Equal("Land Area", vm.FeatureTypeName);
+        Assert.Equal("2", vm.FeatureRef);
+        Assert.Equal(2, vm.Attributes.Count);
+        Assert.Equal("CATLAR", vm.Attributes[0].Code);
+        Assert.True(vm.HasAttributes);
+    }
+
+    [Fact]
+    public void Clear_AfterMultiHit_ResetsHitListAndSelection()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            Hit("A", null!, "1"),
+            Hit("B", null!, "2"),
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Empty(vm.Hits);
+        Assert.Null(vm.SelectedHit);
+    }
+
+    [Fact]
+    public void HitDisplayLabel_PrefersFeatureTypeName_FallsBackToCode()
+    {
+        var withName = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureTypeName = "Depth Area",
+            FeatureRef = "1",
+        };
+        var withoutName = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureTypeName = null,
+            FeatureRef = "1",
+        };
+
+        Assert.Equal("Depth Area", withName.DisplayLabel);
+        Assert.Equal("DepthArea", withoutName.DisplayLabel);
+    }
 }

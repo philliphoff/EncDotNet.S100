@@ -297,6 +297,17 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Pick_NoAttributes" xml:space="preserve">
     <value>(no attributes)</value>
   </data>
+  <data name="Pick_HitListHeader" xml:space="preserve">
+    <value>{0} FEATURES AT THIS POINT</value>
+    <comment>Header above the multi-hit list in the Object Information panel; {0} is the hit count.</comment>
+  </data>
+  <data name="Pick_HitListItemFormat" xml:space="preserve">
+    <value>{0} — {1}</value>
+    <comment>Single hit-list row format: feature type name (or code) followed by its identifier.</comment>
+  </data>
+  <data name="Tooltip_SelectHit" xml:space="preserve">
+    <value>Show this feature's details</value>
+  </data>
 
   <!-- Settings -->
   <data name="Settings_Heading" xml:space="preserve">
@@ -382,6 +393,10 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Status_FeatureSummary" xml:space="preserve">
     <value>{0} [{1}]</value>
+  </data>
+  <data name="Status_FeatureSummaryWithMore" xml:space="preserve">
+    <value>{0} (+{1} more)</value>
+    <comment>Status text for a multi-hit pick: {0} is the primary feature summary, {1} is the count of additional features at the same point.</comment>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
