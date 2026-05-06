@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Datasets.S104;
@@ -97,4 +98,76 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    /// <summary>
+    /// Samples the water-level grid at the supplied geographic
+    /// position and time. <paramref name="time"/> is matched to the
+    /// nearest available time step (see
+    /// <see cref="S104CoverageSource.SelectTime"/>); when <c>null</c>
+    /// the first available step is used.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="S104.WaterLevelValue.Trend"/> is decoded against the
+    /// S-104 Edition 2.0.0 trend enumeration (0 nodata, 1 decreasing,
+    /// 2 increasing, 3 steady).
+    /// </remarks>
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
+    {
+        if (_source.AvailableTimes.Count == 0)
+            return null;
+
+        var selectedTime = time ?? _source.AvailableTimes[0];
+        _source.SelectTime(selectedTime);
+
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        var height = sample.Values.TryGetValue("waterLevelHeight", out var h) ? h : sample.NoDataValue;
+        var trend = sample.Values.TryGetValue("waterLevelTrend", out var t) ? t : 0f;
+
+        var attrs = new List<PickAttribute>
+        {
+            new()
+            {
+                Code = "waterLevelHeight",
+                Name = "Water Level Height",
+                RawValue = height == sample.NoDataValue
+                    ? "NoData"
+                    : height.ToString("0.##########", CultureInfo.InvariantCulture),
+                DisplayValue = height == sample.NoDataValue
+                    ? "—"
+                    : $"{height.ToString("0.##", CultureInfo.InvariantCulture)} m",
+            },
+            new()
+            {
+                Code = "waterLevelTrend",
+                Name = "Water Level Trend",
+                RawValue = ((int)trend).ToString(CultureInfo.InvariantCulture),
+                DisplayValue = DecodeTrend((int)trend),
+            },
+            new()
+            {
+                Code = "timePoint",
+                Name = "Time",
+                RawValue = selectedTime.ToString("u", CultureInfo.InvariantCulture),
+            },
+        };
+
+        return new FeatureInfo
+        {
+            FeatureRef = $"({sample.Row},{sample.Col})",
+            FeatureType = "WaterLevel",
+            FeatureTypeName = "Water Level",
+            Attributes = attrs,
+        };
+    }
+
+    private static string DecodeTrend(int code) => code switch
+    {
+        1 => "Decreasing",
+        2 => "Increasing",
+        3 => "Steady",
+        _ => "Unknown",
+    };
 }

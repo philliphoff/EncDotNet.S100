@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
@@ -80,4 +83,56 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    /// <summary>
+    /// Samples the bathymetric surface at the supplied geographic
+    /// position. Returns a synthetic feature carrying depth and
+    /// uncertainty pick attributes; the <paramref name="time"/> argument
+    /// is ignored because S-102 surfaces are time-invariant.
+    /// </summary>
+    /// <remarks>
+    /// NoData cells (S-100 Part 10c §11; S-102 sentinel
+    /// <c>1_000_000f</c>) yield <c>"—"</c> for the affected attribute
+    /// rather than the raw fill value. Out-of-extent clicks return
+    /// <c>null</c>.
+    /// </remarks>
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
+    {
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        var depth = sample.Values.TryGetValue("depth", out var d) ? d : sample.NoDataValue;
+        var uncertainty = sample.Values.TryGetValue("uncertainty", out var u) ? u : sample.NoDataValue;
+        var attrs = new List<PickAttribute>
+        {
+            new()
+            {
+                Code = "depth",
+                Name = "Depth",
+                RawValue = FormatFloat(depth, sample.NoDataValue),
+                DisplayValue = depth == sample.NoDataValue ? "—" : $"{depth.ToString("0.##", CultureInfo.InvariantCulture)} m",
+            },
+            new()
+            {
+                Code = "uncertainty",
+                Name = "Uncertainty",
+                RawValue = FormatFloat(uncertainty, sample.NoDataValue),
+                DisplayValue = uncertainty == sample.NoDataValue ? "—" : $"{uncertainty.ToString("0.##", CultureInfo.InvariantCulture)} m",
+            },
+        };
+
+        return new FeatureInfo
+        {
+            FeatureRef = $"({sample.Row},{sample.Col})",
+            FeatureType = "BathymetryCoverage",
+            FeatureTypeName = "Bathymetry Coverage",
+            Attributes = attrs,
+        };
+    }
+
+    private static string FormatFloat(float value, float noData)
+        => value == noData
+            ? "NoData"
+            : value.ToString("0.##########", CultureInfo.InvariantCulture);
 }

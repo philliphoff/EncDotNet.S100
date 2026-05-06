@@ -6,6 +6,7 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
+using Mapsui.Projections;
 using Mapsui.Rendering;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -28,13 +29,23 @@ internal sealed class PickService : IPickService
 {
     private readonly IDatasetLoaderService _loader;
     private readonly MainViewModel _viewModel;
+    private readonly GlobalTimeService? _globalTime;
 
     public PickService(IDatasetLoaderService loader, MainViewModel viewModel)
+        : this(loader, viewModel, globalTime: null)
+    {
+    }
+
+    public PickService(
+        IDatasetLoaderService loader,
+        MainViewModel viewModel,
+        GlobalTimeService? globalTime)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(viewModel);
         _loader = loader;
         _viewModel = viewModel;
+        _globalTime = globalTime;
 
         // Bridge the panel's Navigate command back into this service.
         // Failures surface as a transient status-bar message so the user
@@ -61,6 +72,20 @@ internal sealed class PickService : IPickService
         var hits = ResolveHits(mapInfo);
         if (hits.Count == 0)
         {
+            // No vector hit. Try a coverage fallback before clearing —
+            // S-102/S-104/S-111 processors expose
+            // GetCoverageInfo(lat, lon) which samples the underlying
+            // grid and returns a synthesised feature.
+            if (TryCoveragePick(mapInfo, out var coverageHit))
+            {
+                _viewModel.PickReport.SetPicks(new[] { coverageHit });
+                _viewModel.StatusText = string.Format(
+                    Strings.Status_FeatureSummary,
+                    coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
+                    coverageHit.FeatureRef);
+                return;
+            }
+
             // Either an empty-map tap or a hit on a feature whose layer
             // isn't owned by any loaded dataset entry. Either way, hide
             // the panel so it doesn't keep showing stale state.
@@ -192,6 +217,51 @@ internal sealed class PickService : IPickService
 
         owningEntry = null!;
         processor = null!;
+        return false;
+    }
+
+    private bool TryCoveragePick(MapInfo mapInfo, out PickHit hit)
+    {
+        hit = null!;
+        if (mapInfo.WorldPosition is not { } world)
+            return false;
+
+        // SphericalMercator → WGS84. Mapsui returns (lon, lat).
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        var time = _globalTime?.CurrentTime;
+
+        foreach (var (entry, processor) in _loader.Processors)
+        {
+            FeatureInfo? info;
+            try
+            {
+                info = processor.GetCoverageInfo(lat, lon, time);
+            }
+            catch
+            {
+                // Coverage sampling can throw on malformed grids; treat
+                // failures as "no coverage hit here" rather than killing
+                // the click.
+                continue;
+            }
+
+            if (info is null)
+                continue;
+
+            hit = new PickHit
+            {
+                FeatureType = info.FeatureType,
+                FeatureTypeName = info.FeatureTypeName,
+                FeatureRef = info.FeatureRef,
+                DatasetFileName = entry.DisplayName,
+                ProductSpec = processor.ProductSpec,
+                Attributes = info.Attributes,
+                References = info.References,
+                OwningProcessor = processor,
+            };
+            return true;
+        }
+
         return false;
     }
 

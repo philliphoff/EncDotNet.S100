@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -19,6 +20,29 @@ public interface IDatasetProcessor
     /// if the feature cannot be found.
     /// </summary>
     FeatureInfo? GetFeatureInfo(string featureRef);
+
+    /// <summary>
+    /// Samples this dataset at the supplied geographic position and
+    /// returns a synthetic <see cref="FeatureInfo"/> describing the
+    /// underlying coverage value(s) — used by the viewer to provide a
+    /// pick experience on raster / coverage products (S-102, S-104,
+    /// S-111). Vector products do not implement this method and the
+    /// default implementation returns <c>null</c>.
+    /// </summary>
+    /// <param name="latitude">Click position latitude in WGS84 degrees.</param>
+    /// <param name="longitude">Click position longitude in WGS84 degrees.</param>
+    /// <param name="time">
+    /// The selected time step for time-aware coverages (S-104, S-111);
+    /// ignored by static coverages (S-102). When <c>null</c> the
+    /// implementation chooses the dataset's first available time step.
+    /// </param>
+    /// <returns>
+    /// A <see cref="FeatureInfo"/> whose <see cref="FeatureInfo.Attributes"/>
+    /// carry the sampled coverage values, or <c>null</c> if the click
+    /// falls outside the dataset extent or this processor does not
+    /// expose coverage data.
+    /// </returns>
+    FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time) => null;
 
     /// <summary>
     /// Enumerates a lightweight summary of every feature exposed by this
