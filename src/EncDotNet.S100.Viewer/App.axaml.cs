@@ -61,6 +61,11 @@ public partial class App : Application
         _ = s_services.GetService(typeof(OpenTelemetry.Trace.TracerProvider));
         _ = s_services.GetService(typeof(OpenTelemetry.Metrics.MeterProvider));
 
+        // Hook the logger factory into the static BeginCommand path so
+        // each viewer command also emits a structured log entry.
+        ViewerObservability.AttachLoggerFactory(
+            s_services.GetRequiredService<ILoggerFactory>());
+
         // Emit a startup span + log so the viewer always shows up in
         // a connected OpenTelemetry collector even before the user
         // performs any traceable action. Any subscribed exporter
