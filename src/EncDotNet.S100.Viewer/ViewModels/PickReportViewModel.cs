@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -13,15 +14,15 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// and attribute list.
 /// </summary>
 /// <remarks>
-/// This is a deliberately minimal ECDIS-style "pick report": it shows raw
-/// attribute codes and values with no Feature-Catalogue-driven label or
-/// enumerant resolution, and it tracks a single (nearest) feature at a
-/// time. Multi-feature picks and FC-resolved labels are deferred to
-/// follow-up iterations.
+/// As of milestone 1 of the pick roadmap, attribute rows carry FC-resolved
+/// names and (where applicable) decoded enumeration labels via
+/// <see cref="PickAttribute"/>. Multi-feature picks and xlink:href
+/// navigation are deferred to follow-up milestones.
 /// </remarks>
 internal sealed class PickReportViewModel : ViewModelBase
 {
     private string? _featureType;
+    private string? _featureTypeName;
     private string? _featureRef;
     private string? _datasetFileName;
     private string? _productSpec;
@@ -32,11 +33,18 @@ internal sealed class PickReportViewModel : ViewModelBase
         ClearCommand = new RelayCommand(Clear);
     }
 
-    /// <summary>The picked feature's class/type name (e.g. "DepthArea", "LateralBuoy").</summary>
+    /// <summary>The picked feature's class/type code (e.g. "DepthArea", "LateralBuoy").</summary>
     public string? FeatureType
     {
         get => _featureType;
         private set => SetProperty(ref _featureType, value);
+    }
+
+    /// <summary>FC-resolved human-readable name of the feature type, when available.</summary>
+    public string? FeatureTypeName
+    {
+        get => _featureTypeName;
+        private set => SetProperty(ref _featureTypeName, value);
     }
 
     /// <summary>The picked feature's dataset-specific reference identifier.</summary>
@@ -68,8 +76,10 @@ internal sealed class PickReportViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Attribute key/value pairs for the picked feature, with null/whitespace
-    /// values filtered out. Order matches the source dictionary's enumeration.
+    /// Attribute rows for the picked feature, decoded against the dataset's
+    /// Feature Catalogue when one is available. Complex attributes nest their
+    /// sub-rows via <see cref="PickAttribute.Children"/>; the panel renders
+    /// the collection through a TreeView.
     /// </summary>
     public ObservableCollection<PickAttribute> Attributes { get; } = new();
 
@@ -84,28 +94,25 @@ internal sealed class PickReportViewModel : ViewModelBase
     /// </summary>
     public void SetPick(
         string featureType,
+        string? featureTypeName,
         string featureRef,
         string? datasetFileName,
         string? productSpec,
-        IReadOnlyDictionary<string, string?> attributes)
+        IReadOnlyList<PickAttribute> attributes)
     {
         ArgumentNullException.ThrowIfNull(featureType);
         ArgumentNullException.ThrowIfNull(featureRef);
         ArgumentNullException.ThrowIfNull(attributes);
 
         FeatureType = featureType;
+        FeatureTypeName = featureTypeName;
         FeatureRef = featureRef;
         DatasetFileName = datasetFileName;
         ProductSpec = productSpec;
 
         Attributes.Clear();
-        foreach (var (key, value) in attributes)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                continue;
-
-            Attributes.Add(new PickAttribute(key, value!));
-        }
+        foreach (var attr in attributes)
+            Attributes.Add(attr);
 
         HasPick = true;
         OnPropertyChanged(nameof(HasAttributes));
@@ -115,6 +122,7 @@ internal sealed class PickReportViewModel : ViewModelBase
     public void Clear()
     {
         FeatureType = null;
+        FeatureTypeName = null;
         FeatureRef = null;
         DatasetFileName = null;
         ProductSpec = null;
@@ -123,6 +131,3 @@ internal sealed class PickReportViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasAttributes));
     }
 }
-
-/// <summary>A single attribute row displayed in the pick report.</summary>
-internal sealed record PickAttribute(string Name, string Value);

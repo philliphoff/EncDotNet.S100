@@ -67,10 +67,11 @@ public class PickServiceTests
         // Seed with an active pick so we can verify it gets cleared.
         viewModel.PickReport.SetPick(
             featureType: "DepthArea",
+            featureTypeName: null,
             featureRef: "FRID#1",
             datasetFileName: "test.000",
             productSpec: "S-101",
-            attributes: new Dictionary<string, string?>());
+            attributes: System.Array.Empty<EncDotNet.S100.Datasets.Pipelines.PickAttribute>());
         Assert.True(viewModel.PickReport.HasPick);
 
         var service = new PickService(new StubLoader(), viewModel);

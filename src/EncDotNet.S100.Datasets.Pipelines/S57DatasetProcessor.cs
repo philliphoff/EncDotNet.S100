@@ -27,6 +27,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
+    private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
+    private bool _decoderLoaded;
 
     public string ProductSpec => "S-57";
 
@@ -120,15 +122,23 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         if (!_featureIndex.TryGetValue(featureId, out var feature))
             return null;
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value?.ToString();
+        if (!_decoderLoaded)
+        {
+            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
+            _decoderLoaded = true;
+        }
+
+        var attributes = FeatureInfoBuilder.BuildFlat(
+            feature.Attributes.Select(kv =>
+                new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
+            _decoder);
 
         return new FeatureInfo
         {
             FeatureRef = featureRef,
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
         };
     }
 

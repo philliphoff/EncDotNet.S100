@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Datasets.S125;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -22,17 +23,22 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
 {
     private readonly S125Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
     /// <inheritdoc />
     public string ProductSpec => "S-125";
 
     /// <summary>Initializes a new <see cref="S125DatasetProcessor"/>.</summary>
-    public S125DatasetProcessor(string path, PortrayalCatalogueManager catalogueManager)
+    public S125DatasetProcessor(
+        string path,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
     {
         _fileName = Path.GetFileName(path);
         _provider = catalogueManager.GetProvider("S-125");
         _dataset = S125Dataset.Open(path);
+        _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-125");
     }
 
     /// <inheritdoc />
@@ -96,20 +102,39 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
         if (feature is null)
             return null;
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value;
-        foreach (var complex in feature.ComplexAttributes)
-            foreach (var (key, value) in complex.SubAttributes)
-                attrs[$"{complex.Code}.{key}"] = value;
-        foreach (var infoRef in feature.InformationReferences)
-            attrs[$"{infoRef.Role}.ref"] = infoRef.InformationRef;
+        var attributes = FeatureInfoBuilder.Build(
+            feature.Attributes,
+            feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
+            _decoder);
+
+        // S-125 information bindings (xlink:href to AtoNStatus etc.) — surfaced
+        // as synthetic leaves until milestone 3 promotes them to a first-class
+        // FeatureReference model.
+        if (feature.InformationReferences.Length > 0)
+        {
+            var withRefs = new List<PickAttribute>(attributes);
+            foreach (var infoRef in feature.InformationReferences)
+            {
+                if (string.IsNullOrWhiteSpace(infoRef.InformationRef))
+                    continue;
+                withRefs.Add(new PickAttribute
+                {
+                    Code = $"{infoRef.Role}.ref",
+                    Name = null,
+                    RawValue = infoRef.InformationRef,
+                    DisplayValue = null,
+                    Children = [],
+                });
+            }
+            attributes = withRefs;
+        }
 
         return new FeatureInfo
         {
             FeatureRef = featureRef,
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
         };
     }
 

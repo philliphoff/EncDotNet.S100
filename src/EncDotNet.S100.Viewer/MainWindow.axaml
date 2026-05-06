@@ -4,6 +4,7 @@
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+        xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
         xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
@@ -546,34 +547,37 @@
                                                FontWeight="Normal"
                                                LetterSpacing="1"
                                                Opacity="0.7" />
-                                    <ItemsControl ItemsSource="{Binding Attributes}"
-                                                  Grid.IsSharedSizeScope="True">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:PickAttribute">
+                                    <TreeView ItemsSource="{Binding Attributes}"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              Padding="0">
+                                        <TreeView.ItemTemplate>
+                                            <TreeDataTemplate x:DataType="pp:PickAttribute"
+                                                              ItemsSource="{Binding Children}">
                                                 <Grid Margin="0,2">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" SharedSizeGroup="PickName" />
+                                                        <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="8" />
-                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="PickValue" />
+                                                        <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0"
-                                                               Text="{Binding Name}"
+                                                               Text="{Binding DisplayName}"
                                                                FontSize="12"
                                                                Opacity="0.7"
                                                                TextWrapping="NoWrap"
                                                                TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding Name}" />
+                                                               ToolTip.Tip="{Binding Code}" />
                                                     <TextBlock Grid.Column="2"
-                                                               Text="{Binding Value}"
+                                                               Text="{Binding DisplayText}"
                                                                FontSize="12"
                                                                TextWrapping="NoWrap"
                                                                TextTrimming="CharacterEllipsis"
                                                                MaxWidth="220"
-                                                               ToolTip.Tip="{Binding Value}" />
+                                                               ToolTip.Tip="{Binding RawValue}" />
                                                 </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                            </TreeDataTemplate>
+                                        </TreeView.ItemTemplate>
+                                    </TreeView>
                                     <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
                                                FontSize="12"
                                                FontStyle="Italic"

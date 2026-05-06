@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
@@ -20,16 +22,32 @@ public interface IDatasetProcessor
 }
 
 /// <summary>
-/// Feature information returned by a pick/identify operation.
+/// Feature information returned by a pick / object-info operation.
 /// </summary>
 public sealed class FeatureInfo
 {
     /// <summary>The feature reference string (dataset-specific ID).</summary>
     public required string FeatureRef { get; init; }
 
-    /// <summary>The feature type name (e.g. "DepthArea", "LateralBuoy", "NavwarnPart").</summary>
+    /// <summary>
+    /// The feature type code as it appears in the dataset (typically the
+    /// GML element local name or the feature catalogue code, e.g.
+    /// <c>"DepthArea"</c>, <c>"LateralBuoy"</c>, <c>"NavwarnPart"</c>).
+    /// </summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>Feature attribute values keyed by attribute code.</summary>
-    public required IReadOnlyDictionary<string, string?> Attributes { get; init; }
+    /// <summary>
+    /// Human-readable feature type name resolved through the dataset's
+    /// Feature Catalogue, when one is available; otherwise <c>null</c>.
+    /// Viewers should prefer this over <see cref="FeatureType"/> when set.
+    /// </summary>
+    public string? FeatureTypeName { get; init; }
+
+    /// <summary>
+    /// Feature attributes, optionally decoded against the dataset's
+    /// Feature Catalogue (see <see cref="PickAttribute"/>). Complex
+    /// attributes nest their sub-attributes via
+    /// <see cref="PickAttribute.Children"/>.
+    /// </summary>
+    public required IReadOnlyList<PickAttribute> Attributes { get; init; }
 }

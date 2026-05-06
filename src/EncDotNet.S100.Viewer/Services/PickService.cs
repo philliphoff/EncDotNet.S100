@@ -62,12 +62,13 @@ internal sealed class PickService : IPickService
 
         _viewModel.PickReport.SetPick(
             featureType: info.FeatureType,
+            featureTypeName: info.FeatureTypeName,
             featureRef: info.FeatureRef,
             datasetFileName: owningEntry.DisplayName,
             productSpec: processor.ProductSpec,
             attributes: info.Attributes);
 
-        _viewModel.StatusText = string.Format(Strings.Status_FeatureSummary, info.FeatureType, info.FeatureRef);
+        _viewModel.StatusText = string.Format(Strings.Status_FeatureSummary, info.FeatureTypeName ?? info.FeatureType, info.FeatureRef);
     }
 
     private static bool Contains<T>(System.Collections.Generic.IReadOnlyList<T> list, T item)
