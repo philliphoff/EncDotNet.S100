@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -9,6 +10,7 @@ using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer;
 
@@ -48,6 +50,24 @@ public partial class App : Application
         };
 
         s_services = ConfigureServices();
+
+        // Emit a startup span + log so the viewer always shows up in
+        // a connected OpenTelemetry collector even before the user
+        // performs any traceable action. Any subscribed exporter
+        // (e.g. the .NET Aspire dashboard launched via the AppHost
+        // project) will pick this up and confirm the OTEL_* wiring.
+        using (var startup = Telemetry.ActivitySource.StartActivity(
+                   "s100.viewer.startup", System.Diagnostics.ActivityKind.Internal))
+        {
+            startup?.SetTag("s100.viewer.version",
+                typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+            var logger = s_services
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("EncDotNet.S100.Viewer");
+            logger.LogInformation(
+                "EncDotNet.S100.Viewer started (version {Version}).",
+                typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+        }
 
         // Wire the S-128 catalog source into the aggregator. Done here (and
         // not in MainWindow) so the registration is independent of the view.
