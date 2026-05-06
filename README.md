@@ -83,12 +83,12 @@ for S-104, current speed + direction for S-111).
 
 ### Feature search
 
-Above the Datasets panel sits a **Search** field that scans every
-loaded dataset for features matching a free-text query (by feature
-type, FC-resolved type name, or `gml:id`). Typing debounces by 250 ms;
-selecting a result opens the corresponding feature in the pick report,
-even when a producer reuses `gml:id`s across distinct features (a
-real-world S-122 quirk).
+A **Search** field above the Datasets panel lets you find any feature
+across every loaded dataset in a single keystroke — type a feature
+class, a human-readable name, or an identifier and pick a result to
+jump straight to it in the Object Information panel. Equally happy
+with a curated single-cell load or a folder full of overlapping
+exchange sets.
 
 ### Datasets panel — layer controls
 
