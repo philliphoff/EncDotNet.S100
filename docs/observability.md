@@ -79,9 +79,31 @@ exporter honours the standard environment variables:
 When no collector is running the OTLP exporter retries silently —
 the viewer keeps working.
 
-### Local Aspire dashboard
+### One-step: the Aspire AppHost (recommended)
 
-The simplest way to view spans + metrics + logs:
+`src/EncDotNet.S100.AppHost` is a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/)
+host project that orchestrates the dashboard and the viewer in a
+single command. It launches the Aspire dashboard, picks free OTLP
+ports, and starts the viewer with `OTEL_EXPORTER_OTLP_ENDPOINT` /
+`OTEL_SERVICE_NAME` / `OTEL_RESOURCE_ATTRIBUTES` already set:
+
+```sh
+dotnet run --project src/EncDotNet.S100.AppHost
+```
+
+The console prints a login URL like
+`http://localhost:15069/login?t=…` — open it to see structured logs,
+traces, and metrics from the running viewer side-by-side. Closing
+either the AppHost console or the viewer window shuts both down.
+
+No Docker required. The AppHost project does not participate in
+central package management — it is a self-contained orchestration
+shim.
+
+### Local Aspire dashboard (Docker, alternative)
+
+If you don't want to run the AppHost, the dashboard can be run
+standalone:
 
 ```sh
 docker run --rm -it -p 18888:18888 -p 4317:4317 \

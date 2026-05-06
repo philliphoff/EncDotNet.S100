@@ -206,9 +206,18 @@ dotnet build
 The libraries are instrumented with `Microsoft.Extensions.Logging`,
 `System.Diagnostics.ActivitySource`, and `System.Diagnostics.Metrics.Meter`,
 and the viewer ships an OpenTelemetry OTLP exporter configured by the
-standard `OTEL_*` environment variables. See
-[`docs/observability.md`](docs/observability.md) for the span tree,
-metrics catalogue, and recipes for Aspire / Jaeger.
+standard `OTEL_*` environment variables. The fastest way to see logs,
+traces, and metrics is the bundled .NET Aspire host:
+
+```sh
+dotnet run --project src/EncDotNet.S100.AppHost
+```
+
+This starts the Aspire dashboard and the viewer in one step — open
+the printed `http://localhost:15069/login?t=…` URL to inspect them.
+See [`docs/observability.md`](docs/observability.md) for the span
+tree, metrics catalogue, and alternative recipes (standalone Aspire
+dashboard, Jaeger).
 
 ## License
 
