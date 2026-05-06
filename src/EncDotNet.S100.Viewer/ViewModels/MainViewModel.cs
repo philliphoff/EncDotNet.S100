@@ -369,12 +369,20 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
         ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
-        ToolCommitCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Commit));
-        ToolBackstepCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Backstep));
+        ToolCommitCommand = new RelayCommand(
+            () => Tools.OnAction(MapToolAction.Commit),
+            () => Tools.ActiveTool != null);
+        ToolBackstepCommand = new RelayCommand(
+            () => Tools.OnAction(MapToolAction.Backstep),
+            () => Tools.ActiveTool != null);
 
         // Mirror the controller's active-tool changes onto the legacy
         // IsPickModeActive flag (kept so existing XAML/cursor wiring
         // continues to function) and the IsMeasureModeActive property.
+        // Also re-evaluate Commit/Backstep CanExecute so that the
+        // window-level Enter/Backspace key bindings only consume those
+        // keys while a tool is actually active — without this guard
+        // typing Backspace in any TextBox is swallowed by the binding.
         Tools.ActiveToolChanged += _ =>
         {
             var newPick = Tools.IsActive(PickTool.ToolId);
@@ -384,6 +392,8 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPickModeActive));
             }
             OnPropertyChanged(nameof(IsMeasureModeActive));
+            ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());

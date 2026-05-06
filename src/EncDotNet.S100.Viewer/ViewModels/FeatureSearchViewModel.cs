@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -19,8 +20,17 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 {
     private const int DefaultResultLimit = 200;
 
+    /// <summary>
+    /// Delay between the user's last keystroke and the search firing.
+    /// 250ms feels responsive while avoiding a fresh search on every
+    /// character (each search is synchronous and rebuilds the result
+    /// list from scratch).
+    /// </summary>
+    private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(250);
+
     private readonly IFeatureSearchService _search;
     private readonly IPickService _pick;
+    private readonly DispatcherTimer? _debounceTimer;
 
     public FeatureSearchViewModel(IFeatureSearchService search, IPickService pick)
     {
@@ -32,21 +42,49 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         Results = new ObservableCollection<FeatureSearchResultItem>();
         OpenResultCommand = new RelayCommand<FeatureSearchResultItem>(OpenResult, item => item is not null);
         ClearQueryCommand = new RelayCommand(() => Query = string.Empty);
+
+        // Debounce only when running inside a real Avalonia application
+        // — unit tests don't pump a dispatcher, so we fall back to a
+        // synchronous search on every keystroke (still cheap at v1
+        // scale).
+        if (Avalonia.Application.Current is not null)
+        {
+            _debounceTimer = new DispatcherTimer { Interval = DebounceDelay };
+            _debounceTimer.Tick += (_, _) =>
+            {
+                _debounceTimer.Stop();
+                RefreshResults();
+            };
+        }
     }
 
     private string _query = string.Empty;
     /// <summary>
-    /// Current substring query. Setter triggers a synchronous re-search;
-    /// at v1 scale (~10 k features) the search is fast enough to run on
-    /// the UI thread on every keystroke.
+    /// Current substring query. Setter schedules a debounced re-search
+    /// (~250ms after the last keystroke) so a multi-character query
+    /// only triggers one search. Clearing the query fires immediately
+    /// so the result list disappears as soon as the user empties the
+    /// box.
     /// </summary>
     public string Query
     {
         get => _query;
         set
         {
-            if (SetProperty(ref _query, value ?? string.Empty))
+            if (!SetProperty(ref _query, value ?? string.Empty))
+                return;
+
+            if (_debounceTimer is null || string.IsNullOrEmpty(_query))
+            {
+                _debounceTimer?.Stop();
                 RefreshResults();
+                return;
+            }
+
+            // Restart the timer on every keystroke; only the final
+            // pause triggers RefreshResults.
+            _debounceTimer.Stop();
+            _debounceTimer.Start();
         }
     }
 
