@@ -10,6 +10,11 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.EncDotNet_S100_Viewer>("viewer")
-    .WithEnvironment("OTEL_SERVICE_NAME", "EncDotNet.S100.Viewer");
+    .WithEnvironment("OTEL_SERVICE_NAME", "EncDotNet.S100.Viewer")
+    // Mirror traces / metrics / logs to the viewer's stdout so they
+    // surface in the Aspire dashboard's Console tab. Useful for
+    // verifying the OTLP wiring at a glance — disable by overriding
+    // this env var to "0" if the noise becomes a problem.
+    .WithEnvironment("ENC_DOTNET_OTEL_CONSOLE", "1");
 
 builder.Build().Run();

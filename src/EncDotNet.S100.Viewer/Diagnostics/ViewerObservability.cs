@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -32,6 +33,14 @@ internal static class ViewerObservability
         var serviceVersion = typeof(ViewerObservability).Assembly
             .GetName().Version?.ToString() ?? "0.0.0";
 
+        // Optional opt-in console export — invaluable when diagnosing
+        // "why don't I see anything in the dashboard?". Enabled by
+        // setting ENC_DOTNET_OTEL_CONSOLE=1 (the AppHost project sets
+        // this by default in its launch profiles).
+        var consoleExport = string.Equals(
+            Environment.GetEnvironmentVariable("ENC_DOTNET_OTEL_CONSOLE"),
+            "1", StringComparison.OrdinalIgnoreCase);
+
         services.AddLogging(builder =>
         {
             builder.AddOpenTelemetry(options =>
@@ -43,19 +52,37 @@ internal static class ViewerObservability
                 options.IncludeScopes = true;
                 options.ParseStateValues = true;
                 options.AddOtlpExporter();
+                if (consoleExport)
+                {
+                    options.AddConsoleExporter();
+                }
             });
         });
 
         services.AddOpenTelemetry()
             .ConfigureResource(r => r.AddService(serviceName: serviceName, serviceVersion: serviceVersion))
-            .WithTracing(tracing => tracing
-                .AddSource(SourceWildcard)
-                .AddSource(ServiceName)
-                .AddOtlpExporter())
-            .WithMetrics(metrics => metrics
-                .AddMeter(SourceWildcard)
-                .AddMeter(ServiceName)
-                .AddOtlpExporter());
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddSource(SourceWildcard)
+                    .AddSource(ServiceName)
+                    .AddOtlpExporter();
+                if (consoleExport)
+                {
+                    tracing.AddConsoleExporter();
+                }
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter(SourceWildcard)
+                    .AddMeter(ServiceName)
+                    .AddOtlpExporter();
+                if (consoleExport)
+                {
+                    metrics.AddConsoleExporter();
+                }
+            });
 
         return services;
     }
