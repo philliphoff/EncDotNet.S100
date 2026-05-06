@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -104,7 +105,11 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedResult, value) || value is null)
                 return;
-            _pick.OpenFeatureAt(value.Hit.Processor, value.Hit.Ordinal, value.Hit.DatasetFileName);
+            using var __cmd = ViewerObservability.BeginCommand("search.open");
+            __cmd.SetTag("s100.viewer.product_spec", value.Hit.Processor.ProductSpec);
+            var ok = _pick.OpenFeatureAt(value.Hit.Processor, value.Hit.Ordinal, value.Hit.DatasetFileName);
+            if (!ok)
+                __cmd.SetStatus(false, "feature not found at ordinal");
         }
     }
 
@@ -125,6 +130,8 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
     private void RefreshResults()
     {
+        using var __cmd = ViewerObservability.BeginCommand("search");
+
         // Avoid re-entering the SelectedResult setter (which would
         // re-open the previous selection); clear the field directly
         // and notify so XAML resets.
@@ -138,12 +145,19 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(_query))
         {
             Summary = null;
+            __cmd.SetTag("s100.viewer.search.query_length", 0);
             return;
         }
+
+        __cmd.SetTag("s100.viewer.search.query_length", _query.Length);
 
         var (hits, total) = _search.Search(_query, DefaultResultLimit);
         foreach (var hit in hits)
             Results.Add(FeatureSearchResultItem.From(hit));
+
+        __cmd.SetTag("s100.viewer.search.result_count", hits.Count);
+        __cmd.SetTag("s100.viewer.search.total_matched", total);
+        __cmd.SetTag("s100.viewer.search.truncated", total > hits.Count);
 
         Summary = total switch
         {
@@ -159,7 +173,12 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         if (item is null)
             return;
 
-        _pick.OpenFeatureAt(item.Hit.Processor, item.Hit.Ordinal, item.Hit.DatasetFileName);
+        using var __cmd = ViewerObservability.BeginCommand("search.open");
+        __cmd.SetTag("s100.viewer.product_spec", item.Hit.Processor.ProductSpec);
+
+        var ok = _pick.OpenFeatureAt(item.Hit.Processor, item.Hit.Ordinal, item.Hit.DatasetFileName);
+        if (!ok)
+            __cmd.SetStatus(false, "feature not found at ordinal");
     }
 }
 

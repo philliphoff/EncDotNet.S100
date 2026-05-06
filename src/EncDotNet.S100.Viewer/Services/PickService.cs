@@ -167,15 +167,28 @@ internal sealed class PickService : IPickService
     {
         ArgumentNullException.ThrowIfNull(reference);
 
+        using var __cmd = ViewerObservability.BeginCommand("reference.navigate");
+
         // Resolve the owning processor of the currently selected hit and
         // re-query it for the target ref. Cross-dataset hops are out of
         // scope for milestone 3 — they slot into the search milestone
         // where a global feature snapshot already exists.
         var selected = _pickReport.SelectedHit;
         if (selected?.OwningProcessor is not { } processor)
+        {
+            __cmd.SetStatus(false, "no selected hit owns a processor");
             return false;
+        }
 
-        return OpenFeature(processor, reference.TargetRef, selected.DatasetFileName ?? string.Empty);
+        __cmd.SetTag("s100.viewer.product_spec", processor.ProductSpec);
+        __cmd.SetTag("s100.viewer.reference.role", reference.Role);
+
+        var ok = OpenFeature(processor, reference.TargetRef, selected.DatasetFileName ?? string.Empty);
+        if (!ok)
+        {
+            __cmd.SetStatus(false, "target ref not found");
+        }
+        return ok;
     }
 
     public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName)
