@@ -112,6 +112,19 @@ public sealed class S129DatasetProcessor : IDatasetProcessor
         };
     }
 
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        foreach (var feature in _dataset.Features)
+        {
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
+    }
+
     private List<DrawingInstruction> ApplyAreaFillFallback(IReadOnlyList<DrawingInstruction> instructions)
     {
         var byId = new Dictionary<string, S129Feature>(StringComparer.OrdinalIgnoreCase);

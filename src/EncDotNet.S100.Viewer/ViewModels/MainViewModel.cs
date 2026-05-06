@@ -21,6 +21,7 @@ internal sealed class MainViewModel : ViewModelBase
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
     public CatalogPanelViewModel CatalogPanel { get; }
+    public FeatureSearchViewModel Search { get; }
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
     public TimelineViewModel Timeline { get; }
@@ -43,6 +44,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
                 OnPropertyChanged(nameof(IsDatasetsSelected));
                 OnPropertyChanged(nameof(IsCatalogSelected));
+                OnPropertyChanged(nameof(IsSearchSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
 
                 // Persist the last selected activity (Settings is transient, don't remember it)
@@ -60,6 +62,7 @@ internal sealed class MainViewModel : ViewModelBase
         ActivityKind.PortrayalCatalogues => Strings.Pane_PortrayalCatalogues,
         ActivityKind.Datasets => Strings.Pane_Datasets,
         ActivityKind.Catalog => Strings.Pane_Catalog,
+        ActivityKind.Search => Strings.Pane_Search,
         ActivityKind.Settings => Strings.Pane_Settings,
         _ => string.Empty,
     };
@@ -68,12 +71,14 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
     public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
     public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
+    public bool IsSearchSelected => _selectedActivity == ActivityKind.Search;
     public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
 
     public ICommand SelectFeatureCataloguesCommand { get; }
     public ICommand SelectPortrayalCataloguesCommand { get; }
     public ICommand SelectDatasetsCommand { get; }
     public ICommand SelectCatalogCommand { get; }
+    public ICommand SelectSearchCommand { get; }
     public ICommand SelectSettingsCommand { get; }
     public ICommand TogglePrimarySideBarCommand { get; }
 
@@ -255,6 +260,7 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
         CatalogPanelViewModel catalogPanel,
+        FeatureSearchViewModel search,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
         TimelineViewModel timeline,
@@ -267,6 +273,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(catalogPanel);
+        ArgumentNullException.ThrowIfNull(search);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(timeline);
@@ -286,6 +293,7 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
         CatalogPanel = catalogPanel;
+        Search = search;
         Settings = settingsViewModel;
         PickReport = pickReport;
         Timeline = timeline;
@@ -300,6 +308,7 @@ internal sealed class MainViewModel : ViewModelBase
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
         SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
+        SelectSearchCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Search);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
@@ -325,6 +334,7 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
             OnPropertyChanged(nameof(IsDatasetsSelected));
             OnPropertyChanged(nameof(IsCatalogSelected));
+            OnPropertyChanged(nameof(IsSearchSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
         });
 

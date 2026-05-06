@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
+             x:DataType="vm:FeatureSearchViewModel">
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Query box -->
+        <Border DockPanel.Dock="Top" Padding="12,8,12,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="SearchBox"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Watermark="{x:Static loc:Strings.Search_Placeholder}"
+                         VerticalContentAlignment="Center"
+                         Padding="8,4" />
+                <Button Grid.Column="1"
+                        Margin="4,0,0,0"
+                        Padding="8,4"
+                        Command="{Binding ClearQueryCommand}"
+                        IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearSearch}">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Footer: result count / truncation / no-results -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="12,4,12,8"
+                IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Summary}"
+                       FontSize="11"
+                       Opacity="0.7"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Results list -->
+        <ListBox ItemsSource="{Binding Results}"
+                 SelectionMode="Single"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 Padding="0">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FeatureSearchResultItem">
+                    <Button Classes="ResultRow"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Padding="12,6"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}"
+                            Command="{Binding $parent[ListBox].((vm:FeatureSearchViewModel)DataContext).OpenResultCommand}"
+                            CommandParameter="{Binding}">
+                        <StackPanel Orientation="Vertical" Spacing="2">
+                            <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding FeatureRef}"
+                                       FontSize="11"
+                                       Opacity="0.75" />
+                            <TextBlock FontSize="10"
+                                       Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding ProductSpec}" />
+                                <Run Text="·" />
+                                <Run Text="{Binding DatasetFileName}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+
+</UserControl>

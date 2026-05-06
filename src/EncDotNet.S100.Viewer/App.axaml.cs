@@ -86,6 +86,7 @@ public partial class App : Application
         services.AddSingleton<GlobalTimeService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
 
         // View models
@@ -93,6 +94,7 @@ public partial class App : Application
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton<CatalogPanelViewModel>();
+        services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();

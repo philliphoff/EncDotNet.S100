@@ -19,6 +19,40 @@ public interface IDatasetProcessor
     /// if the feature cannot be found.
     /// </summary>
     FeatureInfo? GetFeatureInfo(string featureRef);
+
+    /// <summary>
+    /// Enumerates a lightweight summary of every feature exposed by this
+    /// processor — used to seed the viewer's feature-search index without
+    /// forcing a full <see cref="GetFeatureInfo"/> call per feature.
+    /// </summary>
+    /// <remarks>
+    /// Coverage products (S-102, S-104, S-111) and any processor that does
+    /// not expose discrete features should leave this returning the
+    /// default empty enumeration.
+    /// </remarks>
+    IEnumerable<FeatureSummary> EnumerateFeatures() => System.Array.Empty<FeatureSummary>();
+}
+
+/// <summary>
+/// Lightweight feature descriptor returned by
+/// <see cref="IDatasetProcessor.EnumerateFeatures"/>.
+/// </summary>
+public sealed class FeatureSummary
+{
+    /// <summary>The feature reference string (dataset-specific ID).</summary>
+    public required string FeatureRef { get; init; }
+
+    /// <summary>
+    /// The feature type code as it appears in the dataset (typically the
+    /// GML element local name or the feature catalogue code).
+    /// </summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// Human-readable feature type name resolved through the dataset's
+    /// Feature Catalogue when available; otherwise <c>null</c>.
+    /// </summary>
+    public string? FeatureTypeName { get; init; }
 }
 
 /// <summary>

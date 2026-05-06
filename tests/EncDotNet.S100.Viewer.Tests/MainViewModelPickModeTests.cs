@@ -57,6 +57,7 @@ public class MainViewModelPickModeTests
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: new DatasetsViewModel(new StubDatasetLoaderService()),
             catalogPanel: new CatalogPanelViewModel(catalogSource),
+            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),

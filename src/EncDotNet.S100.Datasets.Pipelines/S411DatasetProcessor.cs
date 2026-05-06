@@ -140,6 +140,19 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
         };
     }
 
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        foreach (var feature in _dataset.Features)
+        {
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
+    }
+
     private MRect ComputeExtent()
     {
         double minLon = double.MaxValue, minLat = double.MaxValue;

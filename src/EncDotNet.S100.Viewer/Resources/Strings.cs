@@ -44,6 +44,13 @@ internal static class Strings
     public static string Pane_DatasetTab_NoLayers => Get(nameof(Pane_DatasetTab_NoLayers));
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
+    public static string Pane_Search => Get(nameof(Pane_Search));
+
+    // Search
+    public static string Search_Placeholder => Get(nameof(Search_Placeholder));
+    public static string Search_NoResults => Get(nameof(Search_NoResults));
+    public static string Search_ResultsFooter => Get(nameof(Search_ResultsFooter));
+    public static string Search_TruncatedFooter => Get(nameof(Search_TruncatedFooter));
 
     // Tooltips
     public static string Tooltip_ToggleTheme => Get(nameof(Tooltip_ToggleTheme));
@@ -59,6 +66,9 @@ internal static class Strings
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
     public static string Tooltip_SelectHit => Get(nameof(Tooltip_SelectHit));
     public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
+    public static string Tooltip_Search => Get(nameof(Tooltip_Search));
+    public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
+    public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));

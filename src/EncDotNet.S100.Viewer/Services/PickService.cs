@@ -137,7 +137,16 @@ internal sealed class PickService : IPickService
         if (selected?.OwningProcessor is not { } processor)
             return false;
 
-        var info = processor.GetFeatureInfo(reference.TargetRef);
+        return OpenFeature(processor, reference.TargetRef, selected.DatasetFileName ?? string.Empty);
+    }
+
+    public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName)
+    {
+        ArgumentNullException.ThrowIfNull(processor);
+        ArgumentNullException.ThrowIfNull(featureRef);
+        ArgumentNullException.ThrowIfNull(datasetFileName);
+
+        var info = processor.GetFeatureInfo(featureRef);
         if (info is null)
             return false;
 
@@ -148,8 +157,8 @@ internal sealed class PickService : IPickService
                 FeatureType = info.FeatureType,
                 FeatureTypeName = info.FeatureTypeName,
                 FeatureRef = info.FeatureRef,
-                DatasetFileName = selected.DatasetFileName,
-                ProductSpec = selected.ProductSpec,
+                DatasetFileName = datasetFileName,
+                ProductSpec = processor.ProductSpec,
                 Attributes = info.Attributes,
                 References = info.References,
                 OwningProcessor = processor,

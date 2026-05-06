@@ -153,6 +153,27 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         };
     }
 
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        _featureIndex ??= BuildFeatureIndex();
+
+        if (!_decoderLoaded)
+        {
+            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
+            _decoderLoaded = true;
+        }
+
+        foreach (var feature in _featureIndex.Values)
+        {
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
+    }
+
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature> BuildFeatureIndex()
     {
         var vectorSource = new S101VectorSource(_dataset);

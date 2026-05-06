@@ -57,6 +57,7 @@ public class PickServiceTests
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: new DatasetsViewModel(new StubLoader()),
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
+            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),

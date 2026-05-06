@@ -39,6 +39,23 @@
   <data name="Pane_Settings" xml:space="preserve">
     <value>SETTINGS</value>
   </data>
+  <data name="Pane_Search" xml:space="preserve">
+    <value>SEARCH</value>
+  </data>
+
+  <!-- Search panel -->
+  <data name="Search_Placeholder" xml:space="preserve">
+    <value>Search features by ID, type, or dataset…</value>
+  </data>
+  <data name="Search_NoResults" xml:space="preserve">
+    <value>No matching features.</value>
+  </data>
+  <data name="Search_ResultsFooter" xml:space="preserve">
+    <value>{0} matching features.</value>
+  </data>
+  <data name="Search_TruncatedFooter" xml:space="preserve">
+    <value>Showing {0} of {1} matching features.</value>
+  </data>
 
   <!-- Tooltips -->
   <data name="Tooltip_ToggleTheme" xml:space="preserve">
@@ -318,6 +335,15 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Tooltip_FollowReference" xml:space="preserve">
     <value>Show the referenced feature's details</value>
+  </data>
+  <data name="Tooltip_Search" xml:space="preserve">
+    <value>Search Features</value>
+  </data>
+  <data name="Tooltip_ClearSearch" xml:space="preserve">
+    <value>Clear search</value>
+  </data>
+  <data name="Tooltip_OpenSearchResult" xml:space="preserve">
+    <value>Show this feature's details</value>
   </data>
 
   <!-- Settings -->

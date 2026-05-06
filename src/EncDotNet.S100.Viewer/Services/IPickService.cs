@@ -28,4 +28,18 @@ internal interface IPickService
     /// or equivalent).
     /// </summary>
     bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference);
+
+    /// <summary>
+    /// Opens the Object Information panel on a feature owned by the
+    /// supplied processor. Used by feature search to re-display an
+    /// arbitrary feature picked from any loaded dataset (the
+    /// xlink-navigation contract is restricted to the currently selected
+    /// hit's processor; this method generalises that for cross-dataset
+    /// jumps). Returns <c>true</c> when the feature was resolved,
+    /// <c>false</c> when the processor returned <c>null</c>.
+    /// </summary>
+    bool OpenFeature(
+        EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor processor,
+        string featureRef,
+        string datasetFileName);
 }
