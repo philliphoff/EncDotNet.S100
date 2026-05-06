@@ -51,6 +51,16 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        // The viewer uses a plain ServiceCollection (no generic IHost),
+        // so the IHostedService registered by AddOpenTelemetry() never
+        // runs — meaning the TracerProvider / MeterProvider would
+        // otherwise stay un-built and no ActivityListener / MeterListener
+        // would ever subscribe. Resolving them here forces construction
+        // and wires up the OTel pipeline before any instrumented code
+        // runs (dataset open, pipeline process, render, etc.).
+        _ = s_services.GetService(typeof(OpenTelemetry.Trace.TracerProvider));
+        _ = s_services.GetService(typeof(OpenTelemetry.Metrics.MeterProvider));
+
         // Emit a startup span + log so the viewer always shows up in
         // a connected OpenTelemetry collector even before the user
         // performs any traceable action. Any subscribed exporter
