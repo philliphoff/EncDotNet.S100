@@ -44,35 +44,53 @@
 
         <!-- Results list -->
         <ListBox ItemsSource="{Binding Results}"
+                 SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                  SelectionMode="Single"
                  BorderThickness="0"
                  Background="Transparent"
                  Padding="0">
+            <ListBox.Styles>
+                <!--
+                    Match DatasetsView / CatalogPanelView: rows fill the
+                    panel width (HorizontalContentAlignment=Stretch),
+                    selection paints the accent across the whole row,
+                    and the default Fluent ListBoxItem checkmark is
+                    suppressed by overriding the
+                    ListBoxItem:selected/pointerover backgrounds via
+                    /template/ Border#PART_Container.
+                -->
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="12,6" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected TextBlock">
+                    <Setter Property="Foreground" Value="White" />
+                </Style>
+            </ListBox.Styles>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureSearchResultItem">
-                    <Button Classes="ResultRow"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Stretch"
-                            Padding="12,6"
-                            BorderThickness="0"
-                            Background="Transparent"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}"
-                            Command="{Binding $parent[ListBox].((vm:FeatureSearchViewModel)DataContext).OpenResultCommand}"
-                            CommandParameter="{Binding}">
-                        <StackPanel Orientation="Vertical" Spacing="2">
-                            <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding FeatureRef}"
-                                       FontSize="11"
-                                       Opacity="0.75" />
-                            <TextBlock FontSize="10"
-                                       Opacity="0.55"
-                                       TextTrimming="CharacterEllipsis">
-                                <Run Text="{Binding ProductSpec}" />
-                                <Run Text="·" />
-                                <Run Text="{Binding DatasetFileName}" />
-                            </TextBlock>
-                        </StackPanel>
-                    </Button>
+                    <StackPanel Orientation="Vertical"
+                                Spacing="2"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
+                        <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding FeatureRef}"
+                                   FontSize="11"
+                                   Opacity="0.75" />
+                        <TextBlock FontSize="10"
+                                   Opacity="0.55"
+                                   TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding ProductSpec}" />
+                            <Run Text="·" />
+                            <Run Text="{Binding DatasetFileName}" />
+                        </TextBlock>
+                    </StackPanel>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>

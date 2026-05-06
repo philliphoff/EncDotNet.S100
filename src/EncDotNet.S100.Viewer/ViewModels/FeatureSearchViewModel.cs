@@ -90,6 +90,24 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
     public ObservableCollection<FeatureSearchResultItem> Results { get; }
 
+    private FeatureSearchResultItem? _selectedResult;
+    /// <summary>
+    /// Currently-selected row in the results list. Setter routes to
+    /// <see cref="IPickService.OpenFeature"/> so a single click opens
+    /// the feature in the Object Information panel — the panel reads
+    /// like a navigation tree rather than a list of buttons.
+    /// </summary>
+    public FeatureSearchResultItem? SelectedResult
+    {
+        get => _selectedResult;
+        set
+        {
+            if (!SetProperty(ref _selectedResult, value) || value is null)
+                return;
+            _pick.OpenFeature(value.Hit.Processor, value.Hit.FeatureRef, value.Hit.DatasetFileName);
+        }
+    }
+
     private string? _summary;
     /// <summary>
     /// Footer text describing how many results matched (and whether the
@@ -107,6 +125,14 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
     private void RefreshResults()
     {
+        // Avoid re-entering the SelectedResult setter (which would
+        // re-open the previous selection); clear the field directly
+        // and notify so XAML resets.
+        if (_selectedResult is not null)
+        {
+            _selectedResult = null;
+            OnPropertyChanged(nameof(SelectedResult));
+        }
         Results.Clear();
 
         if (string.IsNullOrWhiteSpace(_query))
