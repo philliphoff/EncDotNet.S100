@@ -161,6 +161,7 @@ public class FeatureSearchServiceTests
     {
         private readonly Action<IDatasetProcessor, string, string> _open;
         public RecordingPick(Action<IDatasetProcessor, string, string> open) { _open = open; }
+        public void Attach(EncDotNet.S100.Viewer.ViewModels.MainViewModel viewModel) { }
         public void HandlePick(Mapsui.MapInfo? mapInfo) { }
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName)

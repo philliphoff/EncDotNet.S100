@@ -12,6 +12,15 @@ namespace EncDotNet.S100.Viewer.Services;
 internal interface IPickService
 {
     /// <summary>
+    /// Wires this service to the <see cref="MainViewModel"/> after both
+    /// singletons have been constructed. Breaks a DI cycle (MVM →
+    /// FeatureSearchViewModel → IPickService → MVM): PickService is
+    /// constructed without MVM and the host calls
+    /// <c>Attach(viewModel)</c> once during application startup.
+    /// </summary>
+    void Attach(EncDotNet.S100.Viewer.ViewModels.MainViewModel viewModel);
+
+    /// <summary>
     /// Resolves the supplied hit (or null for an empty-map tap) into a
     /// pick-report update and a status-text message. Safe to call with
     /// null or with hits that don't carry a feature reference.

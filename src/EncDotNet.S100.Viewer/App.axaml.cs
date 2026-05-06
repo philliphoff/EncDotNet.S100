@@ -56,6 +56,12 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
+
+            // Break the MVM ↔ FeatureSearchVM ↔ IPickService DI cycle:
+            // PickService is constructed without MVM, then the host wires
+            // them together once MVM has been instantiated by MainWindow.
+            s_services.GetRequiredService<IPickService>()
+                .Attach(s_services.GetRequiredService<ViewModels.MainViewModel>());
         }
 
         base.OnFrameworkInitializationCompleted();

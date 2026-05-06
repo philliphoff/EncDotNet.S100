@@ -28,44 +28,50 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class PickService : IPickService
 {
     private readonly IDatasetLoaderService _loader;
-    private readonly MainViewModel _viewModel;
     private readonly GlobalTimeService? _globalTime;
+    private MainViewModel? _viewModel;
 
-    public PickService(IDatasetLoaderService loader, MainViewModel viewModel)
-        : this(loader, viewModel, globalTime: null)
+    public PickService(IDatasetLoaderService loader)
+        : this(loader, globalTime: null)
     {
     }
 
-    public PickService(
-        IDatasetLoaderService loader,
-        MainViewModel viewModel,
-        GlobalTimeService? globalTime)
+    public PickService(IDatasetLoaderService loader, GlobalTimeService? globalTime)
     {
         ArgumentNullException.ThrowIfNull(loader);
-        ArgumentNullException.ThrowIfNull(viewModel);
         _loader = loader;
-        _viewModel = viewModel;
         _globalTime = globalTime;
+    }
+
+    /// <inheritdoc />
+    public void Attach(MainViewModel viewModel)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        _viewModel = viewModel;
 
         // Bridge the panel's Navigate command back into this service.
         // Failures surface as a transient status-bar message so the user
         // knows the click registered but the target is missing.
-        _viewModel.PickReport.SetNavigateHandler(reference =>
+        viewModel.PickReport.SetNavigateHandler(reference =>
         {
             if (!NavigateToReference(reference))
             {
-                _viewModel.StatusText = string.Format(
+                viewModel.StatusText = string.Format(
                     Resources.Strings.Status_FeatureRefNotFound,
                     reference.TargetRef);
             }
         });
     }
 
+    private MainViewModel ViewModel
+        => _viewModel ?? throw new InvalidOperationException(
+            "PickService.Attach(MainViewModel) must be called before pick operations.");
+
     public void HandlePick(MapInfo? mapInfo)
     {
         if (mapInfo is null)
         {
-            _viewModel.PickReport.Clear();
+            ViewModel.PickReport.Clear();
             return;
         }
 
@@ -78,8 +84,8 @@ internal sealed class PickService : IPickService
             // grid and returns a synthesised feature.
             if (TryCoveragePick(mapInfo, out var coverageHit))
             {
-                _viewModel.PickReport.SetPicks(new[] { coverageHit });
-                _viewModel.StatusText = string.Format(
+                ViewModel.PickReport.SetPicks(new[] { coverageHit });
+                ViewModel.StatusText = string.Format(
                     Strings.Status_FeatureSummary,
                     coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
                     coverageHit.FeatureRef);
@@ -89,11 +95,11 @@ internal sealed class PickService : IPickService
             // Either an empty-map tap or a hit on a feature whose layer
             // isn't owned by any loaded dataset entry. Either way, hide
             // the panel so it doesn't keep showing stale state.
-            _viewModel.PickReport.Clear();
+            ViewModel.PickReport.Clear();
             return;
         }
 
-        _viewModel.PickReport.SetPicks(hits);
+        ViewModel.PickReport.SetPicks(hits);
 
         // Status text follows the first (selected) hit, with a "+N more"
         // suffix when additional features were resolved.
@@ -102,7 +108,7 @@ internal sealed class PickService : IPickService
             Strings.Status_FeatureSummary,
             first.FeatureTypeName ?? first.FeatureType,
             first.FeatureRef);
-        _viewModel.StatusText = hits.Count > 1
+        ViewModel.StatusText = hits.Count > 1
             ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, hits.Count - 1)
             : primary;
     }
@@ -158,7 +164,7 @@ internal sealed class PickService : IPickService
         // re-query it for the target ref. Cross-dataset hops are out of
         // scope for milestone 3 — they slot into the search milestone
         // where a global feature snapshot already exists.
-        var selected = _viewModel.PickReport.SelectedHit;
+        var selected = ViewModel.PickReport.SelectedHit;
         if (selected?.OwningProcessor is not { } processor)
             return false;
 
@@ -175,7 +181,7 @@ internal sealed class PickService : IPickService
         if (info is null)
             return false;
 
-        _viewModel.PickReport.SetPicks(new[]
+        ViewModel.PickReport.SetPicks(new[]
         {
             new PickHit
             {
@@ -190,7 +196,7 @@ internal sealed class PickService : IPickService
             },
         });
 
-        _viewModel.StatusText = string.Format(
+        ViewModel.StatusText = string.Format(
             Resources.Strings.Status_FeatureSummary,
             info.FeatureTypeName ?? info.FeatureType,
             info.FeatureRef);

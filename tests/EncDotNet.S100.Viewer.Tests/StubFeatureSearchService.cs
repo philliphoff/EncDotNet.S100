@@ -12,6 +12,8 @@ internal sealed class StubFeatureSearchService : IFeatureSearchService
 
 internal sealed class StubPickService : IPickService
 {
+    public void Attach(EncDotNet.S100.Viewer.ViewModels.MainViewModel viewModel) { }
+
     public void HandlePick(MapInfo? mapInfo) { }
 
     public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;

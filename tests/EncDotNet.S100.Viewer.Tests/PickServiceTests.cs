@@ -17,6 +17,13 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 public class PickServiceTests
 {
+    private static PickService CreatePickService(IDatasetLoaderService loader, MainViewModel viewModel)
+    {
+        var svc = new PickService(loader);
+        svc.Attach(viewModel);
+        return svc;
+    }
+
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
     {
         public string Id => "test";
@@ -80,7 +87,7 @@ public class PickServiceTests
             attributes: System.Array.Empty<EncDotNet.S100.Datasets.Pipelines.PickAttribute>());
         Assert.True(viewModel.PickReport.HasPick);
 
-        var service = new PickService(new StubLoader(), viewModel);
+        var service = CreatePickService(new StubLoader(), viewModel);
         service.HandlePick(null);
 
         Assert.False(viewModel.PickReport.HasPick);
@@ -90,7 +97,7 @@ public class PickServiceTests
     public void HandlePick_NullMapInfo_NoPriorPick_StaysCleared()
     {
         var viewModel = CreateMainViewModel();
-        var service = new PickService(new StubLoader(), viewModel);
+        var service = CreatePickService(new StubLoader(), viewModel);
 
         service.HandlePick(null);
 
@@ -170,7 +177,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[]
         {
             MakeRecord(layer, "1"),
@@ -203,7 +210,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)lineLayer, labelLayer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[]
         {
             MakeRecord(lineLayer, "1"),
@@ -223,7 +230,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor>(),
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>());
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(orphanLayer, "1") }));
 
         Assert.False(viewModel.PickReport.HasPick);
@@ -233,7 +240,7 @@ public class PickServiceTests
     public void NavigateToReference_NoSelectedHit_ReturnsFalse()
     {
         var viewModel = CreateMainViewModel();
-        var service = new PickService(new StubLoader(), viewModel);
+        var service = CreatePickService(new StubLoader(), viewModel);
 
         var ok = service.NavigateToReference(new FeatureReference { Role = "r", TargetRef = "x" });
 
@@ -263,7 +270,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
         Assert.Equal("L1", viewModel.PickReport.FeatureRef);
         Assert.True(viewModel.PickReport.HasReferences);
@@ -294,7 +301,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
 
         var ok = service.NavigateToReference(viewModel.PickReport.References[0]);
@@ -326,7 +333,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "RTE") }));
         var reference = viewModel.PickReport.References[0];
 
@@ -354,7 +361,7 @@ public class PickServiceTests
             new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
             new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
 
-        var service = new PickService(loader, viewModel);
+        var service = CreatePickService(loader, viewModel);
         service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
 
         viewModel.PickReport.NavigateCommand.Execute(viewModel.PickReport.References[0]);
