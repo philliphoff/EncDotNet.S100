@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -64,6 +65,9 @@ public partial class App : Application
     private static IServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
+
+        // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
+        services.AddS100Observability();
 
         // Persisted user settings
         services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());

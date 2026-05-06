@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.Iso8211;
+using S100Diag = EncDotNet.S100.Datasets.S101.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -10,6 +11,8 @@ internal static class S101DocumentReader
 {
     public static S101Document ReadFromFile(string path)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-101");
         var iso = Iso8211DocumentReader.ReadFromFile(path);
         return Parse(iso);
     }

@@ -201,6 +201,15 @@ Legacy ISO 8211-encoded S-57 (Edition 3.1) ENC cells are translated to the in-me
 dotnet build
 ```
 
+## Observability
+
+The libraries are instrumented with `Microsoft.Extensions.Logging`,
+`System.Diagnostics.ActivitySource`, and `System.Diagnostics.Metrics.Meter`,
+and the viewer ships an OpenTelemetry OTLP exporter configured by the
+standard `OTEL_*` environment variables. See
+[`docs/observability.md`](docs/observability.md) for the span tree,
+metrics catalogue, and recipes for Aspire / Jaeger.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

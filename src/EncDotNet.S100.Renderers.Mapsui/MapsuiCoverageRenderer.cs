@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using EncDotNet.S100.Pipelines.Coverage;
 using Mapsui;
 using Mapsui.Layers;
@@ -35,6 +36,8 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
 
     public ILayer Render(StyledCoverageLayer layer, PipelineViewport viewport)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.build");
+        __activity?.SetTag("s100.render.target", "mapsui");
         var sampled = layer.Coverage;
         var georeferencer = layer.Georeferencer;
         var colorScheme = layer.ColorScheme;

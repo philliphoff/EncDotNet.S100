@@ -12,6 +12,7 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
@@ -139,6 +140,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(entry);
         EnsureInitialized();
 
+        using var __cmd = ViewerObservability.BeginCommand("dataset.open");
+
         var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
         if (spec is null)
         {
@@ -216,6 +219,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public async Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken)
     {
+        using var __cmd = ViewerObservability.BeginCommand("timeline.scrub");
+
         // Cancel any in-flight scrub render and start a fresh debounce
         // window. The token passed in is honoured in addition to the
         // internal debounce token so callers can cancel from outside
@@ -265,6 +270,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public async Task ReRenderAllAsync()
     {
+        using var __cmd = ViewerObservability.BeginCommand("palette.change");
+
         var palette = _settingsVm.SelectedPalette;
         SetStatus(string.Format(Strings.Status_SwitchingPalette, palette));
 

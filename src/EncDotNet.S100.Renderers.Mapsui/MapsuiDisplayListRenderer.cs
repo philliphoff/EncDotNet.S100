@@ -1,4 +1,5 @@
 using System.Globalization;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
@@ -104,6 +105,10 @@ public sealed class MapsuiDisplayListRenderer
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
+
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.layer.build");
+        __activity?.SetTag("s100.render.target", "mapsui");
+        __activity?.SetTag("s100.render.instructions.count", instructions.Count);
 
         // Ensure the custom pattern fill renderer is registered before Mapsui
         // encounters any AnchoredPatternFillStyle instances.

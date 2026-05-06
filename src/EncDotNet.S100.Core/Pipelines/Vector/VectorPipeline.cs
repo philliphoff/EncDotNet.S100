@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Xml.Linq;
 using System.Xml.Xsl;
+using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
@@ -29,42 +31,66 @@ public class VectorPipeline
         Viewport? viewport = null,
         MarinerSettings? mariner = null)
     {
-        // Stage 1 — load FeatureXML into a navigable document
-        XDocument featureDoc;
-        using (var reader = source.GetFeatureXml())
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.process");
+        activity?.SetTag(TelemetryTags.PipelineStage, "portray");
+        var start = Stopwatch.GetTimestamp();
+        var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "vector");
+        try
         {
-            featureDoc = XDocument.Load(reader);
+            // Stage 1 — load FeatureXML into a navigable document
+            XDocument featureDoc;
+            using (var reader = source.GetFeatureXml())
+            {
+                featureDoc = XDocument.Load(reader);
+            }
+
+            // Stage 2 — select applicable rules
+            var featureTypes = source.FeatureTypesPresent;
+            PipelineMetrics.FeaturesIn.Record(featureTypes.Count, stageTag);
+            activity?.SetTag("s100.pipeline.feature_types.count", featureTypes.Count);
+            var applicableRules = SelectRules(featureTypes, catalogue);
+            activity?.SetTag("s100.pipeline.rules.count", applicableRules.Count);
+
+            // Stage 3 — XSLT transformation
+            var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
+
+            // Stage 5 — assemble typed drawing instructions from the XSLT output
+            // using the canonical S-100 Part 9 lower-camel-case display-list reader.
+            var instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
+
+            // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
+            // drawing instructions directly; append them to the XSLT-stage output
+            // before viewing-group filtering and priority sorting.
+            if (_luaExecutor is not null)
+            {
+                instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+            }
+
+            // Stage 6 — viewing group filter + priority sort
+            var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
+            var sorted = SortByPriority(filtered);
+
+            PipelineMetrics.InstructionsOut.Record(sorted.Count, stageTag);
+            activity?.SetTag("s100.pipeline.instructions.count", sorted.Count);
+
+            IVectorLayer layer = new DefaultVectorLayer
+            {
+                Instructions = sorted,
+            };
+
+            return Task.FromResult(layer);
         }
-
-        // Stage 2 — select applicable rules
-        var featureTypes = source.FeatureTypesPresent;
-        var applicableRules = SelectRules(featureTypes, catalogue);
-
-        // Stage 3 — XSLT transformation
-        var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
-
-        // Stage 5 — assemble typed drawing instructions from the XSLT output
-        // using the canonical S-100 Part 9 lower-camel-case display-list reader.
-        var instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
-
-        // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
-        // drawing instructions directly; append them to the XSLT-stage output
-        // before viewing-group filtering and priority sorting.
-        if (_luaExecutor is not null)
+        catch
         {
-            instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
         }
-
-        // Stage 6 — viewing group filter + priority sort
-        var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
-        var sorted = SortByPriority(filtered);
-
-        IVectorLayer layer = new DefaultVectorLayer
+        finally
         {
-            Instructions = sorted,
-        };
-
-        return Task.FromResult(layer);
+            PipelineMetrics.Duration.Record(
+                (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
+                stageTag);
+        }
     }
 
     // ── Stage 2: Rule selection ─────────────────────────────────────────

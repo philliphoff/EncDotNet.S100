@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Hdf5.PureHdf.Diagnostics;
 using PureHDF;
 
 namespace EncDotNet.S100.Hdf5.PureHdf;
@@ -23,6 +27,8 @@ public sealed class PureHdfFile : IHdf5File
     public static PureHdfFile Open(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.hdf5.file.open");
+        activity?.SetTag(TelemetryTags.DatasetPath, path);
         var file = H5File.OpenRead(path);
         return new PureHdfFile(file, file);
     }
@@ -31,6 +37,7 @@ public sealed class PureHdfFile : IHdf5File
     public static PureHdfFile Open(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.hdf5.file.open");
         var file = H5File.Open(stream);
         return new PureHdfFile(file, file);
     }
@@ -84,17 +91,53 @@ public sealed class PureHdfFile : IHdf5File
 
         public T ReadAttribute<T>(string name) where T : unmanaged
         {
-            return _group.Attribute(name).Read<T>();
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                return _group.Attribute(name).Read<T>();
+            }
+            finally
+            {
+                Telemetry.ReadDuration.Record(GetElapsedMs(start), new KeyValuePair<string, object?>("kind", "attribute"));
+            }
         }
 
         public string ReadStringAttribute(string name)
         {
-            return _group.Attribute(name).Read<string>();
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                return _group.Attribute(name).Read<string>();
+            }
+            finally
+            {
+                Telemetry.ReadDuration.Record(GetElapsedMs(start), new KeyValuePair<string, object?>("kind", "attribute"));
+            }
         }
 
         public T[] ReadDataset<T>(string name) where T : unmanaged
         {
-            return _group.Dataset(name).Read<T[]>();
+            using var activity = Telemetry.ActivitySource.StartActivity("s100.hdf5.dataset.read");
+            activity?.SetTag("s100.hdf5.dataset", name);
+            var start = Stopwatch.GetTimestamp();
+            T[] result;
+            try
+            {
+                result = _group.Dataset(name).Read<T[]>();
+            }
+            finally
+            {
+                Telemetry.ReadDuration.Record(GetElapsedMs(start), new KeyValuePair<string, object?>("kind", "dataset"));
+            }
+            long bytes = (long)result.Length * Marshal.SizeOf<T>();
+            Telemetry.ReadBytes.Add(bytes);
+            activity?.SetTag("s100.hdf5.read.bytes", bytes);
+            activity?.SetTag("s100.hdf5.element.count", result.Length);
+            return result;
         }
+
+        private static double GetElapsedMs(long startTimestamp) =>
+            (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
     }
 }
+
