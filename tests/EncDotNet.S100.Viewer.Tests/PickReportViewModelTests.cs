@@ -313,7 +313,7 @@ public class PickReportViewModelTests
     {
         var vm = new PickReportViewModel();
         FeatureReference? captured = null;
-        vm.SetNavigateHandler(r => captured = r);
+        vm.NavigateRequested += (_, r) => captured = r;
 
         var reference = Ref("role", "target");
         Assert.True(vm.NavigateCommand.CanExecute(reference));
@@ -328,7 +328,7 @@ public class PickReportViewModelTests
     {
         var vm = new PickReportViewModel();
         var invoked = false;
-        vm.SetNavigateHandler(_ => invoked = true);
+        vm.NavigateRequested += (_, _) => invoked = true;
 
         Assert.False(vm.NavigateCommand.CanExecute(null));
         vm.NavigateCommand.Execute(null);

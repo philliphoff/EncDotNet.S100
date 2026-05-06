@@ -19,9 +19,12 @@ public class PickServiceTests
 {
     private static PickService CreatePickService(IDatasetLoaderService loader, MainViewModel viewModel)
     {
-        var svc = new PickService(loader);
-        svc.Attach(viewModel);
-        return svc;
+        // Pull MVM's status presenter (set via ctor) so that writes by
+        // the pick service flow through to the MVM's StatusText forward.
+        var presenter = (IStatusPresenter)typeof(MainViewModel)
+            .GetField("_statusPresenter", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(viewModel)!;
+        return new PickService(loader, viewModel.PickReport, presenter);
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
@@ -55,9 +58,13 @@ public class PickServiceTests
     }
 
     private static MainViewModel CreateMainViewModel()
+        => CreateMainViewModel(out _);
+
+    private static MainViewModel CreateMainViewModel(out IStatusPresenter statusPresenter)
     {
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
+        statusPresenter = new StatusPresenter();
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
@@ -70,7 +77,8 @@ public class PickServiceTests
             timeline: new TimelineViewModel(new GlobalTimeService()),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
-            measureAppearance: new StubMeasureOverlayAppearanceProvider());
+            measureAppearance: new StubMeasureOverlayAppearanceProvider(),
+            statusPresenter: statusPresenter);
     }
 
     [Fact]

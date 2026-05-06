@@ -85,8 +85,14 @@ internal sealed class MainViewModel : ViewModelBase
     private string? _statusText;
     public string? StatusText
     {
-        get => _statusText;
-        set => SetProperty(ref _statusText, value);
+        get => _statusPresenter?.StatusText ?? _statusText;
+        set
+        {
+            if (_statusPresenter is { } presenter)
+                presenter.StatusText = value;
+            else
+                SetProperty(ref _statusText, value);
+        }
     }
 
     private bool _isStatusBarVisible;
@@ -254,6 +260,8 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
+    private readonly IStatusPresenter? _statusPresenter;
+
     public MainViewModel(
         ViewerSettings settings,
         FeatureCataloguesViewModel featureCatalogues,
@@ -266,7 +274,8 @@ internal sealed class MainViewModel : ViewModelBase
         TimelineViewModel timeline,
         IThemeService themeService,
         IRecentFilesService recentFiles,
-        IMeasureOverlayAppearanceProvider measureAppearance)
+        IMeasureOverlayAppearanceProvider measureAppearance,
+        IStatusPresenter? statusPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -285,6 +294,15 @@ internal sealed class MainViewModel : ViewModelBase
         _theme = themeService;
         _recentFiles = recentFiles;
         _isDarkTheme = themeService.IsDarkTheme;
+        _statusPresenter = statusPresenter;
+        if (_statusPresenter is { } presenter)
+        {
+            presenter.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(IStatusPresenter.StatusText))
+                    OnPropertyChanged(nameof(StatusText));
+            };
+        }
 
         Tools.Register(new PickTool());
         Tools.Register(new MeasureTool(measureAppearance));

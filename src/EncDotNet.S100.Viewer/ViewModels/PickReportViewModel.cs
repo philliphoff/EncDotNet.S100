@@ -32,6 +32,9 @@ internal sealed class PickReportViewModel : ViewModelBase
     public PickReportViewModel()
     {
         ClearCommand = new RelayCommand(Clear);
+        NavigateCommand = new RelayCommand<FeatureReference>(
+            r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
+            r => r is not null);
     }
 
     /// <summary>The picked feature's class/type code (e.g. "DepthArea", "LateralBuoy").</summary>
@@ -130,31 +133,24 @@ internal sealed class PickReportViewModel : ViewModelBase
 
     /// <summary>
     /// Invoked from the References list. Parameter is the
-    /// <see cref="FeatureReference"/> to follow; the actual lookup is
-    /// delegated to the handler supplied by
-    /// <see cref="SetNavigateHandler"/>. The view-model owns no service
-    /// references directly so unit tests can drive it without a
-    /// pick-service double.
+    /// <see cref="FeatureReference"/> to follow; the view-model raises
+    /// <see cref="NavigateRequested"/> and the pick service (or any
+    /// other subscriber) performs the actual lookup. The view-model
+    /// owns no service references directly so unit tests can drive it
+    /// without a pick-service double.
     /// </summary>
-    public ICommand NavigateCommand { get; private set; } = new RelayCommand<FeatureReference>(_ => { }, _ => false);
+    public ICommand NavigateCommand { get; }
 
     /// <summary>Clears the panel.</summary>
     public ICommand ClearCommand { get; }
 
     /// <summary>
-    /// Wires a navigation handler. <see cref="PickService"/> calls this
-    /// once at construction to bridge <see cref="NavigateCommand"/> back
-    /// into the service. The handler is invoked synchronously on the UI
-    /// thread for each click.
+    /// Raised when the user clicks a row in the References list.
+    /// Subscribers (typically <see cref="Services.PickService"/>) are
+    /// expected to resolve the reference and re-open the panel on the
+    /// target feature.
     /// </summary>
-    public void SetNavigateHandler(Action<FeatureReference> handler)
-    {
-        ArgumentNullException.ThrowIfNull(handler);
-        NavigateCommand = new RelayCommand<FeatureReference>(
-            r => { if (r is not null) handler(r); },
-            r => r is not null);
-        OnPropertyChanged(nameof(NavigateCommand));
-    }
+    public event EventHandler<FeatureReference>? NavigateRequested;
 
     /// <summary>
     /// Replaces the current pick with the supplied list of hits. The first

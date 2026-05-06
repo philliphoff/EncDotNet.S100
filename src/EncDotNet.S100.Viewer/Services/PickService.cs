@@ -15,8 +15,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Default <see cref="IPickService"/> implementation: locates the dataset
 /// entry and processor that own each hit feature via
 /// <see cref="IDatasetLoaderService"/> and pushes the resolved feature list
-/// into <see cref="MainViewModel.PickReport"/> /
-/// <see cref="MainViewModel.StatusText"/>.
+/// into <see cref="PickReportViewModel"/> + <see cref="IStatusPresenter"/>.
 /// </summary>
 /// <remarks>
 /// Mapsui's <c>MapInfo</c> exposes every overlapping feature at the click
@@ -24,54 +23,59 @@ namespace EncDotNet.S100.Viewer.Services;
 /// resolves each record into a <see cref="PickHit"/>, deduplicates by
 /// (processor, feature ref) so a feature drawn into multiple style layers
 /// only appears once, and presents the deduped list to the panel.
+///
+/// Depends only on small, leaf-level singletons — never on the root
+/// <c>MainViewModel</c> — so the dependency graph stays acyclic.
 /// </remarks>
 internal sealed class PickService : IPickService
 {
     private readonly IDatasetLoaderService _loader;
+    private readonly PickReportViewModel _pickReport;
+    private readonly IStatusPresenter _status;
     private readonly GlobalTimeService? _globalTime;
-    private MainViewModel? _viewModel;
 
-    public PickService(IDatasetLoaderService loader)
-        : this(loader, globalTime: null)
+    public PickService(
+        IDatasetLoaderService loader,
+        PickReportViewModel pickReport,
+        IStatusPresenter status)
+        : this(loader, pickReport, status, globalTime: null)
     {
     }
 
-    public PickService(IDatasetLoaderService loader, GlobalTimeService? globalTime)
+    public PickService(
+        IDatasetLoaderService loader,
+        PickReportViewModel pickReport,
+        IStatusPresenter status,
+        GlobalTimeService? globalTime)
     {
         ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(pickReport);
+        ArgumentNullException.ThrowIfNull(status);
         _loader = loader;
+        _pickReport = pickReport;
+        _status = status;
         _globalTime = globalTime;
-    }
 
-    /// <inheritdoc />
-    public void Attach(MainViewModel viewModel)
-    {
-        ArgumentNullException.ThrowIfNull(viewModel);
-        _viewModel = viewModel;
-
-        // Bridge the panel's Navigate command back into this service.
-        // Failures surface as a transient status-bar message so the user
-        // knows the click registered but the target is missing.
-        viewModel.PickReport.SetNavigateHandler(reference =>
+        // The pick-report VM raises NavigateRequested when the user
+        // clicks a row in the References list. Failures surface as a
+        // transient status-bar message so the user knows the click
+        // registered but the target is missing.
+        _pickReport.NavigateRequested += (_, reference) =>
         {
             if (!NavigateToReference(reference))
             {
-                viewModel.StatusText = string.Format(
+                _status.StatusText = string.Format(
                     Resources.Strings.Status_FeatureRefNotFound,
                     reference.TargetRef);
             }
-        });
+        };
     }
-
-    private MainViewModel ViewModel
-        => _viewModel ?? throw new InvalidOperationException(
-            "PickService.Attach(MainViewModel) must be called before pick operations.");
 
     public void HandlePick(MapInfo? mapInfo)
     {
         if (mapInfo is null)
         {
-            ViewModel.PickReport.Clear();
+            _pickReport.Clear();
             return;
         }
 
@@ -84,8 +88,8 @@ internal sealed class PickService : IPickService
             // grid and returns a synthesised feature.
             if (TryCoveragePick(mapInfo, out var coverageHit))
             {
-                ViewModel.PickReport.SetPicks(new[] { coverageHit });
-                ViewModel.StatusText = string.Format(
+                _pickReport.SetPicks(new[] { coverageHit });
+                _status.StatusText = string.Format(
                     Strings.Status_FeatureSummary,
                     coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
                     coverageHit.FeatureRef);
@@ -95,11 +99,11 @@ internal sealed class PickService : IPickService
             // Either an empty-map tap or a hit on a feature whose layer
             // isn't owned by any loaded dataset entry. Either way, hide
             // the panel so it doesn't keep showing stale state.
-            ViewModel.PickReport.Clear();
+            _pickReport.Clear();
             return;
         }
 
-        ViewModel.PickReport.SetPicks(hits);
+        _pickReport.SetPicks(hits);
 
         // Status text follows the first (selected) hit, with a "+N more"
         // suffix when additional features were resolved.
@@ -108,7 +112,7 @@ internal sealed class PickService : IPickService
             Strings.Status_FeatureSummary,
             first.FeatureTypeName ?? first.FeatureType,
             first.FeatureRef);
-        ViewModel.StatusText = hits.Count > 1
+        _status.StatusText = hits.Count > 1
             ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, hits.Count - 1)
             : primary;
     }
@@ -164,7 +168,7 @@ internal sealed class PickService : IPickService
         // re-query it for the target ref. Cross-dataset hops are out of
         // scope for milestone 3 — they slot into the search milestone
         // where a global feature snapshot already exists.
-        var selected = ViewModel.PickReport.SelectedHit;
+        var selected = _pickReport.SelectedHit;
         if (selected?.OwningProcessor is not { } processor)
             return false;
 
@@ -181,7 +185,7 @@ internal sealed class PickService : IPickService
         if (info is null)
             return false;
 
-        ViewModel.PickReport.SetPicks(new[]
+        _pickReport.SetPicks(new[]
         {
             new PickHit
             {
@@ -196,7 +200,7 @@ internal sealed class PickService : IPickService
             },
         });
 
-        ViewModel.StatusText = string.Format(
+        _status.StatusText = string.Format(
             Resources.Strings.Status_FeatureSummary,
             info.FeatureTypeName ?? info.FeatureType,
             info.FeatureRef);
