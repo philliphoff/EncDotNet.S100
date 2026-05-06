@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using EncDotNet.S100.Diagnostics;
+
 namespace EncDotNet.S100.Pipelines.Coverage;
 
 /// <summary>
@@ -19,25 +22,49 @@ public class CoveragePipeline
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalogue);
 
-        var settings = mariner ?? MarinerSettings.Default;
-        var metadata = source.Metadata;
-
-        var colorScheme = catalogue.ResolveColorScheme(settings);
-        var symbolScheme = catalogue.ResolveSymbolScheme(settings);
-        var sampled = source.Sample(GridRegion.Full);
-
-        var layer = new StyledCoverageLayer
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.process");
+        activity?.SetTag(TelemetryTags.PipelineStage, "portray");
+        activity?.SetTag(TelemetryTags.Product, source.Metadata.ProductSpec);
+        var start = Stopwatch.GetTimestamp();
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, source.Metadata.ProductSpec);
+        var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "coverage");
+        try
         {
-            Coverage = sampled,
-            ColorScheme = colorScheme,
-            NoDataValue = metadata.NoDataValue,
-            Georeferencer = new GridGeoreferencer(
-                metadata.GridMetadata,
-                metadata.HorizontalCRS),
-            SymbolScheme = symbolScheme,
-        };
+            var settings = mariner ?? MarinerSettings.Default;
+            var metadata = source.Metadata;
 
-        return Task.FromResult(layer);
+            var colorScheme = catalogue.ResolveColorScheme(settings);
+            var symbolScheme = catalogue.ResolveSymbolScheme(settings);
+            var sampled = source.Sample(GridRegion.Full);
+
+            long cells = (long)metadata.GridMetadata.NumRows * metadata.GridMetadata.NumColumns;
+            PipelineMetrics.CoverageCells.Record(cells, productTag);
+            activity?.SetTag("s100.coverage.cells", cells);
+
+            var layer = new StyledCoverageLayer
+            {
+                Coverage = sampled,
+                ColorScheme = colorScheme,
+                NoDataValue = metadata.NoDataValue,
+                Georeferencer = new GridGeoreferencer(
+                    metadata.GridMetadata,
+                    metadata.HorizontalCRS),
+                SymbolScheme = symbolScheme,
+            };
+
+            return Task.FromResult(layer);
+        }
+        catch
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            PipelineMetrics.Duration.Record(
+                (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
+                productTag, stageTag);
+        }
     }
 }
 

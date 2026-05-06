@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using S100Diag = EncDotNet.S100.Datasets.S421.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S421;
 
@@ -22,6 +23,8 @@ internal static class S421DatasetReader
 
     public static S421Dataset Read(Stream stream)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-421");
         // Some sample datasets contain leading whitespace before the XML declaration.
         using var reader = new StreamReader(stream);
         var xml = reader.ReadToEnd().TrimStart();

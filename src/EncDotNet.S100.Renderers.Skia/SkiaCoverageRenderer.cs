@@ -1,4 +1,5 @@
 using SkiaSharp;
+using S100Diag = EncDotNet.S100.Renderers.Skia.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
@@ -17,6 +18,8 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
 
     public SKBitmap Render(StyledCoverageLayer layer, Viewport viewport)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.build");
+        __activity?.SetTag("s100.render.target", "skia");
         var sampled = layer.Coverage;
         var colorScheme = layer.ColorScheme;
         var fieldData = sampled.GetField(colorScheme.FieldName);

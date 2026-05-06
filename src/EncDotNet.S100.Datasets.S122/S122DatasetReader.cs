@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using S100Diag = EncDotNet.S100.Datasets.S122.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S122;
 
@@ -53,6 +54,8 @@ internal static class S122DatasetReader
 
     public static S122Dataset Read(Stream stream)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-122");
         var doc = XDocument.Load(stream);
         var root = doc.Root
             ?? throw new InvalidOperationException("S-122 GML document has no root element.");

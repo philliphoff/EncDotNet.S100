@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using EncDotNet.S100.Viewer.Diagnostics;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -20,6 +21,8 @@ internal sealed class ScreenshotService
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(outputPath);
+
+        using var __cmd = ViewerObservability.BeginCommand("screenshot");
 
         try
         {

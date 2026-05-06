@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using S100Diag = EncDotNet.S100.Datasets.S129.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S129;
 
@@ -26,6 +27,8 @@ internal static class S129DatasetReader
 
     public static S129Dataset Read(Stream stream)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-129");
         // Some GML files have leading whitespace before the XML declaration;
         // read as text and trim to handle this gracefully.
         using var reader = new StreamReader(stream);

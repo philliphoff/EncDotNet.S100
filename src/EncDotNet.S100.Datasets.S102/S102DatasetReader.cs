@@ -1,4 +1,5 @@
 using EncDotNet.S100.Hdf5;
+using S100Diag = EncDotNet.S100.Datasets.S102.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S102;
 
@@ -13,6 +14,8 @@ public static class S102DatasetReader
     /// </summary>
     public static S102Dataset Read(IHdf5File file)
     {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-102");
         ArgumentNullException.ThrowIfNull(file);
 
         var root = file.Root;

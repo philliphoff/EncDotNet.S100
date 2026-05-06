@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -73,6 +74,8 @@ internal sealed class PickService : IPickService
 
     public void HandlePick(MapInfo? mapInfo)
     {
+        using var __cmd = ViewerObservability.BeginCommand("pick");
+
         if (mapInfo is null)
         {
             _pickReport.Clear();

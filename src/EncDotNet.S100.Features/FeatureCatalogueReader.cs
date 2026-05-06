@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Features.Diagnostics;
 
 namespace EncDotNet.S100.Features;
 
@@ -17,12 +18,15 @@ public static class FeatureCatalogueReader
 
     public static FeatureCatalogue Read(Stream stream)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.featurecatalogue.parse");
         var doc = XDocument.Load(stream);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
 
     public static FeatureCatalogue Read(string path)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.featurecatalogue.parse");
+        activity?.SetTag("s100.featurecatalogue.path", path);
         var doc = XDocument.Load(path);
         return ReadCatalogue(doc.Root ?? throw new XmlException("Missing root element."));
     }
