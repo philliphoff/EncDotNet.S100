@@ -44,6 +44,13 @@ internal static class Strings
     public static string Pane_DatasetTab_NoLayers => Get(nameof(Pane_DatasetTab_NoLayers));
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
+    public static string Pane_Search => Get(nameof(Pane_Search));
+
+    // Search
+    public static string Search_Placeholder => Get(nameof(Search_Placeholder));
+    public static string Search_NoResults => Get(nameof(Search_NoResults));
+    public static string Search_ResultsFooter => Get(nameof(Search_ResultsFooter));
+    public static string Search_TruncatedFooter => Get(nameof(Search_TruncatedFooter));
 
     // Tooltips
     public static string Tooltip_ToggleTheme => Get(nameof(Tooltip_ToggleTheme));
@@ -57,6 +64,11 @@ internal static class Strings
     public static string Tooltip_ZoomOut => Get(nameof(Tooltip_ZoomOut));
     public static string Tooltip_ZoomToExtent => Get(nameof(Tooltip_ZoomToExtent));
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
+    public static string Tooltip_SelectHit => Get(nameof(Tooltip_SelectHit));
+    public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
+    public static string Tooltip_Search => Get(nameof(Tooltip_Search));
+    public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
+    public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
@@ -133,6 +145,10 @@ internal static class Strings
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
     public static string Pick_NoAttributes => Get(nameof(Pick_NoAttributes));
+    public static string Pick_HitListHeader => Get(nameof(Pick_HitListHeader));
+    public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));
+    public static string Pick_ReferencesHeader => Get(nameof(Pick_ReferencesHeader));
+    public static string Pick_ReferenceItemFormat => Get(nameof(Pick_ReferenceItemFormat));
 
     // Settings
     public static string Settings_Heading => Get(nameof(Settings_Heading));
@@ -167,6 +183,8 @@ internal static class Strings
     public static string Status_PaletteApplied => Get(nameof(Status_PaletteApplied));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
+    public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
+    public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
 
     // Dataset entry

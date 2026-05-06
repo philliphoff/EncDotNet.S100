@@ -3,6 +3,49 @@
 Cross-platform desktop viewer for IHO S-100 nautical chart data,
 built on Avalonia 11 + Mapsui 5.
 
+## Pick / Object Information panel
+
+Toggle **Pick Mode** (cross-hair toolbar button, **View → Appearance →
+Pick Mode**, or `I`) and click a feature to open the **Object
+Information** panel. Each pick report shows:
+
+- A **hit list** of every feature overlapping the click — click a row
+  to switch the attribute view to that feature.
+- The selected feature's class, `gml:id` (or ISO 8211 record id), and
+  source dataset, kept sticky at the top of the scrollable panel.
+- An **Attributes** section with FC-decoded names (e.g. `CATPLE` →
+  "Category of pile") and enum-decoded values. Top-level attributes
+  start expanded; complex/sub-attribute groups can be collapsed.
+- A **References** section listing every `xlink:href` the feature
+  carries (role + target id). Clicking a row resolves the reference
+  through the same processor and re-targets the pick report —
+  particularly useful for S-125 AtoN status bindings and S-421 route
+  topology where the pickable geometry only carries an id pointer.
+
+Coverage products (S-102, S-104, S-111) participate in the same
+pipeline: a click that misses every vector feature falls through to
+the active coverage processor's `GetCoverageInfo(lat, lon)`, which
+samples the underlying grid and returns a synthesised feature
+(depth + uncertainty for S-102, water level + trend for S-104,
+current speed + direction for S-111).
+
+## Feature search
+
+The **Search** field above the Datasets panel scans every loaded
+dataset for features matching a free-text query. Matching is
+case-insensitive across feature type, FC-resolved type name, and
+`gml:id`; results are debounced 250 ms and capped to a configurable
+limit. Selecting a result opens the corresponding feature in the
+pick report.
+
+Each hit carries an **ordinal** — the feature's enumeration index
+within its processor — which is used as the open key. This is a
+deliberate workaround for producer datasets that reuse `gml:id`s
+across distinct features (a real-world S-122 issue): the search
+index correctly distinguishes the duplicates, and routing through
+`IPickService.OpenFeatureAt(processor, ordinal, …)` ensures the
+correct feature is opened.
+
 ## Datasets panel — layer controls
 
 Loaded datasets appear in the **Datasets** panel on the left. Each

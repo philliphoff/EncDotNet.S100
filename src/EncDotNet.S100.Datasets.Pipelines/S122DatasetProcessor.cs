@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -17,17 +18,20 @@ public sealed class S122DatasetProcessor : IDatasetProcessor
 {
     private readonly S122Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
     public string ProductSpec => "S-122";
 
     public S122DatasetProcessor(
         string path,
-        PortrayalCatalogueManager catalogueManager)
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
     {
         _fileName = Path.GetFileName(path);
         _provider = catalogueManager.GetProvider("S-122");
         _dataset = S122Dataset.Open(path);
+        _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-122");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -87,22 +91,45 @@ public sealed class S122DatasetProcessor : IDatasetProcessor
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
         var feature = _dataset.Features.FirstOrDefault(f => string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
-        if (feature is null)
-            return null;
+        return feature is null ? null : BuildFeatureInfo(feature);
+    }
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value;
-        foreach (var complex in feature.ComplexAttributes)
-            foreach (var (key, value) in complex.SubAttributes)
-                attrs[$"{complex.Code}.{key}"] = value;
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= _dataset.Features.Length)
+            return null;
+        return BuildFeatureInfo(_dataset.Features[ordinal]);
+    }
+
+    private FeatureInfo BuildFeatureInfo(S122Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.Build(
+            feature.Attributes,
+            feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
+            _decoder);
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id,
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
         };
+    }
+
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        for (int i = 0; i < _dataset.Features.Length; i++)
+        {
+            var feature = _dataset.Features[i];
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                Ordinal = i,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
     }
 
     private MRect ComputeExtent()

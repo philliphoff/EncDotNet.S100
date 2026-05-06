@@ -123,8 +123,10 @@ public partial class App : Application
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
+        services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
 
         // View models
@@ -132,6 +134,7 @@ public partial class App : Application
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton<CatalogPanelViewModel>();
+        services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();

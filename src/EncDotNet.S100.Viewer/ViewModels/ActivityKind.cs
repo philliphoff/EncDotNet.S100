@@ -6,5 +6,6 @@ internal enum ActivityKind
     PortrayalCatalogues,
     Datasets,
     Catalog,
+    Search,
     Settings,
 }

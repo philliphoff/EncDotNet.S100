@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Datasets.S111;
@@ -137,4 +138,74 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    /// <summary>
+    /// Samples the surface-current grid at the supplied geographic
+    /// position and time. <paramref name="time"/> is matched to the
+    /// nearest available time step; when <c>null</c> the first
+    /// available step is used. The reported direction is "going to"
+    /// in degrees true (S-111 Edition 2.0.0 §10.2).
+    /// </summary>
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
+    {
+        if (_source.AvailableTimes.Count == 0)
+            return null;
+
+        var selectedTime = time ?? _source.AvailableTimes[0];
+        _source.SelectTime(selectedTime);
+
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        var speed = sample.Values.TryGetValue("surfaceCurrentSpeed", out var s) ? s : sample.NoDataValue;
+        var direction = sample.Values.TryGetValue("surfaceCurrentDirection", out var dir) ? dir : sample.NoDataValue;
+
+        // S-111 Ed 2.0.0 §10.2.10: speed unit is published in
+        // surfaceCurrentSpeedUom on the dataset root. The bundled
+        // CoverageSource declares "knots" as the published unit.
+        var speedUnit = _source.Metadata.ValueFields
+            .FirstOrDefault(f => string.Equals(f.Name, "surfaceCurrentSpeed", StringComparison.Ordinal))
+            ?.Units ?? "knots";
+
+        var attrs = new List<PickAttribute>
+        {
+            new()
+            {
+                Code = "surfaceCurrentSpeed",
+                Name = "Current Speed",
+                RawValue = speed == sample.NoDataValue
+                    ? "NoData"
+                    : speed.ToString("0.##########", CultureInfo.InvariantCulture),
+                DisplayValue = speed == sample.NoDataValue
+                    ? "—"
+                    : $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} {speedUnit}",
+            },
+            new()
+            {
+                Code = "surfaceCurrentDirection",
+                Name = "Current Direction (going to)",
+                RawValue = direction == sample.NoDataValue
+                    ? "NoData"
+                    : direction.ToString("0.##########", CultureInfo.InvariantCulture),
+                DisplayValue = direction == sample.NoDataValue
+                    ? "—"
+                    : $"{direction.ToString("0.#", CultureInfo.InvariantCulture)}°",
+            },
+            new()
+            {
+                Code = "timePoint",
+                Name = "Time",
+                RawValue = selectedTime.ToString("u", CultureInfo.InvariantCulture),
+            },
+        };
+
+        return new FeatureInfo
+        {
+            FeatureRef = $"({sample.Row},{sample.Col})",
+            FeatureType = "SurfaceCurrent",
+            FeatureTypeName = "Surface Current",
+            Attributes = attrs,
+        };
+    }
 }

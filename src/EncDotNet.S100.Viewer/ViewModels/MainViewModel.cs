@@ -21,6 +21,7 @@ internal sealed class MainViewModel : ViewModelBase
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
     public CatalogPanelViewModel CatalogPanel { get; }
+    public FeatureSearchViewModel Search { get; }
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
     public TimelineViewModel Timeline { get; }
@@ -43,6 +44,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
                 OnPropertyChanged(nameof(IsDatasetsSelected));
                 OnPropertyChanged(nameof(IsCatalogSelected));
+                OnPropertyChanged(nameof(IsSearchSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
 
                 // Persist the last selected activity (Settings is transient, don't remember it)
@@ -60,6 +62,7 @@ internal sealed class MainViewModel : ViewModelBase
         ActivityKind.PortrayalCatalogues => Strings.Pane_PortrayalCatalogues,
         ActivityKind.Datasets => Strings.Pane_Datasets,
         ActivityKind.Catalog => Strings.Pane_Catalog,
+        ActivityKind.Search => Strings.Pane_Search,
         ActivityKind.Settings => Strings.Pane_Settings,
         _ => string.Empty,
     };
@@ -68,20 +71,28 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
     public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
     public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
+    public bool IsSearchSelected => _selectedActivity == ActivityKind.Search;
     public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
 
     public ICommand SelectFeatureCataloguesCommand { get; }
     public ICommand SelectPortrayalCataloguesCommand { get; }
     public ICommand SelectDatasetsCommand { get; }
     public ICommand SelectCatalogCommand { get; }
+    public ICommand SelectSearchCommand { get; }
     public ICommand SelectSettingsCommand { get; }
     public ICommand TogglePrimarySideBarCommand { get; }
 
     private string? _statusText;
     public string? StatusText
     {
-        get => _statusText;
-        set => SetProperty(ref _statusText, value);
+        get => _statusPresenter?.StatusText ?? _statusText;
+        set
+        {
+            if (_statusPresenter is { } presenter)
+                presenter.StatusText = value;
+            else
+                SetProperty(ref _statusText, value);
+        }
     }
 
     private bool _isStatusBarVisible;
@@ -249,24 +260,29 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
+    private readonly IStatusPresenter? _statusPresenter;
+
     public MainViewModel(
         ViewerSettings settings,
         FeatureCataloguesViewModel featureCatalogues,
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
         CatalogPanelViewModel catalogPanel,
+        FeatureSearchViewModel search,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
         TimelineViewModel timeline,
         IThemeService themeService,
         IRecentFilesService recentFiles,
-        IMeasureOverlayAppearanceProvider measureAppearance)
+        IMeasureOverlayAppearanceProvider measureAppearance,
+        IStatusPresenter? statusPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(catalogPanel);
+        ArgumentNullException.ThrowIfNull(search);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(timeline);
@@ -278,6 +294,15 @@ internal sealed class MainViewModel : ViewModelBase
         _theme = themeService;
         _recentFiles = recentFiles;
         _isDarkTheme = themeService.IsDarkTheme;
+        _statusPresenter = statusPresenter;
+        if (_statusPresenter is { } presenter)
+        {
+            presenter.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(IStatusPresenter.StatusText))
+                    OnPropertyChanged(nameof(StatusText));
+            };
+        }
 
         Tools.Register(new PickTool());
         Tools.Register(new MeasureTool(measureAppearance));
@@ -286,6 +311,7 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
         CatalogPanel = catalogPanel;
+        Search = search;
         Settings = settingsViewModel;
         PickReport = pickReport;
         Timeline = timeline;
@@ -300,6 +326,7 @@ internal sealed class MainViewModel : ViewModelBase
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
         SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
+        SelectSearchCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Search);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
@@ -325,6 +352,7 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
             OnPropertyChanged(nameof(IsDatasetsSelected));
             OnPropertyChanged(nameof(IsCatalogSelected));
+            OnPropertyChanged(nameof(IsSearchSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
         });
 
@@ -341,12 +369,20 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
         ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
-        ToolCommitCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Commit));
-        ToolBackstepCommand = new RelayCommand(() => Tools.OnAction(MapToolAction.Backstep));
+        ToolCommitCommand = new RelayCommand(
+            () => Tools.OnAction(MapToolAction.Commit),
+            () => Tools.ActiveTool != null);
+        ToolBackstepCommand = new RelayCommand(
+            () => Tools.OnAction(MapToolAction.Backstep),
+            () => Tools.ActiveTool != null);
 
         // Mirror the controller's active-tool changes onto the legacy
         // IsPickModeActive flag (kept so existing XAML/cursor wiring
         // continues to function) and the IsMeasureModeActive property.
+        // Also re-evaluate Commit/Backstep CanExecute so that the
+        // window-level Enter/Backspace key bindings only consume those
+        // keys while a tool is actually active — without this guard
+        // typing Backspace in any TextBox is swallowed by the binding.
         Tools.ActiveToolChanged += _ =>
         {
             var newPick = Tools.IsActive(PickTool.ToolId);
@@ -356,6 +392,8 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPickModeActive));
             }
             OnPropertyChanged(nameof(IsMeasureModeActive));
+            ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());

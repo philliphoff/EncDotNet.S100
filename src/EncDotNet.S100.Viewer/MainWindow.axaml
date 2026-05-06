@@ -4,6 +4,7 @@
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+        xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
         xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
@@ -260,6 +261,23 @@
                             <ic:FluentIcon Icon="Library" IconVariant="Regular" FontSize="22" />
                         </ToggleButton>
                     </Grid>
+
+                    <!-- Search -->
+                    <Grid>
+                        <Border Width="3" HorizontalAlignment="Left"
+                                Background="{DynamicResource AccentBrush}"
+                                IsVisible="{Binding IsSearchSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsSearchSelected, Mode=OneWay}"
+                                      Command="{Binding SelectSearchCommand}"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Search}"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Search" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -306,6 +324,8 @@
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
                         <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
+                        <views:FeatureSearchView DataContext="{Binding Search}"
+                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSearchSelected}" />
                         <views:SettingsView DataContext="{Binding Settings}"
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
                     </Panel>
@@ -516,72 +536,162 @@
                         </Grid>
                     </Border>
 
+                    <!--
+                        Sticky header: hit list + identity block + references all
+                        stay pinned to the top of the panel; only the attribute
+                        list scrolls. Each block carries its own DataContext so
+                        bindings against PickReportViewModel work in both the
+                        sticky region and the scrolling region.
+                    -->
+                    <StackPanel DockPanel.Dock="Top"
+                                Spacing="10"
+                                Margin="12,4,12,8"
+                                DataContext="{Binding PickReport}">
+                        <!-- Hit list (visible only when more than one feature is at this point) -->
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="0,0,0,1"
+                                Padding="0,0,0,8"
+                                IsVisible="{Binding HasMultipleHits}">
+                            <StackPanel Spacing="4">
+                                <TextBlock FontSize="10"
+                                           FontWeight="Normal"
+                                           LetterSpacing="1"
+                                           Opacity="0.7"
+                                           Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
+                                <ListBox ItemsSource="{Binding Hits}"
+                                         SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         MaxHeight="180">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PickHit">
+                                            <TextBlock FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                                                <Run Text="{Binding DisplayLabel}" />
+                                                <Run Text=" — " FontWeight="Light" />
+                                                <Run Text="{Binding FeatureRef}" FontStyle="Italic" />
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Header block: feature type + identity -->
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding FeatureType}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold" />
+                            <TextBlock FontSize="11" Opacity="0.7">
+                                <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
+                                <Run Text="{Binding FeatureRef}" />
+                            </TextBlock>
+                            <TextBlock FontSize="11" Opacity="0.7"
+                                       Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
+                            <TextBlock FontSize="11" Opacity="0.7"
+                                       Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!-- References list (xlink:href targets) -->
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="0,1,0,0"
+                                Padding="0,8,0,0"
+                                IsVisible="{Binding HasReferences}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Static loc:Strings.Pick_ReferencesHeader}"
+                                           FontSize="10"
+                                           FontWeight="Normal"
+                                           LetterSpacing="1"
+                                           Opacity="0.7" />
+                                <ItemsControl ItemsSource="{Binding References}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="pp:FeatureReference">
+                                            <Button Margin="0,1"
+                                                    Padding="6,2"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left"
+                                                    Background="Transparent"
+                                                    Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).NavigateCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_FollowReference}">
+                                                <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding Role}" />
+                                                    <Run Text=" → " FontWeight="Light" />
+                                                    <Run Text="{Binding TargetRef}" FontStyle="Italic" />
+                                                </TextBlock>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Scrolling region: attributes only -->
                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                   VerticalScrollBarVisibility="Auto"
-                                  Padding="12,4,12,12">
-                        <StackPanel Spacing="10" DataContext="{Binding PickReport}">
-                            <!-- Header block: feature type + identity -->
-                            <StackPanel Spacing="2">
-                                <TextBlock Text="{Binding FeatureType}"
-                                           FontSize="14"
-                                           FontWeight="SemiBold" />
-                                <TextBlock FontSize="11" Opacity="0.7">
-                                    <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
-                                    <Run Text="{Binding FeatureRef}" />
-                                </TextBlock>
-                                <TextBlock FontSize="11" Opacity="0.7"
-                                           Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
-                                <TextBlock FontSize="11" Opacity="0.7"
-                                           Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
-                                           TextWrapping="Wrap" />
+                                  Padding="12,0,12,12">
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="0,1,0,0"
+                                Padding="0,8,0,0"
+                                DataContext="{Binding PickReport}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
+                                           FontSize="10"
+                                           FontWeight="Normal"
+                                           LetterSpacing="1"
+                                           Opacity="0.7" />
+                                <TreeView ItemsSource="{Binding Attributes}"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Padding="0">
+                                    <TreeView.Styles>
+                                        <!--
+                                            Expand every attribute node by default
+                                            so users see complex/sub-attribute
+                                            values without an extra click.
+                                        -->
+                                        <Style Selector="TreeViewItem">
+                                            <Setter Property="IsExpanded" Value="True" />
+                                        </Style>
+                                    </TreeView.Styles>
+                                    <TreeView.ItemTemplate>
+                                        <TreeDataTemplate x:DataType="pp:PickAttribute"
+                                                          ItemsSource="{Binding Children}">
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="8" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding DisplayName}"
+                                                           FontSize="12"
+                                                           Opacity="0.7"
+                                                           TextWrapping="NoWrap"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{Binding Code}" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding DisplayText}"
+                                                           FontSize="12"
+                                                           TextWrapping="NoWrap"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxWidth="220"
+                                                           ToolTip.Tip="{Binding RawValue}" />
+                                            </Grid>
+                                        </TreeDataTemplate>
+                                    </TreeView.ItemTemplate>
+                                </TreeView>
+                                <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                           FontSize="12"
+                                           FontStyle="Italic"
+                                           Opacity="0.6"
+                                           IsVisible="{Binding !HasAttributes}" />
                             </StackPanel>
-
-                            <!-- Attribute list -->
-                            <Border BorderBrush="{DynamicResource BorderColor}"
-                                    BorderThickness="0,1,0,0"
-                                    Padding="0,8,0,0">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
-                                               FontSize="10"
-                                               FontWeight="Normal"
-                                               LetterSpacing="1"
-                                               Opacity="0.7" />
-                                    <ItemsControl ItemsSource="{Binding Attributes}"
-                                                  Grid.IsSharedSizeScope="True">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:PickAttribute">
-                                                <Grid Margin="0,2">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" SharedSizeGroup="PickName" />
-                                                        <ColumnDefinition Width="8" />
-                                                        <ColumnDefinition Width="Auto" SharedSizeGroup="PickValue" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0"
-                                                               Text="{Binding Name}"
-                                                               FontSize="12"
-                                                               Opacity="0.7"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding Name}" />
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding Value}"
-                                                               FontSize="12"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxWidth="220"
-                                                               ToolTip.Tip="{Binding Value}" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
-                                               FontSize="12"
-                                               FontStyle="Italic"
-                                               Opacity="0.6"
-                                               IsVisible="{Binding !HasAttributes}" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
+                        </Border>
                     </ScrollViewer>
                 </DockPanel>
             </Border>

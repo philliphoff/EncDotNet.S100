@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -13,15 +14,20 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
 {
     private readonly S421Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
     public string ProductSpec => "S-421";
 
-    public S421DatasetProcessor(string path, PortrayalCatalogueManager catalogueManager)
+    public S421DatasetProcessor(
+        string path,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
     {
         _fileName = Path.GetFileName(path);
         _provider = catalogueManager.GetProvider("S-421");
         _dataset = S421Dataset.Open(path);
+        _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-421");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -82,24 +88,62 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
     {
         var feature = _dataset.Features.FirstOrDefault(f =>
             string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
-        if (feature is null)
-            return null;
+        return feature is null ? null : BuildFeatureInfo(feature);
+    }
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value;
-        foreach (var complex in feature.ComplexAttributes)
-            foreach (var (key, value) in complex.SubAttributes)
-                attrs[$"{complex.Code}.{key}"] = value;
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= _dataset.Features.Length)
+            return null;
+        return BuildFeatureInfo(_dataset.Features[ordinal]);
+    }
+
+    private FeatureInfo BuildFeatureInfo(S421Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.Build(
+            feature.Attributes,
+            feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
+            _decoder);
+
+        // S-421 cross-references (xlink:href to waypoints, action points,
+        // etc.) are promoted to first-class FeatureReferences so the pick
+        // UI can offer "follow reference" navigation.
+        var references = new List<FeatureReference>();
         foreach (var reference in feature.References)
-            attrs[$"→ {reference.Role}"] = reference.Href;
+        {
+            if (string.IsNullOrWhiteSpace(reference.Href))
+                continue;
+            references.Add(new FeatureReference
+            {
+                Role = reference.Role,
+                TargetRef = reference.Href.TrimStart('#'),
+                ArcRole = reference.ArcRole,
+            });
+        }
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id,
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
+            References = references,
         };
+    }
+
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        for (int i = 0; i < _dataset.Features.Length; i++)
+        {
+            var feature = _dataset.Features[i];
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                Ordinal = i,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
     }
 
     private MRect ComputeExtent()

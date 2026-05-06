@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Datasets.S125;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -22,17 +23,22 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
 {
     private readonly S125Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
     /// <inheritdoc />
     public string ProductSpec => "S-125";
 
     /// <summary>Initializes a new <see cref="S125DatasetProcessor"/>.</summary>
-    public S125DatasetProcessor(string path, PortrayalCatalogueManager catalogueManager)
+    public S125DatasetProcessor(
+        string path,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
     {
         _fileName = Path.GetFileName(path);
         _provider = catalogueManager.GetProvider("S-125");
         _dataset = S125Dataset.Open(path);
+        _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-125");
     }
 
     /// <inheritdoc />
@@ -93,24 +99,62 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
         var feature = _dataset.Features.FirstOrDefault(f => string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
-        if (feature is null)
-            return null;
+        return feature is null ? null : BuildFeatureInfo(feature);
+    }
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value;
-        foreach (var complex in feature.ComplexAttributes)
-            foreach (var (key, value) in complex.SubAttributes)
-                attrs[$"{complex.Code}.{key}"] = value;
+    /// <inheritdoc />
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= _dataset.Features.Length)
+            return null;
+        return BuildFeatureInfo(_dataset.Features[ordinal]);
+    }
+
+    private FeatureInfo BuildFeatureInfo(S125Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.Build(
+            feature.Attributes,
+            feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
+            _decoder);
+
+        // S-125 information bindings (xlink:href to AtoNStatus etc.) are
+        // promoted to first-class FeatureReferences so the pick UI can
+        // offer "follow reference" navigation.
+        var references = new List<FeatureReference>();
         foreach (var infoRef in feature.InformationReferences)
-            attrs[$"{infoRef.Role}.ref"] = infoRef.InformationRef;
+        {
+            if (string.IsNullOrWhiteSpace(infoRef.InformationRef))
+                continue;
+            references.Add(new FeatureReference
+            {
+                Role = infoRef.Role,
+                TargetRef = infoRef.InformationRef,
+            });
+        }
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id,
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
+            References = references,
         };
+    }
+
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        for (int i = 0; i < _dataset.Features.Length; i++)
+        {
+            var feature = _dataset.Features[i];
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                Ordinal = i,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
     }
 
     private MRect ComputeExtent()

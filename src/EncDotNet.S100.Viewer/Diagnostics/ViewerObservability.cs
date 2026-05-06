@@ -146,6 +146,16 @@ internal static class ViewerObservability
             }
         }
 
+        /// <summary>
+        /// Adds a custom tag to the underlying activity (no-op when
+        /// no tracer is listening). Use to record per-command facets
+        /// like product spec, query length, or result count.
+        /// </summary>
+        public void SetTag(string key, object? value)
+        {
+            _activity?.SetTag(key, value);
+        }
+
         public void Dispose()
         {
             var elapsedMs = Stopwatch.GetElapsedTime(_startTimestamp).TotalMilliseconds;

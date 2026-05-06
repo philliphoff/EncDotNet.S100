@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
+             x:DataType="vm:FeatureSearchViewModel">
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Query box -->
+        <Border DockPanel.Dock="Top" Padding="12,8,12,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         x:Name="SearchBox"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Watermark="{x:Static loc:Strings.Search_Placeholder}"
+                         VerticalContentAlignment="Center"
+                         Padding="8,4" />
+                <Button Grid.Column="1"
+                        Margin="4,0,0,0"
+                        Padding="8,4"
+                        Command="{Binding ClearQueryCommand}"
+                        IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearSearch}">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Footer: result count / truncation / no-results -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="12,4,12,8"
+                IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Summary}"
+                       FontSize="11"
+                       Opacity="0.7"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Results list -->
+        <ListBox ItemsSource="{Binding Results}"
+                 SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                 SelectionMode="Single"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 Padding="0">
+            <ListBox.Styles>
+                <!--
+                    Suppress the default ShadUI ListBoxItem chrome
+                    (BaseBackground/HoverBackground/SelectionBackground
+                    layers + check icon) by replacing the template with
+                    a minimal Border#PART_Container, then mirror the
+                    DatasetsView hover/selection look so search rows
+                    match the rest of the side panel.
+                -->
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="12,6" />
+                    <Setter Property="Margin" Value="0,1" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Template">
+                        <ControlTemplate>
+                            <Border Name="PART_Container"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalAlignment="Stretch"
+                                                  HorizontalContentAlignment="Stretch" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter>
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected TextBlock">
+                    <Setter Property="Foreground" Value="White" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FeatureSearchResultItem">
+                    <!--
+                        Border with Background=Transparent so the entire
+                        row hit-tests for click-to-select; without it,
+                        gaps between the StackPanel's children swallow
+                        pointer events and the row needs multiple clicks
+                        to select (same fix as DatasetsView).
+                    -->
+                    <Border Background="Transparent"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
+                        <StackPanel Orientation="Vertical" Spacing="2">
+                            <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding FeatureRef}"
+                                       FontSize="11"
+                                       Opacity="0.75" />
+                            <TextBlock FontSize="10"
+                                       Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding ProductSpec}" />
+                                <Run Text="·" />
+                                <Run Text="{Binding DatasetFileName}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+
+</UserControl>

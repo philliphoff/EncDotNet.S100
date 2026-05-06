@@ -46,7 +46,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 Picking is performed in an ECDIS-style **Pick Mode**: toggle the cross-hair
 button on the map toolbar (or **View → Appearance → Pick Mode**, or press
-**`I`**) and then click any vector feature on the map to open the **Object
+**`I`**) and then click any feature on the map to open the **Object
 Information** panel on the right side of the window — a "pick report"
 showing the feature's class, identifier, source dataset, and full attribute
 list. Press **`Esc`** to leave Pick Mode. While Pick Mode is active the
@@ -64,10 +64,31 @@ report. Use **View → Appearance → Pick Report** to disable the panel
 entirely; the status bar will continue to show a one-line summary of each
 pick.
 
-The pick report supports vector products (S-101, S-122, S-124, S-125,
-S-127, S-129, S-411, S-421, and S-57 via S-101). Coverage products
-(S-102, S-104, S-111) report layer-level information in the status bar
-but do not currently produce per-cell pick reports.
+When a single click overlaps several features the pick report lists
+every overlapping feature; selecting an entry shows that feature's
+attributes in the panel below. **Attribute names and enumerated values
+are decoded against the product's feature catalogue** — codes like
+`CATPLE` are shown as "Category of pile", and enum integers are shown
+with their human-readable label. **`xlink:href` references** to other
+features (heavily used by S-125 AtoN status bindings and S-421 route
+topology) appear under a **References** section; clicking a row jumps
+the pick report to the referenced object.
+
+Pick reports are produced for both vector products (S-101, S-122,
+S-124, S-125, S-127, S-128, S-129, S-411, S-421, and S-57 via S-101)
+and coverage products (S-102, S-104, S-111) — clicking a coverage
+chart samples the underlying grid at the click location and reports
+the per-cell value (depth + uncertainty for S-102, water level + trend
+for S-104, current speed + direction for S-111).
+
+### Feature search
+
+A **Search** field above the Datasets panel lets you find any feature
+across every loaded dataset in a single keystroke — type a feature
+class, a human-readable name, or an identifier and pick a result to
+jump straight to it in the Object Information panel. Equally happy
+with a curated single-cell load or a folder full of overlapping
+exchange sets.
 
 ### Datasets panel — layer controls
 

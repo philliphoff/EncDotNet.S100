@@ -22,6 +22,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
+    private FeatureCatalogueDecoder? _decoder;
+    private bool _decoderLoaded;
 
     public string ProductSpec => "S-101";
 
@@ -131,16 +133,63 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         if (!_featureIndex.TryGetValue(featureId, out var feature))
             return null;
 
-        var attrs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in feature.Attributes)
-            attrs[key] = value?.ToString();
+        EnsureDecoder();
+        return BuildFeatureInfo(feature);
+    }
+
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        _featureIndex ??= BuildFeatureIndex();
+        if (ordinal < 0 || ordinal >= _featureIndex.Count)
+            return null;
+        EnsureDecoder();
+        // Dictionary preserves insertion order; the ordinal matches
+        // EnumerateFeatures' enumeration position.
+        var feature = System.Linq.Enumerable.ElementAt(_featureIndex.Values, ordinal);
+        return BuildFeatureInfo(feature);
+    }
+
+    private void EnsureDecoder()
+    {
+        if (!_decoderLoaded)
+        {
+            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
+            _decoderLoaded = true;
+        }
+    }
+
+    private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.BuildFlat(
+            feature.Attributes.Select(kv =>
+                new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
+            _decoder);
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FeatureType = feature.FeatureType,
-            Attributes = attrs,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
         };
+    }
+
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        _featureIndex ??= BuildFeatureIndex();
+        EnsureDecoder();
+
+        int i = 0;
+        foreach (var feature in _featureIndex.Values)
+        {
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Ordinal = i++,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
     }
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature> BuildFeatureIndex()
