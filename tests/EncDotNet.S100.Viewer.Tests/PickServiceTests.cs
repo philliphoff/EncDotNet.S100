@@ -227,4 +227,137 @@ public class PickServiceTests
 
         Assert.False(viewModel.PickReport.HasPick);
     }
+
+    [Fact]
+    public void NavigateToReference_NoSelectedHit_ReturnsFalse()
+    {
+        var viewModel = CreateMainViewModel();
+        var service = new PickService(new StubLoader(), viewModel);
+
+        var ok = service.NavigateToReference(new FeatureReference { Role = "r", TargetRef = "x" });
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public void NavigateToReference_TargetExists_ReplacesHitWithTarget()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-125");
+        var processor = new StubProcessor(
+            "S-125",
+            new FeatureInfo
+            {
+                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                Attributes = Array.Empty<PickAttribute>(),
+                References = new[] { new FeatureReference { Role = "AtonStatus", TargetRef = "S1" } },
+            },
+            new FeatureInfo
+            {
+                FeatureRef = "S1", FeatureType = "AtonStatus", FeatureTypeName = "AtoN Status",
+                Attributes = Array.Empty<PickAttribute>(),
+            });
+        var layer = new MemoryLayer("layer-a");
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
+
+        var service = new PickService(loader, viewModel);
+        service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
+        Assert.Equal("L1", viewModel.PickReport.FeatureRef);
+        Assert.True(viewModel.PickReport.HasReferences);
+
+        var ok = service.NavigateToReference(viewModel.PickReport.References[0]);
+
+        Assert.True(ok);
+        Assert.Single(viewModel.PickReport.Hits);
+        Assert.Equal("S1", viewModel.PickReport.FeatureRef);
+        Assert.Equal("AtonStatus", viewModel.PickReport.FeatureType);
+    }
+
+    [Fact]
+    public void NavigateToReference_TargetMissing_ReturnsFalseAndKeepsCurrentHit()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-125");
+        var processor = new StubProcessor(
+            "S-125",
+            new FeatureInfo
+            {
+                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                Attributes = Array.Empty<PickAttribute>(),
+                References = new[] { new FeatureReference { Role = "Missing", TargetRef = "ghost" } },
+            });
+        var layer = new MemoryLayer("layer-a");
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
+
+        var service = new PickService(loader, viewModel);
+        service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
+
+        var ok = service.NavigateToReference(viewModel.PickReport.References[0]);
+
+        Assert.False(ok);
+        Assert.Equal("L1", viewModel.PickReport.FeatureRef);
+    }
+
+    [Fact]
+    public void NavigateCommand_OnViewModel_DrivesPickServiceNavigation()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-421");
+        var processor = new StubProcessor(
+            "S-421",
+            new FeatureInfo
+            {
+                FeatureRef = "RTE", FeatureType = "Route", FeatureTypeName = "Route",
+                Attributes = Array.Empty<PickAttribute>(),
+                References = new[] { new FeatureReference { Role = "routeWaypoints", TargetRef = "RTE.WPTS" } },
+            },
+            new FeatureInfo
+            {
+                FeatureRef = "RTE.WPTS", FeatureType = "RouteWaypoints", FeatureTypeName = "Route Waypoints",
+                Attributes = Array.Empty<PickAttribute>(),
+            });
+        var layer = new MemoryLayer("layer-a");
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
+
+        var service = new PickService(loader, viewModel);
+        service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "RTE") }));
+        var reference = viewModel.PickReport.References[0];
+
+        viewModel.PickReport.NavigateCommand.Execute(reference);
+
+        Assert.Equal("RTE.WPTS", viewModel.PickReport.FeatureRef);
+        Assert.Equal("Route Waypoints", viewModel.PickReport.FeatureTypeName);
+    }
+
+    [Fact]
+    public void NavigateCommand_MissingTarget_SetsStatusText()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-125");
+        var processor = new StubProcessor(
+            "S-125",
+            new FeatureInfo
+            {
+                FeatureRef = "L1", FeatureType = "LightLateral", FeatureTypeName = "Lateral Light",
+                Attributes = Array.Empty<PickAttribute>(),
+                References = new[] { new FeatureReference { Role = "X", TargetRef = "ghost" } },
+            });
+        var layer = new MemoryLayer("layer-a");
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>> { [entry] = new[] { (ILayer)layer } });
+
+        var service = new PickService(loader, viewModel);
+        service.HandlePick(BuildMapInfo(new[] { MakeRecord(layer, "L1") }));
+
+        viewModel.PickReport.NavigateCommand.Execute(viewModel.PickReport.References[0]);
+
+        Assert.Contains("ghost", viewModel.StatusText ?? string.Empty);
+    }
 }

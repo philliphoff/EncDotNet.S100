@@ -58,6 +58,7 @@ internal static class Strings
     public static string Tooltip_ZoomToExtent => Get(nameof(Tooltip_ZoomToExtent));
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
     public static string Tooltip_SelectHit => Get(nameof(Tooltip_SelectHit));
+    public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
     public static string Tooltip_CloseTimelinePanel => Get(nameof(Tooltip_CloseTimelinePanel));
     public static string Tooltip_AddFeatureCatalogue => Get(nameof(Tooltip_AddFeatureCatalogue));
     public static string Tooltip_AddPortrayalCatalogue => Get(nameof(Tooltip_AddPortrayalCatalogue));
@@ -136,6 +137,8 @@ internal static class Strings
     public static string Pick_NoAttributes => Get(nameof(Pick_NoAttributes));
     public static string Pick_HitListHeader => Get(nameof(Pick_HitListHeader));
     public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));
+    public static string Pick_ReferencesHeader => Get(nameof(Pick_ReferencesHeader));
+    public static string Pick_ReferenceItemFormat => Get(nameof(Pick_ReferenceItemFormat));
 
     // Settings
     public static string Settings_Heading => Get(nameof(Settings_Heading));
@@ -171,6 +174,7 @@ internal static class Strings
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
+    public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
 
     // Dataset entry

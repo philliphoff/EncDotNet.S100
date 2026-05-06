@@ -107,26 +107,19 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
             feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
             _decoder);
 
-        // S-125 information bindings (xlink:href to AtoNStatus etc.) — surfaced
-        // as synthetic leaves until milestone 3 promotes them to a first-class
-        // FeatureReference model.
-        if (feature.InformationReferences.Length > 0)
+        // S-125 information bindings (xlink:href to AtoNStatus etc.) are
+        // promoted to first-class FeatureReferences so the pick UI can
+        // offer "follow reference" navigation.
+        var references = new List<FeatureReference>();
+        foreach (var infoRef in feature.InformationReferences)
         {
-            var withRefs = new List<PickAttribute>(attributes);
-            foreach (var infoRef in feature.InformationReferences)
+            if (string.IsNullOrWhiteSpace(infoRef.InformationRef))
+                continue;
+            references.Add(new FeatureReference
             {
-                if (string.IsNullOrWhiteSpace(infoRef.InformationRef))
-                    continue;
-                withRefs.Add(new PickAttribute
-                {
-                    Code = $"{infoRef.Role}.ref",
-                    Name = null,
-                    RawValue = infoRef.InformationRef,
-                    DisplayValue = null,
-                    Children = [],
-                });
-            }
-            attributes = withRefs;
+                Role = infoRef.Role,
+                TargetRef = infoRef.InformationRef,
+            });
         }
 
         return new FeatureInfo
@@ -135,6 +128,7 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
+            References = references,
         };
     }
 

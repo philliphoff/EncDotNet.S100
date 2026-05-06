@@ -35,6 +35,19 @@ internal sealed class PickService : IPickService
         ArgumentNullException.ThrowIfNull(viewModel);
         _loader = loader;
         _viewModel = viewModel;
+
+        // Bridge the panel's Navigate command back into this service.
+        // Failures surface as a transient status-bar message so the user
+        // knows the click registered but the target is missing.
+        _viewModel.PickReport.SetNavigateHandler(reference =>
+        {
+            if (!NavigateToReference(reference))
+            {
+                _viewModel.StatusText = string.Format(
+                    Resources.Strings.Status_FeatureRefNotFound,
+                    reference.TargetRef);
+            }
+        });
     }
 
     public void HandlePick(MapInfo? mapInfo)
@@ -104,10 +117,50 @@ internal sealed class PickService : IPickService
                 DatasetFileName = owningEntry.DisplayName,
                 ProductSpec = processor.ProductSpec,
                 Attributes = info.Attributes,
+                References = info.References,
+                OwningProcessor = processor,
             });
         }
 
         return hits;
+    }
+
+    public bool NavigateToReference(FeatureReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        // Resolve the owning processor of the currently selected hit and
+        // re-query it for the target ref. Cross-dataset hops are out of
+        // scope for milestone 3 — they slot into the search milestone
+        // where a global feature snapshot already exists.
+        var selected = _viewModel.PickReport.SelectedHit;
+        if (selected?.OwningProcessor is not { } processor)
+            return false;
+
+        var info = processor.GetFeatureInfo(reference.TargetRef);
+        if (info is null)
+            return false;
+
+        _viewModel.PickReport.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = info.FeatureType,
+                FeatureTypeName = info.FeatureTypeName,
+                FeatureRef = info.FeatureRef,
+                DatasetFileName = selected.DatasetFileName,
+                ProductSpec = selected.ProductSpec,
+                Attributes = info.Attributes,
+                References = info.References,
+                OwningProcessor = processor,
+            },
+        });
+
+        _viewModel.StatusText = string.Format(
+            Resources.Strings.Status_FeatureSummary,
+            info.FeatureTypeName ?? info.FeatureType,
+            info.FeatureRef);
+        return true;
     }
 
     private bool TryResolveOwner(

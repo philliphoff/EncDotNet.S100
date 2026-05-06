@@ -31,6 +31,29 @@ internal sealed class PickHit
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 
     /// <summary>
+    /// xlink-style references this feature points to. Empty for products
+    /// that do not model cross-references. Surfaced in the Object Info
+    /// panel as clickable rows that re-open the panel on the target.
+    /// </summary>
+    public IReadOnlyList<FeatureReference> References { get; init; } = [];
+
+    /// <summary>
+    /// Processor that owns this hit's source feature. Set by
+    /// <c>PickService</c> at construction time so reference navigation
+    /// can re-query the same processor without re-walking the layer
+    /// dictionary. <c>null</c> for unit-test fixtures that bypass the
+    /// service.
+    /// </summary>
+    internal IDatasetProcessor? OwningProcessor { get; init; }
+
+    /// <summary>
+    /// Display name (no path) of the dataset that owns this hit, mirrored
+    /// from <see cref="DatasetFileName"/> so reference-navigation hits
+    /// can carry it without re-resolving the loader.
+    /// </summary>
+    internal string? OwningDatasetFileName => DatasetFileName;
+
+    /// <summary>
     /// Label used in the hit-list row: prefers the FC-resolved name, falls
     /// back to the raw feature-type code when the FC could not decode it.
     /// </summary>

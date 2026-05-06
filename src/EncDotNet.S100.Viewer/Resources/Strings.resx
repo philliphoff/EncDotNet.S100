@@ -308,6 +308,17 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_SelectHit" xml:space="preserve">
     <value>Show this feature's details</value>
   </data>
+  <data name="Pick_ReferencesHeader" xml:space="preserve">
+    <value>REFERENCES</value>
+    <comment>Header above the references list in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_ReferenceItemFormat" xml:space="preserve">
+    <value>{0} → {1}</value>
+    <comment>Single reference-list row format: role followed by target identifier.</comment>
+  </data>
+  <data name="Tooltip_FollowReference" xml:space="preserve">
+    <value>Show the referenced feature's details</value>
+  </data>
 
   <!-- Settings -->
   <data name="Settings_Heading" xml:space="preserve">
@@ -397,6 +408,10 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_FeatureSummaryWithMore" xml:space="preserve">
     <value>{0} (+{1} more)</value>
     <comment>Status text for a multi-hit pick: {0} is the primary feature summary, {1} is the count of additional features at the same point.</comment>
+  </data>
+  <data name="Status_FeatureRefNotFound" xml:space="preserve">
+    <value>Referenced feature not found: {0}</value>
+    <comment>Status text shown when a "follow reference" click resolves to a target that does not exist in the same dataset.</comment>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>

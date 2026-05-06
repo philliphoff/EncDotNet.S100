@@ -117,8 +117,44 @@ internal sealed class PickReportViewModel : ViewModelBase
     /// <summary>True when the current pick has at least one displayable attribute.</summary>
     public bool HasAttributes => Attributes.Count > 0;
 
+    /// <summary>
+    /// xlink-style references the currently selected hit points to.
+    /// Surfaced in the panel above the attributes table; clicking a row
+    /// invokes <see cref="NavigateCommand"/> to re-open the panel on the
+    /// referenced feature.
+    /// </summary>
+    public ObservableCollection<FeatureReference> References { get; } = new();
+
+    /// <summary>True when the selected hit has at least one outbound reference.</summary>
+    public bool HasReferences => References.Count > 0;
+
+    /// <summary>
+    /// Invoked from the References list. Parameter is the
+    /// <see cref="FeatureReference"/> to follow; the actual lookup is
+    /// delegated to the handler supplied by
+    /// <see cref="SetNavigateHandler"/>. The view-model owns no service
+    /// references directly so unit tests can drive it without a
+    /// pick-service double.
+    /// </summary>
+    public ICommand NavigateCommand { get; private set; } = new RelayCommand<FeatureReference>(_ => { }, _ => false);
+
     /// <summary>Clears the panel.</summary>
     public ICommand ClearCommand { get; }
+
+    /// <summary>
+    /// Wires a navigation handler. <see cref="PickService"/> calls this
+    /// once at construction to bridge <see cref="NavigateCommand"/> back
+    /// into the service. The handler is invoked synchronously on the UI
+    /// thread for each click.
+    /// </summary>
+    public void SetNavigateHandler(Action<FeatureReference> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        NavigateCommand = new RelayCommand<FeatureReference>(
+            r => { if (r is not null) handler(r); },
+            r => r is not null);
+        OnPropertyChanged(nameof(NavigateCommand));
+    }
 
     /// <summary>
     /// Replaces the current pick with the supplied list of hits. The first
@@ -197,8 +233,10 @@ internal sealed class PickReportViewModel : ViewModelBase
         DatasetFileName = null;
         ProductSpec = null;
         Attributes.Clear();
+        References.Clear();
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
+        OnPropertyChanged(nameof(HasReferences));
         OnPropertyChanged(nameof(HasMultipleHits));
     }
 
@@ -212,7 +250,9 @@ internal sealed class PickReportViewModel : ViewModelBase
             DatasetFileName = null;
             ProductSpec = null;
             Attributes.Clear();
+            References.Clear();
             OnPropertyChanged(nameof(HasAttributes));
+            OnPropertyChanged(nameof(HasReferences));
             return;
         }
 
@@ -226,5 +266,10 @@ internal sealed class PickReportViewModel : ViewModelBase
         foreach (var attr in hit.Attributes)
             Attributes.Add(attr);
         OnPropertyChanged(nameof(HasAttributes));
+
+        References.Clear();
+        foreach (var reference in hit.References)
+            References.Add(reference);
+        OnPropertyChanged(nameof(HasReferences));
     }
 }

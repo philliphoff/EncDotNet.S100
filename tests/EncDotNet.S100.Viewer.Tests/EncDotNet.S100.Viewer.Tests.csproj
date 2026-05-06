@@ -22,11 +22,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\EncDotNet.S100.Viewer\EncDotNet.S100.Viewer.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S125\EncDotNet.S100.Datasets.S125.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\datasets\S125\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S421\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S421\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

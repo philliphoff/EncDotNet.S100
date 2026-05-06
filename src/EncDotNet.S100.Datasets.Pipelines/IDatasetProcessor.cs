@@ -50,4 +50,46 @@ public sealed class FeatureInfo
     /// <see cref="PickAttribute.Children"/>.
     /// </summary>
     public required IReadOnlyList<PickAttribute> Attributes { get; init; }
+
+    /// <summary>
+    /// xlink-style references this feature points to (e.g. S-125
+    /// information bindings, S-421 route topology). Each reference's
+    /// <see cref="FeatureReference.TargetRef"/> resolves against the
+    /// same dataset's feature collection via
+    /// <see cref="IDatasetProcessor.GetFeatureInfo"/>. Empty for
+    /// products that do not model cross-references.
+    /// </summary>
+    public IReadOnlyList<FeatureReference> References { get; init; }
+        = System.Array.Empty<FeatureReference>();
+}
+
+/// <summary>
+/// An xlink-style reference from one feature to another within the same
+/// dataset. Promoted from per-spec reference types (e.g.
+/// <c>S125InformationReference</c>, <c>S421Reference</c>) so that the
+/// pick UI can offer uniform "follow reference" navigation across all
+/// GML-encoded products.
+/// </summary>
+public sealed class FeatureReference
+{
+    /// <summary>
+    /// The role / association name as it appears in the dataset (e.g.
+    /// <c>"AtonStatus"</c> for an S-125 information binding, or
+    /// <c>"routeWaypoints"</c> for an S-421 route → waypoints link).
+    /// </summary>
+    public required string Role { get; init; }
+
+    /// <summary>
+    /// The referenced feature's identifier (matches
+    /// <see cref="FeatureInfo.FeatureRef"/> on the target). Already
+    /// trimmed of any leading <c>#</c> from the underlying
+    /// <c>xlink:href</c>.
+    /// </summary>
+    public required string TargetRef { get; init; }
+
+    /// <summary>
+    /// The <c>xlink:arcrole</c> value when present; conveys the semantic
+    /// of the link (e.g. an S-421 segment role) and may be null.
+    /// </summary>
+    public string? ArcRole { get; init; }
 }

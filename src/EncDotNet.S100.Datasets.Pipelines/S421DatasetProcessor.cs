@@ -96,26 +96,20 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
             feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
             _decoder);
 
-        // S-421 cross-references (xlink:href to waypoints, action points, etc.)
-        // are surfaced as synthetic leaves until milestone 3 promotes them to
-        // a first-class FeatureReference model.
-        if (feature.References.Length > 0)
+        // S-421 cross-references (xlink:href to waypoints, action points,
+        // etc.) are promoted to first-class FeatureReferences so the pick
+        // UI can offer "follow reference" navigation.
+        var references = new List<FeatureReference>();
+        foreach (var reference in feature.References)
         {
-            var withRefs = new List<PickAttribute>(attributes);
-            foreach (var reference in feature.References)
+            if (string.IsNullOrWhiteSpace(reference.Href))
+                continue;
+            references.Add(new FeatureReference
             {
-                if (string.IsNullOrWhiteSpace(reference.Href))
-                    continue;
-                withRefs.Add(new PickAttribute
-                {
-                    Code = $"→ {reference.Role}",
-                    Name = null,
-                    RawValue = reference.Href,
-                    DisplayValue = null,
-                    Children = [],
-                });
-            }
-            attributes = withRefs;
+                Role = reference.Role,
+                TargetRef = reference.Href.TrimStart('#'),
+                ArcRole = reference.ArcRole,
+            });
         }
 
         return new FeatureInfo
@@ -124,6 +118,7 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
+            References = references,
         };
     }
 

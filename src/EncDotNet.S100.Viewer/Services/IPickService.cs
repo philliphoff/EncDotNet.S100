@@ -17,4 +17,15 @@ internal interface IPickService
     /// null or with hits that don't carry a feature reference.
     /// </summary>
     void HandlePick(MapInfo? mapInfo);
+
+    /// <summary>
+    /// Resolves an xlink-style reference from the currently selected hit
+    /// to its target feature within the same dataset and re-opens the
+    /// Object Info panel on it. Returns <c>true</c> when navigation
+    /// succeeded, <c>false</c> when the target could not be found (the
+    /// caller is responsible for surfacing
+    /// <see cref="EncDotNet.S100.Viewer.Resources.Strings.Status_FeatureRefNotFound"/>
+    /// or equivalent).
+    /// </summary>
+    bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference);
 }

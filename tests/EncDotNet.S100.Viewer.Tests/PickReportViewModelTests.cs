@@ -241,4 +241,98 @@ public class PickReportViewModelTests
         Assert.Equal("Depth Area", withName.DisplayLabel);
         Assert.Equal("DepthArea", withoutName.DisplayLabel);
     }
+
+    private static FeatureReference Ref(string role, string target, string? arcRole = null)
+        => new() { Role = role, TargetRef = target, ArcRole = arcRole };
+
+    [Fact]
+    public void SetPicks_PopulatesReferencesFromSelectedHit()
+    {
+        var vm = new PickReportViewModel();
+        var hit = new PickHit
+        {
+            FeatureType = "LightLateral", FeatureTypeName = "Lateral Light", FeatureRef = "L1",
+            References = new[] { Ref("AtonStatus", "S1"), Ref("SpatialAccuracy", "A2") },
+        };
+
+        vm.SetPicks(new[] { hit });
+
+        Assert.True(vm.HasReferences);
+        Assert.Equal(2, vm.References.Count);
+        Assert.Equal("AtonStatus", vm.References[0].Role);
+        Assert.Equal("S1", vm.References[0].TargetRef);
+    }
+
+    [Fact]
+    public void ChangingSelectedHit_RefreshesReferences()
+    {
+        var vm = new PickReportViewModel();
+        var hits = new[]
+        {
+            new PickHit
+            {
+                FeatureType = "LightLateral", FeatureRef = "L1",
+                References = new[] { Ref("AtonStatus", "S1") },
+            },
+            new PickHit
+            {
+                FeatureType = "DepthArea", FeatureRef = "D1",
+                References = System.Array.Empty<FeatureReference>(),
+            },
+        };
+        vm.SetPicks(hits);
+        Assert.True(vm.HasReferences);
+
+        vm.SelectedHit = hits[1];
+
+        Assert.False(vm.HasReferences);
+        Assert.Empty(vm.References);
+    }
+
+    [Fact]
+    public void Clear_EmptiesReferences()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "X", FeatureRef = "1",
+                References = new[] { Ref("a", "b") },
+            },
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasReferences);
+        Assert.Empty(vm.References);
+    }
+
+    [Fact]
+    public void NavigateCommand_RoutesParameterToHandler()
+    {
+        var vm = new PickReportViewModel();
+        FeatureReference? captured = null;
+        vm.SetNavigateHandler(r => captured = r);
+
+        var reference = Ref("role", "target");
+        Assert.True(vm.NavigateCommand.CanExecute(reference));
+        vm.NavigateCommand.Execute(reference);
+
+        Assert.NotNull(captured);
+        Assert.Equal("target", captured!.TargetRef);
+    }
+
+    [Fact]
+    public void NavigateCommand_NullParameter_DoesNothing()
+    {
+        var vm = new PickReportViewModel();
+        var invoked = false;
+        vm.SetNavigateHandler(_ => invoked = true);
+
+        Assert.False(vm.NavigateCommand.CanExecute(null));
+        vm.NavigateCommand.Execute(null);
+
+        Assert.False(invoked);
+    }
 }

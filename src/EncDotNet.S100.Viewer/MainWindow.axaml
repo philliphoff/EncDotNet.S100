@@ -569,6 +569,40 @@
                                            TextWrapping="Wrap" />
                             </StackPanel>
 
+                            <!-- References list (xlink:href targets) -->
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="0,8,0,0"
+                                    IsVisible="{Binding HasReferences}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_ReferencesHeader}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <ItemsControl ItemsSource="{Binding References}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="pp:FeatureReference">
+                                                <Button Margin="0,1"
+                                                        Padding="6,2"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Left"
+                                                        Background="Transparent"
+                                                        Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).NavigateCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_FollowReference}">
+                                                    <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Role}" />
+                                                        <Run Text=" → " FontWeight="Light" />
+                                                        <Run Text="{Binding TargetRef}" FontStyle="Italic" />
+                                                    </TextBlock>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Attribute list -->
                             <Border BorderBrush="{DynamicResource BorderColor}"
                                     BorderThickness="0,1,0,0"
