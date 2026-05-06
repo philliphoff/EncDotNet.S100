@@ -104,7 +104,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedResult, value) || value is null)
                 return;
-            _pick.OpenFeature(value.Hit.Processor, value.Hit.FeatureRef, value.Hit.DatasetFileName);
+            _pick.OpenFeatureAt(value.Hit.Processor, value.Hit.Ordinal, value.Hit.DatasetFileName);
         }
     }
 
@@ -159,7 +159,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         if (item is null)
             return;
 
-        _pick.OpenFeature(item.Hit.Processor, item.Hit.FeatureRef, item.Hit.DatasetFileName);
+        _pick.OpenFeatureAt(item.Hit.Processor, item.Hit.Ordinal, item.Hit.DatasetFileName);
     }
 }
 

@@ -20,4 +20,9 @@ internal sealed class StubPickService : IPickService
         EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor processor,
         string featureRef,
         string datasetFileName) => false;
+
+    public bool OpenFeatureAt(
+        EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor processor,
+        int ordinal,
+        string datasetFileName) => false;
 }

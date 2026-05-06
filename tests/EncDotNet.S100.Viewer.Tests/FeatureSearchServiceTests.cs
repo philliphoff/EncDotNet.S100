@@ -142,10 +142,10 @@ public class FeatureSearchServiceTests
         var svc = new FeatureSearchService(loader);
 
         IDatasetProcessor? capturedProcessor = null;
-        string? capturedRef = null;
+        int capturedOrdinal = -1;
         string? capturedDataset = null;
         var pick = new RecordingPick(
-            (p, r, d) => { capturedProcessor = p; capturedRef = r; capturedDataset = d; });
+            (p, ord, d) => { capturedProcessor = p; capturedOrdinal = ord; capturedDataset = d; });
 
         var vm = new FeatureSearchViewModel(svc, pick);
         vm.Query = "DepthArea";
@@ -153,19 +153,20 @@ public class FeatureSearchServiceTests
         vm.OpenResultCommand.Execute(vm.Results[0]);
 
         Assert.Same(processor, capturedProcessor);
-        Assert.Equal("a1", capturedRef);
+        Assert.Equal(0, capturedOrdinal);
         Assert.Equal("x.gml", capturedDataset);
     }
 
     private sealed class RecordingPick : IPickService
     {
-        private readonly Action<IDatasetProcessor, string, string> _open;
-        public RecordingPick(Action<IDatasetProcessor, string, string> open) { _open = open; }
+        private readonly Action<IDatasetProcessor, int, string> _openAt;
+        public RecordingPick(Action<IDatasetProcessor, int, string> openAt) { _openAt = openAt; }
         public void HandlePick(Mapsui.MapInfo? mapInfo) { }
         public bool NavigateToReference(FeatureReference reference) => false;
-        public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName)
+        public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
+        public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName)
         {
-            _open(processor, featureRef, datasetFileName);
+            _openAt(processor, ordinal, datasetFileName);
             return true;
         }
     }

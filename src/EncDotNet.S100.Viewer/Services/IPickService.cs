@@ -42,4 +42,17 @@ internal interface IPickService
         EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor processor,
         string featureRef,
         string datasetFileName);
+
+    /// <summary>
+    /// Opens the Object Information panel on a feature identified by
+    /// its enumeration ordinal within the processor (see
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.FeatureSummary.Ordinal"/>).
+    /// Used by feature search so duplicate <c>gml:id</c>s — a real
+    /// producer bug seen in S-122 datasets — still resolve to the
+    /// correct feature instead of always returning the first match.
+    /// </summary>
+    bool OpenFeatureAt(
+        EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor processor,
+        int ordinal,
+        string datasetFileName);
 }

@@ -86,6 +86,7 @@ internal sealed class FeatureSearchService : IFeatureSearchService
                     DatasetFileName = entry.DisplayName,
                     ProductSpec = processor.ProductSpec,
                     FeatureRef = summary.FeatureRef,
+                    Ordinal = summary.Ordinal,
                     FeatureType = summary.FeatureType,
                     FeatureTypeName = summary.FeatureTypeName,
                 });

@@ -19,7 +19,27 @@ public interface IDatasetProcessor
     /// (as stored in the Mapsui feature via <c>FeatureRefKey</c>), or <c>null</c>
     /// if the feature cannot be found.
     /// </summary>
+    /// <remarks>
+    /// Real-world datasets occasionally contain features that share a
+    /// <c>gml:id</c> (a producer bug), so callers that already know the
+    /// feature's position within the dataset should prefer
+    /// <see cref="GetFeatureInfoAt"/> for a collision-free lookup.
+    /// </remarks>
     FeatureInfo? GetFeatureInfo(string featureRef);
+
+    /// <summary>
+    /// Returns information about the feature at the given enumeration
+    /// ordinal — the same index reported via
+    /// <see cref="FeatureSummary.Ordinal"/> from
+    /// <see cref="EnumerateFeatures"/>. Used by the search index so
+    /// duplicate <c>gml:id</c>s (a real producer bug) still route to
+    /// the correct feature.
+    /// </summary>
+    /// <returns>
+    /// Feature info, or <c>null</c> when the ordinal is out of range or
+    /// this processor does not expose discrete features.
+    /// </returns>
+    FeatureInfo? GetFeatureInfoAt(int ordinal) => null;
 
     /// <summary>
     /// Samples this dataset at the supplied geographic position and
@@ -65,6 +85,17 @@ public sealed class FeatureSummary
 {
     /// <summary>The feature reference string (dataset-specific ID).</summary>
     public required string FeatureRef { get; init; }
+
+    /// <summary>
+    /// The feature's position within
+    /// <see cref="IDatasetProcessor.EnumerateFeatures"/>. Used as a
+    /// collision-free key when a producer reuses <c>gml:id</c>s across
+    /// features within a single dataset; pair with
+    /// <see cref="IDatasetProcessor.GetFeatureInfoAt"/> to resolve.
+    /// Defaults to 0 — processors must set this to the loop index when
+    /// duplicate-id resilience matters.
+    /// </summary>
+    public int Ordinal { get; init; }
 
     /// <summary>
     /// The feature type code as it appears in the dataset (typically the

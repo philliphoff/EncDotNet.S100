@@ -133,12 +133,33 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         if (!_featureIndex.TryGetValue(featureId, out var feature))
             return null;
 
+        EnsureDecoder();
+        return BuildFeatureInfo(feature);
+    }
+
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        _featureIndex ??= BuildFeatureIndex();
+        if (ordinal < 0 || ordinal >= _featureIndex.Count)
+            return null;
+        EnsureDecoder();
+        // Dictionary preserves insertion order; the ordinal matches
+        // EnumerateFeatures' enumeration position.
+        var feature = System.Linq.Enumerable.ElementAt(_featureIndex.Values, ordinal);
+        return BuildFeatureInfo(feature);
+    }
+
+    private void EnsureDecoder()
+    {
         if (!_decoderLoaded)
         {
             _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
             _decoderLoaded = true;
         }
+    }
 
+    private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
         var attributes = FeatureInfoBuilder.BuildFlat(
             feature.Attributes.Select(kv =>
                 new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
@@ -146,7 +167,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
@@ -156,18 +177,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     public IEnumerable<FeatureSummary> EnumerateFeatures()
     {
         _featureIndex ??= BuildFeatureIndex();
+        EnsureDecoder();
 
-        if (!_decoderLoaded)
-        {
-            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
-            _decoderLoaded = true;
-        }
-
+        int i = 0;
         foreach (var feature in _featureIndex.Values)
         {
             yield return new FeatureSummary
             {
                 FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Ordinal = i++,
                 FeatureType = feature.FeatureType,
                 FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             };

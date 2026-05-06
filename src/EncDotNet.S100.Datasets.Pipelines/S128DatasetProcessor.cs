@@ -94,9 +94,18 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
         var feature = _dataset.Features.FirstOrDefault(f => string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
-        if (feature is null)
-            return null;
+        return feature is null ? null : BuildFeatureInfo(feature);
+    }
 
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= _dataset.Features.Length)
+            return null;
+        return BuildFeatureInfo(_dataset.Features[ordinal]);
+    }
+
+    private FeatureInfo BuildFeatureInfo(S128Feature feature)
+    {
         var attributes = FeatureInfoBuilder.Build(
             feature.Attributes,
             feature.ComplexAttributes.Select(c => new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
@@ -104,7 +113,7 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
 
         return new FeatureInfo
         {
-            FeatureRef = featureRef,
+            FeatureRef = feature.Id,
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
@@ -113,11 +122,13 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
 
     public IEnumerable<FeatureSummary> EnumerateFeatures()
     {
-        foreach (var feature in _dataset.Features)
+        for (int i = 0; i < _dataset.Features.Length; i++)
         {
+            var feature = _dataset.Features[i];
             yield return new FeatureSummary
             {
                 FeatureRef = feature.Id,
+                Ordinal = i,
                 FeatureType = feature.FeatureType,
                 FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             };

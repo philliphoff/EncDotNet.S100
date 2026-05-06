@@ -42,6 +42,14 @@ internal sealed class FeatureSearchHit
 
     public required string FeatureRef { get; init; }
 
+    /// <summary>
+    /// The feature's enumeration position within its processor — passed
+    /// to <see cref="IPickService.OpenFeatureAt"/> so duplicate
+    /// <c>gml:id</c>s (a real producer bug) still route to the correct
+    /// feature.
+    /// </summary>
+    public int Ordinal { get; init; }
+
     public required string FeatureType { get; init; }
 
     public string? FeatureTypeName { get; init; }

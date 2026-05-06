@@ -182,6 +182,20 @@ internal sealed class PickService : IPickService
         ArgumentNullException.ThrowIfNull(datasetFileName);
 
         var info = processor.GetFeatureInfo(featureRef);
+        return PublishFeatureInfo(processor, info, datasetFileName);
+    }
+
+    public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName)
+    {
+        ArgumentNullException.ThrowIfNull(processor);
+        ArgumentNullException.ThrowIfNull(datasetFileName);
+
+        var info = processor.GetFeatureInfoAt(ordinal);
+        return PublishFeatureInfo(processor, info, datasetFileName);
+    }
+
+    private bool PublishFeatureInfo(IDatasetProcessor processor, FeatureInfo? info, string datasetFileName)
+    {
         if (info is null)
             return false;
 
