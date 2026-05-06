@@ -51,25 +51,37 @@
                  Padding="0">
             <ListBox.Styles>
                 <!--
-                    ShadUI's ListBoxItem template (Controls/ListBox/
-                    ListBoxItem.axaml) layers three template borders —
-                    BaseBackground, HoverBackground, SelectionBackground —
-                    plus a PathIcon#CheckSelected that is shown on
-                    :selected. Override SelectionBackground to paint the
-                    configured accent across the whole row, and hide the
-                    check icon entirely so selected rows read as a solid
-                    coloured strip.
+                    Suppress the default ShadUI ListBoxItem chrome
+                    (BaseBackground/HoverBackground/SelectionBackground
+                    layers + check icon) by replacing the template with
+                    a minimal Border#PART_Container, then mirror the
+                    DatasetsView hover/selection look so search rows
+                    match the rest of the side panel.
                 -->
                 <Style Selector="ListBoxItem">
                     <Setter Property="Padding" Value="12,6" />
-                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="Margin" Value="0,1" />
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Template">
+                        <ControlTemplate>
+                            <Border Name="PART_Container"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalAlignment="Stretch"
+                                                  HorizontalContentAlignment="Stretch" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter>
                 </Style>
-                <Style Selector="ListBoxItem:selected /template/ Border#SelectionBackground">
+                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
                     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                </Style>
-                <Style Selector="ListBoxItem:selected /template/ PathIcon#CheckSelected">
-                    <Setter Property="IsVisible" Value="False" />
                 </Style>
                 <Style Selector="ListBoxItem:selected TextBlock">
                     <Setter Property="Foreground" Value="White" />
