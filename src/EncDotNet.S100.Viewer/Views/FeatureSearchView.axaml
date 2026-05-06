@@ -89,21 +89,29 @@
             </ListBox.Styles>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:FeatureSearchResultItem">
-                    <StackPanel Orientation="Vertical"
-                                Spacing="2"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
-                        <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding FeatureRef}"
-                                   FontSize="11"
-                                   Opacity="0.75" />
-                        <TextBlock FontSize="10"
-                                   Opacity="0.55"
-                                   TextTrimming="CharacterEllipsis">
-                            <Run Text="{Binding ProductSpec}" />
-                            <Run Text="·" />
-                            <Run Text="{Binding DatasetFileName}" />
-                        </TextBlock>
-                    </StackPanel>
+                    <!--
+                        Border with Background=Transparent so the entire
+                        row hit-tests for click-to-select; without it,
+                        gaps between the StackPanel's children swallow
+                        pointer events and the row needs multiple clicks
+                        to select (same fix as DatasetsView).
+                    -->
+                    <Border Background="Transparent"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
+                        <StackPanel Orientation="Vertical" Spacing="2">
+                            <TextBlock Text="{Binding DisplayType}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding FeatureRef}"
+                                       FontSize="11"
+                                       Opacity="0.75" />
+                            <TextBlock FontSize="10"
+                                       Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding ProductSpec}" />
+                                <Run Text="·" />
+                                <Run Text="{Binding DatasetFileName}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
