@@ -259,6 +259,15 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     public ObservableCollection<DatasetEntry> Entries { get; } = new();
 
+    /// <summary>
+    /// Header rows surfaced above <see cref="Entries"/> in the Datasets
+    /// panel — one per currently-loaded exchange set. Populated by
+    /// <see cref="EncDotNet.S100.Viewer.Services.IExchangeSetService"/>
+    /// via <see cref="RegisterExchangeSetHeader"/> and removed when the
+    /// last entry from a set is gone.
+    /// </summary>
+    public ObservableCollection<ExchangeSetHeader> ExchangeSetHeaders { get; } = new();
+
     private DatasetEntry? _selectedEntry;
     /// <summary>
     /// The dataset row currently highlighted in the panel. Drives the
@@ -398,6 +407,42 @@ internal sealed class DatasetsViewModel : ViewModelBase
             displayName: displayName);
         Entries.Insert(0, entry);
         return entry;
+    }
+
+    /// <summary>
+    /// Registers a header row for a freshly-opened exchange set. The
+    /// supplied <paramref name="closeAction"/> is invoked when the user
+    /// clicks the header's Close button and is responsible for removing
+    /// every <see cref="DatasetEntry"/> that came from this set
+    /// (typically by enumerating <see cref="Entries"/> with
+    /// <c>e.Source == source</c> and removing them); the service's
+    /// <c>OnEntriesChanged</c> listener will then dispose the set and
+    /// remove this header via <see cref="RemoveExchangeSetHeader"/>.
+    /// </summary>
+    internal ExchangeSetHeader RegisterExchangeSetHeader(
+        IAssetSource source,
+        string sourcePath,
+        string? producer,
+        string? issueDate,
+        int datasetCount,
+        Action<ExchangeSetHeader> closeAction)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(sourcePath);
+        ArgumentNullException.ThrowIfNull(closeAction);
+
+        var header = new ExchangeSetHeader(
+            source, sourcePath, producer, issueDate, datasetCount, closeAction);
+        ExchangeSetHeaders.Add(header);
+        return header;
+    }
+
+    /// <summary>Removes a header registered via
+    /// <see cref="RegisterExchangeSetHeader"/>. Idempotent.</summary>
+    internal void RemoveExchangeSetHeader(ExchangeSetHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ExchangeSetHeaders.Remove(header);
     }
 
     /// <summary>

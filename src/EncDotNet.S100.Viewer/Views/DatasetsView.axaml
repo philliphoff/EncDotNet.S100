@@ -94,6 +94,55 @@
                 Margin="8"
                 x:Name="AddButton" />
 
+        <!-- Exchange-set header rows: one per loaded exchange set,
+             stacked above the bulk-action toolbar. Each row exposes a
+             Close button that removes every dataset contributed by
+             that set. -->
+        <ItemsControl DockPanel.Dock="Top"
+                      ItemsSource="{Binding ExchangeSetHeaders}"
+                      Margin="8,4,8,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ExchangeSetHeader">
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8,6"
+                            Margin="0,0,0,4">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Text="{Binding DisplayName}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding SourcePath}" />
+                            <Button Grid.Row="0" Grid.Column="1" Grid.RowSpan="2"
+                                    Classes="Icon"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding CloseCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
+                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <StackPanel Grid.Row="1" Grid.Column="0"
+                                        Orientation="Horizontal"
+                                        Spacing="8">
+                                <TextBlock Classes="Caption"
+                                           Opacity="0.75"
+                                           Text="{Binding DatasetCount, StringFormat={x:Static loc:Strings.Pane_ExchangeSetHeader_Count}}" />
+                                <TextBlock Classes="Caption"
+                                           Opacity="0.75"
+                                           IsVisible="{Binding Producer, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Text="{Binding Producer, StringFormat={x:Static loc:Strings.Pane_ExchangeSetHeader_Producer}}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="Caption"
+                                           Opacity="0.75"
+                                           IsVisible="{Binding IssueDate, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Text="{Binding IssueDate, StringFormat={x:Static loc:Strings.Pane_ExchangeSetHeader_Issued}}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- Bulk-action toolbar: applies to every loaded dataset.
              "Isolate" is per-row (right-click context menu) because it
              needs a target. -->

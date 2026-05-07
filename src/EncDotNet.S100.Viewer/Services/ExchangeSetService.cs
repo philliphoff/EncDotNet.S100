@@ -119,6 +119,16 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             _tracked.Add(tracked);
             // From this point on, lifetime ownership transfers to the tracked
             // entry — do not dispose `exchangeSet` / `source` directly below.
+            var assetSource = tracked.ExchangeSet.Source;
+            var producer = tracked.ExchangeSet.Catalogue.Contact?.Organization;
+            var issueDate = ResolveLatestIssueDate(datasets);
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                assetSource,
+                folderOrZipPath,
+                producer,
+                issueDate,
+                datasets.Count,
+                closeAction: CloseExchangeSetFromHeader);
             exchangeSet = null;
             source = null;
 
@@ -194,6 +204,11 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             // immediately so the file handle / archive is not leaked.
             if (tracked.Entries.Count == 0)
             {
+                if (tracked.Header is { } orphanHeader)
+                {
+                    _datasets.RemoveExchangeSetHeader(orphanHeader);
+                    tracked.Header = null;
+                }
                 tracked.ExchangeSet.Dispose();
                 _tracked.Remove(tracked);
             }
@@ -326,10 +341,56 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             if (tracked.Entries.Count == 0)
             {
+                if (tracked.Header is { } header)
+                {
+                    _datasets.RemoveExchangeSetHeader(header);
+                    tracked.Header = null;
+                }
                 tracked.ExchangeSet.Dispose();
                 _tracked.RemoveAt(i);
             }
         }
+    }
+
+    /// <summary>
+    /// Removes every <see cref="DatasetEntry"/> that came from the
+    /// supplied header's exchange set. The collection-changed listener
+    /// then disposes the underlying <see cref="ExchangeSet"/> and
+    /// unregisters the header in the same pass.
+    /// </summary>
+    private void CloseExchangeSetFromHeader(ExchangeSetHeader header)
+    {
+        var tracked = _tracked.Find(t => ReferenceEquals(t.Header, header));
+        if (tracked is null) return;
+
+        // Snapshot the entries: removing from `_datasets.Entries`
+        // mutates `tracked.Entries` indirectly via OnEntriesChanged.
+        var entriesToRemove = tracked.Entries.ToArray();
+        foreach (var entry in entriesToRemove)
+        {
+            _datasets.Entries.Remove(entry);
+        }
+    }
+
+    /// <summary>
+    /// Returns the lexically-greatest non-null
+    /// <see cref="DatasetDiscoveryMetadata.IssueDate"/> across the
+    /// catalogue, or <c>null</c> if no dataset declared one. ISO-8601
+    /// date strings sort correctly under ordinal comparison, so no
+    /// parsing is needed for the common case.
+    /// </summary>
+    private static string? ResolveLatestIssueDate(
+        IReadOnlyList<DatasetDiscoveryMetadata> datasets)
+    {
+        string? latest = null;
+        foreach (var d in datasets)
+        {
+            var s = d.IssueDate;
+            if (string.IsNullOrEmpty(s)) continue;
+            if (latest is null || string.CompareOrdinal(s, latest) > 0)
+                latest = s;
+        }
+        return latest;
     }
 
     public void Dispose()
@@ -355,6 +416,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         public string SourcePath { get; }
         public ExchangeSet ExchangeSet { get; }
         public List<DatasetEntry> Entries { get; } = new();
+        public ExchangeSetHeader? Header { get; set; }
 
         public TrackedExchangeSet(string sourcePath, ExchangeSet exchangeSet)
         {

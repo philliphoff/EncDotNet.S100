@@ -151,6 +151,18 @@
   <data name="Pane_SubLayers" xml:space="preserve">
     <value>Sub-layers</value>
   </data>
+  <data name="Pane_ExchangeSetHeader_Producer" xml:space="preserve">
+    <value>Producer: {0}</value>
+  </data>
+  <data name="Pane_ExchangeSetHeader_Issued" xml:space="preserve">
+    <value>Issued: {0}</value>
+  </data>
+  <data name="Pane_ExchangeSetHeader_Count" xml:space="preserve">
+    <value>{0} datasets</value>
+  </data>
+  <data name="Tooltip_CloseExchangeSet" xml:space="preserve">
+    <value>Close this exchange set and remove every dataset it contributed</value>
+  </data>
   <data name="Tooltip_ShowAllDatasets" xml:space="preserve">
     <value>Show every dataset</value>
   </data>

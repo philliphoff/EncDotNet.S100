@@ -89,6 +89,10 @@ internal static class Strings
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
     public static string Pane_SubLayers => Get(nameof(Pane_SubLayers));
+    public static string Pane_ExchangeSetHeader_Producer => Get(nameof(Pane_ExchangeSetHeader_Producer));
+    public static string Pane_ExchangeSetHeader_Issued => Get(nameof(Pane_ExchangeSetHeader_Issued));
+    public static string Pane_ExchangeSetHeader_Count => Get(nameof(Pane_ExchangeSetHeader_Count));
+    public static string Tooltip_CloseExchangeSet => Get(nameof(Tooltip_CloseExchangeSet));
     public static string Tooltip_ShowAllDatasets => Get(nameof(Tooltip_ShowAllDatasets));
     public static string Tooltip_HideAllDatasets => Get(nameof(Tooltip_HideAllDatasets));
     public static string Menu_IsolateDataset => Get(nameof(Menu_IsolateDataset));
