@@ -25,4 +25,14 @@ public interface IVectorPortrayalCatalogue
 
     /// <summary>Controls which viewing groups are currently visible.</summary>
     ViewingGroupController ViewingGroups { get; }
+
+    /// <summary>
+    /// Tracks the active S-100 Part 9 display-mode id for the
+    /// catalogue. When the controller's active id changes the
+    /// catalogue is responsible for resolving the corresponding
+    /// viewing-group membership and pushing it into
+    /// <see cref="ViewingGroups"/> via
+    /// <see cref="ViewingGroupController.SetActiveModeMembership"/>.
+    /// </summary>
+    DisplayModeController DisplayModes { get; }
 }

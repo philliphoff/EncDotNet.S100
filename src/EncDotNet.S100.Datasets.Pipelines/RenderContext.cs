@@ -16,6 +16,14 @@ public abstract record RenderContext
 
     /// <summary>Global text scale factor (1.0 = default).</summary>
     public double TextScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// Cross-spec ECDIS display settings (S-100 Part 9 §11.7
+    /// display-mode selection plus per-spec viewing-group overrides).
+    /// When <c>null</c> processors render with no mode filter and no
+    /// user overrides — equivalent to "All" with an empty hidden set.
+    /// </summary>
+    public EcdisDisplaySettings? EcdisDisplay { get; init; }
 }
 
 public sealed record S101RenderContext : RenderContext;

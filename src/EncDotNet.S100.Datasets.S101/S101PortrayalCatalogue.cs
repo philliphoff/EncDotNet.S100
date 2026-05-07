@@ -31,6 +31,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
         _luaEngine = luaEngine;
+        DisplayModeMembership.Bind(DisplayModes, ViewingGroups, _provider.Catalogue);
     }
 
     public string ProductSpec => "S-101";
@@ -50,6 +51,8 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     }
 
     public ViewingGroupController ViewingGroups { get; } = new();
+
+    public DisplayModeController DisplayModes { get; } = new();
 
     // ── Palettes ───────────────────────────────────────────────────────
 

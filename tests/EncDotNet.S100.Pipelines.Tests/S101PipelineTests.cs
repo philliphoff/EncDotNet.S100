@@ -269,6 +269,8 @@ public class S101PipelineTests
         public IReadOnlyList<PortrayalRule> Rules { get; }
         public ViewingGroupController ViewingGroups { get; }
 
+        public DisplayModeController DisplayModes { get; } = new();
+
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
 

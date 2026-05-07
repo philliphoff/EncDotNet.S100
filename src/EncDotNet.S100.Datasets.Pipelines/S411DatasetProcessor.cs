@@ -67,6 +67,7 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
         }
 
         var catalogue = new S411PortrayalCatalogue(_provider);
+        context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(palette);
 
         // 1. Run the S-100 Part 9 vector portrayal pipeline.

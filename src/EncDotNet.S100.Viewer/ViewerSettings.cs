@@ -52,6 +52,21 @@ internal sealed class ViewerSettings
     /// <summary>Distance unit used by the map scale bar.</summary>
     public string DistanceUnit { get; set; } = "NauticalMiles";
 
+    /// <summary>
+    /// Active ECDIS display category — one of "DisplayBase",
+    /// "Standard", "OtherInformation", "All". Defaults to Standard
+    /// (S-100 Part 9 §11.7).
+    /// </summary>
+    public string EcdisDisplayCategory { get; set; } = "Standard";
+
+    /// <summary>
+    /// Per-spec viewing-group ids the user has explicitly hidden via
+    /// the ECDIS panel. Keys are spec codes (e.g. "S-101"); values
+    /// are comma-separated viewing-group ids. Empty by default.
+    /// </summary>
+    public Dictionary<string, string> EcdisHiddenViewingGroups { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
