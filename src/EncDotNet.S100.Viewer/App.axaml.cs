@@ -177,6 +177,8 @@ public partial class App : Application
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();
+        services.AddSingleton<DisplayToolbarViewModel>();
+        services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // Main window — receives only the StartupOptions plus the small set

@@ -38,6 +38,7 @@ internal static class S101DocumentReader
         var featureAssociationCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
         var roleCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
         var points = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
+        var multiPoints = ImmutableDictionary.CreateBuilder<uint, S101MultiPointRecord>();
         var curveSegments = ImmutableDictionary.CreateBuilder<uint, S101CurveSegmentRecord>();
         var compositeCurves = ImmutableDictionary.CreateBuilder<uint, S101CompositeCurveRecord>();
         var surfaces = ImmutableDictionary.CreateBuilder<uint, S101SurfaceRecord>();
@@ -62,6 +63,12 @@ internal static class S101DocumentReader
                     var pt = ParsePoint(record, ddr);
                     if (pt is not null)
                         points[pt.RecordId] = pt;
+                    break;
+
+                case "MRID":
+                    var mpt = ParseMultiPoint(record, ddr);
+                    if (mpt is not null)
+                        multiPoints[mpt.RecordId] = mpt;
                     break;
 
                 case "CRID":
@@ -115,6 +122,7 @@ internal static class S101DocumentReader
             FeatureTypeCatalogue = featureTypeCatalogue.ToImmutable(),
             AttributeTypeCatalogue = attributeTypeCatalogue.ToImmutable(),
             Points = points.ToImmutable(),
+            MultiPoints = multiPoints.ToImmutable(),
             CurveSegments = curveSegments.ToImmutable(),
             CompositeCurves = compositeCurves.ToImmutable(),
             Surfaces = surfaces.ToImmutable(),
@@ -229,6 +237,52 @@ internal static class S101DocumentReader
         }
 
         return new S101PointRecord { RecordId = rcid, Y = y, X = x };
+    }
+
+    /// <summary>
+    /// Parses an MRID (MultiPoint Record IDentifier) record containing 3D
+    /// sounding coordinates (S-100 Part 10a §10a-5.6).
+    /// </summary>
+    /// <remarks>
+    /// The C3IL field uses format <c>(b11,3b24)</c>: a 1-byte VCID leader
+    /// followed by three 4-byte signed integers (YCOO, XCOO, ZCOO) per point.
+    /// The EncDotNet.Iso8211 library does not fully split the concatenated
+    /// array descriptor (<c>VCID*YCOO!XCOO!ZCOO</c>), so coordinates are
+    /// parsed directly from the raw binary data.
+    /// </remarks>
+    private static S101MultiPointRecord? ParseMultiPoint(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
+    {
+        var mridField = record.GetFieldByTag("MRID");
+        if (mridField is null) return null;
+
+        var mridDef = ddr.GetFieldDefinition("MRID")!;
+        var mridReader = new Iso8211FieldReader(mridDef, mridField.Data);
+        var rcid = mridReader.GetSubfield<uint>("RCID");
+
+        // C3IL — 3D coordinate list: 1-byte VCID + 3×4-byte signed (Y, X, Z) per point
+        const int bytesPerPoint = 1 + 4 + 4 + 4; // VCID(b11) + YCOO(b24) + XCOO(b24) + ZCOO(b24)
+        var coords = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
+        var c3ilField = record.GetFieldByTag("C3IL");
+        if (c3ilField is not null)
+        {
+            var data = c3ilField.Data;
+            int pointCount = data.Length / bytesPerPoint;
+            for (int i = 0; i < pointCount; i++)
+            {
+                int offset = i * bytesPerPoint;
+                // Skip VCID (1 byte), then read YCOO, XCOO, ZCOO as signed 32-bit LE
+                int cy = BitConverter.ToInt32(data, offset + 1);
+                int cx = BitConverter.ToInt32(data, offset + 5);
+                int cz = BitConverter.ToInt32(data, offset + 9);
+                coords.Add((cy, cx, cz));
+            }
+        }
+
+        return new S101MultiPointRecord
+        {
+            RecordId = rcid,
+            Points = coords.ToImmutable(),
+        };
     }
 
     private static S101CurveSegmentRecord? ParseCurveSegment(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)

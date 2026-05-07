@@ -25,6 +25,8 @@ internal sealed class MainViewModel : ViewModelBase
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
     public TimelineViewModel Timeline { get; }
+    public DisplayToolbarViewModel DisplayToolbar { get; }
+    public EcdisDisplayPanelViewModel EcdisDisplayPanel { get; }
 
     private ActivityKind? _selectedActivity;
     public ActivityKind? SelectedActivity
@@ -46,6 +48,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsCatalogSelected));
                 OnPropertyChanged(nameof(IsSearchSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
+                OnPropertyChanged(nameof(IsEcdisDisplaySelected));
 
                 // Persist the last selected activity (Settings is transient, don't remember it)
                 _settings.LastSelectedActivity = value is ActivityKind.Settings ? null : value?.ToString();
@@ -64,6 +67,7 @@ internal sealed class MainViewModel : ViewModelBase
         ActivityKind.Catalog => Strings.Pane_Catalog,
         ActivityKind.Search => Strings.Pane_Search,
         ActivityKind.Settings => Strings.Pane_Settings,
+        ActivityKind.EcdisDisplay => Strings.Pane_EcdisDisplay,
         _ => string.Empty,
     };
 
@@ -73,6 +77,7 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
     public bool IsSearchSelected => _selectedActivity == ActivityKind.Search;
     public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
+    public bool IsEcdisDisplaySelected => _selectedActivity == ActivityKind.EcdisDisplay;
 
     public ICommand SelectFeatureCataloguesCommand { get; }
     public ICommand SelectPortrayalCataloguesCommand { get; }
@@ -80,6 +85,7 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand SelectCatalogCommand { get; }
     public ICommand SelectSearchCommand { get; }
     public ICommand SelectSettingsCommand { get; }
+    public ICommand SelectEcdisDisplayCommand { get; }
     public ICommand TogglePrimarySideBarCommand { get; }
 
     private string? _statusText;
@@ -272,6 +278,8 @@ internal sealed class MainViewModel : ViewModelBase
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
         TimelineViewModel timeline,
+        DisplayToolbarViewModel displayToolbar,
+        EcdisDisplayPanelViewModel ecdisDisplayPanel,
         IThemeService themeService,
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
@@ -286,6 +294,8 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(timeline);
+        ArgumentNullException.ThrowIfNull(displayToolbar);
+        ArgumentNullException.ThrowIfNull(ecdisDisplayPanel);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(measureAppearance);
@@ -315,6 +325,8 @@ internal sealed class MainViewModel : ViewModelBase
         Settings = settingsViewModel;
         PickReport = pickReport;
         Timeline = timeline;
+        DisplayToolbar = displayToolbar;
+        EcdisDisplayPanel = ecdisDisplayPanel;
         Timeline.CloseRequested += () => IsTimelineVisible = false;
         PickReport.PropertyChanged += (_, e) =>
         {
@@ -328,6 +340,7 @@ internal sealed class MainViewModel : ViewModelBase
         SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
         SelectSearchCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Search);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
+        SelectEcdisDisplayCommand = new RelayCommand(() => SelectedActivity = ActivityKind.EcdisDisplay);
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
         {
@@ -354,6 +367,7 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsCatalogSelected));
             OnPropertyChanged(nameof(IsSearchSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
+            OnPropertyChanged(nameof(IsEcdisDisplaySelected));
         });
 
         _isStatusBarVisible = settings.IsStatusBarVisible;

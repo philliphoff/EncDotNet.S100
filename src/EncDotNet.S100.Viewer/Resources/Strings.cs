@@ -199,6 +199,23 @@ internal static class Strings
 
     // Measure Mode
     public static string Tooltip_MeasureMode => Get(nameof(Tooltip_MeasureMode));
+
+    // ECDIS Display Controls
+    public static string Pane_EcdisDisplay => Get(nameof(Pane_EcdisDisplay));
+    public static string Tooltip_EcdisDisplay => Get(nameof(Tooltip_EcdisDisplay));
+    public static string Toolbar_DisplayFormat => Get(nameof(Toolbar_DisplayFormat));
+    public static string Tooltip_DisplayMode => Get(nameof(Tooltip_DisplayMode));
+    public static string DisplayCategory_DisplayBase => Get(nameof(DisplayCategory_DisplayBase));
+    public static string DisplayCategory_Standard => Get(nameof(DisplayCategory_Standard));
+    public static string DisplayCategory_OtherInformation => Get(nameof(DisplayCategory_OtherInformation));
+    public static string DisplayCategory_All => Get(nameof(DisplayCategory_All));
+    public static string Button_ResetOverrides => Get(nameof(Button_ResetOverrides));
+    public static string Tooltip_ResetOverrides => Get(nameof(Tooltip_ResetOverrides));
+    public static string Button_ResetAllOverrides => Get(nameof(Button_ResetAllOverrides));
+    public static string Tooltip_ResetAllOverrides => Get(nameof(Tooltip_ResetAllOverrides));
+    public static string EcdisPanel_NoSpecs => Get(nameof(EcdisPanel_NoSpecs));
+    public static string EcdisPanel_OverrideCountFormat => Get(nameof(EcdisPanel_OverrideCountFormat));
+    public static string EcdisPanel_CategoryHeader => Get(nameof(EcdisPanel_CategoryHeader));
     public static string Menu_MeasureMode => Get(nameof(Menu_MeasureMode));
     public static string Status_MeasureLeg => Get(nameof(Status_MeasureLeg));
     public static string Status_MeasureTotal => Get(nameof(Status_MeasureTotal));

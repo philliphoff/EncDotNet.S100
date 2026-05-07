@@ -24,4 +24,9 @@ internal static class Telemetry
             "s100.viewer.command.duration",
             unit: "ms",
             description: "Wall-clock duration of a top-level viewer command.");
+
+    public static readonly Counter<long> ViewingGroupToggled =
+        Meter.CreateCounter<long>(
+            "s100.viewer.viewinggroup.toggled",
+            description: "Number of times a user toggled a viewing-group override.");
 }

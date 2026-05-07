@@ -78,6 +78,8 @@ public class MainViewModelOpenRecentTests : IDisposable
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
+            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(loader)),
             themeService: new StubThemeService(),
             recentFiles: recent,
             measureAppearance: new StubMeasureOverlayAppearanceProvider());
