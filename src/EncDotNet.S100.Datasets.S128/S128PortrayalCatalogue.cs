@@ -39,6 +39,7 @@ public sealed class S128PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
+        DisplayModeMembership.Bind(DisplayModes, ViewingGroups, _provider.Catalogue);
     }
 
     /// <summary>Gets the S-100 product specification identifier for this catalogue.</summary>
@@ -69,6 +70,9 @@ public sealed class S128PortrayalCatalogue : IVectorPortrayalCatalogue
 
     /// <summary>Gets the controller for viewing group visibility.</summary>
     public ViewingGroupController ViewingGroups { get; } = new();
+
+    /// <summary>Tracks the active S-100 Part 9 §11.7 display mode.</summary>
+    public DisplayModeController DisplayModes { get; } = new();
 
     // ── Palettes ───────────────────────────────────────────────────────
 

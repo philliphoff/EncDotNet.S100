@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -123,6 +125,43 @@ public partial class App : Application
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
+        services.AddSingleton<EcdisDisplayState>(sp =>
+        {
+            var settings = sp.GetRequiredService<ViewerSettings>();
+            var state = new EcdisDisplayState();
+            var category = Enum.TryParse<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(
+                settings.EcdisDisplayCategory, ignoreCase: true, out var c)
+                ? c
+                : EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory.Standard;
+            var hidden = new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in settings.EcdisHiddenViewingGroups)
+            {
+                var ids = new HashSet<int>();
+                foreach (var token in (kv.Value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (int.TryParse(token, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id))
+                        ids.Add(id);
+                }
+                if (ids.Count > 0) hidden[kv.Key] = ids;
+            }
+            state.Hydrate(category, hidden);
+
+            // Persist on every change so a crash doesn't lose the user's
+            // ECDIS preferences. Cheap because settings.json is small.
+            state.Changed += () =>
+            {
+                settings.EcdisDisplayCategory = state.Category.ToString();
+                var snap = state.Snapshot();
+                settings.EcdisHiddenViewingGroups.Clear();
+                foreach (var kv in snap.HiddenViewingGroups)
+                {
+                    settings.EcdisHiddenViewingGroups[kv.Key] =
+                        string.Join(",", kv.Value.OrderBy(i => i));
+                }
+                try { settings.Save(); } catch { /* best-effort */ }
+            };
+            return state;
+        });
         services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();

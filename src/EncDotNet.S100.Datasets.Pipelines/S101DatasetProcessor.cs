@@ -56,6 +56,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
         var paletteType = context?.Palette ?? PaletteType.Day;
         s101Cat.SwitchPalette(paletteType);
+        context?.EcdisDisplay?.ApplyTo(s101Cat);
         var palette = s101Cat.ActivePalette;
         Console.WriteLine($"[S101] Loaded {paletteType} palette with {palette.Colors.Count} colors");
 

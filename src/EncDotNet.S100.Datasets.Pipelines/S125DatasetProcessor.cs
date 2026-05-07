@@ -45,6 +45,7 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
     public DatasetResult Render(RenderContext? context = null)
     {
         var catalogue = new S125PortrayalCatalogue(_provider);
+        context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         var featureSource = new S125FeatureXmlSource(_dataset);

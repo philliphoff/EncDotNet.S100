@@ -40,6 +40,7 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
     public DatasetResult Render(RenderContext? context = null)
     {
         var catalogue = new S128PortrayalCatalogue(_provider);
+        context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // 1. Run the S-100 Part 9 vector portrayal pipeline.
