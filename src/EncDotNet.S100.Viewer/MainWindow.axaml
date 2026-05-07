@@ -543,6 +543,79 @@
                                            Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
+
+                <!-- Partial-failure / failure banner (es3-progress).
+                     Anchored to the top of the map area; dismissable via the
+                     X button. Stays out of the way of the scale bar by
+                     reserving the top edge with a small offset. -->
+                <Border HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        Margin="48,4,180,0"
+                        Padding="12,8"
+                        CornerRadius="4"
+                        Background="{DynamicResource BackgroundColor}"
+                        BorderBrush="{DynamicResource AccentBrush}"
+                        BorderThickness="1"
+                        IsVisible="{Binding IsExchangeSetBannerVisible}">
+                    <DockPanel LastChildFill="True">
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding DismissExchangeSetBannerCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Banner_Dismiss}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="4"
+                                Margin="8,0,0,0">
+                            <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                        <TextBlock Text="{Binding ExchangeSetBannerMessage}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </DockPanel>
+                </Border>
+
+                <!-- Exchange-set progress overlay (es3-progress).
+                     Centered card; non-modal — the user can still pan the
+                     map underneath but cannot start a second exchange-set
+                     load until this one completes or is cancelled. -->
+                <Border HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MinWidth="320" MaxWidth="480"
+                        Padding="16"
+                        CornerRadius="6"
+                        Background="{DynamicResource BackgroundColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        IsVisible="{Binding IsExchangeSetLoading}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="12" Color="Black" Opacity="0.25" />
+                    </Border.Effect>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{x:Static loc:Strings.Progress_ExchangeSetTitle}"
+                                   FontWeight="SemiBold"
+                                   FontSize="14" />
+                        <TextBlock Text="{Binding ExchangeSetSourceLabel}"
+                                   FontSize="12"
+                                   Opacity="0.7"
+                                   TextTrimming="CharacterEllipsis" />
+                        <ProgressBar Value="{Binding ExchangeSetProgressFraction}"
+                                     Minimum="0" Maximum="1"
+                                     Height="4" />
+                        <DockPanel LastChildFill="True">
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding ExchangeSetCounter}"
+                                       FontSize="12"
+                                       Opacity="0.7" />
+                            <TextBlock Text="{Binding ExchangeSetCurrentDataset}"
+                                       FontSize="12"
+                                       Opacity="0.85"
+                                       TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <Button HorizontalAlignment="Right"
+                                Command="{Binding CancelExchangeSetCommand}"
+                                Content="{x:Static loc:Strings.Progress_ExchangeSetCancel}"
+                                ToolTip.Tip="{x:Static loc:Strings.Progress_ExchangeSetCancel}" />
+                    </StackPanel>
+                </Border>
                 </Grid>
 
                 <!-- Resize grip between map and timeline panel -->

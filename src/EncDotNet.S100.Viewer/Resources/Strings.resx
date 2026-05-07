@@ -151,6 +151,21 @@
   <data name="Pane_SubLayers" xml:space="preserve">
     <value>Sub-layers</value>
   </data>
+  <data name="Pane_ExchangeSetHeader_Producer" xml:space="preserve">
+    <value>Producer: {0}</value>
+  </data>
+  <data name="Pane_ExchangeSetHeader_Issued" xml:space="preserve">
+    <value>Issued: {0}</value>
+  </data>
+  <data name="Pane_ExchangeSetHeader_Count" xml:space="preserve">
+    <value>{0} datasets</value>
+  </data>
+  <data name="Pane_ExchangeSetHeader_Unsupported" xml:space="preserve">
+    <value>{0} unsupported</value>
+  </data>
+  <data name="Tooltip_CloseExchangeSet" xml:space="preserve">
+    <value>Close this exchange set and remove every dataset it contributed</value>
+  </data>
   <data name="Tooltip_ShowAllDatasets" xml:space="preserve">
     <value>Show every dataset</value>
   </data>
@@ -212,6 +227,14 @@
   <data name="Menu_OpenDataset" xml:space="preserve">
     <value>Open Dataset...</value>
   </data>
+  <data name="Menu_OpenExchangeSet" xml:space="preserve">
+    <value>Open Exchange Set...</value>
+    <comment>File menu entry that opens a folder containing a CATALOG.XML.</comment>
+  </data>
+  <data name="Menu_OpenExchangeSetZip" xml:space="preserve">
+    <value>Open Exchange Set (ZIP)...</value>
+    <comment>File menu entry that opens a .zip file containing a CATALOG.XML.</comment>
+  </data>
   <data name="Menu_OpenRecent" xml:space="preserve">
     <value>Open Recent</value>
   </data>
@@ -249,6 +272,15 @@
   </data>
   <data name="FilePicker_S100DatasetsType" xml:space="preserve">
     <value>S-100 Datasets</value>
+  </data>
+  <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
+    <value>Open Exchange Set Folder</value>
+  </data>
+  <data name="FilePicker_ExchangeSetZipTitle" xml:space="preserve">
+    <value>Open Exchange Set ZIP</value>
+  </data>
+  <data name="FilePicker_ExchangeSetZipType" xml:space="preserve">
+    <value>S-100 Exchange Set (ZIP)</value>
   </data>
 
   <!-- Catalogue list -->
@@ -441,6 +473,50 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
+  </data>
+  <data name="Status_ExchangeSetLoading" xml:space="preserve">
+    <value>Loading exchange set {0}...</value>
+    <comment>Status text while reading an exchange set's CATALOG.XML and dispatching its datasets. {0} is the source path.</comment>
+  </data>
+  <data name="Status_ExchangeSetLoaded" xml:space="preserve">
+    <value>Loaded {0} dataset(s) from {1}.</value>
+    <comment>{0} = dataset count, {1} = source path.</comment>
+  </data>
+  <data name="Status_ExchangeSetLoadedWithErrors" xml:space="preserve">
+    <value>Loaded {0} of {1} dataset(s) from {2} ({3} skipped).</value>
+    <comment>{0} = dispatched, {1} = total, {2} = source path, {3} = skipped count.</comment>
+  </data>
+  <data name="Status_ExchangeSetFailed" xml:space="preserve">
+    <value>Failed to open exchange set {0}: {1}</value>
+  </data>
+  <data name="Status_ExchangeSetCatalogNotFound" xml:space="preserve">
+    <value>No CATALOG.XML found in {0}.</value>
+  </data>
+  <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
+    <value>Skipped {0}: unsupported product specification '{1}'.</value>
+  </data>
+  <data name="Status_ExchangeSetCancelled" xml:space="preserve">
+    <value>Cancelled after loading {0} of {1} datasets from {2}.</value>
+  </data>
+
+  <!-- Exchange-set progress overlay (es3-progress) -->
+  <data name="Progress_ExchangeSetTitle" xml:space="preserve">
+    <value>Opening exchange set</value>
+  </data>
+  <data name="Progress_ExchangeSetCounter" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="Progress_ExchangeSetCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Banner_ExchangeSetPartial" xml:space="preserve">
+    <value>{0} of {1} datasets in {2} could not be loaded ({3} unsupported).</value>
+  </data>
+  <data name="Banner_ExchangeSetFailed" xml:space="preserve">
+    <value>Failed to open exchange set {0}: {1}</value>
+  </data>
+  <data name="Banner_Dismiss" xml:space="preserve">
+    <value>Dismiss</value>
   </data>
 
   <!-- Dataset entry -->

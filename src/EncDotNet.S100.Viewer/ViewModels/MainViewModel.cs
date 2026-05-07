@@ -259,6 +259,137 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
+    // ─── Exchange-set progress + banner (es3-progress) ────────────────────
+
+    private bool _isExchangeSetLoading;
+    private double _exchangeSetProgressFraction;
+    private string? _exchangeSetCurrentDataset;
+    private string? _exchangeSetCounter;
+    private string? _exchangeSetSourceLabel;
+    private bool _isExchangeSetBannerVisible;
+    private string? _exchangeSetBannerMessage;
+    private System.Threading.CancellationTokenSource? _exchangeSetCts;
+
+    /// <summary>
+    /// True while an exchange-set load is in flight. Bound to the
+    /// progress overlay's <c>IsVisible</c>.
+    /// </summary>
+    public bool IsExchangeSetLoading
+    {
+        get => _isExchangeSetLoading;
+        private set => SetProperty(ref _isExchangeSetLoading, value);
+    }
+
+    /// <summary>
+    /// Progress fraction in <c>[0, 1]</c> — bound to a determinate
+    /// <see cref="Avalonia.Controls.ProgressBar"/>.
+    /// </summary>
+    public double ExchangeSetProgressFraction
+    {
+        get => _exchangeSetProgressFraction;
+        private set => SetProperty(ref _exchangeSetProgressFraction, value);
+    }
+
+    /// <summary>Catalogue-relative path of the dataset currently being routed.</summary>
+    public string? ExchangeSetCurrentDataset
+    {
+        get => _exchangeSetCurrentDataset;
+        private set => SetProperty(ref _exchangeSetCurrentDataset, value);
+    }
+
+    /// <summary>"3 of 12" counter shown in the overlay header.</summary>
+    public string? ExchangeSetCounter
+    {
+        get => _exchangeSetCounter;
+        private set => SetProperty(ref _exchangeSetCounter, value);
+    }
+
+    /// <summary>The folder or .zip path being opened — shown in the overlay.</summary>
+    public string? ExchangeSetSourceLabel
+    {
+        get => _exchangeSetSourceLabel;
+        private set => SetProperty(ref _exchangeSetSourceLabel, value);
+    }
+
+    /// <summary>Cancels the in-flight exchange-set load. No-op if idle.</summary>
+    public ICommand CancelExchangeSetCommand { get; }
+
+    /// <summary>True while a partial-failure / fatal-error banner is shown.</summary>
+    public bool IsExchangeSetBannerVisible
+    {
+        get => _isExchangeSetBannerVisible;
+        private set => SetProperty(ref _isExchangeSetBannerVisible, value);
+    }
+
+    /// <summary>Banner body text (already localised + formatted).</summary>
+    public string? ExchangeSetBannerMessage
+    {
+        get => _exchangeSetBannerMessage;
+        private set => SetProperty(ref _exchangeSetBannerMessage, value);
+    }
+
+    /// <summary>Hides the partial-failure banner.</summary>
+    public ICommand DismissExchangeSetBannerCommand { get; }
+
+    /// <summary>
+    /// Called by <see cref="MainWindow"/> when an exchange-set load is
+    /// about to start. Captures the cancellation source, resets progress
+    /// state, and clears any leftover banner.
+    /// </summary>
+    internal System.Threading.CancellationToken BeginExchangeSetLoad(string sourcePath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sourcePath);
+        _exchangeSetCts?.Dispose();
+        _exchangeSetCts = new System.Threading.CancellationTokenSource();
+
+        IsExchangeSetBannerVisible = false;
+        ExchangeSetBannerMessage = null;
+        ExchangeSetSourceLabel = sourcePath;
+        ExchangeSetCurrentDataset = null;
+        ExchangeSetCounter = null;
+        ExchangeSetProgressFraction = 0;
+        IsExchangeSetLoading = true;
+        return _exchangeSetCts.Token;
+    }
+
+    /// <summary>Pushes a single progress update from the service into the VM.</summary>
+    internal void ReportExchangeSetProgress(ExchangeSetProgress progress)
+    {
+        ExchangeSetCurrentDataset = progress.CurrentDataset;
+        ExchangeSetCounter = progress.Total > 0
+            ? string.Format(Strings.Progress_ExchangeSetCounter, progress.Completed, progress.Total)
+            : null;
+        ExchangeSetProgressFraction = progress.Total > 0
+            ? Math.Clamp((double)progress.Completed / progress.Total, 0.0, 1.0)
+            : 0.0;
+    }
+
+    /// <summary>
+    /// Called by <see cref="MainWindow"/> when an exchange-set load
+    /// completes (or is cancelled / fatally fails). Hides the overlay
+    /// and surfaces a banner if there is anything worth flagging.
+    /// </summary>
+    internal void EndExchangeSetLoad(ExchangeSetOpenResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        IsExchangeSetLoading = false;
+        ExchangeSetCurrentDataset = null;
+
+        if (result.FailureMessage is { } message && !result.CatalogueNotFound)
+        {
+            ExchangeSetBannerMessage = string.Format(
+                Strings.Banner_ExchangeSetFailed, result.SourcePath, message);
+            IsExchangeSetBannerVisible = true;
+        }
+        else if (result.SkippedUnsupported > 0)
+        {
+            ExchangeSetBannerMessage = string.Format(
+                Strings.Banner_ExchangeSetPartial,
+                result.SkippedUnsupported, result.Total, result.SourcePath, result.SkippedUnsupported);
+            IsExchangeSetBannerVisible = true;
+        }
+    }
+
     /// <summary>
     /// Opens a dataset that the user has previously loaded. If the file is
     /// no longer at the recorded path the entry is dropped from the recent
@@ -411,6 +542,20 @@ internal sealed class MainViewModel : ViewModelBase
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
+
+        CancelExchangeSetCommand = new RelayCommand(
+            () => _exchangeSetCts?.Cancel(),
+            () => IsExchangeSetLoading);
+        DismissExchangeSetBannerCommand = new RelayCommand(
+            () => IsExchangeSetBannerVisible = false);
+
+        // Re-evaluate Cancel command when the loading flag changes so the
+        // overlay button enables/disables correctly.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IsExchangeSetLoading))
+                ((RelayCommand)CancelExchangeSetCommand).NotifyCanExecuteChanged();
+        };
 
         OpenRecentCommand = new AsyncRelayCommand<string>(OpenRecentAsync);
 

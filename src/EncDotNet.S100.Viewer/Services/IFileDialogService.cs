@@ -28,4 +28,16 @@ internal interface IFileDialogService
     /// Prompts for a single Portrayal Catalogue folder.
     /// </summary>
     Task<string?> OpenPortrayalCatalogueFolderAsync(TopLevel? topLevel);
+
+    /// <summary>
+    /// Prompts for a single folder containing an S-100 exchange set
+    /// (must include a <c>CATALOG.XML</c> at the root).
+    /// </summary>
+    Task<string?> OpenExchangeSetFolderAsync(TopLevel? topLevel);
+
+    /// <summary>
+    /// Prompts for a single <c>.zip</c> archive containing an S-100
+    /// exchange set (a <c>CATALOG.XML</c> at the root of the archive).
+    /// </summary>
+    Task<string?> OpenExchangeSetZipAsync(TopLevel? topLevel);
 }

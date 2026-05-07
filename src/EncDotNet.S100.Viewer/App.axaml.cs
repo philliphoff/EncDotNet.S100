@@ -167,6 +167,7 @@ public partial class App : Application
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
+        services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
@@ -192,7 +193,8 @@ public partial class App : Application
             sp.GetRequiredService<ScreenshotService>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IPickService>(),
-            sp.GetRequiredService<IFileDialogService>()));
+            sp.GetRequiredService<IFileDialogService>(),
+            sp.GetRequiredService<IExchangeSetService>()));
 
         return services.BuildServiceProvider();
     }

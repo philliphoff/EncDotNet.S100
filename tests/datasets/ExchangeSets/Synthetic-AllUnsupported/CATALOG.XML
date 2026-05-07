@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic exchange-set catalogue used by ExchangeSetServiceLoaderTests
+  to exercise the all-unsupported path: when every entry is skipped,
+  the service must dispose the underlying ExchangeSet and unregister
+  its header so no file handle / archive is leaked.
+-->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc/5.0"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTH_NONE_v1</S100XC:identifier>
+    <S100XC:dateTime>2026-02-01T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Hydrographic Office</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-998/A.dat</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-998</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>0.1</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-998</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-999/B.dat</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-999</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>0.1</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-999</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
@@ -37,13 +38,48 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         Func<string, Stream?> featureCatalogueResolver)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueResolver)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S57DatasetProcessor"/> by reading
+    /// the ISO 8211 dataset <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    public S57DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        Func<string, Stream?> featureCatalogueResolver)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            luaEngine,
+            featureCatalogueResolver)
+    {
+    }
+
+    private S57DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        Func<string, Stream?> featureCatalogueResolver)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _featureCatalogueResolver = featureCatalogueResolver;
 
-        var s57 = S57Dataset.Open(path);
+        S57Dataset s57;
+        using (datasetStream)
+        {
+            s57 = S57Dataset.Open(datasetStream);
+        }
         var translator = new S57ToS101Translator();
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);

@@ -94,6 +94,65 @@
                 Margin="8"
                 x:Name="AddButton" />
 
+        <!-- Exchange-set header rows: one per loaded exchange set,
+             stacked above the bulk-action toolbar. Each row exposes a
+             Close button that removes every dataset contributed by
+             that set. -->
+        <ItemsControl DockPanel.Dock="Top"
+                      ItemsSource="{Binding ExchangeSetHeaders}"
+                      HorizontalAlignment="Stretch"
+                      Margin="8,4,8,0">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Vertical" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:ExchangeSetHeader">
+                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8,6"
+                            Margin="0,0,0,4"
+                            HorizontalAlignment="Stretch">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                            <TextBlock Grid.Column="0" Grid.Row="0"
+                                       Text="{Binding DisplayName}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding SourcePath}" />
+                            <TextBlock Grid.Column="0" Grid.Row="1"
+                                       Classes="Caption"
+                                       Opacity="0.75"
+                                       Text="{Binding MetadataSummary}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding MetadataSummary}" />
+                            <Button Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                                    Classes="Icon"
+                                    VerticalAlignment="Center"
+                                    Margin="6,0,0,0"
+                                    Command="{Binding CloseCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
+                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+            <ItemsControl.Styles>
+                <!-- Force each generated container to stretch the full
+                     pane width. Without this, ShadUI's default
+                     ContentPresenter sizing leaves the Border at
+                     intrinsic content width, which can let the inner
+                     Grid measure children with infinity and skip
+                     TextTrimming. -->
+                <Style Selector="ItemsControl > ContentPresenter">
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ItemsControl.Styles>
+        </ItemsControl>
+
         <!-- Bulk-action toolbar: applies to every loaded dataset.
              "Isolate" is per-row (right-click context menu) because it
              needs a target. -->

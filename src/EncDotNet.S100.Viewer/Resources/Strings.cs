@@ -89,6 +89,11 @@ internal static class Strings
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
     public static string Pane_SubLayers => Get(nameof(Pane_SubLayers));
+    public static string Pane_ExchangeSetHeader_Producer => Get(nameof(Pane_ExchangeSetHeader_Producer));
+    public static string Pane_ExchangeSetHeader_Issued => Get(nameof(Pane_ExchangeSetHeader_Issued));
+    public static string Pane_ExchangeSetHeader_Count => Get(nameof(Pane_ExchangeSetHeader_Count));
+    public static string Pane_ExchangeSetHeader_Unsupported => Get(nameof(Pane_ExchangeSetHeader_Unsupported));
+    public static string Tooltip_CloseExchangeSet => Get(nameof(Tooltip_CloseExchangeSet));
     public static string Tooltip_ShowAllDatasets => Get(nameof(Tooltip_ShowAllDatasets));
     public static string Tooltip_HideAllDatasets => Get(nameof(Tooltip_HideAllDatasets));
     public static string Menu_IsolateDataset => Get(nameof(Menu_IsolateDataset));
@@ -106,6 +111,8 @@ internal static class Strings
     // Native menu
     public static string Menu_File => Get(nameof(Menu_File));
     public static string Menu_OpenDataset => Get(nameof(Menu_OpenDataset));
+    public static string Menu_OpenExchangeSet => Get(nameof(Menu_OpenExchangeSet));
+    public static string Menu_OpenExchangeSetZip => Get(nameof(Menu_OpenExchangeSetZip));
     public static string Menu_OpenRecent => Get(nameof(Menu_OpenRecent));
     public static string Menu_NoRecentDatasets => Get(nameof(Menu_NoRecentDatasets));
     public static string Menu_ClearRecentlyOpened => Get(nameof(Menu_ClearRecentlyOpened));
@@ -120,6 +127,9 @@ internal static class Strings
     // File picker
     public static string FilePicker_OpenDatasetTitle => Get(nameof(FilePicker_OpenDatasetTitle));
     public static string FilePicker_S100DatasetsType => Get(nameof(FilePicker_S100DatasetsType));
+    public static string FilePicker_ExchangeSetFolderTitle => Get(nameof(FilePicker_ExchangeSetFolderTitle));
+    public static string FilePicker_ExchangeSetZipTitle => Get(nameof(FilePicker_ExchangeSetZipTitle));
+    public static string FilePicker_ExchangeSetZipType => Get(nameof(FilePicker_ExchangeSetZipType));
 
     // Catalogue list
     public static string Catalogue_BuiltInLabel => Get(nameof(Catalogue_BuiltInLabel));
@@ -186,6 +196,21 @@ internal static class Strings
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
+    public static string Status_ExchangeSetLoading => Get(nameof(Status_ExchangeSetLoading));
+    public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));
+    public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
+    public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
+    public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
+    public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
+    public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
+
+    // Exchange-set progress overlay (es3-progress)
+    public static string Progress_ExchangeSetTitle => Get(nameof(Progress_ExchangeSetTitle));
+    public static string Progress_ExchangeSetCounter => Get(nameof(Progress_ExchangeSetCounter));
+    public static string Progress_ExchangeSetCancel => Get(nameof(Progress_ExchangeSetCancel));
+    public static string Banner_ExchangeSetPartial => Get(nameof(Banner_ExchangeSetPartial));
+    public static string Banner_ExchangeSetFailed => Get(nameof(Banner_ExchangeSetFailed));
+    public static string Banner_Dismiss => Get(nameof(Banner_Dismiss));
 
     // Dataset entry
     public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));

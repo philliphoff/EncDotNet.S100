@@ -10,6 +10,13 @@ public sealed class ExchangeSet : IDisposable
     private readonly IAssetSource _source;
 
     /// <summary>
+    /// Gets the asset source backing this exchange set. Exposed so callers
+    /// (e.g. bulk loaders) can pass it directly to per-spec dataset
+    /// processors that accept an <see cref="IAssetSource"/>.
+    /// </summary>
+    public IAssetSource Source => _source;
+
+    /// <summary>
     /// Initializes a new instance of <see cref="ExchangeSet"/> with the given source and catalogue.
     /// </summary>
     /// <param name="source">The asset source used to fetch referenced files.</param>
@@ -76,7 +83,7 @@ public sealed class ExchangeSet : IDisposable
     /// <summary>
     /// Strips the <c>file:/</c> URI prefix that S-100 exchange catalogues may use on file names.
     /// </summary>
-    private static string NormalizeFileName(string fileName)
+    public static string NormalizeFileName(string fileName)
     {
         ArgumentException.ThrowIfNullOrEmpty(fileName);
 

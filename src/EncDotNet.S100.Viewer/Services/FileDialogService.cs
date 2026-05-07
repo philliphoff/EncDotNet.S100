@@ -82,4 +82,46 @@ internal sealed class FileDialogService : IFileDialogService
 
         return folders[0].TryGetLocalPath();
     }
+
+    public async Task<string?> OpenExchangeSetFolderAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = Strings.FilePicker_ExchangeSetFolderTitle,
+            AllowMultiple = false,
+        });
+
+        if (folders is null || folders.Count == 0)
+            return null;
+
+        return folders[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> OpenExchangeSetZipAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_ExchangeSetZipTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_ExchangeSetZipType)
+                {
+                    Patterns = new[] { "*.zip" },
+                },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files is null || files.Count == 0)
+            return null;
+
+        return files[0].TryGetLocalPath();
+    }
 }

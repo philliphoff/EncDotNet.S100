@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -16,6 +17,26 @@ internal sealed class DatasetEntry : ViewModelBase
     public string FilePath { get; }
     public string DisplayName { get; }
     public string ProductSpec { get; }
+
+    /// <summary>
+    /// Optional asset source backing this dataset. When non-null, the
+    /// loader reads the dataset bytes from <see cref="Source"/> at
+    /// <see cref="RelativePath"/> instead of opening
+    /// <see cref="FilePath"/> directly. Set when the entry was added
+    /// from an exchange set (folder or ZIP); null for plain file
+    /// loads. Lifetime is owned by the producer (typically
+    /// <see cref="EncDotNet.S100.Viewer.Services.IExchangeSetService"/>).
+    /// </summary>
+    public IAssetSource? Source { get; }
+
+    /// <summary>
+    /// Path of this dataset relative to <see cref="Source"/>, or
+    /// <c>null</c> when the entry is a plain file load.
+    /// </summary>
+    public string? RelativePath { get; }
+
+    /// <summary>True when this entry's bytes live inside an exchange-set asset source.</summary>
+    public bool IsFromExchangeSet => Source is not null;
 
     private bool _isLoaded;
     public bool IsLoaded
@@ -151,10 +172,29 @@ internal sealed class DatasetEntry : ViewModelBase
             : string.Empty;
 
     public DatasetEntry(string filePath, string productSpec)
+        : this(filePath, productSpec, source: null, relativePath: null, displayName: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a dataset entry whose bytes live inside
+    /// <paramref name="source"/> at <paramref name="relativePath"/>.
+    /// Used by <see cref="EncDotNet.S100.Viewer.Services.IExchangeSetService"/>
+    /// for exchange-set ingestion.
+    /// </summary>
+    public DatasetEntry(
+        string filePath,
+        string productSpec,
+        IAssetSource? source,
+        string? relativePath,
+        string? displayName)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
-        DisplayName = System.IO.Path.GetFileName(filePath);
+        Source = source;
+        RelativePath = relativePath;
+        DisplayName = displayName ?? System.IO.Path.GetFileName(
+            relativePath is { Length: > 0 } ? relativePath : filePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
 
         _subLayers.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSubLayers));
@@ -218,6 +258,15 @@ internal sealed class DatasetsViewModel : ViewModelBase
     private readonly IDatasetLoaderService _loader;
 
     public ObservableCollection<DatasetEntry> Entries { get; } = new();
+
+    /// <summary>
+    /// Header rows surfaced above <see cref="Entries"/> in the Datasets
+    /// panel — one per currently-loaded exchange set. Populated by
+    /// <see cref="EncDotNet.S100.Viewer.Services.IExchangeSetService"/>
+    /// via <see cref="RegisterExchangeSetHeader"/> and removed when the
+    /// last entry from a set is gone.
+    /// </summary>
+    public ObservableCollection<ExchangeSetHeader> ExchangeSetHeaders { get; } = new();
 
     private DatasetEntry? _selectedEntry;
     /// <summary>
@@ -326,6 +375,74 @@ internal sealed class DatasetsViewModel : ViewModelBase
         // ones by default.
         Entries.Insert(0, entry);
         return entry;
+    }
+
+    /// <summary>
+    /// Adds a dataset entry whose bytes live inside an exchange set
+    /// (folder or ZIP) rather than at a plain filesystem path.
+    /// <paramref name="source"/> must remain alive for as long as
+    /// the returned entry is loaded; the caller (typically
+    /// <see cref="IExchangeSetService"/>) is responsible for that
+    /// lifetime.
+    /// </summary>
+    public DatasetEntry AddFromExchangeSet(
+        IAssetSource source,
+        string relativePath,
+        string productSpec,
+        string? displayName = null)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+
+        // FilePath is set to the relative path so logging and the
+        // Properties panel have something useful to show even when
+        // there is no real on-disk file (the entry is sourced from
+        // a ZIP archive).
+        var entry = new DatasetEntry(
+            filePath: relativePath,
+            productSpec: productSpec,
+            source: source,
+            relativePath: relativePath,
+            displayName: displayName);
+        Entries.Insert(0, entry);
+        return entry;
+    }
+
+    /// <summary>
+    /// Registers a header row for a freshly-opened exchange set. The
+    /// supplied <paramref name="closeAction"/> is invoked when the user
+    /// clicks the header's Close button and is responsible for removing
+    /// every <see cref="DatasetEntry"/> that came from this set
+    /// (typically by enumerating <see cref="Entries"/> with
+    /// <c>e.Source == source</c> and removing them); the service's
+    /// <c>OnEntriesChanged</c> listener will then dispose the set and
+    /// remove this header via <see cref="RemoveExchangeSetHeader"/>.
+    /// </summary>
+    internal ExchangeSetHeader RegisterExchangeSetHeader(
+        IAssetSource source,
+        string sourcePath,
+        string? producer,
+        string? issueDate,
+        int datasetCount,
+        Action<ExchangeSetHeader> closeAction)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(sourcePath);
+        ArgumentNullException.ThrowIfNull(closeAction);
+
+        var header = new ExchangeSetHeader(
+            source, sourcePath, producer, issueDate, datasetCount, closeAction);
+        ExchangeSetHeaders.Add(header);
+        return header;
+    }
+
+    /// <summary>Removes a header registered via
+    /// <see cref="RegisterExchangeSetHeader"/>. Idempotent.</summary>
+    internal void RemoveExchangeSetHeader(ExchangeSetHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ExchangeSetHeaders.Remove(header);
     }
 
     /// <summary>

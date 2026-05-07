@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -34,6 +35,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly IDatasetLoaderService _loader;
     private readonly IPickService _pickService;
     private readonly IFileDialogService _fileDialog;
+    private readonly IExchangeSetService _exchangeSetService;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private string? _screenshotPath;
@@ -59,7 +61,9 @@ public partial class MainWindow : ShadUI.Window
                 "IDatasetLoaderService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
                 "IPickService cannot be resolved without the application service provider.")),
-            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()))
+            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()),
+            ResolveOrFallback<IExchangeSetService>(static () => throw new InvalidOperationException(
+                "IExchangeSetService cannot be resolved without the application service provider.")))
     {
     }
 
@@ -83,7 +87,8 @@ public partial class MainWindow : ShadUI.Window
         ScreenshotService screenshotService,
         IDatasetLoaderService loader,
         IPickService pickService,
-        IFileDialogService fileDialog)
+        IFileDialogService fileDialog,
+        IExchangeSetService exchangeSetService)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
@@ -92,6 +97,7 @@ public partial class MainWindow : ShadUI.Window
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
         ArgumentNullException.ThrowIfNull(fileDialog);
+        ArgumentNullException.ThrowIfNull(exchangeSetService);
 
         InitializeComponent();
 
@@ -102,6 +108,7 @@ public partial class MainWindow : ShadUI.Window
         _loader = loader;
         _pickService = pickService;
         _fileDialog = fileDialog;
+        _exchangeSetService = exchangeSetService;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -127,7 +134,9 @@ public partial class MainWindow : ShadUI.Window
         // PropertyChanged subscriptions for the lifetime of this window.
         new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
             window: this,
-            openDatasetAsync: OpenDatasetAsync);
+            openDatasetAsync: OpenDatasetAsync,
+            openExchangeSetAsync: OpenExchangeSetAsync,
+            openExchangeSetZipAsync: OpenExchangeSetZipAsync);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -339,6 +348,159 @@ public partial class MainWindow : ShadUI.Window
         }
     }
 
+    private async Task OpenExchangeSetAsync()
+    {
+        var folder = await _fileDialog.OpenExchangeSetFolderAsync(this);
+        if (folder is null)
+            return;
+
+        await RunExchangeSetAsync(folder);
+    }
+
+    private async Task OpenExchangeSetZipAsync()
+    {
+        var zip = await _fileDialog.OpenExchangeSetZipAsync(this);
+        if (zip is null)
+            return;
+
+        await RunExchangeSetAsync(zip);
+    }
+
+    private async Task RunExchangeSetAsync(string sourcePath)
+    {
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+
+        var token = _viewModel.BeginExchangeSetLoad(sourcePath);
+        var progress = new Progress<Services.ExchangeSetProgress>(
+            p => _viewModel.ReportExchangeSetProgress(p));
+
+        // Subscribe to per-dataset load completions for the duration of
+        // this open. We accumulate each loaded entry's layer extents so
+        // we can zoom to their union — the catalogue may not declare
+        // per-dataset bounding boxes (S-101 producer dumps often skip
+        // them) and Map.Extent alone could include unrelated layers.
+        var loadedEntries = new HashSet<DatasetEntry>();
+        var unionSlot = new MRect?[1];
+        var lastEventTicks = new long[1];
+        Action<DatasetEntry> handler = entry =>
+        {
+            // Only count entries from any exchange set — we filter to
+            // this specific open below by checking the entry's Source.
+            if (!entry.IsFromExchangeSet) return;
+            if (!loadedEntries.Add(entry)) return;
+            if (_loader.EntryLayers.TryGetValue(entry, out var layers))
+            {
+                foreach (var layer in layers)
+                {
+                    if (layer.Extent is { } e && e.Width > 0 && e.Height > 0)
+                    {
+                        unionSlot[0] = unionSlot[0] is null
+                            ? new MRect(e.MinX, e.MinY, e.MaxX, e.MaxY)
+                            : unionSlot[0]!.Join(e);
+                    }
+                }
+            }
+            Interlocked.Exchange(ref lastEventTicks[0], Environment.TickCount64);
+        };
+        _loader.DatasetLoaded += handler;
+
+        try
+        {
+            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token);
+            _viewModel.EndExchangeSetLoad(result);
+
+            // Prefer the catalogue's union bbox when available — it's
+            // ready immediately and matches producer intent.
+            if (result.UnionBoundingBox is { } bbox &&
+                MapControl.Map?.Navigator is { } nav)
+            {
+                ZoomToCatalogueBoundingBox(nav, bbox);
+                return;
+            }
+
+            // Otherwise debounce on DatasetLoaded events: zoom once no
+            // new event has arrived for QuietWindowMs. This naturally
+            // handles per-dataset load failures (which never raise the
+            // event) without waiting a fixed timeout.
+            await ZoomWhenLoadingQuietsAsync(loadedEntries, unionSlot, lastEventTicks);
+        }
+        catch (Exception ex)
+        {
+            _viewModel.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
+            {
+                SourcePath = sourcePath,
+                FailureMessage = ex.Message,
+            });
+        }
+        finally
+        {
+            _loader.DatasetLoaded -= handler;
+        }
+    }
+
+    private void ZoomToCatalogueBoundingBox(Mapsui.Navigator nav, EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+    {
+        // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps
+        // the input range, so polar catalogues degrade gracefully.
+        var (minX, minY) = SphericalMercator.FromLonLat(
+            bbox.WestBoundLongitude, bbox.SouthBoundLatitude);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(
+            bbox.EastBoundLongitude, bbox.NorthBoundLatitude);
+        var extent = new MRect(minX, minY, maxX, maxY);
+        if (extent.Width > 0 && extent.Height > 0)
+        {
+            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+        }
+    }
+
+    private async Task ZoomWhenLoadingQuietsAsync(
+        HashSet<DatasetEntry> loadedEntries,
+        MRect?[] unionSlot,
+        long[] lastEventTicks)
+    {
+        // Quiet-window debounce: the per-dataset loaders complete on
+        // their own background tasks and may fail silently (caught and
+        // logged inside DatasetLoaderService), so we can't simply
+        // await an exact count. Instead we wait until DatasetLoaded
+        // events stop arriving for a short window — at that point
+        // every dispatched dataset has either completed or errored,
+        // and the accumulated union extent is final.
+        const int QuietWindowMs = 600;
+        const int PollMs = 100;
+        const int MaxWaitMs = 30_000;
+
+        var startedAt = Environment.TickCount64;
+        while (true)
+        {
+            await Task.Delay(PollMs);
+
+            var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
+            var now = Environment.TickCount64;
+
+            // No events yet — keep waiting up to MaxWaitMs from start.
+            if (lastEvent == 0)
+            {
+                if (now - startedAt >= MaxWaitMs) return;
+                continue;
+            }
+
+            // We've seen at least one event; trigger as soon as the
+            // bus is quiet for QuietWindowMs.
+            if (now - lastEvent >= QuietWindowMs)
+                break;
+
+            if (now - startedAt >= MaxWaitMs)
+                break;
+        }
+
+        if (MapControl.Map?.Navigator is not { } nav) return;
+
+        var extent = unionSlot[0] ?? MapControl.Map.Extent;
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
+
+        nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+    }
+
     private async void OnDrop(object? sender, DragEventArgs e)
     {
         if (e.DataTransfer.TryGetFiles() is not { } files)
@@ -349,8 +511,33 @@ public partial class MainWindow : ShadUI.Window
         foreach (var item in files)
         {
             var path = item.TryGetLocalPath();
-            if (path is null || !File.Exists(path))
+            if (path is null)
                 continue;
+
+            // Folder drop: treat as an exchange set when CATALOG.XML
+            // is at the root, otherwise ignore (the dataset loader is
+            // single-file).
+            if (Directory.Exists(path))
+            {
+                if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path))
+                {
+                    await RunExchangeSetAsync(path);
+                }
+                continue;
+            }
+
+            if (!File.Exists(path))
+                continue;
+
+            // File drop: a .zip with a root-level CATALOG.XML is an
+            // exchange-set ZIP; everything else falls through to the
+            // single-dataset loader.
+            if (ExchangeSetDetection.IsZipPath(path) &&
+                ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+            {
+                await RunExchangeSetAsync(path);
+                continue;
+            }
 
             await _viewModel.Datasets.LoadFromPathAsync(path);
         }
