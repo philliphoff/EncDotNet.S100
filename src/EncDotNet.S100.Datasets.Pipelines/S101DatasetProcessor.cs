@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
@@ -32,11 +33,45 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         Func<string, Stream?> featureCatalogueResolver)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueResolver)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S101DatasetProcessor"/> by reading
+    /// the ISO 8211 dataset <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    public S101DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        Func<string, Stream?> featureCatalogueResolver)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            luaEngine,
+            featureCatalogueResolver)
+    {
+    }
+
+    private S101DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        Func<string, Stream?> featureCatalogueResolver)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
-        _dataset = S101Dataset.Open(path);
+        using (datasetStream)
+        {
+            _dataset = S101Dataset.Open(datasetStream);
+        }
         _featureCatalogueResolver = featureCatalogueResolver;
     }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -32,12 +33,43 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         ICrsTransformFactory crsTransformFactory)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, crsTransformFactory)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S111DatasetProcessor"/> by reading
+    /// the HDF5 dataset <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    public S111DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ICrsTransformFactory crsTransformFactory)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            crsTransformFactory)
+    {
+    }
+
+    private S111DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ICrsTransformFactory crsTransformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _crsTransformFactory = crsTransformFactory;
 
-        using var hdf5 = PureHdfFile.Open(path);
-        _dataset = S111DatasetReader.Read(hdf5);
+        using (datasetStream)
+        using (var hdf5 = PureHdfFile.Open(datasetStream))
+        {
+            _dataset = S111DatasetReader.Read(hdf5);
+        }
         _source = new S111CoverageSource(_dataset);
 
         _provider = catalogueManager.HasCatalogue("S-111")

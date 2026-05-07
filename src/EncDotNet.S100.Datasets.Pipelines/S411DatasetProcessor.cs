@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
@@ -36,10 +37,41 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         Func<string, Stream?>? featureCatalogueResolver = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueResolver)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S411DatasetProcessor"/> by reading
+    /// the dataset file <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    public S411DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            featureCatalogueResolver)
+    {
+    }
+
+    private S411DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _provider = catalogueManager.GetProvider("S-411");
-        _dataset = S411Dataset.Open(path);
+        using (datasetStream)
+        {
+            _dataset = S411Dataset.Open(datasetStream);
+        }
         _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-411");
     }
 

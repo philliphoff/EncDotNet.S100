@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
@@ -27,10 +28,42 @@ public sealed class S122DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         Func<string, Stream?>? featureCatalogueResolver = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueResolver)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S122DatasetProcessor"/> by reading the
+    /// dataset file <paramref name="relativePath"/> from
+    /// <paramref name="source"/> (e.g. <c>FileSystemAssetSource</c> or
+    /// <c>ZipAssetSource</c>). Used by exchange-set bulk loading.
+    /// </summary>
+    public S122DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver = null)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            featureCatalogueResolver)
+    {
+    }
+
+    private S122DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        Func<string, Stream?>? featureCatalogueResolver)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _provider = catalogueManager.GetProvider("S-122");
-        _dataset = S122Dataset.Open(path);
+        using (datasetStream)
+        {
+            _dataset = S122Dataset.Open(datasetStream);
+        }
         _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-122");
     }
 

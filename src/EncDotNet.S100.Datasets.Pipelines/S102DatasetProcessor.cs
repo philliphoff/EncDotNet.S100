@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -28,12 +29,48 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, crsTransformFactory)
     {
-        _fileName = Path.GetFileName(path);
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S102DatasetProcessor"/> by reading
+    /// the dataset file <paramref name="relativePath"/> from
+    /// <paramref name="source"/> (e.g. a <c>FileSystemAssetSource</c> or
+    /// <c>ZipAssetSource</c>). Used by exchange-set bulk loading where
+    /// a dataset's bytes live inside a ZIP archive.
+    /// </summary>
+    public S102DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        ICrsTransformFactory crsTransformFactory)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            luaEngine,
+            crsTransformFactory)
+    {
+    }
+
+    private S102DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        ICrsTransformFactory crsTransformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
         _crsTransformFactory = crsTransformFactory;
 
-        using var hdf5 = PureHdfFile.Open(path);
-        _dataset = S102DatasetReader.Read(hdf5);
+        using (datasetStream)
+        using (var hdf5 = PureHdfFile.Open(datasetStream))
+        {
+            _dataset = S102DatasetReader.Read(hdf5);
+        }
         _source = new S102CoverageSource(_dataset);
 
         var provider = catalogueManager.GetProvider("S-102");

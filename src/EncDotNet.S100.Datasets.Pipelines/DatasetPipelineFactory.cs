@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
@@ -330,4 +331,93 @@ public sealed class DatasetPipelineFactory
     /// Convenience method: creates a processor and renders with default context.
     /// </summary>
     public DatasetResult Process(string path) => CreateProcessor(path).Render();
+
+    /// <summary>
+    /// Creates a processor for a dataset stored inside <paramref name="source"/>
+    /// at <paramref name="relativePath"/>. Used by exchange-set bulk loading
+    /// where dataset bytes may live inside a ZIP archive.
+    /// </summary>
+    /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
+    /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
+    /// <param name="declaredProductSpec">
+    /// Product specification declared by the exchange-set catalogue (e.g. "S-101").
+    /// When non-null and recognized, content sniffing is skipped. When null or
+    /// unrecognized, falls back to extension-based sniffing on
+    /// <paramref name="relativePath"/>.
+    /// </param>
+    public IDatasetProcessor CreateProcessor(
+        IAssetSource source,
+        string relativePath,
+        string? declaredProductSpec = null)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+
+        var spec = MapProductIdentifierToSpec(declaredProductSpec)
+            ?? DetectProductSpecByExtension(relativePath)
+            ?? throw new NotSupportedException(
+                $"Unable to determine product specification for '{relativePath}' " +
+                $"(declared='{declaredProductSpec ?? "<none>"}').");
+
+        return spec switch
+        {
+            "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
+            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueResolver),
+            "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueResolver),
+            "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
+            "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),
+            "S-122" => new S122DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-124" => new S124DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-125" => new S125DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-127" => new S127DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-128" => new S128DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-129" => new S129DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-411" => new S411DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            "S-421" => new S421DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueResolver),
+            _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
+        };
+    }
+
+    /// <summary>
+    /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
+    /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
+    /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).
+    /// Returns <c>null</c> when the identifier is null, blank, or unrecognized.
+    /// </summary>
+    public static string? MapProductIdentifierToSpec(string? productIdentifier)
+    {
+        if (string.IsNullOrWhiteSpace(productIdentifier)) return null;
+        var trimmed = productIdentifier.Trim();
+        var normalized = trimmed.StartsWith("S-", StringComparison.OrdinalIgnoreCase)
+            ? "S-" + trimmed[2..]
+            : trimmed.StartsWith('S') || trimmed.StartsWith('s')
+                ? "S-" + trimmed[1..]
+                : trimmed;
+        normalized = normalized.ToUpperInvariant();
+        return normalized switch
+        {
+            "S-57" or "S-101" or "S-102" or "S-104" or "S-111"
+                or "S-122" or "S-124" or "S-125" or "S-127" or "S-128"
+                or "S-129" or "S-411" or "S-421" => normalized,
+            _ => null,
+        };
+    }
+
+    private static string? DetectProductSpecByExtension(string relativePath)
+    {
+        var ext = Path.GetExtension(relativePath);
+        if (string.Equals(ext, ".000", StringComparison.OrdinalIgnoreCase))
+        {
+            // Could be S-101 or legacy S-57; without content access we
+            // cannot disambiguate cheaply. Caller should supply
+            // declaredProductSpec for ISO 8211 datasets.
+            return null;
+        }
+        if (string.Equals(ext, ".h5", StringComparison.OrdinalIgnoreCase))
+        {
+            // HDF5 product spec cannot be inferred from extension alone.
+            return null;
+        }
+        return null;
+    }
 }
