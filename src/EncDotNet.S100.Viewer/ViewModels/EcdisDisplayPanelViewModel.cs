@@ -65,9 +65,16 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     /// <summary>Clears all overrides across every spec.</summary>
     public ICommand ResetAllOverridesCommand { get; }
 
+    /// <summary>Sets the display category to Display Base.</summary>
     public ICommand SetDisplayBaseCommand { get; }
+
+    /// <summary>Sets the display category to Standard.</summary>
     public ICommand SetStandardCommand { get; }
+
+    /// <summary>Sets the display category to Other Information.</summary>
     public ICommand SetOtherInformationCommand { get; }
+
+    /// <summary>Sets the display category to All.</summary>
     public ICommand SetAllCommand { get; }
 
     /// <summary>

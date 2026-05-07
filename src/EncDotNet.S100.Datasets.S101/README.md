@@ -13,6 +13,22 @@ This library reads S-101 datasets encoded in ISO 8211 format and executes the S-
 - **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline.
 - **`DrawingInstructionParser`** — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy from `EncDotNet.S100.Core`. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is recognised but not yet rendered — sector lights and all-around-light circles will log a warning.
 
+## Record types
+
+`S101DocumentReader` parses the following ISO 8211 record types:
+
+| Tag | Record type | Notes |
+|-----|-------------|-------|
+| DSID | Dataset identification | Version, edition, product spec |
+| DSSI | Dataset structure info | COMF / SOMF scaling factors |
+| PRID | Point | Single 2D coordinate |
+| MRID | MultiPoint | 3D sounding arrays via C3IL field (VCID leader + YCOO/XCOO/ZCOO repeating group) |
+| CRID | Curve segment | Ordered coordinate sequences |
+| CCID | Composite curve | References to curve segments |
+| SRID | Surface | Ring-based polygon geometry |
+| FRID | Feature | Object class, attributes, spatial associations |
+| IRID | Information type | Metadata records referenced by features |
+
 ## Installation
 
 ```sh

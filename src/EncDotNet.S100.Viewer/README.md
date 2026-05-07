@@ -71,6 +71,35 @@ All visibility / opacity / order changes drive Mapsui's per-layer
 `Enabled`, `Opacity`, and stack position directly — they apply
 immediately and do not re-run the dataset pipeline.
 
+## ECDIS Display Controls
+
+The viewer exposes S-100 Part 9A display-category filtering and
+per-spec viewing-group overrides through two UI surfaces:
+
+### Display toolbar pill
+
+A compact pill button in the map toolbar shows the active
+**display category** (Display Base, Standard, Other Information,
+or All). Clicking the pill opens a flyout with radio buttons to
+switch categories; the change propagates through `EcdisDisplayState`
+and triggers a re-render of all vector datasets.
+
+### ECDIS panel (activity bar)
+
+A dedicated activity-bar entry opens the ECDIS Display Controls
+panel. It lists each loaded **vector** product specification
+(S-101, S-122, S-124, S-125, S-127, S-128, S-129, S-411, S-421)
+with a flat checkbox list of viewing groups sourced from the spec's
+portrayal catalogue. Unchecking a viewing group hides its features
+from the rendered output.
+
+Coverage products (S-102, S-104, S-111) have no viewing-group
+concept and are excluded from the panel.
+
+Per-spec and global "Reset overrides" buttons clear any
+user-hidden viewing groups. Override state is persisted in
+`settings.json` and restored on launch.
+
 ## Time-varying datasets and the global time slider
 
 Three product specifications carry a time dimension:

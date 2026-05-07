@@ -29,9 +29,16 @@ internal sealed class DisplayToolbarViewModel : ViewModelBase, IDisposable
         SetAllCommand = new RelayCommand(() => SetCategory(EcdisDisplayCategory.All));
     }
 
+    /// <summary>Sets the display category to Display Base.</summary>
     public ICommand SetDisplayBaseCommand { get; }
+
+    /// <summary>Sets the display category to Standard.</summary>
     public ICommand SetStandardCommand { get; }
+
+    /// <summary>Sets the display category to Other Information.</summary>
     public ICommand SetOtherInformationCommand { get; }
+
+    /// <summary>Sets the display category to All.</summary>
     public ICommand SetAllCommand { get; }
 
     /// <summary>
