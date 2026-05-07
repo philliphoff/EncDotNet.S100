@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -9,6 +10,7 @@ using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -46,12 +48,23 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         _status = status;
     }
 
-    public async Task OpenAsync(string folderOrZipPath, CancellationToken cancellationToken = default)
+    public async Task<ExchangeSetOpenResult> OpenAsync(
+        string folderOrZipPath,
+        IProgress<ExchangeSetProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(folderOrZipPath);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         EnsureCollectionSubscription();
+
+        // s100.exchangeset.open child span sits under whatever
+        // s100.viewer.command span the caller (MainWindow) opened.
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "s100.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var sourceKind = ResolveSourceKind(folderOrZipPath);
+        activity?.SetTag("s100.exchangeset.source.kind", sourceKind);
+        activity?.SetTag("s100.exchangeset.source.path", folderOrZipPath);
 
         IAssetSource? source = null;
         ExchangeSet? exchangeSet = null;
@@ -67,19 +80,40 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 _status.StatusText = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
                 source.Dispose();
-                return;
+                activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath),
+                };
             }
 
             var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
+            activity?.SetTag("s100.exchangeset.dataset.count", datasets.Count);
+            activity?.SetTag(
+                "s100.exchangeset.producer",
+                exchangeSet.Catalogue.Contact?.Organization);
+            activity?.SetTag(
+                "s100.exchangeset.product",
+                exchangeSet.Catalogue.ProductSpecification?.ProductIdentifier);
+
             if (datasets.Count == 0)
             {
                 _status.StatusText = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
                 exchangeSet.Dispose();
                 exchangeSet = null;
-                return;
+                activity?.SetStatus(ActivityStatusCode.Error, "empty catalogue");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath),
+                };
             }
 
             _status.StatusText = string.Format(Strings.Status_ExchangeSetLoading, folderOrZipPath);
+            progress?.Report(new ExchangeSetProgress(folderOrZipPath, datasets.Count, 0, 0, null));
 
             var tracked = new TrackedExchangeSet(folderOrZipPath, exchangeSet);
             _tracked.Add(tracked);
@@ -90,21 +124,31 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             var dispatched = 0;
             var skipped = 0;
+            var skipMessages = new List<string>();
+            var cancelled = false;
 
             foreach (var metadata in datasets)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    cancelled = true;
+                    break;
+                }
 
                 var relativePath = ExchangeSet.NormalizeFileName(metadata.FileName);
                 var spec = DatasetPipelineFactory.MapProductIdentifierToSpec(
                     metadata.ProductSpecification?.ProductIdentifier);
                 if (spec is null)
                 {
-                    _status.StatusText = string.Format(
+                    var msg = string.Format(
                         Strings.Status_ExchangeSetUnsupportedSpec,
                         relativePath,
                         metadata.ProductSpecification?.ProductIdentifier ?? string.Empty);
+                    _status.StatusText = msg;
+                    skipMessages.Add(msg);
                     skipped++;
+                    progress?.Report(new ExchangeSetProgress(
+                        folderOrZipPath, datasets.Count, dispatched + skipped, skipped, relativePath));
                     continue;
                 }
 
@@ -116,9 +160,17 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 tracked.Entries.Add(entry);
                 _datasets.RequestLoad(entry);
                 dispatched++;
+                progress?.Report(new ExchangeSetProgress(
+                    folderOrZipPath, datasets.Count, dispatched + skipped, skipped, relativePath));
             }
 
-            if (skipped == 0)
+            if (cancelled)
+            {
+                _status.StatusText = string.Format(
+                    Strings.Status_ExchangeSetCancelled,
+                    dispatched, datasets.Count, folderOrZipPath);
+            }
+            else if (skipped == 0)
             {
                 _status.StatusText = string.Format(
                     Strings.Status_ExchangeSetLoaded, dispatched, folderOrZipPath);
@@ -130,6 +182,13 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     dispatched, datasets.Count, folderOrZipPath, skipped);
             }
 
+            activity?.SetTag("s100.exchangeset.dataset.loaded", dispatched);
+            activity?.SetTag("s100.exchangeset.dataset.skipped", skipped);
+            activity?.SetTag("s100.exchangeset.cancelled", cancelled);
+            activity?.SetStatus(
+                cancelled ? ActivityStatusCode.Error : ActivityStatusCode.Ok,
+                cancelled ? "cancelled" : null);
+
             // If every dataset was skipped (unsupported product specs),
             // there will be no entries to keep the set alive — release it
             // immediately so the file handle / archive is not leaked.
@@ -138,19 +197,51 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 tracked.ExchangeSet.Dispose();
                 _tracked.Remove(tracked);
             }
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                Total = datasets.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = skipped,
+                Cancelled = cancelled,
+                SkipMessages = skipMessages,
+            };
         }
         catch (OperationCanceledException)
         {
             exchangeSet?.Dispose();
             source?.Dispose();
-            throw;
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                Cancelled = true,
+            };
         }
         catch (Exception ex)
         {
             _status.StatusText = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
             exchangeSet?.Dispose();
             source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                FailureMessage = ex.Message,
+            };
         }
+    }
+
+    private static string ResolveSourceKind(string path)
+    {
+        if (Directory.Exists(path)) return "folder";
+        if (File.Exists(path) &&
+            string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zip";
+        }
+        return "unknown";
     }
 
     private static IAssetSource OpenSource(string path)

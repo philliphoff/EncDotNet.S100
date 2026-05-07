@@ -480,6 +480,29 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
     <value>Skipped {0}: unsupported product specification '{1}'.</value>
   </data>
+  <data name="Status_ExchangeSetCancelled" xml:space="preserve">
+    <value>Cancelled after loading {0} of {1} datasets from {2}.</value>
+  </data>
+
+  <!-- Exchange-set progress overlay (es3-progress) -->
+  <data name="Progress_ExchangeSetTitle" xml:space="preserve">
+    <value>Opening exchange set</value>
+  </data>
+  <data name="Progress_ExchangeSetCounter" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="Progress_ExchangeSetCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Banner_ExchangeSetPartial" xml:space="preserve">
+    <value>{0} of {1} datasets in {2} could not be loaded ({3} unsupported).</value>
+  </data>
+  <data name="Banner_ExchangeSetFailed" xml:space="preserve">
+    <value>Failed to open exchange set {0}: {1}</value>
+  </data>
+  <data name="Banner_Dismiss" xml:space="preserve">
+    <value>Dismiss</value>
+  </data>
 
   <!-- Dataset entry -->
   <data name="DatasetEntry_CurrentTimeFormat" xml:space="preserve">

@@ -197,6 +197,15 @@ internal static class Strings
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
+    public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
+
+    // Exchange-set progress overlay (es3-progress)
+    public static string Progress_ExchangeSetTitle => Get(nameof(Progress_ExchangeSetTitle));
+    public static string Progress_ExchangeSetCounter => Get(nameof(Progress_ExchangeSetCounter));
+    public static string Progress_ExchangeSetCancel => Get(nameof(Progress_ExchangeSetCancel));
+    public static string Banner_ExchangeSetPartial => Get(nameof(Banner_ExchangeSetPartial));
+    public static string Banner_ExchangeSetFailed => Get(nameof(Banner_ExchangeSetFailed));
+    public static string Banner_Dismiss => Get(nameof(Banner_Dismiss));
 
     // Dataset entry
     public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));

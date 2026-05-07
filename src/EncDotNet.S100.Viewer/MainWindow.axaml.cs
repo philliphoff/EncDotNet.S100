@@ -353,8 +353,7 @@ public partial class MainWindow : ShadUI.Window
         if (folder is null)
             return;
 
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-        await _exchangeSetService.OpenAsync(folder);
+        await RunExchangeSetAsync(folder);
     }
 
     private async Task OpenExchangeSetZipAsync()
@@ -363,8 +362,30 @@ public partial class MainWindow : ShadUI.Window
         if (zip is null)
             return;
 
+        await RunExchangeSetAsync(zip);
+    }
+
+    private async Task RunExchangeSetAsync(string sourcePath)
+    {
         _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
-        await _exchangeSetService.OpenAsync(zip);
+
+        var token = _viewModel.BeginExchangeSetLoad(sourcePath);
+        var progress = new Progress<Services.ExchangeSetProgress>(
+            p => _viewModel.ReportExchangeSetProgress(p));
+
+        try
+        {
+            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token);
+            _viewModel.EndExchangeSetLoad(result);
+        }
+        catch (Exception ex)
+        {
+            _viewModel.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
+            {
+                SourcePath = sourcePath,
+                FailureMessage = ex.Message,
+            });
+        }
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
