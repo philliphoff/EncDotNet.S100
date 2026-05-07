@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -67,6 +68,15 @@ public sealed class ExchangeSetOpenResult
     /// <summary>Human-readable per-dataset skip messages (currently all
     /// "unsupported product spec" entries).</summary>
     public IReadOnlyList<string> SkipMessages { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Union of every catalogued dataset's
+    /// <see cref="DatasetDiscoveryMetadata.BoundingBox"/> in EPSG:4326
+    /// (the catalogue's declared CRS). <c>null</c> when no dataset
+    /// supplied a bounding box. The viewer reprojects this to web
+    /// mercator to fit the map after a successful bulk load.
+    /// </summary>
+    public BoundingBox? UnionBoundingBox { get; init; }
 }
 
 /// <summary>

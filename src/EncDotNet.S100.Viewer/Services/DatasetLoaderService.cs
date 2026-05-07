@@ -207,7 +207,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var result = await Task.Run(() => processor.Render(initialContext));
 
             ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
-            _mapHost!.ZoomToExtent(result.Extent);
+            // Exchange-set entries opt out of the per-dataset auto-zoom so
+            // the union-extent zoom from `IExchangeSetService` (or the
+            // user's manual Zoom-to-Extent toolbar action) wins. Without
+            // this, the last-completed dataset would race with the bulk
+            // load and "win" the viewport.
+            if (!fromExchangeSet)
+            {
+                _mapHost!.ZoomToExtent(result.Extent);
+            }
 
             entry.IsLoaded = true;
             entry.Info = result.Info;

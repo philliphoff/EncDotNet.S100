@@ -206,6 +206,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 SkippedUnsupported = skipped,
                 Cancelled = cancelled,
                 SkipMessages = skipMessages,
+                UnionBoundingBox = ComputeUnionBoundingBox(datasets),
             };
         }
         catch (OperationCanceledException)
@@ -231,6 +232,39 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 FailureMessage = ex.Message,
             };
         }
+    }
+
+    /// <summary>
+    /// Computes the EPSG:4326 union of every dataset's bounding box,
+    /// ignoring entries that lack one. Returns <c>null</c> if no
+    /// dataset declared a bounding box.
+    /// </summary>
+    /// <remarks>
+    /// Antimeridian-spanning catalogues are not handled here — if a
+    /// producer ever ships one, this will return an over-wide box.
+    /// Exposed as <c>internal</c> for unit testing.
+    /// </remarks>
+    internal static BoundingBox? ComputeUnionBoundingBox(
+        IReadOnlyList<DatasetDiscoveryMetadata> datasets)
+    {
+        double? west = null, east = null, south = null, north = null;
+        foreach (var d in datasets)
+        {
+            var b = d.BoundingBox;
+            if (b is null) continue;
+            west = west is null ? b.WestBoundLongitude : Math.Min(west.Value, b.WestBoundLongitude);
+            east = east is null ? b.EastBoundLongitude : Math.Max(east.Value, b.EastBoundLongitude);
+            south = south is null ? b.SouthBoundLatitude : Math.Min(south.Value, b.SouthBoundLatitude);
+            north = north is null ? b.NorthBoundLatitude : Math.Max(north.Value, b.NorthBoundLatitude);
+        }
+        if (west is null) return null;
+        return new BoundingBox
+        {
+            WestBoundLongitude = west.Value,
+            EastBoundLongitude = east!.Value,
+            SouthBoundLatitude = south!.Value,
+            NorthBoundLatitude = north!.Value,
+        };
     }
 
     private static string ResolveSourceKind(string path)

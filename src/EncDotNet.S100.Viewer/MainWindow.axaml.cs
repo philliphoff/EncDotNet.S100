@@ -377,6 +377,7 @@ public partial class MainWindow : ShadUI.Window
         {
             var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token);
             _viewModel.EndExchangeSetLoad(result);
+            ZoomToUnionExtent(result);
         }
         catch (Exception ex)
         {
@@ -386,6 +387,26 @@ public partial class MainWindow : ShadUI.Window
                 FailureMessage = ex.Message,
             });
         }
+    }
+
+    private void ZoomToUnionExtent(Services.ExchangeSetOpenResult result)
+    {
+        // No-op when the catalogue had no bbox or the open failed; the
+        // user can still hit the toolbar Zoom-to-Extent which fits to
+        // every loaded layer.
+        if (result.UnionBoundingBox is not { } bbox) return;
+        if (MapControl.Map?.Navigator is not { } nav) return;
+
+        // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps the
+        // input range, so polar catalogues degrade gracefully.
+        var (minX, minY) = SphericalMercator.FromLonLat(
+            bbox.WestBoundLongitude, bbox.SouthBoundLatitude);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(
+            bbox.EastBoundLongitude, bbox.NorthBoundLatitude);
+        var extent = new MRect(minX, minY, maxX, maxY);
+        if (extent.Width <= 0 || extent.Height <= 0) return;
+
+        nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
