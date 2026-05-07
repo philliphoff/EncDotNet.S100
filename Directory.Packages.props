@@ -23,7 +23,7 @@
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
     <!-- EncDotNet -->
-    <PackageVersion Include="EncDotNet.Iso8211" Version="0.4.0" />
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.4.1" />
     <PackageVersion Include="EncDotNet.S57" Version="0.4.0" />
     <!-- Mapping / rendering -->
     <PackageVersion Include="FluentIcons.Avalonia.Fluent" Version="2.0.323" />

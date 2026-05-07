@@ -244,11 +244,9 @@ internal static class S101DocumentReader
     /// sounding coordinates (S-100 Part 10a §10a-5.6).
     /// </summary>
     /// <remarks>
-    /// The C3IL field uses format <c>(b11,3b24)</c>: a 1-byte VCID leader
-    /// followed by three 4-byte signed integers (YCOO, XCOO, ZCOO) per point.
-    /// The EncDotNet.Iso8211 library does not fully split the concatenated
-    /// array descriptor (<c>VCID*YCOO!XCOO!ZCOO</c>), so coordinates are
-    /// parsed directly from the raw binary data.
+    /// The C3IL field uses concatenated array descriptor <c>VCID*YCOO!XCOO!ZCOO</c>
+    /// with format <c>(b11,3b24)</c>: a 1-byte VCID leader followed by repeating
+    /// groups of three 4-byte signed integers (YCOO, XCOO, ZCOO) per sounding point.
     /// </remarks>
     private static S101MultiPointRecord? ParseMultiPoint(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
     {
@@ -259,21 +257,18 @@ internal static class S101DocumentReader
         var mridReader = new Iso8211FieldReader(mridDef, mridField.Data);
         var rcid = mridReader.GetSubfield<uint>("RCID");
 
-        // C3IL — 3D coordinate list: 1-byte VCID + 3×4-byte signed (Y, X, Z) per point
-        const int bytesPerPoint = 1 + 4 + 4 + 4; // VCID(b11) + YCOO(b24) + XCOO(b24) + ZCOO(b24)
         var coords = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
         var c3ilField = record.GetFieldByTag("C3IL");
         if (c3ilField is not null)
         {
-            var data = c3ilField.Data;
-            int pointCount = data.Length / bytesPerPoint;
-            for (int i = 0; i < pointCount; i++)
+            var c3ilDef = ddr.GetFieldDefinition("C3IL")!;
+            var c3ilReader = new Iso8211FieldReader(c3ilDef, c3ilField.Data);
+
+            foreach (var group in c3ilReader.GetSubfieldGroups())
             {
-                int offset = i * bytesPerPoint;
-                // Skip VCID (1 byte), then read YCOO, XCOO, ZCOO as signed 32-bit LE
-                int cy = BitConverter.ToInt32(data, offset + 1);
-                int cx = BitConverter.ToInt32(data, offset + 5);
-                int cz = BitConverter.ToInt32(data, offset + 9);
+                var cy = group.GetSubfield<int>("YCOO");
+                var cx = group.GetSubfield<int>("XCOO");
+                var cz = group.GetSubfield<int>("ZCOO");
                 coords.Add((cy, cx, cz));
             }
         }
