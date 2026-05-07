@@ -34,6 +34,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly IDatasetLoaderService _loader;
     private readonly IPickService _pickService;
     private readonly IFileDialogService _fileDialog;
+    private readonly IExchangeSetService _exchangeSetService;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private string? _screenshotPath;
@@ -59,7 +60,9 @@ public partial class MainWindow : ShadUI.Window
                 "IDatasetLoaderService cannot be resolved without the application service provider.")),
             ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
                 "IPickService cannot be resolved without the application service provider.")),
-            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()))
+            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()),
+            ResolveOrFallback<IExchangeSetService>(static () => throw new InvalidOperationException(
+                "IExchangeSetService cannot be resolved without the application service provider.")))
     {
     }
 
@@ -83,7 +86,8 @@ public partial class MainWindow : ShadUI.Window
         ScreenshotService screenshotService,
         IDatasetLoaderService loader,
         IPickService pickService,
-        IFileDialogService fileDialog)
+        IFileDialogService fileDialog,
+        IExchangeSetService exchangeSetService)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(catalogAggregator);
@@ -92,6 +96,7 @@ public partial class MainWindow : ShadUI.Window
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickService);
         ArgumentNullException.ThrowIfNull(fileDialog);
+        ArgumentNullException.ThrowIfNull(exchangeSetService);
 
         InitializeComponent();
 
@@ -102,6 +107,7 @@ public partial class MainWindow : ShadUI.Window
         _loader = loader;
         _pickService = pickService;
         _fileDialog = fileDialog;
+        _exchangeSetService = exchangeSetService;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -127,7 +133,9 @@ public partial class MainWindow : ShadUI.Window
         // PropertyChanged subscriptions for the lifetime of this window.
         new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
             window: this,
-            openDatasetAsync: OpenDatasetAsync);
+            openDatasetAsync: OpenDatasetAsync,
+            openExchangeSetAsync: OpenExchangeSetAsync,
+            openExchangeSetZipAsync: OpenExchangeSetZipAsync);
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -337,6 +345,26 @@ public partial class MainWindow : ShadUI.Window
 
             await _viewModel.Datasets.LoadFromPathAsync(path);
         }
+    }
+
+    private async Task OpenExchangeSetAsync()
+    {
+        var folder = await _fileDialog.OpenExchangeSetFolderAsync(this);
+        if (folder is null)
+            return;
+
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        await _exchangeSetService.OpenAsync(folder);
+    }
+
+    private async Task OpenExchangeSetZipAsync()
+    {
+        var zip = await _fileDialog.OpenExchangeSetZipAsync(this);
+        if (zip is null)
+            return;
+
+        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        await _exchangeSetService.OpenAsync(zip);
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)

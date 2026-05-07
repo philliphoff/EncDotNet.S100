@@ -106,6 +106,8 @@ internal static class Strings
     // Native menu
     public static string Menu_File => Get(nameof(Menu_File));
     public static string Menu_OpenDataset => Get(nameof(Menu_OpenDataset));
+    public static string Menu_OpenExchangeSet => Get(nameof(Menu_OpenExchangeSet));
+    public static string Menu_OpenExchangeSetZip => Get(nameof(Menu_OpenExchangeSetZip));
     public static string Menu_OpenRecent => Get(nameof(Menu_OpenRecent));
     public static string Menu_NoRecentDatasets => Get(nameof(Menu_NoRecentDatasets));
     public static string Menu_ClearRecentlyOpened => Get(nameof(Menu_ClearRecentlyOpened));
@@ -120,6 +122,9 @@ internal static class Strings
     // File picker
     public static string FilePicker_OpenDatasetTitle => Get(nameof(FilePicker_OpenDatasetTitle));
     public static string FilePicker_S100DatasetsType => Get(nameof(FilePicker_S100DatasetsType));
+    public static string FilePicker_ExchangeSetFolderTitle => Get(nameof(FilePicker_ExchangeSetFolderTitle));
+    public static string FilePicker_ExchangeSetZipTitle => Get(nameof(FilePicker_ExchangeSetZipTitle));
+    public static string FilePicker_ExchangeSetZipType => Get(nameof(FilePicker_ExchangeSetZipType));
 
     // Catalogue list
     public static string Catalogue_BuiltInLabel => Get(nameof(Catalogue_BuiltInLabel));
@@ -186,6 +191,12 @@ internal static class Strings
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
+    public static string Status_ExchangeSetLoading => Get(nameof(Status_ExchangeSetLoading));
+    public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));
+    public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
+    public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
+    public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
+    public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
 
     // Dataset entry
     public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));

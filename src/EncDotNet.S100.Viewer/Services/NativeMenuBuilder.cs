@@ -22,6 +22,8 @@ internal sealed class NativeMenuBuilder
     private readonly NativeMenu _openRecentMenu = new();
     private NativeMenuItem? _openRecentMenuItem;
     private Func<Task>? _openDatasetAsync;
+    private Func<Task>? _openExchangeSetAsync;
+    private Func<Task>? _openExchangeSetZipAsync;
 
     public NativeMenuBuilder(MainViewModel viewModel, IRecentFilesService recentFiles)
     {
@@ -39,14 +41,22 @@ internal sealed class NativeMenuBuilder
     /// </summary>
     /// <param name="window">The window to attach the menu to.</param>
     /// <param name="openDatasetAsync">Invoked when the user selects File › Open Dataset…</param>
+    /// <param name="openExchangeSetAsync">Invoked when the user selects File › Open Exchange Set…</param>
+    /// <param name="openExchangeSetZipAsync">Invoked when the user selects File › Open Exchange Set (ZIP)…</param>
     public void Attach(
         Window window,
-        Func<Task> openDatasetAsync)
+        Func<Task> openDatasetAsync,
+        Func<Task> openExchangeSetAsync,
+        Func<Task> openExchangeSetZipAsync)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(openDatasetAsync);
+        ArgumentNullException.ThrowIfNull(openExchangeSetAsync);
+        ArgumentNullException.ThrowIfNull(openExchangeSetZipAsync);
 
         _openDatasetAsync = openDatasetAsync;
+        _openExchangeSetAsync = openExchangeSetAsync;
+        _openExchangeSetZipAsync = openExchangeSetZipAsync;
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
@@ -150,9 +160,22 @@ internal sealed class NativeMenuBuilder
             Menu = _openRecentMenu,
         };
 
+        var openExchangeSetItem = new NativeMenuItem(Strings.Menu_OpenExchangeSet);
+        openExchangeSetItem.Click += (_, _) => _ = _openExchangeSetAsync!.Invoke();
+
+        var openExchangeSetZipItem = new NativeMenuItem(Strings.Menu_OpenExchangeSetZip);
+        openExchangeSetZipItem.Click += (_, _) => _ = _openExchangeSetZipAsync!.Invoke();
+
         return new NativeMenuItem(Strings.Menu_File)
         {
-            Menu = new NativeMenu { openItem, _openRecentMenuItem },
+            Menu = new NativeMenu
+            {
+                openItem,
+                _openRecentMenuItem,
+                new NativeMenuItemSeparator(),
+                openExchangeSetItem,
+                openExchangeSetZipItem,
+            },
         };
     }
 

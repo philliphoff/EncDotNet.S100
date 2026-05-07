@@ -142,11 +142,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
         using var __cmd = ViewerObservability.BeginCommand("dataset.open");
 
-        var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
-        if (spec is null)
+        // Exchange-set entries carry an explicit ProductSpec from the
+        // catalogue and never require path-based detection or recent-
+        // files updates (the relative path inside a ZIP is not
+        // meaningful as a recent-file entry).
+        var fromExchangeSet = entry.IsFromExchangeSet;
+
+        string? spec;
+        if (fromExchangeSet)
         {
-            SetStatus(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
-            return;
+            spec = entry.ProductSpec;
+        }
+        else
+        {
+            spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
+            if (spec is null)
+            {
+                SetStatus(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
+                return;
+            }
         }
 
         // S-104 ships a built-in portrayal catalogue.
@@ -158,11 +172,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             return;
         }
 
-        SetStatus(string.Format(Strings.Status_LoadingFile, Path.GetFileName(entry.FilePath)));
+        SetStatus(string.Format(Strings.Status_LoadingFile, entry.DisplayName));
 
         try
         {
-            var processor = await Task.Run(() => _pipelineFactory!.CreateProcessor(entry.FilePath));
+            var processor = await Task.Run(() => fromExchangeSet
+                ? _pipelineFactory!.CreateProcessor(entry.Source!, entry.RelativePath!, spec)
+                : _pipelineFactory!.CreateProcessor(entry.FilePath));
             _processors[entry] = processor;
 
             // Surface S-128 catalogues into the Dataset Catalog panel.
@@ -198,7 +214,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
             SetStatus(result.Info);
 
-            _recentFiles.Add(entry.FilePath);
+            // Recent files only makes sense for plain file loads. An
+            // exchange-set entry's FilePath is a relative path inside
+            // a folder/ZIP source and not openable on its own.
+            if (!fromExchangeSet)
+            {
+                _recentFiles.Add(entry.FilePath);
+            }
 
             // Register with the global time service after the entry's
             // CurrentTime has been set so the first slider snap reflects
