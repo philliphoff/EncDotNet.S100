@@ -419,8 +419,33 @@ public partial class MainWindow : ShadUI.Window
         foreach (var item in files)
         {
             var path = item.TryGetLocalPath();
-            if (path is null || !File.Exists(path))
+            if (path is null)
                 continue;
+
+            // Folder drop: treat as an exchange set when CATALOG.XML
+            // is at the root, otherwise ignore (the dataset loader is
+            // single-file).
+            if (Directory.Exists(path))
+            {
+                if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path))
+                {
+                    await RunExchangeSetAsync(path);
+                }
+                continue;
+            }
+
+            if (!File.Exists(path))
+                continue;
+
+            // File drop: a .zip with a root-level CATALOG.XML is an
+            // exchange-set ZIP; everything else falls through to the
+            // single-dataset loader.
+            if (ExchangeSetDetection.IsZipPath(path) &&
+                ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+            {
+                await RunExchangeSetAsync(path);
+                continue;
+            }
 
             await _viewModel.Datasets.LoadFromPathAsync(path);
         }
