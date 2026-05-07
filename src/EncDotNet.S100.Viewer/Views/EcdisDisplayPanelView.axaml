@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
+             x:Class="EncDotNet.S100.Viewer.Views.EcdisDisplayPanelView"
+             x:DataType="vm:EcdisDisplayPanelViewModel">
+
+    <DockPanel>
+        <!-- Empty state message -->
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{x:Static loc:Strings.EcdisPanel_NoSpecs}"
+                   IsVisible="{Binding IsEmpty}"
+                   Opacity="0.5"
+                   TextWrapping="Wrap"
+                   Margin="12,8" />
+
+        <ScrollViewer IsVisible="{Binding !IsEmpty}">
+            <StackPanel Spacing="12" Margin="12,4,12,12">
+                <!-- Display category radio group -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_CategoryHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <RadioButton Content="{x:Static loc:Strings.DisplayCategory_DisplayBase}"
+                                 IsChecked="{Binding IsDisplayBase, Mode=OneWay}"
+                                 Command="{Binding SetDisplayBaseCommand}"
+                                 GroupName="DisplayCategory" />
+                    <RadioButton Content="{x:Static loc:Strings.DisplayCategory_Standard}"
+                                 IsChecked="{Binding IsStandard, Mode=OneWay}"
+                                 Command="{Binding SetStandardCommand}"
+                                 GroupName="DisplayCategory" />
+                    <RadioButton Content="{x:Static loc:Strings.DisplayCategory_OtherInformation}"
+                                 IsChecked="{Binding IsOtherInformation, Mode=OneWay}"
+                                 Command="{Binding SetOtherInformationCommand}"
+                                 GroupName="DisplayCategory" />
+                    <RadioButton Content="{x:Static loc:Strings.DisplayCategory_All}"
+                                 IsChecked="{Binding IsAll, Mode=OneWay}"
+                                 Command="{Binding SetAllCommand}"
+                                 GroupName="DisplayCategory" />
+                </StackPanel>
+
+                <!-- Global reset -->
+                <Button Content="{x:Static loc:Strings.Button_ResetAllOverrides}"
+                        Command="{Binding ResetAllOverridesCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetAllOverrides}"
+                        HorizontalAlignment="Left"
+                        Padding="8,4" />
+
+                <!-- Per-spec sections -->
+                <ItemsControl ItemsSource="{Binding Specs}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:EcdisSpecViewModel">
+                            <Border BorderBrush="{DynamicResource BorderColor}"
+                                    BorderThickness="0,1,0,0"
+                                    Padding="0,8,0,0"
+                                    Margin="0,4,0,0">
+                                <StackPanel Spacing="4">
+                                    <!-- Spec header -->
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="{x:Static loc:Strings.Button_ResetOverrides}"
+                                                Command="{Binding ResetOverridesCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetOverrides}"
+                                                IsVisible="{Binding HasOverrides}"
+                                                Padding="6,2"
+                                                FontSize="11" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding SpecCode}"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding OverrideCountLabel}"
+                                                       IsVisible="{Binding HasOverrides}"
+                                                       Opacity="0.6"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <!-- Viewing group checkboxes -->
+                                    <ItemsControl ItemsSource="{Binding ViewingGroups}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:EcdisViewingGroupViewModel">
+                                                <CheckBox IsChecked="{Binding IsVisible}"
+                                                          Margin="0,1">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </CheckBox>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

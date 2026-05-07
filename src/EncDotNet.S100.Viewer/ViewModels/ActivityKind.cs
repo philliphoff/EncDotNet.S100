@@ -8,4 +8,5 @@ internal enum ActivityKind
     Catalog,
     Search,
     Settings,
+    EcdisDisplay,
 }

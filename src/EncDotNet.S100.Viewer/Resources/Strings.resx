@@ -470,6 +470,56 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Latitude and longitude of the cursor on the map</value>
   </data>
 
+  <!-- ECDIS Display Controls -->
+  <data name="Pane_EcdisDisplay" xml:space="preserve">
+    <value>DISPLAY CONTROLS</value>
+  </data>
+  <data name="Tooltip_EcdisDisplay" xml:space="preserve">
+    <value>ECDIS Display Controls</value>
+  </data>
+  <data name="Toolbar_DisplayFormat" xml:space="preserve">
+    <value>Display: {0} ▾</value>
+    <comment>Toolbar pill label; {0} is the active display category name.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode" xml:space="preserve">
+    <value>Change the ECDIS display category</value>
+  </data>
+  <data name="DisplayCategory_DisplayBase" xml:space="preserve">
+    <value>Display Base</value>
+  </data>
+  <data name="DisplayCategory_Standard" xml:space="preserve">
+    <value>Standard</value>
+  </data>
+  <data name="DisplayCategory_OtherInformation" xml:space="preserve">
+    <value>Other Information</value>
+  </data>
+  <data name="DisplayCategory_All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Button_ResetOverrides" xml:space="preserve">
+    <value>Reset overrides</value>
+  </data>
+  <data name="Tooltip_ResetOverrides" xml:space="preserve">
+    <value>Clear all viewing-group overrides for this spec</value>
+  </data>
+  <data name="Button_ResetAllOverrides" xml:space="preserve">
+    <value>Reset all overrides</value>
+  </data>
+  <data name="Tooltip_ResetAllOverrides" xml:space="preserve">
+    <value>Clear all viewing-group overrides across every spec</value>
+  </data>
+  <data name="EcdisPanel_NoSpecs" xml:space="preserve">
+    <value>No vector datasets loaded.
+Open an S-101, S-124, S-125, or S-421 dataset to see display controls here.</value>
+  </data>
+  <data name="EcdisPanel_OverrideCountFormat" xml:space="preserve">
+    <value>{0} overrides</value>
+    <comment>{0} is the count of user-hidden viewing groups for a spec.</comment>
+  </data>
+  <data name="EcdisPanel_CategoryHeader" xml:space="preserve">
+    <value>Display Category</value>
+  </data>
+
   <!-- Measure Mode -->
   <data name="Tooltip_MeasureMode" xml:space="preserve">
     <value>Measure distance and bearing (rhumb line)</value>

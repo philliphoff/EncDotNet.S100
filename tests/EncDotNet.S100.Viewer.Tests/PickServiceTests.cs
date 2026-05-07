@@ -75,6 +75,8 @@ public class PickServiceTests
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
+            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(new StubLoader())),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
