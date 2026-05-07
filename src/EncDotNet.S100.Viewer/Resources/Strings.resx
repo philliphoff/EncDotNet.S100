@@ -160,6 +160,9 @@
   <data name="Pane_ExchangeSetHeader_Count" xml:space="preserve">
     <value>{0} datasets</value>
   </data>
+  <data name="Pane_ExchangeSetHeader_Unsupported" xml:space="preserve">
+    <value>{0} unsupported</value>
+  </data>
   <data name="Tooltip_CloseExchangeSet" xml:space="preserve">
     <value>Close this exchange set and remove every dataset it contributed</value>
   </data>

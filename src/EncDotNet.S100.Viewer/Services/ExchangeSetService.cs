@@ -199,6 +199,16 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 cancelled ? ActivityStatusCode.Error : ActivityStatusCode.Ok,
                 cancelled ? "cancelled" : null);
 
+            // Update the header now that we know the loaded/unsupported
+            // split; the header was registered with conservative defaults
+            // before the dispatch loop ran so progress UI had something
+            // to show.
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = skipped;
+            }
+
             // If every dataset was skipped (unsupported product specs),
             // there will be no entries to keep the set alive — release it
             // immediately so the file handle / archive is not leaked.

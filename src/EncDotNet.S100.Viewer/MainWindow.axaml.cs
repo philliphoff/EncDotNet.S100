@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -373,11 +374,55 @@ public partial class MainWindow : ShadUI.Window
         var progress = new Progress<Services.ExchangeSetProgress>(
             p => _viewModel.ReportExchangeSetProgress(p));
 
+        // Subscribe to per-dataset load completions for the duration of
+        // this open. We accumulate each loaded entry's layer extents so
+        // we can zoom to their union — the catalogue may not declare
+        // per-dataset bounding boxes (S-101 producer dumps often skip
+        // them) and Map.Extent alone could include unrelated layers.
+        var loadedEntries = new HashSet<DatasetEntry>();
+        var unionSlot = new MRect?[1];
+        var lastEventTicks = new long[1];
+        Action<DatasetEntry> handler = entry =>
+        {
+            // Only count entries from any exchange set — we filter to
+            // this specific open below by checking the entry's Source.
+            if (!entry.IsFromExchangeSet) return;
+            if (!loadedEntries.Add(entry)) return;
+            if (_loader.EntryLayers.TryGetValue(entry, out var layers))
+            {
+                foreach (var layer in layers)
+                {
+                    if (layer.Extent is { } e && e.Width > 0 && e.Height > 0)
+                    {
+                        unionSlot[0] = unionSlot[0] is null
+                            ? new MRect(e.MinX, e.MinY, e.MaxX, e.MaxY)
+                            : unionSlot[0]!.Join(e);
+                    }
+                }
+            }
+            Interlocked.Exchange(ref lastEventTicks[0], Environment.TickCount64);
+        };
+        _loader.DatasetLoaded += handler;
+
         try
         {
             var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token);
             _viewModel.EndExchangeSetLoad(result);
-            ZoomToUnionExtent(result);
+
+            // Prefer the catalogue's union bbox when available — it's
+            // ready immediately and matches producer intent.
+            if (result.UnionBoundingBox is { } bbox &&
+                MapControl.Map?.Navigator is { } nav)
+            {
+                ZoomToCatalogueBoundingBox(nav, bbox);
+                return;
+            }
+
+            // Otherwise debounce on DatasetLoaded events: zoom once no
+            // new event has arrived for QuietWindowMs. This naturally
+            // handles per-dataset load failures (which never raise the
+            // event) without waiting a fixed timeout.
+            await ZoomWhenLoadingQuietsAsync(loadedEntries, unionSlot, lastEventTicks);
         }
         catch (Exception ex)
         {
@@ -387,24 +432,71 @@ public partial class MainWindow : ShadUI.Window
                 FailureMessage = ex.Message,
             });
         }
+        finally
+        {
+            _loader.DatasetLoaded -= handler;
+        }
     }
 
-    private void ZoomToUnionExtent(Services.ExchangeSetOpenResult result)
+    private void ZoomToCatalogueBoundingBox(Mapsui.Navigator nav, EncDotNet.S100.ExchangeSets.BoundingBox bbox)
     {
-        // No-op when the catalogue had no bbox or the open failed; the
-        // user can still hit the toolbar Zoom-to-Extent which fits to
-        // every loaded layer.
-        if (result.UnionBoundingBox is not { } bbox) return;
-        if (MapControl.Map?.Navigator is not { } nav) return;
-
-        // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps the
-        // input range, so polar catalogues degrade gracefully.
+        // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps
+        // the input range, so polar catalogues degrade gracefully.
         var (minX, minY) = SphericalMercator.FromLonLat(
             bbox.WestBoundLongitude, bbox.SouthBoundLatitude);
         var (maxX, maxY) = SphericalMercator.FromLonLat(
             bbox.EastBoundLongitude, bbox.NorthBoundLatitude);
         var extent = new MRect(minX, minY, maxX, maxY);
-        if (extent.Width <= 0 || extent.Height <= 0) return;
+        if (extent.Width > 0 && extent.Height > 0)
+        {
+            nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
+        }
+    }
+
+    private async Task ZoomWhenLoadingQuietsAsync(
+        HashSet<DatasetEntry> loadedEntries,
+        MRect?[] unionSlot,
+        long[] lastEventTicks)
+    {
+        // Quiet-window debounce: the per-dataset loaders complete on
+        // their own background tasks and may fail silently (caught and
+        // logged inside DatasetLoaderService), so we can't simply
+        // await an exact count. Instead we wait until DatasetLoaded
+        // events stop arriving for a short window — at that point
+        // every dispatched dataset has either completed or errored,
+        // and the accumulated union extent is final.
+        const int QuietWindowMs = 600;
+        const int PollMs = 100;
+        const int MaxWaitMs = 30_000;
+
+        var startedAt = Environment.TickCount64;
+        while (true)
+        {
+            await Task.Delay(PollMs);
+
+            var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
+            var now = Environment.TickCount64;
+
+            // No events yet — keep waiting up to MaxWaitMs from start.
+            if (lastEvent == 0)
+            {
+                if (now - startedAt >= MaxWaitMs) return;
+                continue;
+            }
+
+            // We've seen at least one event; trigger as soon as the
+            // bus is quiet for QuietWindowMs.
+            if (now - lastEvent >= QuietWindowMs)
+                break;
+
+            if (now - startedAt >= MaxWaitMs)
+                break;
+        }
+
+        if (MapControl.Map?.Navigator is not { } nav) return;
+
+        var extent = unionSlot[0] ?? MapControl.Map.Extent;
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
 
         nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1), duration: 250);
     }
