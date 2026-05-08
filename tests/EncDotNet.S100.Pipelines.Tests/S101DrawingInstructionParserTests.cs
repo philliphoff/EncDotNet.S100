@@ -167,4 +167,43 @@ public class S101DrawingInstructionParserTests
 
         Assert.Null(pt.CoordinateOverride);
     }
+
+    [Fact]
+    public void DisplayPlane_OverRadar_ParsedCorrectly()
+    {
+        const string s = "ViewingGroup:12210;DrawingPriority:24;DisplayPlane:OverRadar;PointInstruction:BRIDGE01";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+
+        var pt = Assert.Single(parsed.OfType<PointInstruction>());
+        Assert.Equal(DisplayPlane.OverRadar, pt.Plane);
+    }
+
+    [Fact]
+    public void DisplayPlane_ConcatenatedInstructions_PreservePlane()
+    {
+        // Simulates table.concat of multiple AddInstructions calls — some OverRadar, some UnderRadar
+        const string s =
+            "ViewingGroup:12210;DrawingPriority:6;DisplayPlane:UnderRadar;LineInstruction:LITARE01;" +
+            "ViewingGroup:12210;DrawingPriority:24;DisplayPlane:OverRadar;PointInstruction:BRIDGE01";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+
+        Assert.Equal(2, parsed.Count);
+        var line = parsed.OfType<LineInstruction>().Single();
+        var point = parsed.OfType<PointInstruction>().Single();
+        Assert.Equal(DisplayPlane.UnderRadar, line.Plane);
+        Assert.Equal(DisplayPlane.OverRadar, point.Plane);
+    }
+
+    [Fact]
+    public void DisplayPlane_DefaultsToUnderRadar_WhenNotSpecified()
+    {
+        const string s = "ViewingGroup:10000;DrawingPriority:1;PointInstruction:DEFAULT";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+
+        var pt = Assert.Single(parsed.OfType<PointInstruction>());
+        Assert.Equal(DisplayPlane.UnderRadar, pt.Plane);
+    }
 }
