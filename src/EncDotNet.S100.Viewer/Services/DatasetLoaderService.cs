@@ -34,6 +34,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly SettingsViewModel _settingsVm;
     private readonly GlobalTimeService _globalTime;
     private readonly EcdisDisplayState _ecdisDisplay;
+    private readonly IMarinerSettingsProvider _marinerSettings;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -73,7 +74,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         S128DatasetCatalogSource s128CatalogSource,
         SettingsViewModel settingsVm,
         GlobalTimeService globalTime,
-        EcdisDisplayState ecdisDisplay)
+        EcdisDisplayState ecdisDisplay,
+        IMarinerSettingsProvider marinerSettings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -83,6 +85,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(settingsVm);
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
+        ArgumentNullException.ThrowIfNull(marinerSettings);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -92,6 +95,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _settingsVm = settingsVm;
         _globalTime = globalTime;
         _ecdisDisplay = ecdisDisplay;
+        _marinerSettings = marinerSettings;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
@@ -138,6 +142,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _settingsVm.PaletteChanged += palette => _ = ReRenderAllAsync();
         _settingsVm.DisplayScaleChanged += () => _ = ReRenderAllAsync();
         _ecdisDisplay.Changed += () => _ = ReRenderAllAsync();
+        _marinerSettings.Changed += m => _ = ReRenderAllAsync();
     }
 
     public async Task LoadAsync(DatasetEntry entry)
@@ -387,36 +392,37 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var symbolScale = _settingsVm.SymbolScale;
         var textScale = _settingsVm.TextScale;
         var ecdis = _ecdisDisplay.Snapshot();
+        var mariner = _marinerSettings.Current;
 
         return processor switch
         {
             S104DatasetProcessor when timeStep is not null
-                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S104DatasetProcessor
-                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S104RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S111DatasetProcessor when timeStep is not null
-                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S111DatasetProcessor
-                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S111RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S101DatasetProcessor
-                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S102DatasetProcessor
-                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S122DatasetProcessor
-                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S124DatasetProcessor
-                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S125DatasetProcessor
-                => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S127DatasetProcessor
-                => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S129DatasetProcessor
-                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S411DatasetProcessor when timeStep is not null
-                => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S411DatasetProcessor
-                => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
-            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis },
+                => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+            _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
         };
     }
 

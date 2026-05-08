@@ -172,6 +172,43 @@ internal static class Strings
     public static string Settings_DistanceUnits => Get(nameof(Settings_DistanceUnits));
     public static string Settings_DistanceUnits_Help => Get(nameof(Settings_DistanceUnits_Help));
 
+    // Mariner settings (S-100 Part 9 §4.2)
+    public static string Settings_MarinerSection => Get(nameof(Settings_MarinerSection));
+    public static string Settings_MarinerSection_Help => Get(nameof(Settings_MarinerSection_Help));
+    public static string Settings_DepthUnit => Get(nameof(Settings_DepthUnit));
+    public static string Settings_DepthUnit_Help => Get(nameof(Settings_DepthUnit_Help));
+    public static string DepthUnit_Metres => Get(nameof(DepthUnit_Metres));
+    public static string DepthUnit_Feet => Get(nameof(DepthUnit_Feet));
+    public static string DepthUnit_FathomsFeet => Get(nameof(DepthUnit_FathomsFeet));
+    public static string DepthUnit_Fathoms => Get(nameof(DepthUnit_Fathoms));
+    public static string Settings_SafetyContour => Get(nameof(Settings_SafetyContour));
+    public static string Tooltip_SafetyContour => Get(nameof(Tooltip_SafetyContour));
+    public static string Settings_SafetyDepth => Get(nameof(Settings_SafetyDepth));
+    public static string Tooltip_SafetyDepth => Get(nameof(Tooltip_SafetyDepth));
+    public static string Settings_ShallowContour => Get(nameof(Settings_ShallowContour));
+    public static string Tooltip_ShallowContour => Get(nameof(Tooltip_ShallowContour));
+    public static string Settings_DeepContour => Get(nameof(Settings_DeepContour));
+    public static string Tooltip_DeepContour => Get(nameof(Tooltip_DeepContour));
+    public static string Settings_FourShades => Get(nameof(Settings_FourShades));
+    public static string Tooltip_FourShades => Get(nameof(Tooltip_FourShades));
+    public static string Settings_ShallowWaterDangers => Get(nameof(Settings_ShallowWaterDangers));
+    public static string Tooltip_ShallowWaterDangers => Get(nameof(Tooltip_ShallowWaterDangers));
+    public static string Settings_PlainBoundaries => Get(nameof(Settings_PlainBoundaries));
+    public static string Tooltip_PlainBoundaries => Get(nameof(Tooltip_PlainBoundaries));
+    public static string Settings_SimplifiedSymbols => Get(nameof(Settings_SimplifiedSymbols));
+    public static string Tooltip_SimplifiedSymbols => Get(nameof(Tooltip_SimplifiedSymbols));
+    public static string Settings_FullLightLines => Get(nameof(Settings_FullLightLines));
+    public static string Tooltip_FullLightLines => Get(nameof(Tooltip_FullLightLines));
+    public static string Settings_RadarOverlay => Get(nameof(Settings_RadarOverlay));
+    public static string Tooltip_RadarOverlay => Get(nameof(Tooltip_RadarOverlay));
+    public static string Settings_IgnoreScaleMinimum => Get(nameof(Settings_IgnoreScaleMinimum));
+    public static string Tooltip_IgnoreScaleMinimum => Get(nameof(Tooltip_IgnoreScaleMinimum));
+    public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
+    public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
+    public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
+    public static string Language_System => Get(nameof(Language_System));
+    public static string Status_MarinerSettingsApplied => Get(nameof(Status_MarinerSettingsApplied));
+
     // Distance unit display names
     public static string DistanceUnit_Metric => Get(nameof(DistanceUnit_Metric));
     public static string DistanceUnit_Miles => Get(nameof(DistanceUnit_Miles));

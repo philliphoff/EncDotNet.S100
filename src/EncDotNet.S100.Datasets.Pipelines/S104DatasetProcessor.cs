@@ -99,7 +99,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = pipeline.ProcessAsync(_source, _catalogue, MarinerSettings.Default)
+        var layer = pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default)
             .GetAwaiter().GetResult();
         var styledLayer = (StyledCoverageLayer)layer;
 

@@ -176,6 +176,7 @@ public partial class App : Application
         services.AddSingleton<CatalogPanelViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();

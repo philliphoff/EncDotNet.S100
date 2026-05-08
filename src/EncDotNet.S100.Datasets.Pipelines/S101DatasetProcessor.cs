@@ -77,7 +77,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        var mariner = MarinerSettings.Default;
+        var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         using var fcStream = _featureCatalogueResolver("S-101")
             ?? throw new InvalidOperationException(

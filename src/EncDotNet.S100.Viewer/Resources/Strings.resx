@@ -410,6 +410,114 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Units used by the map scale bar.</value>
   </data>
 
+  <!-- Mariner settings (S-100 Part 9 §4.2) -->
+  <data name="Settings_MarinerSection" xml:space="preserve">
+    <value>Mariner Settings</value>
+  </data>
+  <data name="Settings_MarinerSection_Help" xml:space="preserve">
+    <value>Safety/depth preferences and S-101 portrayal toggles. Changes re-render all loaded datasets.</value>
+  </data>
+  <data name="Settings_DepthUnit" xml:space="preserve">
+    <value>Depth Unit</value>
+  </data>
+  <data name="Settings_DepthUnit_Help" xml:space="preserve">
+    <value>Display unit for depth values in the viewer (Pick panel, legends, settings inputs). Internal storage is always metres.</value>
+  </data>
+  <data name="DepthUnit_Metres" xml:space="preserve">
+    <value>Metres (m)</value>
+  </data>
+  <data name="DepthUnit_Feet" xml:space="preserve">
+    <value>Feet (ft)</value>
+  </data>
+  <data name="DepthUnit_FathomsFeet" xml:space="preserve">
+    <value>Fathoms and feet (fm/ft)</value>
+  </data>
+  <data name="DepthUnit_Fathoms" xml:space="preserve">
+    <value>Fathoms (fm)</value>
+  </data>
+  <data name="Settings_SafetyContour" xml:space="preserve">
+    <value>Safety Contour</value>
+  </data>
+  <data name="Tooltip_SafetyContour" xml:space="preserve">
+    <value>Depth boundary between safe and unsafe water for own ship (S-101 PC SafetyContour).</value>
+  </data>
+  <data name="Settings_SafetyDepth" xml:space="preserve">
+    <value>Safety Depth</value>
+  </data>
+  <data name="Tooltip_SafetyDepth" xml:space="preserve">
+    <value>Soundings shallower than this are emphasised (S-101 PC SafetyDepth).</value>
+  </data>
+  <data name="Settings_ShallowContour" xml:space="preserve">
+    <value>Shallow Contour</value>
+  </data>
+  <data name="Tooltip_ShallowContour" xml:space="preserve">
+    <value>Inner boundary of the four-shade scheme (S-101 PC ShallowContour). Must be ≤ Safety Contour.</value>
+  </data>
+  <data name="Settings_DeepContour" xml:space="preserve">
+    <value>Deep Contour</value>
+  </data>
+  <data name="Tooltip_DeepContour" xml:space="preserve">
+    <value>Outer boundary of the four-shade scheme (S-101 PC DeepContour). Must be ≥ Safety Contour.</value>
+  </data>
+  <data name="Settings_FourShades" xml:space="preserve">
+    <value>Four-shade depth scheme</value>
+  </data>
+  <data name="Tooltip_FourShades" xml:space="preserve">
+    <value>When on, depth areas use four shades using the Shallow/Safety/Deep contours; when off, only two shades are used (S-101 PC FourShades).</value>
+  </data>
+  <data name="Settings_ShallowWaterDangers" xml:space="preserve">
+    <value>Highlight shallow-water dangers</value>
+  </data>
+  <data name="Tooltip_ShallowWaterDangers" xml:space="preserve">
+    <value>Emphasise isolated dangers in shallow water (S-101 PC ShallowWaterDangers).</value>
+  </data>
+  <data name="Settings_PlainBoundaries" xml:space="preserve">
+    <value>Plain boundaries</value>
+  </data>
+  <data name="Tooltip_PlainBoundaries" xml:space="preserve">
+    <value>Draw plain (un-symbolised) area boundaries (S-101 PC PlainBoundaries).</value>
+  </data>
+  <data name="Settings_SimplifiedSymbols" xml:space="preserve">
+    <value>Simplified symbols</value>
+  </data>
+  <data name="Tooltip_SimplifiedSymbols" xml:space="preserve">
+    <value>Use simplified point symbols (S-101 PC SimplifiedSymbols).</value>
+  </data>
+  <data name="Settings_FullLightLines" xml:space="preserve">
+    <value>Full light lines</value>
+  </data>
+  <data name="Tooltip_FullLightLines" xml:space="preserve">
+    <value>Draw light sectors as full lines extending to nominal range (S-101 PC FullLightLines).</value>
+  </data>
+  <data name="Settings_RadarOverlay" xml:space="preserve">
+    <value>Radar overlay mode</value>
+  </data>
+  <data name="Tooltip_RadarOverlay" xml:space="preserve">
+    <value>Tells the catalogue the chart is being drawn under a radar overlay (S-101 PC RadarOverlay).</value>
+  </data>
+  <data name="Settings_IgnoreScaleMinimum" xml:space="preserve">
+    <value>Ignore scale minimum</value>
+  </data>
+  <data name="Tooltip_IgnoreScaleMinimum" xml:space="preserve">
+    <value>Always portray features regardless of cell scale-minimum attribute (S-101 PC IgnoreScaleMinimum).</value>
+  </data>
+  <data name="Settings_NationalLanguage" xml:space="preserve">
+    <value>National Language</value>
+  </data>
+  <data name="Tooltip_NationalLanguage" xml:space="preserve">
+    <value>Preferred 3-letter ISO 639-2/B code for chart text (S-101 PC NationalLanguage). Empty = catalogue default.</value>
+  </data>
+  <data name="Settings_NationalLanguage_Default" xml:space="preserve">
+    <value>(Catalogue default)</value>
+  </data>
+  <data name="Language_System" xml:space="preserve">
+    <value>System ({0})</value>
+    <comment>{0} is replaced with the OS UI language display name, e.g. "System (English (United States))".</comment>
+  </data>
+  <data name="Status_MarinerSettingsApplied" xml:space="preserve">
+    <value>Mariner settings applied.</value>
+  </data>
+
   <!-- Distance unit display names -->
   <data name="DistanceUnit_Metric" xml:space="preserve">
     <value>Metric (km, m)</value>
