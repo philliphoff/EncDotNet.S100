@@ -42,6 +42,23 @@
                                  GroupName="DisplayCategory" />
                 </StackPanel>
 
+                <!-- Display planes (S-100 Part 9 §11.6) -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_DisplayPlanesHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <CheckBox IsChecked="{Binding IsUnderRadarVisible}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_UnderRadar}">
+                        <TextBlock Text="{x:Static loc:Strings.DisplayPlane_UnderRadar}" />
+                    </CheckBox>
+                    <CheckBox IsChecked="{Binding IsOverRadarVisible}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_OverRadar}">
+                        <TextBlock Text="{x:Static loc:Strings.DisplayPlane_OverRadar}" />
+                    </CheckBox>
+                </StackPanel>
+
                 <!-- Global reset -->
                 <Button Content="{x:Static loc:Strings.Button_ResetAllOverrides}"
                         Command="{Binding ResetAllOverridesCommand}"

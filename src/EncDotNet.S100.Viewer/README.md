@@ -73,8 +73,9 @@ immediately and do not re-run the dataset pipeline.
 
 ## ECDIS Display Controls
 
-The viewer exposes S-100 Part 9A display-category filtering and
-per-spec viewing-group overrides through two UI surfaces:
+The viewer exposes S-100 Part 9A display-category filtering,
+per-spec viewing-group overrides, display-plane toggles, and
+quick text-group toggles through several UI surfaces:
 
 ### Display toolbar pill
 
@@ -84,6 +85,15 @@ or All). Clicking the pill opens a flyout with radio buttons to
 switch categories; the change propagates through `EcdisDisplayState`
 and triggers a re-render of all vector datasets.
 
+### Text toolbar pill
+
+A "Text ▾" pill button next to the display pill opens a flyout
+with checkboxes for the three S-101 text viewing-group layers:
+**Important Text**, **Other Text**, and **All Other Chart Text**.
+Unchecking a group hides the corresponding viewing groups. The
+pill is disabled when no S-101 data (or another spec with text
+layers) is loaded.
+
 ### ECDIS panel (activity bar)
 
 A dedicated activity-bar entry opens the ECDIS Display Controls
@@ -92,6 +102,14 @@ panel. It lists each loaded **vector** product specification
 with a flat checkbox list of viewing groups sourced from the spec's
 portrayal catalogue. Unchecking a viewing group hides its features
 from the rendered output.
+
+#### Display planes
+
+Below the display-category radios, the panel shows checkboxes for
+the two S-100 display planes — **Under Radar** and **Over Radar**
+(S-100 Part 9 §11.6). Unchecking a plane hides all drawing
+instructions assigned to it across all loaded vector datasets.
+Plane visibility is persisted in `settings.json`.
 
 Coverage products (S-102, S-104, S-111) have no viewing-group
 concept and are excluded from the panel.

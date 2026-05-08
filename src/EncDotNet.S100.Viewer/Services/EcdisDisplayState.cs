@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -17,6 +18,7 @@ internal sealed class EcdisDisplayState
     private readonly object _gate = new();
     private readonly Dictionary<string, HashSet<int>> _hidden =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<DisplayPlane> _hiddenPlanes = new();
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
 
     /// <summary>Raised after any mutation completes.</summary>
@@ -85,6 +87,43 @@ internal sealed class EcdisDisplayState
     }
 
     /// <summary>
+    /// Hides a display plane (S-100 Part 9 §11.6).
+    /// </summary>
+    public void HideDisplayPlane(DisplayPlane plane)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            changed = _hiddenPlanes.Add(plane);
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Shows a previously hidden display plane.
+    /// </summary>
+    public void ShowDisplayPlane(DisplayPlane plane)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            changed = _hiddenPlanes.Remove(plane);
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Returns the set of hidden display planes.
+    /// </summary>
+    public IReadOnlySet<DisplayPlane> GetHiddenDisplayPlanes()
+    {
+        lock (_gate)
+        {
+            return new HashSet<DisplayPlane>(_hiddenPlanes);
+        }
+    }
+
+    /// <summary>
     /// Clears every per-spec viewing-group override and raises
     /// <see cref="Changed"/> if anything was cleared.
     /// </summary>
@@ -147,6 +186,7 @@ internal sealed class EcdisDisplayState
             {
                 Category = _category,
                 HiddenViewingGroups = copy,
+                HiddenDisplayPlanes = new HashSet<DisplayPlane>(_hiddenPlanes),
             };
         }
     }
@@ -157,7 +197,10 @@ internal sealed class EcdisDisplayState
     /// per-spec overrides). Raises <see cref="Changed"/> exactly
     /// once after the swap.
     /// </summary>
-    public void Hydrate(EcdisDisplayCategory category, IReadOnlyDictionary<string, IReadOnlySet<int>> hidden)
+    public void Hydrate(
+        EcdisDisplayCategory category,
+        IReadOnlyDictionary<string, IReadOnlySet<int>> hidden,
+        IReadOnlySet<DisplayPlane>? hiddenPlanes = null)
     {
         ArgumentNullException.ThrowIfNull(hidden);
         lock (_gate)
@@ -166,6 +209,12 @@ internal sealed class EcdisDisplayState
             _hidden.Clear();
             foreach (var kv in hidden)
                 _hidden[kv.Key] = new HashSet<int>(kv.Value);
+            _hiddenPlanes.Clear();
+            if (hiddenPlanes is not null)
+            {
+                foreach (var p in hiddenPlanes)
+                    _hiddenPlanes.Add(p);
+            }
         }
         Changed?.Invoke();
     }

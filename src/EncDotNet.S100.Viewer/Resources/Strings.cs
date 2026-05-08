@@ -283,4 +283,18 @@ internal static class Strings
     public static string Status_MeasureTotal => Get(nameof(Status_MeasureTotal));
     public static string Status_MeasureNoData => Get(nameof(Status_MeasureNoData));
     public static string Status_MeasureLegLabel => Get(nameof(Status_MeasureLegLabel));
+
+    // ECDIS Display Planes
+    public static string EcdisPanel_DisplayPlanesHeader => Get(nameof(EcdisPanel_DisplayPlanesHeader));
+    public static string DisplayPlane_UnderRadar => Get(nameof(DisplayPlane_UnderRadar));
+    public static string DisplayPlane_OverRadar => Get(nameof(DisplayPlane_OverRadar));
+    public static string Tooltip_DisplayPlane_UnderRadar => Get(nameof(Tooltip_DisplayPlane_UnderRadar));
+    public static string Tooltip_DisplayPlane_OverRadar => Get(nameof(Tooltip_DisplayPlane_OverRadar));
+
+    // Text group toolbar pill
+    public static string Toolbar_Text => Get(nameof(Toolbar_Text));
+    public static string Tooltip_TextGroupPill => Get(nameof(Tooltip_TextGroupPill));
+    public static string TextGroup_Important => Get(nameof(TextGroup_Important));
+    public static string TextGroup_Other => Get(nameof(TextGroup_Other));
+    public static string TextGroup_All => Get(nameof(TextGroup_All));
 }

@@ -35,4 +35,12 @@ public interface IVectorPortrayalCatalogue
     /// <see cref="ViewingGroupController.SetActiveModeMembership"/>.
     /// </summary>
     DisplayModeController DisplayModes { get; }
+
+    /// <summary>
+    /// Controls which S-100 Part 9 §11.6 display planes are currently
+    /// visible. The pipeline queries this controller after
+    /// viewing-group filtering to drop instructions whose plane is
+    /// hidden.
+    /// </summary>
+    DisplayPlaneController DisplayPlanes { get; }
 }

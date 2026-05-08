@@ -482,6 +482,77 @@ public class VectorPipelineTests
         Assert.IsType<PointInstruction>(layer.Instructions[1]);
     }
 
+    [Fact]
+    public async Task ProcessAsync_HiddenDisplayPlane_FiltersInstructions()
+    {
+        // Two features: one on UnderRadar, one on OverRadar
+        var source = new FakeFeatureXmlSource(
+            featureTypes: ["Buoy", "DepthArea"],
+            featureXml: """
+                <Dataset>
+                  <Feature id="1" type="Buoy">
+                    <Position lat="47.6" lon="-122.3"/>
+                  </Feature>
+                  <Feature id="2" type="DepthArea">
+                    <Polygon>
+                      <Exterior>47.0 -123.0 47.1 -123.0 47.1 -122.9 47.0 -123.0</Exterior>
+                    </Polygon>
+                  </Feature>
+                </Dataset>
+                """);
+
+        var xslt = CompileXslt("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <displayList>
+                  <xsl:for-each select="//Feature[@type='Buoy']">
+                    <pointInstruction>
+                      <featureReference><xsl:value-of select="@id"/></featureReference>
+                      <drawingPriority>8</drawingPriority>
+                      <viewingGroup>21010</viewingGroup>
+                      <displayPlane>OverRadar</displayPlane>
+                      <symbol reference="BOYLAT01"><rotation>0</rotation></symbol>
+                    </pointInstruction>
+                  </xsl:for-each>
+                  <xsl:for-each select="//Feature[@type='DepthArea']">
+                    <areaInstruction>
+                      <featureReference><xsl:value-of select="@id"/></featureReference>
+                      <drawingPriority>3</drawingPriority>
+                      <viewingGroup>13010</viewingGroup>
+                      <displayPlane>UnderRadar</displayPlane>
+                      <areaFillReference reference="DEPARE01"/>
+                    </areaInstruction>
+                  </xsl:for-each>
+                </displayList>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var catalogue = new FakeVectorPortrayalCatalogue(
+        [
+            new PortrayalRule
+            {
+                Name = "MixedRule",
+                Type = PortrayalRuleType.Xslt,
+                ExecutionOrder = 1,
+                AppliesTo = ["Buoy", "DepthArea"],
+            },
+        ],
+        xsltRules: new() { ["MixedRule"] = xslt });
+
+        // Hide OverRadar — should filter out the Buoy point
+        catalogue.DisplayPlanes.SetVisible(DisplayPlane.OverRadar, false);
+
+        var pipeline = new VectorPipeline();
+        var layer = await pipeline.ProcessAsync(source, catalogue);
+
+        // Only the UnderRadar area should remain
+        Assert.Single(layer.Instructions);
+        var inst = Assert.IsType<AreaInstruction>(layer.Instructions[0]);
+        Assert.Equal("2", inst.FeatureReference);
+        Assert.Equal(DisplayPlane.UnderRadar, inst.Plane);
+    }
+
     #region Helpers
 
     private static XslCompiledTransform CompileXslt(string xslt)
@@ -535,6 +606,8 @@ public class VectorPipelineTests
         public ViewingGroupController ViewingGroups { get; }
 
         public DisplayModeController DisplayModes { get; } = new();
+
+        public DisplayPlaneController DisplayPlanes { get; } = new();
 
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);

@@ -723,4 +723,38 @@ Open an S-101, S-124, S-125, or S-421 dataset to see display controls here.</val
   <data name="Status_MeasureLegLabel" xml:space="preserve">
     <value>{0:0.0} NM @ {1:000}°T</value>
   </data>
+
+  <!-- ECDIS Display Planes -->
+  <data name="EcdisPanel_DisplayPlanesHeader" xml:space="preserve">
+    <value>Display Planes</value>
+  </data>
+  <data name="DisplayPlane_UnderRadar" xml:space="preserve">
+    <value>Under Radar</value>
+  </data>
+  <data name="DisplayPlane_OverRadar" xml:space="preserve">
+    <value>Over Radar</value>
+  </data>
+  <data name="Tooltip_DisplayPlane_UnderRadar" xml:space="preserve">
+    <value>Toggle visibility of the Under Radar display plane</value>
+  </data>
+  <data name="Tooltip_DisplayPlane_OverRadar" xml:space="preserve">
+    <value>Toggle visibility of the Over Radar display plane</value>
+  </data>
+
+  <!-- Text group toolbar pill -->
+  <data name="Toolbar_Text" xml:space="preserve">
+    <value>Text ▾</value>
+  </data>
+  <data name="Tooltip_TextGroupPill" xml:space="preserve">
+    <value>Toggle text viewing groups</value>
+  </data>
+  <data name="TextGroup_Important" xml:space="preserve">
+    <value>Important Text</value>
+  </data>
+  <data name="TextGroup_Other" xml:space="preserve">
+    <value>Other Text</value>
+  </data>
+  <data name="TextGroup_All" xml:space="preserve">
+    <value>All other chart text</value>
+  </data>
 </root>

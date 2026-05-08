@@ -58,18 +58,20 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
     {
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
+        var datasets = new DatasetsViewModel(new NoopLoader());
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: new DatasetsViewModel(new NoopLoader()),
+            datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(new NoopLoader())),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider());

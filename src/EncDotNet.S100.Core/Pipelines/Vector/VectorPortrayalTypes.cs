@@ -188,6 +188,60 @@ public sealed class ViewingGroupController
 }
 
 /// <summary>
+/// Controls visibility of drawing instructions by display plane
+/// (S-100 Part 9 §11.6). The three canonical planes are
+/// <see cref="DisplayPlane.UnderRadar"/> and
+/// <see cref="DisplayPlane.OverRadar"/>; all planes are visible by
+/// default.
+/// </summary>
+/// <remarks>
+/// Unlike <see cref="ViewingGroupController"/> this controller has no
+/// "mode membership" layer — planes are simply on or off. The pipeline
+/// evaluates the controller after viewing-group filtering so the
+/// (typically smaller) VG-filtered list is the input.
+/// </remarks>
+public sealed class DisplayPlaneController
+{
+    private readonly HashSet<DisplayPlane> _hidden = new();
+
+    /// <summary>
+    /// Raised whenever the hidden set changes.
+    /// </summary>
+    public event Action? Changed;
+
+    /// <summary>
+    /// The set of planes that are currently hidden.
+    /// </summary>
+    public IReadOnlySet<DisplayPlane> HiddenPlanes => _hidden;
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="plane"/> is visible
+    /// (i.e. not in the hidden set).
+    /// </summary>
+    public bool IsVisible(DisplayPlane plane) => !_hidden.Contains(plane);
+
+    /// <summary>
+    /// Shows or hides <paramref name="plane"/>. Raises
+    /// <see cref="Changed"/> when the effective state changes.
+    /// </summary>
+    public void SetVisible(DisplayPlane plane, bool visible)
+    {
+        bool changed = visible ? _hidden.Remove(plane) : _hidden.Add(plane);
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Resets all planes to visible.
+    /// </summary>
+    public void ShowAll()
+    {
+        if (_hidden.Count == 0) return;
+        _hidden.Clear();
+        Changed?.Invoke();
+    }
+}
+
+/// <summary>
 /// Tracks the active S-100 Part 9 display-mode id for a vector
 /// portrayal catalogue.
 /// </summary>

@@ -98,6 +98,13 @@ internal sealed class ViewerSettings
     public Dictionary<string, string> EcdisHiddenViewingGroups { get; set; }
         = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Display planes the user has hidden in the ECDIS panel.
+    /// Stored as a comma-separated list of enum names so the JSON
+    /// stays human-editable (S-100 Part 9 §11.6).
+    /// </summary>
+    public string EcdisHiddenDisplayPlanes { get; set; } = "";
+
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>

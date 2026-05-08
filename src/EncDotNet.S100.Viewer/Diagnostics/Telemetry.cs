@@ -29,4 +29,9 @@ internal static class Telemetry
         Meter.CreateCounter<long>(
             "s100.viewer.viewinggroup.toggled",
             description: "Number of times a user toggled a viewing-group override.");
+
+    public static readonly Counter<long> DisplayPlaneToggled =
+        Meter.CreateCounter<long>(
+            "s100.viewer.displayplane.toggled",
+            description: "Number of times a user toggled a display-plane override.");
 }
