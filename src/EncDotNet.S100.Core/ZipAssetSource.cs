@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.IO.Compression;
+using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Core;
 
@@ -61,6 +63,10 @@ public sealed class ZipAssetSource : IAssetSource
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.asset.read");
+        activity?.SetTag(TelemetryTags.AssetKind, "zip");
+        var start = Stopwatch.GetTimestamp();
+
         string entryName = relativePath.Replace('\\', '/');
 
         // Prevent path traversal
@@ -75,6 +81,11 @@ public sealed class ZipAssetSource : IAssetSource
             ?? throw new FileNotFoundException($"Entry '{fullEntryName}' not found in the archive.");
 
         Stream stream = entry.Open();
+
+        AssetMetrics.ReadDuration.Record(
+            (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.AssetKind, "zip"));
+
         return Task.FromResult(stream);
     }
 

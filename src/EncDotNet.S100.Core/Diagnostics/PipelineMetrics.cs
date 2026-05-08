@@ -36,4 +36,40 @@ internal static class PipelineMetrics
             name: "s100.coverage.cells",
             unit: "{cells}",
             description: "Number of grid cells produced by the coverage pipeline per pass (rows × columns of the sampled region).");
+
+    public static readonly Histogram<double> StageDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.pipeline.stage.duration",
+            unit: "ms",
+            description: "Wall-clock duration of an individual pipeline stage (vector or coverage).");
+
+    public static readonly Histogram<long> StageInstructionsCount =
+        Telemetry.Meter.CreateHistogram<long>(
+            name: "s100.pipeline.stage.instructions.count",
+            unit: "{instructions}",
+            description: "Drawing instructions present at the end of a pipeline stage that produces instructions.");
+
+    public static readonly Histogram<double> XsltTransformDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.xslt.transform.duration",
+            unit: "ms",
+            description: "Wall-clock duration of a single XSLT rule transform pass.");
+
+    public static readonly Histogram<double> XsltCompileDuration =
+        Telemetry.Meter.CreateHistogram<double>(
+            name: "s100.xslt.compile.duration",
+            unit: "ms",
+            description: "Wall-clock duration of compiling an XSLT rule (first load only).");
+
+    public static readonly Counter<long> XsltCacheHit =
+        Telemetry.Meter.CreateCounter<long>(
+            name: "s100.xslt.cache.hit.count",
+            unit: "{hits}",
+            description: "XSLT compiled-transform cache hits.");
+
+    public static readonly Counter<long> XsltCacheMiss =
+        Telemetry.Meter.CreateCounter<long>(
+            name: "s100.xslt.cache.miss.count",
+            unit: "{misses}",
+            description: "XSLT compiled-transform cache misses (compilation triggered).");
 }

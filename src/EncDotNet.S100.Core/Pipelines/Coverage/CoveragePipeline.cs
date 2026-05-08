@@ -28,14 +28,35 @@ public class CoveragePipeline
         var start = Stopwatch.GetTimestamp();
         var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, source.Metadata.ProductSpec);
         var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "coverage");
+
+        int gc0Before = GC.CollectionCount(0);
+        int gc1Before = GC.CollectionCount(1);
+        int gc2Before = GC.CollectionCount(2);
+
         try
         {
             var settings = mariner ?? MarinerSettings.Default;
             var metadata = source.Metadata;
 
-            var colorScheme = catalogue.ResolveColorScheme(settings);
-            var symbolScheme = catalogue.ResolveSymbolScheme(settings);
-            var sampled = source.Sample(GridRegion.Full);
+            // Stage 1 — resolve colour and symbol schemes from catalogue
+            CoverageColorScheme colorScheme;
+            CoverageSymbolScheme? symbolScheme;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.resolve"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                colorScheme = catalogue.ResolveColorScheme(settings);
+                symbolScheme = catalogue.ResolveSymbolScheme(settings);
+                RecordCoverageStageDuration(stageStart, "resolve");
+            }
+
+            // Stage 2 — sample the grid
+            SampledCoverage sampled;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.read"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                sampled = source.Sample(GridRegion.Full);
+                RecordCoverageStageDuration(stageStart, "read");
+            }
 
             long cells = (long)metadata.GridMetadata.NumRows * metadata.GridMetadata.NumColumns;
             PipelineMetrics.CoverageCells.Record(cells, productTag);
@@ -61,10 +82,21 @@ public class CoveragePipeline
         }
         finally
         {
+            activity?.SetTag(TelemetryTags.GcGen0Delta, GC.CollectionCount(0) - gc0Before);
+            activity?.SetTag(TelemetryTags.GcGen1Delta, GC.CollectionCount(1) - gc1Before);
+            activity?.SetTag(TelemetryTags.GcGen2Delta, GC.CollectionCount(2) - gc2Before);
+
             PipelineMetrics.Duration.Record(
                 (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
                 productTag, stageTag);
         }
+    }
+
+    private static void RecordCoverageStageDuration(long stageStart, string stageName)
+    {
+        PipelineMetrics.StageDuration.Record(
+            (Stopwatch.GetTimestamp() - stageStart) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, stageName));
     }
 }
 

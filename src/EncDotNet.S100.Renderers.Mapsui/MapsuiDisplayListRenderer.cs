@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
@@ -121,9 +123,12 @@ public sealed class MapsuiDisplayListRenderer
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
 
-        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.layer.build");
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.frame");
         __activity?.SetTag("s100.render.target", "mapsui");
         __activity?.SetTag("s100.render.instructions.count", instructions.Count);
+        var renderStart = Stopwatch.GetTimestamp();
+
+        S100Diag.Telemetry.InstructionsProcessed.Add(instructions.Count);
 
         // Ensure the custom pattern fill renderer is registered before Mapsui
         // encounters any AnchoredPatternFillStyle instances.
@@ -240,6 +245,10 @@ public sealed class MapsuiDisplayListRenderer
             mapFeatures.Insert(insertAt, feature);
             insertAt++;
         }
+
+        S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
+        S100Diag.Telemetry.FrameDuration.Record(
+            (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
         return new MemoryLayer
         {
@@ -765,10 +774,21 @@ public sealed class MapsuiDisplayListRenderer
         if (string.IsNullOrEmpty(symbolRef) || SymbolProvider is null)
             return default;
 
+        var resolveStart = Stopwatch.GetTimestamp();
+
         if (_symbolDataUriCache.TryGetValue(symbolRef, out var cached))
+        {
+            S100Diag.Telemetry.SymbolCacheHit.Add(1);
+            S100Diag.Telemetry.SymbolResolveDuration.Record(
+                (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+                new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, "hit"));
             return cached;
+        }
+
+        S100Diag.Telemetry.SymbolCacheMiss.Add(1);
 
         SymbolEntry entry = default;
+        string resultTag = "fallback";
         try
         {
             var svgContent = SymbolProvider(symbolRef);
@@ -787,6 +807,7 @@ public sealed class MapsuiDisplayListRenderer
                     pivot?.PivotToBoundsCenterMm.Y ?? 0.0,
                     pivot?.RelativeOffset.X ?? 0.0,
                     pivot?.RelativeOffset.Y ?? 0.0);
+                resultTag = "miss";
             }
         }
         catch
@@ -795,6 +816,9 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         _symbolDataUriCache[symbolRef] = entry;
+        S100Diag.Telemetry.SymbolResolveDuration.Record(
+            (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, resultTag));
         return entry;
     }
 

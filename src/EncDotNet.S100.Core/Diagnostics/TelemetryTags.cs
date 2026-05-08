@@ -44,4 +44,33 @@ public static class TelemetryTags
 
     /// <summary>Viewer command name for the top-level user-action activity.</summary>
     public const string ViewerCommand = "s100.viewer.command";
+
+    /// <summary>Renderer implementation: <c>mapsui</c> or <c>skia</c>.</summary>
+    public const string RendererKind = "s100.renderer.kind";
+
+    /// <summary>Asset source type: <c>file</c>, <c>zip</c>, or <c>embedded</c>.</summary>
+    public const string AssetKind = "s100.asset.kind";
+
+    /// <summary>Symbol resolution outcome: <c>hit</c>, <c>miss</c>, or <c>fallback</c>.</summary>
+    public const string SymbolResult = "s100.symbol.result";
+
+    /// <summary>XSLT rule name (used for compile and transform spans).</summary>
+    public const string XsltRule = "s100.xslt.rule";
+
+    /// <summary>Symbol identifier used in a resolve operation.</summary>
+    public const string SymbolId = "s100.symbol.id";
+
+    /// <summary>HDF5 entity kind: <c>group</c> or <c>dataset</c>.</summary>
+    public const string Hdf5Kind = "s100.hdf5.kind";
+
+    /// <summary>GC generation delta tag prefix. Append <c>.delta</c> to get
+    /// e.g. <c>gc.gen0.delta</c>. Values are process-wide collection-count
+    /// differences and may include noise from other threads.</summary>
+    public const string GcGen0Delta = "gc.gen0.delta";
+
+    /// <inheritdoc cref="GcGen0Delta"/>
+    public const string GcGen1Delta = "gc.gen1.delta";
+
+    /// <inheritdoc cref="GcGen0Delta"/>
+    public const string GcGen2Delta = "gc.gen2.delta";
 }

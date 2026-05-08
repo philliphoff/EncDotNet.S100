@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Xml;
 using System.Xml.Xsl;
+using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -171,6 +173,10 @@ public sealed class S127PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private XslCompiledTransform LoadXsltRule(RuleFile ruleFile)
     {
+        using var activity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.xslt.compile");
+        activity?.SetTag(TelemetryTags.XsltRule, ruleFile.Id);
+        var start = Stopwatch.GetTimestamp();
+
         using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
 
         var resolver = new AssetSourceXmlResolver(_provider);
@@ -179,6 +185,10 @@ public sealed class S127PortrayalCatalogue : IVectorPortrayalCatalogue
 
         var transform = new XslCompiledTransform();
         transform.Load(reader, XsltSettings.TrustedXslt, resolver);
+
+        var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        activity?.SetTag("s100.xslt.compile.duration_ms", elapsedMs);
+
         return transform;
     }
 

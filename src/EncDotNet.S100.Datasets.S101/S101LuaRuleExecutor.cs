@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.Globalization;
+using EncDotNet.S100.Datasets.S101.Diagnostics;
+using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -124,15 +127,42 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     /// </summary>
     public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner)
     {
-        var emitted = ExecuteRaw(mariner);
+        // TODO: Per-Lua-rule timing is deferred to PR P2 — requires a small
+        // executor refactor to inject timing hooks around individual rule calls.
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
+        activity?.SetTag(TelemetryTags.Product, "S-101");
+        var start = Stopwatch.GetTimestamp();
 
-        var parsed = new List<DrawingInstruction>();
-        foreach (var e in emitted)
+        try
         {
-            parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
-        }
+            var emitted = ExecuteRaw(mariner);
 
-        return S101SafconLabelMerger.Merge(parsed);
+            Telemetry.LuaFeaturesCount.Add(emitted.Count);
+            activity?.SetTag("s100.lua.features.count", emitted.Count);
+
+            var parsed = new List<DrawingInstruction>();
+            foreach (var e in emitted)
+            {
+                parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
+            }
+
+            var result = S101SafconLabelMerger.Merge(parsed);
+
+            Telemetry.LuaInstructionsEmittedCount.Record(result.Count);
+            activity?.SetTag("s100.lua.instructions.emitted.count", result.Count);
+
+            return result;
+        }
+        catch
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            Telemetry.LuaExecuteDuration.Record(
+                (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
+        }
     }
 
     /// <summary>

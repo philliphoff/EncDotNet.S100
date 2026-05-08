@@ -24,6 +24,31 @@ namespace EncDotNet.S100.Diagnostics;
 /// no listener is attached, so libraries pay no measurable cost when
 /// observability is not wired up by the host.
 /// </para>
+/// <para><b>Canonical instrument naming conventions:</b></para>
+/// <list type="bullet">
+/// <item><description>
+/// <b>Spans (activities):</b> <c>s100.&lt;area&gt;.&lt;verb&gt;</c> for
+/// point-in-time events (e.g. <c>s100.symbol.resolve</c>,
+/// <c>s100.lua.execute</c>), and <c>s100.&lt;area&gt;.&lt;noun&gt;</c>
+/// for stage containers (e.g. <c>s100.pipeline.vector.stage.xslt</c>,
+/// <c>s100.render.frame</c>).
+/// </description></item>
+/// <item><description>
+/// <b>Histograms:</b> <c>s100.&lt;area&gt;.&lt;measured&gt;</c>, e.g.
+/// <c>s100.pipeline.duration</c>, <c>s100.render.frame.duration</c>,
+/// <c>s100.symbol.resolve.duration</c>. Use <c>ms</c> for durations,
+/// <c>{items}</c> for counts.
+/// </description></item>
+/// <item><description>
+/// <b>Counters:</b> <c>s100.&lt;area&gt;.&lt;event&gt;.count</c>, e.g.
+/// <c>s100.symbol.cache.hit.count</c>,
+/// <c>s100.xslt.cache.miss.count</c>.
+/// </description></item>
+/// </list>
+/// <para>
+/// All tags are defined in <see cref="TelemetryTags"/>. New instruments
+/// must follow these patterns so dashboards and queries stay uniform.
+/// </para>
 /// </remarks>
 public static class S100Telemetry
 {

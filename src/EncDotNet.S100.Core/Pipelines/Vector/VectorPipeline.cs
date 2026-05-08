@@ -35,41 +35,100 @@ public class VectorPipeline
         activity?.SetTag(TelemetryTags.PipelineStage, "portray");
         var start = Stopwatch.GetTimestamp();
         var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "vector");
+
+        // GC delta snapshots — process-wide, so there is noise from other
+        // threads; useful for orders-of-magnitude comparisons, not precision.
+        int gc0Before = GC.CollectionCount(0);
+        int gc1Before = GC.CollectionCount(1);
+        int gc2Before = GC.CollectionCount(2);
+
         try
         {
             // Stage 1 — load FeatureXML into a navigable document
             XDocument featureDoc;
-            using (var reader = source.GetFeatureXml())
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.feature_xml"))
             {
-                featureDoc = XDocument.Load(reader);
+                var stageStart = Stopwatch.GetTimestamp();
+                using (var reader = source.GetFeatureXml())
+                {
+                    featureDoc = XDocument.Load(reader);
+                }
+                RecordStageDuration(stageStart, "feature_xml");
             }
 
             // Stage 2 — select applicable rules
-            var featureTypes = source.FeatureTypesPresent;
-            PipelineMetrics.FeaturesIn.Record(featureTypes.Count, stageTag);
-            activity?.SetTag("s100.pipeline.feature_types.count", featureTypes.Count);
-            var applicableRules = SelectRules(featureTypes, catalogue);
-            activity?.SetTag("s100.pipeline.rules.count", applicableRules.Count);
+            IReadOnlyList<PortrayalRule> applicableRules;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.rule_select"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                var featureTypes = source.FeatureTypesPresent;
+                PipelineMetrics.FeaturesIn.Record(featureTypes.Count, stageTag);
+                activity?.SetTag("s100.pipeline.feature_types.count", featureTypes.Count);
+                applicableRules = SelectRules(featureTypes, catalogue);
+                activity?.SetTag("s100.pipeline.rules.count", applicableRules.Count);
+                RecordStageDuration(stageStart, "rule_select");
+            }
 
             // Stage 3 — XSLT transformation
-            var drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
+            XDocument drawingInstructionsDoc;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.xslt"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
+                RecordStageDuration(stageStart, "xslt");
+            }
 
             // Stage 5 — assemble typed drawing instructions from the XSLT output
             // using the canonical S-100 Part 9 lower-camel-case display-list reader.
-            var instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
+            List<DrawingInstruction> instructions;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.assemble"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
+                RecordStageDuration(stageStart, "assemble");
+                PipelineMetrics.StageInstructionsCount.Record(
+                    instructions.Count,
+                    new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "assemble"));
+            }
 
             // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
             // drawing instructions directly; append them to the XSLT-stage output
             // before viewing-group filtering and priority sorting.
             if (_luaExecutor is not null)
             {
-                instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+                using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
+                {
+                    var stageStart = Stopwatch.GetTimestamp();
+                    instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+                    RecordStageDuration(stageStart, "lua");
+                    PipelineMetrics.StageInstructionsCount.Record(
+                        instructions.Count,
+                        new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "lua"));
+                }
             }
 
             // Stage 6 — viewing group filter + display plane filter + priority sort
-            var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
-            var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
-            var sorted = SortByPriority(planeFiltered);
+            IReadOnlyList<DrawingInstruction> sorted;
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.viewing_groups"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
+                var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
+                RecordStageDuration(stageStart, "viewing_groups");
+                PipelineMetrics.StageInstructionsCount.Record(
+                    planeFiltered.Count,
+                    new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "viewing_groups"));
+
+                using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.sort"))
+                {
+                    var sortStart = Stopwatch.GetTimestamp();
+                    sorted = SortByPriority(planeFiltered);
+                    RecordStageDuration(sortStart, "sort");
+                    PipelineMetrics.StageInstructionsCount.Record(
+                        sorted.Count,
+                        new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "sort"));
+                }
+            }
 
             PipelineMetrics.InstructionsOut.Record(sorted.Count, stageTag);
             activity?.SetTag("s100.pipeline.instructions.count", sorted.Count);
@@ -88,10 +147,21 @@ public class VectorPipeline
         }
         finally
         {
+            activity?.SetTag(TelemetryTags.GcGen0Delta, GC.CollectionCount(0) - gc0Before);
+            activity?.SetTag(TelemetryTags.GcGen1Delta, GC.CollectionCount(1) - gc1Before);
+            activity?.SetTag(TelemetryTags.GcGen2Delta, GC.CollectionCount(2) - gc2Before);
+
             PipelineMetrics.Duration.Record(
                 (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
                 stageTag);
         }
+    }
+
+    private static void RecordStageDuration(long stageStart, string stageName)
+    {
+        PipelineMetrics.StageDuration.Record(
+            (Stopwatch.GetTimestamp() - stageStart) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, stageName));
     }
 
     // ── Stage 2: Rule selection ─────────────────────────────────────────
@@ -147,11 +217,20 @@ public class VectorPipeline
             var transform = catalogue.GetCompiledRule(rule.Name);
             var resultFragment = new XDocument();
 
-            using (var inputReader = featureDoc.CreateReader())
-            using (var writer = resultFragment.CreateWriter())
+            var transformStart = Stopwatch.GetTimestamp();
+            using (var transformActivity = Telemetry.ActivitySource.StartActivity("s100.xslt.transform"))
             {
-                transform.Transform(inputReader, args, writer);
+                transformActivity?.SetTag(TelemetryTags.XsltRule, rule.Name);
+
+                using (var inputReader = featureDoc.CreateReader())
+                using (var writer = resultFragment.CreateWriter())
+                {
+                    transform.Transform(inputReader, args, writer);
+                }
             }
+            PipelineMetrics.XsltTransformDuration.Record(
+                (Stopwatch.GetTimestamp() - transformStart) * 1000.0 / Stopwatch.Frequency,
+                new KeyValuePair<string, object?>(TelemetryTags.XsltRule, rule.Name));
 
             // Accumulate results — each rule emits instruction elements
             if (resultFragment.Root is not null)
