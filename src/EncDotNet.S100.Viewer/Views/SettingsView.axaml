@@ -115,6 +115,118 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </StackPanel>
+
+            <!-- Mariner Settings (S-100 Part 9 §4.2) -->
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+
+            <!-- Depth Unit -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_DepthUnit}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_DepthUnit_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableDepthUnits}"
+                          SelectedItem="{Binding SelectedDepthUnit}"
+                          ToolTip.Tip="{x:Static loc:Strings.Settings_DepthUnit_Help}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:DepthUnitNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Safety Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding SafetyContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_SafetyContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Safety Depth -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyDepth}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding SafetyDepthDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_SafetyDepth}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Shallow Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_ShallowContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding ShallowContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Deep Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_DeepContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding DeepContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DeepContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- S-101 toggles -->
+            <CheckBox Content="{x:Static loc:Strings.Settings_FourShades}"
+                      IsChecked="{Binding FourShades}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_ShallowWaterDangers}"
+                      IsChecked="{Binding ShallowWaterDangers}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_PlainBoundaries}"
+                      IsChecked="{Binding PlainBoundaries}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_SimplifiedSymbols}"
+                      IsChecked="{Binding SimplifiedSymbols}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_FullLightLines}"
+                      IsChecked="{Binding FullLightLines}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_RadarOverlay}"
+                      IsChecked="{Binding RadarOverlay}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"
+                      IsChecked="{Binding IgnoreScaleMinimum}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}" />
+
+            <!-- National Language -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <ComboBox ItemsSource="{Binding AvailableLanguageCodes}"
+                          SelectedItem="{Binding NationalLanguage}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_NationalLanguage}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

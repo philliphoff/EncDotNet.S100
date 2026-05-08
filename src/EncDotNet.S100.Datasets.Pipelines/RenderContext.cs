@@ -24,6 +24,17 @@ public abstract record RenderContext
     /// user overrides — equivalent to "All" with an empty hidden set.
     /// </summary>
     public EcdisDisplaySettings? EcdisDisplay { get; init; }
+
+    /// <summary>
+    /// Mariner-configurable display preferences (S-100 Part 9 §4.2 —
+    /// safety/shallow/deep contours, S-101 boolean toggles, depth display
+    /// unit, etc.). When <c>null</c> processors fall back to
+    /// <see cref="MarinerSettings.Default"/>. Only consumed by processors
+    /// whose portrayal pipeline honours mariner selections (S-101, S-102,
+    /// S-104, S-111 today); other processors carry it transparently for
+    /// future use.
+    /// </summary>
+    public MarinerSettings? Mariner { get; init; }
 }
 
 public sealed record S101RenderContext : RenderContext;

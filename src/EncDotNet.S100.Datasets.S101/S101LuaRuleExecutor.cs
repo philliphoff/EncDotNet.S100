@@ -277,13 +277,29 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     {
         // Known S-101 context parameters mapped from MarinerSettings.
         // PortrayalSetContextParameter expects both arguments as strings.
+        // The Lua side parses booleans from the lower-case literals
+        // "true"/"false" (per the bundled S-101 PC parameter declarations).
         var parameters = new Dictionary<string, string>
         {
             ["SafetyContour"] = mariner.SafetyContour.ToString(CultureInfo.InvariantCulture),
             ["SafetyDepth"] = mariner.SafetyDepth.ToString(CultureInfo.InvariantCulture),
             ["ShallowContour"] = mariner.ShallowContour.ToString(CultureInfo.InvariantCulture),
             ["DeepContour"] = mariner.DeepContour.ToString(CultureInfo.InvariantCulture),
+            ["FourShades"] = mariner.FourShades ? "true" : "false",
+            ["ShallowWaterDangers"] = mariner.ShallowWaterDangers ? "true" : "false",
+            ["PlainBoundaries"] = mariner.PlainBoundaries ? "true" : "false",
+            ["SimplifiedSymbols"] = mariner.SimplifiedSymbols ? "true" : "false",
+            ["FullLightLines"] = mariner.FullLightLines ? "true" : "false",
+            ["RadarOverlay"] = mariner.RadarOverlay ? "true" : "false",
+            ["IgnoreScaleMinimum"] = mariner.IgnoreScaleMinimum ? "true" : "false",
         };
+
+        // NationalLanguage is only sent when the user has explicitly chosen
+        // one — empty means "use the catalogue's declared default" (eng).
+        if (!string.IsNullOrWhiteSpace(mariner.NationalLanguage))
+        {
+            parameters["NationalLanguage"] = mariner.NationalLanguage;
+        }
 
         foreach (var (name, value) in parameters)
         {

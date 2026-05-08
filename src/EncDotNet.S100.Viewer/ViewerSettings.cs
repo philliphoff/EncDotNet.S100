@@ -59,6 +59,37 @@ internal sealed class ViewerSettings
     /// </summary>
     public string EcdisDisplayCategory { get; set; } = "Standard";
 
+    // Mariner settings (S-100 Part 9 §4.2). Depth values are stored in
+    // metres regardless of the user's chosen DepthUnit. All fields are
+    // nullable so older settings.json files keep working — defaults are
+    // applied by SettingsViewModel / MarinerSettingsProvider when null.
+
+    /// <summary>Safety contour depth in metres.</summary>
+    public double? SafetyContour { get; set; }
+
+    /// <summary>Safety depth in metres for sounding selection.</summary>
+    public double? SafetyDepth { get; set; }
+
+    /// <summary>Shallow contour depth in metres.</summary>
+    public double? ShallowContour { get; set; }
+
+    /// <summary>Deep contour depth in metres.</summary>
+    public double? DeepContour { get; set; }
+
+    /// <summary>Display unit name ("Metres", "Feet", "FathomsFeet", "Fathoms").</summary>
+    public string? DepthUnit { get; set; }
+
+    public bool? FourShades { get; set; }
+    public bool? ShallowWaterDangers { get; set; }
+    public bool? PlainBoundaries { get; set; }
+    public bool? SimplifiedSymbols { get; set; }
+    public bool? FullLightLines { get; set; }
+    public bool? RadarOverlay { get; set; }
+    public bool? IgnoreScaleMinimum { get; set; }
+
+    /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
+    public string? NationalLanguage { get; set; }
+
     /// <summary>
     /// Per-spec viewing-group ids the user has explicitly hidden via
     /// the ECDIS panel. Keys are spec codes (e.g. "S-101"); values
