@@ -83,8 +83,23 @@ public sealed class MapsuiDisplayListRenderer
     /// </summary>
     public double TextScale { get; set; } = 1.0;
 
-    // Caches processed SVG data URIs keyed by symbol name.
-    private readonly Dictionary<string, string?> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
+    // Caches processed SVG data URIs and pivot metrics keyed by symbol name.
+    private readonly Dictionary<string, SymbolEntry> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
+    /// the pivot-to-bounds-centre offset recovered from the raw SVG before
+    /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
+    /// offset (in fractions of viewBox size) is what Mapsui's
+    /// <c>RelativeOffset</c> consumes; the millimetre offset is retained in
+    /// case a future code path needs an absolute-pixel translation.
+    /// </summary>
+    private readonly record struct SymbolEntry(
+        string? Source,
+        double PivotOffsetXMm,
+        double PivotOffsetYMm,
+        double RelativeOffsetX,
+        double RelativeOffsetY);
 
     // Caches rasterized pattern tile PNG bytes keyed by area fill name.
     private readonly Dictionary<string, byte[]?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
@@ -437,10 +452,25 @@ public sealed class MapsuiDisplayListRenderer
 
         // Try to render with an actual SVG symbol
         var symbolRef = instruction.SymbolReference;
-        var svgSource = renderer.GetSymbolSource(symbolRef);
+        var entry = renderer.GetSymbolEntry(symbolRef);
+        var svgSource = entry.Source;
         if (svgSource is not null)
         {
             var svgScale = 0.6 * instruction.SymbolScale * renderer.SymbolScale;
+
+            // Recover S-100 Part 9 §11.5 pivot placement.  Mapsui's ImageStyle
+            // centres the SVG bounding box on the anchor (pivot semantics are
+            // ignored), so composite symbols built from off-centre glyph
+            // tiles — most visibly multi-digit soundings — collapse on top of
+            // each other.  Mapsui's RelativeOffset is expressed as a fraction
+            // of the symbol size and matches the (vbCenter - pivot)/vbSize
+            // ratio computed from the SVG, so it stays correct regardless of
+            // SymbolScale or any mm→px convention used by the SVG rasteriser.
+            // Mapsui's RelativeOffset uses +Y = up (map frame); SVG/screen use
+            // +Y = down, so the Y component is negated here.
+            var pivotRelX = entry.RelativeOffsetX;
+            var pivotRelY = -entry.RelativeOffsetY;
+            var hasPivotRelative = pivotRelX != 0 || pivotRelY != 0;
 
             // Add a nearly-invisible rectangle as a hit-test area so that
             // tapping on a transparent portion of the SVG still picks this
@@ -458,6 +488,8 @@ public sealed class MapsuiDisplayListRenderer
                 hitStyle.SymbolRotation = instruction.Rotation.Value;
             if (hasSymbolOffset)
                 hitStyle.Offset = new Offset(symOffsetXpx, symOffsetYpx);
+            if (hasPivotRelative)
+                hitStyle.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
             feature.Styles.Add(hitStyle);
 
             var style = new ImageStyle
@@ -469,6 +501,8 @@ public sealed class MapsuiDisplayListRenderer
                 style.SymbolRotation = instruction.Rotation.Value;
             if (hasSymbolOffset)
                 style.Offset = new Offset(symOffsetXpx, symOffsetYpx);
+            if (hasPivotRelative)
+                style.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
             feature.Styles.Add(style);
         }
         else
@@ -721,26 +755,38 @@ public sealed class MapsuiDisplayListRenderer
     // ── SVG symbol processing ──────────────────────────────────────────
 
     /// <summary>
-    /// Returns a Mapsui svg-content:// source string for the given symbol name,
-    /// processing and caching the SVG on first access. Returns null if no
-    /// SymbolProvider is set or the symbol is not found.
+    /// Returns a cached <see cref="SymbolEntry"/> for the given symbol name,
+    /// processing and caching the raw SVG on first access.  The entry's
+    /// <c>Source</c> is <c>null</c> when no <see cref="SymbolProvider"/> is
+    /// configured or the symbol cannot be resolved.
     /// </summary>
-    private string? GetSymbolSource(string? symbolRef)
+    private SymbolEntry GetSymbolEntry(string? symbolRef)
     {
         if (string.IsNullOrEmpty(symbolRef) || SymbolProvider is null)
-            return null;
+            return default;
 
         if (_symbolDataUriCache.TryGetValue(symbolRef, out var cached))
             return cached;
 
-        string? source = null;
+        SymbolEntry entry = default;
         try
         {
             var svgContent = SymbolProvider(symbolRef);
             if (svgContent is not null)
             {
+                // Recover S-100 Part 9 §11.5 pivot placement from the *raw*
+                // SVG before SvgProcessor strips the pivotPoint layout
+                // element.  Without this, Mapsui centres the SVG bbox on the
+                // anchor and composite symbols (e.g. multi-digit soundings)
+                // collapse onto the same point.
+                var pivot = SvgPivotMetrics.TryParse(svgContent);
                 var processed = SvgProcessor.Process(svgContent, Palette);
-                source = "svg-content://" + processed;
+                entry = new SymbolEntry(
+                    "svg-content://" + processed,
+                    pivot?.PivotToBoundsCenterMm.X ?? 0.0,
+                    pivot?.PivotToBoundsCenterMm.Y ?? 0.0,
+                    pivot?.RelativeOffset.X ?? 0.0,
+                    pivot?.RelativeOffset.Y ?? 0.0);
             }
         }
         catch
@@ -748,8 +794,8 @@ public sealed class MapsuiDisplayListRenderer
             // Symbol not found or malformed — fall back to dot
         }
 
-        _symbolDataUriCache[symbolRef] = source;
-        return source;
+        _symbolDataUriCache[symbolRef] = entry;
+        return entry;
     }
 
     // ── Pattern tile rasterization ─────────────────────────────────────
