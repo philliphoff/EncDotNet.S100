@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using EncDotNet.S100.Diagnostics;
+
 namespace EncDotNet.S100.Core;
 
 /// <summary>
@@ -27,6 +30,10 @@ public sealed class FileSystemAssetSource : IAssetSource
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.asset.read");
+        activity?.SetTag(TelemetryTags.AssetKind, "file");
+        var start = Stopwatch.GetTimestamp();
+
         string fullPath = Path.GetFullPath(Path.Combine(_basePath, relativePath));
 
         // Prevent path traversal
@@ -36,6 +43,11 @@ public sealed class FileSystemAssetSource : IAssetSource
         }
 
         Stream stream = File.OpenRead(fullPath);
+
+        AssetMetrics.ReadDuration.Record(
+            (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.AssetKind, "file"));
+
         return Task.FromResult(stream);
     }
 

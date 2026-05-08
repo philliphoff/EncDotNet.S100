@@ -37,30 +37,98 @@ s100.viewer.command (kind=Internal, command="dataset.open")
       ├─ s100.exchangeset.parse
       ├─ s100.featurecatalogue.parse
       ├─ s100.hdf5.file.open
-      └─ s100.hdf5.dataset.read   (× N)
-  └─ s100.pipeline.vector.process
-      └─ s100.lua.rule.invoke     (× N, listener-gated)
-  └─ s100.pipeline.coverage.process
-  └─ s100.render.layer.build
-  └─ s100.render.coverage.build
+      ├─ s100.hdf5.open{kind=group|dataset}         (× N)
+      └─ s100.hdf5.dataset.read                     (× N)
+  └─ s100.pipeline.vector.process                   [gc.gen0/1/2.delta tags]
+      ├─ s100.pipeline.vector.stage.feature_xml
+      ├─ s100.pipeline.vector.stage.rule_select
+      ├─ s100.pipeline.vector.stage.xslt
+      │   └─ s100.xslt.transform{rule=…}            (× N)
+      ├─ s100.pipeline.vector.stage.lua
+      │   └─ s100.lua.execute
+      ├─ s100.pipeline.vector.stage.assemble
+      ├─ s100.pipeline.vector.stage.viewing_groups
+      └─ s100.pipeline.vector.stage.sort
+  └─ s100.pipeline.coverage.process                 [gc.gen0/1/2.delta tags]
+      ├─ s100.pipeline.coverage.stage.resolve
+      └─ s100.pipeline.coverage.stage.read
+  └─ s100.render.frame
+  └─ s100.render.coverage.frame
+  └─ s100.asset.read{kind=file|zip}                 (× N)
+  └─ s100.xslt.compile{rule=…}                      (× N, per catalogue)
 ```
 
 The Lua per-rule activity is gated on listener subscription so a
 busy ENC does not flood the trace pipeline. Rule volume is captured
 instead by the `s100.lua.rule.invoke.count` counter.
 
+GC delta tags (`gc.gen0.delta`, `gc.gen1.delta`, `gc.gen2.delta`) on
+pipeline parent spans are process-wide `GC.CollectionCount` deltas —
+useful for orders-of-magnitude comparisons, not exact attribution.
+
 ## Metrics catalogue
+
+### Pipeline metrics (`EncDotNet.S100.Core`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `s100.pipeline.duration` | histogram | `ms` | `s100.pipeline.stage`, `s100.product` |
+| `s100.pipeline.stage.duration` | histogram | `ms` | `s100.pipeline.stage` |
+| `s100.pipeline.stage.instructions.count` | histogram | `{instructions}` | `s100.pipeline.stage` |
+| `s100.pipeline.features.in` | histogram | `{features}` | `s100.product` |
+| `s100.pipeline.drawinginstructions.out` | histogram | `{instructions}` | `s100.product` |
+| `s100.coverage.cells` | histogram | `{cells}` | `s100.product` |
+| `s100.xslt.transform.duration` | histogram | `ms` | `s100.xslt.rule` |
+| `s100.xslt.compile.duration` | histogram | `ms` | `s100.xslt.rule` |
+| `s100.xslt.cache.hit.count` | counter | `{hits}` | — |
+| `s100.xslt.cache.miss.count` | counter | `{misses}` | — |
+
+### Asset I/O metrics (`EncDotNet.S100.Core`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `s100.asset.read.duration` | histogram | `ms` | `s100.asset.kind` |
+| `s100.asset.bytes.read.count` | counter | `By` | `s100.asset.kind` |
+
+### HDF5 metrics (`EncDotNet.S100.Hdf5.PureHdf`)
 
 | Instrument | Type | Unit | Tags |
 |---|---|---|---|
 | `s100.hdf5.read.bytes` | counter | `By` | — |
 | `s100.hdf5.read.duration` | histogram | `ms` | — |
+
+### Lua metrics (`EncDotNet.S100.Datasets.S101`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `s100.lua.execute.duration` | histogram | `ms` | — |
+| `s100.lua.features.count` | histogram | `{features}` | — |
+| `s100.lua.instructions.emitted.count` | histogram | `{instructions}` | — |
 | `s100.lua.rule.invoke.count` | counter | `{calls}` | `s100.lua.rule`, `s100.result` |
 | `s100.lua.rule.invoke.duration` | histogram | `ms` | `s100.lua.rule` |
-| `s100.pipeline.duration` | histogram | `ms` | `s100.pipeline.stage`, `s100.product` |
-| `s100.pipeline.features.in` | histogram | `{features}` | `s100.product` |
-| `s100.pipeline.drawinginstructions.out` | histogram | `{instructions}` | `s100.product` |
-| `s100.coverage.cells` | histogram | `{cells}` | `s100.product` |
+
+### Mapsui renderer metrics (`EncDotNet.S100.Renderers.Mapsui`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `s100.render.frame.duration` | histogram | `ms` | — |
+| `s100.render.instructions.processed.count` | histogram | `{instructions}` | — |
+| `s100.render.styles.applied.count` | histogram | `{styles}` | — |
+| `s100.symbol.resolve.duration` | histogram | `ms` | `s100.symbol.result` |
+| `s100.symbol.cache.hit.count` | counter | `{hits}` | — |
+| `s100.symbol.cache.miss.count` | counter | `{misses}` | — |
+
+### Skia renderer metrics (`EncDotNet.S100.Renderers.Skia`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `s100.render.coverage.frame.duration` | histogram | `ms` | — |
+| `s100.coverage.cells.processed.count` | histogram | `{cells}` | — |
+
+### Viewer metrics (`EncDotNet.S100.Viewer`)
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
 | `s100.viewer.command.duration` | histogram | `ms` | `s100.viewer.command` |
 
 ## Wiring it up — the viewer
@@ -164,8 +232,10 @@ assert on `OperationName` and tags.
 - **No log file sinks.** Use the OTLP log exporter or wire any
   Microsoft.Extensions.Logging-compatible sink (Serilog, NLog,
   console) into your host.
-- **No allocation / GC profiling.** Use `dotnet-counters`,
-  `dotnet-trace`, or `EventPipe` directly for that.
+- **No allocation / GC profiling.** GC collection-count deltas are
+  tagged on pipeline parent spans for rough comparison, but for
+  detailed allocation profiling use `dotnet-counters`,
+  `dotnet-trace`, or `EventPipe` directly.
 - **No custom dashboards.** Aspire/Grafana/Tempo dashboards are
   out of scope; the metrics catalogue above is meant to be
   self-describing.

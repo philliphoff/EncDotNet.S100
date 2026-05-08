@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SkiaSharp;
 using S100Diag = EncDotNet.S100.Renderers.Skia.Diagnostics;
 using EncDotNet.S100.Pipelines;
@@ -18,14 +19,17 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
 
     public SKBitmap Render(StyledCoverageLayer layer, Viewport viewport)
     {
-        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.build");
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.frame");
         __activity?.SetTag("s100.render.target", "skia");
+        var renderStart = Stopwatch.GetTimestamp();
+
         var sampled = layer.Coverage;
         var colorScheme = layer.ColorScheme;
         var fieldData = sampled.GetField(colorScheme.FieldName);
 
         int rows = fieldData.GetLength(0);
         int cols = fieldData.GetLength(1);
+        S100Diag.Telemetry.CoverageCellsProcessed.Add((long)rows * cols);
 
         var bitmap = new SKBitmap(cols, rows, SKColorType.Rgba8888, SKAlphaType.Premul);
 
@@ -52,6 +56,9 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
             // Grid row 0 is the southernmost (bottom of image), so flip vertically.
             bitmap.SetPixel(col, rows - 1 - row, color);
         }
+
+        S100Diag.Telemetry.CoverageFrameDuration.Record(
+            (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
         return bitmap;
     }

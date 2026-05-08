@@ -59,7 +59,17 @@ public sealed class PureHdfFile : IHdf5File
 
         public IHdf5Group OpenGroup(string name)
         {
-            return new PureHdfGroup(_group.Group(name));
+            using var activity = Telemetry.ActivitySource.StartActivity("s100.hdf5.open");
+            activity?.SetTag(TelemetryTags.Hdf5Kind, "group");
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                return new PureHdfGroup(_group.Group(name));
+            }
+            finally
+            {
+                Telemetry.ReadDuration.Record(GetElapsedMs(start), new KeyValuePair<string, object?>("kind", "group"));
+            }
         }
 
         public IReadOnlyList<string> GroupNames
