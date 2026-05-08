@@ -64,6 +64,9 @@ public sealed class S125PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <summary>Tracks the active S-100 Part 9 §11.7 display mode.</summary>
     public DisplayModeController DisplayModes { get; } = new();
 
+    /// <summary>Controls which S-100 Part 9 §11.6 display planes are visible.</summary>
+    public DisplayPlaneController DisplayPlanes { get; } = new();
+
     // ── Palettes ───────────────────────────────────────────────────────
 
     private void EnsurePalettesLoaded()

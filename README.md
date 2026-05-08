@@ -40,7 +40,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, S-421, and legacy S-57 datasets and renders them on an interactive map. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, S-421, and legacy S-57 datasets and renders them on an interactive map. Features ECDIS display-category filtering, display-plane toggles, quick text-group toggles, and per-spec viewing-group overrides. |
 
 ### Pick / Object Information
 

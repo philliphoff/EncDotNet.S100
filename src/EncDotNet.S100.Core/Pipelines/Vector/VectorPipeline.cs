@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Pipelines.Vector;
 ///   <item>XSLT transformation — run applicable XSLT rules against the FeatureXML</item>
 ///   <item>Lua execution — delegate to <see cref="ILuaRuleExecutor"/> (Part 9A)</item>
 ///   <item>Drawing instruction assembly — parse XSLT output into typed objects and append Lua output</item>
-///   <item>Viewing group filtering and priority sorting</item>
+///   <item>Viewing group filtering, display plane filtering, and priority sorting</item>
 /// </list>
 /// </summary>
 public class VectorPipeline
@@ -66,9 +66,10 @@ public class VectorPipeline
                 instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
             }
 
-            // Stage 6 — viewing group filter + priority sort
+            // Stage 6 — viewing group filter + display plane filter + priority sort
             var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
-            var sorted = SortByPriority(filtered);
+            var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
+            var sorted = SortByPriority(planeFiltered);
 
             PipelineMetrics.InstructionsOut.Record(sorted.Count, stageTag);
             activity?.SetTag("s100.pipeline.instructions.count", sorted.Count);
@@ -174,6 +175,23 @@ public class VectorPipeline
         {
             return false;
         }
+    }
+
+    // ── Stage 6: Display plane filtering ──────────────────────────────
+
+    /// <summary>
+    /// Removes instructions whose <see cref="DrawingInstruction.Plane"/>
+    /// is hidden by the controller (S-100 Part 9 §11.6). Runs after
+    /// viewing-group filtering so the input list is already reduced.
+    /// </summary>
+    private static IReadOnlyList<DrawingInstruction> ApplyDisplayPlanes(
+        IReadOnlyList<DrawingInstruction> instructions,
+        DisplayPlaneController displayPlanes)
+    {
+        if (displayPlanes.HiddenPlanes.Count == 0) return instructions;
+        return instructions
+            .Where(i => displayPlanes.IsVisible(i.Plane))
+            .ToList();
     }
 
     // ── Stage 6: Viewing group filtering and sort ──────────────────────

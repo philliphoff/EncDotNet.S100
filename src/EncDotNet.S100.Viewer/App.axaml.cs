@@ -144,7 +144,15 @@ public partial class App : Application
                 }
                 if (ids.Count > 0) hidden[kv.Key] = ids;
             }
-            state.Hydrate(category, hidden);
+            // Hydrate hidden display planes
+            var hiddenPlanes = new HashSet<EncDotNet.S100.Pipelines.Vector.DisplayPlane>();
+            foreach (var token in (settings.EcdisHiddenDisplayPlanes ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (Enum.TryParse<EncDotNet.S100.Pipelines.Vector.DisplayPlane>(token, ignoreCase: true, out var plane))
+                    hiddenPlanes.Add(plane);
+            }
+            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null);
 
             // Persist on every change so a crash doesn't lose the user's
             // ECDIS preferences. Cheap because settings.json is small.
@@ -158,6 +166,8 @@ public partial class App : Application
                     settings.EcdisHiddenViewingGroups[kv.Key] =
                         string.Join(",", kv.Value.OrderBy(i => i));
                 }
+                settings.EcdisHiddenDisplayPlanes =
+                    string.Join(",", snap.HiddenDisplayPlanes.OrderBy(p => p));
                 try { settings.Save(); } catch { /* best-effort */ }
             };
             return state;
@@ -180,6 +190,7 @@ public partial class App : Application
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
+        services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<MainViewModel>();
 

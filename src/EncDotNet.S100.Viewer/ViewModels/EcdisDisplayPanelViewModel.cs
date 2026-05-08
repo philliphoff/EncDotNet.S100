@@ -7,7 +7,9 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
+using DisplayPlane = EncDotNet.S100.Pipelines.Vector.DisplayPlane;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -96,6 +98,48 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     public bool IsOtherInformation => _state.Category == EcdisDisplayCategory.OtherInformation;
     public bool IsAll => _state.Category == EcdisDisplayCategory.All;
 
+    /// <summary>
+    /// Whether the Under Radar display plane is visible.
+    /// </summary>
+    public bool IsUnderRadarVisible
+    {
+        get => !_state.GetHiddenDisplayPlanes().Contains(DisplayPlane.UnderRadar);
+        set
+        {
+            if (value)
+                _state.ShowDisplayPlane(DisplayPlane.UnderRadar);
+            else
+                _state.HideDisplayPlane(DisplayPlane.UnderRadar);
+
+            Telemetry.DisplayPlaneToggled.Add(1,
+                new KeyValuePair<string, object?>("s100.displayplane", nameof(DisplayPlane.UnderRadar)),
+                new KeyValuePair<string, object?>("s100.visible", value));
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Whether the Over Radar display plane is visible.
+    /// </summary>
+    public bool IsOverRadarVisible
+    {
+        get => !_state.GetHiddenDisplayPlanes().Contains(DisplayPlane.OverRadar);
+        set
+        {
+            if (value)
+                _state.ShowDisplayPlane(DisplayPlane.OverRadar);
+            else
+                _state.HideDisplayPlane(DisplayPlane.OverRadar);
+
+            Telemetry.DisplayPlaneToggled.Add(1,
+                new KeyValuePair<string, object?>("s100.displayplane", nameof(DisplayPlane.OverRadar)),
+                new KeyValuePair<string, object?>("s100.visible", value));
+
+            OnPropertyChanged();
+        }
+    }
+
     private void OnStateChanged()
     {
         OnPropertyChanged(nameof(ActiveCategory));
@@ -103,6 +147,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsStandard));
         OnPropertyChanged(nameof(IsOtherInformation));
         OnPropertyChanged(nameof(IsAll));
+        OnPropertyChanged(nameof(IsUnderRadarVisible));
+        OnPropertyChanged(nameof(IsOverRadarVisible));
         foreach (var spec in Specs)
             spec.Refresh();
     }

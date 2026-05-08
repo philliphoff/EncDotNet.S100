@@ -62,6 +62,7 @@ public class MainViewModelPickModeTests
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues),
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(new StubDatasetLoaderService())),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),

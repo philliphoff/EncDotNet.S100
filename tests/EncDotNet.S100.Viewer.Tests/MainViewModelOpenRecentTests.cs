@@ -79,6 +79,7 @@ public class MainViewModelOpenRecentTests : IDisposable
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues),
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(loader)),
             themeService: new StubThemeService(),
             recentFiles: recent,
