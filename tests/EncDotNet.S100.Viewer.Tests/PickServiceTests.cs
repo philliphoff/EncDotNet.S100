@@ -65,19 +65,20 @@ public class PickServiceTests
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
         statusPresenter = new StatusPresenter();
+        var datasets = new DatasetsViewModel(new StubLoader());
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: new DatasetsViewModel(new StubLoader()),
+            datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(new StubLoader())),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),

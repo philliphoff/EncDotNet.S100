@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -27,6 +28,7 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
 {
     private readonly EcdisDisplayState _state;
     private readonly PortrayalCatalogueManager _catalogueManager;
+    private readonly DatasetsViewModel _datasets;
 
     /// <summary>Cached VG ids per text group for the primary spec.</summary>
     private readonly Dictionary<TextGroup, IReadOnlySet<int>> _resolvedGroups = new();
@@ -34,18 +36,24 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
 
     public TextGroupToolbarViewModel(
         EcdisDisplayState state,
-        PortrayalCatalogueManager catalogueManager)
+        PortrayalCatalogueManager catalogueManager,
+        DatasetsViewModel datasets)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
+        ArgumentNullException.ThrowIfNull(datasets);
 
         _state = state;
         _catalogueManager = catalogueManager;
+        _datasets = datasets;
         _state.Changed += OnStateChanged;
+        _datasets.Entries.CollectionChanged += OnEntriesChanged;
 
         ToggleImportantCommand = new RelayCommand(() => Toggle(TextGroup.Important));
         ToggleOtherCommand = new RelayCommand(() => Toggle(TextGroup.Other));
         ToggleAllCommand = new RelayCommand(() => Toggle(TextGroup.All));
+
+        RebuildFromLoadedSpecs();
     }
 
     public ICommand ToggleImportantCommand { get; }
@@ -132,6 +140,40 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
 
     private void OnStateChanged() => NotifyAll();
 
+    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RebuildFromLoadedSpecs();
+    }
+
+    /// <summary>
+    /// Scans loaded datasets and resolves text layers for the first
+    /// vector spec that has them.
+    /// </summary>
+    private void RebuildFromLoadedSpecs()
+    {
+        // Find the first loaded vector spec that has text layers
+        string? matchedSpec = null;
+        foreach (var entry in _datasets.Entries)
+        {
+            var spec = entry.ProductSpec;
+            if (_catalogueManager.HasCatalogue(spec))
+            {
+                try
+                {
+                    var provider = _catalogueManager.GetProvider(spec);
+                    if (TextGroupMapping.HasTextLayers(provider.Catalogue))
+                    {
+                        matchedSpec = spec;
+                        break;
+                    }
+                }
+                catch { /* skip */ }
+            }
+        }
+
+        RefreshForSpec(matchedSpec);
+    }
+
     private void NotifyAll()
     {
         OnPropertyChanged(nameof(IsImportantVisible));
@@ -142,5 +184,6 @@ internal sealed class TextGroupToolbarViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _state.Changed -= OnStateChanged;
+        _datasets.Entries.CollectionChanged -= OnEntriesChanged;
     }
 }

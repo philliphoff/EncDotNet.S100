@@ -68,19 +68,20 @@ public class MainViewModelOpenRecentTests : IDisposable
         var catalogues = new PortrayalCatalogueManager();
         loader = new RecordingLoaderService();
         recent = new StubRecentFilesService();
+        var datasets = new DatasetsViewModel(loader);
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: new DatasetsViewModel(loader),
+            datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(loader)),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: recent,
             measureAppearance: new StubMeasureOverlayAppearanceProvider());
