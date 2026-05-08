@@ -271,6 +271,8 @@ public class S101PipelineTests
 
         public DisplayModeController DisplayModes { get; } = new();
 
+        public DisplayPlaneController DisplayPlanes { get; } = new();
+
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
 

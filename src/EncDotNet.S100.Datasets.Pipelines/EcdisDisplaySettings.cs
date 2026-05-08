@@ -55,6 +55,13 @@ public sealed record EcdisDisplaySettings
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlySet<int>> HiddenViewingGroups { get; init; }
         = new Dictionary<string, IReadOnlySet<int>>();
+
+    /// <summary>
+    /// Display planes the user has hidden via the ECDIS panel
+    /// (S-100 Part 9 §11.6). Empty by default.
+    /// </summary>
+    public IReadOnlySet<DisplayPlane> HiddenDisplayPlanes { get; init; }
+        = new HashSet<DisplayPlane>();
 }
 
 /// <summary>
@@ -137,6 +144,12 @@ public static class EcdisDisplayExtensions
         {
             foreach (var vg in hidden)
                 catalogue.ViewingGroups.SetUserOverride(vg, false);
+        }
+
+        // Push display-plane visibility (S-100 Part 9 §11.6).
+        foreach (var plane in Enum.GetValues<DisplayPlane>())
+        {
+            catalogue.DisplayPlanes.SetVisible(plane, !settings.HiddenDisplayPlanes.Contains(plane));
         }
     }
 }

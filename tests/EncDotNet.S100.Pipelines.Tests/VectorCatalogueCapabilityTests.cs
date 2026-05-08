@@ -47,9 +47,10 @@ public class VectorCatalogueCapabilityTests
             .Select(m => m.Name)
             .ToHashSet();
 
-        // Property accessors come through as get_Rules / get_ViewingGroups.
+        // Property accessors come through as get_Rules / get_ViewingGroups / etc.
         Assert.Contains("get_Rules", ownMembers);
         Assert.Contains("get_ViewingGroups", ownMembers);
+        Assert.Contains("get_DisplayPlanes", ownMembers);
         Assert.DoesNotContain("GetSymbol", ownMembers);
         Assert.DoesNotContain("GetLineStyle", ownMembers);
         Assert.DoesNotContain("GetAreaFill", ownMembers);

@@ -26,6 +26,7 @@ internal sealed class MainViewModel : ViewModelBase
     public PickReportViewModel PickReport { get; }
     public TimelineViewModel Timeline { get; }
     public DisplayToolbarViewModel DisplayToolbar { get; }
+    public TextGroupToolbarViewModel TextToolbar { get; }
     public EcdisDisplayPanelViewModel EcdisDisplayPanel { get; }
 
     private ActivityKind? _selectedActivity;
@@ -410,6 +411,7 @@ internal sealed class MainViewModel : ViewModelBase
         PickReportViewModel pickReport,
         TimelineViewModel timeline,
         DisplayToolbarViewModel displayToolbar,
+        TextGroupToolbarViewModel textToolbar,
         EcdisDisplayPanelViewModel ecdisDisplayPanel,
         IThemeService themeService,
         IRecentFilesService recentFiles,
@@ -426,6 +428,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(displayToolbar);
+        ArgumentNullException.ThrowIfNull(textToolbar);
         ArgumentNullException.ThrowIfNull(ecdisDisplayPanel);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
@@ -457,6 +460,7 @@ internal sealed class MainViewModel : ViewModelBase
         PickReport = pickReport;
         Timeline = timeline;
         DisplayToolbar = displayToolbar;
+        TextToolbar = textToolbar;
         EcdisDisplayPanel = ecdisDisplayPanel;
         Timeline.CloseRequested += () => IsTimelineVisible = false;
         PickReport.PropertyChanged += (_, e) =>

@@ -51,18 +51,20 @@ public class MainViewModelPickModeTests
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
         var catalogSource = new EmptyCatalogSource();
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
         return new MainViewModel(
             settings,
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: new DatasetsViewModel(new StubDatasetLoaderService()),
+            datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(catalogSource),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, new DatasetsViewModel(new StubDatasetLoaderService())),
+            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider());
