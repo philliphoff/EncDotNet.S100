@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using Avalonia.Media;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -116,23 +119,46 @@ internal sealed class SettingsViewModel : ViewModelBase
         DepthUnit.Fathoms,
     ];
 
-    /// <summary>Common ISO 639-2/B language codes the user can pick. Empty = catalogue default.</summary>
-    public static string[] AvailableLanguageCodes { get; } =
-    [
-        "",
-        "eng",
-        "fra",
-        "spa",
-        "deu",
-        "ita",
-        "nor",
-        "swe",
-        "fin",
-        "rus",
-        "jpn",
-        "kor",
-        "zho",
-    ];
+    /// <summary>
+    /// Languages the user can pick. <see cref="LanguageOption.Code"/> is the
+    /// ISO 639-2/B 3-letter code stored in settings; empty string means
+    /// "follow the operating system's UI culture" (resolved at snapshot time
+    /// in <see cref="BuildMarinerSettings"/>).
+    /// </summary>
+    public static IReadOnlyList<LanguageOption> AvailableLanguages { get; } = BuildLanguageOptions();
+
+    private static IReadOnlyList<LanguageOption> BuildLanguageOptions()
+    {
+        var sysCulture = CultureInfo.CurrentUICulture;
+        var systemLabel = string.Format(
+            CultureInfo.CurrentUICulture,
+            Strings.Language_System,
+            sysCulture.DisplayName);
+
+        var list = new List<LanguageOption> { new("", systemLabel) };
+
+        // S-100 PC NationalLanguage uses ISO 639-2/B; we surface a short list
+        // of common chart languages and look up the localised display name
+        // from the OS culture catalogue so labels match the user's locale.
+        string[] codes = ["eng", "fra", "spa", "deu", "ita", "nld", "nor", "swe", "fin", "dan", "rus", "jpn", "kor", "zho", "ara"];
+        foreach (var code in codes)
+        {
+            var culture = TryFindCultureByThreeLetterCode(code);
+            var name = culture?.DisplayName ?? code;
+            list.Add(new LanguageOption(code, name));
+        }
+        return list;
+    }
+
+    private static CultureInfo? TryFindCultureByThreeLetterCode(string threeLetterIsoCode)
+    {
+        foreach (var c in CultureInfo.GetCultures(CultureTypes.NeutralCultures))
+        {
+            if (string.Equals(c.ThreeLetterISOLanguageName, threeLetterIsoCode, StringComparison.OrdinalIgnoreCase))
+                return c;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Raised after any mariner-affecting property has changed and the
@@ -348,8 +374,24 @@ internal sealed class SettingsViewModel : ViewModelBase
         FullLightLines = _fullLightLines,
         RadarOverlay = _radarOverlay,
         IgnoreScaleMinimum = _ignoreScaleMinimum,
-        NationalLanguage = _nationalLanguage,
+        NationalLanguage = ResolveLanguageCode(_nationalLanguage),
     };
+
+    private static string ResolveLanguageCode(string stored)
+    {
+        if (!string.IsNullOrWhiteSpace(stored))
+            return stored;
+
+        // Empty / null means "follow the OS UI culture". Map the current UI
+        // culture's 3-letter ISO 639-2 code into the same form S-101 expects.
+        // If the runtime can't supply a real code (e.g. invariant culture
+        // returns "ivl"), fall back to empty so the executor skips the param
+        // and the catalogue default applies.
+        var code = CultureInfo.CurrentUICulture.ThreeLetterISOLanguageName;
+        if (string.IsNullOrEmpty(code) || code == "ivl")
+            return string.Empty;
+        return code;
+    }
 
     public SettingsViewModel(ViewerSettings settings)
     {

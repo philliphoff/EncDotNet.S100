@@ -6,7 +6,7 @@
              x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
 
-    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                    VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="12" Spacing="16">
             <TextBlock Text="{x:Static loc:Strings.Settings_Heading}"
@@ -221,11 +221,18 @@
                 <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"
                            FontSize="12"
                            FontWeight="SemiBold" />
-                <ComboBox ItemsSource="{Binding AvailableLanguageCodes}"
-                          SelectedItem="{Binding NationalLanguage}"
+                <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                          SelectedValue="{Binding NationalLanguage}"
+                          SelectedValueBinding="{Binding Code}"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_NationalLanguage}"
                           MinWidth="180"
-                          HorizontalAlignment="Left" />
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

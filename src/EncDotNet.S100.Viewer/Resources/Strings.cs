@@ -206,6 +206,7 @@ internal static class Strings
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
+    public static string Language_System => Get(nameof(Language_System));
     public static string Status_MarinerSettingsApplied => Get(nameof(Status_MarinerSettingsApplied));
 
     // Distance unit display names

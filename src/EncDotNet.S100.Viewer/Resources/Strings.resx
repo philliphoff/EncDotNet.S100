@@ -510,6 +510,10 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Settings_NationalLanguage_Default" xml:space="preserve">
     <value>(Catalogue default)</value>
   </data>
+  <data name="Language_System" xml:space="preserve">
+    <value>System ({0})</value>
+    <comment>{0} is replaced with the OS UI language display name, e.g. "System (English (United States))".</comment>
+  </data>
   <data name="Status_MarinerSettingsApplied" xml:space="preserve">
     <value>Mariner settings applied.</value>
   </data>
