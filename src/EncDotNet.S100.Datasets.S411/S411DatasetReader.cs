@@ -43,7 +43,6 @@ namespace EncDotNet.S100.Datasets.S411;
 /// </remarks>
 internal static class S411DatasetReader
 {
-    private static readonly XNamespace GmlNs = "http://www.opengis.net/gml/3.2";
     private static readonly XNamespace IceNs = "http://www.jcomm.info/ice";
 
     private static readonly XNamespace S100Ns_1_0_lower = "http://www.iho.int/s100gml/1.0";
@@ -104,7 +103,7 @@ internal static class S411DatasetReader
 
     private static S411Dataset ReadIceDataSet(XDocument doc, XElement root)
     {
-        string? datasetId = root.Attribute(GmlNs + "id")?.Value;
+        string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         var issueDate = ParseIceIssueDate(root);
 
         var features = ImmutableArray.CreateBuilder<S411Feature>();
@@ -125,7 +124,7 @@ internal static class S411DatasetReader
 
                 var syntheticId = string.Format(
                     CultureInfo.InvariantCulture, "{0}.{1:0000}", featureEl.Name.LocalName, ++idCounter);
-                featureEl.SetAttributeValue(GmlNs + "id", syntheticId);
+                featureEl.SetAttributeValue(GmlNamespaces.Gml + "id", syntheticId);
 
                 features.Add(ParseIceFeature(featureEl));
             }
@@ -158,7 +157,7 @@ internal static class S411DatasetReader
 
     private static S411Feature ParseIceFeature(XElement element)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value ?? "";
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var featureType = element.Name.LocalName;
 
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseInlineGmlGeometry(element);
@@ -166,7 +165,7 @@ internal static class S411DatasetReader
 
         foreach (var child in element.Elements())
         {
-            if (child.Name.Namespace == GmlNs) continue;
+            if (child.Name.Namespace == GmlNamespaces.Gml) continue;
             if (child.Name.Namespace != IceNs) continue;
             if (child.HasElements) continue;
             if (string.IsNullOrEmpty(child.Value)) continue;
@@ -195,27 +194,27 @@ internal static class S411DatasetReader
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var geometryType = GmlGeometryType.None;
 
-        var polygon = element.Element(GmlNs + "Polygon");
+        var polygon = element.Element(GmlNamespaces.Gml + "Polygon");
         if (polygon is not null)
         {
-            var (ext, intRings) = ParseSurfaceCoordinates(polygon);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(polygon);
             return (GmlGeometryType.Surface, points, curves, ext, intRings);
         }
 
-        var lineString = element.Element(GmlNs + "LineString") ?? element.Element(GmlNs + "Curve");
+        var lineString = element.Element(GmlNamespaces.Gml + "LineString") ?? element.Element(GmlNamespaces.Gml + "Curve");
         if (lineString is not null)
         {
-            var coords = ParseCurveCoordinates(lineString);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(lineString);
             curves = coords.Length > 0
                 ? ImmutableArray.Create(coords)
                 : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
             return (GmlGeometryType.Curve, points, curves, exteriorRing, interiorRings);
         }
 
-        var point = element.Element(GmlNs + "Point");
+        var point = element.Element(GmlNamespaces.Gml + "Point");
         if (point is not null)
         {
-            var coord = ParseGmlPointCoord(point);
+            var coord = GmlCoordinateParser.ParsePointElement(point);
             if (coord is not null)
             {
                 geometryType = GmlGeometryType.Point;
@@ -233,7 +232,7 @@ internal static class S411DatasetReader
         var datasetNs = root.Name.Namespace;
         var s100Ns = DetectS100Namespace(root);
 
-        string? datasetId = root.Attribute(GmlNs + "id")?.Value;
+        string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = null;
         DateTime? issueDate = null;
 
@@ -300,7 +299,7 @@ internal static class S411DatasetReader
 
     private static S411Feature ParseGenericFeature(XElement element, XNamespace s100Ns)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
             ?? element.Attribute("id")?.Value
             ?? "";
         var featureType = element.Name.LocalName;
@@ -340,7 +339,7 @@ internal static class S411DatasetReader
             ?? geometryContainer.Element(s100Ns + "Point");
         if (pointProp is not null)
         {
-            var coord = ParseGmlPointCoord(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
             if (coord is not null)
             {
                 geometryType = GmlGeometryType.Point;
@@ -352,7 +351,7 @@ internal static class S411DatasetReader
         if (curveProp is not null)
         {
             geometryType = GmlGeometryType.Curve;
-            var coords = ParseCurveCoordinates(curveProp);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             curves = coords.Length > 0
                 ? ImmutableArray.Create(coords)
                 : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
@@ -362,7 +361,7 @@ internal static class S411DatasetReader
         if (surfaceProp is not null)
         {
             geometryType = GmlGeometryType.Surface;
-            var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;
         }
@@ -380,7 +379,7 @@ internal static class S411DatasetReader
             var localName = child.Name.LocalName;
 
             if (localName is "geometry" or "boundedBy" ||
-                child.Name.Namespace == GmlNs ||
+                child.Name.Namespace == GmlNamespaces.Gml ||
                 child.Name.Namespace == s100Ns)
                 continue;
 
@@ -417,107 +416,7 @@ internal static class S411DatasetReader
     {
         return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
                FeatureTypeCodes.Contains(name.LocalName);
-    }
-
-    // ── Shared GML geometry helpers ────────────────────────────────────
-
-    private static (double Latitude, double Longitude)? ParseGmlPointCoord(XElement element)
-    {
-        var pos = element.Descendants(GmlNs + "pos").FirstOrDefault();
-        if (pos is not null)
-            return ParsePos(pos.Value);
-        return null;
-    }
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ParseCurveCoordinates(XElement curveContainer)
-    {
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-
-        foreach (var posList in curveContainer.Descendants(GmlNs + "posList"))
-        {
-            coords.AddRange(ParsePosList(posList.Value));
-        }
-
-        if (coords.Count == 0)
-        {
-            foreach (var pos in curveContainer.Descendants(GmlNs + "pos"))
-            {
-                var coord = ParsePos(pos.Value);
-                if (coord is not null)
-                    coords.Add(coord.Value);
-            }
-        }
-
-        return coords.ToImmutable();
-    }
-
-    private static (ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseSurfaceCoordinates(XElement surfaceContainer)
-    {
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
-
-        var exterior = surfaceContainer.Descendants(GmlNs + "exterior").FirstOrDefault();
-        if (exterior is not null)
-        {
-            exteriorRing = ParseRing(exterior);
-        }
-
-        foreach (var interior in surfaceContainer.Descendants(GmlNs + "interior"))
-        {
-            var ring = ParseRing(interior);
-            if (ring.Length > 0)
-                interiorRings.Add(ring);
-        }
-
-        return (exteriorRing, interiorRings.ToImmutable());
-    }
-
-    private static ImmutableArray<(double, double)> ParseRing(XElement ringContainer)
-    {
-        var posList = ringContainer.Descendants(GmlNs + "posList").FirstOrDefault();
-        if (posList is not null)
-            return ParsePosList(posList.Value);
-
-        var builder = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var pos in ringContainer.Descendants(GmlNs + "pos"))
-        {
-            var coord = ParsePos(pos.Value);
-            if (coord is not null)
-                builder.Add(coord.Value);
-        }
-        return builder.ToImmutable();
-    }
-
-    private static (double Latitude, double Longitude)? ParsePos(string posValue)
-    {
-        var parts = posValue.Trim().Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2 &&
-            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
-            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
-        {
-            return (lat, lon);
-        }
-        return null;
-    }
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ParsePosList(string posListValue)
-    {
-        var parts = posListValue.Trim().Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-
-        for (int i = 0; i + 1 < parts.Length; i += 2)
-        {
-            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var lon))
-            {
-                coords.Add((lat, lon));
-            }
-        }
-
-        return coords.ToImmutable();
-    }
-
-    /// <summary>
+    }    /// <summary>
     /// Parses an xs:dateTime or xs:date timestamp into UTC, accepting any
     /// of the formats S-100 Part 17 / Part 10b allow for dataset metadata.
     /// </summary>
