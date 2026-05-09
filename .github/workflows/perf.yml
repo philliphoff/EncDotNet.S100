@@ -72,6 +72,7 @@ jobs:
           gate
           ${{ steps.baseline.outputs.dir }}
           ${{ steps.candidate.outputs.dir }}
+          --threshold 15
           --out /tmp/perf-gate.md
 
       - name: Upload gate report
