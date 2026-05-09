@@ -240,6 +240,26 @@ See [`docs/observability.md`](docs/observability.md) for the span
 tree, metrics catalogue, and alternative recipes (standalone Aspire
 dashboard, Jaeger).
 
+## Performance
+
+Scripted performance scenarios for profiling pipeline, portrayal, and
+rendering costs:
+
+```sh
+# Run a scenario
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- s124-vector
+
+# Summarise a run
+dotnet run --project tools/EncDotNet.S100.PerfReport -- summarise perf-runs/<file>.jsonl
+
+# Diff two runs
+dotnet run --project tools/EncDotNet.S100.PerfReport -- diff baseline.jsonl candidate.jsonl
+```
+
+See [PerfRunner README](tools/EncDotNet.S100.PerfRunner/README.md) and
+[PerfReport README](tools/EncDotNet.S100.PerfReport/README.md) for
+details. Baseline runs and CI gating arrive in PRs D2 / D4.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
