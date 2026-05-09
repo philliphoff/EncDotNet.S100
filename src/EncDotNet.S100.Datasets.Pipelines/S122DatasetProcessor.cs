@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S122DatasetProcessor : IDatasetProcessor
 {
     private readonly S122Dataset _dataset;
-    private readonly PortrayalCatalogueProvider _provider;
+    private readonly S122PortrayalCatalogue _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
@@ -59,7 +59,8 @@ public sealed class S122DatasetProcessor : IDatasetProcessor
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
-        _provider = catalogueManager.GetProvider("S-122");
+        var provider = catalogueManager.GetProvider("S-122");
+        _catalogue = new S122PortrayalCatalogue(provider);
         using (datasetStream)
         {
             _dataset = S122Dataset.Open(datasetStream);
@@ -69,7 +70,7 @@ public sealed class S122DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        var catalogue = new S122PortrayalCatalogue(_provider);
+        var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
