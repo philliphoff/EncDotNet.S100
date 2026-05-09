@@ -27,7 +27,18 @@ public sealed class TelemetryFileReader
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            using var doc = JsonDocument.Parse(line);
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(line);
+            }
+            catch (JsonException)
+            {
+                // Skip corrupt lines caused by concurrent file writes.
+                continue;
+            }
+
+            using var _ = doc;
             var root = doc.RootElement;
 
             if (!root.TryGetProperty("kind", out var kindProp)) continue;
