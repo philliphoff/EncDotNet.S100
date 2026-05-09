@@ -13,16 +13,38 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Build
+      # --- Run baseline from the base branch on the same runner ---
+      - name: Checkout base branch
+        run: git checkout ${{ github.event.pull_request.base.sha }}
+
+      - name: Build base
         run: dotnet build --configuration Release
 
-      - name: Run candidate baseline
+      - name: Run base performance
+        run: >
+          dotnet run --no-build --configuration Release
+          --project tools/EncDotNet.S100.PerfRunner --
+          baseline
+          --warmup 3
+          --iterations 10
+          --out /tmp/perf-baseline
+
+      # --- Run candidate from the PR branch ---
+      - name: Checkout PR branch
+        run: git checkout ${{ github.event.pull_request.head.sha }}
+
+      - name: Build candidate
+        run: dotnet build --configuration Release
+
+      - name: Run candidate performance
         run: >
           dotnet run --no-build --configuration Release
           --project tools/EncDotNet.S100.PerfRunner --
@@ -31,14 +53,15 @@ jobs:
           --iterations 10
           --out /tmp/perf-candidate
 
-      - name: Determine baseline SHA
+      - name: Find baseline directory
         id: baseline
-        run: echo "sha=$(cat tools/EncDotNet.S100.PerfRunner/baselines/CURRENT)" >> "$GITHUB_OUTPUT"
+        run: |
+          DIR=$(find /tmp/perf-baseline -mindepth 1 -maxdepth 1 -type d | head -1)
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: Find candidate directory
         id: candidate
         run: |
-          # The baseline command writes to /tmp/perf-candidate/<git-sha>/
           DIR=$(find /tmp/perf-candidate -mindepth 1 -maxdepth 1 -type d | head -1)
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
@@ -47,7 +70,7 @@ jobs:
           dotnet run --no-build --configuration Release
           --project tools/EncDotNet.S100.PerfReport --
           gate
-          tools/EncDotNet.S100.PerfRunner/baselines/${{ steps.baseline.outputs.sha }}
+          ${{ steps.baseline.outputs.dir }}
           ${{ steps.candidate.outputs.dir }}
           --out /tmp/perf-gate.md
 
