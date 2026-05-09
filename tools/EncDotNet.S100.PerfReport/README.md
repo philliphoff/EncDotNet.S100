@@ -63,6 +63,10 @@ dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
 # Custom threshold (default is 5%)
 dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
     baseline-dir candidate-dir --threshold 10
+
+# Custom minimum absolute floor (default is 50; skips noisy sub-ms spans)
+dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
+    baseline-dir candidate-dir --min-abs 100
 ```
 
 Output includes a scenario summary table followed by per-scenario

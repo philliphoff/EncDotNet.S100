@@ -26,6 +26,11 @@ public sealed class GateCommand : Command<GateCommand.Settings>
         [DefaultValue(5.0)]
         public double Threshold { get; set; } = 5.0;
 
+        [CommandOption("--min-abs <VALUE>")]
+        [Description("Minimum baseline absolute value to consider for regression gating. Spans/metrics below this floor are reported but never flag a regression (default: 50).")]
+        [DefaultValue(50.0)]
+        public double MinAbsolute { get; set; } = 50.0;
+
         [CommandOption("--out <PATH>")]
         [Description("Write the gate summary to a markdown file instead of stdout.")]
         public string? OutputPath { get; set; }
@@ -67,7 +72,7 @@ public sealed class GateCommand : Command<GateCommand.Settings>
         {
             var baseline = TelemetryFileReader.Read(baselineFiles[scenario]);
             var candidate = TelemetryFileReader.Read(candidateFiles[scenario]);
-            var result = EvaluateScenario(scenario, baseline, candidate, settings.Threshold);
+            var result = EvaluateScenario(scenario, baseline, candidate, settings.Threshold, settings.MinAbsolute);
             results.Add(result);
         }
 
@@ -103,7 +108,8 @@ public sealed class GateCommand : Command<GateCommand.Settings>
         string name,
         TelemetryFileReader baseline,
         TelemetryFileReader candidate,
-        double threshold)
+        double threshold,
+        double minAbsolute = 50.0)
     {
         var result = new ScenarioResult { Name = name };
 
@@ -128,7 +134,7 @@ public sealed class GateCommand : Command<GateCommand.Settings>
                 Candidate = cVal,
                 DeltaStr = deltaStr,
                 Status = status,
-                Regressed = pct >= threshold,
+                Regressed = pct >= threshold && bVal >= minAbsolute,
             });
         }
 
@@ -156,7 +162,7 @@ public sealed class GateCommand : Command<GateCommand.Settings>
                 Candidate = cVal,
                 DeltaStr = deltaStr,
                 Status = status,
-                Regressed = pct >= threshold,
+                Regressed = pct >= threshold && bVal >= minAbsolute,
             });
         }
 

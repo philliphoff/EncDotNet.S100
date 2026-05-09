@@ -163,8 +163,9 @@ The `.github/workflows/perf.yml` workflow runs on every PR to `main`:
 3. Runs `perfreport gate` comparing the candidate against the
    committed baseline pointed to by `baselines/CURRENT`.
 4. Posts a markdown summary to the PR and fails the check if any
-   scenario regresses ≥ 15% (higher than local default to accommodate
-   CI noise).
+   scenario regresses ≥ 10%. Spans and metrics with baseline values
+   below 50ms are excluded from gating to avoid noise on sub-millisecond
+   measurements.
 
 To update the committed baseline after merging perf improvements:
 

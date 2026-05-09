@@ -306,8 +306,9 @@ and catches regressions automatically:
    comparing the candidate run against the committed baseline
    (`baselines/CURRENT`).
 4. Posts a markdown summary to the PR and **fails the check** when any
-   scenario's span or metric delta ≥ 15% (a higher threshold than the
-   local default of 5%, to accommodate CI runner noise).
+   scenario's span or metric delta ≥ 10%. Spans and metrics with
+   baseline values below 50ms are excluded from gating (via
+   `--min-abs`) to avoid noise on tiny measurements.
 
 The threshold is configurable via `--threshold <PCT>` on the `gate`
 command. CI uses fewer iterations (10 vs 20) to reduce wall time.
