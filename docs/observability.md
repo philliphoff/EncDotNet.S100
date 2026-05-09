@@ -291,5 +291,34 @@ detection** — catching regressions between commits — not for
 estimating production latency. The absolute numbers will be much
 lower than a real ENC or bathymetry grid.
 
-A single laptop run is noisy; CI-gated baselines (arriving in a
-future PR) will provide more authoritative comparisons.
+A single laptop run is noisy; the CI perf gate (below) provides more
+authoritative comparisons on a consistent runner.
+
+## CI performance gating
+
+The `.github/workflows/perf.yml` workflow runs on every PR to `main`
+and catches regressions automatically:
+
+1. Builds the solution in Release mode.
+2. Runs [PerfRunner](../tools/EncDotNet.S100.PerfRunner/) `baseline`
+   with `--warmup 3 --iterations 10`.
+3. Runs [PerfReport](../tools/EncDotNet.S100.PerfReport/) `gate`
+   comparing the candidate run against the committed baseline
+   (`baselines/CURRENT`).
+4. Posts a markdown summary to the PR and **fails the check** when any
+   scenario's span or metric delta ≥ 5%.
+
+The threshold is configurable via `--threshold <PCT>` on the `gate`
+command. CI uses fewer iterations (10 vs 20) to reduce wall time.
+
+### Updating the baseline
+
+After merging perf improvements, re-run the baseline and commit:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline
+# Review baselines/<new-sha>/SUMMARY.md
+echo "<new-sha>" > tools/EncDotNet.S100.PerfRunner/baselines/CURRENT
+git add tools/EncDotNet.S100.PerfRunner/baselines/
+git commit -m "perf: update baseline to <new-sha>"
+```

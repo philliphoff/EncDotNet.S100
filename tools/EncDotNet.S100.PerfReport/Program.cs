@@ -11,6 +11,9 @@ app.Configure(config =>
 
     config.AddCommand<DiffCommand>("diff")
         .WithDescription("Compare baseline vs candidate .jsonl files.");
+
+    config.AddCommand<GateCommand>("gate")
+        .WithDescription("Gate CI on regressions across all scenarios in baseline vs candidate directories.");
 });
 
 return app.Run(args);
