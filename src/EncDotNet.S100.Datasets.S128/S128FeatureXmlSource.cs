@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -57,9 +58,9 @@ public sealed class S128FeatureXmlSource : IFeatureXmlSource
         {
             var primitive = feature.GeometryType switch
             {
-                S128GeometryType.Point => "Point",
-                S128GeometryType.Curve => "Curve",
-                S128GeometryType.Surface => "Surface",
+                GmlGeometryType.Point => "Point",
+                GmlGeometryType.Curve => "Curve",
+                GmlGeometryType.Surface => "Surface",
                 _ => "NoGeometry",
             };
 
@@ -69,14 +70,14 @@ public sealed class S128FeatureXmlSource : IFeatureXmlSource
 
             switch (feature.GeometryType)
             {
-                case S128GeometryType.Point:
+                case GmlGeometryType.Point:
                     AppendPointRefs(featureElement, pointsElement, feature.Points, ref pointCounter);
                     break;
-                case S128GeometryType.Curve:
+                case GmlGeometryType.Curve:
                     foreach (var curve in feature.Curves)
                         AppendPointRefs(featureElement, pointsElement, curve, ref pointCounter);
                     break;
-                case S128GeometryType.Surface:
+                case GmlGeometryType.Surface:
                     AppendPointRefs(featureElement, pointsElement, feature.ExteriorRing, ref pointCounter);
                     break;
             }

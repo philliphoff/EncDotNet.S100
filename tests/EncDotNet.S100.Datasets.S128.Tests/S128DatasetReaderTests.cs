@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S128;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S128.Tests;
 
@@ -57,7 +58,7 @@ public class S128DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "ID0002");
 
         Assert.Equal("ElectronicProduct", f.FeatureType);
-        Assert.Equal(S128GeometryType.Surface, f.GeometryType);
+        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
         Assert.True(f.ExteriorRing.Length > 2);
         // S-100 Part 10b convention: lat lon for EPSG:4326. Sample is Korean
         // waters, so latitude ≈ 32–40°, longitude ≈ 122–135°.
@@ -75,7 +76,7 @@ public class S128DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "CNP00007");
 
         Assert.Equal("DistributorInformation", f.FeatureType);
-        Assert.Equal(S128GeometryType.None, f.GeometryType);
+        Assert.Equal(GmlGeometryType.None, f.GeometryType);
         Assert.True(f.ExteriorRing.IsDefaultOrEmpty);
     }
 

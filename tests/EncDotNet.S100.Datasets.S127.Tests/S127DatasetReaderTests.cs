@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S127;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S127.Tests;
 
@@ -46,7 +47,7 @@ public class S127DatasetReaderTests
         var f1 = ds.Features.First(f => f.Id == "f1");
 
         Assert.Equal("PilotBoardingPlace", f1.FeatureType);
-        Assert.Equal(S127GeometryType.Point, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, f1.GeometryType);
         Assert.Single(f1.Points);
         Assert.Equal(36.95, f1.Points[0].Latitude, 4);
         Assert.Equal(-76.0133, f1.Points[0].Longitude, 4);
@@ -98,7 +99,7 @@ public class S127DatasetReaderTests
         var f1 = ds.Features.First(f => f.Id == "f1");
 
         Assert.Equal("RouteingMeasure", f1.FeatureType);
-        Assert.Equal(S127GeometryType.Curve, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Curve, f1.GeometryType);
         Assert.Single(f1.Curves);
         Assert.Equal(4, f1.Curves[0].Length);
         Assert.Equal(29.31, f1.Curves[0][0].Latitude, 4);
@@ -111,7 +112,7 @@ public class S127DatasetReaderTests
         var ds = LoadTestData("marine_curve.gml");
         var f2 = ds.Features.First(f => f.Id == "f2");
 
-        Assert.Equal(S127GeometryType.Curve, f2.GeometryType);
+        Assert.Equal(GmlGeometryType.Curve, f2.GeometryType);
         Assert.Single(f2.Curves);
         Assert.Equal(3, f2.Curves[0].Length);
     }
@@ -132,7 +133,7 @@ public class S127DatasetReaderTests
         var f1 = ds.Features.First(f => f.Id == "f1");
 
         Assert.Equal("RestrictedArea", f1.FeatureType);
-        Assert.Equal(S127GeometryType.Surface, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Surface, f1.GeometryType);
         Assert.Equal(5, f1.ExteriorRing.Length); // closed ring
         Assert.Equal(51.05, f1.ExteriorRing[0].Latitude, 4);
         Assert.Equal(1.20, f1.ExteriorRing[0].Longitude, 4);
@@ -145,7 +146,7 @@ public class S127DatasetReaderTests
         var f3 = ds.Features.First(f => f.Id == "f3");
 
         Assert.Equal("VesselTrafficServiceArea", f3.FeatureType);
-        Assert.Equal(S127GeometryType.Surface, f3.GeometryType);
+        Assert.Equal(GmlGeometryType.Surface, f3.GeometryType);
         Assert.Equal(5, f3.ExteriorRing.Length);
         Assert.Single(f3.InteriorRings);
         Assert.Equal(5, f3.InteriorRings[0].Length);
@@ -158,7 +159,7 @@ public class S127DatasetReaderTests
         var f2 = ds.Features.First(f => f.Id == "f2");
 
         Assert.Equal("PilotBoardingPlace", f2.FeatureType);
-        Assert.Equal(S127GeometryType.Point, f2.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, f2.GeometryType);
         Assert.Single(f2.Points);
         Assert.Equal(51.085, f2.Points[0].Latitude, 4);
     }
@@ -177,10 +178,10 @@ public class S127DatasetReaderTests
     {
         var ds = LoadTestData("marine_mixed.gml");
 
-        Assert.Contains(ds.Features, f => f.GeometryType == S127GeometryType.Point);
-        Assert.Contains(ds.Features, f => f.GeometryType == S127GeometryType.Curve);
-        Assert.Contains(ds.Features, f => f.GeometryType == S127GeometryType.Surface);
-        Assert.Contains(ds.Features, f => f.GeometryType == S127GeometryType.None);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Point);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Curve);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Surface);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.None);
     }
 
     [Fact]
@@ -202,7 +203,7 @@ public class S127DatasetReaderTests
         var ds = LoadTestData("marine_mixed.gml");
         var f5 = ds.Features.First(f => f.Id == "f5");
 
-        Assert.Equal(S127GeometryType.None, f5.GeometryType);
+        Assert.Equal(GmlGeometryType.None, f5.GeometryType);
         Assert.True(f5.Points.IsDefaultOrEmpty);
         Assert.True(f5.Curves.IsDefaultOrEmpty);
         Assert.True(f5.ExteriorRing.IsDefaultOrEmpty);
@@ -221,13 +222,13 @@ public class S127DatasetReaderTests
 
         Assert.Equal(3, ds.Features.Length);
         Assert.Equal(
-            S127GeometryType.Point,
+            GmlGeometryType.Point,
             ds.Features.First(f => f.Id == "f1").GeometryType);
         Assert.Equal(
-            S127GeometryType.Surface,
+            GmlGeometryType.Surface,
             ds.Features.First(f => f.Id == "f2").GeometryType);
         Assert.Equal(
-            S127GeometryType.Curve,
+            GmlGeometryType.Curve,
             ds.Features.First(f => f.Id == "f3").GeometryType);
     }
 
@@ -243,10 +244,10 @@ public class S127DatasetReaderTests
 
         Assert.Equal(2, ds.Features.Length);
         Assert.Equal(
-            S127GeometryType.Point,
+            GmlGeometryType.Point,
             ds.Features.First(f => f.Id == "f1").GeometryType);
         Assert.Equal(
-            S127GeometryType.Surface,
+            GmlGeometryType.Surface,
             ds.Features.First(f => f.Id == "f2").GeometryType);
     }
 }

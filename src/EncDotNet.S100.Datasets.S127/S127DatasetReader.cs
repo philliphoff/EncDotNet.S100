@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
 using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S127;
 
@@ -116,13 +117,13 @@ internal static class S127DatasetReader
         };
     }
 
-    private static (S127GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S127GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -137,7 +138,7 @@ internal static class S127DatasetReader
             var coord = ParsePointDescendant(pointProp);
             if (coord is not null)
             {
-                geometryType = S127GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }
@@ -146,7 +147,7 @@ internal static class S127DatasetReader
         var curveProp = FindS100Element(geometryContainer, "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S127GeometryType.Curve;
+            geometryType = GmlGeometryType.Curve;
             var coords = ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
             {
@@ -158,7 +159,7 @@ internal static class S127DatasetReader
         var surfaceProp = FindS100Element(geometryContainer, "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S127GeometryType.Surface;
+            geometryType = GmlGeometryType.Surface;
             var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;

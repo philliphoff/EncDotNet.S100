@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
 using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -196,14 +197,14 @@ internal static class S128DatasetReader
 
     // ── Geometry ────────────────────────────────────────────────────────
 
-    private static (S128GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
         ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S128GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -215,7 +216,7 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S128GeometryType.Surface;
+            geometryType = GmlGeometryType.Surface;
             var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;
@@ -225,7 +226,7 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S128GeometryType.Curve;
+            geometryType = GmlGeometryType.Curve;
             var coords = ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
                 curves = [coords];
@@ -238,7 +239,7 @@ internal static class S128DatasetReader
             var coord = ParsePointElement(pointProp);
             if (coord is not null)
             {
-                geometryType = S128GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }

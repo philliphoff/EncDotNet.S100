@@ -9,7 +9,7 @@ This library reads S-129 datasets from GML files and provides an XSLT-based port
 - **`S129Dataset`** — root model containing parsed features and dataset identification.
 - **`S129Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S129ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S129GeometryType`** — enum describing the geometry primitive type of a feature.
+- **`GmlGeometryType`** — enum describing the geometry primitive type of a feature.
 - **`S129FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S129Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
 - **`S129PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 

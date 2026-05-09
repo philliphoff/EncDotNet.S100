@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S129;
 
@@ -60,9 +61,9 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
         {
             var primitiveType = feature.GeometryType switch
             {
-                S129GeometryType.Point => "Point",
-                S129GeometryType.Curve => "Curve",
-                S129GeometryType.Surface => "Surface",
+                GmlGeometryType.Point => "Point",
+                GmlGeometryType.Curve => "Curve",
+                GmlGeometryType.Surface => "Surface",
                 _ => "NoGeometry",
             };
 
@@ -72,7 +73,7 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
 
             switch (feature.GeometryType)
             {
-                case S129GeometryType.Point:
+                case GmlGeometryType.Point:
                     foreach (var (lat, lon) in feature.Points)
                     {
                         var pointId = $"p{++pointCounter}";
@@ -85,7 +86,7 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
                     }
                     break;
 
-                case S129GeometryType.Curve:
+                case GmlGeometryType.Curve:
                     foreach (var curve in feature.Curves)
                     {
                         foreach (var (lat, lon) in curve)
@@ -101,7 +102,7 @@ public sealed class S129FeatureXmlSource : IFeatureXmlSource
                     }
                     break;
 
-                case S129GeometryType.Surface:
+                case GmlGeometryType.Surface:
                     foreach (var (lat, lon) in feature.ExteriorRing)
                     {
                         var pointId = $"p{++pointCounter}";
