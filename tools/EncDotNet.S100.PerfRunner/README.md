@@ -141,8 +141,8 @@ done
 
 > **Noise floor caveat:** A single laptop run is informational, not
 > authoritative. Timing values vary with background load, thermal
-> throttling, and system state. CI-based perf gating arrives in a
-> future PR (D4).
+> throttling, and system state. See [CI gating](#ci-gating) for
+> automated regression detection on every PR.
 
 ### Corpus
 
@@ -153,6 +153,25 @@ For larger real-world datasets, run
 [`tests/perf/corpus/INDEX.md`](../../tests/perf/corpus/INDEX.md) for
 the full corpus inventory.
 
-## Notes
+## CI gating
 
-- CI perf gating arrives in a future PR (D4).
+The `.github/workflows/perf.yml` workflow runs on every PR to `main`:
+
+1. Builds the solution in Release mode.
+2. Runs `baseline` with `--warmup 3 --iterations 10` to produce a
+   candidate snapshot.
+3. Runs `perfreport gate` comparing the candidate against the
+   committed baseline pointed to by `baselines/CURRENT`.
+4. Posts a markdown summary to the PR and fails the check if any
+   scenario regresses ≥ 10%. Spans and metrics with baseline values
+   below 50ms are excluded from gating to avoid noise on sub-millisecond
+   measurements.
+
+To update the committed baseline after merging perf improvements:
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline
+# Review baselines/<new-sha>/SUMMARY.md, then commit and update CURRENT.
+```
+
+## Notes

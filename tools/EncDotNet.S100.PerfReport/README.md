@@ -48,6 +48,36 @@ For every shared instrument and span name:
 | s100.render.frame | 53.20 | 63.10 | +18.6% | ❌ |
 ```
 
+## `gate` output
+
+The `gate` command compares all `.jsonl` files in a baseline directory
+against matching files in a candidate directory:
+
+```bash
+# Gate against committed baseline (exits 0 if no regressions, 2 if any)
+dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
+    tools/EncDotNet.S100.PerfRunner/baselines/c282a6512ad8 \
+    /tmp/perf-candidate/<sha> \
+    --out gate-report.md
+
+# Custom threshold (default is 5%)
+dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
+    baseline-dir candidate-dir --threshold 10
+
+# Custom minimum absolute floor (default is 50; skips noisy sub-ms spans)
+dotnet run --project tools/EncDotNet.S100.PerfReport -- gate \
+    baseline-dir candidate-dir --min-abs 100
+```
+
+Output includes a scenario summary table followed by per-scenario
+span and metric breakdowns. Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| 0 | All scenarios within threshold — pass |
+| 1 | Input error (missing dirs, no matching files) |
+| 2 | One or more scenarios regressed — fail |
+
 ## Notes
 
 - The tool reads schema version 1 files only. It will refuse files with

@@ -1,0 +1,124 @@
+name: Performance
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  perf-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # --- Run baseline from the base branch on the same runner ---
+      - name: Checkout base branch
+        run: git checkout ${{ github.event.pull_request.base.sha }}
+
+      - name: Build base
+        run: dotnet build --configuration Release
+
+      - name: Run base performance
+        run: >
+          dotnet run --no-build --configuration Release
+          --project tools/EncDotNet.S100.PerfRunner --
+          baseline
+          --warmup 3
+          --iterations 10
+          --out /tmp/perf-baseline
+
+      # --- Run candidate from the PR branch ---
+      - name: Checkout PR branch
+        run: git checkout ${{ github.event.pull_request.head.sha }}
+
+      - name: Build candidate
+        run: dotnet build --configuration Release
+
+      - name: Run candidate performance
+        run: >
+          dotnet run --no-build --configuration Release
+          --project tools/EncDotNet.S100.PerfRunner --
+          baseline
+          --warmup 3
+          --iterations 10
+          --out /tmp/perf-candidate
+
+      - name: Find baseline directory
+        id: baseline
+        run: |
+          DIR=$(find /tmp/perf-baseline -mindepth 1 -maxdepth 1 -type d | head -1)
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Find candidate directory
+        id: candidate
+        run: |
+          DIR=$(find /tmp/perf-candidate -mindepth 1 -maxdepth 1 -type d | head -1)
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Run performance gate
+        run: >
+          dotnet run --no-build --configuration Release
+          --project tools/EncDotNet.S100.PerfReport --
+          gate
+          ${{ steps.baseline.outputs.dir }}
+          ${{ steps.candidate.outputs.dir }}
+          --threshold 10
+          --out /tmp/perf-gate.md
+
+      - name: Upload gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-gate-report
+          path: /tmp/perf-gate.md
+          if-no-files-found: ignore
+
+      - name: Post PR comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '/tmp/perf-gate.md';
+            if (!fs.existsSync(path)) {
+              console.log('No gate report found, skipping comment.');
+              return;
+            }
+
+            const body = fs.readFileSync(path, 'utf8');
+            const marker = '<!-- perf-gate-comment -->';
+            const fullBody = `${marker}\n${body}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
