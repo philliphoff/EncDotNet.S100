@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -82,7 +83,7 @@ public sealed class S128Dataset
 /// The reader is namespace-driven and does not gate on a hard-coded
 /// feature-type allow-list, so producer extensions are surfaced as well.
 /// </remarks>
-public sealed class S128Feature
+public sealed class S128Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -95,7 +96,7 @@ public sealed class S128Feature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type associated with the feature.</summary>
-    public S128GeometryType GeometryType { get; init; }
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -126,7 +127,7 @@ public sealed class S128Feature
 /// An information type instance parsed from an S-128 <c>&lt;imember&gt;</c>
 /// or <c>&lt;imembers&gt;</c> wrapper.
 /// </summary>
-public sealed class S128InformationType
+public sealed class S128InformationType : IGmlInformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -144,7 +145,7 @@ public sealed class S128InformationType
 /// <summary>
 /// A complex (nested) attribute instance containing sub-attribute values.
 /// </summary>
-public sealed class S128ComplexAttribute
+public sealed class S128ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code (the carrying element local name).</summary>
     public required string Code { get; init; }
@@ -164,16 +165,3 @@ public sealed class S128ComplexAttribute
 /// <param name="Arcrole">Optional <c>xlink:arcrole</c> attribute.</param>
 /// <param name="TargetId">The trimmed identifier portion of <paramref name="Href"/> (leading <c>#</c> stripped).</param>
 public readonly record struct S128XlinkReference(string Role, string Href, string? Arcrole, string TargetId);
-
-/// <summary>The geometry primitive type of an S-128 feature.</summary>
-public enum S128GeometryType
-{
-    /// <summary>The feature has no geometry (e.g. <c>DistributorInformation</c>).</summary>
-    None = 0,
-    /// <summary>The feature has one or more <c>S100:pointProperty</c> geometries.</summary>
-    Point = 1,
-    /// <summary>The feature has one or more <c>S100:curveProperty</c> geometries.</summary>
-    Curve = 2,
-    /// <summary>The feature has a <c>S100:surfaceProperty</c> geometry.</summary>
-    Surface = 3,
-}

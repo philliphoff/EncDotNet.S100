@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S125.Tests;
 
@@ -17,7 +18,7 @@ public class S125FeatureXmlSourceTests
             {
                 Id = "f1",
                 FeatureType = "LateralBuoy",
-                GeometryType = S125GeometryType.Point,
+                GeometryType = GmlGeometryType.Point,
                 Points = ImmutableArray.Create((36.95, -76.0)),
                 Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
                 ExteriorRing = ImmutableArray<(double, double)>.Empty,
