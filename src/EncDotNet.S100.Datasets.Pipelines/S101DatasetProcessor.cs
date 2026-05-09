@@ -19,6 +19,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly S101PortrayalCatalogue _catalogue;
     private readonly ILuaEngine _luaEngine;
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
@@ -68,6 +69,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
+        _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         using (datasetStream)
         {
             _dataset = S101Dataset.Open(datasetStream);
@@ -88,7 +90,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
         // Build the S-101 portrayal catalogue and switch palette before the
         // pipeline runs so XSLT rules (if any) see the active colour profile.
-        var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
+        var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
         s101Cat.SwitchPalette(paletteType);
         context?.EcdisDisplay?.ApplyTo(s101Cat);

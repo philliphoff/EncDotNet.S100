@@ -24,6 +24,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
 {
     private readonly S101Dataset _translatedDataset;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly S101PortrayalCatalogue _catalogue;
     private readonly ILuaEngine _luaEngine;
     private readonly Func<string, Stream?> _featureCatalogueResolver;
     private readonly string _fileName;
@@ -73,6 +74,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
+        _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         _featureCatalogueResolver = featureCatalogueResolver;
 
         S57Dataset s57;
@@ -96,7 +98,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         Console.WriteLine("[S57] Translated to S-101 in-memory; running Part 9 portrayal pipeline...");
         var fc = FeatureCatalogueReader.Read(fcStream);
 
-        var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
+        var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
         s101Cat.SwitchPalette(paletteType);
         var palette = s101Cat.ActivePalette;
