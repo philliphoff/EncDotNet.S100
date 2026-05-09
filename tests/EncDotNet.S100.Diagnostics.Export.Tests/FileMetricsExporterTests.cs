@@ -88,7 +88,7 @@ public class FileMetricsExporterTests : IDisposable
 
         var metricLine = lines
             .Select(l => JsonDocument.Parse(l))
-            .FirstOrDefault(d =>
+            .LastOrDefault(d =>
                 d.RootElement.TryGetProperty("kind", out var k) &&
                 k.GetString() == "metric" &&
                 d.RootElement.GetProperty("name").GetString() == "test.cache.hit.count");
