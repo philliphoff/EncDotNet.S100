@@ -1,11 +1,13 @@
 using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S122.Tests;
 
 /// <summary>
-/// Tests for <see cref="S122FeatureXmlSource"/> verifying the Part 9 FeatureXML
-/// intermediate format produced for XSLT portrayal rules.
+/// Tests for <see cref="GmlFeatureXmlSource{TFeature}"/> with S-122 features,
+/// verifying the Part 9 FeatureXML intermediate format produced for XSLT
+/// portrayal rules.
 /// </summary>
 public class S122FeatureXmlSourceTests
 {
@@ -17,7 +19,7 @@ public class S122FeatureXmlSourceTests
 
     private static XDocument GetFeatureXmlDoc(S122Dataset dataset)
     {
-        var source = new S122FeatureXmlSource(dataset);
+        var source = new GmlFeatureXmlSource<S122Feature>(dataset.Features);
         using var reader = source.GetFeatureXml();
         return XDocument.Load(reader);
     }
@@ -81,7 +83,7 @@ public class S122FeatureXmlSourceTests
     [Fact]
     public void FeatureTypesPresent_ReportsExpectedSet()
     {
-        var source = new S122FeatureXmlSource(LoadSample());
+        var source = new GmlFeatureXmlSource<S122Feature>(LoadSample().Features);
         var types = source.FeatureTypesPresent.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Assert.Contains("MarineProtectedArea", types);

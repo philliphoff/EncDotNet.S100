@@ -1,12 +1,14 @@
 using System.Xml;
 using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S124.Tests;
 
 /// <summary>
-/// Tests for <see cref="S124FeatureXmlSource"/> verifying the Part 9 FeatureXML
-/// intermediate format produced for XSLT portrayal rules.
+/// Tests for <see cref="GmlFeatureXmlSource{TFeature}"/> with S-124 features,
+/// verifying the Part 9 FeatureXML intermediate format produced for XSLT
+/// portrayal rules.
 /// </summary>
 public class S124FeatureXmlSourceTests
 {
@@ -17,7 +19,7 @@ public class S124FeatureXmlSourceTests
 
     private static XDocument GetFeatureXmlDoc(S124Dataset dataset)
     {
-        var source = new S124FeatureXmlSource(dataset);
+        var source = new GmlFeatureXmlSource<S124Feature>(dataset.Features);
         using var reader = source.GetFeatureXml();
         return XDocument.Load(reader);
     }
@@ -194,7 +196,7 @@ public class S124FeatureXmlSourceTests
     public void FeatureTypesPresent_MixedDataset_ReturnsAllTypes()
     {
         var ds = LoadTestData("navwarn_mixed.gml");
-        var source = new S124FeatureXmlSource(ds);
+        var source = new GmlFeatureXmlSource<S124Feature>(ds.Features);
 
         var types = source.FeatureTypesPresent;
         Assert.Contains("NavwarnPart", types);

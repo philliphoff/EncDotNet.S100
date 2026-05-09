@@ -105,6 +105,9 @@ public sealed class S411Feature : IGmlFeature
 
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
     public required ImmutableArray<S411ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
 
 /// <summary>

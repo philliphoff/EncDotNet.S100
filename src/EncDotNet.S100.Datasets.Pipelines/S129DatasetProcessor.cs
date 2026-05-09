@@ -74,7 +74,7 @@ public sealed class S129DatasetProcessor : IDatasetProcessor
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // 1. Run the S-100 Part 9 vector portrayal pipeline.
-        var featureSource = new S129FeatureXmlSource(_dataset);
+        var featureSource = new GmlFeatureXmlSource<S129Feature>(_dataset.Features);
         var pipeline = new PortrayalPipeline();
         var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
         var instructions = ((IVectorLayer)portrayalLayer).Instructions;

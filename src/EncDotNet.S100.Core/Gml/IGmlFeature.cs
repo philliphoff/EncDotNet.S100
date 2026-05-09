@@ -37,6 +37,9 @@ public interface IGmlFeature
 
     /// <summary>Simple attributes keyed by code.</summary>
     ImmutableDictionary<string, string> Attributes { get; }
+
+    /// <summary>Complex attributes associated with the feature.</summary>
+    IEnumerable<IGmlComplexAttribute> GmlComplexAttributes { get; }
 }
 
 /// <summary>

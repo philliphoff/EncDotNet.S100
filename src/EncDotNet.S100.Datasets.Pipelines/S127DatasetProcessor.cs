@@ -78,7 +78,7 @@ public sealed class S127DatasetProcessor : IDatasetProcessor
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
-        var featureSource = new S127FeatureXmlSource(_dataset);
+        var featureSource = new GmlFeatureXmlSource<S127Feature>(_dataset.Features);
         var pipeline = new PortrayalPipeline();
         var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
         var instructions = ((IVectorLayer)portrayalLayer).Instructions;

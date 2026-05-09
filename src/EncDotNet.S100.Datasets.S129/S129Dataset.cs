@@ -65,6 +65,9 @@ public sealed class S129Feature : IGmlFeature
 
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S129ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
 
 /// <summary>

@@ -82,6 +82,9 @@ public sealed class S125Feature : IGmlFeature
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
     public required ImmutableArray<S125ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+
     /// <summary>
     /// Information-type association references (e.g. <c>AtoNStatus</c> bindings to
     /// <see cref="S125InformationType"/> instances). Preserved so XSLT portrayal

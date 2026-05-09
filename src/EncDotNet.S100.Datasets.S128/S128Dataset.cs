@@ -116,6 +116,9 @@ public sealed class S128Feature : IGmlFeature
     /// <summary>Complex (nested) attribute groups.</summary>
     public required ImmutableArray<S128ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+
     /// <summary>
     /// Outgoing <c>xlink:href</c> references carried directly on the feature
     /// (e.g. <c>elementContainer</c>, <c>theReference</c>).

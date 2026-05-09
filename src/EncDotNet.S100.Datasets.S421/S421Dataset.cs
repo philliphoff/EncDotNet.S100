@@ -77,6 +77,9 @@ public sealed class S421Feature : IGmlFeature
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S421ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+
     /// <summary>
     /// Cross-references (xlink:href values) for related objects, keyed by the
     /// containing element's local name. Multiple references for the same role

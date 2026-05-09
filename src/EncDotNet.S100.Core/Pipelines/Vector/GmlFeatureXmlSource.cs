@@ -39,7 +39,7 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
     /// <summary>
     /// Initializes a new <see cref="GmlFeatureXmlSource{TFeature}"/>.
     /// </summary>
-    protected GmlFeatureXmlSource(IReadOnlyList<TFeature> features)
+    public GmlFeatureXmlSource(IReadOnlyList<TFeature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
         _features = features;
@@ -104,7 +104,7 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
             foreach (var (code, value) in feature.Attributes)
                 featureElement.Add(new XElement(code, value));
 
-            foreach (var complex in feature.ComplexAttributes)
+            foreach (var complex in feature.GmlComplexAttributes)
                 featureElement.Add(BuildComplexAttributeElement(complex));
 
             WriteFeatureExtensions(feature, featureElement);
