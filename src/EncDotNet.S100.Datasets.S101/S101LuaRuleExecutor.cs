@@ -180,7 +180,10 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 
         using var lua = _luaEngine.CreateContext();
 
-        // 1. Configure require() to resolve modules from the Rules/ subdirectory
+        // 1. Configure require() to resolve modules from the Rules/ subdirectory.
+        //    Module source strings are cached so repeated require() calls (and
+        //    any future context re-creation) avoid redundant stream I/O.
+        var moduleCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         lua.SetModuleLoader(moduleName =>
         {
             // MoonSharp may pass the bare name (e.g. "S100Scripting") or with
@@ -188,15 +191,22 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
             var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)
                 ? moduleName
                 : $"{moduleName}.lua";
+
+            if (moduleCache.TryGetValue(fileName, out var cached))
+                return cached;
+
             try
             {
                 using var stream = _provider.FetchRuleAsync(fileName)
                     .GetAwaiter().GetResult();
                 using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
+                var source = reader.ReadToEnd();
+                moduleCache[fileName] = source;
+                return source;
             }
             catch
             {
+                moduleCache[fileName] = null;
                 return null;
             }
         });
