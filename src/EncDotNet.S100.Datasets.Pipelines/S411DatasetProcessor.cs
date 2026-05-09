@@ -135,7 +135,7 @@ public sealed class S411DatasetProcessor : IDatasetProcessor
             },
         };
 
-        var geometryProvider = new S411FeatureGeometryProvider(_dataset);
+        var geometryProvider = new GmlFeatureGeometryProvider<S411Feature>(_dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
 
         var featureTypes = featureSource.FeatureTypesPresent;

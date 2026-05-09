@@ -108,7 +108,7 @@ public sealed class S128DatasetProcessor : IDatasetProcessor
             },
         };
 
-        var geometryProvider = new S128FeatureGeometryProvider(_dataset);
+        var geometryProvider = new GmlFeatureGeometryProvider<S128Feature>(_dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
 
         var featureTypes = featureSource.FeatureTypesPresent;

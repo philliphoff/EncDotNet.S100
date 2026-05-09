@@ -102,7 +102,7 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
             },
         };
 
-        var geometryProvider = new S421FeatureGeometryProvider(_dataset);
+        var geometryProvider = new GmlFeatureGeometryProvider<S421Feature>(_dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
 
         var info = $"S-421 Route Plan — {_fileName}\n"
