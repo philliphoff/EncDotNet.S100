@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S411;
 
@@ -73,7 +74,7 @@ public sealed class S411Dataset
 /// <summary>
 /// A geographic feature parsed from an S-411 GML dataset.
 /// </summary>
-public sealed class S411Feature
+public sealed class S411Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -85,7 +86,7 @@ public sealed class S411Feature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public S411GeometryType GeometryType { get; init; }
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -109,26 +110,11 @@ public sealed class S411Feature
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S411ComplexAttribute
+public sealed class S411ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
-}
-
-/// <summary>
-/// The type of geometry associated with an S-411 feature.
-/// </summary>
-public enum S411GeometryType
-{
-    /// <summary>The feature has no geometry.</summary>
-    None = 0,
-    /// <summary>The feature is a point.</summary>
-    Point = 1,
-    /// <summary>The feature is a curve / line string.</summary>
-    Curve = 2,
-    /// <summary>The feature is a surface / polygon (with optional holes).</summary>
-    Surface = 3,
 }

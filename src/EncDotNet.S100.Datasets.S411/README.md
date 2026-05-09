@@ -18,7 +18,7 @@ Key types:
 - **`S411Dataset`** — root model containing parsed features and dataset identification.
 - **`S411Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S411ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S411GeometryType`** — enum describing the geometry primitive type of a feature.
+- **`GmlGeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
 - **`S411FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S411Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
 - **`S411FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
 - **`S411PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.

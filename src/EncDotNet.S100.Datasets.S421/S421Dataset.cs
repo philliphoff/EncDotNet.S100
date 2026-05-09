@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S421;
 
@@ -47,7 +48,7 @@ public sealed class S421Dataset
 /// <summary>
 /// A feature parsed from an S-421 GML dataset.
 /// </summary>
-public sealed class S421Feature
+public sealed class S421Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -55,8 +56,8 @@ public sealed class S421Feature
     /// <summary>The feature type code (local element name, e.g. "Route", "RouteWaypoint").</summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>The geometry primitive type, or <see cref="S421GeometryType.None"/> when absent.</summary>
-    public S421GeometryType GeometryType { get; init; }
+    /// <summary>The geometry primitive type, or <see cref="GmlGeometryType.None"/> when absent.</summary>
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -87,7 +88,7 @@ public sealed class S421Feature
 /// <summary>
 /// An information type instance parsed from an S-421 GML dataset.
 /// </summary>
-public sealed class S421InformationType
+public sealed class S421InformationType : IGmlInformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -108,7 +109,7 @@ public sealed class S421InformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S421ComplexAttribute
+public sealed class S421ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }
@@ -130,19 +131,4 @@ public sealed class S421Reference
 
     /// <summary>The <c>xlink:arcrole</c> value when present.</summary>
     public string? ArcRole { get; init; }
-}
-
-/// <summary>
-/// The type of geometry associated with an S-421 feature.
-/// </summary>
-public enum S421GeometryType
-{
-    /// <summary>No geometry (e.g. <c>Route</c>, <c>RouteWaypoints</c> container objects).</summary>
-    None = 0,
-    /// <summary>A single point (e.g. a <c>RouteWaypoint</c>).</summary>
-    Point = 1,
-    /// <summary>A curve / linear geometry.</summary>
-    Curve = 2,
-    /// <summary>A polygonal surface.</summary>
-    Surface = 3,
 }

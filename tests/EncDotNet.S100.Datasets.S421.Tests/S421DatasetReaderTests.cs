@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 
@@ -39,7 +40,7 @@ public class S421DatasetReaderTests
         var ds = Load("RTE-TEST-GMIN.s421.gml");
         var route = ds.Features.Single(f => f.FeatureType == "Route");
         Assert.Equal("RTE", route.Id);
-        Assert.Equal(S421GeometryType.None, route.GeometryType);
+        Assert.Equal(GmlGeometryType.None, route.GeometryType);
     }
 
     [Fact]
@@ -78,7 +79,7 @@ public class S421DatasetReaderTests
         var wp = ds.Features.Single(f => f.Id == "RTE.WPT.1");
 
         Assert.Equal("RouteWaypoint", wp.FeatureType);
-        Assert.Equal(S421GeometryType.Point, wp.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, wp.GeometryType);
         Assert.Single(wp.Points);
         Assert.Equal(59.892863, wp.Points[0].Latitude, 6);
         Assert.Equal(25.822235, wp.Points[0].Longitude, 6);

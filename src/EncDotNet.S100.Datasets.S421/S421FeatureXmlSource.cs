@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S421;
@@ -70,9 +71,9 @@ public sealed class S421FeatureXmlSource : IFeatureXmlSource
         {
             var primitive = feature.GeometryType switch
             {
-                S421GeometryType.Point => "Point",
-                S421GeometryType.Curve => "Curve",
-                S421GeometryType.Surface => "Surface",
+                GmlGeometryType.Point => "Point",
+                GmlGeometryType.Curve => "Curve",
+                GmlGeometryType.Surface => "Surface",
                 _ => "NoGeometry",
             };
 
@@ -82,18 +83,18 @@ public sealed class S421FeatureXmlSource : IFeatureXmlSource
 
             switch (feature.GeometryType)
             {
-                case S421GeometryType.Point:
+                case GmlGeometryType.Point:
                     foreach (var (lat, lon) in feature.Points)
                         AddPointReference(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;
 
-                case S421GeometryType.Curve:
+                case GmlGeometryType.Curve:
                     foreach (var curve in feature.Curves)
                         foreach (var (lat, lon) in curve)
                             AddPointReference(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;
 
-                case S421GeometryType.Surface:
+                case GmlGeometryType.Surface:
                     foreach (var (lat, lon) in feature.ExteriorRing)
                         AddPointReference(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;

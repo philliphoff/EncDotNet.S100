@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 using S100Diag = EncDotNet.S100.Datasets.S411.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S411;
@@ -186,19 +187,19 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S411GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseInlineGmlGeometry(XElement element)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseInlineGmlGeometry(XElement element)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S411GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var polygon = element.Element(GmlNs + "Polygon");
         if (polygon is not null)
         {
             var (ext, intRings) = ParseSurfaceCoordinates(polygon);
-            return (S411GeometryType.Surface, points, curves, ext, intRings);
+            return (GmlGeometryType.Surface, points, curves, ext, intRings);
         }
 
         var lineString = element.Element(GmlNs + "LineString") ?? element.Element(GmlNs + "Curve");
@@ -208,7 +209,7 @@ internal static class S411DatasetReader
             curves = coords.Length > 0
                 ? ImmutableArray.Create(coords)
                 : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-            return (S411GeometryType.Curve, points, curves, exteriorRing, interiorRings);
+            return (GmlGeometryType.Curve, points, curves, exteriorRing, interiorRings);
         }
 
         var point = element.Element(GmlNs + "Point");
@@ -217,7 +218,7 @@ internal static class S411DatasetReader
             var coord = ParseGmlPointCoord(point);
             if (coord is not null)
             {
-                geometryType = S411GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }
@@ -321,13 +322,13 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S411GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S411GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -342,7 +343,7 @@ internal static class S411DatasetReader
             var coord = ParseGmlPointCoord(pointProp);
             if (coord is not null)
             {
-                geometryType = S411GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }
@@ -350,7 +351,7 @@ internal static class S411DatasetReader
         var curveProp = geometryContainer.Element(s100Ns + "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S411GeometryType.Curve;
+            geometryType = GmlGeometryType.Curve;
             var coords = ParseCurveCoordinates(curveProp);
             curves = coords.Length > 0
                 ? ImmutableArray.Create(coords)
@@ -360,7 +361,7 @@ internal static class S411DatasetReader
         var surfaceProp = geometryContainer.Element(s100Ns + "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S411GeometryType.Surface;
+            geometryType = GmlGeometryType.Surface;
             var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;
