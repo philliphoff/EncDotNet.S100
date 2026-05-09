@@ -1,0 +1,97 @@
+# EncDotNet.S100.PerfRunner
+
+Scripted performance scenario runner for EncDotNet.S100 pipelines and
+renderers. Produces reproducible, comparable telemetry files that can be
+summarised and diffed by the companion
+[PerfReport](../EncDotNet.S100.PerfReport/) tool.
+
+## Quick start
+
+```bash
+# Run the S-124 vector scenario with defaults
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- s124-vector
+
+# List all available scenarios
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- list
+
+# Full options
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-warm \
+    --corpus tests/datasets \
+    --out ./perf-runs \
+    --warmup 3 \
+    --iterations 20 \
+    --tag branch=main \
+    --tag commit=abc1234
+```
+
+## Scenarios
+
+| Name | Description |
+|------|-------------|
+| `s101-portray-cold` | Single cold-start S-101 parse + portray. No warmup — captures first-pass Lua/XSLT compile cost. |
+| `s101-portray-warm` | S-101 portrayal pipeline only (no render) with warmup. Pure pipeline throughput. |
+| `s101-render-warm` | S-101 pipeline + Mapsui display-list render (headless). |
+| `s102-coverage` | S-102 HDF5 bathymetry: coverage pipeline + render. |
+| `s124-vector` | S-124 GML navigational warnings: XSLT-only vector pipeline. |
+| `exchange-set-open` | Open a synthetic exchange set and walk all datasets. |
+
+## Output
+
+Each run produces two files in the output directory:
+
+- `<timestamp>-<scenario>.jsonl` — newline-delimited JSON telemetry
+  (spans + metrics).
+- `<timestamp>-<scenario>.md` — markdown summary with iteration
+  statistics.
+
+### `.jsonl` schema (version 1)
+
+Every line is a JSON object with a `kind` discriminator:
+
+```jsonc
+// First line — schema header
+{"kind":"header","version":1,"startedAtUtc":"2026-05-09T05:00:00Z"}
+
+// Span line
+{"kind":"span","name":"s100.pipeline.vector.stage.lua",
+ "traceId":"…","spanId":"…","parentSpanId":"…",
+ "startUnixNs":…,"endUnixNs":…,"durationMs":13.4,
+ "status":"Ok",
+ "tags":{"s100.pipeline.stage":"lua","s100.product":"S-101"}}
+
+// Metric line (histogram)
+{"kind":"metric","name":"s100.pipeline.duration",
+ "instrument":"histogram","unit":"ms",
+ "tags":{"s100.product":"S-101"},
+ "buckets":[{"sum":142.5,"count":20,"min":5.1,"max":12.3}]}
+
+// Metric line (counter)
+{"kind":"metric","name":"s100.symbol.cache.hit.count",
+ "instrument":"counter","unit":"{hits}",
+ "tags":{"s100.product":"S-101"},"value":48}
+```
+
+## Adding a new scenario
+
+1. Create a class implementing `IPerfScenario` under `Scenarios/`.
+2. Register it in `ScenarioRegistry.cs`:
+
+```csharp
+Register(() => new MyNewScenario());
+```
+
+3. Use `SharedInfrastructure.CreatePipelineFactory()` to get a factory
+   pre-configured with all bundled portrayal catalogues, Lua engine,
+   and CRS transforms.
+
+## Notes
+
+- The runner sets `ENC_DOTNET_OTEL_FILE` to capture telemetry from all
+  `EncDotNet.S100.*` activity sources and meters.
+- Cold scenarios run a single iteration with no warmup by design — they
+  measure start-up overhead.
+- Warm scenarios discard warmup iterations and report distribution stats
+  so random noise is bounded.
+- Adopting an OTLP collector is a future option; this in-process file
+  exporter avoids an out-of-process dependency.
+- Baseline runs and CI gating arrive in subsequent PRs (D2, D4).

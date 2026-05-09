@@ -7,6 +7,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using EncDotNet.S100.Diagnostics.Export;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
@@ -82,7 +83,8 @@ internal static class ViewerObservability
                 tracing
                     .AddSource(SourceWildcard)
                     .AddSource(ServiceName)
-                    .AddOtlpExporter();
+                    .AddOtlpExporter()
+                    .AddFileExporterIfConfigured(out _);
                 if (consoleExport)
                 {
                     tracing.AddConsoleExporter();
@@ -93,7 +95,8 @@ internal static class ViewerObservability
                 metrics
                     .AddMeter(SourceWildcard)
                     .AddMeter(ServiceName)
-                    .AddOtlpExporter();
+                    .AddOtlpExporter()
+                    .AddFileExporterIfConfigured();
                 if (consoleExport)
                 {
                     metrics.AddConsoleExporter();
