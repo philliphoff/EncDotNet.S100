@@ -25,7 +25,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     private readonly S101Dataset _translatedDataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly ILuaEngine _luaEngine;
-    private readonly Func<string, Stream?> _featureCatalogueResolver;
+    private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
@@ -37,8 +37,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
     {
     }
 
@@ -52,13 +52,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
-            featureCatalogueResolver)
+            featureCatalogueManager)
     {
     }
 
@@ -67,13 +67,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
-        _featureCatalogueResolver = featureCatalogueResolver;
+        _featureCatalogueManager = featureCatalogueManager;
 
         S57Dataset s57;
         using (datasetStream)
@@ -89,12 +89,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     {
         var mariner = MarinerSettings.Default;
 
-        using var fcStream = _featureCatalogueResolver("S-101")
+        var fc = _featureCatalogueManager.GetCatalogue("S-101")
             ?? throw new InvalidOperationException(
                 "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
 
         Console.WriteLine("[S57] Translated to S-101 in-memory; running Part 9 portrayal pipeline...");
-        var fc = FeatureCatalogueReader.Read(fcStream);
 
         var s101Cat = new S101PortrayalCatalogue(_provider, _luaEngine);
         var paletteType = context?.Palette ?? PaletteType.Day;
@@ -176,7 +175,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     {
         if (!_decoderLoaded)
         {
-            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
+            _decoder = _featureCatalogueManager.GetDecoder("S-101");
             _decoderLoaded = true;
         }
     }

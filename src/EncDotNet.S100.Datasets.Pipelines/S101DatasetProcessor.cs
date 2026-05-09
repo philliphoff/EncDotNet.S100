@@ -20,7 +20,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly ILuaEngine _luaEngine;
-    private readonly Func<string, Stream?> _featureCatalogueResolver;
+    private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
@@ -32,8 +32,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
     {
     }
 
@@ -47,13 +47,13 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
-            featureCatalogueResolver)
+            featureCatalogueManager)
     {
     }
 
@@ -62,7 +62,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        Func<string, Stream?> featureCatalogueResolver)
+        FeatureCatalogueManager featureCatalogueManager)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
@@ -72,19 +72,18 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         {
             _dataset = S101Dataset.Open(datasetStream);
         }
-        _featureCatalogueResolver = featureCatalogueResolver;
+        _featureCatalogueManager = featureCatalogueManager;
     }
 
     public DatasetResult Render(RenderContext? context = null)
     {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
-        using var fcStream = _featureCatalogueResolver("S-101")
+        var fc = _featureCatalogueManager.GetCatalogue("S-101")
             ?? throw new InvalidOperationException(
                 "S-101 feature catalogue is required to render the dataset but none was provided.");
 
         Console.WriteLine("[S101] Starting Part 9 vector portrayal pipeline...");
-        var fc = FeatureCatalogueReader.Read(fcStream);
 
         // Build the S-101 portrayal catalogue and switch palette before the
         // pipeline runs so XSLT rules (if any) see the active colour profile.
@@ -189,7 +188,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     {
         if (!_decoderLoaded)
         {
-            _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(_featureCatalogueResolver, "S-101");
+            _decoder = _featureCatalogueManager.GetDecoder("S-101");
             _decoderLoaded = true;
         }
     }

@@ -34,8 +34,8 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
     public S125DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
-        Func<string, Stream?>? featureCatalogueResolver = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueResolver)
+        FeatureCatalogueManager? featureCatalogueManager = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueManager)
     {
     }
 
@@ -48,12 +48,12 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
-        Func<string, Stream?>? featureCatalogueResolver = null)
+        FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
-            featureCatalogueResolver)
+            featureCatalogueManager)
     {
     }
 
@@ -61,7 +61,7 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
-        Func<string, Stream?>? featureCatalogueResolver)
+        FeatureCatalogueManager? featureCatalogueManager)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
@@ -70,7 +70,7 @@ public sealed class S125DatasetProcessor : IDatasetProcessor
         {
             _dataset = S125Dataset.Open(datasetStream);
         }
-        _decoder = ProcessorFeatureCatalogue.TryLoadDecoder(featureCatalogueResolver, "S-125");
+        _decoder = featureCatalogueManager?.GetDecoder("S-125");
     }
 
     /// <inheritdoc />
