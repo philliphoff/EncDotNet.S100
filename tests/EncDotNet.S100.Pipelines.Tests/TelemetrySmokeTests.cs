@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Xml;
@@ -22,7 +23,7 @@ public sealed class TelemetrySmokeTests
     [Fact]
     public void FeatureCatalogueReader_emits_parse_activity()
     {
-        var observed = new List<Activity>();
+        var observed = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "EncDotNet.S100.Features",
@@ -73,7 +74,7 @@ public sealed class TelemetrySmokeTests
     [Fact]
     public async Task VectorPipeline_emits_stage_spans()
     {
-        var observed = new List<Activity>();
+        var observed = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "EncDotNet.S100.Core",
@@ -110,7 +111,7 @@ public sealed class TelemetrySmokeTests
     [Fact]
     public async Task VectorPipeline_tags_gc_deltas()
     {
-        var observed = new List<Activity>();
+        var observed = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "EncDotNet.S100.Core",
@@ -144,7 +145,7 @@ public sealed class TelemetrySmokeTests
     [Fact]
     public async Task VectorPipeline_emits_xslt_transform_span()
     {
-        var observed = new List<Activity>();
+        var observed = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
             ShouldListenTo = src => src.Name == "EncDotNet.S100.Core",

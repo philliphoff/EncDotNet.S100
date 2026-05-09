@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S421DatasetProcessor : IDatasetProcessor
 {
     private readonly S421Dataset _dataset;
-    private readonly PortrayalCatalogueProvider _provider;
+    private readonly S421PortrayalCatalogue _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
 
@@ -55,7 +55,8 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
-        _provider = catalogueManager.GetProvider("S-421");
+        var provider = catalogueManager.GetProvider("S-421");
+        _catalogue = new S421PortrayalCatalogue(provider);
         using (datasetStream)
         {
             _dataset = S421Dataset.Open(datasetStream);
@@ -65,7 +66,7 @@ public sealed class S421DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        var catalogue = new S421PortrayalCatalogue(_provider);
+        var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
