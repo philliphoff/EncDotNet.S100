@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Scripting.MoonSharp.Diagnostics;
 using MoonSharp.Interpreter;
@@ -73,7 +74,7 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         var ruleTag = new KeyValuePair<string, object?>(TelemetryTags.LuaRule, functionName);
         try
         {
-            var luaArgs = args.Select(MarshalToLua).ToArray();
+            var luaArgs = MarshalArgsToLua(args);
             var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
             Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "ok"));
             return MarshalFromLua(result);
@@ -106,14 +107,18 @@ internal sealed class MoonSharpLuaContext : ILuaContext
         var ruleTag = new KeyValuePair<string, object?>(TelemetryTags.LuaRule, functionName);
         try
         {
-            var luaArgs = args.Select(MarshalToLua).ToArray();
+            var luaArgs = MarshalArgsToLua(args);
             var result = WithInvariantCulture(() => _script.Call(fn, luaArgs));
 
             Telemetry.InvokeCount.Add(1, ruleTag, new KeyValuePair<string, object?>(TelemetryTags.Result, "ok"));
 
             if (result.Type == DataType.Tuple)
             {
-                return result.Tuple.Select(MarshalFromLua).ToArray();
+                var tuple = result.Tuple;
+                var arr = new object?[tuple.Length];
+                for (int i = 0; i < tuple.Length; i++)
+                    arr[i] = MarshalFromLua(tuple[i]);
+                return arr;
             }
 
             return [MarshalFromLua(result)];
@@ -137,6 +142,22 @@ internal sealed class MoonSharpLuaContext : ILuaContext
     public void Dispose()
     {
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Marshals a .NET argument array to MoonSharp <see cref="DynValue"/> values
+    /// without LINQ. Returns <see cref="Array.Empty{T}"/> for zero-length input
+    /// to avoid allocation.
+    /// </summary>
+    private DynValue[] MarshalArgsToLua(object?[] args)
+    {
+        if (args.Length == 0)
+            return Array.Empty<DynValue>();
+
+        var luaArgs = new DynValue[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            luaArgs[i] = MarshalToLua(args[i]);
+        return luaArgs;
     }
 
     /// <summary>
@@ -249,11 +270,25 @@ internal sealed class MoonSharpLuaContext : ILuaContext
     /// Wraps a .NET <see cref="Delegate"/> as a MoonSharp callback,
     /// handling argument and return value marshalling.
     /// </summary>
+    /// <remarks>
+    /// Hot-path optimisation: for known <c>Func&lt;&gt;</c> and <c>Action&lt;&gt;</c>
+    /// arities the delegate is cast to its concrete type and invoked directly,
+    /// bypassing <see cref="Delegate.DynamicInvoke"/> (which uses runtime
+    /// reflection and boxes value-type arguments). The generic fallback path
+    /// caches <c>GetParameters()</c> so reflection runs only once per delegate.
+    /// </remarks>
     private CallbackFunction WrapDelegate(Delegate del)
     {
+        // Try the fast typed-dispatch path first. If the delegate matches a
+        // known Func<>/Action<> arity we avoid DynamicInvoke entirely.
+        var fast = TryWrapTyped(del);
+        if (fast is not null)
+            return fast;
+
+        // Fallback: generic reflection path. Cache parameter metadata once.
+        var parameters = del.Method.GetParameters();
         return new CallbackFunction((ctx, callArgs) =>
         {
-            var parameters = del.Method.GetParameters();
             var netArgs = new object?[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
@@ -266,6 +301,146 @@ internal sealed class MoonSharpLuaContext : ILuaContext
             }
 
             var result = del.DynamicInvoke(netArgs);
+            return MarshalToLua(result);
+        });
+    }
+
+    /// <summary>
+    /// Lookup table mapping generic type definitions to their <c>WrapXxxTyped</c>
+    /// generic method infos. Built once per process via lazy reflection so the
+    /// per-delegate registration path is a single dictionary lookup + one
+    /// <see cref="MethodInfo.MakeGenericMethod"/> call.
+    /// </summary>
+    private static readonly Dictionary<Type, MethodInfo> TypedWrapMethods = BuildTypedWrapMethods();
+
+    private static Dictionary<Type, MethodInfo> BuildTypedWrapMethods()
+    {
+        const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var self = typeof(MoonSharpLuaContext);
+        return new Dictionary<Type, MethodInfo>
+        {
+            [typeof(Action<>)]       = self.GetMethod(nameof(WrapAction1Typed), flags)!,
+            [typeof(Action<,>)]      = self.GetMethod(nameof(WrapAction2Typed), flags)!,
+            [typeof(Func<>)]         = self.GetMethod(nameof(WrapFunc0Typed), flags)!,
+            [typeof(Func<,>)]        = self.GetMethod(nameof(WrapFunc1Typed), flags)!,
+            [typeof(Func<,,>)]       = self.GetMethod(nameof(WrapFunc2Typed), flags)!,
+            [typeof(Func<,,,>)]      = self.GetMethod(nameof(WrapFunc3Typed), flags)!,
+            [typeof(Func<,,,,>)]     = self.GetMethod(nameof(WrapFunc4Typed), flags)!,
+        };
+    }
+
+    /// <summary>
+    /// Attempts to wrap a delegate using direct typed invocation for known
+    /// <c>Func&lt;&gt;</c> and <c>Action&lt;&gt;</c> arities (0–4 parameters).
+    /// Returns <c>null</c> if the delegate type is not recognised.
+    /// </summary>
+    /// <remarks>
+    /// Uses <see cref="MethodInfo.MakeGenericMethod"/> once at registration time
+    /// to create a strongly-typed wrapper. The per-call path then invokes the
+    /// delegate directly — no <see cref="Delegate.DynamicInvoke"/>, no boxing
+    /// of value-type arguments, and no per-call reflection.
+    /// </remarks>
+    private CallbackFunction? TryWrapTyped(Delegate del)
+    {
+        var type = del.GetType();
+
+        if (type == typeof(Action))
+        {
+            var fn = (Action)del;
+            return new CallbackFunction((ctx, args) => { fn(); return DynValue.Nil; });
+        }
+
+        if (!type.IsGenericType)
+            return null;
+
+        var genDef = type.GetGenericTypeDefinition();
+        if (!TypedWrapMethods.TryGetValue(genDef, out var wrapMethod))
+            return null;
+
+        var typeArgs = type.GetGenericArguments();
+        var concrete = wrapMethod.MakeGenericMethod(typeArgs);
+        return (CallbackFunction)concrete.Invoke(this, [del])!;
+    }
+
+    // ── Typed wrappers ─────────────────────────────────────────────────
+    // Each generic method is invoked once at registration time via
+    // MakeGenericMethod. The returned CallbackFunction captures the
+    // strongly-typed delegate, so the per-call path is a direct
+    // invocation — no DynamicInvoke, no parameter-info reflection,
+    // and no intermediate object[] allocation.
+
+    private CallbackFunction WrapAction1Typed<T1>(Action<T1> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            fn(a1);
+            return DynValue.Nil;
+        });
+    }
+
+    private CallbackFunction WrapAction2Typed<T1, T2>(Action<T1, T2> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            var a2 = (T2)ConvertArg(MarshalFromLua(args.RawGet(1, false)), typeof(T2))!;
+            fn(a1, a2);
+            return DynValue.Nil;
+        });
+    }
+
+    private CallbackFunction WrapFunc0Typed<TResult>(Func<TResult> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var result = fn();
+            return MarshalToLua(result);
+        });
+    }
+
+    private CallbackFunction WrapFunc1Typed<T1, TResult>(Func<T1, TResult> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            var result = fn(a1);
+            return MarshalToLua(result);
+        });
+    }
+
+    private CallbackFunction WrapFunc2Typed<T1, T2, TResult>(Func<T1, T2, TResult> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            var a2 = (T2)ConvertArg(MarshalFromLua(args.RawGet(1, false)), typeof(T2))!;
+            var result = fn(a1, a2);
+            return MarshalToLua(result);
+        });
+    }
+
+    private CallbackFunction WrapFunc3Typed<T1, T2, T3, TResult>(Func<T1, T2, T3, TResult> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            var a2 = (T2)ConvertArg(MarshalFromLua(args.RawGet(1, false)), typeof(T2))!;
+            var a3 = (T3)ConvertArg(MarshalFromLua(args.RawGet(2, false)), typeof(T3))!;
+            var result = fn(a1, a2, a3);
+            return MarshalToLua(result);
+        });
+    }
+
+    private CallbackFunction WrapFunc4Typed<T1, T2, T3, T4, TResult>(Func<T1, T2, T3, T4, TResult> fn)
+    {
+        return new CallbackFunction((ctx, args) =>
+        {
+            var a1 = (T1)ConvertArg(MarshalFromLua(args.RawGet(0, false)), typeof(T1))!;
+            var a2 = (T2)ConvertArg(MarshalFromLua(args.RawGet(1, false)), typeof(T2))!;
+            var a3 = (T3)ConvertArg(MarshalFromLua(args.RawGet(2, false)), typeof(T3))!;
+            var a4 = (T4)ConvertArg(MarshalFromLua(args.RawGet(3, false)), typeof(T4))!;
+            var result = fn(a1, a2, a3, a4);
             return MarshalToLua(result);
         });
     }
