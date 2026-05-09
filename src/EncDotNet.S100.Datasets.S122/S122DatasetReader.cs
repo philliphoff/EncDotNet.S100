@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 using S100Diag = EncDotNet.S100.Datasets.S122.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S122;
@@ -286,13 +287,13 @@ internal static class S122DatasetReader
         };
     }
 
-    private static (S122GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S122GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         // Look for geometry in the "geometry" child element or directly under the feature.
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -309,7 +310,7 @@ internal static class S122DatasetReader
             var pointCoords = ParsePointElement(pointProp, s100Ns);
             if (pointCoords is not null)
             {
-                geometryType = S122GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [pointCoords.Value];
             }
             else
@@ -321,7 +322,7 @@ internal static class S122DatasetReader
                     var coord = ParseGmlPoint(gmlPoint);
                     if (coord is not null)
                     {
-                        geometryType = S122GeometryType.Point;
+                        geometryType = GmlGeometryType.Point;
                         points = [coord.Value];
                     }
                 }
@@ -332,7 +333,7 @@ internal static class S122DatasetReader
         var curveProp = geometryContainer.Element(s100Ns + "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S122GeometryType.Curve;
+            geometryType = GmlGeometryType.Curve;
             var curveBuilder = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
             var coords = ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
@@ -344,7 +345,7 @@ internal static class S122DatasetReader
         var surfaceProp = geometryContainer.Element(s100Ns + "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S122GeometryType.Surface;
+            geometryType = GmlGeometryType.Surface;
             var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;

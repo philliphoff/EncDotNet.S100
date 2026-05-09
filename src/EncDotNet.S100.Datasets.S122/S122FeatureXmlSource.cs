@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S122;
@@ -74,9 +75,9 @@ public sealed class S122FeatureXmlSource : IFeatureXmlSource
         {
             var primitiveType = feature.GeometryType switch
             {
-                S122GeometryType.Point => "Point",
-                S122GeometryType.Curve => "Curve",
-                S122GeometryType.Surface => "Surface",
+                GmlGeometryType.Point => "Point",
+                GmlGeometryType.Curve => "Curve",
+                GmlGeometryType.Surface => "Surface",
                 _ => "NoGeometry",
             };
 
@@ -87,7 +88,7 @@ public sealed class S122FeatureXmlSource : IFeatureXmlSource
             // Add geometry references
             switch (feature.GeometryType)
             {
-                case S122GeometryType.Point:
+                case GmlGeometryType.Point:
                     foreach (var (lat, lon) in feature.Points)
                     {
                         var pointId = $"p{++pointCounter}";
@@ -100,7 +101,7 @@ public sealed class S122FeatureXmlSource : IFeatureXmlSource
                     }
                     break;
 
-                case S122GeometryType.Curve:
+                case GmlGeometryType.Curve:
                     foreach (var curve in feature.Curves)
                     {
                         foreach (var (lat, lon) in curve)
@@ -116,7 +117,7 @@ public sealed class S122FeatureXmlSource : IFeatureXmlSource
                     }
                     break;
 
-                case S122GeometryType.Surface:
+                case GmlGeometryType.Surface:
                     // Emit exterior ring points
                     foreach (var (lat, lon) in feature.ExteriorRing)
                     {
