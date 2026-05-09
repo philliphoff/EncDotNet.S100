@@ -94,4 +94,65 @@ Register(() => new MyNewScenario());
   so random noise is bounded.
 - Adopting an OTLP collector is a future option; this in-process file
   exporter avoids an out-of-process dependency.
-- Baseline runs and CI gating arrive in subsequent PRs (D2, D4).
+## Baseline runs
+
+The `baseline` command runs **all** registered scenarios in series
+with fixed parameters and writes results into a git-SHA-keyed
+subdirectory:
+
+```bash
+# Run baseline with defaults (warmup 3, iterations 20)
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline
+
+# Custom output directory
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline \
+    --out tools/EncDotNet.S100.PerfRunner/baselines
+```
+
+### Output layout
+
+```
+baselines/
+  CURRENT                          ← plain text file with the SHA
+  <git-sha>/
+    SUMMARY.md                     ← environment + per-scenario headline
+    s101-portray-cold.jsonl
+    s101-portray-cold.md
+    s101-portray-warm.jsonl
+    s101-portray-warm.md
+    …
+```
+
+### Comparing your branch to baseline
+
+```bash
+# 1. On your branch, produce a fresh baseline
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline --out /tmp/perf
+
+# 2. Diff each scenario against the committed baseline
+BASELINE_SHA=$(cat tools/EncDotNet.S100.PerfRunner/baselines/CURRENT)
+for s in s101-portray-cold s101-portray-warm s101-render-warm \
+         s102-coverage s124-vector exchange-set-open; do
+    dotnet run --project tools/EncDotNet.S100.PerfReport -- diff \
+        tools/EncDotNet.S100.PerfRunner/baselines/$BASELINE_SHA/$s.jsonl \
+        /tmp/perf/*/$s.jsonl
+done
+```
+
+> **Noise floor caveat:** A single laptop run is informational, not
+> authoritative. Timing values vary with background load, thermal
+> throttling, and system state. CI-based perf gating arrives in a
+> future PR (D4).
+
+### Corpus
+
+All default scenarios use synthetic fixtures under `tests/datasets/`.
+For larger real-world datasets, run
+`tools/EncDotNet.S100.PerfRunner/scripts/fetch-corpus.sh` and set
+`ENC_DOTNET_PERF_CORPUS` to the cache directory. See
+[`tests/perf/corpus/INDEX.md`](../../tests/perf/corpus/INDEX.md) for
+the full corpus inventory.
+
+## Notes
+
+- CI perf gating arrives in a future PR (D4).

@@ -239,3 +239,57 @@ assert on `OperationName` and tags.
 - **No custom dashboards.** Aspire/Grafana/Tempo dashboards are
   out of scope; the metrics catalogue above is meant to be
   self-describing.
+
+## Reading a baseline run
+
+The [PerfRunner](../tools/EncDotNet.S100.PerfRunner/) `baseline`
+command captures a snapshot of all scenario timings at a specific git
+commit. Baselines live in
+`tools/EncDotNet.S100.PerfRunner/baselines/<git-sha>/`.
+
+### What's in a baseline directory
+
+| File | Contents |
+|------|----------|
+| `SUMMARY.md` | Git SHA, branch, commit subject, UTC timestamp, runtime info (OS, arch, CPU count, .NET version), and a per-scenario headline table (mean and P95 of the primary span). Also notes whether the run used synthetic-only data or the full corpus. |
+| `<scenario>.jsonl` | Raw telemetry in the [JSONL schema v1](#jsonl-schema-version-1) — span records, histogram records, and counter records emitted during measured iterations. |
+| `<scenario>.md` | Per-scenario markdown summary with min/P50/P90/P95/P99/max/mean iteration durations. |
+
+The `baselines/CURRENT` file contains the SHA of the latest committed
+baseline so tooling can locate it without parsing directory names.
+
+### Interpreting the data
+
+Use the [PerfReport](../tools/EncDotNet.S100.PerfReport/) tool:
+
+```bash
+# Summarise a single scenario's telemetry
+dotnet run --project tools/EncDotNet.S100.PerfReport -- summarise \
+    tools/EncDotNet.S100.PerfRunner/baselines/<sha>/s101-portray-warm.jsonl
+
+# Diff baseline vs. a fresh local run
+dotnet run --project tools/EncDotNet.S100.PerfReport -- diff \
+    tools/EncDotNet.S100.PerfRunner/baselines/<sha>/s101-portray-warm.jsonl \
+    /tmp/perf/<sha>/s101-portray-warm.jsonl
+```
+
+The `summarise` command lists the top 20 spans by total duration plus
+all histogram and counter metrics. The `diff` command compares
+baseline and candidate side-by-side with status indicators:
+
+| Symbol | Meaning |
+|--------|---------|
+| ❌ | ≥ 5% regression (higher duration / count) |
+| ✅ | ≥ 10% improvement (lower duration / count) |
+| ▫️ | < 5% change (stable) |
+
+### Caveats
+
+Synthetic-only baselines exercise the same code paths as real-world
+datasets but with much smaller inputs. They exist for **trend
+detection** — catching regressions between commits — not for
+estimating production latency. The absolute numbers will be much
+lower than a real ENC or bathymetry grid.
+
+A single laptop run is noisy; CI-gated baselines (arriving in a
+future PR) will provide more authoritative comparisons.

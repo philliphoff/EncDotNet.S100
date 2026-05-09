@@ -1,0 +1,2 @@
+# Performance baseline JSONL files are machine-generated.
+tools/EncDotNet.S100.PerfRunner/baselines/**/*.jsonl linguist-generated
