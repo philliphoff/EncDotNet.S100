@@ -8,36 +8,27 @@ namespace EncDotNet.S100.Datasets.S411;
 
 /// <summary>
 /// S-411 portrayal catalogue. Extends <see cref="GmlPortrayalCatalogueBase"/>
-/// with S-411-specific behaviour: an adapter XSLT for the main rule,
-/// restricted rule selection, and simplified palette loading.
+/// with an adapter XSLT for the <c>mainRule</c>, single-rule-only rule list,
+/// no multi-palette fallback, and fetch-rule resolver.
 /// </summary>
-/// <remarks>
-/// S-411 uses purely XSLT-based portrayal rules (no Lua). The catalogue ships
-/// several top-level templates — one master <c>mainRule</c> (<c>main.xsl</c>)
-/// plus per-ice-class entry points. Only the <c>mainRule</c> is exposed as a
-/// pipeline rule by default; others are still loadable via
-/// <see cref="GetCompiledRule"/>.
-/// </remarks>
 public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     private const string DefaultTopLevelRuleId = "mainRule";
     private bool _adapterLoaded;
 
-    /// <summary>Initializes a new S-411 portrayal catalogue.</summary>
     public S411PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
 
-    /// <inheritdoc/>
     public override string ProductSpec => "S-411";
 
-    /// <inheritdoc/>
-    protected override XmlResolver CreateXmlResolver() =>
+    protected override System.Xml.XmlResolver CreateXmlResolver() =>
         new FetchRuleFallbackXmlResolver(Provider);
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// S-411 1.2.1 PC ships no day/dusk/night colour profiles with
+    /// multi-palette fallback; only load explicitly named palettes.
+    /// </summary>
     protected override void LoadPalettes(Dictionary<PaletteType, ColorPalette> palettes)
     {
-        // S-411 1.2.1 PC ships no multi-palette colour profiles; only load
-        // explicitly named Day/Dusk/Night palettes.
         foreach (var item in Provider.Catalogue.ColorProfiles)
         {
             var paletteName = item.Description.Name;
@@ -60,14 +51,15 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
                 var palette = ColorProfileReader.Read(stream, paletteName);
                 palettes[paletteType.Value] = palette;
             }
-            catch (Exception)
-            {
-                // Skip gracefully — palette assets are optional in S-411.
-            }
+            catch (Exception) { }
         }
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Only the master <c>mainRule</c> top-level template is included; the
+    /// per-class top-level templates are still loadable on demand via
+    /// <see cref="GetCompiledRule"/>.
+    /// </summary>
     protected override IReadOnlyList<PortrayalRule> BuildRules()
     {
         var mainRule = Provider.Catalogue.RuleFiles
@@ -86,12 +78,13 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
         }];
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// For the <c>mainRule</c>, substitutes the library's bundled adapter XSLT
+    /// which produces the display-list dialect expected by this codebase's
+    /// <c>Part9DisplayListReader</c>. All other rules delegate to base.
+    /// </summary>
     public override XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        // The official S-411 1.2.1 catalogue's mainRule emits a display-list
-        // dialect incompatible with this codebase's Part9DisplayListReader.
-        // Substitute the library's bundled adapter on first access.
         if (!_adapterLoaded && ruleName.Equals(DefaultTopLevelRuleId, StringComparison.OrdinalIgnoreCase))
         {
             CacheCompiledRule(ruleName, LoadAdapterRule());
@@ -107,8 +100,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
         const string resourceName = "EncDotNet.S100.Datasets.S411.Adapter.main.xsl";
         using var stream = asm.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
-                $"Embedded resource '{resourceName}' not found in {asm.GetName().Name}. " +
-                "Verify Adapter/main.xsl is registered as an EmbeddedResource in the .csproj.");
+                $"Embedded resource '{resourceName}' not found in {asm.GetName().Name}.");
 
         var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
         using var reader = XmlReader.Create(stream, settings);
