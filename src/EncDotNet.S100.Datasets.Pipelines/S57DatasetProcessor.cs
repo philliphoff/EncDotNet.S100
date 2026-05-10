@@ -85,12 +85,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         var translator = new S57ToS101Translator();
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
+
+        // S-57 datasets render through the S-101 portrayal catalogue.
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        // S-57 datasets render through the S-101 portrayal catalogue.
-        Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
         var mariner = MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")

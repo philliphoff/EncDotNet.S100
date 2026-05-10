@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 /// than the dataset is a backward-compatible read; a lower minor or a
 /// different major may indicate the wrong catalogue is wired up. We emit one
 /// diagnostic per processor instance per (dataset spec, catalogue ref) pair —
-/// repeated <see cref="IDatasetProcessor.Render"/> calls do not re-emit.
+/// repeated calls with the same scope do not re-emit.
 /// </para>
 /// <para>
 /// Each emit:
@@ -28,6 +28,12 @@ namespace EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 ///   declared edition, catalogue version, catalogue kind, and match kind.</description></item>
 /// </list>
 /// </para>
+/// <para>
+/// Dataset processors should call this from their constructor — catalogue
+/// resolution is a one-shot per processor lifetime, and emitting at
+/// construction keeps the per-<see cref="IDatasetProcessor.Render"/> hot
+/// path free of any telemetry overhead.
+/// </para>
 /// </remarks>
 public static class CatalogueResolutionDiagnostics
 {
@@ -38,13 +44,17 @@ public static class CatalogueResolutionDiagnostics
 
     /// <summary>
     /// Reports the relationship between a dataset's declared spec and the
-    /// catalogue resolved for it. Safe to call from <see cref="IDatasetProcessor.Render"/>;
-    /// the per-(spec, catalogue) dedup key passed in <paramref name="dedupScope"/>
-    /// guarantees only the first call emits.
+    /// catalogue resolved for it. Intended to be called once per processor
+    /// instance from the processor's constructor, after the catalogue has
+    /// been assigned.
     /// </summary>
     /// <param name="dedupScope">
     /// An object whose identity scopes deduplication — typically the
-    /// processor instance itself. Pass <c>this</c>.
+    /// processor instance itself. Pass <c>this</c>. Subsequent calls with
+    /// the same <paramref name="dedupScope"/>, <paramref name="datasetSpec"/>,
+    /// <paramref name="catalogueRef"/>, and <paramref name="catalogueKind"/>
+    /// are no-ops; this safety net guards against accidental double-emit
+    /// without forcing the caller to manually track state.
     /// </param>
     /// <param name="datasetSpec">The dataset's declared product spec.</param>
     /// <param name="catalogueRef">
@@ -66,30 +76,11 @@ public static class CatalogueResolutionDiagnostics
 
         if (catalogueRef is not { } catRef) return;
 
-        // Hot-path fast check: a thread-local single-slot cache of the most
-        // recently reported (scope, spec, cat, kind). The diagnostics call
-        // sits at the top of every Render, so on a tight render loop this
-        // matches on every call after the first and avoids the
-        // ConditionalWeakTable lookup (which takes an internal lock) and the
-        // HashSet allocation/equality cost. Authoritative dedup still happens
-        // via _seen below; the cache only suppresses redundant lookups.
-        ref var slot = ref _lastSeen;
-        if (ReferenceEquals(slot.Scope, dedupScope)
-            && slot.Kind == catalogueKind
-            && slot.Spec.Equals(datasetSpec)
-            && slot.Cat.Equals(catRef))
-        {
-            return;
-        }
-
         var key = (datasetSpec, catRef, catalogueKind);
         var entries = _seen.GetOrCreateValue(dedupScope);
         if (!entries.Add(key))
         {
-            // Already emitted on a different thread (or with a different
-            // intervening key); refresh the TLS cache so the next call on
-            // this thread takes the fast path.
-            slot = (dedupScope, datasetSpec, catRef, catalogueKind);
+            // Already emitted for this scope/spec/cat tuple.
             return;
         }
 
@@ -114,12 +105,7 @@ public static class CatalogueResolutionDiagnostics
                 ["s100.catalogue.match"] = match.ToString(),
             }));
         }
-
-        slot = (dedupScope, datasetSpec, catRef, catalogueKind);
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, HashSet<(SpecRef, CatalogueRef, string)>> _seen = new();
-
-    [ThreadStatic]
-    private static (object? Scope, SpecRef Spec, CatalogueRef Cat, string Kind) _lastSeen;
 }

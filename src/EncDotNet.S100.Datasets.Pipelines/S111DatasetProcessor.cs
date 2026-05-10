@@ -78,11 +78,12 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 "S-111 portrayal catalogue is not registered. " +
                 "Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
         _catalogue = new S111PortrayalCatalogue(_provider);
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // Select the requested time step, defaulting to the first

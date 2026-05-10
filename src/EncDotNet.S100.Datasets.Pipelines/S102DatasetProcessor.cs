@@ -75,11 +75,12 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
 
         var provider = catalogueManager.GetProvider("S-102");
         _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { FourShades = true };
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
     {
-        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
         var metadata = _source.Metadata;
 

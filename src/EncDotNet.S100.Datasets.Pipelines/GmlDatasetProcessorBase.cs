@@ -50,6 +50,11 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         _catalogue = catalogue;
         _decoder = decoder;
         _fileName = fileName;
+
+        // Catalogue resolution is a one-shot per processor instance; emit
+        // the diagnostic at construction so the per-Render hot path stays
+        // free of the (cheap but non-zero) telemetry overhead.
+        CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     /// <inheritdoc/>
@@ -116,7 +121,6 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         if (preResult is not null) return preResult;
 
         var catalogue = _catalogue;
-        CatalogueResolutionDiagnostics.Report(this, Spec, catalogue.CatalogueRef, "portrayal");
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
