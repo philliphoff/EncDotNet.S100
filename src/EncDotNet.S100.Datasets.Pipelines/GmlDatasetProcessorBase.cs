@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
@@ -115,6 +116,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         if (preResult is not null) return preResult;
 
         var catalogue = _catalogue;
+        CatalogueResolutionDiagnostics.Report(this, Spec, catalogue.CatalogueRef, "portrayal");
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 

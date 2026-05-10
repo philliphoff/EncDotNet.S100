@@ -82,6 +82,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
 
         // Select the requested time step, defaulting to the first

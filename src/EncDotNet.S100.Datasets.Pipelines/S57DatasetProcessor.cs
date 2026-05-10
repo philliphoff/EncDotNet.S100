@@ -89,6 +89,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        // S-57 datasets render through the S-101 portrayal catalogue.
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
         var mariner = MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")

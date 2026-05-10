@@ -52,6 +52,14 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Gets the edition of the portrayal catalogue.</summary>
     public string Edition => _provider.Catalogue.Version;
 
+    /// <summary>
+    /// The identity (name + version) of the underlying portrayal catalogue
+    /// XML, when populated. Used to surface mismatches between the dataset's
+    /// declared <see cref="Spec"/> edition and the catalogue version actually
+    /// resolved for it.
+    /// </summary>
+    public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
+
     /// <summary>Gets the currently active color palette.</summary>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 

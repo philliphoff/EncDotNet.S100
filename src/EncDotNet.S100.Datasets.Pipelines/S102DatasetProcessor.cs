@@ -79,6 +79,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
 
     public DatasetResult Render(RenderContext? context = null)
     {
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
         var metadata = _source.Metadata;
 

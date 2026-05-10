@@ -39,6 +39,9 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public SpecRef Spec => new("S-101", default);
     public string Edition => _provider.Catalogue.Version;
+
+    /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
+    public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     public void SwitchPalette(PaletteType type)
