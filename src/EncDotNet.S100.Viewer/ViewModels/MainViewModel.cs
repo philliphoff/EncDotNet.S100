@@ -16,6 +16,7 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly ViewerSettings _settings;
     private readonly IThemeService _theme;
     private readonly IRecentFilesService _recentFiles;
+    private readonly IToastService _toasts;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -416,6 +417,7 @@ internal sealed class MainViewModel : ViewModelBase
         IThemeService themeService,
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
+        IToastService toasts,
         IStatusPresenter? statusPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -433,10 +435,12 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(measureAppearance);
+        ArgumentNullException.ThrowIfNull(toasts);
 
         _settings = settings;
         _theme = themeService;
         _recentFiles = recentFiles;
+        _toasts = toasts;
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
         if (_statusPresenter is { } presenter)
@@ -578,7 +582,9 @@ internal sealed class MainViewModel : ViewModelBase
 
         if (!File.Exists(path))
         {
-            StatusText = string.Format(Strings.Status_FileNoLongerExists, path);
+            var msg = string.Format(Strings.Status_FileNoLongerExists, path);
+            StatusText = msg;
+            _toasts.ShowWarning(Strings.Toast_Warning, msg);
             // Drop the missing entry so the menu reflects reality.
             _recentFiles.Remove(path);
             return;

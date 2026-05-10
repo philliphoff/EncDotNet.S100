@@ -36,16 +36,19 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 {
     private readonly DatasetsViewModel _datasets;
     private readonly IStatusPresenter _status;
+    private readonly IToastService _toasts;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
 
-    public ExchangeSetService(DatasetsViewModel datasets, IStatusPresenter status)
+    public ExchangeSetService(DatasetsViewModel datasets, IStatusPresenter status, IToastService toasts)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(toasts);
         _datasets = datasets;
         _status = status;
+        _toasts = toasts;
     }
 
     public async Task<ExchangeSetOpenResult> OpenAsync(
@@ -78,7 +81,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             }
             catch (FileNotFoundException)
             {
-                _status.StatusText = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                var msg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                _status.StatusText = msg;
+                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
                 source.Dispose();
                 activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
                 return new ExchangeSetOpenResult
@@ -100,7 +105,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             if (datasets.Count == 0)
             {
-                _status.StatusText = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                var emptyMsg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                _status.StatusText = emptyMsg;
+                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
                 exchangeSet.Dispose();
                 exchangeSet = null;
                 activity?.SetStatus(ActivityStatusCode.Error, "empty catalogue");
@@ -155,6 +162,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                         relativePath,
                         metadata.ProductSpecification?.ProductIdentifier ?? string.Empty);
                     _status.StatusText = msg;
+                    _toasts.ShowWarning(Strings.Toast_Warning, msg);
                     skipMessages.Add(msg);
                     skipped++;
                     progress?.Report(new ExchangeSetProgress(
@@ -176,20 +184,26 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             if (cancelled)
             {
-                _status.StatusText = string.Format(
+                var cancelledMsg = string.Format(
                     Strings.Status_ExchangeSetCancelled,
                     dispatched, datasets.Count, folderOrZipPath);
+                _status.StatusText = cancelledMsg;
+                _toasts.ShowInfo(Strings.Toast_Info, cancelledMsg);
             }
             else if (skipped == 0)
             {
-                _status.StatusText = string.Format(
+                var loadedMsg = string.Format(
                     Strings.Status_ExchangeSetLoaded, dispatched, folderOrZipPath);
+                _status.StatusText = loadedMsg;
+                _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
             }
             else
             {
-                _status.StatusText = string.Format(
+                var partialMsg = string.Format(
                     Strings.Status_ExchangeSetLoadedWithErrors,
                     dispatched, datasets.Count, folderOrZipPath, skipped);
+                _status.StatusText = partialMsg;
+                _toasts.ShowWarning(Strings.Toast_ExchangeSetLoaded, partialMsg);
             }
 
             activity?.SetTag("s100.exchangeset.dataset.loaded", dispatched);
@@ -254,7 +268,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         }
         catch (Exception ex)
         {
-            _status.StatusText = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
+            _status.StatusText = failedMsg;
+            _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
             exchangeSet?.Dispose();
             source?.Dispose();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);

@@ -1,0 +1,84 @@
+using ShadUI;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Default <see cref="IToastService"/> implementation backed by the
+/// ShadUI <see cref="ToastManager"/>. All toasts are positioned at the
+/// bottom-right corner to stay out of the map viewport.
+/// </summary>
+internal sealed class ToastService : IToastService
+{
+    private readonly ToastManager _manager;
+
+    /// <summary>Default auto-dismiss delay for brief confirmations (seconds).</summary>
+    private const double ShortDelay = 4;
+
+    /// <summary>Default auto-dismiss delay for warnings/info (seconds).</summary>
+    private const double MediumDelay = 8;
+
+    /// <summary>Default auto-dismiss delay for errors (seconds).</summary>
+    private const double LongDelay = 15;
+
+    public ToastService(ToastManager manager)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+        _manager = manager;
+    }
+
+    /// <inheritdoc />
+    public void ShowInfo(string title, string? content = null)
+    {
+        var builder = _manager.CreateToast(title)
+            .OnBottomRight()
+            .WithDelay(MediumDelay)
+            .DismissOnClick();
+
+        if (content is not null)
+            builder = builder.WithContent(content);
+
+        builder.ShowInfo();
+    }
+
+    /// <inheritdoc />
+    public void ShowSuccess(string title, string? content = null)
+    {
+        var builder = _manager.CreateToast(title)
+            .OnBottomRight()
+            .WithDelay(ShortDelay)
+            .DismissOnClick();
+
+        if (content is not null)
+            builder = builder.WithContent(content);
+
+        builder.ShowSuccess();
+    }
+
+    /// <inheritdoc />
+    public void ShowWarning(string title, string? content = null)
+    {
+        var builder = _manager.CreateToast(title)
+            .OnBottomRight()
+            .WithDelay(MediumDelay)
+            .DismissOnClick();
+
+        if (content is not null)
+            builder = builder.WithContent(content);
+
+        builder.ShowWarning();
+    }
+
+    /// <inheritdoc />
+    public void ShowError(string title, string? content = null)
+    {
+        var builder = _manager.CreateToast(title)
+            .OnBottomRight()
+            .WithDelay(LongDelay)
+            .DismissOnClick();
+
+        if (content is not null)
+            builder = builder.WithContent(content);
+
+        builder.ShowError();
+    }
+}

@@ -35,6 +35,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly GlobalTimeService _globalTime;
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
+    private readonly IToastService _toasts;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -75,7 +76,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         SettingsViewModel settingsVm,
         GlobalTimeService globalTime,
         EcdisDisplayState ecdisDisplay,
-        IMarinerSettingsProvider marinerSettings)
+        IMarinerSettingsProvider marinerSettings,
+        IToastService toasts)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -86,6 +88,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
         ArgumentNullException.ThrowIfNull(marinerSettings);
+        ArgumentNullException.ThrowIfNull(toasts);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -96,6 +99,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _globalTime = globalTime;
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
+        _toasts = toasts;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
@@ -169,6 +173,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             if (spec is null)
             {
                 SetStatus(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
+                _toasts.ShowWarning(Strings.Toast_Warning,
+                    string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
                 return;
             }
         }
@@ -179,6 +185,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
             SetStatus(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
+            _toasts.ShowWarning(Strings.Toast_Warning,
+                string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
             return;
         }
 
@@ -253,6 +261,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         catch (Exception ex)
         {
             SetStatus(string.Format(Strings.Status_Error, ex.Message));
+            _toasts.ShowError(Strings.Toast_DatasetError,
+                string.Format(Strings.Status_Error, ex.Message));
             Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
         }
     }
@@ -335,6 +345,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
 
         SetStatus(string.Format(Strings.Status_PaletteApplied, palette));
+        _toasts.ShowSuccess(Strings.Toast_Success,
+            string.Format(Strings.Status_PaletteApplied, palette));
     }
 
     public void RemoveEntry(DatasetEntry entry)

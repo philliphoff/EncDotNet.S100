@@ -304,4 +304,13 @@ internal static class Strings
     public static string TextGroup_Important => Get(nameof(TextGroup_Important));
     public static string TextGroup_Other => Get(nameof(TextGroup_Other));
     public static string TextGroup_All => Get(nameof(TextGroup_All));
+
+    // Toast notification titles
+    public static string Toast_Error => Get(nameof(Toast_Error));
+    public static string Toast_Warning => Get(nameof(Toast_Warning));
+    public static string Toast_Success => Get(nameof(Toast_Success));
+    public static string Toast_Info => Get(nameof(Toast_Info));
+    public static string Toast_ExchangeSetLoaded => Get(nameof(Toast_ExchangeSetLoaded));
+    public static string Toast_ExchangeSetFailed => Get(nameof(Toast_ExchangeSetFailed));
+    public static string Toast_DatasetError => Get(nameof(Toast_DatasetError));
 }

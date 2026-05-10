@@ -101,6 +101,10 @@ public partial class MainWindow : ShadUI.Window
 
         InitializeComponent();
 
+        // Wire the ShadUI toast host to the DI-managed ToastManager so
+        // background services can surface notifications through toasts.
+        ToastHost.Manager = App.Services.GetRequiredService<ShadUI.ToastManager>();
+
         _viewModel = viewModel;
         _catalogAggregator = catalogAggregator;
         _recentFiles = recentFiles;
@@ -159,7 +163,12 @@ public partial class MainWindow : ShadUI.Window
 
         // Surface DatasetsViewModel rejection of unknown file extensions.
         _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
+        {
             _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
+            App.Services.GetRequiredService<IToastService>().ShowWarning(
+                Strings.Toast_Warning,
+                string.Format(Strings.Status_UnrecognizedFileType, extension));
+        };
 
         // Clean up layers when a dataset entry is removed from the list.
         _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
