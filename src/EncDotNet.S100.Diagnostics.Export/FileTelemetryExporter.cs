@@ -27,6 +27,7 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
     private readonly BlockingCollection<string> _queue = new(boundedCapacity: 4096);
     private readonly Thread _writerThread;
     private readonly string _path;
+    private readonly bool _appendToExisting;
     private volatile bool _disposed;
 
     /// <summary>
@@ -38,10 +39,29 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
     /// The file is created if it does not exist; an existing file is
     /// truncated.
     /// </param>
-    public FileTelemetryExporter(string path)
+    public FileTelemetryExporter(string path) : this(path, appendToExisting: false)
+    {
+    }
+
+    /// <summary>
+    /// Initialises the exporter, opening (or creating) the target file.
+    /// </summary>
+    /// <param name="path">
+    /// Absolute or relative path to the <c>.jsonl</c> output file.
+    /// </param>
+    /// <param name="appendToExisting">
+    /// When <c>true</c>, an existing file is appended to and a new
+    /// header is <em>not</em> written; when <c>false</c> (default),
+    /// the file is truncated and a fresh header is emitted. Used by
+    /// orchestrators (e.g. the perf interleave loop) that accumulate
+    /// telemetry from multiple PerfRunner invocations into a single
+    /// JSONL file.
+    /// </param>
+    public FileTelemetryExporter(string path, bool appendToExisting)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _path = path;
+        _appendToExisting = appendToExisting;
 
         // Ensure the directory exists.
         var dir = Path.GetDirectoryName(path);
@@ -57,14 +77,17 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
         };
         _writerThread.Start();
 
-        // Write the schema header as the first line.
-        var header = JsonSerializer.Serialize(new
+        if (!appendToExisting)
         {
-            kind = "header",
-            version = TelemetryJsonFormat.SchemaVersion,
-            startedAtUtc = DateTime.UtcNow,
-        }, TelemetryJsonFormat.SerializerOptions);
-        _queue.Add(header);
+            // Write the schema header as the first line.
+            var header = JsonSerializer.Serialize(new
+            {
+                kind = "header",
+                version = TelemetryJsonFormat.SchemaVersion,
+                startedAtUtc = DateTime.UtcNow,
+            }, TelemetryJsonFormat.SerializerOptions);
+            _queue.Add(header);
+        }
     }
 
     /// <inheritdoc />
@@ -130,8 +153,9 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
 
     private void WriterLoop()
     {
+        var fileMode = _appendToExisting ? FileMode.Append : FileMode.Create;
         using var writer = new StreamWriter(
-            new FileStream(_path, FileMode.Create, FileAccess.Write, FileShare.Read),
+            new FileStream(_path, fileMode, FileAccess.Write, FileShare.Read),
             leaveOpen: false);
 
         foreach (var line in _queue.GetConsumingEnumerable())

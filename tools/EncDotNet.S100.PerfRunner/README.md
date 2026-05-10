@@ -153,19 +153,39 @@ For larger real-world datasets, run
 [`tests/perf/corpus/INDEX.md`](../../tests/perf/corpus/INDEX.md) for
 the full corpus inventory.
 
-## CI gating
+## CI gating (interleaved + median/MAD)
 
 The `.github/workflows/perf.yml` workflow runs on every PR to `main`:
 
-1. Builds the solution in Release mode.
-2. Runs `baseline` with `--warmup 3 --iterations 10` to produce a
-   candidate snapshot.
-3. Runs `perfreport gate` comparing the candidate against the
-   committed baseline pointed to by `baselines/CURRENT`.
-4. Posts a markdown summary to the PR and fails the check if any
-   scenario regresses ≥ 10%. Spans and metrics with baseline values
-   below 50ms are excluded from gating to avoid noise on sub-millisecond
-   measurements.
+1. Builds the **base** branch's PerfRunner into `/tmp/perf-bin/base/`
+   and the **candidate** branch's into `/tmp/perf-bin/cand/` so both
+   binaries are simultaneously available.
+2. Calls `tools/perf/interleave.sh` which runs **5 rounds × 4
+   iterations per side**, alternating which side leads each round
+   (random order) so both base and candidate observe the same noise
+   distribution. Each measured iteration is wrapped in a
+   `perf.iteration` activity tagged with `perf.scenario`,
+   `perf.round`, `perf.iter`, and `perf.side`.
+3. Runs `perfreport gate` with median + MAD evaluation
+   (`--threshold 10 --min-abs 100 --mad-k 3.0 --retry-zone-mult 2.0`).
+   Scenarios in the suspicious zone are written to
+   `${out}.suspicious.txt` rather than failing immediately.
+4. If any scenarios are suspicious, re-runs interleave for **only
+   those scenarios** for 5 more rounds, then re-gates with
+   `--retry-zone-mult 1.0` (no second retry).
+5. Posts a markdown summary to the PR.
+
+### Per-iteration baseline flags
+
+The `baseline` command supports the orchestrator contract:
+
+| Flag | Purpose |
+|------|---------|
+| `--append` | Append to existing per-scenario `.jsonl` files instead of overwriting; suppresses per-scenario `.md` and `SUMMARY.md` regeneration. |
+| `--round-tag <N>` | Stamp every `perf.iteration` activity with `perf.round=<N>`. |
+| `--side <baseline\|candidate>` | Stamp every iteration with `perf.side`. |
+| `--scenarios <csv>` | Restrict the run to the named scenarios (used by retry). |
+| `--out-subdir <name>` | Override the git-SHA-derived subdirectory so the orchestrator owns the layout. |
 
 To update the committed baseline after merging perf improvements:
 
