@@ -24,7 +24,7 @@ namespace EncDotNet.S100.Features;
 /// cache slot per product name.
 /// </para>
 /// </remarks>
-public sealed class FeatureCatalogueManager
+public sealed class FeatureCatalogueManager : ICatalogueProvider<FeatureCatalogue>
 {
     private readonly Func<SpecRef, Stream?> _resolver;
     private readonly ConcurrentDictionary<SpecRef, Lazy<FeatureCatalogue?>> _catalogues = new();
@@ -136,6 +136,34 @@ public sealed class FeatureCatalogueManager
             // Parse failures must not break dataset loading; pick output
             // degrades to raw codes and portrayal falls back gracefully.
             return null;
+        }
+    }
+
+    /// <inheritdoc />
+    ValueTask<FeatureCatalogue?> ICatalogueProvider<FeatureCatalogue>.GetCatalogueAsync(
+        SpecRef spec, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValueTask<FeatureCatalogue?>(GetCatalogue(spec));
+    }
+
+    /// <inheritdoc />
+    IReadOnlyCollection<CatalogueRef> ICatalogueProvider<FeatureCatalogue>.AvailableCatalogues
+    {
+        get
+        {
+            var refs = new List<CatalogueRef>();
+            foreach (var lazy in _catalogues.Values)
+            {
+                // Avoid forcing lazy initialization for unloaded entries —
+                // available means "currently loaded and self-describing".
+                if (!lazy.IsValueCreated) continue;
+                if (lazy.Value?.CatalogueRef is { } cref)
+                {
+                    refs.Add(cref);
+                }
+            }
+            return refs;
         }
     }
 }

@@ -1,4 +1,6 @@
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Portrayals;
 using Xunit;
@@ -73,5 +75,35 @@ public class PortrayalCatalogueManagerTests
         {
             Directory.Delete(tmp);
         }
+    }
+
+    [Fact]
+    public async Task ICatalogueProvider_GetCatalogueAsync_UnregisteredSpec_ReturnsNull()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        ICatalogueProvider<PortrayalCatalogueProvider> provider = mgr;
+        var result = await provider.GetCatalogueAsync(new SpecRef("S-101", default));
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ICatalogueProvider_GetCatalogueAsync_HonoursCancellation()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        ICatalogueProvider<PortrayalCatalogueProvider> provider = mgr;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await provider.GetCatalogueAsync(new SpecRef("S-101", default), cts.Token));
+    }
+
+    [Fact]
+    public void ICatalogueProvider_AvailableCatalogues_ReflectsLoadedProviders()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        ICatalogueProvider<PortrayalCatalogueProvider> provider = mgr;
+
+        // Before any provider is forced into existence, no catalogues are visible.
+        Assert.Empty(provider.AvailableCatalogues);
     }
 }

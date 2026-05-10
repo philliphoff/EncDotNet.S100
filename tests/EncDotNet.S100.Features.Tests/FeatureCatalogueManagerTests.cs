@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
 
@@ -124,5 +126,39 @@ public class FeatureCatalogueManagerTests
         var dec = mgr.GetDecoder(new SpecRef("S-101", default));
         Assert.NotNull(dec);
         Assert.Equal("S-101", dec!.Catalogue.ProductId);
+    }
+
+    [Fact]
+    public async Task ICatalogueProvider_GetCatalogueAsync_ReturnsParsedCatalogue()
+    {
+        var mgr = new FeatureCatalogueManager((SpecRef _) => Open(MinimalFcXml));
+        ICatalogueProvider<FeatureCatalogue> provider = mgr;
+        var fc = await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)));
+        Assert.NotNull(fc);
+        Assert.Equal(new CatalogueRef("S-101", new SpecVersion(2, 0, 0)), fc!.CatalogueRef);
+    }
+
+    [Fact]
+    public async Task ICatalogueProvider_AvailableCatalogues_ListsLoadedRefs()
+    {
+        var mgr = new FeatureCatalogueManager((SpecRef _) => Open(MinimalFcXml));
+        ICatalogueProvider<FeatureCatalogue> provider = mgr;
+        Assert.Empty(provider.AvailableCatalogues);
+
+        await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)));
+        var refs = provider.AvailableCatalogues;
+        Assert.Single(refs);
+        Assert.Contains(new CatalogueRef("S-101", new SpecVersion(2, 0, 0)), refs);
+    }
+
+    [Fact]
+    public async Task ICatalogueProvider_GetCatalogueAsync_HonoursCancellation()
+    {
+        var mgr = new FeatureCatalogueManager((SpecRef _) => Open(MinimalFcXml));
+        ICatalogueProvider<FeatureCatalogue> provider = mgr;
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await provider.GetCatalogueAsync(new SpecRef("S-101", default), cts.Token));
     }
 }

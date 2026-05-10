@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Portrayals;
 /// and a default <see cref="SpecVersion"/>, so all string callers share a
 /// single slot per product name.
 /// </remarks>
-public sealed class PortrayalCatalogueManager : IDisposable
+public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<PortrayalCatalogueProvider>
 {
     private readonly ConcurrentDictionary<SpecRef, string> _paths = new();
     private readonly ConcurrentDictionary<SpecRef, PortrayalCatalogueProvider> _providers = new();
@@ -187,5 +187,46 @@ public sealed class PortrayalCatalogueManager : IDisposable
         }
 
         _providers.Clear();
+    }
+
+    /// <inheritdoc />
+    ValueTask<PortrayalCatalogueProvider?> ICatalogueProvider<PortrayalCatalogueProvider>.GetCatalogueAsync(
+        SpecRef spec, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (spec.Name is null || !HasCatalogue(spec))
+        {
+            return new ValueTask<PortrayalCatalogueProvider?>((PortrayalCatalogueProvider?)null);
+        }
+
+        try
+        {
+            return new ValueTask<PortrayalCatalogueProvider?>(GetProvider(spec));
+        }
+        catch (InvalidOperationException)
+        {
+            return new ValueTask<PortrayalCatalogueProvider?>((PortrayalCatalogueProvider?)null);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new ValueTask<PortrayalCatalogueProvider?>((PortrayalCatalogueProvider?)null);
+        }
+    }
+
+    /// <inheritdoc />
+    IReadOnlyCollection<CatalogueRef> ICatalogueProvider<PortrayalCatalogueProvider>.AvailableCatalogues
+    {
+        get
+        {
+            var refs = new List<CatalogueRef>();
+            foreach (var provider in _providers.Values)
+            {
+                if (provider.Catalogue.CatalogueRef is { } cref)
+                {
+                    refs.Add(cref);
+                }
+            }
+            return refs;
+        }
     }
 }
