@@ -149,12 +149,17 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _marinerSettings.Changed += m => _ = ReRenderAllAsync();
     }
 
-    public async Task LoadAsync(DatasetEntry entry)
+    public async Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
         EnsureInitialized();
 
         using var __cmd = ViewerObservability.BeginCommand("dataset.open");
+
+        // Create a linked CTS so the caller's token and the toast's
+        // Cancel button both feed into a single token.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var token = cts.Token;
 
         // Exchange-set entries carry an explicit ProductSpec from the
         // catalogue and never require path-based detection or recent-
@@ -192,11 +197,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
         SetStatus(string.Format(Strings.Status_LoadingFile, entry.DisplayName));
 
+        // Show a loading toast with a Cancel action. The toast stays
+        // visible (5-minute delay) until the operation completes and
+        // we call DismissAll().
+        _toasts.ShowLoading(
+            Strings.Toast_Loading,
+            string.Format(Strings.Status_LoadingFile, entry.DisplayName),
+            Strings.Toast_Cancel,
+            () => cts.Cancel());
+
         try
         {
             var processor = await Task.Run(() => fromExchangeSet
                 ? _pipelineFactory!.CreateProcessor(entry.Source!, entry.RelativePath!, spec)
-                : _pipelineFactory!.CreateProcessor(entry.FilePath));
+                : _pipelineFactory!.CreateProcessor(entry.FilePath), token);
             _processors[entry] = processor;
 
             // Surface S-128 catalogues into the Dataset Catalog panel.
@@ -222,7 +236,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 initialTime = adapter.SnapTo(globalNow);
 
             var initialContext = CreateRenderContext(processor, initialTime);
-            var result = await Task.Run(() => processor.Render(initialContext));
+            var result = await Task.Run(() => processor.Render(initialContext), token);
 
             ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
             // Exchange-set entries opt out of the per-dataset auto-zoom so
@@ -238,6 +252,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             entry.IsLoaded = true;
             entry.Info = result.Info;
             entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
+
+            // Dismiss the loading toast before showing the result.
+            _toasts.DismissAll();
             SetStatus(result.Info);
 
             // Recent files only makes sense for plain file loads. An
@@ -258,8 +275,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             DatasetLoaded?.Invoke(entry);
         }
+        catch (OperationCanceledException)
+        {
+            _toasts.DismissAll();
+            _toasts.ShowInfo(Strings.Toast_DatasetCancelled, entry.DisplayName);
+            SetStatus(null);
+        }
         catch (Exception ex)
         {
+            _toasts.DismissAll();
             SetStatus(string.Format(Strings.Status_Error, ex.Message));
             _toasts.ShowError(Strings.Toast_DatasetError,
                 string.Format(Strings.Status_Error, ex.Message));

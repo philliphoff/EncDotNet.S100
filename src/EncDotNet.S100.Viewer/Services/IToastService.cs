@@ -18,4 +18,19 @@ internal interface IToastService
 
     /// <summary>Shows an error toast (longer delay, dismiss on click).</summary>
     void ShowError(string title, string? content = null);
+
+    /// <summary>
+    /// Shows a persistent loading toast with an action button (e.g.
+    /// "Cancel"). The toast stays visible until explicitly dismissed via
+    /// <see cref="DismissAll"/> or the action button is clicked (ShadUI
+    /// auto-dismisses after an action click).
+    /// </summary>
+    void ShowLoading(string title, string? content = null, string? actionLabel = null, Action? action = null);
+
+    /// <summary>
+    /// Dismisses all currently visible toasts. Use after a long-running
+    /// operation completes to clear loading toasts before showing the
+    /// result toast.
+    /// </summary>
+    void DismissAll();
 }

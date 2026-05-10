@@ -313,4 +313,7 @@ internal static class Strings
     public static string Toast_ExchangeSetLoaded => Get(nameof(Toast_ExchangeSetLoaded));
     public static string Toast_ExchangeSetFailed => Get(nameof(Toast_ExchangeSetFailed));
     public static string Toast_DatasetError => Get(nameof(Toast_DatasetError));
+    public static string Toast_Loading => Get(nameof(Toast_Loading));
+    public static string Toast_DatasetCancelled => Get(nameof(Toast_DatasetCancelled));
+    public static string Toast_Cancel => Get(nameof(Toast_Cancel));
 }

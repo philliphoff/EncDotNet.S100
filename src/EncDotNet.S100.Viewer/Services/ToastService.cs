@@ -20,6 +20,9 @@ internal sealed class ToastService : IToastService
     /// <summary>Default auto-dismiss delay for errors (seconds).</summary>
     private const double LongDelay = 15;
 
+    /// <summary>Long delay for loading toasts so they stay visible during the operation.</summary>
+    private const double LoadingDelay = 300;
+
     public ToastService(ToastManager manager)
     {
         ArgumentNullException.ThrowIfNull(manager);
@@ -81,4 +84,24 @@ internal sealed class ToastService : IToastService
 
         builder.ShowError();
     }
+
+    /// <inheritdoc />
+    public void ShowLoading(string title, string? content = null, string? actionLabel = null, Action? action = null)
+    {
+        var builder = _manager.CreateToast(title)
+            .OnBottomRight()
+            .WithDelay(LoadingDelay)
+            .DismissOnClick();
+
+        if (content is not null)
+            builder = builder.WithContent(content);
+
+        if (actionLabel is not null && action is not null)
+            builder = builder.WithAction(actionLabel, action);
+
+        builder.ShowInfo();
+    }
+
+    /// <inheritdoc />
+    public void DismissAll() => _manager.DismissAll();
 }

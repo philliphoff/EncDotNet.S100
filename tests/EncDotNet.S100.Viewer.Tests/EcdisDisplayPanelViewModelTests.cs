@@ -19,7 +19,7 @@ public class EcdisDisplayPanelViewModelTests
         public event System.Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event System.Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
-        public Task LoadAsync(DatasetEntry entry) => Task.CompletedTask;
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
