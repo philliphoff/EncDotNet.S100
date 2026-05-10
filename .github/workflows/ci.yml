@@ -242,6 +242,83 @@ jobs:
           echo "::warning::Stapling failed after 5 attempts. The app is still notarized; Gatekeeper will verify online."
           exit 1
 
+      - name: Read viewer version
+        if: matrix.rid == 'osx-arm64'
+        id: viewer_version
+        run: |
+          VERSION=$(grep -oE '<Version>[^<]+' src/Directory.Build.props | sed 's/<Version>//')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read <Version> from src/Directory.Build.props"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build macOS DMG
+        if: matrix.rid == 'osx-arm64'
+        env:
+          VERSION: ${{ steps.viewer_version.outputs.version }}
+        run: |
+          DMG_NAME="EncDotNet.S100.Viewer-${VERSION}.dmg"
+          STAGING="$(mktemp -d)/dmg"
+          mkdir -p "$STAGING"
+          cp -R EncDotNet.S100.Viewer.app "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          hdiutil create \
+            -volname "S-100 Viewer" \
+            -srcfolder "$STAGING" \
+            -ov -format UDZO \
+            "$DMG_NAME"
+          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Sign macOS DMG
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$DMG_NAME"
+
+      - name: Notarize macOS DMG
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait \
+            --output-format json | tee dmg-notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < dmg-notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < dmg-notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::DMG notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+
+      - name: Staple notarization ticket to DMG
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        continue-on-error: true
+        run: |
+          # Same retry shape as the .app stapler step: the notarization
+          # ticket may not yet be available in CloudKit. The DMG is
+          # still notarized — Gatekeeper will verify online if the
+          # ticket is absent.
+          for i in 1 2 3 4 5; do
+            if xcrun stapler staple "$DMG_NAME"; then
+              exit 0
+            fi
+            echo "DMG staple attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "::warning::DMG stapling failed after 5 attempts. The DMG is still notarized; Gatekeeper will verify online."
+          exit 1
+
       - name: Archive macOS .app bundle
         if: matrix.rid == 'osx-arm64'
         run: tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
@@ -256,6 +333,13 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.tar.gz
+
+      - name: Upload macOS DMG
+        if: matrix.rid == 'osx-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-dmg
+          path: ${{ env.DMG_NAME }}
 
   publish-nuget:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -305,3 +389,4 @@ jobs:
           files: |
             artifacts/nupkgs/*.nupkg
             artifacts/Viewer-*/*.tar.gz
+            artifacts/Viewer-*-dmg/*.dmg
