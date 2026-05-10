@@ -316,4 +316,5 @@ internal static class Strings
     public static string Toast_Loading => Get(nameof(Toast_Loading));
     public static string Toast_DatasetCancelled => Get(nameof(Toast_DatasetCancelled));
     public static string Toast_Cancel => Get(nameof(Toast_Cancel));
+    public static string Toast_ExchangeSetLoading => Get(nameof(Toast_ExchangeSetLoading));
 }

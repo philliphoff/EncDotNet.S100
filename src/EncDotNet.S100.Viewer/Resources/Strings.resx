@@ -810,4 +810,7 @@ Open an S-101, S-124, S-125, or S-421 dataset to see display controls here.</val
   <data name="Toast_Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="Toast_ExchangeSetLoading" xml:space="preserve">
+    <value>Loading Exchange Set</value>
+  </data>
 </root>

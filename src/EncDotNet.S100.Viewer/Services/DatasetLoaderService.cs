@@ -197,14 +197,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
         SetStatus(string.Format(Strings.Status_LoadingFile, entry.DisplayName));
 
-        // Show a loading toast with a Cancel action. The toast stays
-        // visible (5-minute delay) until the operation completes and
-        // we call DismissAll().
-        _toasts.ShowLoading(
-            Strings.Toast_Loading,
-            string.Format(Strings.Status_LoadingFile, entry.DisplayName),
-            Strings.Toast_Cancel,
-            () => cts.Cancel());
+        // Show a loading toast with a Cancel action for standalone
+        // dataset loads. Exchange-set entries are covered by the
+        // exchange-set progress overlay instead, so skip the per-
+        // dataset toast to avoid toast churn during bulk loads.
+        if (!fromExchangeSet)
+        {
+            _toasts.ShowLoading(
+                Strings.Toast_Loading,
+                string.Format(Strings.Status_LoadingFile, entry.DisplayName),
+                Strings.Toast_Cancel,
+                () => cts.Cancel());
+        }
 
         try
         {
@@ -254,7 +258,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
 
             // Dismiss the loading toast before showing the result.
-            _toasts.DismissAll();
+            // Exchange-set entries don't show per-dataset toasts.
+            if (!fromExchangeSet)
+            {
+                _toasts.DismissAll();
+            }
             SetStatus(result.Info);
 
             // Recent files only makes sense for plain file loads. An
@@ -277,13 +285,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
         catch (OperationCanceledException)
         {
-            _toasts.DismissAll();
-            _toasts.ShowInfo(Strings.Toast_DatasetCancelled, entry.DisplayName);
+            if (!fromExchangeSet)
+            {
+                _toasts.DismissAll();
+                _toasts.ShowInfo(Strings.Toast_DatasetCancelled, entry.DisplayName);
+            }
             SetStatus(null);
         }
         catch (Exception ex)
         {
-            _toasts.DismissAll();
+            if (!fromExchangeSet)
+            {
+                _toasts.DismissAll();
+            }
             SetStatus(string.Format(Strings.Status_Error, ex.Message));
             _toasts.ShowError(Strings.Toast_DatasetError,
                 string.Format(Strings.Status_Error, ex.Message));
