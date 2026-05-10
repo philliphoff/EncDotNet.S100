@@ -1,11 +1,13 @@
 using System.Xml.Linq;
 using EncDotNet.S100.Datasets.S127;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S127.Tests;
 
 /// <summary>
-/// Tests for <see cref="S127FeatureXmlSource"/> verifying the Part 9
-/// FeatureXML intermediate format used by S-127 XSLT portrayal rules.
+/// Tests for <see cref="GmlFeatureXmlSource{TFeature}"/> with S-127 features,
+/// verifying the Part 9 FeatureXML intermediate format used by S-127 XSLT
+/// portrayal rules.
 /// </summary>
 public class S127FeatureXmlSourceTests
 {
@@ -16,7 +18,7 @@ public class S127FeatureXmlSourceTests
 
     private static XDocument GetFeatureXmlDoc(S127Dataset dataset)
     {
-        var source = new S127FeatureXmlSource(dataset);
+        var source = new GmlFeatureXmlSource<S127Feature>(dataset.Features);
         using var reader = source.GetFeatureXml();
         return XDocument.Load(reader);
     }
@@ -128,7 +130,7 @@ public class S127FeatureXmlSourceTests
     public void FeatureTypesPresent_MixedDataset_ReturnsAllTypes()
     {
         var ds = LoadTestData("marine_mixed.gml");
-        var source = new S127FeatureXmlSource(ds);
+        var source = new GmlFeatureXmlSource<S127Feature>(ds.Features);
 
         var types = source.FeatureTypesPresent;
         Assert.Contains("PilotBoardingPlace", types);

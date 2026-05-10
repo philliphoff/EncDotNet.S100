@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S129;
 
@@ -36,7 +37,7 @@ public sealed class S129Dataset
 /// <summary>
 /// A geographic feature parsed from an S-129 GML dataset.
 /// </summary>
-public sealed class S129Feature
+public sealed class S129Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -45,7 +46,7 @@ public sealed class S129Feature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public S129GeometryType GeometryType { get; init; }
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -64,27 +65,19 @@ public sealed class S129Feature
 
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S129ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
 
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S129ComplexAttribute
+public sealed class S129ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
-}
-
-/// <summary>
-/// The type of geometry associated with an S-129 feature.
-/// </summary>
-public enum S129GeometryType
-{
-    None = 0,
-    Point = 1,
-    Curve = 2,
-    Surface = 3,
 }

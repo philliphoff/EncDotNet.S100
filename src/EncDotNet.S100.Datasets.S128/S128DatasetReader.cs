@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Xml.Linq;
 using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -33,7 +33,6 @@ namespace EncDotNet.S100.Datasets.S128;
 /// </remarks>
 internal static class S128DatasetReader
 {
-    private static readonly XNamespace GmlNs = "http://www.opengis.net/gml/3.2";
     private static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
 
     private static readonly XNamespace[] CandidateS100Namespaces =
@@ -54,7 +53,7 @@ internal static class S128DatasetReader
         var datasetNs = root.Name.Namespace;
         var s100Ns = DetectS100Namespace(root);
 
-        string? datasetId = root.Attribute(GmlNs + "id")?.Value;
+        string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = null;
         var dsInfo = root.Element(s100Ns + "DatasetIdentificationInformation");
         if (dsInfo is not null)
@@ -144,7 +143,7 @@ internal static class S128DatasetReader
         if (!hasContainer)
         {
             yield return (false, root.Elements()
-                .Where(e => e.Attribute(GmlNs + "id") is not null
+                .Where(e => e.Attribute(GmlNamespaces.Gml + "id") is not null
                             && (e.Name.Namespace == datasetNs || e.Name.Namespace == XNamespace.None)));
         }
     }
@@ -153,7 +152,7 @@ internal static class S128DatasetReader
     {
         // Skip GML / S100 framework elements; only application-namespace
         // (or unqualified) elements are catalogue members.
-        if (element.Name.Namespace == GmlNs) return false;
+        if (element.Name.Namespace == GmlNamespaces.Gml) return false;
         if (CandidateS100Namespaces.Any(n => n == element.Name.Namespace)) return false;
         if (element.Name.NamespaceName.Contains("s100gml", StringComparison.OrdinalIgnoreCase)) return false;
         return element.Name.Namespace == datasetNs || element.Name.Namespace == XNamespace.None;
@@ -161,7 +160,7 @@ internal static class S128DatasetReader
 
     private static S128Feature ParseFeature(XElement element, XNamespace s100Ns)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value ?? "";
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
         var (simple, complex) = ParseAttributes(element, s100Ns);
         var refs = ParseReferences(element);
@@ -183,7 +182,7 @@ internal static class S128DatasetReader
 
     private static S128InformationType ParseInformationType(XElement element, XNamespace s100Ns)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value ?? "";
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var (simple, complex) = ParseAttributes(element, s100Ns);
         return new S128InformationType
         {
@@ -196,14 +195,14 @@ internal static class S128DatasetReader
 
     // ── Geometry ────────────────────────────────────────────────────────
 
-    private static (S128GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
         ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S128GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -215,8 +214,8 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S128GeometryType.Surface;
-            var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
+            geometryType = GmlGeometryType.Surface;
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;
         }
@@ -225,8 +224,8 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S128GeometryType.Curve;
-            var coords = ParseCurveCoordinates(curveProp);
+            geometryType = GmlGeometryType.Curve;
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
                 curves = [coords];
         }
@@ -235,104 +234,16 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "pointProperty");
         if (pointProp is not null)
         {
-            var coord = ParsePointElement(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
             if (coord is not null)
             {
-                geometryType = S128GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }
-
-    private static (double Latitude, double Longitude)? ParsePointElement(XElement element)
-    {
-        var pos = element.Descendants(GmlNs + "pos").FirstOrDefault();
-        return pos is null ? null : ParsePos(pos.Value);
-    }
-
-    private static ImmutableArray<(double, double)> ParseCurveCoordinates(XElement curveContainer)
-    {
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var posList in curveContainer.Descendants(GmlNs + "posList"))
-            coords.AddRange(ParsePosList(posList.Value));
-        if (coords.Count == 0)
-        {
-            foreach (var pos in curveContainer.Descendants(GmlNs + "pos"))
-            {
-                var c = ParsePos(pos.Value);
-                if (c is not null) coords.Add(c.Value);
-            }
-        }
-        return coords.ToImmutable();
-    }
-
-    private static (ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
-        ParseSurfaceCoordinates(XElement surfaceContainer)
-    {
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
-
-        var exterior = surfaceContainer.Descendants(GmlNs + "exterior").FirstOrDefault();
-        if (exterior is not null)
-            exteriorRing = ExtractRing(exterior);
-
-        foreach (var interior in surfaceContainer.Descendants(GmlNs + "interior"))
-        {
-            var ring = ExtractRing(interior);
-            if (!ring.IsDefaultOrEmpty)
-                interiorRings.Add(ring);
-        }
-
-        return (exteriorRing, interiorRings.ToImmutable());
-    }
-
-    private static ImmutableArray<(double, double)> ExtractRing(XElement ringContainer)
-    {
-        var posList = ringContainer.Descendants(GmlNs + "posList").FirstOrDefault();
-        if (posList is not null)
-            return ParsePosList(posList.Value);
-
-        var builder = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var pos in ringContainer.Descendants(GmlNs + "pos"))
-        {
-            var c = ParsePos(pos.Value);
-            if (c is not null) builder.Add(c.Value);
-        }
-        return builder.ToImmutable();
-    }
-
-    // GML 3.2 mandates whitespace-separated tokens, but some real-world
-    // producers (notably an issue inherited from the gml:coordinates
-    // convention) emit "lon,lat lon,lat ..." commas-between-axis. Treating
-    // both whitespace and commas as separators handles either shape.
-    private static readonly char[] CoordSeparators = [' ', '\t', '\n', '\r', ','];
-
-    private static (double Latitude, double Longitude)? ParsePos(string value)
-    {
-        var parts = value.Split(CoordSeparators, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2 &&
-            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
-            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
-            return (lat, lon);
-        return null;
-    }
-
-    private static ImmutableArray<(double, double)> ParsePosList(string value)
-    {
-        var parts = value.Split(CoordSeparators, StringSplitOptions.RemoveEmptyEntries);
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-        for (int i = 0; i + 1 < parts.Length; i += 2)
-        {
-            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var lon))
-                coords.Add((lat, lon));
-        }
-        return coords.ToImmutable();
-    }
-
-    // ── Attributes & references ─────────────────────────────────────────
+    }    // ── Attributes & references ─────────────────────────────────────────
 
     private static (ImmutableDictionary<string, string>, ImmutableArray<S128ComplexAttribute>)
         ParseAttributes(XElement element, XNamespace s100Ns)
@@ -346,7 +257,7 @@ internal static class S128DatasetReader
 
             // Skip GML / S100 infrastructure and the geometry container.
             if (localName is "geometry" or "boundedBy") continue;
-            if (child.Name.Namespace == GmlNs) continue;
+            if (child.Name.Namespace == GmlNamespaces.Gml) continue;
             if (CandidateS100Namespaces.Any(n => n == child.Name.Namespace)) continue;
 
             // Pure xlink-only references are surfaced via ParseReferences.
@@ -377,7 +288,7 @@ internal static class S128DatasetReader
 
         foreach (var sub in element.Elements())
         {
-            if (sub.Name.Namespace == GmlNs) continue;
+            if (sub.Name.Namespace == GmlNamespaces.Gml) continue;
             if (CandidateS100Namespaces.Any(n => n == sub.Name.Namespace)) continue;
 
             if (sub.HasElements)
@@ -434,15 +345,15 @@ internal static class S128DatasetReader
 
     private static (double MinLat, double MinLon, double MaxLat, double MaxLon)? ParseEnvelope(XElement root)
     {
-        var envelope = root.Descendants(GmlNs + "Envelope").FirstOrDefault();
+        var envelope = root.Descendants(GmlNamespaces.Gml + "Envelope").FirstOrDefault();
         if (envelope is null) return null;
 
-        var lower = envelope.Element(GmlNs + "lowerCorner")?.Value;
-        var upper = envelope.Element(GmlNs + "upperCorner")?.Value;
+        var lower = envelope.Element(GmlNamespaces.Gml + "lowerCorner")?.Value;
+        var upper = envelope.Element(GmlNamespaces.Gml + "upperCorner")?.Value;
         if (lower is null || upper is null) return null;
 
-        var lo = ParsePos(lower);
-        var hi = ParsePos(upper);
+        var lo = GmlCoordinateParser.ParsePos(lower);
+        var hi = GmlCoordinateParser.ParsePos(upper);
         if (lo is null || hi is null) return null;
 
         if (Math.Abs(lo.Value.Latitude) > 90 || Math.Abs(hi.Value.Latitude) > 90 ||

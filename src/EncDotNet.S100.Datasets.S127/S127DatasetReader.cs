@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Xml.Linq;
 using S100Diag = EncDotNet.S100.Datasets.S127.Diagnostics;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S127;
 
@@ -19,7 +19,6 @@ namespace EncDotNet.S100.Datasets.S127;
 /// </remarks>
 internal static class S127DatasetReader
 {
-    private static readonly XNamespace GmlNs = "http://www.opengis.net/gml/3.2";
 
     // S-100 Part 10b GML namespaces — accept both 5.0 (current) and 1.0 (legacy).
     private static readonly XNamespace S100Ns5 = "http://www.iho.int/s100gml/5.0";
@@ -35,7 +34,7 @@ internal static class S127DatasetReader
 
         var datasetNs = root.Name.Namespace;
 
-        string? datasetId = root.Attribute(GmlNs + "id")?.Value;
+        string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = ReadProductIdentifier(root);
 
         var features = ImmutableArray.CreateBuilder<S127Feature>();
@@ -84,7 +83,7 @@ internal static class S127DatasetReader
 
     private static S127Feature ParseFeature(XElement element)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value ?? "";
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element);
         var (simpleAttrs, complexAttrs) = ParseAttributes(element);
 
@@ -104,7 +103,7 @@ internal static class S127DatasetReader
 
     private static S127InformationType ParseInformationType(XElement element)
     {
-        var id = element.Attribute(GmlNs + "id")?.Value ?? "";
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var (simpleAttrs, complexAttrs) = ParseAttributes(element);
 
         return new S127InformationType
@@ -116,13 +115,13 @@ internal static class S127DatasetReader
         };
     }
 
-    private static (S127GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exteriorRing = ImmutableArray<(double, double)>.Empty;
         var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geometryType = S127GeometryType.None;
+        var geometryType = GmlGeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -134,10 +133,10 @@ internal static class S127DatasetReader
         var pointProp = FindS100Element(geometryContainer, "pointProperty");
         if (pointProp is not null)
         {
-            var coord = ParsePointDescendant(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
             if (coord is not null)
             {
-                geometryType = S127GeometryType.Point;
+                geometryType = GmlGeometryType.Point;
                 points = [coord.Value];
             }
         }
@@ -146,8 +145,8 @@ internal static class S127DatasetReader
         var curveProp = FindS100Element(geometryContainer, "curveProperty");
         if (curveProp is not null)
         {
-            geometryType = S127GeometryType.Curve;
-            var coords = ParseCurveCoordinates(curveProp);
+            geometryType = GmlGeometryType.Curve;
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
             {
                 curves = [coords];
@@ -158,8 +157,8 @@ internal static class S127DatasetReader
         var surfaceProp = FindS100Element(geometryContainer, "surfaceProperty");
         if (surfaceProp is not null)
         {
-            geometryType = S127GeometryType.Surface;
-            var (ext, intRings) = ParseSurfaceCoordinates(surfaceProp);
+            geometryType = GmlGeometryType.Surface;
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
             exteriorRing = ext;
             interiorRings = intRings;
         }
@@ -180,96 +179,7 @@ internal static class S127DatasetReader
                 (e.Name.Namespace == S100Ns5 ||
                  e.Name.Namespace == S100Ns1 ||
                  e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
-    }
-
-    private static (double Latitude, double Longitude)? ParsePointDescendant(XElement element)
-    {
-        // gml:Point/gml:pos descendants — accept whatever wrapper the encoder used
-        // (S100:Point, gml:Point, or a bare gml:pos under the property).
-        var pos = element.Descendants(GmlNs + "pos").FirstOrDefault();
-        return pos is null ? null : ParsePos(pos.Value);
-    }
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ParseCurveCoordinates(XElement curveContainer)
-    {
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-
-        foreach (var posList in curveContainer.Descendants(GmlNs + "posList"))
-            coords.AddRange(ParsePosList(posList.Value));
-
-        if (coords.Count == 0)
-        {
-            foreach (var pos in curveContainer.Descendants(GmlNs + "pos"))
-            {
-                var coord = ParsePos(pos.Value);
-                if (coord is not null) coords.Add(coord.Value);
-            }
-        }
-
-        return coords.ToImmutable();
-    }
-
-    private static (ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseSurfaceCoordinates(XElement surfaceContainer)
-    {
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
-
-        var exterior = surfaceContainer.Descendants(GmlNs + "exterior").FirstOrDefault();
-        if (exterior is not null) exteriorRing = ReadRing(exterior);
-
-        foreach (var interior in surfaceContainer.Descendants(GmlNs + "interior"))
-        {
-            var ring = ReadRing(interior);
-            if (ring.Length > 0) interiorRings.Add(ring);
-        }
-
-        return (exteriorRing, interiorRings.ToImmutable());
-    }
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ReadRing(XElement ringContainer)
-    {
-        var posList = ringContainer.Descendants(GmlNs + "posList").FirstOrDefault();
-        if (posList is not null) return ParsePosList(posList.Value);
-
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var pos in ringContainer.Descendants(GmlNs + "pos"))
-        {
-            var coord = ParsePos(pos.Value);
-            if (coord is not null) coords.Add(coord.Value);
-        }
-        return coords.ToImmutable();
-    }
-
-    private static (double Latitude, double Longitude)? ParsePos(string posValue)
-    {
-        var parts = posValue.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2 &&
-            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
-            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
-        {
-            return (lat, lon);
-        }
-        return null;
-    }
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ParsePosList(string posListValue)
-    {
-        var parts = posListValue.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var coords = ImmutableArray.CreateBuilder<(double, double)>();
-
-        for (int i = 0; i + 1 < parts.Length; i += 2)
-        {
-            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var lon))
-            {
-                coords.Add((lat, lon));
-            }
-        }
-
-        return coords.ToImmutable();
-    }
-
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S127ComplexAttribute>) ParseAttributes(XElement element)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S127ComplexAttribute>) ParseAttributes(XElement element)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S127ComplexAttribute>();
@@ -280,7 +190,7 @@ internal static class S127DatasetReader
 
             // Skip geometry, GML id, and S-100 infrastructure elements.
             if (localName is "geometry" or "boundedBy" ||
-                child.Name.Namespace == GmlNs ||
+                child.Name.Namespace == GmlNamespaces.Gml ||
                 child.Name.Namespace == S100Ns5 ||
                 child.Name.Namespace == S100Ns1)
                 continue;
@@ -327,7 +237,7 @@ internal static class S127DatasetReader
     private static bool IsApplicationSchema(XName name, XNamespace datasetNs)
     {
         _ = datasetNs;
-        if (name.Namespace == GmlNs) return false;
+        if (name.Namespace == GmlNamespaces.Gml) return false;
         if (name.Namespace.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase))
             return false;
         return true;

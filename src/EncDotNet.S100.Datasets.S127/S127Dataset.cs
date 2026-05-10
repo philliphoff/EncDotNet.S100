@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S127;
 
@@ -50,7 +51,7 @@ public sealed class S127Dataset
 /// <summary>
 /// A geographic feature parsed from an S-127 GML dataset.
 /// </summary>
-public sealed class S127Feature
+public sealed class S127Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -64,7 +65,7 @@ public sealed class S127Feature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public S127GeometryType GeometryType { get; init; }
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -83,12 +84,15 @@ public sealed class S127Feature
 
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S127ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
 
 /// <summary>
 /// An information type instance parsed from an S-127 GML dataset.
 /// </summary>
-public sealed class S127InformationType
+public sealed class S127InformationType : IGmlInformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -106,7 +110,7 @@ public sealed class S127InformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S127ComplexAttribute
+public sealed class S127ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }
@@ -115,20 +119,4 @@ public sealed class S127ComplexAttribute
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
 }
 
-/// <summary>
-/// The type of geometry associated with an S-127 feature.
-/// </summary>
-public enum S127GeometryType
-{
-    /// <summary>The feature has no associated geometry.</summary>
-    None = 0,
 
-    /// <summary>A single point.</summary>
-    Point = 1,
-
-    /// <summary>One or more curves (polylines).</summary>
-    Curve = 2,
-
-    /// <summary>A surface (polygon with optional holes).</summary>
-    Surface = 3,
-}

@@ -17,11 +17,11 @@ S-125 supersedes the AtoN (Aids to Navigation) feature classes from S-57 / S-101
 Key types:
 
 - **`S125Dataset`** — root model containing parsed features, information types, and dataset identification.
-- **`S125Feature`** — a geographic feature with type code, geometry, simple/complex attributes, and information references.
-- **`S125InformationType`** — an information type instance (e.g. `AtonStatusInformation`).
+- **`S125Feature`** — a geographic feature with type code, geometry, simple/complex attributes, and information references. Implements `IGmlFeature`.
+- **`S125InformationType`** — an information type instance (e.g. `AtonStatusInformation`). Implements `IGmlInformationType`.
 - **`S125InformationReference`** — a feature → information-type association captured from `xlink:href` / `informationRef` attributes.
-- **`S125ComplexAttribute`** — a complex attribute group with sub-attribute values.
-- **`S125GeometryType`** — enum describing the geometry primitive type of a feature.
+- **`S125ComplexAttribute`** — a complex attribute group with sub-attribute values. Implements `IGmlComplexAttribute`.
+- **`GmlGeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
 - **`S125FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S125Dataset` into the synthesized `Dataset/Features/*` shape that S-125 XSLT rules match against.
 - **`S125FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
 - **`S125PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.

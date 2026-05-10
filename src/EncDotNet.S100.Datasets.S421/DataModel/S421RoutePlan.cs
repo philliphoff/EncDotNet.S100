@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
 
@@ -357,19 +358,19 @@ public sealed class S421RoutePlan
         ImmutableArray<GeoPosition> coords;
         switch (f.GeometryType)
         {
-            case S421GeometryType.Point:
+            case GmlGeometryType.Point:
                 kind = S421ActionPointGeometryKind.Point;
                 coords = f.Points.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
                 break;
-            case S421GeometryType.Curve:
+            case GmlGeometryType.Curve:
                 kind = S421ActionPointGeometryKind.Curve;
                 coords = f.Curves.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
                 break;
-            case S421GeometryType.Surface:
+            case GmlGeometryType.Surface:
                 kind = S421ActionPointGeometryKind.Surface;
                 coords = f.ExteriorRing.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty

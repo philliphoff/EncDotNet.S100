@@ -1,23 +1,33 @@
-using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Gml;
 
-namespace EncDotNet.S100.Datasets.S411;
+namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
-/// Adapter that exposes the geometry of an <see cref="S411Dataset"/> through the
-/// product-agnostic <see cref="IFeatureGeometryProvider"/> contract used by the
-/// unified Mapsui display-list renderer.
+/// Generic geometry provider for GML-encoded S-100 datasets.
 /// </summary>
-public sealed class S411FeatureGeometryProvider : IFeatureGeometryProvider
+/// <remarks>
+/// Replaces the identical per-spec <c>S{NNN}FeatureGeometryProvider</c>
+/// classes that each implemented the same surface → curve → point preference
+/// logic. When a feature exposes multiple geometry kinds the provider
+/// prefers, in order: surface (with interior rings), the first curve, then
+/// points.
+/// </remarks>
+/// <typeparam name="TFeature">
+/// The concrete feature type, constrained to <see cref="IGmlFeature"/>.
+/// </typeparam>
+public sealed class GmlFeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
+    where TFeature : IGmlFeature
 {
     private readonly Dictionary<string, FeatureGeometry> _byId;
 
-    /// <summary>Builds a provider over the supplied dataset.</summary>
-    public S411FeatureGeometryProvider(S411Dataset dataset)
+    /// <summary>Builds a provider over the supplied features.</summary>
+    public GmlFeatureGeometryProvider(IReadOnlyList<TFeature> features)
     {
-        ArgumentNullException.ThrowIfNull(dataset);
+        ArgumentNullException.ThrowIfNull(features);
         _byId = new Dictionary<string, FeatureGeometry>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in dataset.Features)
+        foreach (var f in features)
         {
+            if (string.IsNullOrEmpty(f.Id)) continue;
             var geometry = BuildGeometry(f);
             if (geometry is not null)
                 _byId[f.Id] = geometry;
@@ -28,7 +38,7 @@ public sealed class S411FeatureGeometryProvider : IFeatureGeometryProvider
     public FeatureGeometry? GetGeometry(string featureReference) =>
         _byId.TryGetValue(featureReference, out var g) ? g : null;
 
-    private static FeatureGeometry? BuildGeometry(S411Feature feature)
+    private static FeatureGeometry? BuildGeometry(TFeature feature)
     {
         if (!feature.ExteriorRing.IsDefaultOrEmpty)
         {

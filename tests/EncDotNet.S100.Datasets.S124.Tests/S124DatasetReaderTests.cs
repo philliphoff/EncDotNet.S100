@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S124.Tests;
 
@@ -54,7 +55,7 @@ public class S124DatasetReaderTests
         var f1 = ds.Features.First(f => f.Id == "f1");
 
         Assert.Equal("NavwarnPart", f1.FeatureType);
-        Assert.Equal(S124GeometryType.Point, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, f1.GeometryType);
         Assert.Single(f1.Points);
         Assert.Equal(36.95, f1.Points[0].Latitude, 4);
         Assert.Equal(-76.0133, f1.Points[0].Longitude, 4);
@@ -89,7 +90,7 @@ public class S124DatasetReaderTests
         var f3 = ds.Features.First(f => f.Id == "f3");
 
         Assert.Equal("TextPlacement", f3.FeatureType);
-        Assert.Equal(S124GeometryType.Point, f3.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, f3.GeometryType);
         Assert.Single(f3.Points);
     }
 
@@ -121,7 +122,7 @@ public class S124DatasetReaderTests
         var ds = LoadTestData("navwarn_curve.gml");
         var f1 = ds.Features.First(f => f.Id == "f1");
 
-        Assert.Equal(S124GeometryType.Curve, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Curve, f1.GeometryType);
         Assert.Single(f1.Curves);
         Assert.Equal(4, f1.Curves[0].Length);
         Assert.Equal(29.31, f1.Curves[0][0].Latitude, 4);
@@ -134,7 +135,7 @@ public class S124DatasetReaderTests
         var ds = LoadTestData("navwarn_curve.gml");
         var f2 = ds.Features.First(f => f.Id == "f2");
 
-        Assert.Equal(S124GeometryType.Curve, f2.GeometryType);
+        Assert.Equal(GmlGeometryType.Curve, f2.GeometryType);
         Assert.Single(f2.Curves);
         Assert.Equal(3, f2.Curves[0].Length);
     }
@@ -162,7 +163,7 @@ public class S124DatasetReaderTests
         var f1 = ds.Features.First(f => f.Id == "f1");
 
         Assert.Equal("NavwarnAreaAffected", f1.FeatureType);
-        Assert.Equal(S124GeometryType.Surface, f1.GeometryType);
+        Assert.Equal(GmlGeometryType.Surface, f1.GeometryType);
         Assert.Equal(5, f1.ExteriorRing.Length); // Closed ring: 5 coordinate pairs
         Assert.Equal(51.05, f1.ExteriorRing[0].Latitude, 4);
         Assert.Equal(1.20, f1.ExteriorRing[0].Longitude, 4);
@@ -174,7 +175,7 @@ public class S124DatasetReaderTests
         var ds = LoadTestData("navwarn_surface.gml");
         var f3 = ds.Features.First(f => f.Id == "f3");
 
-        Assert.Equal(S124GeometryType.Surface, f3.GeometryType);
+        Assert.Equal(GmlGeometryType.Surface, f3.GeometryType);
         Assert.Equal(5, f3.ExteriorRing.Length);
         Assert.Single(f3.InteriorRings);
         Assert.Equal(5, f3.InteriorRings[0].Length);
@@ -187,7 +188,7 @@ public class S124DatasetReaderTests
         var f2 = ds.Features.First(f => f.Id == "f2");
 
         Assert.Equal("NavwarnPart", f2.FeatureType);
-        Assert.Equal(S124GeometryType.Point, f2.GeometryType);
+        Assert.Equal(GmlGeometryType.Point, f2.GeometryType);
         Assert.Single(f2.Points);
         Assert.Equal(51.085, f2.Points[0].Latitude, 4);
     }
@@ -213,10 +214,10 @@ public class S124DatasetReaderTests
     {
         var ds = LoadTestData("navwarn_mixed.gml");
 
-        Assert.Contains(ds.Features, f => f.GeometryType == S124GeometryType.Point);
-        Assert.Contains(ds.Features, f => f.GeometryType == S124GeometryType.Curve);
-        Assert.Contains(ds.Features, f => f.GeometryType == S124GeometryType.Surface);
-        Assert.Contains(ds.Features, f => f.GeometryType == S124GeometryType.None);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Point);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Curve);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.Surface);
+        Assert.Contains(ds.Features, f => f.GeometryType == GmlGeometryType.None);
     }
 
     [Fact]
@@ -247,7 +248,7 @@ public class S124DatasetReaderTests
         var ds = LoadTestData("navwarn_mixed.gml");
         var f5 = ds.Features.First(f => f.Id == "f5");
 
-        Assert.Equal(S124GeometryType.None, f5.GeometryType);
+        Assert.Equal(GmlGeometryType.None, f5.GeometryType);
         Assert.True(f5.Points.IsDefaultOrEmpty);
         Assert.True(f5.Curves.IsDefaultOrEmpty);
         Assert.True(f5.ExteriorRing.IsDefaultOrEmpty);

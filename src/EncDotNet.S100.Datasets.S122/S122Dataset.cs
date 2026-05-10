@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S122;
 
@@ -39,7 +40,7 @@ public sealed class S122Dataset
 /// <summary>
 /// A geographic feature parsed from an S-122 GML dataset.
 /// </summary>
-public sealed class S122Feature
+public sealed class S122Feature : IGmlFeature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -48,7 +49,7 @@ public sealed class S122Feature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public S122GeometryType GeometryType { get; init; }
+    public GmlGeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -67,12 +68,15 @@ public sealed class S122Feature
 
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S122ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
 
 /// <summary>
 /// An information type instance parsed from an S-122 GML dataset.
 /// </summary>
-public sealed class S122InformationType
+public sealed class S122InformationType : IGmlInformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -90,7 +94,7 @@ public sealed class S122InformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S122ComplexAttribute
+public sealed class S122ComplexAttribute : IGmlComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }
@@ -99,13 +103,4 @@ public sealed class S122ComplexAttribute
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
 }
 
-/// <summary>
-/// The type of geometry associated with an S-122 feature.
-/// </summary>
-public enum S122GeometryType
-{
-    None = 0,
-    Point = 1,
-    Curve = 2,
-    Surface = 3,
-}
+

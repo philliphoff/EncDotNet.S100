@@ -19,7 +19,7 @@ Key types:
 - **`S127Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
 - **`S127InformationType`** — a non-geographic information type instance (S-127 Edition 2.0.0 declares none, but the parser preserves any `imember` content for forward compatibility).
 - **`S127ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S127GeometryType`** — enum describing the geometry primitive type of a feature.
+- **`GmlGeometryType`** — enum describing the geometry primitive type of a feature.
 - **`S127FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S127Dataset` into S-100 Part 9 FeatureXML (`Dataset/Features/*`) for the bundled `main.xsl` rule.
 - **`S127FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter exposing feature geometry to the unified Mapsui display-list renderer.
 - **`S127PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, SVG symbols, line styles, and color palettes.
