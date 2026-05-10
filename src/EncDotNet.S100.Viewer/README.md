@@ -3,6 +3,23 @@
 Cross-platform desktop viewer for IHO S-100 nautical chart data,
 built on Avalonia 11 + Mapsui 5.
 
+## Installation
+
+Each release attaches per-platform builds at
+[github.com/philliphoff/EncDotNet.S100/releases](https://github.com/philliphoff/EncDotNet.S100/releases).
+
+- **macOS (Apple Silicon)** — download
+  `EncDotNet.S100.Viewer-<version>.dmg`, open it, and drag
+  **S-100 Viewer** to **Applications**. The DMG, the bundled `.app`,
+  and the embedded executable are all signed with a Developer ID
+  certificate and notarized by Apple, so Gatekeeper will accept them
+  without a manual override. A legacy
+  `Viewer-osx-arm64.tar.gz` is also published during a transition
+  period; expanding it produces the same `.app`.
+- **Windows / Linux** — download `Viewer-<rid>.tar.gz` for your
+  architecture and extract it; run `EncDotNet.S100.Viewer` from the
+  extracted directory.
+
 ## Pick / Object Information panel
 
 Toggle **Pick Mode** (cross-hair toolbar button, **View → Appearance →
