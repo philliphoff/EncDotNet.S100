@@ -22,7 +22,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     private readonly S104Dataset _dataset;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-104";
+    public SpecRef Spec => new("S-104", default);
 
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes => _source.AvailableTimes;
@@ -122,7 +122,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
             Layers = [colorLayer],
             Extent = extent,
             Info = info,
-            ProductSpec = "S-104",
+            Spec = new SpecRef("S-104", default),
         };
     }
 

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -9,5 +10,5 @@ namespace EncDotNet.S100.Datasets.S128;
 public sealed class S128PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     public S128PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
-    public override string ProductSpec => "S-128";
+    public override SpecRef Spec => new("S-128", default);
 }

@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S101;
 
@@ -27,11 +28,22 @@ public sealed class S101VectorSource : IVectorSource
 
     public VectorMetadata Metadata => new()
     {
-        ProductSpec = "S-101",
+        Spec = BuildSpec(_dataset.Document),
         Extent = ComputeExtent(),
         HorizontalCRS = "EPSG:4326",
         CompilationScaleDenominator = 0, // S-101 doesn't encode scale in DSSI the same way as S-57
     };
+
+    private static SpecRef BuildSpec(S101Document doc)
+    {
+        var edition = doc.Identification?.ProductSpecificationEdition;
+        if (!string.IsNullOrWhiteSpace(edition)
+            && SpecVersion.TryParse(edition, out var v))
+        {
+            return new SpecRef("S-101", v);
+        }
+        return new SpecRef("S-101", default);
+    }
 
     public IReadOnlyList<Feature> GetFeatures(BoundingBox? extent = null)
     {

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using EncDotNet.S100.Core;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Xml;
@@ -214,7 +215,7 @@ public sealed class TelemetrySmokeTests
             ViewingGroups = viewingGroups ?? new ViewingGroupController();
         }
 
-        public string ProductSpec => "S-101";
+        public SpecRef Spec => new("S-101", default);
         public string Edition => "1.2.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }

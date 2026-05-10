@@ -137,10 +137,10 @@ public static class EcdisDisplayExtensions
         ArgumentNullException.ThrowIfNull(catalogue);
 
         var modeId = EcdisCategoryMapper.Map(
-            catalogue.ProductSpec, settings.Category, catalogue.DisplayModes.DeclaredModeIds);
+            catalogue.Spec.Name, settings.Category, catalogue.DisplayModes.DeclaredModeIds);
         catalogue.DisplayModes.SetActive(modeId);
 
-        if (settings.HiddenViewingGroups.TryGetValue(catalogue.ProductSpec, out var hidden))
+        if (settings.HiddenViewingGroups.TryGetValue(catalogue.Spec.Name, out var hidden))
         {
             foreach (var vg in hidden)
                 catalogue.ViewingGroups.SetUserOverride(vg, false);

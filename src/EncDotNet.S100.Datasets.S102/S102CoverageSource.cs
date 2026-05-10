@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S102;
 
@@ -19,7 +20,7 @@ public class S102CoverageSource : ICoverageSource
     
     public CoverageMetadata Metadata => new CoverageMetadata
     {
-        ProductSpec = "S-102",
+        Spec = new SpecRef("S-102", default),
         Extent = new BoundingBox(
             _coverage.OriginLatitude,
             _coverage.OriginLongitude,

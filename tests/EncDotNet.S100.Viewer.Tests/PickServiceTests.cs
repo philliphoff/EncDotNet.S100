@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -123,12 +124,14 @@ public class PickServiceTests
         public StubProcessor(string spec, params FeatureInfo[] features)
         {
             ProductSpec = spec;
+            Spec = new SpecRef(spec, default);
             _features = new Dictionary<string, FeatureInfo>();
             foreach (var f in features)
                 _features[f.FeatureRef] = f;
         }
 
         public string ProductSpec { get; }
+        public SpecRef Spec { get; }
         public DatasetResult Render(RenderContext? context = null)
             => throw new NotSupportedException();
         public FeatureInfo? GetFeatureInfo(string featureRef)

@@ -1,3 +1,5 @@
+using EncDotNet.S100.Core;
+
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
@@ -21,7 +23,8 @@ public interface IVectorSource
 /// </summary>
 public sealed class VectorMetadata
 {
-    public required string ProductSpec { get; init; }
+    /// <summary>The product specification (name + edition) this dataset declares conformance to.</summary>
+    public required SpecRef Spec { get; init; }
     public required BoundingBox Extent { get; init; }
     public required string HorizontalCRS { get; init; }
     public required int CompilationScaleDenominator { get; init; }

@@ -106,7 +106,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
             if (!SetProperty(ref _selectedResult, value) || value is null)
                 return;
             using var __cmd = ViewerObservability.BeginCommand("search.open");
-            __cmd.SetTag("s100.viewer.product_spec", value.Hit.Processor.ProductSpec);
+            __cmd.SetTag("s100.viewer.product_spec", value.Hit.Processor.Spec.Name);
             var ok = _pick.OpenFeatureAt(value.Hit.Processor, value.Hit.Ordinal, value.Hit.DatasetFileName);
             if (!ok)
                 __cmd.SetStatus(false, "feature not found at ordinal");
@@ -174,7 +174,7 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
             return;
 
         using var __cmd = ViewerObservability.BeginCommand("search.open");
-        __cmd.SetTag("s100.viewer.product_spec", item.Hit.Processor.ProductSpec);
+        __cmd.SetTag("s100.viewer.product_spec", item.Hit.Processor.Spec.Name);
 
         var ok = _pick.OpenFeatureAt(item.Hit.Processor, item.Hit.Ordinal, item.Hit.DatasetFileName);
         if (!ok)

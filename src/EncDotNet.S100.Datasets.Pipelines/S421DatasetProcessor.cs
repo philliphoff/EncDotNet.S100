@@ -11,7 +11,7 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
 {
     private readonly S421Dataset _dataset;
 
-    public override string ProductSpec => "S-421";
+    public override SpecRef Spec => new("S-421", default);
     protected override string ProductDescription => "Route Plan";
     protected override IReadOnlyList<S421Feature> Features => _dataset.Features;
     protected override double MinExtentPadding => 0.05;

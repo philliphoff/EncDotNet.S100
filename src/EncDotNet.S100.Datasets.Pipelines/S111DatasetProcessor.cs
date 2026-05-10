@@ -24,7 +24,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
     private readonly S111Dataset _dataset;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-111";
+    public SpecRef Spec => new("S-111", default);
 
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes => _source.AvailableTimes;
@@ -159,7 +159,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Layers = layers,
             Extent = extent,
             Info = info,
-            ProductSpec = "S-111",
+            Spec = new SpecRef("S-111", default),
             // Stable sub-layer keys; the viewer maps these to
             // localized display names. The processor itself does not
             // depend on UI string resources.

@@ -1,4 +1,5 @@
 using System.Xml;
+using EncDotNet.S100.Core;
 using System.Xml.Xsl;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -597,7 +598,7 @@ public class VectorPipelineTests
             ViewingGroups = viewingGroups ?? new ViewingGroupController();
         }
 
-        public string ProductSpec => "S-101";
+        public SpecRef Spec => new("S-101", default);
         public string Edition => "1.2.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }

@@ -3,6 +3,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S102;
 
@@ -49,7 +50,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         _provider = provider;
     }
 
-    public string ProductSpec => "S-102";
+    public SpecRef Spec => new("S-102", default);
     public string Edition => "3.0.0";
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 

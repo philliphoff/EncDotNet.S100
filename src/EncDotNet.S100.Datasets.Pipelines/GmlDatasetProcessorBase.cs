@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
@@ -51,7 +52,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
     }
 
     /// <inheritdoc/>
-    public abstract string ProductSpec { get; }
+    public abstract SpecRef Spec { get; }
 
     /// <summary>
     /// Human-readable product description for info strings (e.g.
@@ -122,12 +123,12 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
         var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
 
-        Console.WriteLine($"[{ProductSpec.Replace("-", "")}] {_fileName}: {Features.Count} features, "
+        Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
             + $"{instructions.Count} drawing instructions");
 
         var renderer = new MapsuiDisplayListRenderer
         {
-            LayerName = $"{ProductSpec}: {_fileName}",
+            LayerName = $"{Spec.Name}: {_fileName}",
             Palette = catalogue.ActivePalette,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
@@ -153,7 +154,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
 
         var featureTypes = featureSource.FeatureTypesPresent;
         var suffix = BuildInfoSuffix();
-        var info = $"{ProductSpec} {ProductDescription} — {_fileName}\n"
+        var info = $"{Spec.Name} {ProductDescription} — {_fileName}\n"
             + $"Features: {Features.Count} ({string.Join(", ", featureTypes)})\n"
             + (suffix.Length > 0 ? suffix + "\n" : "")
             + $"Drawing instructions: {instructions.Count}";
@@ -163,7 +164,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             Layers = [layer],
             Extent = ComputeExtent(),
             Info = info,
-            ProductSpec = ProductSpec,
+            Spec = Spec,
         };
     }
 

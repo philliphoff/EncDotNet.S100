@@ -22,7 +22,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-102";
+    public SpecRef Spec => new("S-102", default);
 
     public S102DatasetProcessor(
         string path,
@@ -115,7 +115,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
             Layers = [mapLayer],
             Extent = extent,
             Info = info,
-            ProductSpec = "S-102",
+            Spec = new SpecRef("S-102", default),
         };
     }
 

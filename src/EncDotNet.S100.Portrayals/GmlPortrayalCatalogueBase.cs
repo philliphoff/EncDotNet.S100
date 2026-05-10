@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Xml;
 using System.Xml.Xsl;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -14,7 +15,7 @@ namespace EncDotNet.S100.Portrayals;
 /// resolver for <c>xsl:include</c> resolution.
 /// </summary>
 /// <remarks>
-/// Subclasses typically only need to supply <see cref="ProductSpec"/> and,
+/// Subclasses typically only need to supply <see cref="Spec"/> and,
 /// where necessary, override <see cref="CreateXmlResolver"/> (for specs
 /// whose XSLT includes reference unregistered sub-templates) or
 /// <see cref="GetCompiledRule"/> (for specs that inject an adapter rule).
@@ -45,8 +46,8 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Gets the underlying portrayal catalogue provider.</summary>
     protected PortrayalCatalogueProvider Provider => _provider;
 
-    /// <summary>Gets the S-100 product specification identifier (e.g. "S-124").</summary>
-    public abstract string ProductSpec { get; }
+    /// <summary>The product specification (name + edition) this catalogue targets.</summary>
+    public abstract SpecRef Spec { get; }
 
     /// <summary>Gets the edition of the portrayal catalogue.</summary>
     public string Edition => _provider.Catalogue.Version;

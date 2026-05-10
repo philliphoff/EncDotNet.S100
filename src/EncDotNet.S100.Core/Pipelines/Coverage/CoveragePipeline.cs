@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Pipelines.Coverage;
@@ -24,9 +25,9 @@ public class CoveragePipeline
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.process");
         activity?.SetTag(TelemetryTags.PipelineStage, "portray");
-        activity?.SetTag(TelemetryTags.Product, source.Metadata.ProductSpec);
+        activity?.SetTag(TelemetryTags.Product, source.Metadata.Spec.Name);
         var start = Stopwatch.GetTimestamp();
-        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, source.Metadata.ProductSpec);
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, source.Metadata.Spec.Name);
         var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "coverage");
 
         int gc0Before = GC.CollectionCount(0);
@@ -116,7 +117,8 @@ public interface ICoverageSource
 
 public class CoverageMetadata
 {
-    public required string ProductSpec { get; init; }
+    /// <summary>The product specification (name + edition) this coverage declares conformance to.</summary>
+    public required SpecRef Spec { get; init; }
     public required BoundingBox Extent { get; init; }
     public required GridMetadata GridMetadata { get; init; }
     public required string HorizontalCRS { get; init; }
