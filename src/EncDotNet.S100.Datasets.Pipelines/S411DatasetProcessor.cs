@@ -14,7 +14,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
 {
     private readonly S411Dataset _dataset;
 
-    public override string ProductSpec => "S-411";
+    public override SpecRef Spec => new("S-411", default);
     protected override string ProductDescription => "Sea Ice";
     protected override IReadOnlyList<S411Feature> Features => _dataset.Features;
 
@@ -83,7 +83,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
                 Layers = Array.Empty<ILayer>(),
                 Extent = ComputeExtent(),
                 Info = $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})",
-                ProductSpec = "S-411",
+                Spec = new SpecRef("S-411", default),
             };
         }
         return null;

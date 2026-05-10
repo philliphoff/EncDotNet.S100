@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S111;
 
@@ -24,7 +25,7 @@ public class S111CoverageSource : ICoverageSource
             var coverage = _dataset.Coverages[_selectedTimeIndex];
             return new CoverageMetadata
             {
-                ProductSpec = "S-111",
+                Spec = new SpecRef("S-111", default),
                 Extent = new BoundingBox(
                     coverage.OriginLatitude,
                     coverage.OriginLongitude,

@@ -3,6 +3,7 @@ using System.Xml.Xsl;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S411;
 
@@ -18,7 +19,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 
     public S411PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
 
-    public override string ProductSpec => "S-411";
+    public override SpecRef Spec => new("S-411", default);
 
     protected override System.Xml.XmlResolver CreateXmlResolver() =>
         new FetchRuleFallbackXmlResolver(Provider);

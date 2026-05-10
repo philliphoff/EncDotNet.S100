@@ -27,7 +27,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
 
-    public string ProductSpec => "S-101";
+    public SpecRef Spec => new("S-101", default);
 
     public S101DatasetProcessor(
         string path,
@@ -75,6 +75,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             _dataset = S101Dataset.Open(datasetStream);
         }
         _featureCatalogueManager = featureCatalogueManager;
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -156,7 +158,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             Layers = [mapLayer],
             Extent = layerExtent,
             Info = info,
-            ProductSpec = "S-101",
+            Spec = new SpecRef("S-101", default),
         };
     }
 

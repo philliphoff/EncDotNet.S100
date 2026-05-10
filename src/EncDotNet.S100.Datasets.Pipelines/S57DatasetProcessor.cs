@@ -32,7 +32,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
 
-    public string ProductSpec => "S-57";
+    public SpecRef Spec => new("S-57", default);
 
     public S57DatasetProcessor(
         string path,
@@ -85,6 +85,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         var translator = new S57ToS101Translator();
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
+
+        // S-57 datasets render through the S-101 portrayal catalogue.
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -144,7 +147,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
             Layers = [mapLayer],
             Extent = layerExtent,
             Info = info,
-            ProductSpec = "S-57",
+            Spec = new SpecRef("S-57", default),
         };
     }
 

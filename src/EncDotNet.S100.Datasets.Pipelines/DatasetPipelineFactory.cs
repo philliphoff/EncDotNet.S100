@@ -18,7 +18,8 @@ public sealed class DatasetResult
     public required IReadOnlyList<ILayer> Layers { get; init; }
     public required MRect Extent { get; init; }
     public required string Info { get; init; }
-    public required string ProductSpec { get; init; }
+    /// <summary>The product specification (name + edition) of the rendered dataset.</summary>
+    public required SpecRef Spec { get; init; }
 
     /// <summary>
     /// Optional human-readable display names for each layer in

@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Portrayals;
 
@@ -25,10 +26,19 @@ public static class PortrayalCatalogueReader
         string productId = (string?)root.Attribute("productId") ?? "";
         string version = (string?)root.Attribute("version") ?? "";
 
+        CatalogueRef? catalogueRef = null;
+        if (!string.IsNullOrWhiteSpace(productId)
+            && SpecName.TryNormalize(productId, out var canonicalName)
+            && SpecVersion.TryParse(version, out var parsedVersion))
+        {
+            catalogueRef = new CatalogueRef(canonicalName, parsedVersion);
+        }
+
         return new PortrayalCatalogue
         {
             ProductId = productId,
             Version = version,
+            CatalogueRef = catalogueRef,
             AlertCatalog = ReadCatalogItem(root.Element(Unqualified("alertCatalog")) ?? root.Element(PC + "alertCatalog")),
             Pixmaps = ReadCatalogItems(root, "pixmaps", "pixmap"),
             ColorProfiles = ReadCatalogItems(root, "colorProfiles", "colorProfile"),

@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Features.Diagnostics;
 
 namespace EncDotNet.S100.Features;
@@ -55,13 +56,24 @@ public static class FeatureCatalogueReader
         _s100fc = ResolveNamespace(root, "S100FC", "http://www.iho.int/S100FC");
         _s100base = ResolveNamespace(root, "S100Base", "http://www.iho.int/S100Base");
         _s100ci = ResolveNamespace(root, "S100CI", "http://www.iho.int/S100CI");
+        var versionNumber = (string)root.Element(S100FC + "versionNumber")!;
+        var productId = (string?)root.Element(S100FC + "productId");
+        CatalogueRef? catalogueRef = null;
+        if (!string.IsNullOrWhiteSpace(productId)
+            && SpecName.TryNormalize(productId, out var canonicalName)
+            && SpecVersion.TryParse(versionNumber, out var parsedVersion))
+        {
+            catalogueRef = new CatalogueRef(canonicalName, parsedVersion);
+        }
         return new FeatureCatalogue
         {
             Name = (string)root.Element(S100FC + "name")!,
             Scope = (string?)root.Element(S100FC + "scope"),
             FieldOfApplication = (string?)root.Element(S100FC + "fieldOfApplication"),
-            VersionNumber = (string)root.Element(S100FC + "versionNumber")!,
+            ProductId = productId,
+            VersionNumber = versionNumber,
             VersionDate = (string)root.Element(S100FC + "versionDate")!,
+            CatalogueRef = catalogueRef,
             Producer = ReadProducer(root.Element(S100FC + "producer")),
             Classification = (string?)root.Element(S100FC + "classification"),
             SimpleAttributes = root

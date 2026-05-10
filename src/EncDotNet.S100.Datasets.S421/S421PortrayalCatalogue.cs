@@ -1,4 +1,5 @@
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S421;
 
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Datasets.S421;
 public sealed class S421PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     public S421PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
-    public override string ProductSpec => "S-421";
+    public override SpecRef Spec => new("S-421", default);
     protected override System.Xml.XmlResolver CreateXmlResolver() =>
         new FetchRuleFallbackXmlResolver(Provider);
 }

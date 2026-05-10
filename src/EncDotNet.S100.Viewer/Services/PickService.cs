@@ -153,7 +153,7 @@ internal sealed class PickService : IPickService
                 FeatureTypeName = info.FeatureTypeName,
                 FeatureRef = info.FeatureRef,
                 DatasetFileName = owningEntry.DisplayName,
-                ProductSpec = processor.ProductSpec,
+                ProductSpec = processor.Spec.Name,
                 Attributes = info.Attributes,
                 References = info.References,
                 OwningProcessor = processor,
@@ -180,7 +180,7 @@ internal sealed class PickService : IPickService
             return false;
         }
 
-        __cmd.SetTag("s100.viewer.product_spec", processor.ProductSpec);
+        __cmd.SetTag("s100.viewer.product_spec", processor.Spec.Name);
         __cmd.SetTag("s100.viewer.reference.role", reference.Role);
 
         var ok = OpenFeature(processor, reference.TargetRef, selected.DatasetFileName ?? string.Empty);
@@ -223,7 +223,7 @@ internal sealed class PickService : IPickService
                 FeatureTypeName = info.FeatureTypeName,
                 FeatureRef = info.FeatureRef,
                 DatasetFileName = datasetFileName,
-                ProductSpec = processor.ProductSpec,
+                ProductSpec = processor.Spec.Name,
                 Attributes = info.Attributes,
                 References = info.References,
                 OwningProcessor = processor,
@@ -294,7 +294,7 @@ internal sealed class PickService : IPickService
                 FeatureTypeName = info.FeatureTypeName,
                 FeatureRef = info.FeatureRef,
                 DatasetFileName = entry.DisplayName,
-                ProductSpec = processor.ProductSpec,
+                ProductSpec = processor.Spec.Name,
                 Attributes = info.Attributes,
                 References = info.References,
                 OwningProcessor = processor,

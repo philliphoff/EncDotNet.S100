@@ -17,6 +17,17 @@ public static class Specification
     public static IReadOnlyList<string> AvailableSpecs { get; } = ["S-101", "S-102", "S-104", "S-111", "S-122", "S-124", "S-125", "S-127", "S-128", "S-129", "S-411", "S-421"];
 
     /// <summary>
+    /// Strongly-typed view of <see cref="AvailableSpecs"/>. Each entry has its
+    /// canonical name (e.g. "S-101") and a default <see cref="SpecVersion"/>
+    /// of <c>0.0.0</c>, signaling "edition unspecified" — no per-bundle manifest
+    /// currently records which spec edition the bundled assets target. To
+    /// determine the actual catalogue version, parse the bundled Feature or
+    /// Portrayal Catalogue and inspect its <c>CatalogueRef</c>.
+    /// </summary>
+    public static IReadOnlyList<SpecRef> AvailableSpecRefs { get; } =
+        AvailableSpecs.Select(name => new SpecRef(name, default)).ToList().AsReadOnly();
+
+    /// <summary>
     /// Opens the bundled Feature Catalogue XML for the given product specification as a readable stream.
     /// </summary>
     /// <param name="productSpec">The product specification identifier (e.g. "S-101", "S-102", "S-104", "S-111").</param>

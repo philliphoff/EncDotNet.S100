@@ -24,7 +24,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
     private readonly S111Dataset _dataset;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-111";
+    public SpecRef Spec => new("S-111", default);
 
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes => _source.AvailableTimes;
@@ -78,6 +78,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 "S-111 portrayal catalogue is not registered. " +
                 "Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
         _catalogue = new S111PortrayalCatalogue(_provider);
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -159,7 +161,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Layers = layers,
             Extent = extent,
             Info = info,
-            ProductSpec = "S-111",
+            Spec = new SpecRef("S-111", default),
             // Stable sub-layer keys; the viewer maps these to
             // localized display names. The processor itself does not
             // depend on UI string resources.

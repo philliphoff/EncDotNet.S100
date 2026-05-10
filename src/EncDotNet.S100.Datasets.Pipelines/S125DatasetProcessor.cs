@@ -17,7 +17,7 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
     private readonly S125Dataset _dataset;
 
     /// <inheritdoc />
-    public override string ProductSpec => "S-125";
+    public override SpecRef Spec => new("S-125", default);
     protected override string ProductDescription => "Marine Aids to Navigation";
     protected override IReadOnlyList<S125Feature> Features => _dataset.Features;
 

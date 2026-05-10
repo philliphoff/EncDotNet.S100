@@ -22,7 +22,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly string _fileName;
 
-    public string ProductSpec => "S-102";
+    public SpecRef Spec => new("S-102", default);
 
     public S102DatasetProcessor(
         string path,
@@ -75,6 +75,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
 
         var provider = catalogueManager.GetProvider("S-102");
         _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { FourShades = true };
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -115,7 +117,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
             Layers = [mapLayer],
             Extent = extent,
             Info = info,
-            ProductSpec = "S-102",
+            Spec = new SpecRef("S-102", default),
         };
     }
 

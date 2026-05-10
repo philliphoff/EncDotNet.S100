@@ -138,11 +138,21 @@ public sealed class GateCommand : Command<GateCommand.Settings>
             });
         }
 
-        // Metric totals.
-        var baseMetrics = baseline.Metrics.ToDictionary(
-            m => m.Name + "|" + string.Join(",", m.Tags.Select(t => $"{t.Key}={t.Value}")));
-        var candMetrics = candidate.Metrics.ToDictionary(
-            m => m.Name + "|" + string.Join(",", m.Tags.Select(t => $"{t.Key}={t.Value}")));
+        // Metric totals. The OTel periodic exporter emits one record per
+        // export cycle (every 5s); a long-running scenario therefore writes
+        // multiple records per (name, tags) tuple. Counter / histogram
+        // records use cumulative temporality, so the LAST record per key
+        // contains the total for the run — keep it and discard earlier
+        // snapshots rather than crashing on duplicate keys.
+        static string MetricKey(MetricRecord m) =>
+            m.Name + "|" + string.Join(",", m.Tags.OrderBy(t => t.Key).Select(t => $"{t.Key}={t.Value}"));
+
+        var baseMetrics = baseline.Metrics
+            .GroupBy(MetricKey)
+            .ToDictionary(g => g.Key, g => g.Last());
+        var candMetrics = candidate.Metrics
+            .GroupBy(MetricKey)
+            .ToDictionary(g => g.Key, g => g.Last());
 
         foreach (var key in baseMetrics.Keys.Union(candMetrics.Keys).OrderBy(k => k))
         {

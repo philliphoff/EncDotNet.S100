@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -19,9 +20,11 @@ public class FeatureSearchServiceTests
         public FakeProcessor(string spec, params FeatureSummary[] features)
         {
             ProductSpec = spec;
+            Spec = new SpecRef(spec, default);
             _features = features;
         }
         public string ProductSpec { get; }
+        public SpecRef Spec { get; }
         public DatasetResult Render(RenderContext? context = null) => throw new NotSupportedException();
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
         public IEnumerable<FeatureSummary> EnumerateFeatures() => _features;

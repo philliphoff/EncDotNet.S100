@@ -12,7 +12,7 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
 {
     private readonly S129Dataset _dataset;
 
-    public override string ProductSpec => "S-129";
+    public override SpecRef Spec => new("S-129", default);
     protected override string ProductDescription => "Under Keel Clearance Management";
     protected override IReadOnlyList<S129Feature> Features => _dataset.Features;
 

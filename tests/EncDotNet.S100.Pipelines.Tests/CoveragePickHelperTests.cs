@@ -1,4 +1,5 @@
 using System;
+using EncDotNet.S100.Core;
 using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
@@ -84,7 +85,7 @@ public class CoveragePickHelperTests
         };
         var meta = new CoverageMetadata
         {
-            ProductSpec = "S-102",
+            Spec = new SpecRef("S-102", default),
             Extent = new BoundingBox(
                 southLatitude: originLat,
                 westLongitude: originLon,

@@ -11,7 +11,7 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
 {
     private readonly S122Dataset _dataset;
 
-    public override string ProductSpec => "S-122";
+    public override SpecRef Spec => new("S-122", default);
     protected override string ProductDescription => "Marine Protected Areas";
     protected override IReadOnlyList<S122Feature> Features => _dataset.Features;
 

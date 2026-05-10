@@ -1,5 +1,6 @@
 using System.Xml;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S129;
 
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Datasets.S129;
 public sealed class S129PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     public S129PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
-    public override string ProductSpec => "S-129";
+    public override SpecRef Spec => new("S-129", default);
 
     protected override XmlResolver CreateXmlResolver() => new S129XmlResolver(Provider);
 

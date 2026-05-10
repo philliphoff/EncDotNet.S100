@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.S104;
 
@@ -34,7 +35,7 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     ];
 
     /// <summary>Gets the S-100 product specification identifier for this catalogue.</summary>
-    public string ProductSpec => "S-104";
+    public SpecRef Spec => new("S-104", default);
 
     /// <summary>Gets the edition of the portrayal catalogue.</summary>
     public string Edition => "2.0.0";

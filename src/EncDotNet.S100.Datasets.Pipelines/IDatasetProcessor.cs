@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -10,7 +11,15 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </summary>
 public interface IDatasetProcessor
 {
-    string ProductSpec { get; }
+    /// <summary>
+    /// The product specification (name + edition) this dataset declares
+    /// conformance to. Each per-spec processor returns a fixed name (e.g.
+    /// "S-101"); the edition portion is populated from the dataset itself
+    /// (HDF5 <c>productSpecification</c> attribute, GML application
+    /// namespace, S-101 ProductSpecificationEdition, etc.) when known,
+    /// otherwise defaults to <see cref="SpecVersion"/> default.
+    /// </summary>
+    SpecRef Spec { get; }
 
     DatasetResult Render(RenderContext? context = null);
 

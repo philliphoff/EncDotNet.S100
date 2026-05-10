@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines.Coverage;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -192,7 +193,7 @@ public class CoveragePipelineTests
                 var (rows, cols) = GridSize;
                 return new CoverageMetadata
                 {
-                    ProductSpec = _productSpec,
+                    Spec = new SpecRef(_productSpec, default),
                     Extent = new BoundingBox(
                         _originLat, _originLon,
                         _originLat + _spacingLat * rows,
@@ -259,7 +260,7 @@ public class CoveragePipelineTests
             _contours = contours ?? [];
         }
 
-        public string ProductSpec => "S-102";
+        public SpecRef Spec => new("S-102", default);
         public string Edition => "1.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }

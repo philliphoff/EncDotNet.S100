@@ -126,7 +126,7 @@ public sealed class RenderHarness : IDisposable
 
         // Time-series specs need a DateTime resolved from the time-step index.
         DateTime? timeStep = null;
-        if (options.TimeStepIndex > 0 || processor.ProductSpec is "S-104" or "S-111")
+        if (options.TimeStepIndex > 0 || processor.Spec.Name is "S-104" or "S-111")
         {
             // Reach for the AvailableTimes property (publicly defined on the
             // concrete S104/S111 processors) without a hard reference.
@@ -141,7 +141,7 @@ public sealed class RenderHarness : IDisposable
             }
         }
 
-        return processor.ProductSpec switch
+        return processor.Spec.Name switch
         {
             "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
             "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },

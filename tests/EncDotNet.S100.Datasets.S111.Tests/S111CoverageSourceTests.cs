@@ -38,7 +38,7 @@ public class S111CoverageSourceTests : IDisposable
 
         var source = new S111CoverageSource(_dataset!);
 
-        Assert.Equal("S-111", source.Metadata.ProductSpec);
+        Assert.Equal("S-111", source.Metadata.Spec.Name);
     }
 
     [SkippableFact]
