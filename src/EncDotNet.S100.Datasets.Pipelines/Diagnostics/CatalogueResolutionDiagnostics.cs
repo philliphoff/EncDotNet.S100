@@ -66,9 +66,32 @@ public static class CatalogueResolutionDiagnostics
 
         if (catalogueRef is not { } catRef) return;
 
+        // Hot-path fast check: a thread-local single-slot cache of the most
+        // recently reported (scope, spec, cat, kind). The diagnostics call
+        // sits at the top of every Render, so on a tight render loop this
+        // matches on every call after the first and avoids the
+        // ConditionalWeakTable lookup (which takes an internal lock) and the
+        // HashSet allocation/equality cost. Authoritative dedup still happens
+        // via _seen below; the cache only suppresses redundant lookups.
+        ref var slot = ref _lastSeen;
+        if (ReferenceEquals(slot.Scope, dedupScope)
+            && slot.Kind == catalogueKind
+            && slot.Spec.Equals(datasetSpec)
+            && slot.Cat.Equals(catRef))
+        {
+            return;
+        }
+
         var key = (datasetSpec, catRef, catalogueKind);
         var entries = _seen.GetOrCreateValue(dedupScope);
-        if (!entries.Add(key)) return;
+        if (!entries.Add(key))
+        {
+            // Already emitted on a different thread (or with a different
+            // intervening key); refresh the TLS cache so the next call on
+            // this thread takes the fast path.
+            slot = (dedupScope, datasetSpec, catRef, catalogueKind);
+            return;
+        }
 
         var match = SpecCompatibility.Classify(datasetSpec.Edition, catRef.Version);
 
@@ -91,7 +114,12 @@ public static class CatalogueResolutionDiagnostics
                 ["s100.catalogue.match"] = match.ToString(),
             }));
         }
+
+        slot = (dedupScope, datasetSpec, catRef, catalogueKind);
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, HashSet<(SpecRef, CatalogueRef, string)>> _seen = new();
+
+    [ThreadStatic]
+    private static (object? Scope, SpecRef Spec, CatalogueRef Cat, string Kind) _lastSeen;
 }
