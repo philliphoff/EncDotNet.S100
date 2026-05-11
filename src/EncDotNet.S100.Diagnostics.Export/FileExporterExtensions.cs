@@ -22,12 +22,25 @@ public static class FileExporterExtensions
     /// </summary>
     public static TracerProviderBuilder AddFileExporter(
         this TracerProviderBuilder builder, string path)
+        => AddFileExporter(builder, path, appendToExisting: false);
+
+    /// <summary>
+    /// Adds a <see cref="FileTelemetryExporter"/> that writes span data
+    /// to the specified <paramref name="path"/> as newline-delimited JSON.
+    /// </summary>
+    /// <param name="appendToExisting">
+    /// When <c>true</c>, appends to an existing file without writing a
+    /// new header. Used by orchestrators that accumulate telemetry
+    /// across multiple PerfRunner invocations.
+    /// </param>
+    public static TracerProviderBuilder AddFileExporter(
+        this TracerProviderBuilder builder, string path, bool appendToExisting)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         return builder.AddProcessor(
-            new OpenTelemetry.SimpleActivityExportProcessor(new FileTelemetryExporter(path)));
+            new OpenTelemetry.SimpleActivityExportProcessor(new FileTelemetryExporter(path, appendToExisting)));
     }
 
     /// <summary>

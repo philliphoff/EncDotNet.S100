@@ -113,13 +113,19 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             AnsiConsole.MarkupLine(" [grey]done[/]");
         }
 
-        // Measured iterations.
+        // Measured iterations — wrapped in a perf.iteration activity so the
+        // JSONL contains a tagged span per sample (consistent with `baseline`).
         var durations = new List<double>();
         for (int i = 0; i < settings.Iterations; i++)
         {
             AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
-            var sw = Stopwatch.StartNew();
             var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i };
+            using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
+            iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
+            iterActivity?.SetTag(PerfActivitySource.RoundTag, 1);
+            iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
+
+            var sw = Stopwatch.StartNew();
             await scenario.RunAsync(ctx, CancellationToken.None);
             sw.Stop();
             durations.Add(sw.Elapsed.TotalMilliseconds);
