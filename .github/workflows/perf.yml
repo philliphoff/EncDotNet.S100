@@ -25,6 +25,22 @@ jobs:
       - name: Checkout base branch
         run: git checkout ${{ github.event.pull_request.base.sha }}
 
+      # The perf tooling on the base SHA may predate this PR's CLI
+      # surface (--out-subdir, --append, --round-tag, --side, --scenarios)
+      # and the perf.iteration activity instrumentation the gate reads.
+      # Overlay the PR's perf tooling + the tiny Diagnostics.Export delta
+      # (an --append overload on AddFileExporter) onto the base tree so
+      # the base runner is built with this PR's runner code linked against
+      # the base SHA's library code. The library code under test stays
+      # at the base SHA — only the measurement harness is overlaid.
+      - name: Overlay PR perf tooling onto base tree
+        run: |
+          git checkout ${{ github.event.pull_request.head.sha }} -- \
+            tools/EncDotNet.S100.PerfRunner \
+            tools/EncDotNet.S100.PerfReport \
+            tools/perf \
+            src/EncDotNet.S100.Diagnostics.Export
+
       - name: Build base PerfRunner
         run: |
           dotnet publish tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj \
