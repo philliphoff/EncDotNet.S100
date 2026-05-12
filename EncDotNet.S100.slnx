@@ -13,6 +13,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S127/EncDotNet.S100.Datasets.S127.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S128/EncDotNet.S100.Datasets.S128.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S129/EncDotNet.S100.Datasets.S129.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.S131/EncDotNet.S100.Datasets.S131.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S411/EncDotNet.S100.Datasets.S411.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S421/EncDotNet.S100.Datasets.S421.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
