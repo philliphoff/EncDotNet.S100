@@ -153,6 +153,8 @@ jobs:
           APP="EncDotNet.S100.Viewer.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp src/EncDotNet.S100.Viewer/Info.plist "$APP/Contents/"
+          # AppIcon.icns is referenced from Info.plist via CFBundleIconFile.
+          cp src/EncDotNet.S100.Viewer/Branding/AppIcon.icns "$APP/Contents/Resources/"
           cp -a "$PUBLISH_DIR"/. "$APP/Contents/MacOS/"
           # Remove debug symbols; they are not needed in the release bundle
           # and codesign treats them as unsigned code objects.
@@ -258,16 +260,36 @@ jobs:
         env:
           VERSION: ${{ steps.viewer_version.outputs.version }}
         run: |
+          # Build a styled DMG with the branding background image, icon
+          # positions and Applications drop link. We delegate to
+          # `create-dmg` (https://github.com/create-dmg/create-dmg)
+          # because it bundles a battle-tested workaround for the
+          # `Finder got an error: Can't get disk (-1728)` failure that
+          # bare `osascript` hits on GitHub-hosted macOS runners.
+          # Geometry must match src/EncDotNet.S100.Viewer/Branding/dmg-background.svg.
           DMG_NAME="EncDotNet.S100.Viewer-${VERSION}.dmg"
           STAGING="$(mktemp -d)/dmg"
+          BG="src/EncDotNet.S100.Viewer/Branding/dmg-background.png"
+          VOLICON="src/EncDotNet.S100.Viewer/Branding/AppIcon.icns"
+          VOLNAME="S-100 Viewer"
+
           mkdir -p "$STAGING"
           cp -R EncDotNet.S100.Viewer.app "$STAGING/"
-          ln -s /Applications "$STAGING/Applications"
-          hdiutil create \
-            -volname "S-100 Viewer" \
-            -srcfolder "$STAGING" \
-            -ov -format UDZO \
-            "$DMG_NAME"
+
+          brew install create-dmg
+
+          create-dmg \
+            --volname "$VOLNAME" \
+            --volicon "$VOLICON" \
+            --background "$BG" \
+            --window-pos 200 120 \
+            --window-size 540 380 \
+            --icon-size 96 \
+            --icon "EncDotNet.S100.Viewer.app" 140 200 \
+            --app-drop-link 400 200 \
+            --hdiutil-quiet \
+            "$DMG_NAME" \
+            "$STAGING"
           echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Sign macOS DMG

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="title desc">
+  <title id="title">Geometric ENC grammar icon</title>
+  <desc id="desc">A geometric nautical chart-inspired icon with angular land shape, stepped depth bands, and simplified contour lines.</desc>
+
+  <defs>
+    <clipPath id="clip">
+      <rect x="32" y="32" width="960" height="960" rx="208" ry="208"/>
+    </clipPath>
+
+    <style>
+      .border { fill: #0b3a67; }
+      .deepest { fill: #5d9bd3; }
+      .deep { fill: #7eb7e6; }
+      .mid { fill: #a7cdea; }
+      .shallow { fill: #c9deec; }
+      .land { fill: #e7cf8e; }
+      .coast { fill: none; stroke: #b99647; stroke-width: 10; stroke-linejoin: bevel; stroke-linecap: square; }
+      .contour { fill: none; stroke: #4b9bdd; stroke-width: 4; stroke-linejoin: bevel; stroke-linecap: square; opacity: 0.95; }
+      .contour2 { fill: none; stroke: #2d78bf; stroke-width: 5; stroke-linejoin: bevel; stroke-linecap: square; opacity: 0.95; }
+    </style>
+  </defs>
+
+  <rect x="32" y="32" width="960" height="960" rx="208" ry="208" class="border"/>
+
+  <g clip-path="url(#clip)">
+    <rect width="1024" height="1024" class="deepest"/>
+
+    <!-- stepped depth bands -->
+    <path class="deep" d="M0,920 L96,820 L188,760 L286,720 L392,640 L478,554 L570,458 L662,356 L760,258 L852,184 L944,132 L1024,108 L1024,1024 L0,1024 Z"/>
+
+    <path class="mid" d="M0,836 L92,752 L184,700 L282,654 L370,584 L454,492 L550,394 L646,292 L742,198 L834,124 L926,70 L1024,44 L1024,1024 L0,1024 Z"/>
+
+    <path class="shallow" d="M0,742 L84,676 L180,620 L276,572 L360,496 L438,400 L528,300 L630,202 L728,114 L826,44 L900,20 L1024,20 L1024,1024 L0,1024 Z"/>
+
+    <!-- angular land mass -->
+    <path class="land" d="M0,0 L1024,0 L1024,72 L928,94 L836,144 L742,218 L650,312 L560,412 L474,508 L384,590 L288,642 L190,690 L94,750 L0,844 Z"/>
+
+    <!-- coastline -->
+    <path class="coast" d="M0,844 L94,750 L190,690 L288,642 L384,590 L474,508 L560,412 L650,312 L742,218 L836,144 L928,94 L1024,72"/>
+
+    <!-- geometric contours -->
+    <path class="contour" d="M0,878 L88,792 L182,734 L280,690 L378,614 L462,526 L554,430 L648,330 L744,236 L838,164 L932,114 L1024,90"/>
+
+    <path class="contour" d="M0,968 L80,874 L170,814 L266,768 L360,692 L446,602 L540,504 L636,404 L736,308 L834,232 L932,182 L1024,158"/>
+
+    <path class="contour" d="M144,1024 L170,928 L238,852 L330,796 L422,720 L506,626 L596,530 L694,438 L792,352 L890,286 L972,246 L1024,234"/>
+
+    <path class="contour" d="M344,1024 L374,940 L438,870 L522,812 L612,736 L696,646 L790,556 L886,482 L972,436 L1024,420"/>
+
+    <!-- deeper pocket, also geometric -->
+    <path class="contour2" d="M846,850 L910,808 L972,816 L1004,858 L996,916 L944,966 L882,982 L830,952 L816,900 Z"/>
+    <path class="contour2" d="M884,874 L930,846 L966,852 L984,882 L976,918 L938,950 L894,958 L860,936 L852,900 Z"/>
+  </g>
+</svg>
