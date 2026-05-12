@@ -261,60 +261,35 @@ jobs:
           VERSION: ${{ steps.viewer_version.outputs.version }}
         run: |
           # Build a styled DMG with the branding background image, icon
-          # positions and a hidden .background folder. Done in two passes:
-          #   1) hdiutil create -format UDRW (read/write sparse image)
-          #   2) mount, stage assets, run AppleScript to set window
-          #      geometry + background + icon positions
-          #   3) hdiutil convert -format UDZO (final compressed image)
+          # positions and Applications drop link. We delegate to
+          # `create-dmg` (https://github.com/create-dmg/create-dmg)
+          # because it bundles a battle-tested workaround for the
+          # `Finder got an error: Can't get disk (-1728)` failure that
+          # bare `osascript` hits on GitHub-hosted macOS runners.
+          # Geometry must match src/EncDotNet.S100.Viewer/Branding/dmg-background.svg.
           DMG_NAME="EncDotNet.S100.Viewer-${VERSION}.dmg"
-          RW_DMG="$(mktemp -d)/rw.dmg"
           STAGING="$(mktemp -d)/dmg"
           BG="src/EncDotNet.S100.Viewer/Branding/dmg-background.png"
+          VOLICON="src/EncDotNet.S100.Viewer/Branding/AppIcon.icns"
           VOLNAME="S-100 Viewer"
 
-          mkdir -p "$STAGING/.background"
-          cp "$BG" "$STAGING/.background/background.png"
+          mkdir -p "$STAGING"
           cp -R EncDotNet.S100.Viewer.app "$STAGING/"
-          ln -s /Applications "$STAGING/Applications"
 
-          hdiutil create \
-            -volname "$VOLNAME" \
-            -srcfolder "$STAGING" \
-            -ov -format UDRW \
-            "$RW_DMG"
+          brew install create-dmg
 
-          MOUNT_DIR="$(mktemp -d)/mnt"
-          hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR"
-
-          # AppleScript geometry must match the SVG layout in
-          # src/EncDotNet.S100.Viewer/Branding/dmg-background.svg.
-          osascript \
-            -e 'on run argv' \
-            -e '  set volName to item 1 of argv' \
-            -e '  tell application "Finder"' \
-            -e '    tell disk volName' \
-            -e '      open' \
-            -e '      set current view of container window to icon view' \
-            -e '      set toolbar visible of container window to false' \
-            -e '      set statusbar visible of container window to false' \
-            -e '      set the bounds of container window to {200, 120, 740, 500}' \
-            -e '      set viewOptions to the icon view options of container window' \
-            -e '      set arrangement of viewOptions to not arranged' \
-            -e '      set icon size of viewOptions to 96' \
-            -e '      set background picture of viewOptions to file ".background:background.png"' \
-            -e '      set position of item "EncDotNet.S100.Viewer.app" of container window to {140, 200}' \
-            -e '      set position of item "Applications" of container window to {400, 200}' \
-            -e '      update without registering applications' \
-            -e '      delay 1' \
-            -e '      close' \
-            -e '    end tell' \
-            -e '  end tell' \
-            -e 'end run' \
-            "$VOLNAME"
-
-          sync
-          hdiutil detach "$MOUNT_DIR"
-          hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -ov -o "$DMG_NAME"
+          create-dmg \
+            --volname "$VOLNAME" \
+            --volicon "$VOLICON" \
+            --background "$BG" \
+            --window-pos 200 120 \
+            --window-size 540 380 \
+            --icon-size 96 \
+            --icon "EncDotNet.S100.Viewer.app" 140 200 \
+            --app-drop-link 400 200 \
+            --hdiutil-quiet \
+            "$DMG_NAME" \
+            "$STAGING"
           echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Sign macOS DMG
