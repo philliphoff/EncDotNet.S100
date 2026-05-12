@@ -141,19 +141,19 @@
                                    Margin="4,0,0,0"
                                    ToolTip.Tip="{Binding SignatureTooltip}"
                                    IsVisible="{Binding SignatureStatus, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <ic:FluentIcon FontSize="14"
+                                <ic:FluentIcon FontSize="20"
                                                IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
                                                Icon="ShieldCheckmark" IconVariant="Filled"
                                                Foreground="#16a34a" />
-                                <ic:FluentIcon FontSize="14"
+                                <ic:FluentIcon FontSize="20"
                                                IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
                                                Icon="ShieldDismiss" IconVariant="Regular"
                                                Opacity="0.5" />
-                                <ic:FluentIcon FontSize="14"
+                                <ic:FluentIcon FontSize="20"
                                                IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
                                                Icon="ShieldError" IconVariant="Filled"
                                                Foreground="#dc2626" />
-                                <ic:FluentIcon FontSize="14"
+                                <ic:FluentIcon FontSize="20"
                                                IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
                                                Icon="Shield" IconVariant="Regular"
                                                Opacity="0.4" />
