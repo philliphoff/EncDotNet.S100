@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 380" width="540" height="380">
+  <!--
+    DMG window background for the S-100 Viewer installer.
+    Layout (matches the AppleScript geometry in CI):
+      - Window inner size: 540x380 px
+      - App icon position:      (140, 200)
+      - Applications symlink:   (400, 200)
+    The background draws a soft horizontal band of S-100 chart-style
+    depth tints and a subtle drag arrow between the two icon slots.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#F5F1E5"/>
+      <stop offset="100%" stop-color="#E8E1CB"/>
+    </linearGradient>
+
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"  stop-color="#C9DEEC"/>
+      <stop offset="35%" stop-color="#A7CDEA"/>
+      <stop offset="65%" stop-color="#A7CDEA"/>
+      <stop offset="100%" stop-color="#C9DEEC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Buff background like ENC land tint -->
+  <rect width="540" height="380" fill="url(#bg)"/>
+
+  <!-- Pale chart-water band running across the icon row -->
+  <rect x="0" y="170" width="540" height="100" fill="url(#band)" opacity="0.85"/>
+
+  <!-- Geometric contour line, echoing the app icon's grammar -->
+  <polyline points="0,205 80,180 160,200 240,185 320,205 400,180 480,200 540,190"
+            fill="none" stroke="#7EB7E6" stroke-width="1.5" opacity="0.7"/>
+  <polyline points="0,245 80,225 160,240 240,225 320,245 400,225 480,240 540,235"
+            fill="none" stroke="#7EB7E6" stroke-width="1.5" opacity="0.7"/>
+
+  <!-- Drag arrow from app icon slot toward Applications slot -->
+  <g stroke="#0B3A67" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.55">
+    <line x1="210" y1="220" x2="330" y2="220"/>
+    <polyline points="320,210 332,220 320,230"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="270" y="345" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+        font-size="14" fill="#0B3A67" text-anchor="middle" font-weight="500" letter-spacing="0.5">
+    S-100 Viewer
+  </text>
+  <text x="270" y="362" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+        font-size="10" fill="#0B3A67" text-anchor="middle" opacity="0.7">
+    Drag the application into the Applications folder
+  </text>
+</svg>
