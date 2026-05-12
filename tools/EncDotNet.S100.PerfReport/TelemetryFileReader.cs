@@ -18,6 +18,44 @@ public sealed class TelemetryFileReader
     public JsonElement? Header { get; private set; }
 
     /// <summary>
+    /// Iteration samples extracted from <c>perf.iteration</c> spans. One
+    /// entry per measured iteration emitted by the perf runner. When the
+    /// list is non-empty, downstream gating prefers per-iteration
+    /// statistics (median + MAD) over span-sum totals.
+    /// </summary>
+    public IReadOnlyList<IterationSample> Iterations
+    {
+        get
+        {
+            // The activity name and tag key constants must stay in sync
+            // with EncDotNet.S100.PerfRunner.PerfActivitySource. They are
+            // duplicated here as string literals because PerfReport must
+            // not take a project reference on PerfRunner (one is a
+            // standalone .NET tool, the other an executable).
+            const string IterationActivityName = "perf.iteration";
+            const string ScenarioTag = "perf.scenario";
+            const string RoundTag = "perf.round";
+            const string IterTag = "perf.iter";
+            const string SideTag = "perf.side";
+
+            var samples = new List<IterationSample>(Spans.Count);
+            foreach (var span in Spans)
+            {
+                if (span.Name != IterationActivityName) continue;
+                var scenario = span.Tags.GetValueOrDefault(ScenarioTag) ?? "";
+                int round = ParseInt(span.Tags.GetValueOrDefault(RoundTag), 1);
+                int index = ParseInt(span.Tags.GetValueOrDefault(IterTag), 0);
+                var side = span.Tags.GetValueOrDefault(SideTag);
+                samples.Add(new IterationSample(scenario, round, index, side, span.DurationMs));
+            }
+            return samples;
+        }
+    }
+
+    private static int ParseInt(string? s, int fallback) =>
+        int.TryParse(s, out var v) ? v : fallback;
+
+    /// <summary>
     /// Reads all lines from the specified <c>.jsonl</c> file.
     /// </summary>
     public static TelemetryFileReader Read(string path)
@@ -119,6 +157,13 @@ public sealed class SpanRecord
     public double DurationMs { get; init; }
     public Dictionary<string, string> Tags { get; init; } = [];
 }
+
+/// <summary>
+/// One measured-iteration sample, derived from a <c>perf.iteration</c>
+/// span emitted by <c>EncDotNet.S100.PerfRunner</c>. Used by the
+/// performance gate to compute median + MAD per scenario.
+/// </summary>
+public sealed record IterationSample(string Scenario, int Round, int Index, string? Side, double DurationMs);
 
 /// <summary>A single metric record from the telemetry file.</summary>
 public sealed class MetricRecord

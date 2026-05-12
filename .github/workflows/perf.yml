@@ -21,67 +21,126 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # --- Run baseline from the base branch on the same runner ---
+      # --- Build the BASE branch's PerfRunner into a dedicated dir ---
       - name: Checkout base branch
         run: git checkout ${{ github.event.pull_request.base.sha }}
 
-      - name: Build base
-        run: dotnet build --configuration Release
+      # The perf tooling on the base SHA may predate this PR's CLI
+      # surface (--out-subdir, --append, --round-tag, --side, --scenarios)
+      # and the perf.iteration activity instrumentation the gate reads.
+      # Overlay the PR's perf tooling + the tiny Diagnostics.Export delta
+      # (an --append overload on AddFileExporter) onto the base tree so
+      # the base runner is built with this PR's runner code linked against
+      # the base SHA's library code. The library code under test stays
+      # at the base SHA — only the measurement harness is overlaid.
+      - name: Overlay PR perf tooling onto base tree
+        run: |
+          git checkout ${{ github.event.pull_request.head.sha }} -- \
+            tools/EncDotNet.S100.PerfRunner \
+            tools/EncDotNet.S100.PerfReport \
+            tools/perf \
+            src/EncDotNet.S100.Diagnostics.Export
 
-      - name: Run base performance
-        run: >
-          dotnet run --no-build --configuration Release
-          --project tools/EncDotNet.S100.PerfRunner --
-          baseline
-          --warmup 3
-          --iterations 10
-          --out /tmp/perf-baseline
+      - name: Build base PerfRunner
+        run: |
+          dotnet publish tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj \
+            --configuration Release \
+            --output /tmp/perf-bin/base \
+            --no-self-contained
 
-      # --- Run candidate from the PR branch ---
+      # --- Build the PR branch's PerfRunner into a separate dir ---
       - name: Checkout PR branch
         run: git checkout ${{ github.event.pull_request.head.sha }}
 
-      - name: Build candidate
-        run: dotnet build --configuration Release
-
-      - name: Run candidate performance
-        run: >
-          dotnet run --no-build --configuration Release
-          --project tools/EncDotNet.S100.PerfRunner --
-          baseline
-          --warmup 3
-          --iterations 10
-          --out /tmp/perf-candidate
-
-      - name: Find baseline directory
-        id: baseline
+      - name: Build candidate PerfRunner
         run: |
-          DIR=$(find /tmp/perf-baseline -mindepth 1 -maxdepth 1 -type d | head -1)
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          dotnet publish tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj \
+            --configuration Release \
+            --output /tmp/perf-bin/cand \
+            --no-self-contained
 
-      - name: Find candidate directory
-        id: candidate
+      # --- Build the PerfReport tool from the PR branch (gate logic) ---
+      - name: Build PerfReport
         run: |
-          DIR=$(find /tmp/perf-candidate -mindepth 1 -maxdepth 1 -type d | head -1)
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          dotnet build tools/EncDotNet.S100.PerfReport/EncDotNet.S100.PerfReport.csproj \
+            --configuration Release
 
-      - name: Run performance gate
-        run: >
-          dotnet run --no-build --configuration Release
-          --project tools/EncDotNet.S100.PerfReport --
-          gate
-          ${{ steps.baseline.outputs.dir }}
-          ${{ steps.candidate.outputs.dir }}
-          --threshold 10
-          --min-abs 100
-          --out /tmp/perf-gate.md
+      # --- Interleaved measurement: 5 rounds × 4 iters/side = 20 samples/side ---
+      - name: Run interleaved performance measurements
+        run: |
+          tools/perf/interleave.sh \
+            --base-runner /tmp/perf-bin/base/EncDotNet.S100.PerfRunner.dll \
+            --cand-runner /tmp/perf-bin/cand/EncDotNet.S100.PerfRunner.dll \
+            --base-out    /tmp/perf-baseline \
+            --cand-out    /tmp/perf-candidate \
+            --corpus      tests/datasets \
+            --rounds      5 \
+            --iters       4 \
+            --warmup      3 \
+            --subdir      interleaved
+
+      # --- First gate pass (median + MAD; suspicious zone allowed) ---
+      - name: Run performance gate (first pass)
+        id: gate1
+        run: |
+          dotnet run --no-build --configuration Release \
+            --project tools/EncDotNet.S100.PerfReport -- \
+            gate \
+            /tmp/perf-baseline/interleaved \
+            /tmp/perf-candidate/interleaved \
+            --threshold 10 \
+            --min-abs 100 \
+            --mad-k 3.0 \
+            --retry-zone-mult 2.0 \
+            --out /tmp/perf-gate.md
+          if [[ -s /tmp/perf-gate.md.suspicious.txt ]]; then
+            echo "suspicious=$(tr '\n' ',' < /tmp/perf-gate.md.suspicious.txt | sed 's/,$//')" >> "$GITHUB_OUTPUT"
+          else
+            echo "suspicious=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --- Retry only the suspicious scenarios with extra rounds ---
+      - name: Re-test suspicious scenarios
+        if: steps.gate1.outputs.suspicious != ''
+        run: |
+          echo "Re-testing scenarios: ${{ steps.gate1.outputs.suspicious }}"
+          tools/perf/interleave.sh \
+            --base-runner /tmp/perf-bin/base/EncDotNet.S100.PerfRunner.dll \
+            --cand-runner /tmp/perf-bin/cand/EncDotNet.S100.PerfRunner.dll \
+            --base-out    /tmp/perf-baseline \
+            --cand-out    /tmp/perf-candidate \
+            --corpus      tests/datasets \
+            --rounds      5 \
+            --iters       4 \
+            --warmup      3 \
+            --subdir      interleaved \
+            --scenarios   "${{ steps.gate1.outputs.suspicious }}"
+
+      # --- Final gate (no retry zone — suspicious scenarios now have ≥40 samples) ---
+      - name: Run performance gate (final)
+        if: steps.gate1.outputs.suspicious != ''
+        run: |
+          dotnet run --no-build --configuration Release \
+            --project tools/EncDotNet.S100.PerfReport -- \
+            gate \
+            /tmp/perf-baseline/interleaved \
+            /tmp/perf-candidate/interleaved \
+            --threshold 10 \
+            --min-abs 100 \
+            --mad-k 3.0 \
+            --retry-zone-mult 1.0 \
+            --out /tmp/perf-gate.md
 
       - name: Upload gate report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: perf-gate-report
-          path: /tmp/perf-gate.md
+          path: |
+            /tmp/perf-gate.md
+            /tmp/perf-gate.md.suspicious.txt
+            /tmp/perf-baseline/interleaved/
+            /tmp/perf-candidate/interleaved/
           if-no-files-found: ignore
 
       - name: Post PR comment
