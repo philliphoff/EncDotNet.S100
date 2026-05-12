@@ -166,6 +166,27 @@
   <data name="Tooltip_CloseExchangeSet" xml:space="preserve">
     <value>Close this exchange set and remove every dataset it contributed</value>
   </data>
+  <data name="Tooltip_SignatureVerified" xml:space="preserve">
+    <value>All digital signatures verified</value>
+  </data>
+  <data name="Tooltip_SignatureUnsigned" xml:space="preserve">
+    <value>This exchange set is not digitally signed</value>
+  </data>
+  <data name="Tooltip_SignatureInvalid" xml:space="preserve">
+    <value>One or more digital signatures are invalid</value>
+  </data>
+  <data name="Tooltip_SignatureUntrusted" xml:space="preserve">
+    <value>The signing certificate is not trusted</value>
+  </data>
+  <data name="Tooltip_SignatureMixed" xml:space="preserve">
+    <value>Mixed signature verification results</value>
+  </data>
+  <data name="Tooltip_SignatureChecking" xml:space="preserve">
+    <value>Verifying digital signatures…</value>
+  </data>
+  <data name="Tooltip_SignatureError" xml:space="preserve">
+    <value>An error occurred during signature verification</value>
+  </data>
   <data name="Tooltip_ShowAllDatasets" xml:space="preserve">
     <value>Show every dataset</value>
   </data>

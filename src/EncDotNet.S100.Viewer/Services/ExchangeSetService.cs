@@ -222,6 +222,13 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 tracked.ExchangeSet.Dispose();
                 _tracked.Remove(tracked);
             }
+            else
+            {
+                // Fire-and-forget: verify exchange set signatures in the
+                // background. The result is surfaced as a non-blocking badge
+                // on the header — we never refuse to load unsigned data.
+                _ = VerifySignaturesAsync(tracked);
+            }
 
             return new ExchangeSetOpenResult
             {
@@ -401,6 +408,56 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 latest = s;
         }
         return latest;
+    }
+
+    /// <summary>
+    /// Runs signature verification in the background and updates the
+    /// exchange set header with the result. Non-blocking — errors are
+    /// swallowed and surfaced as <see cref="SignatureStatus.Error"/>.
+    /// </summary>
+    private async Task VerifySignaturesAsync(TrackedExchangeSet tracked)
+    {
+        if (tracked.Header is null) return;
+
+        tracked.Header.SignatureStatus = SignatureStatus.Checking;
+        tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureChecking;
+
+        try
+        {
+            var verifier = new ExchangeSetVerifier();
+            var result = await verifier.VerifyAsync(
+                tracked.ExchangeSet.Source,
+                tracked.ExchangeSet.Catalogue,
+                new TrustAnchorOptions { AllowUntrustedCertificates = true },
+                CancellationToken.None).ConfigureAwait(true);
+
+            if (result.IsUnsigned)
+            {
+                tracked.Header.SignatureStatus = SignatureStatus.Unsigned;
+                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureUnsigned;
+            }
+            else if (result.AllValid)
+            {
+                tracked.Header.SignatureStatus = SignatureStatus.Verified;
+                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureVerified;
+            }
+            else if (result.HasInvalidSignatures)
+            {
+                tracked.Header.SignatureStatus = SignatureStatus.Invalid;
+                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureInvalid;
+            }
+            else
+            {
+                // Some files ok, some not — e.g. certificate issues
+                tracked.Header.SignatureStatus = SignatureStatus.Mixed;
+                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureMixed;
+            }
+        }
+        catch (Exception)
+        {
+            tracked.Header.SignatureStatus = SignatureStatus.Error;
+            tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureError;
+        }
     }
 
     public void Dispose()

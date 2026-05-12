@@ -94,6 +94,13 @@ internal static class Strings
     public static string Pane_ExchangeSetHeader_Count => Get(nameof(Pane_ExchangeSetHeader_Count));
     public static string Pane_ExchangeSetHeader_Unsupported => Get(nameof(Pane_ExchangeSetHeader_Unsupported));
     public static string Tooltip_CloseExchangeSet => Get(nameof(Tooltip_CloseExchangeSet));
+    public static string Tooltip_SignatureVerified => Get(nameof(Tooltip_SignatureVerified));
+    public static string Tooltip_SignatureUnsigned => Get(nameof(Tooltip_SignatureUnsigned));
+    public static string Tooltip_SignatureInvalid => Get(nameof(Tooltip_SignatureInvalid));
+    public static string Tooltip_SignatureUntrusted => Get(nameof(Tooltip_SignatureUntrusted));
+    public static string Tooltip_SignatureMixed => Get(nameof(Tooltip_SignatureMixed));
+    public static string Tooltip_SignatureChecking => Get(nameof(Tooltip_SignatureChecking));
+    public static string Tooltip_SignatureError => Get(nameof(Tooltip_SignatureError));
     public static string Tooltip_ShowAllDatasets => Get(nameof(Tooltip_ShowAllDatasets));
     public static string Tooltip_HideAllDatasets => Get(nameof(Tooltip_HideAllDatasets));
     public static string Menu_IsolateDataset => Get(nameof(Menu_IsolateDataset));

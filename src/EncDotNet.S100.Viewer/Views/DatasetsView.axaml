@@ -4,8 +4,16 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
+
+    <UserControl.Resources>
+        <conv:SignatureStatusConverter x:Key="SignatureStatusVerifiedConverter" Match="Verified" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusUnsignedConverter" Match="Unsigned" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusInvalidConverter" Match="Invalid,Untrusted,Mixed,Error" />
+        <conv:SignatureStatusConverter x:Key="SignatureStatusCheckingConverter" Match="Checking,Unknown" />
+    </UserControl.Resources>
 
     <UserControl.Styles>
         <!--
@@ -115,7 +123,7 @@
                             Padding="8,6"
                             Margin="0,0,0,4"
                             HorizontalAlignment="Stretch">
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
                             <TextBlock Grid.Column="0" Grid.Row="0"
                                        Text="{Binding DisplayName}"
                                        FontWeight="SemiBold"
@@ -127,7 +135,30 @@
                                        Text="{Binding MetadataSummary}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding MetadataSummary}" />
-                            <Button Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                            <!-- Signature verification badge -->
+                            <Panel Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                                   VerticalAlignment="Center"
+                                   Margin="4,0,0,0"
+                                   ToolTip.Tip="{Binding SignatureTooltip}"
+                                   IsVisible="{Binding SignatureStatus, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <ic:FluentIcon FontSize="14"
+                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
+                                               Icon="ShieldCheckmark" IconVariant="Filled"
+                                               Foreground="#16a34a" />
+                                <ic:FluentIcon FontSize="14"
+                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
+                                               Icon="ShieldDismiss" IconVariant="Regular"
+                                               Opacity="0.5" />
+                                <ic:FluentIcon FontSize="14"
+                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
+                                               Icon="ShieldError" IconVariant="Filled"
+                                               Foreground="#dc2626" />
+                                <ic:FluentIcon FontSize="14"
+                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
+                                               Icon="Shield" IconVariant="Regular"
+                                               Opacity="0.4" />
+                            </Panel>
+                            <Button Grid.Column="2" Grid.Row="0" Grid.RowSpan="2"
                                     Classes="Icon"
                                     VerticalAlignment="Center"
                                     Margin="6,0,0,0"
