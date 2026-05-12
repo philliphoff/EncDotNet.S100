@@ -8,7 +8,7 @@
 [![NuGet](https://img.shields.io/nuget/v/EncDotNet.S100.Core)](https://www.nuget.org/packages?q=EncDotNet.S100)
 [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://philliphoff.github.io/EncDotNet.S100/)
 
-A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-122 Marine Protected Areas, S-124 Navigational Warnings, S-127 Marine Resources and Services, S-128 Catalogue of Nautical Products, S-129 Under Keel Clearance Management, S-411 Sea Ice, and S-421 Route Plans.
+A set of .NET libraries for reading, portraying, and rendering [S-100](https://iho.int/en/s-100-edition-5-2-0) based nautical chart data, including S-101 Electronic Navigational Charts (ENCs), S-102 Bathymetric Surfaces, S-104 Water Level Information, S-111 Surface Currents, S-122 Marine Protected Areas, S-124 Navigational Warnings, S-127 Marine Resources and Services, S-128 Catalogue of Nautical Products, S-129 Under Keel Clearance Management, S-131 Marine Harbour Infrastructure, S-411 Sea Ice, and S-421 Route Plans.
 
 ## Libraries
 
@@ -29,6 +29,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 | **EncDotNet.S100.Datasets.S127** | Reader and XSLT portrayal pipeline for S-127 Marine Resources and Services datasets. |
 | **EncDotNet.S100.Datasets.S128** | Reader and XSLT portrayal pipeline for S-128 Catalogue of Nautical Products datasets. |
 | **EncDotNet.S100.Datasets.S129** | Reader and XSLT portrayal pipeline for S-129 Under Keel Clearance Management datasets. |
+| **EncDotNet.S100.Datasets.S131** | Reader and Lua portrayal pipeline for S-131 Marine Harbour Infrastructure datasets (GML+Lua hybrid). |
 | **EncDotNet.S100.Datasets.S411** | Reader and XSLT portrayal pipeline for S-411 Sea Ice datasets. |
 | **EncDotNet.S100.Datasets.S421** | Reader and XSLT portrayal pipeline for S-421 Route Plan datasets. |
 | **EncDotNet.S100.Datasets.S57** | Reader for legacy IHO S-57 ENC base cells; translates them to the in-memory S-101 model so the S-101 portrayal pipeline can render them (best-effort, not S-52). |
@@ -40,7 +41,7 @@ A set of .NET libraries for reading, portraying, and rendering [S-100](https://i
 
 | Application | Description |
 |---|---|
-| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-411, S-421, and legacy S-57 datasets and renders them on an interactive map. Features ECDIS display-category filtering, display-plane toggles, quick text-group toggles, and per-spec viewing-group overrides. |
+| **EncDotNet.S100.Viewer** | Cross-platform desktop nautical chart viewer built on [Avalonia](https://avaloniaui.net/) and Mapsui. Loads S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-129, S-131, S-411, S-421, and legacy S-57 datasets and renders them on an interactive map. Features ECDIS display-category filtering, display-plane toggles, quick text-group toggles, and per-spec viewing-group overrides. |
 
 ### Pick / Object Information
 
@@ -75,7 +76,7 @@ topology) appear under a **References** section; clicking a row jumps
 the pick report to the referenced object.
 
 Pick reports are produced for both vector products (S-101, S-122,
-S-124, S-125, S-127, S-128, S-129, S-411, S-421, and S-57 via S-101)
+S-124, S-125, S-127, S-128, S-129, S-131, S-411, S-421, and S-57 via S-101)
 and coverage products (S-102, S-104, S-111) — clicking a coverage
 chart samples the underlying grid at the click location and reports
 the per-cell value (depth + uncertainty for S-102, water level + trend

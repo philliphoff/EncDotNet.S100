@@ -175,6 +175,15 @@ public sealed class DatasetPipelineFactory
                         return "S-129";
                     }
 
+                    // S-131 — Marine Harbour Infrastructure. Application
+                    // namespace is "http://www.iho.int/S131/1.0".
+                    if (reader.NamespaceURI.Contains("S-131", StringComparison.OrdinalIgnoreCase)
+                        || reader.NamespaceURI.Contains("S131", StringComparison.OrdinalIgnoreCase)
+                        || reader.LocalName.Contains("S131", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "S-131";
+                    }
+
                     // S-421 datasets use the S421 namespace prefix and the
                     // namespace URI "http://www.iho.int/S421/gml/cs0/1.0".
                     if (reader.NamespaceURI.Contains("S-421", StringComparison.OrdinalIgnoreCase)
@@ -226,6 +235,12 @@ public sealed class DatasetPipelineFactory
                                     || reader.Value.Contains("S-129", StringComparison.OrdinalIgnoreCase))
                                 {
                                     return "S-129";
+                                }
+
+                                if (reader.Value.Contains("S131", StringComparison.OrdinalIgnoreCase)
+                                    || reader.Value.Contains("S-131", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return "S-131";
                                 }
 
                                 if (reader.Value.Contains("S124", StringComparison.OrdinalIgnoreCase)
@@ -323,6 +338,7 @@ public sealed class DatasetPipelineFactory
             "S-127" => new S127DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
             "S-128" => new S128DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
             "S-129" => new S129DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
+            "S-131" => new S131DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-411" => new S411DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
             "S-421" => new S421DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
@@ -374,6 +390,7 @@ public sealed class DatasetPipelineFactory
             "S-127" => new S127DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
             "S-128" => new S128DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
             "S-129" => new S129DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
+            "S-131" => new S131DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-411" => new S411DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
             "S-421" => new S421DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
@@ -400,7 +417,7 @@ public sealed class DatasetPipelineFactory
         {
             "S-57" or "S-101" or "S-102" or "S-104" or "S-111"
                 or "S-122" or "S-124" or "S-125" or "S-127" or "S-128"
-                or "S-129" or "S-411" or "S-421" => normalized,
+                or "S-129" or "S-131" or "S-411" or "S-421" => normalized,
             _ => null,
         };
     }
