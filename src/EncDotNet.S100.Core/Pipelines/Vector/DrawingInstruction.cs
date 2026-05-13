@@ -119,6 +119,13 @@ public sealed class LineInstruction : DrawingInstruction
     public IReadOnlyList<(double Offset, double Length)>? Dashes { get; init; }
 
     /// <summary>
+    /// Dash "on" length in millimetres, from the LineStyle second parameter.
+    /// Used with <see cref="Dashes"/> to form the full [on, gap] dash array.
+    /// Zero means no explicit dash-on length was specified.
+    /// </summary>
+    public double DashOnLengthMm { get; init; }
+
+    /// <summary>
     /// Optional explicit coordinate sequence that overrides the feature's
     /// geometry-derived polyline. Set by the S-100 Part 9A §11.5
     /// <c>AugmentedRay</c> / <c>ArcByRadius</c> / <c>AugmentedPath</c>

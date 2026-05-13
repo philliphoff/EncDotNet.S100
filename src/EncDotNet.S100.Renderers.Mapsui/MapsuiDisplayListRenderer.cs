@@ -416,7 +416,26 @@ public sealed class MapsuiDisplayListRenderer
             Color = resolveColor(colorToken),
             Width = Math.Max(widthPx, 1.0),
         };
-        if (dashed)
+        if (dashed && instruction.Dashes is { Count: > 0 })
+        {
+            // Build a SkiaSharp-compatible [on, off] dash array from the S-100
+            // dash specification.  The Dash command gives (offset, gapMm) pairs
+            // and the LineStyle second parameter gives the dash "on" length.
+            // NOTE: SkiaSharp applies the dash pattern in screen space, which
+            // causes a subtle "marquee" shift when the viewport pans.  This is
+            // an inherent limitation of the SkiaSharp/Mapsui rendering pipeline;
+            // a proper fix would require a custom Mapsui renderer that anchors
+            // the dash phase to the geometry's world coordinates.
+            var onMm = instruction.DashOnLengthMm > 0
+                ? instruction.DashOnLengthMm
+                : instruction.Dashes[0].Length;   // fallback: use gap length
+            var gapMm = instruction.Dashes[0].Length;
+            var onPx = (float)(onMm / S100PixelSizeMm);
+            var gapPx = (float)(gapMm / S100PixelSizeMm);
+            pen.DashArray = [Math.Max(onPx, 1f), Math.Max(gapPx, 1f)];
+            pen.PenStyle = PenStyle.UserDefined;
+        }
+        else if (dashed)
         {
             pen.PenStyle = PenStyle.Dash;
         }
