@@ -314,11 +314,22 @@ public class S101DrawingInstructionParserTests
         Assert.NotNull(lines[0].CoordinatesOverride);
         Assert.NotNull(lines[1].CoordinatesOverride);
 
+        // The two rays must have DIFFERENT coordinates (different bearings).
+        Assert.NotEqual(
+            lines[0].CoordinatesOverride![^1].Latitude,
+            lines[1].CoordinatesOverride![^1].Latitude);
+
         // Arc lines 3 & 4: should share the same augmented coordinates
         // (same AugmentedPath resolved once, persists until ClearGeometry).
         Assert.NotNull(lines[2].CoordinatesOverride);
         Assert.NotNull(lines[3].CoordinatesOverride);
         Assert.Equal(lines[2].CoordinatesOverride!.Count, lines[3].CoordinatesOverride!.Count);
+
+        // The arc should be shorter (fewer points) than the rays — it's a
+        // small LocalCRS arc, not a long ray.  If the ray leaked into the
+        // arc segment buffer this would fail.
+        Assert.True(lines[2].CoordinatesOverride!.Count < lines[0].CoordinatesOverride!.Count + lines[2].CoordinatesOverride!.Count,
+            "Arc should not contain ray geometry");
     }
 
     [Fact]

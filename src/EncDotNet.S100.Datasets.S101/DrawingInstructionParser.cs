@@ -391,6 +391,15 @@ public static class DrawingInstructionParser
                             double.TryParse(arParts[1], CultureInfo.InvariantCulture, out var arBearing) &&
                             double.TryParse(arParts[3], CultureInfo.InvariantCulture, out var arLength))
                         {
+                            // A new geometry element invalidates any previously
+                            // resolved coordinates (e.g. from a prior bare-ray
+                            // auto-resolve).  Without this, the second sector
+                            // limit ray would reuse the first ray's coordinates
+                            // because the auto-resolve guard
+                            //   (augmentedLineCoords is null)
+                            // would fail.
+                            augmentedLineCoords = null;
+
                             string crs = arParts[2]; // end-point CRS
                             augmentedLineSegments.Add(new AugmentedSegment.Ray(arBearing, arLength, crs));
                         }
@@ -410,6 +419,10 @@ public static class DrawingInstructionParser
                             double.TryParse(abParts[3], CultureInfo.InvariantCulture, out var abStart) &&
                             double.TryParse(abParts[4], CultureInfo.InvariantCulture, out var abSweep))
                         {
+                            // Clear previously resolved coordinates so the arc
+                            // stands on its own (same rationale as AugmentedRay).
+                            augmentedLineCoords = null;
+
                             augmentedLineSegments.Add(
                                 new AugmentedSegment.Arc(abXOff, abYOff, abRadius, abStart, abSweep));
                         }
