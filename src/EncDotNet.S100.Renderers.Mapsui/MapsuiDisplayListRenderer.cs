@@ -179,11 +179,16 @@ public sealed class MapsuiDisplayListRenderer
         foreach (var instruction in sorted)
         {
             var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
-            if (geom is null || geom.Coordinates.Count == 0)
+
+            // LineInstructions with CoordinatesOverride carry their own
+            // synthetic geometry (from augmented rays/arcs) and don't need
+            // the feature's natural geometry to have coordinates.
+            bool hasAugmentedLine = instruction is LineInstruction { CoordinatesOverride: not null };
+            if (!hasAugmentedLine && (geom is null || geom.Coordinates.Count == 0))
                 continue;
 
             // Defer pattern fills for merging
-            if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern)
+            if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
             {
                 var tilePng = GetPatternTilePng(patternRef);
                 if (tilePng is not null)
@@ -209,6 +214,7 @@ public sealed class MapsuiDisplayListRenderer
 
             // Track non-patterned color fills (e.g. land areas) for pattern clipping
             if (instruction is AreaInstruction { FillColor: not null } colorFill
+                && geom is not null
                 && !featuresWithPatterns.Contains(colorFill.FeatureReference))
             {
                 var polygon = CreatePolygonFromGeometry(geom);
@@ -260,16 +266,16 @@ public sealed class MapsuiDisplayListRenderer
 
     private static IFeature? CreateMapFeature(
         DrawingInstruction instruction,
-        FeatureGeometry geometry,
+        FeatureGeometry? geometry,
         Func<string?, MapsuiColor> resolveColor,
         MapsuiDisplayListRenderer renderer)
     {
         var feature = instruction switch
         {
-            AreaInstruction area => CreateAreaFeature(area, geometry, resolveColor, renderer),
+            AreaInstruction area when geometry is not null => CreateAreaFeature(area, geometry, resolveColor, renderer),
             LineInstruction line => CreateLineFeature(line, geometry, resolveColor, renderer),
-            PointInstruction point => CreatePointFeature(point, geometry, resolveColor, renderer),
-            TextInstruction text => CreateTextFeature(text, geometry, resolveColor, renderer),
+            PointInstruction point when geometry is not null => CreatePointFeature(point, geometry, resolveColor, renderer),
+            TextInstruction text when geometry is not null => CreateTextFeature(text, geometry, resolveColor, renderer),
             _ => null,
         };
 
@@ -368,12 +374,14 @@ public sealed class MapsuiDisplayListRenderer
 
     private static IFeature? CreateLineFeature(
         LineInstruction instruction,
-        FeatureGeometry geometry,
+        FeatureGeometry? geometry,
         Func<string?, MapsuiColor> resolveColor,
         MapsuiDisplayListRenderer renderer)
     {
-        var coords = geometry.Coordinates;
-        if (coords.Count < 2)
+        // Prefer augmented (synthetic) coordinates from AugmentedRay/ArcByRadius
+        // over the feature's natural geometry.
+        var coords = instruction.CoordinatesOverride ?? geometry?.Coordinates;
+        if (coords is null || coords.Count < 2)
             return null;
 
         var projected = ProjectCoordinates(coords);

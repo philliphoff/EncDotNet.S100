@@ -125,6 +125,15 @@ public sealed class LineInstruction : DrawingInstruction
     /// </summary>
     public double DashOnLengthMm { get; init; }
 
+    /// <summary>
+    /// Optional explicit coordinate sequence that overrides the feature's
+    /// geometry-derived polyline. Set by the S-100 Part 9A §11.5
+    /// <c>AugmentedRay</c> / <c>ArcByRadius</c> / <c>AugmentedPath</c>
+    /// primitives to supply synthetic geometry for sector-light limit lines
+    /// and all-around-light circles.
+    /// </summary>
+    public IReadOnlyList<(double Latitude, double Longitude)>? CoordinatesOverride { get; init; }
+
     internal override int TypeSortOrder => 1;
 }
 

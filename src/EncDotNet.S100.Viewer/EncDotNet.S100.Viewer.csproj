@@ -3,12 +3,31 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <PublishReadyToRun>true</PublishReadyToRun>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Avalonia window icon. Loaded via avares://… in MainWindow.axaml.
+      The other Branding artifacts (.icns / .ico / DMG background / Linux
+      PNG set) are consumed by packaging tooling, not by the app itself,
+      so they are intentionally excluded from the build below.
+    -->
+    <AvaloniaResource Include="Branding\AppIcon.png" />
+    <None Remove="Branding\AppIcon.icns" />
+    <None Remove="Branding\AppIcon.ico" />
+    <None Remove="Branding\dmg-background.png" />
+    <None Remove="Branding\dmg-background@2x.png" />
+    <None Remove="Branding\dmg-background.svg" />
+    <None Remove="Branding\icon.svg" />
+    <None Remove="Branding\png\**" />
+    <None Remove="Branding\AppIcon.iconset\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="EncDotNet.S100.Viewer.Tests" />

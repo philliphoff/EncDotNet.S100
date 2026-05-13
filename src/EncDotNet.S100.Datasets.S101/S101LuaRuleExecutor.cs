@@ -140,12 +140,19 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
             Telemetry.LuaFeaturesCount.Add(emitted.Count);
             activity?.SetTag("s100.lua.features.count", emitted.Count);
 
+            // Build a geometry provider to supply feature anchor points for
+            // augmented line geometry tessellation (sector lights, all-around
+            // lights).  AugmentedRay/ArcByRadius need the feature's point
+            // position as the origin for geodesic computation.
+            var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+
             var parsed = new List<DrawingInstruction>();
             foreach (var e in emitted)
             {
-                parsed.AddRange(DrawingInstructionParser.Parse(e.FeatureRef, e.InstructionString));
+                var anchor = GetFeatureAnchor(geometryProvider, e.FeatureRef);
+                parsed.AddRange(DrawingInstructionParser.Parse(
+                    e.FeatureRef, e.InstructionString, anchor));
             }
-
             var result = S101SafconLabelMerger.Merge(parsed);
 
             Telemetry.LuaInstructionsEmittedCount.Record(result.Count);
@@ -163,6 +170,20 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
             Telemetry.LuaExecuteDuration.Record(
                 (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
         }
+    }
+
+    /// <summary>
+    /// Returns the first (anchor) coordinate of the feature identified by
+    /// <paramref name="featureRef"/>, or <see langword="null"/> if the feature
+    /// has no point geometry.
+    /// </summary>
+    private static (double Latitude, double Longitude)? GetFeatureAnchor(
+        IFeatureGeometryProvider geometryProvider, string featureRef)
+    {
+        var geom = geometryProvider.GetGeometry(featureRef);
+        if (geom is null || geom.Coordinates.Count == 0)
+            return null;
+        return geom.Coordinates[0];
     }
 
     /// <summary>
