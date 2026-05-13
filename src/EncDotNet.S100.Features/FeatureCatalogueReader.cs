@@ -239,6 +239,7 @@ public static class FeatureCatalogueReader
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
+            SuperType = (string?)element.Element(S100FC + "superType"),
             AttributeBindings = element
                 .Elements(S100FC + "attributeBinding")
                 .Select(ReadAttributeBinding)
@@ -260,6 +261,7 @@ public static class FeatureCatalogueReader
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             IsAbstract = string.Equals((string?)element.Attribute("isAbstract"), "true", StringComparison.OrdinalIgnoreCase),
+            SuperType = (string?)element.Element(S100FC + "superType"),
             AttributeBindings = element
                 .Elements(S100FC + "attributeBinding")
                 .Select(ReadAttributeBinding)

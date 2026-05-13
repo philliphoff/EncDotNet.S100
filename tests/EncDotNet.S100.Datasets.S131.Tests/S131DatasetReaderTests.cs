@@ -92,23 +92,16 @@ public class S131DatasetReaderTests
     {
         var dataset = S131Dataset.Open(GetTestDataPath("harbour_xlink.gml"));
 
-        // Authority and Berth are features; Applicability and ContactDetails are info types
-        Assert.Equal(2, dataset.Features.Length);
-        Assert.Equal(2, dataset.InformationTypes.Length);
+        // Berth is a feature; Applicability, ContactDetails, and Authority are info types
+        Assert.Single(dataset.Features);
+        Assert.Equal(3, dataset.InformationTypes.Length);
 
-        // Authority is a geometry-less container
-        var authority = dataset.Features.Single(f => f.FeatureType == "Authority");
-        Assert.Equal(GmlGeometryType.None, authority.GeometryType);
-        Assert.Empty(authority.Points);
-        Assert.Empty(authority.Curves);
-        Assert.Empty(authority.ExteriorRing);
-
-        // Authority should have xlink references
-        Assert.True(authority.References.Length >= 1,
-            "Authority should have xlink references to info types");
+        // Authority is an information type (FC §B.1)
+        Assert.Contains(dataset.InformationTypes, i => i.TypeCode == "Authority");
 
         // Berth feature has geometry
-        var berth = dataset.Features.Single(f => f.FeatureType == "Berth");
+        var berth = Assert.Single(dataset.Features);
+        Assert.Equal("Berth", berth.FeatureType);
         Assert.Equal(GmlGeometryType.Point, berth.GeometryType);
         Assert.Single(berth.Points);
     }

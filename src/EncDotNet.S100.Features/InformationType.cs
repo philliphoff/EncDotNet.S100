@@ -14,6 +14,9 @@ public sealed class InformationType
 
     public bool IsAbstract { get; init; }
 
+    /// <summary>The code of the super type, if any.</summary>
+    public string? SuperType { get; init; }
+
     public IReadOnlyList<AttributeBinding> AttributeBindings { get; init; } = [];
 
     public IReadOnlyList<InformationBinding> InformationBindings { get; init; } = [];

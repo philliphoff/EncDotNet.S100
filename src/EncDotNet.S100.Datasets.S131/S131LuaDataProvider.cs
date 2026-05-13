@@ -456,7 +456,8 @@ public sealed class S131LuaDataProvider
         if (!_featureTypeByCode!.TryGetValue(code, out var ft))
             return new Dictionary<string, object?>();
 
-        return BuildObjectTypeInfo(ft.Code, ft.Name, ft.AttributeBindings, ft.IsAbstract);
+        var allBindings = ResolveFeatureTypeBindings(ft);
+        return BuildObjectTypeInfo(ft.Code, ft.Name, allBindings, ft.IsAbstract);
     }
 
     private IReadOnlyDictionary<string, object?> HostGetInformationTypeInfo(string code)
@@ -465,7 +466,8 @@ public sealed class S131LuaDataProvider
         if (!_infoTypeByCode!.TryGetValue(code, out var it))
             return new Dictionary<string, object?>();
 
-        return BuildObjectTypeInfo(it.Code, it.Name, it.AttributeBindings, it.IsAbstract);
+        var allBindings = ResolveInfoTypeBindings(it);
+        return BuildObjectTypeInfo(it.Code, it.Name, allBindings, it.IsAbstract);
     }
 
     private IReadOnlyDictionary<string, object?> HostGetSimpleAttributeTypeInfo(string code)
@@ -543,6 +545,49 @@ public sealed class S131LuaDataProvider
     {
         _complexAttrByCode ??= _fc.ComplexAttributes
             .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Walk the feature type inheritance chain and collect all attribute bindings,
+    /// starting from the most-derived type up to the root.
+    /// </summary>
+    private List<AttributeBinding> ResolveFeatureTypeBindings(FeatureType ft)
+    {
+        EnsureFeatureTypeLookup();
+        var bindings = new List<AttributeBinding>(ft.AttributeBindings);
+        var seen = new HashSet<string>(bindings.Select(b => b.AttributeRef), StringComparer.OrdinalIgnoreCase);
+        var current = ft.SuperType;
+        while (current is not null && _featureTypeByCode!.TryGetValue(current, out var parent))
+        {
+            foreach (var ab in parent.AttributeBindings)
+            {
+                if (seen.Add(ab.AttributeRef))
+                    bindings.Add(ab);
+            }
+            current = parent.SuperType;
+        }
+        return bindings;
+    }
+
+    /// <summary>
+    /// Walk the information type inheritance chain and collect all attribute bindings.
+    /// </summary>
+    private List<AttributeBinding> ResolveInfoTypeBindings(InformationType it)
+    {
+        EnsureInfoTypeLookup();
+        var bindings = new List<AttributeBinding>(it.AttributeBindings);
+        var seen = new HashSet<string>(bindings.Select(b => b.AttributeRef), StringComparer.OrdinalIgnoreCase);
+        var current = it.SuperType;
+        while (current is not null && _infoTypeByCode!.TryGetValue(current, out var parent))
+        {
+            foreach (var ab in parent.AttributeBindings)
+            {
+                if (seen.Add(ab.AttributeRef))
+                    bindings.Add(ab);
+            }
+            current = parent.SuperType;
+        }
+        return bindings;
     }
 
     /// <summary>

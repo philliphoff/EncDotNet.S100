@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?xml-model href="https://schemas.s100dev.net/schemas/S100/5.0.0/S100FC/20220610/S100_FC.sch"?> 
+<?xml-model href="https://schemas.s100dev.net/schemas/S100/5.2.0/S100FC/20240515/S100_FC.sch"?> 
 <S100FC:S100_FC_FeatureCatalogue
-	xmlns:S100FC="http://www.iho.int/S100FC/5.0"
+	xmlns:S100FC="http://www.iho.int/S100FC/5.2"
 	xmlns:S100Base="http://www.iho.int/S100Base/5.0"
 	xmlns:S100CI="http://www.iho.int/S100CI/5.0"
 	xmlns:xlink="http://www.w3.org/1999/xlink"
 	xmlns:S100CD="http://www.iho.int/S100CD/5.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.iho.int/S100FC/5.0 https://schemas.s100dev.net/schemas/S100/5.0.0/S100FC/20220610/S100FC.xsd">
+	xsi:schemaLocation="http://www.iho.int/S100FC/5.2 https://schemas.s100dev.net/schemas/S100/5.2.0/S100FC/20231214/S100FC.xsd">
 	<S100FC:name>Feature Catalogue for S-131</S100FC:name>
 	<S100FC:scope>Global coverage of maritime areas</S100FC:scope>
 	<S100FC:fieldOfApplication>Marine Harbour Infrastructure</S100FC:fieldOfApplication>
-	<S100FC:versionNumber>1.0.0</S100FC:versionNumber>
-	<S100FC:versionDate>2023-03-15</S100FC:versionDate>
+	<S100FC:versionNumber>2.0.0</S100FC:versionNumber>
+	<S100FC:versionDate>2025-10-25</S100FC:versionDate>
 	<S100FC:productId>S-131</S100FC:productId>
 	<S100FC:producer>
 		<S100CI:role>pointOfContact</S100CI:role>
@@ -26,20 +26,13 @@
 						<S100CI:electronicMailAddress>info@iho.int</S100CI:electronicMailAddress>
 					</S100CI:address>
 					<S100CI:onlineResource>
-						<S100CI:linkage>https://www.iho.int/</S100CI:linkage>
+						<S100CI:linkage>https://iho.int/</S100CI:linkage>
 					</S100CI:onlineResource>
 				</S100CI:contactInfo>
 			</S100CI:CI_Organisation>
 		</S100CI:party>
-		<S100CI:party>
-			<S100CI:CI_Organisation>
-				<S100CI:name>Portolan Sciences LLC</S100CI:name>
-			</S100CI:CI_Organisation>
-		</S100CI:party>
 	</S100FC:producer>
-
 	<S100FC:classification>unclassified</S100FC:classification>
-
 	<S100FC:S100_FC_DefinitionSources>
 		<S100FC:FC_DefinitionSource id="IHOREG">
 			<S100FC:source>
@@ -113,8 +106,8 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name>
-				<S100Base:definition>SI Metre</S100Base:definition>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
 				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
@@ -214,29 +207,7 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
-		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Bollard Pull</S100FC:name>
-			<S100FC:definition>The rated pull force for a bollard or other structure used to secure a vessel’s lines at a berth, a mooring facility or to a tug.</S100FC:definition>
-			<S100FC:code>bollardPull</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>1030</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-			<S100FC:valueType>real</S100FC:valueType>
-			<S100FC:uom>
-				<S100Base:name>Tonnes (force)</S100Base:name>
-				<S100Base:definition>Tonnes of force</S100Base:definition>
-				<S100Base:symbol>Tonnes</S100Base:symbol>
-			</S100FC:uom>
-			<S100FC:quantitySpecification>otherQuantity</S100FC:quantitySpecification>
-			<S100FC:constraints>
-				<S100CD:range>
-					<S100Base:lowerBound>0.0</S100Base:lowerBound>
-					<S100Base:upperBound>1000.0</S100Base:upperBound>
-					<S100Base:closure>closedInterval</S100Base:closure>
-				</S100CD:range>
-			</S100FC:constraints>
-		</S100FC:S100_FC_SimpleAttribute>
+		
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Call Name</S100FC:name>
 			<S100FC:definition>The designated call name of a station; for example, radio station, radar station, pilot.</S100FC:definition>
@@ -466,7 +437,109 @@
 				</S100FC:listedValue>
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
-		
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Anchorage</S100FC:name>
+			<S100FC:definition>Classification of an area where different use types of vessel can remain static.</S100FC:definition>
+			<S100FC:code>categoryOfAnchorage</S100FC:code>
+			<S100FC:alias>CATACH</S100FC:alias>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>6</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>Unrestricted Anchorage</S100FC:label>
+					<S100FC:definition>An area in which vessels anchor or may anchor.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>29</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Deep Water Anchorage</S100FC:label>
+					<S100FC:definition>An area in which vessels of deep draught anchor or may anchor.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>30</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Tanker Anchorage</S100FC:label>
+					<S100FC:definition>An area in which tankers anchor or may anchor.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>31</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Quarantine Anchorage</S100FC:label>
+					<S100FC:definition>An area where a vessel anchors when satisfying quarantine regulations.</S100FC:definition>
+					<S100FC:code>5</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>33</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Seaplane Anchorage</S100FC:label>
+					<S100FC:definition>An area in which seaplanes anchor or may anchor.</S100FC:definition>
+					<S100FC:code>6</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>34</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Small Craft Anchorage</S100FC:label>
+					<S100FC:definition>An area in which yachts and small boats anchor or may anchor.</S100FC:definition>
+					<S100FC:code>7</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>35</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Anchorage for Periods Up To 24 Hours</S100FC:label>
+					<S100FC:definition>An area in which vessels anchor or may anchor for periods of up to 24 hours.</S100FC:definition>
+					<S100FC:code>9</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>37</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Anchorage for a Limited Period of Time</S100FC:label>
+					<S100FC:definition>An area in which vessels may anchor for a period of time not to exceed a specific limit.</S100FC:definition>
+					<S100FC:code>10</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>38</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Waiting Anchorage</S100FC:label>
+					<S100FC:definition>An area in which vessels anchor or may anchor while waiting, for example, for access to a port or berth.</S100FC:definition>
+					<S100FC:code>14</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>39</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Reported Anchorage</S100FC:label>
+					<S100FC:definition>A location not defined by a regulatory authority that has been reported to be suitable and safe for anchoring.</S100FC:definition>
+					<S100FC:code>15</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>40</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Category of Authority</S100FC:name>
 			<S100FC:definition>The type of person, government agency or organisation granted powers of managing or controlling access to and/or activity in an area.</S100FC:definition>
@@ -653,11 +726,11 @@
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
 				<S100FC:listedValue>
-					<S100FC:label>Conventional Mooring</S100FC:label>
-					<S100FC:definition>Mooring using the vessel's anchors and buoys to secure the vessel at multiple points.</S100FC:definition>
+					<S100FC:label>Multi-Buoy Mooring Berth</S100FC:label>
+					<S100FC:definition>A designated facility where a vessel may moor, usually by a combination of the mooring buoys and the ship’s anchors.</S100FC:definition>
 					<S100FC:code>4</S100FC:code>
 					<S100FC:definitionReference>
-						<S100FC:sourceIdentifier>3107</S100FC:sourceIdentifier>
+						<S100FC:sourceIdentifier>3448</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
@@ -676,7 +749,15 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>enumeration</S100FC:valueType>
 			<S100FC:listedValues>
-			
+				<S100FC:listedValue>
+					<S100FC:label>Bulk</S100FC:label>
+					<S100FC:definition>Unpacked homogenous cargo poured loose in a certain space of a vessel, for example oil or grain.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1353</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Container</S100FC:label>
 					<S100FC:definition>One of a number of standard sized cargo carrying units, secured using standard corner attachments and bar.</S100FC:definition>
@@ -684,6 +765,24 @@
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>1808</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>General</S100FC:label>
+					<S100FC:definition>Break bulk cargo normally loaded by crane.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1809</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Liquid</S100FC:label>
+					<S100FC:definition>Any cargo loaded by pipeline.</S100FC:definition>
+					<S100FC:code>4</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1810</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
 				<S100FC:listedValue>
@@ -720,6 +819,15 @@
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>1814</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Ballast</S100FC:label>
+					<S100FC:definition>Material carried by a ship to ensure its stability.</S100FC:definition>
+					<S100FC:code>9</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1351</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
 				<S100FC:listedValue>
@@ -1069,6 +1177,76 @@
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Dolphin</S100FC:name>
+			<S100FC:definition>Classification of a post or group of posts, used for mooring or warping a vessel.</S100FC:definition>
+			<S100FC:code>categoryOfDolphin</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1142</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>Mooring Dolphin</S100FC:label>
+					<S100FC:definition>A post or group of posts driven into the seabed or riverbed, used as a mooring point for vessels.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3463</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Deviation Dolphin</S100FC:label>
+					<S100FC:definition>A post or group of posts, which a vessel may swing around for compass adjustment.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>303</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Berthing Dolphin</S100FC:label>
+					<S100FC:definition>A post or group of posts driven into the seabed or riverbed, used to extend the berth of a vessel by providing extra mooring points.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3464</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Fender or Breasting Dolphin</S100FC:label>
+					<S100FC:definition>A post or group of posts driven into the seabed or riverbed, used to assist in berthing of vessels by taking up some berthing loads; keep vessels from pressing against the pier structure; or to protect structures from possible impact by ships.</S100FC:definition>
+					<S100FC:code>4</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3465</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Frequency</S100FC:name>
+			<S100FC:definition>The electrical frequency provided by the power supply station.</S100FC:definition>
+			<S100FC:code>categoryOfFrequency</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>310</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>50Hz</S100FC:label>
+					<S100FC:definition>50 Hertz</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>60Hz</S100FC:label>
+					<S100FC:definition>60 Hertz</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Category of Harbour Facility</S100FC:name>
 			<S100FC:definition>Classification of harbour use.</S100FC:definition>
 			<S100FC:code>categoryOfHarbourFacility</S100FC:code>
@@ -1237,33 +1415,9 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>enumeration</S100FC:valueType>
 			<S100FC:listedValues>
-				<S100FC:listedValue>
-					<S100FC:label>Dolphin</S100FC:label>
-					<S100FC:definition>A post or group of posts, used for mooring or warping a vessel, or as an aid to navigation. The dolphin may be in the water, on a wharf or on the beach.</S100FC:definition>
-					<S100FC:code>1</S100FC:code>
-					<S100FC:definitionReference>
-						<S100FC:sourceIdentifier>302</S100FC:sourceIdentifier>
-						<S100FC:definitionSource ref="IHOREG"/>
-					</S100FC:definitionReference>
-				</S100FC:listedValue>
-				<S100FC:listedValue>
-					<S100FC:label>Deviation Dolphin</S100FC:label>
-					<S100FC:definition>A post or group of posts, which a vessel may swing around for compass adjustment.</S100FC:definition>
-					<S100FC:code>2</S100FC:code>
-					<S100FC:definitionReference>
-						<S100FC:sourceIdentifier>303</S100FC:sourceIdentifier>
-						<S100FC:definitionSource ref="IHOREG"/>
-					</S100FC:definitionReference>
-				</S100FC:listedValue>
-				<S100FC:listedValue>
-					<S100FC:label>Bollard</S100FC:label>
-					<S100FC:definition>Small shaped post, mounted on a wharf or dolphin used to secure ship&apos;s lines.</S100FC:definition>
-					<S100FC:code>3</S100FC:code>
-					<S100FC:definitionReference>
-						<S100FC:sourceIdentifier>304</S100FC:sourceIdentifier>
-						<S100FC:definitionSource ref="IHOREG"/>
-					</S100FC:definitionReference>
-				</S100FC:listedValue>
+				
+				
+				
 				<S100FC:listedValue>
 					<S100FC:label>Tie-Up Wall</S100FC:label>
 					<S100FC:definition>A section of wall designated for tying-up vessels awaiting transit. Bollards and mooring devices are available for both large and small ships.</S100FC:definition>
@@ -1291,16 +1445,14 @@
 						<S100FC:definitionSource ref="IHOREG"/>
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
-				<S100FC:listedValue>
-					<S100FC:label>Mooring Buoy</S100FC:label>
-					<S100FC:definition>A buoy secured to the bottom by permanent moorings with means for mooring a vessel by use of its anchor chain or mooring lines.</S100FC:definition>
-					<S100FC:code>7</S100FC:code>
-					<S100FC:definitionReference>
-						<S100FC:sourceIdentifier>307</S100FC:sourceIdentifier>
-						<S100FC:definitionSource ref="IHOREG"/>
-					</S100FC:definitionReference>
-				</S100FC:listedValue>
+				
 			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Plug</S100FC:name>
+			<S100FC:definition>The type of plug(s) available at the power supply station.</S100FC:definition>
+			<S100FC:code>categoryOfPlug</S100FC:code>
+			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Category of Port Section</S100FC:name>
@@ -1432,6 +1584,11 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:listedValue>
+			<S100FC:listedValue>
+				<S100FC:label>Exclusively Permitted</S100FC:label>
+				<S100FC:definition>Only vessels of the specified characteristics may use the facility, waterway, or service.</S100FC:definition>
+				<S100FC:code>7</S100FC:code>
+			</S100FC:listedValue>
 		</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
@@ -1470,6 +1627,29 @@
 						<S100FC:sourceIdentifier>431</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
 					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Shore Power Facility</S100FC:name>
+			<S100FC:definition>Classification of equipment or installations that are used for providing shoreside electrical power to a vessel at berth.</S100FC:definition>
+			<S100FC:code>categoryOfShorePowerFacility</S100FC:code>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>High-Voltage Shore Power System</S100FC:label>
+					<S100FC:definition>Delivers power to vessels using higher voltage (for example, 10 kV or above), suitable for large ports and large vessels. such as tankers, cargo ships, etc.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Low-Voltage Shore Power System</S100FC:label>
+					<S100FC:definition>Delivers power to vessels using lower voltage, designed for small to medium-sized coastal or riverine terminals and smaller vessels.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Hybrid Shore Power System</S100FC:label>
+					<S100FC:definition>Delivers power to vessels using high-voltage (for example, 10kV and above) and low-voltage outputs or simultaneous provision of dual-voltage power.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
 				</S100FC:listedValue>
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
@@ -1534,6 +1714,68 @@
 					<S100FC:code>6</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>1246</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Terminal</S100FC:name>
+			<S100FC:definition>Classification of terminals according to type of use, purpose, or type of cargo loaded or unloaded.</S100FC:definition>
+			<S100FC:code>categoryOfTerminal</S100FC:code>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>RoRo Terminal</S100FC:label>
+					<S100FC:definition>A terminal for roll-on roll-off ferries.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>137</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Ferry Terminal</S100FC:label>
+					<S100FC:definition>A terminal for passenger and vehicle ferries.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>138</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Tanker Terminal</S100FC:label>
+					<S100FC:definition>A terminal for the bulk handling of liquid cargoes.</S100FC:definition>
+					<S100FC:code>7</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>142</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Passenger Terminal</S100FC:label>
+					<S100FC:definition>A terminal for the loading and unloading of passengers.</S100FC:definition>
+					<S100FC:code>8</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>143</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Container Terminal</S100FC:label>
+					<S100FC:definition>A terminal with facilities to load/unload or store shipping containers.</S100FC:definition>
+					<S100FC:code>10</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>145</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Bulk Terminal</S100FC:label>
+					<S100FC:definition>A terminal for the handling of bulk materials such as iron ore, coal, etc.</S100FC:definition>
+					<S100FC:code>11</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>146</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
@@ -1609,7 +1851,96 @@
 			</S100FC:listedValue>
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
-		
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Category of Voltage</S100FC:name>
+			<S100FC:definition>The electrical voltage provided by the power supply station.</S100FC:definition>
+			<S100FC:code>categoryOfVoltage</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>327</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>230V</S100FC:label>
+					<S100FC:definition>230 Volts</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1624</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>400V</S100FC:label>
+					<S100FC:definition>400 Volts.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>1625</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>120V</S100FC:label>
+					<S100FC:definition>120 Volts</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>120V or 240V</S100FC:label>
+					<S100FC:definition>120/240 Volts</S100FC:definition>
+					<S100FC:code>4</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>208V</S100FC:label>
+					<S100FC:definition>208 Volts</S100FC:definition>
+					<S100FC:code>5</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>440V</S100FC:label>
+					<S100FC:definition>440 Volts</S100FC:definition>
+					<S100FC:code>6</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>440V or 690V</S100FC:label>
+					<S100FC:definition>440/690 Volts</S100FC:definition>
+					<S100FC:code>7</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>480V</S100FC:label>
+					<S100FC:definition>480 Volts</S100FC:definition>
+					<S100FC:code>8</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>690V</S100FC:label>
+					<S100FC:definition>690 Volts</S100FC:definition>
+					<S100FC:code>9</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>6600V</S100FC:label>
+					<S100FC:definition>6.6 kiloVolts</S100FC:definition>
+					<S100FC:code>10</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>6600V or 11000V</S100FC:label>
+					<S100FC:definition>6.6/11 kiloVolts</S100FC:definition>
+					<S100FC:code>11</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>11000V</S100FC:label>
+					<S100FC:definition>11 kiloVolts</S100FC:definition>
+					<S100FC:code>12</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>22000V</S100FC:label>
+					<S100FC:definition>22 kiloVolts</S100FC:definition>
+					<S100FC:code>13</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>380V</S100FC:label>
+					<S100FC:definition>380 Volts</S100FC:definition>
+					<S100FC:code>14</S100FC:code>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Cathodic Protection System</S100FC:name>
 			<S100FC:definition>A system used to protect metal structures against corrosion by supplying direct current to the immersed external surface of the structure.</S100FC:definition>
@@ -1841,7 +2172,7 @@
 			<S100FC:listedValues>
 				<S100FC:listedValue>
 					<S100FC:label>Sunday</S100FC:label>
-					<S100FC:definition>The first day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Saturday and preceding Monday.</S100FC:definition>
 					<S100FC:code>1</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>813</S100FC:sourceIdentifier>
@@ -1850,7 +2181,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Monday</S100FC:label>
-					<S100FC:definition>The second day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Sunday and preceding Tuesday.</S100FC:definition>
 					<S100FC:code>2</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>814</S100FC:sourceIdentifier>
@@ -1859,7 +2190,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Tuesday</S100FC:label>
-					<S100FC:definition>The third day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Monday and preceding Wednesday.</S100FC:definition>
 					<S100FC:code>3</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>815</S100FC:sourceIdentifier>
@@ -1868,7 +2199,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Wednesday</S100FC:label>
-					<S100FC:definition>The fourth day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Tuesday and preceding Thursday.</S100FC:definition>
 					<S100FC:code>4</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>816</S100FC:sourceIdentifier>
@@ -1877,7 +2208,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Thursday</S100FC:label>
-					<S100FC:definition>The fifth day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Wednesday and preceding Friday.</S100FC:definition>
 					<S100FC:code>5</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>817</S100FC:sourceIdentifier>
@@ -1886,7 +2217,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Friday</S100FC:label>
-					<S100FC:definition>The sixth day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Thursday and preceding Saturday.</S100FC:definition>
 					<S100FC:code>6</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>818</S100FC:sourceIdentifier>
@@ -1895,7 +2226,7 @@
 				</S100FC:listedValue>
 				<S100FC:listedValue>
 					<S100FC:label>Saturday</S100FC:label>
-					<S100FC:definition>The seventh day of the week.</S100FC:definition>
+					<S100FC:definition>The day of the week following Friday and preceding Sunday.</S100FC:definition>
 					<S100FC:code>7</S100FC:code>
 					<S100FC:definitionReference>
 						<S100FC:sourceIdentifier>819</S100FC:sourceIdentifier>
@@ -1930,6 +2261,19 @@
 			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Destination</S100FC:name>
+			<S100FC:definition>The place or general direction to which a vessel is going or directed.</S100FC:definition>
+			<S100FC:code>destination</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1154</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>text</S100FC:valueType>
+			<S100FC:constraints>
+				<S100CD:stringLength>100</S100CD:stringLength>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Development</S100FC:name>
 			<S100FC:definition>Describes a feature that is in development.</S100FC:definition>
 			<S100FC:code>development</S100FC:code>
@@ -1938,19 +2282,7 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>text</S100FC:valueType>
-		</S100FC:S100_FC_SimpleAttribute>
-		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Display Name</S100FC:name>
-			<S100FC:definition>A statement expressing if a feature name is to be displayed in certain system display settings or not.</S100FC:definition>
-			<S100FC:code>displayName</S100FC:code>
-			<S100FC:remarks>Where it is allowable to encode multiple instances of feature name for a single feature instance, only one feature name instance can indicate that the name is to be displayed (display name set to True).</S100FC:remarks>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>94</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-			<S100FC:valueType>boolean</S100FC:valueType>
-		</S100FC:S100_FC_SimpleAttribute>
-		
+		</S100FC:S100_FC_SimpleAttribute>		
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Distance</S100FC:name>
 			<S100FC:definition>A numeric measure of the spatial separation between two locations.</S100FC:definition>
@@ -2027,8 +2359,8 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name>
-				<S100Base:definition>SI metre</S100Base:definition>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
 				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
@@ -2204,6 +2536,28 @@
 			<S100FC:valueType>boolean</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Height</S100FC:name>
+			<S100FC:definition>The value of the vertical distance to the highest point of the feature, measured from a specified vertical datum.</S100FC:definition>
+			<S100FC:code>height</S100FC:code>
+			<S100FC:alias>HEIGHT</S100FC:alias>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1162</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:closure>gtSemiInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Horizontal Distance Uncertainty</S100FC:name>
 			<S100FC:definition>The best estimate of the horizontal accuracy of horizontal clearances and distances.</S100FC:definition>
 			<S100FC:code>horizontalDistanceUncertainty</S100FC:code>
@@ -2247,6 +2601,19 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>boolean</S100FC:valueType>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Interoperability Identifier</S100FC:name>
+			<S100FC:definition>A common unique identifier for entities which describe a single real-world feature, and which is used to identify instances of the feature in end-user systems where the feature may be included in multiple data product types.</S100FC:definition>
+			<S100FC:code>interoperabilityIdentifier</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1134</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>URN</S100FC:valueType>
+			<S100FC:constraints>
+				<S100CD:textPattern>urn:mrn:.+</S100CD:textPattern>
+			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>ISPS Level</S100FC:name>
@@ -2298,7 +2665,16 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
-		
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Linkage</S100FC:name>
+			<S100FC:definition>Location (address) for online access using a URL/URI address or similar addressing scheme.</S100FC:definition>
+			<S100FC:code>linkage</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1146</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>URI</S100FC:valueType>
+		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Local Knowledge Description</S100FC:name>
 			<S100FC:definition>Description of local knowledge that may be needed, for example to traverse a location.</S100FC:definition>
@@ -2385,6 +2761,52 @@
 					<S100Base:lowerBound>1</S100Base:lowerBound>
 					<S100Base:closure>geSemiInterval</S100Base:closure>
 				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Maximum Permitted Draught</S100FC:name>
+			<S100FC:definition>The maximum draught of a vessel permitted along a route, in a channel or dock, at a berth, or over a submerged feature.</S100FC:definition>
+			<S100FC:code>maximumPermittedDraught</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1172</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:upperBound>30.0</S100Base:upperBound>
+					<S100Base:closure>gtLeInterval</S100Base:closure>
+				</S100CD:range>
+				<S100CD:precision>1</S100CD:precision>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Maximum Permitted Vessel Length</S100FC:name>
+			<S100FC:definition>The maximum length of a vessel permitted in a channel or dock, at a berth, or at an anchorage or mooring.</S100FC:definition>
+			<S100FC:code>maximumPermittedVesselLength</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1173</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:closure>gtSemiInterval</S100Base:closure>
+				</S100CD:range>
+				<S100CD:precision>1</S100CD:precision>
 			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
@@ -2557,8 +2979,8 @@
 					</S100FC:definitionReference>
 				</S100FC:listedValue>
 				<S100FC:listedValue>
-				<S100FC:label>Conventional Mooring</S100FC:label>
-				<S100FC:definition>Mooring using the vessel's anchors and buoys to secure the vessel at multiple points.</S100FC:definition>
+					<S100FC:label>Multi-Buoy Mooring</S100FC:label>
+					<S100FC:definition>A facility where a vessel is usually moored by a combination of the ship’s anchors forward and mooring buoys aft and held on a fixed heading. Also called Conventional Buoy Mooring (CBM).</S100FC:definition>
 				<S100FC:code>8</S100FC:code>
 				<S100FC:definitionReference>
 					<S100FC:sourceIdentifier>3107</S100FC:sourceIdentifier>
@@ -2607,8 +3029,8 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name>
-				<S100Base:definition>SI metre</S100Base:definition>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
 				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:constraints>
@@ -2665,6 +3087,45 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>text</S100FC:valueType>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Name Usage</S100FC:name>
+			<S100FC:definition>Classification of the type and display level of the name of a feature in an end-user system.</S100FC:definition>
+			<S100FC:code>nameUsage</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1143</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>Default Name Display</S100FC:label>
+					<S100FC:definition>The name is intended to be displayed when the end-user system is set to the default name/text display setting.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3469</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Alternate Name Display</S100FC:label>
+					<S100FC:definition>The name is intended to be displayed when the end-user system is set to an alternate name/text display setting, for example an alternate language.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3470</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>No Chart Display</S100FC:label>
+					<S100FC:definition>The name or text is not intended to be displayed.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>3471</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG"/>
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Nationality</S100FC:name>
@@ -2791,14 +3252,21 @@
 			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Online Resource Linkage URL</S100FC:name>
-			<S100FC:definition>Universal Resource Locator of the online resource.</S100FC:definition>
-			<S100FC:code>onlineResourceLinkageURL</S100FC:code>
+			<S100FC:name>Optimum Display Scale</S100FC:name>
+			<S100FC:definition>The largest intended viewing scale for the data.</S100FC:definition>
+			<S100FC:code>optimumDisplayScale</S100FC:code>
+			<S100FC:alias>CSCALE</S100FC:alias>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>580</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
+				<S100FC:sourceIdentifier>1223</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
 			</S100FC:definitionReference>
-			<S100FC:valueType>URL</S100FC:valueType>
+			<S100FC:valueType>integer</S100FC:valueType>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>1</S100Base:lowerBound>
+					<S100Base:closure>geSemiInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		
 		
@@ -2811,6 +3279,14 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.000</S100Base:lowerBound>
+					<S100Base:upperBound>360.000</S100Base:upperBound>
+					<S100Base:closure>geLtInterval</S100Base:closure>
+				</S100CD:range>
+				<S100CD:precision>3</S100CD:precision>
+			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Orientation Value</S100FC:name>
@@ -2868,7 +3344,46 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>text</S100FC:valueType>
-		</S100FC:S100_FC_SimpleAttribute>		
+		</S100FC:S100_FC_SimpleAttribute>	
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Pilot Movement</S100FC:name>
+			<S100FC:definition>Classification of pilot activity by arrival, departure, or change of pilot. It may also describe the place where the pilot's advice begins, ends, or is transferred to a different pilot.</S100FC:definition>
+			<S100FC:code>pilotMovement</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>143</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>enumeration</S100FC:valueType>
+			<S100FC:listedValues>
+				<S100FC:listedValue>
+					<S100FC:label>Embarkation</S100FC:label>
+					<S100FC:definition>The place where vessels not being navigated according to a pilot's instructions pick up a pilot while in transit from sea to a port or constricted waters for future navigation under pilot instructions.</S100FC:definition>
+					<S100FC:code>1</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>976</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Disembarkation</S100FC:label>
+					<S100FC:definition>The place where vessels being navigated under a pilot's instructions in transit from sea to a port or constricted waters drop the pilot and proceed without being subject to pilot instructions.</S100FC:definition>
+					<S100FC:code>2</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>977</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Pilot Change</S100FC:label>
+					<S100FC:definition>The place where vessels being navigated under a pilot's instructions drop off the pilot and pick up a different pilot for future navigation under pilot's instructions.</S100FC:definition>
+					<S100FC:code>3</S100FC:code>
+					<S100FC:definitionReference>
+						<S100FC:sourceIdentifier>978</S100FC:sourceIdentifier>
+						<S100FC:definitionSource ref="IHOREG" />
+					</S100FC:definitionReference>
+				</S100FC:listedValue>
+			</S100FC:listedValues>
+		</S100FC:S100_FC_SimpleAttribute>
 		
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Port Facility Number</S100FC:name>
@@ -3223,6 +3738,29 @@
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Radius</S100FC:name>
+			<S100FC:definition>The vector extending from the centre to the periphery of a circular or spherical feature.</S100FC:definition>
+			<S100FC:code>radius</S100FC:code>
+			<S100FC:alias>RADIUS</S100FC:alias>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1183</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:closure>gtSemiInterval</S100Base:closure>
+				</S100CD:range>
+				<S100CD:precision>1</S100CD:precision>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Ramp Number</S100FC:name>
 			<S100FC:definition>An identifier for a specific ramp (a sloping structure that can be used as a landing place for small vessels, landing ships, or a ferry boat, or for hauling a cradle carrying a vessel, or for the transfer of rolling cargo).</S100FC:definition>
 			<S100FC:code>rampNumber</S100FC:code>
@@ -3346,6 +3884,24 @@
 			<S100FC:valueType>S100_TruncatedDate</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Safe Working Load</S100FC:name>
+			<S100FC:definition>The maximum safe force or load that a piece of equipment, device, or accessory can handle without breaking or failing under normal conditions.</S100FC:definition>
+			<S100FC:code>safeWorkingLoad</S100FC:code>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>KiloNewton</S100Base:name>
+				<S100Base:definition>Unit of force. One Newton is defined as 1 kg-m/s^2. 1kN = 1000N.</S100Base:definition>
+				<S100Base:symbol>kN</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:quantitySpecification>otherQuantity</S100FC:quantitySpecification>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:closure>gtSemiInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Scale Minimum</S100FC:name>
 			<S100FC:definition>The minimum scale at which the feature may be used for example for ECDIS presentation.</S100FC:definition>
 			<S100FC:code>scaleMinimum</S100FC:code>
@@ -3356,33 +3912,6 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>integer</S100FC:valueType>
-		</S100FC:S100_FC_SimpleAttribute>
-		
-		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Sector Bearing</S100FC:name>
-			<S100FC:definition>A sector is the part of a circle between two straight lines drawn from the centre to the circumference. Sector bearing specifies the limit of the sector.</S100FC:definition>
-			<S100FC:code>sectorBearing</S100FC:code>
-			<S100FC:remarks>The values given to the common limits of adjacent sectors should be identical. The orientation of bearing is from seaward to the central object. This conforms with the method used in &apos;List of Lights&apos; publications. A generic term such as &apos;to shore&apos; cannot be used; a specific bearing must be encoded. Where a light sector limit is defined as &apos;to the shore&apos;, it should be encoded using a value that ensures that, when the limit is drawn, it will fall entirely on land.</S100FC:remarks>
-			<S100FC:alias>SECTR1</S100FC:alias>
-			<S100FC:alias>SECTR2</S100FC:alias>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>866</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-			<S100FC:valueType>real</S100FC:valueType>
-			<S100FC:uom>
-				<S100Base:name>degrees</S100Base:name>
-				<S100Base:definition>degrees of arc</S100Base:definition>
-				<S100Base:symbol>°</S100Base:symbol>
-			</S100FC:uom>
-			<S100FC:quantitySpecification>planeAngle</S100FC:quantitySpecification>
-			<S100FC:constraints>
-				<S100CD:range>
-					<S100Base:lowerBound>0</S100Base:lowerBound>
-					<S100Base:upperBound>360</S100Base:upperBound>
-					<S100Base:closure>closedInterval</S100Base:closure>
-				</S100CD:range>
-			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Ship Sanitation Control</S100FC:name>
@@ -3427,27 +3956,16 @@
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Signal Frequency</S100FC:name>
-			<S100FC:definition>The frequency of a signal.</S100FC:definition>
-			<S100FC:code>signalFrequency</S100FC:code>
-			<S100FC:alias>SIGFRQ</S100FC:alias>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>1105</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-			<S100FC:valueType>integer</S100FC:valueType>
-			<S100FC:uom>
-				<S100Base:name>Hertz</S100Base:name>
-				<S100Base:definition>Cycles per second</S100Base:definition>
-				<S100Base:symbol>Hz</S100Base:symbol>
-			</S100FC:uom>
-			<S100FC:quantitySpecification>frequency</S100FC:quantitySpecification>
-			<S100FC:constraints>
-				<S100CD:range>
-					<S100Base:lowerBound>1</S100Base:lowerBound>
-					<S100Base:closure>geSemiInterval</S100Base:closure>
-				</S100CD:range>
-			</S100FC:constraints>
+			<S100FC:name>Shore Power Description</S100FC:name>
+			<S100FC:definition>A textual description of precautions for shore power usage.</S100FC:definition>
+			<S100FC:code>shorePowerDescription</S100FC:code>
+			<S100FC:valueType>text</S100FC:valueType>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Shore Power Service Provider</S100FC:name>
+			<S100FC:definition>An entity that generates, sells, or is responsible for supplying shore power to vessels.</S100FC:definition>
+			<S100FC:code>shorePowerServiceProvider</S100FC:code>
+			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Sill Depth</S100FC:name>
@@ -3459,8 +3977,8 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name>
-				<S100Base:definition>SI metre</S100Base:definition>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
 				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
@@ -3889,14 +4407,59 @@
 			<S100FC:valueType>text</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
-			<S100FC:name>Text Offset Mm</S100FC:name>
-			<S100FC:definition>The distance in millimetres that text associated with a feature is positioned from the feature in an end-user system.</S100FC:definition>
-			<S100FC:code>textOffsetMm</S100FC:code>
+			<S100FC:name>Text Offset Bearing</S100FC:name>
+			<S100FC:definition>The angular distance measured from true north that text associated with a feature is positioned from the feature in an end-user system.</S100FC:definition>
+			<S100FC:code>textOffsetBearing</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>993</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
+				<S100FC:sourceIdentifier>1201</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
 			</S100FC:definitionReference>
 			<S100FC:valueType>integer</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Degree of Arc</S100Base:name>
+				<S100Base:definition>1° = (&#960;/180) rad</S100Base:definition>
+				<S100Base:symbol>°</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:upperBound>360.0</S100Base:upperBound>
+					<S100Base:closure>geLtInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Text Offset Distance</S100FC:name>
+			<S100FC:definition>The distance that text associated with a feature is positioned from the feature in an end-user system.</S100FC:definition>
+			<S100FC:code>textOffsetDistance</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1202</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>integer</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Millimetre</S100Base:name>
+				<S100Base:definition>1 metre = 1000 millimetres</S100Base:definition>
+				<S100Base:symbol>mm</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0</S100Base:lowerBound>
+					<S100Base:upperBound>50</S100Base:upperBound>
+					<S100Base:closure>gtLeInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Text Rotation</S100FC:name>
+			<S100FC:definition>A statement that expresses if text associated with a feature is to be rotated in the ECDIS display or not.</S100FC:definition>
+			<S100FC:code>textRotation</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1141</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>boolean</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Text Type</S100FC:name>
@@ -3937,7 +4500,8 @@
 			<S100FC:constraints><S100CD:range>
 				<S100Base:lowerBound>0</S100Base:lowerBound>
 				<S100Base:closure>gtSemiInterval</S100Base:closure>
-			</S100CD:range><S100CD:precision>0</S100CD:precision></S100FC:constraints>
+			</S100CD:range>
+			</S100FC:constraints>
 		</S100FC:S100_FC_SimpleAttribute>
 		
 		<S100FC:S100_FC_SimpleAttribute>
@@ -4000,8 +4564,8 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name>
-				<S100Base:definition>SI metre</S100Base:definition>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
 				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:constraints>
@@ -4032,7 +4596,9 @@
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
 			<S100FC:uom>
-				<S100Base:name>metre</S100Base:name><S100Base:definition>SI metre</S100Base:definition><S100Base:symbol>m</S100Base:symbol>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
 			</S100FC:uom>
 			<S100FC:quantitySpecification>length</S100FC:quantitySpecification>
 			<S100FC:constraints><S100CD:range>
@@ -4339,6 +4905,28 @@
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Vertical Length</S100FC:name>
+			<S100FC:definition>The total vertical length of a feature.</S100FC:definition>
+			<S100FC:code>verticalLength</S100FC:code>
+			<S100FC:alias>VERLEN</S100FC:alias>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1212</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>real</S100FC:valueType>
+			<S100FC:uom>
+				<S100Base:name>Metre</S100Base:name>
+				<S100Base:definition>The basic unit of length in the International System of Units (SI) system.</S100Base:definition>
+				<S100Base:symbol>m</S100Base:symbol>
+			</S100FC:uom>
+			<S100FC:constraints>
+				<S100CD:range>
+					<S100Base:lowerBound>0.0</S100Base:lowerBound>
+					<S100Base:closure>gtSemiInterval</S100Base:closure>
+				</S100CD:range>
+			</S100FC:constraints>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Vessel Performance</S100FC:name>
 			<S100FC:definition>A description of the required handling characteristics of a vessel including hull design, main and auxiliary machinery, cargo handling equipment, navigation equipment and manoeuvring behaviour.</S100FC:definition>
 			<S100FC:code>vesselPerformance</S100FC:code>
@@ -4555,6 +5143,16 @@
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:valueType>real</S100FC:valueType>
+		</S100FC:S100_FC_SimpleAttribute>
+		<S100FC:S100_FC_SimpleAttribute>
+			<S100FC:name>Visitors Mooring</S100FC:name>
+			<S100FC:definition>A mooring set aside for the use of visiting vessels.</S100FC:definition>
+			<S100FC:code>visitorsMooring</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1121</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:valueType>boolean</S100FC:valueType>
 		</S100FC:S100_FC_SimpleAttribute>
 		<S100FC:S100_FC_SimpleAttribute>
 			<S100FC:name>Waste Disposal Service</S100FC:name>
@@ -4940,6 +5538,16 @@
 						<S100FC:sourceIdentifier>2857</S100FC:sourceIdentifier>
 						<S100FC:definitionSource ref="IHOREG"/>
 					</S100FC:definitionReference>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Ballast Water Exchange</S100FC:label>
+					<S100FC:definition>Discharge and uptake of ballast water.</S100FC:definition>
+					<S100FC:code>17</S100FC:code>
+				</S100FC:listedValue>
+				<S100FC:listedValue>
+					<S100FC:label>Hull Cleaning</S100FC:label>
+					<S100FC:definition>The removal or treatment of biofouling (accumulation of aquatic organisms including microfouling and macrofouling) from a ship's submerged surfaces, including hull and niche areas, conducted either in-water or during dry-docking. The process includes both proactive cleaning (periodic removal of microfouling) and reactive cleaning (removal of micro- and macrofouling as corrective action).</S100FC:definition>
+					<S100FC:code>18</S100FC:code>
 				</S100FC:listedValue>
 			</S100FC:listedValues>
 		</S100FC:S100_FC_SimpleAttribute>
@@ -5478,13 +6086,7 @@
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="distance"/>
 			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="true">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">2</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="sectorBearing"/>
-			</S100FC:subAttributeBinding>
+			
 			<S100FC:subAttributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
@@ -5661,29 +6263,35 @@
 			<S100FC:definition>Provides the name of an entity, defines the national language of the name, and provides the option to display the name at various system display settings.</S100FC:definition>
 			<S100FC:code>featureName</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>227</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
+				<S100FC:sourceIdentifier>1129</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
 			</S100FC:definitionReference>
 			<S100FC:subAttributeBinding sequential="false">
 				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
+					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="displayName"/>
-			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="language"/>
+				<S100FC:attribute ref="language" />
 			</S100FC:subAttributeBinding>
 			<S100FC:subAttributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="name"/>
+				<S100FC:attribute ref="name" />
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attributeVisibility>privateVisibility</S100FC:attributeVisibility>
+				<S100FC:attribute ref="nameUsage" />
 			</S100FC:subAttributeBinding>
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
@@ -5732,13 +6340,6 @@
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="frequencyShoreStationReceives"/>
-			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="true">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="true" infinite="true"/>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="contactInstructions"/>
 			</S100FC:subAttributeBinding>
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
@@ -6021,7 +6622,7 @@
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="onlineResourceLinkageURL"/>
+				<S100FC:attribute ref="linkage"/>
 			</S100FC:subAttributeBinding>
 			<S100FC:subAttributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -6176,6 +6777,8 @@
 					<S100FC:value>14</S100FC:value>
 					<S100FC:value>15</S100FC:value>
 					<S100FC:value>16</S100FC:value>
+					<S100FC:value>17</S100FC:value>
+					<S100FC:value>18</S100FC:value>
 				</S100FC:permittedValues>
 				<S100FC:attribute ref="actionOrActivity"/>
 			</S100FC:subAttributeBinding>
@@ -6213,6 +6816,57 @@
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="timeIntervalsByDayOfWeek"/>
+			</S100FC:subAttributeBinding>
+		</S100FC:S100_FC_ComplexAttribute>
+		<S100FC:S100_FC_ComplexAttribute>
+			<S100FC:name>Source Indication</S100FC:name>
+			<S100FC:definition>Information about the source document, publication, or reference from which object data or textual material included or referenced in a dataset are derived.</S100FC:definition>
+			<S100FC:code>sourceIndication</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>1320</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="categoryOfAuthority"/>
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="countryName"/>
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="source"/>
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="sourceType"/>
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="reportedDate"/>
+			</S100FC:subAttributeBinding>
+			<S100FC:subAttributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true"/>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="featureName"/>
 			</S100FC:subAttributeBinding>
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
@@ -6328,13 +6982,7 @@
 				</S100FC:permittedValues>
 				<S100FC:attribute ref="telecommunicationService"/>
 			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="scheduleByDayOfWeek"/>
-			</S100FC:subAttributeBinding>
+			
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
 			<S100FC:name>Text Content</S100FC:name>
@@ -6375,35 +7023,9 @@
 			<S100FC:subAttributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="source"/>
-			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>1</S100FC:value>
-					<S100FC:value>2</S100FC:value>
-					<S100FC:value>7</S100FC:value>
-					<S100FC:value>8</S100FC:value>
-					<S100FC:value>9</S100FC:value>
-					<S100FC:value>10</S100FC:value>
-					<S100FC:value>11</S100FC:value>
-					<S100FC:value>12</S100FC:value>
-					<S100FC:value>13</S100FC:value>
-					<S100FC:value>14</S100FC:value>
-				</S100FC:permittedValues>
-				<S100FC:attribute ref="sourceType"/>
-			</S100FC:subAttributeBinding>
-			<S100FC:subAttributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="reportedDate"/>
+				<S100FC:attribute ref="sourceIndication"/>
 			</S100FC:subAttributeBinding>
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
@@ -6494,10 +7116,10 @@
 			</S100FC:subAttributeBinding>
 		</S100FC:S100_FC_ComplexAttribute>
 		<S100FC:S100_FC_ComplexAttribute>
-			<S100FC:name>Vessels Measurements</S100FC:name>
-			<S100FC:definition>Values, discovered by measuring, that correspond to vessels characteristics.</S100FC:definition>
-			<S100FC:code>vesselsMeasurements</S100FC:code>
-			<S100FC:remarks>Combines (i) specifications of vessels&apos; measurable characteristics (length, beam, tonnages, etc.), (ii) limit values for the specified characteristics (with units), (iii) arithmetical comparison operators (greater than, etc.), and (iv) logical operators (AND/OR) to define a subset of vessels characterized by the specified ranges. For example, the combination (draught, 10.5, metres, greaterThan) describes &quot;vessels with draught greater than 10.5 metres&quot;.</S100FC:remarks>
+			<S100FC:name>Vessel Measurements Specification</S100FC:name>
+			<S100FC:definition>Combinations of values of measurable characteristics or dimensions of vessels, used to specify size and tonnage ranges.</S100FC:definition>
+			<S100FC:code>vesselMeasurementsSpecification</S100FC:code>
+			<S100FC:remarks>Combines (i) specifications of vessels' measurable characteristics (length, beam, tonnages, etc.), (ii) limit values for the specified characteristics (with units), (iii) arithmetical comparison operators (greater than, etc.), and (iv) logical operators (AND/OR) to define a subset of vessels characterized by the specified ranges. For example, the combination (draught, 10.5, metres, greaterThan) describes "vessels with draught greater than 10.5 metres".</S100FC:remarks>
 			<S100FC:definitionReference>
 				<S100FC:sourceIdentifier>772</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
@@ -6603,61 +7225,7 @@
 	</S100FC:S100_FC_ComplexAttributes>
 	<S100FC:S100_FC_Roles>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Positions</S100FC:name>
-			<S100FC:definition>A pointer to a specific cartographically positioned location for text.</S100FC:definition>
-			<S100FC:code>positions</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>3</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Component of</S100FC:name>
-			<S100FC:definition>A pointer to the aggregate in a whole-part relationship.</S100FC:definition>
-			<S100FC:code>componentOf</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>9</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Information provided for</S100FC:name>
-			<S100FC:definition>A pointer to a specific feature(s) for which further information is required.</S100FC:definition>
-			<S100FC:code>informationProvidedFor</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>16</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Provides information</S100FC:name>
-			<S100FC:definition>A pointer to an object that provides more information about the referencing feature or information type.</S100FC:definition>
-			<S100FC:code>providesInformation</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>17</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>The applicable RxN</S100FC:name>
-			<S100FC:definition>The applicable regulation, restriction, recommendation or nautical information</S100FC:definition>
-			<S100FC:code>theApplicableRxN</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>18</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Applies in location</S100FC:name>
-			<S100FC:definition>The location in which the information item applies</S100FC:definition>
-			<S100FC:code>appliesInLocation</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>19</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Authority</S100FC:name>
+			<S100FC:name>The Authority</S100FC:name>
 			<S100FC:definition>A pointer to an Authority object</S100FC:definition>
 			<S100FC:code>theAuthority</S100FC:code>
 			<S100FC:definitionReference>
@@ -6675,138 +7243,21 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Contact details</S100FC:name>
-			<S100FC:definition>A pointer to an Contact Details object</S100FC:definition>
-			<S100FC:code>theContactDetails</S100FC:code>
+			<S100FC:name>Auxiliary Facility</S100FC:name>
+			<S100FC:definition>A reference to a feature that supplements or supports the use of the primary feature in an AuxiliaryFacility relationship.</S100FC:definition>
+			<S100FC:code>auxiliaryFacility</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>22</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>58</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
+		
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Control authority</S100FC:name>
-			<S100FC:definition>The controlling organization or authority for a geographically located service</S100FC:definition>
-			<S100FC:code>controlAuthority</S100FC:code>
-		<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>23</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Controlled service</S100FC:name>
-			<S100FC:definition>The service controlled by an organisation or authority</S100FC:definition>
-			<S100FC:code>controlledService</S100FC:code>
-		<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>24</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Identifies</S100FC:name>
-			<S100FC:definition>A pointer to a specific feature(s).</S100FC:definition>
-			<S100FC:code>identifies</S100FC:code>
+			<S100FC:name>Component of</S100FC:name>
+			<S100FC:definition>A pointer to the aggregate in a whole-part relationship.</S100FC:definition>
+			<S100FC:code>componentOf</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>27</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Is applicable to</S100FC:name>
-			<S100FC:definition>The object or class of objects to which the regulation, restriction, recommendation, or nautical information applies</S100FC:definition>
-			<S100FC:code>isApplicableTo</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>28</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Service Hours (reference)</S100FC:name>
-			<S100FC:definition>Service hours for an authority or service provider</S100FC:definition>
-			<S100FC:code>theServiceHours</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>29</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>The RxN</S100FC:name>
-			<S100FC:definition>The regulation, restriction, recommendation, or nautical information</S100FC:definition>
-			<S100FC:code>theRxN</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>30</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>The service hours for a non-standard workday</S100FC:name>
-			<S100FC:definition>The usual service hours to which an exception applies</S100FC:definition>
-			<S100FC:code>theServiceHours_nsdy</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>32</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Vessel location</S100FC:name>
-			<S100FC:definition>The location to which the permission statement applies</S100FC:definition>
-			<S100FC:code>vslLocation</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>35</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Partial working day</S100FC:name>
-			<S100FC:definition>The work hours for a non-standard workday</S100FC:definition>
-			<S100FC:code>partialWorkingDay</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>36</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Service place</S100FC:name>
-			<S100FC:definition>Pointer to service or facility</S100FC:definition>
-			<S100FC:code>servicePlace</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>43</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Location service hours</S100FC:name>
-			<S100FC:definition>The location for which service hours are given</S100FC:definition>
-			<S100FC:code>location_srvHrs</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>44</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>The organisation</S100FC:name>
-			<S100FC:definition>The organisation to which information relates</S100FC:definition>
-			<S100FC:code>theOrganisation</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>47</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>The information</S100FC:name>
-			<S100FC:definition>Information related to an organisation</S100FC:definition>
-			<S100FC:code>theInformation</S100FC:code>
-			<S100FC:remarks>Registry definition "The information" merely repeats the name.</S100FC:remarks>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>48</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Permission</S100FC:name>
-			<S100FC:definition>Association class for associations describing whether the subsets of vessels determined by the ship characteristics specified in APPLIC may (or must, etc.) transit, enter, or use a feature.</S100FC:definition>
-			<S100FC:code>permission</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>49</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>9</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6820,11 +7271,20 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Auxiliary Facility</S100FC:name>
-			<S100FC:definition>A reference to a feature that supplements or supports the use of the primary feature in an AuxiliaryFacility relationship.</S100FC:definition>
-			<S100FC:code>auxiliaryFacility</S100FC:code>
+			<S100FC:name>Contact details</S100FC:name>
+			<S100FC:definition>A pointer to an Contact Details object</S100FC:definition>
+			<S100FC:code>theContactDetails</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>58</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>22</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>Control authority</S100FC:name>
+			<S100FC:definition>The controlling organization or authority for a geographically located service</S100FC:definition>
+			<S100FC:code>controlAuthority</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>23</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6856,11 +7316,11 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Entrance To</S100FC:name>
-			<S100FC:definition>A reference to the feature to which entrance information pertains.</S100FC:definition>
-			<S100FC:code>entranceTo</S100FC:code>
+			<S100FC:name>Facility Operating Hours</S100FC:name>
+			<S100FC:definition>Reference to information about the days and times during which a facility operates or may be used.</S100FC:definition>
+			<S100FC:code>facilityOperatingHours</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>62</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>69</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6883,6 +7343,24 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
+			<S100FC:name>Is applicable to</S100FC:name>
+			<S100FC:definition>The object or class of objects to which the regulation, restriction, recommendation, or nautical information applies</S100FC:definition>
+			<S100FC:code>isApplicableTo</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>28</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>Layout Unit</S100FC:name>
+			<S100FC:definition>A reference to the diverse units comprising a feature of a different type.</S100FC:definition>
+			<S100FC:code>layoutUnit</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>67</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
 			<S100FC:name>Limit Extent</S100FC:name>
 			<S100FC:definition>Reference to a feature demarcating the extent to which a coastal State claims or may claim a specific jurisdiction.</S100FC:definition>
 			<S100FC:code>limitExtent</S100FC:code>
@@ -6901,29 +7379,16 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Layout Unit</S100FC:name>
-			<S100FC:definition>A reference to the diverse units comprising a feature of a different type.</S100FC:definition>
-			<S100FC:code>layoutUnit</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>67</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
+			<S100FC:name>Organisation-Related RxN</S100FC:name>
+			<S100FC:definition>Reference to regulation, recommendation, restriction or general information related to an organisation</S100FC:definition>
+			<S100FC:code>organisationRelatedRxN</S100FC:code>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Location Served</S100FC:name>
-			<S100FC:definition>Reference to the location (feature) where specified services are available.</S100FC:definition>
-			<S100FC:code>locationServed</S100FC:code>
+			<S100FC:name>Permission</S100FC:name>
+			<S100FC:definition>Association class for associations describing whether the subsets of vessels determined by the ship characteristics specified in APPLIC may (or must, etc.) transit, enter, or use a feature.</S100FC:definition>
+			<S100FC:code>permission</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>68</S100FC:sourceIdentifier>
-				<S100FC:definitionSource ref="IHOREG"/>
-			</S100FC:definitionReference>
-		</S100FC:S100_FC_Role>
-		<S100FC:S100_FC_Role>
-			<S100FC:name>Facility Operating Hours</S100FC:name>
-			<S100FC:definition>Reference to information about the days and times during which a facility operates or may be used.</S100FC:definition>
-			<S100FC:code>facilityOperatingHours</S100FC:code>
-			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>69</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>49</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6937,11 +7402,29 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
+			<S100FC:name>Partial working day</S100FC:name>
+			<S100FC:definition>The work hours for a non-standard workday</S100FC:definition>
+			<S100FC:code>partialWorkingDay</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>36</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
 			<S100FC:name>Service Description Reference</S100FC:name>
 			<S100FC:definition>Reference to an information object describing services.</S100FC:definition>
 			<S100FC:code>serviceDescriptionReference</S100FC:code>
 			<S100FC:definitionReference>
 				<S100FC:sourceIdentifier>71</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>Service Hours (reference)</S100FC:name>
+			<S100FC:definition>Service hours for an authority or service provider</S100FC:definition>
+			<S100FC:code>theServiceHours</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>29</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6955,20 +7438,67 @@
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Defined for</S100FC:name>
-			<S100FC:definition>A pointer to a specific spatial type(s).</S100FC:definition>
-			<S100FC:code>definedFor</S100FC:code>
+			<S100FC:name>The information</S100FC:name>
+			<S100FC:definition>A pointer to an object that provides more information about the referencing feature or information type.</S100FC:definition>
+			<S100FC:code>theInformation</S100FC:code>
+			<S100FC:remarks>Registry definition "The information" merely repeats the name.</S100FC:remarks>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>14</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>48</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
 		<S100FC:S100_FC_Role>
-			<S100FC:name>Defines</S100FC:name>
-			<S100FC:definition>A pointer to an information type providing spatial quality information.</S100FC:definition>
-			<S100FC:code>defines</S100FC:code>
+			<S100FC:name>The organisation</S100FC:name>
+			<S100FC:definition>The organisation to which information relates</S100FC:definition>
+			<S100FC:code>theOrganisation</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>15</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>47</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The Quality Information</S100FC:name>
+			<S100FC:definition>A pointer to an information type providing spatial quality information.</S100FC:definition>
+			<S100FC:code>theQualityInformation</S100FC:code>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The RxN</S100FC:name>
+			<S100FC:definition>The regulation, restriction, recommendation, or nautical information</S100FC:definition>
+			<S100FC:code>theRxN</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>30</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The Applicable RxN</S100FC:name>
+			<S100FC:definition>The applicable regulation, restriction, recommendation or nautical information</S100FC:definition>
+			<S100FC:code>theApplicableRxN</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>18</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The Cartographic Text</S100FC:name>
+			<S100FC:definition>A pointer to a specific cartographically positioned location for text.</S100FC:definition>
+			<S100FC:code>theCartographicText</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>3</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The Position Provider</S100FC:name>
+			<S100FC:definition>A pointer to a specific feature(s).</S100FC:definition>
+			<S100FC:code>thePositionProvider</S100FC:code>
+		</S100FC:S100_FC_Role>
+		<S100FC:S100_FC_Role>
+			<S100FC:name>The service hours for a non-standard workday</S100FC:name>
+			<S100FC:definition>The usual service hours to which an exception applies</S100FC:definition>
+			<S100FC:code>theServiceHours_nsdy</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>32</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 		</S100FC:S100_FC_Role>
@@ -6983,8 +7513,7 @@
 				<S100FC:sourceIdentifier>8000001</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="providesInformation"/>
-			<S100FC:role ref="informationProvidedFor"/>
+			<S100FC:role ref="theInformation"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
 			<S100FC:name>Authority contact</S100FC:name>
@@ -7017,7 +7546,6 @@
 				<S100FC:sourceIdentifier>8000005</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="appliesInLocation"/>
 			<S100FC:role ref="theRxN"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7040,7 +7568,6 @@
 				<S100FC:sourceIdentifier>8000010</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="controlledService"/>
 			<S100FC:role ref="controlAuthority"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7051,7 +7578,6 @@
 				<S100FC:sourceIdentifier>8000012</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="servicePlace"/>
 			<S100FC:role ref="theContactDetails"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7063,7 +7589,6 @@
 				<S100FC:sourceIdentifier>8000013</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="location_srvHrs"/>
 			<S100FC:role ref="facilityOperatingHours"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7074,7 +7599,7 @@
 				<S100FC:sourceIdentifier>8000014</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="theInformation"/>
+			<S100FC:role ref="organisationRelatedRxN"/>
 			<S100FC:role ref="theOrganisation"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7119,22 +7644,21 @@
 					<S100FC:value>4</S100FC:value>
 					<S100FC:value>5</S100FC:value>
 					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
 				</S100FC:permittedValues>
 				<S100FC:attribute ref="categoryOfRelationship"/>
 			</S100FC:attributeBinding>
-			<S100FC:role ref="vslLocation"/>
 			<S100FC:role ref="permission"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
 			<S100FC:name>Spatial Association</S100FC:name>
-			<S100FC:definition>Association for linking spatial quality to spatial objects.</S100FC:definition>
+			<S100FC:definition>An association for the binding between a spatial type and its spatial quality information.</S100FC:definition>
 			<S100FC:code>SpatialAssociation</S100FC:code>
 			<S100FC:definitionReference>
 				<S100FC:sourceIdentifier>8000019</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="defines"/>
-			<S100FC:role ref="definedFor"/>
+			<S100FC:role ref="theQualityInformation"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
 			<S100FC:name>Limit Entrance</S100FC:name>
@@ -7144,7 +7668,6 @@
 				<S100FC:sourceIdentifier>8000021</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="entranceTo"/>
 			<S100FC:role ref="entranceReference"/>
 		</S100FC:S100_FC_InformationAssociation>
 		<S100FC:S100_FC_InformationAssociation isAbstract="false">
@@ -7155,7 +7678,6 @@
 				<S100FC:sourceIdentifier>8000022</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:role ref="locationServed"/>
 			<S100FC:role ref="serviceDescriptionReference"/>
 		</S100FC:S100_FC_InformationAssociation>
 	</S100FC:S100_FC_InformationAssociations>
@@ -7169,8 +7691,8 @@
 	 			<S100FC:sourceIdentifier>9000014</S100FC:sourceIdentifier>
 	 			<S100FC:definitionSource ref="IHOREG"/>
 	 		</S100FC:definitionReference>
-	 		<S100FC:role ref="identifies"/>
-	 		<S100FC:role ref="positions"/>
+	 		<S100FC:role ref="thePositionProvider"/>
+	 		<S100FC:role ref="theCartographicText"/>
 	 	</S100FC:S100_FC_FeatureAssociation>
 	 	<S100FC:S100_FC_FeatureAssociation isAbstract="false">
 			<S100FC:name>Subsection</S100FC:name>
@@ -7280,55 +7802,10 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="source"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>1</S100FC:value>
-					<S100FC:value>2</S100FC:value>
-					<S100FC:value>7</S100FC:value>
-					<S100FC:value>8</S100FC:value>
-					<S100FC:value>9</S100FC:value>
-					<S100FC:value>10</S100FC:value>
-					<S100FC:value>11</S100FC:value>
-					<S100FC:value>12</S100FC:value>
-					<S100FC:value>13</S100FC:value>
-					<S100FC:value>14</S100FC:value>
-				</S100FC:permittedValues>
-				<S100FC:attribute ref="sourceType"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="reportedDate"/>
-			</S100FC:attributeBinding>
-			<S100FC:informationBinding roleType="association">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
-				<S100FC:association ref="AdditionalInformation"/>
-				<S100FC:role ref="providesInformation"/>
-				<S100FC:informationType ref="NauticalInformation"/>
-			</S100FC:informationBinding>
-			<!--
-			<S100FC:subType>AbstractRxN</S100FC:subType>
-			<S100FC:subType>Applicability</S100FC:subType>
-			<S100FC:subType>Authority</S100FC:subType>
-			<S100FC:subType>AvailablePortServices</S100FC:subType>
-			<S100FC:subType>ContactDetails</S100FC:subType>
-			<S100FC:subType>Entrance</S100FC:subType>
-			<S100FC:subType>NonStandardWorkingDay</S100FC:subType>
-			<S100FC:subType>ServiceHours</S100FC:subType>
-			-->
+				<S100FC:attribute ref="sourceIndication"/>
+			</S100FC:attributeBinding>
 		</S100FC:S100_FC_InformationType>
 		<S100FC:S100_FC_InformationType isAbstract="true">
 			<S100FC:name>AbstractRxN</S100FC:name>
@@ -7526,6 +8003,13 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="false" xsi:nil="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="destination"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="information"/>
@@ -7535,7 +8019,7 @@
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="vesselsMeasurements"/>
+				<S100FC:attribute ref="vesselMeasurementsSpecification"/>
 			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
@@ -7546,16 +8030,6 @@
 				<S100FC:role ref="theApplicableRxN"/>
 				<S100FC:informationType ref="AbstractRxN"/>
 			</S100FC:informationBinding>
-			<S100FC:informationBinding roleType="association">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="true" infinite="true"/>
-				</S100FC:multiplicity>
-				<S100FC:association ref="PermissionType"/>
-				<S100FC:role ref="vslLocation"/>
-				<S100FC:informationType ref="InformationType"/>
-			</S100FC:informationBinding>
-			
 			<S100FC:superType>InformationType</S100FC:superType>
 		</S100FC:S100_FC_InformationType>
 		<S100FC:S100_FC_InformationType isAbstract="false">
@@ -7612,7 +8086,7 @@
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:association ref="RelatedOrganisation"/>
-				<S100FC:role ref="theInformation"/>
+				<S100FC:role ref="organisationRelatedRxN"/>
 				<S100FC:informationType ref="AbstractRxN"/>
 			</S100FC:informationBinding>
 			<S100FC:informationBinding roleType="association">
@@ -7882,25 +8356,31 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="contactInstructions"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="contactAddress"/>
+				<S100FC:attribute ref="language"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="contactInstructions"/>
+				<S100FC:attribute ref="mMSICode"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="signalFrequency"/>
+				<S100FC:attribute ref="contactAddress"/>
 			</S100FC:attributeBinding>
-			
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
@@ -7914,13 +8394,6 @@
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="information"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="mMSICode"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -8035,15 +8508,6 @@
 				<S100FC:sourceIdentifier>30</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:informationBinding roleType="association">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="true" infinite="true"/>
-				</S100FC:multiplicity>
-				<S100FC:association ref="AdditionalInformation"/>
-				<S100FC:role ref="informationProvidedFor"/>
-				<S100FC:informationType ref="InformationType"/>
-			</S100FC:informationBinding>
 			<S100FC:superType>AbstractRxN</S100FC:superType>
 		</S100FC:S100_FC_InformationType>
 		<S100FC:S100_FC_InformationType isAbstract="false">
@@ -8077,7 +8541,6 @@
 			</S100FC:attributeBinding>
 			<S100FC:superType>InformationType</S100FC:superType>
 		</S100FC:S100_FC_InformationType>
-		
 		<S100FC:S100_FC_InformationType isAbstract="false">
 			<S100FC:name>Recommendations</S100FC:name>
 			<S100FC:definition>Recommendations for a related area or facility.</S100FC:definition>
@@ -8218,6 +8681,13 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="interoperabilityIdentifier"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="featureName"/>
@@ -8253,35 +8723,9 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="source"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>1</S100FC:value>
-					<S100FC:value>2</S100FC:value>
-					<S100FC:value>7</S100FC:value>
-					<S100FC:value>8</S100FC:value>
-					<S100FC:value>9</S100FC:value>
-					<S100FC:value>10</S100FC:value>
-					<S100FC:value>11</S100FC:value>
-					<S100FC:value>12</S100FC:value>
-					<S100FC:value>13</S100FC:value>
-					<S100FC:value>14</S100FC:value>
-				</S100FC:permittedValues>
-				<S100FC:attribute ref="sourceType"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="reportedDate"/>
+				<S100FC:attribute ref="sourceIndication"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -8314,7 +8758,7 @@
 					<S100Base:upper xsi:nil="true" infinite="true"/>
 				</S100FC:multiplicity>
 				<S100FC:association ref="AdditionalInformation"/>
-				<S100FC:role ref="providesInformation"/>
+				<S100FC:role ref="theInformation"/>
 				<S100FC:informationType ref="NauticalInformation"/>
 			</S100FC:informationBinding>
 			<S100FC:featureUseType>geographic</S100FC:featureUseType>
@@ -8324,7 +8768,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="TextAssociation"/>
-				<S100FC:role ref="positions"/>
+				<S100FC:role ref="theCartographicText"/>
 				<S100FC:featureType ref="TextPlacement"/>
 			</S100FC:featureBinding>
 			<S100FC:permittedPrimitives>noGeometry</S100FC:permittedPrimitives>
@@ -8383,13 +8827,7 @@
 				<S100FC:sourceIdentifier>612</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="verticalClearanceValue"/>
-			</S100FC:attributeBinding>
+			
 			<S100FC:superType>SupervisedArea</S100FC:superType>
 			<S100FC:featureUseType>geographic</S100FC:featureUseType>
 			<S100FC:featureBinding roleType="association">
@@ -8428,6 +8866,55 @@
 				<S100FC:sourceIdentifier>308</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfAnchorage" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>8</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>11</S100FC:value>
+					<S100FC:value>12</S100FC:value>
+					<S100FC:value>13</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+					<S100FC:value>15</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfCargo" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="radius" />
+			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
@@ -8443,7 +8930,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -8472,9 +8959,57 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+					<S100FC:value>15</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfAnchorage" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="depthsDescription"/>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="iSPSLevel"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>8</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>11</S100FC:value>
+					<S100FC:value>12</S100FC:value>
+					<S100FC:value>13</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+					<S100FC:value>15</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfCargo" />
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -8488,19 +9023,14 @@
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="markedBy"/>
+				<S100FC:attribute ref="depthsDescription"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>1</S100FC:value>
-<S100FC:value>2</S100FC:value>
-<S100FC:value>3</S100FC:value>
-				</S100FC:permittedValues>
-				<S100FC:attribute ref="iSPSLevel"/>
+				<S100FC:attribute ref="markedBy"/>
 			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
@@ -8508,7 +9038,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -8523,6 +9053,25 @@
 				<S100FC:featureType ref="HarbourAreaSection"/>
 			</S100FC:featureBinding>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Automated Guided Vehicle</S100FC:name>
+			<S100FC:definition>Equipment with material handling or operational capabilities, characterised by wheeled (including tracked) mobility, and which autonomously moves along a preset route based on environmental markers or external guidance signals.</S100FC:definition>
+			<S100FC:code>AutomatedGuidedVehicle</S100FC:code>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>curve</S100FC:permittedPrimitives>
 			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
@@ -8553,7 +9102,7 @@
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="bollardPull"/>
+				<S100FC:attribute ref="safeWorkingLoad"/>
 			</S100FC:attributeBinding>
 			
 			<S100FC:attributeBinding sequential="false">
@@ -8672,6 +9221,78 @@
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="terminalIdentifier"/>
 			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="false" xsi:nil="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="shorePowerDescription"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfFrequency"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>8</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>11</S100FC:value>
+					<S100FC:value>12</S100FC:value>
+					<S100FC:value>13</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfVoltage"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="categoryOfPlug"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>8</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>11</S100FC:value>
+					<S100FC:value>12</S100FC:value>
+					<S100FC:value>13</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+					<S100FC:value>15</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfCargo" />
+			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
@@ -8687,7 +9308,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -8725,31 +9346,10 @@
 				<S100FC:sourceIdentifier>613</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="availableBerthingLength"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="bollardDescription"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="bollardPull"/>
-			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="true">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">2</S100Base:upper>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="bollardNumber"/>
 			</S100FC:attributeBinding>
@@ -8763,14 +9363,14 @@
 			<S100FC:attributeBinding sequential="true">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">2</S100Base:upper>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="metreMarkNumber"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="true">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">2</S100Base:upper>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="manifoldNumber"/>
 			</S100FC:attributeBinding>
@@ -8808,6 +9408,35 @@
 				<S100FC:role ref="auxiliaryFacility"/>
 				<S100FC:featureType ref="MooringWarpingFacility"/>
 			</S100FC:featureBinding>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Bollard</S100FC:name>
+			<S100FC:definition>Small shaped post, mounted on a wharf or dolphin used to secure ship's lines.</S100FC:definition>
+			<S100FC:code>Bollard</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>649</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="false" xsi:nil="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="height"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="verticalLength"/>
+			</S100FC:attributeBinding>			
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			
+			
+			
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
@@ -8867,7 +9496,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -8900,15 +9529,48 @@
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="sillDepth"/>
 			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="verticalClearanceValue"/>
+			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Dolphin</S100FC:name>
+			<S100FC:definition>A post or group of posts, used for mooring or warping a vessel, or as an aid to navigation. The dolphin may be in the water, on a wharf or on the beach.</S100FC:definition>
+			<S100FC:code>Dolphin</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>659</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>1</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true" />
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfDolphin" />
+			</S100FC:attributeBinding>
 			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
 			<S100FC:featureUseType>geographic</S100FC:featureUseType>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
@@ -8962,7 +9624,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -8978,6 +9640,30 @@
 			</S100FC:featureBinding>
 			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Fender Line</S100FC:name>
+			<S100FC:definition>An imaginary line parallel to a face of a berth or quay which touches the seaward face of the fenders.</S100FC:definition>
+			<S100FC:code>FenderLine</S100FC:code>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="orientation"/>
+			</S100FC:attributeBinding>
+			<S100FC:superType>Layout</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:featureBinding roleType="aggregation">
+				<S100FC:multiplicity>
+					<S100Base:lower>1</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LayoutDivision"/>
+				<S100FC:role ref="componentOf"/>
+				<S100FC:featureType ref="HarbourAreaSection"/>
+			</S100FC:featureBinding>
+			<S100FC:permittedPrimitives>curve</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
 			<S100FC:name>Floating Dock</S100FC:name>
@@ -9001,7 +9687,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
@@ -9026,13 +9712,20 @@
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="sillDepth"/>
 			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="verticalClearanceValue"/>
+			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
@@ -9127,7 +9820,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9229,7 +9922,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9281,6 +9974,7 @@
 				<S100FC:featureType ref="Berth"/>
 				<S100FC:featureType ref="DockArea"/>
 				<S100FC:featureType ref="DumpingGround"/>
+				<S100FC:featureType ref="FenderLine"/>
 				<S100FC:featureType ref="HarbourBasin"/>
 				<S100FC:featureType ref="PilotBoardingPlace"/>
 				<S100FC:featureType ref="SeaplaneLandingArea"/>
@@ -9339,7 +10033,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9364,16 +10058,36 @@
 				<S100FC:sourceIdentifier>367</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>curve</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Lock Basin</S100FC:name>
+			<S100FC:definition>A wet dock in a waterway, permitting a ship to pass from one level to another.</S100FC:definition>
+			<S100FC:code>LockBasin</S100FC:code>
+			<S100FC:alias>LOKBSN</S100FC:alias>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>625</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
-					<S100Base:lower>1</S100Base:lower>
-					<S100Base:upper xsi:nil="true" infinite="true"/>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false" >1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>12</S100FC:value>
-					<S100FC:value>13</S100FC:value>		
-				</S100FC:permittedValues>
-				<S100FC:attribute ref="categoryOfHarbourFacility"/>
+				<S100FC:attribute ref="sillDepth" />
 			</S100FC:attributeBinding>
 			<S100FC:informationBinding roleType="association">
 				<S100FC:multiplicity>
@@ -9381,7 +10095,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
@@ -9390,10 +10104,78 @@
 			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Lock Basin Part</S100FC:name>
+			<S100FC:definition>A lock basin is divided into several lock basin parts, if this lock basin has one ground level but several gates.</S100FC:definition>
+			<S100FC:code>LockBasinPart</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>381</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false" >1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="sillDepth" />
+			</S100FC:attributeBinding>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Mooring Buoy</S100FC:name>
+			<S100FC:definition>A buoy secured to the bottom by permanent moorings with means for mooring a vessel by use of its anchor chain or mooring lines.</S100FC:definition>
+			<S100FC:code>MooringBuoy</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>660</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="maximumPermittedDraught" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="maximumPermittedVesselLength" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="verticalLength" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="visitorsMooring" />
+			</S100FC:attributeBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>			
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
 			<S100FC:name>Mooring/Warping Facility</S100FC:name>
 			<S100FC:definition>The equipment or structure used to secure a vessel.</S100FC:definition>
 			<S100FC:code>MooringWarpingFacility</S100FC:code>
-			
 			<S100FC:alias>MORFAC</S100FC:alias>
 			<S100FC:definitionReference>
 				<S100FC:sourceIdentifier>244</S100FC:sourceIdentifier>
@@ -9404,15 +10186,11 @@
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:permittedValues>
-					<S100FC:value>1</S100FC:value>
-					<S100FC:value>2</S100FC:value>
-					<S100FC:value>3</S100FC:value>
+				<S100FC:permittedValues>					
 					<S100FC:value>4</S100FC:value>
 					<S100FC:value>5</S100FC:value>
 					<S100FC:value>6</S100FC:value>
-					<S100FC:value>7</S100FC:value>
-				</S100FC:permittedValues>
+			</S100FC:permittedValues>
 				<S100FC:attribute ref="categoryOfMooringWarpingFacility"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
@@ -9434,7 +10212,7 @@
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="bollardPull"/>
+				<S100FC:attribute ref="safeWorkingLoad"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -9458,7 +10236,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9473,6 +10251,93 @@
 				<S100FC:featureType ref="AnchorBerth"/>
 				<S100FC:featureType ref="BerthPosition"/>
 			</S100FC:featureBinding>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Onshore Power Facility</S100FC:name>
+			<S100FC:definition>Facilities or infrastructure providing shore power to berthed vessels.</S100FC:definition>
+			<S100FC:code>OnshorePowerFacility</S100FC:code>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="false" xsi:nil="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfShorePowerFacility"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>1</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="iDCode"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="shorePowerDescription"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+					<S100FC:value>4</S100FC:value>
+					<S100FC:value>5</S100FC:value>
+					<S100FC:value>6</S100FC:value>
+					<S100FC:value>7</S100FC:value>
+					<S100FC:value>8</S100FC:value>
+					<S100FC:value>9</S100FC:value>
+					<S100FC:value>10</S100FC:value>
+					<S100FC:value>11</S100FC:value>
+					<S100FC:value>12</S100FC:value>
+					<S100FC:value>13</S100FC:value>
+					<S100FC:value>14</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="categoryOfVoltage"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper infinite="true" xsi:nil="true"/>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="categoryOfFrequency"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="true" infinite="true"/>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="categoryOfPlug"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="shorePowerServiceProvider"/>
+			</S100FC:attributeBinding>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
@@ -9574,6 +10439,18 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">3</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:permittedValues>
+					<S100FC:value>1</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
+				</S100FC:permittedValues>
+				<S100FC:attribute ref="pilotMovement"/>
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="markedBy"/>
@@ -9585,8 +10462,8 @@
 				</S100FC:multiplicity>
 				<S100FC:permittedValues>
 					<S100FC:value>1</S100FC:value>
-<S100FC:value>2</S100FC:value>
-<S100FC:value>3</S100FC:value>
+					<S100FC:value>2</S100FC:value>
+					<S100FC:value>3</S100FC:value>
 				</S100FC:permittedValues>
 				<S100FC:attribute ref="iSPSLevel"/>
 			</S100FC:attributeBinding>
@@ -9596,7 +10473,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9661,7 +10538,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9677,6 +10554,57 @@
 			</S100FC:featureBinding>
 			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Ship Lift</S100FC:name>
+			<S100FC:definition>A platform powered by synchronous electric motors (for example syncrolift) used to lift vessels (larger than boats) in and out of the water.</S100FC:definition>
+			<S100FC:code>ShipLift</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>609</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG"/>
+			</S100FC:definitionReference>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="verticalClearanceValue"/>
+			</S100FC:attributeBinding>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
+		</S100FC:S100_FC_FeatureType>
+		<S100FC:S100_FC_FeatureType isAbstract="false">
+			<S100FC:name>Straddle Carrier</S100FC:name>
+			<S100FC:definition>A wheeled vehicle designed to lift and carry containers or vessels within its own framework. It is used for moving, and sometimes stacking, shipping containers and vessels.</S100FC:definition>
+			<S100FC:code>StraddleCarrier</S100FC:code>
+			<S100FC:definitionReference>
+				<S100FC:sourceIdentifier>610</S100FC:sourceIdentifier>
+				<S100FC:definitionSource ref="IHOREG" />
+			</S100FC:definitionReference>
+			<S100FC:informationBinding roleType="association">
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:association ref="LocationHours"/>
+				<S100FC:role ref="facilityOperatingHours"/>
+				<S100FC:informationType ref="ServiceHours"/>
+			</S100FC:informationBinding>
+			<S100FC:superType>HarbourPhysicalInfrastructure</S100FC:superType>
+			<S100FC:featureUseType>geographic</S100FC:featureUseType>			
+			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>
+			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
 		<S100FC:S100_FC_FeatureType isAbstract="false">
 			<S100FC:name>Terminal</S100FC:name>
@@ -9697,18 +10625,17 @@
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+					<S100Base:upper infinite="false" xsi:nil="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:permittedValues>
 					<S100FC:value>1</S100FC:value>
 					<S100FC:value>3</S100FC:value>
-					<S100FC:value>5</S100FC:value>
 					<S100FC:value>7</S100FC:value>
 					<S100FC:value>8</S100FC:value>
 					<S100FC:value>10</S100FC:value>
 					<S100FC:value>11</S100FC:value>
 				</S100FC:permittedValues>
-				<S100FC:attribute ref="categoryOfHarbourFacility"/>
+				<S100FC:attribute ref="categoryOfTerminal"/>
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
@@ -9795,7 +10722,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9878,7 +10805,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9945,7 +10872,7 @@
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="LocationHours"/>
-				<S100FC:role ref="location_srvHrs"/>
+				<S100FC:role ref="facilityOperatingHours"/>
 				<S100FC:informationType ref="ServiceHours"/>
 			</S100FC:informationBinding>
 			<S100FC:superType>Layout</S100FC:superType>
@@ -9986,6 +10913,13 @@
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="minimumDisplayScale"/>
 			</S100FC:attributeBinding>
+			<S100FC:attributeBinding>
+				<S100FC:multiplicity>
+					<S100Base:lower>0</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="optimumDisplayScale" />
+			</S100FC:attributeBinding>
 			<S100FC:featureUseType>meta</S100FC:featureUseType>
 			<S100FC:permittedPrimitives>surface</S100FC:permittedPrimitives>
 		</S100FC:S100_FC_FeatureType>
@@ -10023,7 +10957,7 @@
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
-					<S100Base:lower>1</S100Base:lower>
+					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:attribute ref="horizontalPositionUncertainty"/>
@@ -10127,6 +11061,7 @@
 				</S100FC:multiplicity>
 				<S100FC:permittedValues>
 					<S100FC:value>3</S100FC:value>
+					<S100FC:value>13</S100FC:value>
 					<S100FC:value>16</S100FC:value>
 					<S100FC:value>17</S100FC:value>
 					<S100FC:value>18</S100FC:value>
@@ -10160,7 +11095,7 @@
 			<S100FC:definition>The Text Placement feature is used in association with the Feature Name attribute or a light description to optimize text positioning in ECDIS.</S100FC:definition>
 			<S100FC:code>TextPlacement</S100FC:code>
 			<S100FC:definitionReference>
-				<S100FC:sourceIdentifier>637</S100FC:sourceIdentifier>
+				<S100FC:sourceIdentifier>662</S100FC:sourceIdentifier>
 				<S100FC:definitionSource ref="IHOREG"/>
 			</S100FC:definitionReference>
 			<S100FC:attributeBinding sequential="false">
@@ -10168,47 +11103,47 @@
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="orientationValue"/>
-			</S100FC:attributeBinding>
-			<S100FC:attributeBinding sequential="false">
-				<S100FC:multiplicity>
-					<S100Base:lower>0</S100Base:lower>
-					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
-				</S100FC:multiplicity>
-				<S100FC:attribute ref="text"/>
+				<S100FC:attribute ref="textOffsetBearing" />
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="textOffsetMm"/>
+				<S100FC:attribute ref="textOffsetDistance" />
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
+				</S100FC:multiplicity>
+				<S100FC:attribute ref="textRotation" />
+			</S100FC:attributeBinding>
+			<S100FC:attributeBinding sequential="false">
+				<S100FC:multiplicity>
+					<S100Base:lower>1</S100Base:lower>
+					<S100Base:upper xsi:nil="false" infinite="false">2</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:permittedValues>
 					<S100FC:value>1</S100FC:value>
 				</S100FC:permittedValues>
-				<S100FC:attribute ref="textType"/>
+				<S100FC:attribute ref="textType" />
 			</S100FC:attributeBinding>
 			<S100FC:attributeBinding sequential="false">
 				<S100FC:multiplicity>
 					<S100Base:lower>0</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
-				<S100FC:attribute ref="scaleMinimum"/>
+				<S100FC:attribute ref="scaleMinimum" />
 			</S100FC:attributeBinding>
 			<S100FC:featureUseType>cartographic</S100FC:featureUseType>
-			<S100FC:featureBinding roleType="association">
+			<S100FC:featureBinding roleType="composition">
 				<S100FC:multiplicity>
 					<S100Base:lower>1</S100Base:lower>
 					<S100Base:upper xsi:nil="false" infinite="false">1</S100Base:upper>
 				</S100FC:multiplicity>
 				<S100FC:association ref="TextAssociation"/>
-				<S100FC:role ref="positions"/>
+				<S100FC:role ref="thePositionProvider"/>
 				<S100FC:featureType ref="FeatureType"/>
 			</S100FC:featureBinding>
 			<S100FC:permittedPrimitives>point</S100FC:permittedPrimitives>

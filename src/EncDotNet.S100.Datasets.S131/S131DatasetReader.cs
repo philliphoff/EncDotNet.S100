@@ -38,16 +38,19 @@ internal static class S131DatasetReader
     private static readonly XNamespace S100Ns5 = "http://www.iho.int/s100gml/5.0";
     private static readonly XNamespace S100Ns1 = "http://www.iho.int/S100/profile/s100gml/1.0";
 
-    // S-131 Feature Catalogue — known information type codes.
+    // S-131 Feature Catalogue Edition 1.0.0 — concrete information type codes.
     // Information types lack geometry and are referenced via xlink:href from features.
-    // This set is derived from the S-131 Edition 1.0.0 Feature Catalogue (§B.1).
+    // Abstract base types (InformationType, AbstractRxN) are included for completeness
+    // but will not appear in real GML datasets.
     private static readonly HashSet<string> InformationTypeCodes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Applicability", "AvailablePortServices", "Berths",
-        "ContactDetails", "InclusionType", "NauticalInformation",
-        "PermissionType", "Recommendations", "Regulations",
-        "Restrictions", "ServiceHours", "ShipReportingServiceArea",
-        "SpatialQuality", "Vessels",
+        // Abstract base types
+        "InformationType", "AbstractRxN",
+        // Concrete information types (FC §B.1)
+        "Applicability", "Authority", "AvailablePortServices",
+        "ContactDetails", "Entrance", "NauticalInformation",
+        "NonStandardWorkingDay", "Recommendations", "Regulations",
+        "Restrictions", "ServiceHours", "SpatialQuality",
     };
 
     public static S131Dataset Read(Stream stream)

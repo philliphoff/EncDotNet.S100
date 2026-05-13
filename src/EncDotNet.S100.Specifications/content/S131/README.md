@@ -10,7 +10,7 @@ from the upstream IHO repository.
 |---|---|
 | Upstream repository | `iho-ohi/S-131-Product-Specification-Development` |
 | Upstream commit | `46eb6c7` (tag `ed2.0.0`) |
-| Feature Catalogue edition | 1.0.0 |
+| Feature Catalogue edition | 2.0.0 (bundled with PC; `PC/2.0.0/131_FC_2.0.0.20251025.xml`) |
 | Portrayal Catalogue edition | 2.0.0 |
 | Date copied | 2026-05-12 |
 
@@ -19,7 +19,7 @@ from the upstream IHO repository.
 ```
 S131/
 ├── fc/
-│   └── FeatureCatalogue.xml      ← FC/1.0.0/131FC.xml
+│   └── FeatureCatalogue.xml      ← PC/2.0.0/131_FC_2.0.0.20251025.xml
 ├── pc/
 │   ├── portrayal_catalogue.xml   ← PC/2.0.0/portrayal_catalogue.xml
 │   ├── Rules/                    ← PC/2.0.0/Rules/*.lua (41 files)
