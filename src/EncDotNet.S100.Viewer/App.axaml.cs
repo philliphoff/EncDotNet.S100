@@ -173,6 +173,8 @@ public partial class App : Application
             return state;
         });
         services.AddSingleton<IStatusPresenter, StatusPresenter>();
+        services.AddSingleton<ShadUI.ToastManager>();
+        services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();

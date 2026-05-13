@@ -24,7 +24,7 @@ internal interface IDatasetLoaderService
     void Initialize(IMapHost host, ViewerCommandSettings? options);
 
     /// <summary>Loads a dataset and adds its rendered layers to the map.</summary>
-    Task LoadAsync(DatasetEntry entry);
+    Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Re-renders every loaded time-aware dataset at the supplied global

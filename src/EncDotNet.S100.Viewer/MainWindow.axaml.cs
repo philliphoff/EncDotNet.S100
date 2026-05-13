@@ -101,6 +101,10 @@ public partial class MainWindow : ShadUI.Window
 
         InitializeComponent();
 
+        // Wire the ShadUI toast host to the DI-managed ToastManager so
+        // background services can surface notifications through toasts.
+        ToastHost.Manager = App.Services.GetRequiredService<ShadUI.ToastManager>();
+
         _viewModel = viewModel;
         _catalogAggregator = catalogAggregator;
         _recentFiles = recentFiles;
@@ -159,7 +163,12 @@ public partial class MainWindow : ShadUI.Window
 
         // Surface DatasetsViewModel rejection of unknown file extensions.
         _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
+        {
             _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
+            App.Services.GetRequiredService<IToastService>().ShowWarning(
+                Strings.Toast_Warning,
+                string.Format(Strings.Status_UnrecognizedFileType, extension));
+        };
 
         // Clean up layers when a dataset entry is removed from the list.
         _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
@@ -374,6 +383,16 @@ public partial class MainWindow : ShadUI.Window
         var progress = new Progress<Services.ExchangeSetProgress>(
             p => _viewModel.ReportExchangeSetProgress(p));
 
+        // Show a loading toast with a Cancel action that mirrors the
+        // overlay's Cancel button. The toast supplements the progress
+        // overlay for users who switch to another activity panel.
+        var toasts = App.Services.GetRequiredService<IToastService>();
+        toasts.ShowLoading(
+            Strings.Toast_ExchangeSetLoading,
+            sourcePath,
+            Strings.Toast_Cancel,
+            () => _viewModel.CancelExchangeSetCommand.Execute(null));
+
         // Subscribe to per-dataset load completions for the duration of
         // this open. We accumulate each loaded entry's layer extents so
         // we can zoom to their union — the catalogue may not declare
@@ -435,6 +454,9 @@ public partial class MainWindow : ShadUI.Window
         finally
         {
             _loader.DatasetLoaded -= handler;
+            // Dismiss the exchange-set loading toast; the result
+            // toasts from ExchangeSetService will follow immediately.
+            toasts.DismissAll();
         }
     }
 

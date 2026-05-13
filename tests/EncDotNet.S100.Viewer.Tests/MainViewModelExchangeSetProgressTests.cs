@@ -47,7 +47,7 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
-        public Task LoadAsync(DatasetEntry entry) => Task.CompletedTask;
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
@@ -74,7 +74,8 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
-            measureAppearance: new StubMeasureOverlayAppearanceProvider());
+            measureAppearance: new StubMeasureOverlayAppearanceProvider(),
+            toasts: new StubToastService());
     }
 
     [Fact]

@@ -30,7 +30,7 @@ public class DatasetsViewModelExchangeSetHeaderTests
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
-        public Task LoadAsync(DatasetEntry entry) => Task.CompletedTask;
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(DateTime t, CancellationToken ct) => Task.CompletedTask;
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }

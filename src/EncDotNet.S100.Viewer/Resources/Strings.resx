@@ -778,4 +778,39 @@ Open an S-101, S-124, S-125, or S-421 dataset to see display controls here.</val
   <data name="TextGroup_All" xml:space="preserve">
     <value>All other chart text</value>
   </data>
+
+  <!-- Toast notification titles -->
+  <data name="Toast_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Toast_Warning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="Toast_Success" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="Toast_Info" xml:space="preserve">
+    <value>Info</value>
+  </data>
+  <data name="Toast_ExchangeSetLoaded" xml:space="preserve">
+    <value>Exchange Set Loaded</value>
+  </data>
+  <data name="Toast_ExchangeSetFailed" xml:space="preserve">
+    <value>Exchange Set Failed</value>
+  </data>
+  <data name="Toast_DatasetError" xml:space="preserve">
+    <value>Dataset Error</value>
+  </data>
+  <data name="Toast_Loading" xml:space="preserve">
+    <value>Loading Dataset</value>
+  </data>
+  <data name="Toast_DatasetCancelled" xml:space="preserve">
+    <value>Load Cancelled</value>
+  </data>
+  <data name="Toast_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Toast_ExchangeSetLoading" xml:space="preserve">
+    <value>Loading Exchange Set</value>
+  </data>
 </root>
