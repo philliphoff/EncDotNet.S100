@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -24,7 +25,18 @@ public static class DrawingInstructionParser
     /// Parses a single emitted instruction string into zero or more
     /// <see cref="DrawingInstruction"/> instances.
     /// </summary>
-    public static List<DrawingInstruction> Parse(string featureRef, string instructionString)
+    /// <param name="featureRef">Feature reference identifier.</param>
+    /// <param name="instructionString">Semicolon-separated instruction string from Lua.</param>
+    /// <param name="featureAnchor">
+    /// Optional (latitude, longitude) anchor of the feature's primary point
+    /// geometry. Required for tessellating <c>AugmentedRay</c> /
+    /// <c>ArcByRadius</c> / <c>AugmentedPath</c> augmented line geometry.
+    /// When <see langword="null"/>, augmented line geometry is silently skipped.
+    /// </param>
+    public static List<DrawingInstruction> Parse(
+        string featureRef,
+        string instructionString,
+        (double Latitude, double Longitude)? featureAnchor = null)
     {
         if (string.IsNullOrEmpty(instructionString))
             return [];
@@ -62,10 +74,19 @@ public static class DrawingInstructionParser
         // Augmented-geometry state.  S-100 Part 9 §11.5 lets a Lua rule
         // override the per-instruction anchor with AugmentedPoint, or build
         // a synthetic line geometry from AugmentedRay/ArcByRadius/AugmentedPath.
-        // We currently support only the GeographicCRS anchor override; a
-        // following PointInstruction or TextInstruction is anchored at this
-        // explicit lat/lon instead of the feature's first vertex.
+        // AugmentedPoint is a simple GeographicCRS anchor override for
+        // PointInstruction / TextInstruction.
+        // AugmentedRay / ArcByRadius buffer segments that AugmentedPath
+        // resolves into a tessellated coordinate list attached to the next
+        // LineInstruction via CoordinatesOverride.
         (double Latitude, double Longitude)? augmentedAnchor = null;
+
+        // Buffered augmented line segments awaiting AugmentedPath resolution.
+        var augmentedLineSegments = new List<AugmentedSegment>();
+
+        // Resolved augmented line coordinates ready to attach to the next
+        // LineInstruction.  Set by the AugmentedPath command.
+        IReadOnlyList<(double Latitude, double Longitude)>? augmentedLineCoords = null;
 
         var segments = instructionString.Split(';');
 
@@ -218,6 +239,16 @@ public static class DrawingInstructionParser
 
                 case "LineInstruction":
                 case "LineInstructionUnsuppressed":
+                    // If there are pending augmented segments that weren't
+                    // explicitly resolved by AugmentedPath (e.g. a bare
+                    // AugmentedRay → LineInstruction), resolve them now.
+                    if (augmentedLineCoords is null && augmentedLineSegments.Count > 0)
+                    {
+                        augmentedLineCoords = ResolveAugmentedPath(
+                            augmentedLineSegments, augmentedAnchor ?? featureAnchor);
+                        augmentedLineSegments.Clear();
+                    }
+
                     results.Add(new LineInstruction
                     {
                         FeatureReference = featureRef,
@@ -228,11 +259,16 @@ public static class DrawingInstructionParser
                         LineWidth = lineWidth,
                         LineColor = lineColor,
                         Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
+                        CoordinatesOverride = augmentedLineCoords,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
                     dashes.Clear();
                     lineStyleRef = null;
+                    // NOTE: augmentedLineCoords is NOT cleared here — the Lua
+                    // pattern for sector arcs emits multiple LineInstructions
+                    // (outline + colour) against the same resolved geometry.
+                    // ClearGeometry resets it.
                     break;
 
                 case "ColorFill":
@@ -324,6 +360,8 @@ public static class DrawingInstructionParser
 
                 case "ClearGeometry":
                     augmentedAnchor = null;
+                    augmentedLineSegments.Clear();
+                    augmentedLineCoords = null;
                     break;
 
                 case "AugmentedPoint":
@@ -344,11 +382,66 @@ public static class DrawingInstructionParser
                     break;
 
                 case "AugmentedRay":
-                case "AugmentedPath":
+                    {
+                        // AugmentedRay:GeographicCRS,bearing,endCrs,length
+                        // S-100 Part 9A §11.5: a ray from the feature's anchor
+                        // at a true bearing for a given length.
+                        var arParts = value.Split(',');
+                        if (arParts.Length >= 4 &&
+                            double.TryParse(arParts[1], CultureInfo.InvariantCulture, out var arBearing) &&
+                            double.TryParse(arParts[3], CultureInfo.InvariantCulture, out var arLength))
+                        {
+                            // A new geometry element invalidates any previously
+                            // resolved coordinates (e.g. from a prior bare-ray
+                            // auto-resolve).  Without this, the second sector
+                            // limit ray would reuse the first ray's coordinates
+                            // because the auto-resolve guard
+                            //   (augmentedLineCoords is null)
+                            // would fail.
+                            augmentedLineCoords = null;
+
+                            string crs = arParts[2]; // end-point CRS
+                            augmentedLineSegments.Add(new AugmentedSegment.Ray(arBearing, arLength, crs));
+                        }
+                    }
+                    break;
+
                 case "ArcByRadius":
-                    // Buffered synthetic line geometry: not yet supported.
-                    // Affects sector lights and all-around-light circles.
-                    WarnAugmentedLineGeometryOnce();
+                    {
+                        // ArcByRadius:xOffset,yOffset,radius,startBearing,sweep
+                        // S-100 Part 9A §11.5: a circular arc around the feature
+                        // anchor. Offsets are typically 0,0.
+                        var abParts = value.Split(',');
+                        if (abParts.Length >= 5 &&
+                            double.TryParse(abParts[0], CultureInfo.InvariantCulture, out var abXOff) &&
+                            double.TryParse(abParts[1], CultureInfo.InvariantCulture, out var abYOff) &&
+                            double.TryParse(abParts[2], CultureInfo.InvariantCulture, out var abRadius) &&
+                            double.TryParse(abParts[3], CultureInfo.InvariantCulture, out var abStart) &&
+                            double.TryParse(abParts[4], CultureInfo.InvariantCulture, out var abSweep))
+                        {
+                            // Clear previously resolved coordinates so the arc
+                            // stands on its own (same rationale as AugmentedRay).
+                            augmentedLineCoords = null;
+
+                            augmentedLineSegments.Add(
+                                new AugmentedSegment.Arc(abXOff, abYOff, abRadius, abStart, abSweep));
+                        }
+                    }
+                    break;
+
+                case "AugmentedPath":
+                    {
+                        // AugmentedPath:crs1,crs2,...
+                        // Resolves buffered AugmentedRay/ArcByRadius segments
+                        // into a tessellated coordinate list using the declared CRS
+                        // sequence.  The feature's anchor point is the origin.
+                        if (augmentedLineSegments.Count > 0)
+                        {
+                            augmentedLineCoords = ResolveAugmentedPath(
+                                augmentedLineSegments, augmentedAnchor ?? featureAnchor);
+                            augmentedLineSegments.Clear();
+                        }
+                    }
                     break;
 
                 case "TextAlignHorizontal":
@@ -403,18 +496,6 @@ public static class DrawingInstructionParser
         return results;
     }
 
-    private static int s_augmentedLineGeometryWarningCount;
-
-    private static void WarnAugmentedLineGeometryOnce()
-    {
-        if (System.Threading.Interlocked.Increment(ref s_augmentedLineGeometryWarningCount) == 1)
-        {
-            Console.Error.WriteLine(
-                "[S101] Augmented line geometry (AugmentedRay / ArcByRadius / AugmentedPath) " +
-                "is not yet rendered — sector lights and all-around-light circles will be incomplete.");
-        }
-    }
-
     /// <summary>
     /// Decodes DEF-encoded text: &amp;a → &amp;, &amp;s → ;, &amp;c → :, &amp;m → ,
     /// </summary>
@@ -429,4 +510,123 @@ public static class DrawingInstructionParser
             .Replace("&s", ";")
             .Replace("&a", "&");
     }
+
+    /// <summary>
+    /// Nominal S-100 display pixel size in millimetres (S-100 Part 9 §11.3).
+    /// </summary>
+    private const double S100PixelSizeMm = 0.32;
+
+    /// <summary>
+    /// Reference scale denominator used to convert LocalCRS mm radii to
+    /// approximate geographic distances for tessellation. 1:25000 is a
+    /// typical ECDIS display scale for harbour approaches where sector
+    /// lights are most relevant.
+    /// </summary>
+    private const double ReferenceScaleDenominator = 25_000.0;
+
+    /// <summary>
+    /// Resolves buffered augmented line segments into a tessellated coordinate
+    /// list. The feature's anchor point (from <paramref name="anchor"/>) is
+    /// the origin for all geometry.
+    /// </summary>
+    private static IReadOnlyList<(double Latitude, double Longitude)>? ResolveAugmentedPath(
+        List<AugmentedSegment> segments,
+        (double Latitude, double Longitude)? anchor)
+    {
+        if (segments.Count == 0)
+            return null;
+
+        var allPoints = new List<(double Latitude, double Longitude)>();
+
+        foreach (var segment in segments)
+        {
+            IReadOnlyList<(double Latitude, double Longitude)> tessellated = segment switch
+            {
+                AugmentedSegment.Ray ray => TessellateRaySegment(ray, anchor),
+                AugmentedSegment.Arc arc => TessellateArcSegment(arc, anchor),
+                _ => [],
+            };
+
+            // Append points, skipping the first if it duplicates the previous
+            // end-point (segments share junction vertices).
+            for (int i = 0; i < tessellated.Count; i++)
+            {
+                if (i == 0 && allPoints.Count > 0 &&
+                    Math.Abs(allPoints[^1].Latitude - tessellated[i].Latitude) < 1e-10 &&
+                    Math.Abs(allPoints[^1].Longitude - tessellated[i].Longitude) < 1e-10)
+                {
+                    continue;
+                }
+
+                allPoints.Add(tessellated[i]);
+            }
+        }
+
+        return allPoints.Count >= 2 ? allPoints : null;
+    }
+
+    private static IReadOnlyList<(double Latitude, double Longitude)> TessellateRaySegment(
+        AugmentedSegment.Ray ray,
+        (double Latitude, double Longitude)? anchor)
+    {
+        if (anchor is not { } origin)
+            return [];
+
+        double distanceMetres = ray.LengthMetres;
+        if (string.Equals(ray.EndCrs, "LocalCRS", StringComparison.OrdinalIgnoreCase))
+        {
+            // LocalCRS length is in mm on the nominal display surface.
+            // Convert to approximate metres using the reference scale.
+            distanceMetres = ray.LengthMetres * S100PixelSizeMm / 1000.0 * ReferenceScaleDenominator;
+        }
+
+        if (distanceMetres <= 0)
+            return [];
+
+        return GeodesicHelper.TessellateRay(
+            origin.Latitude, origin.Longitude, ray.BearingDeg, distanceMetres);
+    }
+
+    private static IReadOnlyList<(double Latitude, double Longitude)> TessellateArcSegment(
+        AugmentedSegment.Arc arc,
+        (double Latitude, double Longitude)? anchor)
+    {
+        if (anchor is not { } origin)
+            return [];
+
+        // The arc radius is in LocalCRS units (mm on nominal display).
+        // Convert to approximate metres.
+        double radiusMetres = arc.Radius * S100PixelSizeMm / 1000.0 * ReferenceScaleDenominator;
+
+        if (radiusMetres <= 0)
+            return [];
+
+        return GeodesicHelper.TessellateArc(
+            origin.Latitude, origin.Longitude, radiusMetres,
+            arc.StartBearingDeg, arc.SweepDeg);
+    }
+}
+
+/// <summary>
+/// Discriminated union of augmented line geometry segments buffered by
+/// <see cref="DrawingInstructionParser"/> before <c>AugmentedPath</c>
+/// resolution.
+/// </summary>
+internal abstract record AugmentedSegment
+{
+    private AugmentedSegment() { }
+
+    /// <summary>
+    /// A ray from the feature anchor at a true bearing for a given length
+    /// (S-100 Part 9A §11.5 <c>AugmentedRay</c>).
+    /// </summary>
+    internal sealed record Ray(double BearingDeg, double LengthMetres, string EndCrs) : AugmentedSegment;
+
+    /// <summary>
+    /// A circular arc around the feature anchor (S-100 Part 9A §11.5
+    /// <c>ArcByRadius</c>).
+    /// </summary>
+    internal sealed record Arc(
+        double XOffset, double YOffset, double Radius,
+        double StartBearingDeg, double SweepDeg) : AugmentedSegment;
 }

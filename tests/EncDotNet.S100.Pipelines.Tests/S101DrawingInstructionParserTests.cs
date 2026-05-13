@@ -206,4 +206,167 @@ public class S101DrawingInstructionParserTests
         var pt = Assert.Single(parsed.OfType<PointInstruction>());
         Assert.Equal(DisplayPlane.UnderRadar, pt.Plane);
     }
+
+    // ── Augmented line geometry tests ──
+
+    [Fact]
+    public void AugmentedRay_GeographicCRS_ProducesLineWithCoordinatesOverride()
+    {
+        // AugmentedRay without AugmentedPath — auto-resolves at LineInstruction.
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "AugmentedRay:GeographicCRS,45.0,GeographicCRS,18520;" +
+            "LineInstruction:_simple_";
+
+        var anchor = (Latitude: 60.0, Longitude: 25.0);
+        var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.NotNull(line.CoordinatesOverride);
+        Assert.True(line.CoordinatesOverride!.Count >= 2);
+
+        // First point should be the anchor.
+        Assert.Equal(60.0, line.CoordinatesOverride[0].Latitude, precision: 5);
+        Assert.Equal(25.0, line.CoordinatesOverride[0].Longitude, precision: 5);
+    }
+
+    [Fact]
+    public void ArcByRadius_FullCircle_ProducesClosedCoordinatesOverride()
+    {
+        // All-around light pattern: ArcByRadius with 360° sweep.
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "ArcByRadius:0,0,26,0,360;" +
+            "AugmentedPath:LocalCRS,LocalCRS,LocalCRS;" +
+            "LineInstruction:_simple_";
+
+        var anchor = (Latitude: 51.5, Longitude: -0.1);
+        var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.NotNull(line.CoordinatesOverride);
+        Assert.True(line.CoordinatesOverride!.Count >= 3);
+
+        // Full circle: first and last points should coincide.
+        Assert.Equal(
+            line.CoordinatesOverride[0].Latitude,
+            line.CoordinatesOverride[^1].Latitude,
+            precision: 8);
+        Assert.Equal(
+            line.CoordinatesOverride[0].Longitude,
+            line.CoordinatesOverride[^1].Longitude,
+            precision: 8);
+    }
+
+    [Fact]
+    public void ArcByRadius_PartialArc_ProducesExpectedSweep()
+    {
+        // Sector arc: 90° sweep from bearing 45°.
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "ArcByRadius:0,0,20,45,90;" +
+            "AugmentedPath:LocalCRS,LocalCRS,LocalCRS;" +
+            "LineInstruction:_simple_";
+
+        var anchor = (Latitude: 0.0, Longitude: 0.0);
+        var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.NotNull(line.CoordinatesOverride);
+        Assert.True(line.CoordinatesOverride!.Count >= 3);
+
+        // First and last should NOT coincide (partial arc).
+        var first = line.CoordinatesOverride[0];
+        var last = line.CoordinatesOverride[^1];
+        var dist = Math.Sqrt(
+            Math.Pow(first.Latitude - last.Latitude, 2) +
+            Math.Pow(first.Longitude - last.Longitude, 2));
+        Assert.True(dist > 0.0001);
+    }
+
+    [Fact]
+    public void SectorLight_TwoRaysAndArc_ProducesMultipleLineInstructions()
+    {
+        // Simulates the LightSectored.lua pattern:
+        //   Ray leg 1 → LineInstruction
+        //   Ray leg 2 → LineInstruction
+        //   ArcByRadius → AugmentedPath → LineInstruction (×2 for outline + fill)
+        //   ClearGeometry
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "AugmentedRay:GeographicCRS,200,GeographicCRS,18520;" +
+            "LineInstruction:_simple_;" +
+            "AugmentedRay:GeographicCRS,260,GeographicCRS,18520;" +
+            "LineInstruction:_simple_;" +
+            "ArcByRadius:0,0,25,200,60;" +
+            "AugmentedPath:LocalCRS,GeographicCRS,LocalCRS;" +
+            "LineInstruction:_simple_;" +
+            "LineInstruction:_simple_;" +
+            "ClearGeometry";
+
+        var anchor = (Latitude: 55.0, Longitude: 12.0);
+        var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
+
+        var lines = parsed.OfType<LineInstruction>().ToList();
+        Assert.Equal(4, lines.Count);
+
+        // Legs 1 & 2: each should have their own ray coordinates.
+        Assert.NotNull(lines[0].CoordinatesOverride);
+        Assert.NotNull(lines[1].CoordinatesOverride);
+
+        // The two rays must have DIFFERENT coordinates (different bearings).
+        Assert.NotEqual(
+            lines[0].CoordinatesOverride![^1].Latitude,
+            lines[1].CoordinatesOverride![^1].Latitude);
+
+        // Arc lines 3 & 4: should share the same augmented coordinates
+        // (same AugmentedPath resolved once, persists until ClearGeometry).
+        Assert.NotNull(lines[2].CoordinatesOverride);
+        Assert.NotNull(lines[3].CoordinatesOverride);
+        Assert.Equal(lines[2].CoordinatesOverride!.Count, lines[3].CoordinatesOverride!.Count);
+
+        // The arc should be shorter (fewer points) than the rays — it's a
+        // small LocalCRS arc, not a long ray.  If the ray leaked into the
+        // arc segment buffer this would fail.
+        Assert.True(lines[2].CoordinatesOverride!.Count < lines[0].CoordinatesOverride!.Count + lines[2].CoordinatesOverride!.Count,
+            "Arc should not contain ray geometry");
+    }
+
+    [Fact]
+    public void ClearGeometry_ResetsAugmentedLineState()
+    {
+        // After ClearGeometry, a subsequent LineInstruction should NOT have
+        // any augmented coordinates.
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "ArcByRadius:0,0,20,0,360;" +
+            "AugmentedPath:LocalCRS,LocalCRS,LocalCRS;" +
+            "LineInstruction:_simple_;" +
+            "ClearGeometry;" +
+            "LineInstruction:_simple_";
+
+        var anchor = (Latitude: 10.0, Longitude: 20.0);
+        var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
+
+        var lines = parsed.OfType<LineInstruction>().ToList();
+        Assert.Equal(2, lines.Count);
+
+        Assert.NotNull(lines[0].CoordinatesOverride);
+        Assert.Null(lines[1].CoordinatesOverride);
+    }
+
+    [Fact]
+    public void AugmentedRay_WithoutFeatureAnchor_ProducesNoOverride()
+    {
+        // When no anchor is available, augmented line geometry is skipped.
+        const string s =
+            "ViewingGroup:27070;DrawingPriority:24;" +
+            "AugmentedRay:GeographicCRS,45.0,GeographicCRS,18520;" +
+            "LineInstruction:_simple_";
+
+        var parsed = DrawingInstructionParser.Parse("F1", s);
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.Null(line.CoordinatesOverride);
+    }
 }
