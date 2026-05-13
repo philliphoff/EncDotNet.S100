@@ -18,6 +18,17 @@ public sealed class SupportFileDiscoveryMetadata
 
     public string? DigitalSignatureReference { get; init; }
 
+    /// <summary>
+    /// The parsed digital signature algorithm, derived from <see cref="DigitalSignatureReference"/>.
+    /// </summary>
+    public DigitalSignatureAlgorithm DigitalSignatureAlgorithm { get; init; }
+
+    /// <summary>
+    /// The digital signature value for this support file, if present.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-4.2.</remarks>
+    public DigitalSignatureValue? DigitalSignatureValue { get; init; }
+
     public IReadOnlyList<string> SupportedResources { get; init; } = [];
 
     public string? ResourcePurpose { get; init; }

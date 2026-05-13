@@ -11,6 +11,7 @@ public static class ExchangeCatalogueReader
     private static readonly XNamespace Gex = "http://standards.iso.org/iso/19115/-3/gex/1.0";
     private static readonly XNamespace Cit = "http://standards.iso.org/iso/19115/-3/cit/2.0";
     private static readonly XNamespace Mri = "http://standards.iso.org/iso/19115/-3/mri/1.0";
+    private static readonly XNamespace S100SE = "http://www.iho.int/s100/se/5.0";
 
     public static ExchangeCatalogue Read(Stream stream)
     {
@@ -51,6 +52,7 @@ public static class ExchangeCatalogueReader
             Description = ReadCharacterString(root.Element(xc + "exchangeCatalogueDescription")),
             Comment = ReadCharacterString(root.Element(xc + "exchangeCatalogueComment")),
             DataServerIdentifier = (string?)root.Element(xc + "dataServerIdentifier"),
+            Certificates = ReadCertificateBlock(root.Element(xc + "certificates")),
             DatasetDiscoveryMetadata = root
                 .Element(xc + "datasetDiscoveryMetadata")?
                 .Elements(xc + "S100_DatasetDiscoveryMetadata")
@@ -115,6 +117,8 @@ public static class ExchangeCatalogueReader
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DataProtection = ParseBool(element, "dataProtection", xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
+            DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
+            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
             Copyright = ParseBool(element, "copyright", xc),
             Classification = ReadCodeListValue(element.Element(xc + "classification")),
             Purpose = (string?)element.Element(xc + "purpose"),
@@ -153,6 +157,8 @@ public static class ExchangeCatalogueReader
             DataType = (string?)element.Element(xc + "dataType"),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
+            DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
+            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
             SupportedResources = element
                 .Elements(xc + "supportedResource")
                 .Select(e => e.Value.Trim())
@@ -175,6 +181,8 @@ public static class ExchangeCatalogueReader
             IssueDate = (string?)element.Element(xc + "issueDate"),
             ProductSpecification = ReadProductSpecification(element.Element(xc + "productSpecification"), xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
+            DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
+            DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
             DefaultLocaleCharacterEncoding = ReadLocaleCharacterEncoding(defaultLocaleEl, lan),
@@ -292,5 +300,86 @@ public static class ExchangeCatalogueReader
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Parses the <c>digitalSignatureReference</c> element value into a
+    /// <see cref="DigitalSignatureAlgorithm"/> enum.
+    /// </summary>
+    private static DigitalSignatureAlgorithm ParseSignatureAlgorithm(XElement parent, XNamespace xc)
+    {
+        var value = (string?)parent.Element(xc + "digitalSignatureReference");
+        return value?.Trim().ToUpperInvariant() switch
+        {
+            "DSA" => DigitalSignatureAlgorithm.DSA,
+            "ECDSA" => DigitalSignatureAlgorithm.ECDSA,
+            _ => DigitalSignatureAlgorithm.Unknown,
+        };
+    }
+
+    /// <summary>
+    /// Parses an <c>S100_SE_DigitalSignature</c> element nested inside a
+    /// <c>digitalSignatureValue</c> wrapper.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-4.2.</remarks>
+    private static DigitalSignatureValue? ReadDigitalSignatureValue(XElement? wrapper)
+    {
+        if (wrapper is null) return null;
+
+        var sigEl = wrapper.Element(S100SE + "S100_SE_DigitalSignature");
+        if (sigEl is null) return null;
+
+        var id = (string?)sigEl.Attribute("id");
+        var certRef = (string?)sigEl.Attribute("certificateRef");
+        var base64 = sigEl.Value.Trim();
+
+        if (id is null || certRef is null || base64.Length == 0)
+            return null;
+
+        return new DigitalSignatureValue
+        {
+            Id = id,
+            CertificateRef = certRef,
+            Value = Convert.FromBase64String(base64),
+        };
+    }
+
+    /// <summary>
+    /// Parses the <c>certificates</c> block containing the scheme administrator
+    /// identifier and embedded X.509 certificates.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-5.</remarks>
+    private static CertificateBlock? ReadCertificateBlock(XElement? element)
+    {
+        if (element is null) return null;
+
+        var saId = (string?)element.Element(S100SE + "schemeAdministrator")?.Attribute("id");
+
+        var certs = element
+            .Elements(S100SE + "certificate")
+            .Select(c =>
+            {
+                var id = (string?)c.Attribute("id");
+                var issuer = (string?)c.Attribute("issuer");
+                var base64 = c.Value.Trim();
+
+                if (id is null || base64.Length == 0)
+                    return null;
+
+                return new CertificateEntry
+                {
+                    Id = id,
+                    Issuer = issuer,
+                    Value = Convert.FromBase64String(base64),
+                };
+            })
+            .Where(c => c is not null)
+            .ToList()!;
+
+        return new CertificateBlock
+        {
+            SchemeAdministratorId = saId,
+            Certificates = certs!,
+        };
     }
 }

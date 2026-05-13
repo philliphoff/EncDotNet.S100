@@ -18,6 +18,17 @@ public sealed class CatalogueDiscoveryMetadata
 
     public string? DigitalSignatureReference { get; init; }
 
+    /// <summary>
+    /// The parsed digital signature algorithm, derived from <see cref="DigitalSignatureReference"/>.
+    /// </summary>
+    public DigitalSignatureAlgorithm DigitalSignatureAlgorithm { get; init; }
+
+    /// <summary>
+    /// The digital signature value for this catalogue file, if present.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-4.2.</remarks>
+    public DigitalSignatureValue? DigitalSignatureValue { get; init; }
+
     public bool CompressionFlag { get; init; }
 
     public string? DefaultLocaleLanguage { get; init; }

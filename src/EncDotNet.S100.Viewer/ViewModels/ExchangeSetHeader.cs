@@ -54,6 +54,12 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     [ObservableProperty]
     private int _unsupportedCount;
 
+    [ObservableProperty]
+    private SignatureStatus _signatureStatus = SignatureStatus.Unknown;
+
+    [ObservableProperty]
+    private string? _signatureTooltip;
+
     /// <summary>Single-line summary combining loaded/unsupported counts,
     /// producer and issue date, joined with " · ". Bound to the
     /// trimmable secondary line in the header so any of the three
