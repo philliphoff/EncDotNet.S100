@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Reflection;
 using EncDotNet.S100.Core;
 
@@ -11,11 +10,31 @@ public sealed class EmbeddedAssetSource : IAssetSource
 {
     private readonly Assembly _assembly;
     private readonly string _resourcePrefix;
+    private readonly Lazy<Dictionary<string, string>> _caseInsensitiveIndex;
 
     private EmbeddedAssetSource(Assembly assembly, string resourcePrefix)
     {
         _assembly = assembly;
         _resourcePrefix = resourcePrefix;
+        _caseInsensitiveIndex = new Lazy<Dictionary<string, string>>(
+            BuildCaseInsensitiveIndex,
+            LazyThreadSafetyMode.ExecutionAndPublication);
+    }
+
+    private Dictionary<string, string> BuildCaseInsensitiveIndex()
+    {
+        // Build once and reuse: GetManifestResourceNames() walks the
+        // assembly's resource directory, which is non-trivial work to
+        // repeat on every case-insensitive miss.
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string name in _assembly.GetManifestResourceNames())
+        {
+            // First-wins keeps behaviour stable when two manifest entries
+            // differ only by case; manifest names are unique in practice.
+            map.TryAdd(name, name);
+        }
+
+        return map;
     }
 
     /// <summary>
@@ -54,9 +73,7 @@ public sealed class EmbeddedAssetSource : IAssetSource
             // (macOS, Windows) but breaks here because embedded resource names
             // are case-sensitive. This fallback keeps the bundled assets
             // byte-identical to upstream while still resolving correctly.
-            var match = _assembly.GetManifestResourceNames()
-                .FirstOrDefault(n => string.Equals(n, resourceName, StringComparison.OrdinalIgnoreCase));
-            if (match is not null)
+            if (_caseInsensitiveIndex.Value.TryGetValue(resourceName, out string? match))
             {
                 stream = _assembly.GetManifestResourceStream(match);
             }

@@ -84,7 +84,11 @@ public static class Specification
     {
         ArgumentException.ThrowIfNullOrEmpty(productSpec);
 
-        return CreateAssetSource(productSpec, "pc");
+        // Wrap the embedded source in a caching decorator so repeated
+        // reads of the same Portrayal Catalogue asset (Lua source, XSLT
+        // templates, SVG symbols, palette XML; see S-100 Edition 5.2.1
+        // Part 9 §3) are served from memory after the first read.
+        return new CachingAssetSource(CreateAssetSource(productSpec, "pc"));
     }
 
     private static EmbeddedAssetSource CreateAssetSource(string productSpec, string subfolder)
