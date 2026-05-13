@@ -517,6 +517,16 @@ public sealed class S131LuaDataProvider
 
     private bool HostPortrayalEmit(string featureRef, string drawingInstructions, string observedParams)
     {
+        // The Lua pipeline emits numeric feature IDs (e.g. "5") as the
+        // feature reference, but the Mapsui geometry provider is keyed by
+        // the GML gml:id attribute (e.g. "AnchorageArea.1"). Translate so
+        // that the renderer can locate the feature's geometry.
+        if (double.TryParse(featureRef, NumberStyles.Number, CultureInfo.InvariantCulture, out var numericId)
+            && _featureById.TryGetValue(numericId, out var feat))
+        {
+            featureRef = feat.Id;
+        }
+
         _emitted.Add((featureRef, drawingInstructions, observedParams));
         return true;
     }

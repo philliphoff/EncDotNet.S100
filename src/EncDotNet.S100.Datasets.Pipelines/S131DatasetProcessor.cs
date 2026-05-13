@@ -133,7 +133,6 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
                 featureSource, _catalogue, mariner: mariner)
             .GetAwaiter().GetResult();
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
-        Console.WriteLine($"[S131] Pipeline produced {prepared.Count} drawing instructions");
 
         // Render to Mapsui layer
         var vectorRenderer = new MapsuiDisplayListRenderer
@@ -180,13 +179,14 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfo(string featureRef)
     {
-        if (!int.TryParse(featureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
-            || idx < 0 || idx >= _dataset.Features.Length)
+        // Feature refs are GML gml:id strings (translated from Lua numeric IDs
+        // in HostPortrayalEmit).
+        var feature = _dataset.Features.FirstOrDefault(f =>
+            string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
+        if (feature is null)
             return null;
 
-        var feature = _dataset.Features[idx];
         EnsureDecoder();
-
         return BuildFeatureInfo(feature);
     }
 
@@ -209,7 +209,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
             var f = _dataset.Features[i];
             yield return new FeatureSummary
             {
-                FeatureRef = i.ToString(CultureInfo.InvariantCulture),
+                FeatureRef = f.Id,
                 Ordinal = i,
                 FeatureType = f.FeatureType,
                 FeatureTypeName = _decoder?.ResolveFeatureTypeName(f.FeatureType),
