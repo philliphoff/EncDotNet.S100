@@ -118,6 +118,13 @@ public sealed class LineInstruction : DrawingInstruction
     /// </summary>
     public IReadOnlyList<(double Offset, double Length)>? Dashes { get; init; }
 
+    /// <summary>
+    /// Dash "on" length in millimetres, from the LineStyle second parameter.
+    /// Used with <see cref="Dashes"/> to form the full [on, gap] dash array.
+    /// Zero means no explicit dash-on length was specified.
+    /// </summary>
+    public double DashOnLengthMm { get; init; }
+
     internal override int TypeSortOrder => 1;
 }
 

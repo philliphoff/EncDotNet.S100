@@ -43,6 +43,7 @@ public static class DrawingInstructionParser
         double lineWidth = 0.32;
         string lineColor = "CSTLN";
         var dashes = new List<(double Offset, double Length)>();
+        double dashOnLengthMm = 0;
         double? rotation = null;
         string? rotationCrs = null;
         double scaleFactor = 1.0;
@@ -157,6 +158,8 @@ public static class DrawingInstructionParser
                     if (lsParts.Length >= 4)
                     {
                         lineStyleRef = lsParts[0];
+                        if (double.TryParse(lsParts[1], CultureInfo.InvariantCulture, out var dl))
+                            dashOnLengthMm = dl;
                         if (double.TryParse(lsParts[2], CultureInfo.InvariantCulture, out var lw))
                             lineWidth = lw;
                         lineColor = lsParts[3];
@@ -228,6 +231,7 @@ public static class DrawingInstructionParser
                         LineWidth = lineWidth,
                         LineColor = lineColor,
                         Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
+                        DashOnLengthMm = dashOnLengthMm,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
