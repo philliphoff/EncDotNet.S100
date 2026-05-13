@@ -197,6 +197,12 @@ GML-encoded catalogue of available nautical products rendered via XSLT portrayal
 
 Under keel clearance data for safe navigation in shallow or restricted waterways.
 
+### S-131 — Marine Harbour Infrastructure
+
+GML-encoded marine harbour infrastructure (berths, bollards, mooring buoys, anchorage areas, terminals) rendered via Lua portrayal — the first GML+Lua hybrid in this codebase.
+
+![S-131 Marine Harbour Infrastructure](readme/s131-viewer.png)
+
 ### S-411 — Sea Ice
 
 GML-encoded sea-ice and lake-ice information (concentration, stage of development, ice edges, icebergs) rendered via XSLT portrayal.

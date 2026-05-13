@@ -11,6 +11,12 @@ Infrastructure** datasets (GML encoding, S-100 Part 10b).
 | Portrayal Catalogue | 2.0.0 | 42 Lua scripts, 6 SVG symbols |
 | GML Application Schema | 1.0.0 | Namespace `http://www.iho.int/S131/1.0` |
 
+## Screenshot
+
+S-131 Halifax Harbour sample rendered in the S-100 Viewer:
+
+![S-131 Halifax Harbour](../../readme/s131-viewer.png)
+
 ## Architecture — GML + Lua hybrid
 
 S-131 is **unique** in this codebase: it combines **GML data encoding**
