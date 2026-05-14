@@ -161,4 +161,93 @@ public class FeatureCatalogueManagerTests
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await provider.GetCatalogueAsync(new SpecRef("S-101", default), cts.Token));
     }
+
+    /// <summary>
+    /// Minimal <see cref="IAssetSource"/> that hands out a single in-memory
+    /// asset on demand and counts how many times it has been opened.
+    /// </summary>
+    private sealed class CountingSource : IAssetSource
+    {
+        private readonly byte[] _bytes;
+        public int OpenCount;
+        public int DisposeCount;
+        public CountingSource(string content) => _bytes = Encoding.UTF8.GetBytes(content);
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref OpenCount);
+            return Task.FromResult<Stream>(new MemoryStream(_bytes));
+        }
+        public void Dispose() => Interlocked.Increment(ref DisposeCount);
+    }
+
+    [Fact]
+    public void SetSource_OpensFeatureCatalogueXml_WhenResolverReturnsNull()
+    {
+        var mgr = new FeatureCatalogueManager((string _) => null);
+        var source = new CountingSource(MinimalFcXml);
+        mgr.SetSource("S-101", source);
+
+        var fc = mgr.GetCatalogue("S-101");
+        Assert.NotNull(fc);
+        Assert.Equal("S-101", fc!.ProductId);
+        Assert.Equal(1, source.OpenCount);
+
+        // Second access hits the parse cache, not the source.
+        var fc2 = mgr.GetCatalogue("S-101");
+        Assert.Same(fc, fc2);
+        Assert.Equal(1, source.OpenCount);
+    }
+
+    [Fact]
+    public void SetSource_ResolverWins_OverSetSource()
+    {
+        // Resolver returns a valid FC: SetSource must not be consulted.
+        var source = new CountingSource(MinimalFcXml);
+        var resolverCalls = 0;
+        var mgr = new FeatureCatalogueManager((string _) =>
+        {
+            Interlocked.Increment(ref resolverCalls);
+            return Open(MinimalFcXml);
+        });
+        mgr.SetSource("S-101", source);
+
+        var fc = mgr.GetCatalogue("S-101");
+        Assert.NotNull(fc);
+        Assert.Equal(1, resolverCalls);
+        Assert.Equal(0, source.OpenCount);
+    }
+
+    [Fact]
+    public void SetSource_Replace_DisposesPreviousSource()
+    {
+        var mgr = new FeatureCatalogueManager((string _) => null);
+        var first = new CountingSource(MinimalFcXml);
+        var second = new CountingSource(MinimalFcXml);
+
+        mgr.SetSource("S-101", first);
+        mgr.GetCatalogue("S-101");
+        Assert.Equal(1, first.OpenCount);
+
+        mgr.SetSource("S-101", second);
+        Assert.Equal(1, first.DisposeCount);
+
+        // Cache was evicted; the new source is opened on the next access.
+        mgr.GetCatalogue("S-101");
+        Assert.Equal(1, second.OpenCount);
+    }
+
+    [Fact]
+    public void Dispose_DisposesAllRegisteredSources()
+    {
+        var mgr = new FeatureCatalogueManager((string _) => null);
+        var s101 = new CountingSource(MinimalFcXml);
+        var s102 = new CountingSource(MinimalFcXml.Replace("S-101", "S-102"));
+        mgr.SetSource("S-101", s101);
+        mgr.SetSource("S-102", s102);
+
+        mgr.Dispose();
+
+        Assert.Equal(1, s101.DisposeCount);
+        Assert.Equal(1, s102.DisposeCount);
+    }
 }
