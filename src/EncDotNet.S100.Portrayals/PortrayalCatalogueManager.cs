@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Portrayals;
 public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<PortrayalCatalogueProvider>
 {
     private readonly ConcurrentDictionary<SpecRef, string> _paths = new();
-    private readonly ConcurrentDictionary<SpecRef, PortrayalCatalogueProvider> _providers = new();
+    private readonly ConcurrentDictionary<SpecRef, Lazy<PortrayalCatalogueProvider>> _providers = new();
 
     private static SpecRef ToSpec(string productSpec)
     {
@@ -50,9 +50,9 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         _paths[spec] = cataloguePath;
 
         // Evict stale cached provider
-        if (_providers.TryRemove(spec, out var old))
+        if (_providers.TryRemove(spec, out var old) && old.IsValueCreated)
         {
-            old.Dispose();
+            old.Value.Dispose();
         }
     }
 
@@ -114,15 +114,18 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         ArgumentNullException.ThrowIfNull(source);
 
         // Evict stale cached provider
-        if (_providers.TryRemove(spec, out var old))
+        if (_providers.TryRemove(spec, out var old) && old.IsValueCreated)
         {
-            old.Dispose();
+            old.Value.Dispose();
         }
 
         _paths.TryRemove(spec, out _);
 
         var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
-        _providers[spec] = provider;
+        // Pre-materialised lazy: callers see the provider immediately, and
+        // the slot participates in the same Lazy-based eviction/Dispose
+        // semantics as lazily-built providers.
+        _providers[spec] = new Lazy<PortrayalCatalogueProvider>(provider);
     }
 
     /// <summary>
@@ -134,6 +137,17 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
     /// <summary>
     /// Gets (or lazily opens) the <see cref="PortrayalCatalogueProvider"/> for the given spec reference.
     /// </summary>
+    /// <remarks>
+    /// Concurrent first-misses for the same spec collapse to a single
+    /// underlying open via <see cref="Lazy{T}"/> with
+    /// <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/>, so the
+    /// <see cref="IAssetSource"/> behind the provider is constructed at
+    /// most once per spec slot. Path/source presence is validated *before*
+    /// the lazy is added to the cache; if a registered path is missing on
+    /// disk, the slot is never created, leaving callers free to fix the
+    /// configuration and try again without poisoning the slot with a
+    /// faulted Lazy.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">No catalogue path registered for the spec.</exception>
     /// <exception cref="DirectoryNotFoundException">The registered path does not exist.</exception>
     public PortrayalCatalogueProvider GetProvider(SpecRef spec)
@@ -142,7 +156,7 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
 
         if (_providers.TryGetValue(spec, out var cached))
         {
-            return cached;
+            return cached.Value;
         }
 
         if (!_paths.TryGetValue(spec, out var path))
@@ -158,10 +172,15 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
                 $"Portrayal catalogue directory not found: {path}");
         }
 
-        var source = FileSystemAssetSource.Create(path);
-        var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
-        _providers[spec] = provider;
-        return provider;
+        var lazy = _providers.GetOrAdd(spec, _ => new Lazy<PortrayalCatalogueProvider>(
+            () =>
+            {
+                var source = FileSystemAssetSource.Create(path);
+                return PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+            },
+            LazyThreadSafetyMode.ExecutionAndPublication));
+
+        return lazy.Value;
     }
 
     /// <summary>
@@ -181,9 +200,12 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
 
     public void Dispose()
     {
-        foreach (var provider in _providers.Values)
+        foreach (var lazy in _providers.Values)
         {
-            provider.Dispose();
+            if (lazy.IsValueCreated)
+            {
+                lazy.Value.Dispose();
+            }
         }
 
         _providers.Clear();
@@ -219,9 +241,12 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         get
         {
             var refs = new List<CatalogueRef>();
-            foreach (var provider in _providers.Values)
+            foreach (var lazy in _providers.Values)
             {
-                if (provider.Catalogue.CatalogueRef is { } cref)
+                // Avoid forcing lazy initialization for unloaded entries —
+                // available means "currently loaded and self-describing".
+                if (!lazy.IsValueCreated) continue;
+                if (lazy.Value.Catalogue.CatalogueRef is { } cref)
                 {
                     refs.Add(cref);
                 }
