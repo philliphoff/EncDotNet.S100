@@ -62,13 +62,21 @@ internal sealed class FeatureCatalogueOverrides
     }
 
     /// <summary>
-    /// Returns a readable stream over the resolved feature catalogue for
-    /// <paramref name="productSpec"/>, or <c>null</c> if none is
+    /// Returns a readable stream over the user-supplied feature catalogue
+    /// for <paramref name="productSpec"/>, or <c>null</c> if none is
     /// configured. Caller owns the stream.
     /// </summary>
     /// <remarks>
     /// Lookup precedence: transient CLI overrides → persisted user
-    /// settings → bundled <c>EncDotNet.S100.Specifications</c> content.
+    /// settings. When neither is configured, the method returns
+    /// <c>null</c> so the
+    /// <see cref="EncDotNet.S100.Features.FeatureCatalogueManager"/>
+    /// falls through to its registered <c>IAssetSource</c> for the
+    /// bundled fallback (wired in <c>App.ConfigureServices</c> via
+    /// <see cref="Specification.CreateFeatureCatalogueSource(string)"/>),
+    /// allowing repeated parses to hit the
+    /// <c>CachingAssetSource</c> instead of re-opening a fresh manifest
+    /// stream each time.
     /// </remarks>
     public Stream? Open(string productSpec)
     {
@@ -85,6 +93,9 @@ internal sealed class FeatureCatalogueOverrides
             return File.OpenRead(persisted);
         }
 
-        return Specification.TryOpenFeatureCatalogue(productSpec);
+        // Bundled fallback is handled by FeatureCatalogueManager via a
+        // registered IAssetSource (see App.ConfigureServices). Returning
+        // null here is what lets that fallback fire.
+        return null;
     }
 }

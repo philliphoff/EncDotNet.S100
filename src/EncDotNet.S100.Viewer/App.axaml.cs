@@ -126,8 +126,26 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Features.FeatureCatalogueManager>(sp =>
         {
             var overrides = sp.GetRequiredService<FeatureCatalogueOverrides>();
-            return new EncDotNet.S100.Features.FeatureCatalogueManager(
+            var manager = new EncDotNet.S100.Features.FeatureCatalogueManager(
                 (string spec) => overrides.Open(spec));
+
+            // Register the bundled Feature Catalogue for every available
+            // spec as a long-lived IAssetSource so repeated parses go
+            // through CachingAssetSource (see PR #59 / Specification
+            // .CreateFeatureCatalogueSource). The resolver delegate still
+            // wins, so transient CLI overrides and persisted user
+            // settings continue to take precedence; this only changes
+            // how the bundled fallback is opened. Mirrors the bundled
+            // Portrayal Catalogue seeding in PortrayalCatalogueSeeder.
+            foreach (var spec in Specifications.Specification.AvailableSpecs)
+            {
+                if (Specifications.Specification.HasFeatureCatalogue(spec))
+                {
+                    manager.SetSource(spec, Specifications.Specification.CreateFeatureCatalogueSource(spec));
+                }
+            }
+
+            return manager;
         });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
