@@ -1,7 +1,10 @@
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.PerfRunner;
 
@@ -15,13 +18,13 @@ internal static class SharedInfrastructure
     private static readonly Lazy<PortrayalCatalogueManager> s_catalogueManager = new(CreateCatalogueManager);
     private static readonly Lazy<MoonSharpLuaEngine> s_luaEngine = new(() => new MoonSharpLuaEngine());
     private static readonly Lazy<ProjNetCrsTransformFactory> s_crsFactory = new(() => new ProjNetCrsTransformFactory());
-    private static readonly Lazy<EncDotNet.S100.Features.FeatureCatalogueManager> s_featureCatalogueManager =
-        new(() => new EncDotNet.S100.Features.FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
+    private static readonly Lazy<FeatureCatalogueManager> s_featureCatalogueManager =
+        new(() => new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
     public static PortrayalCatalogueManager CatalogueManager => s_catalogueManager.Value;
     public static MoonSharpLuaEngine LuaEngine => s_luaEngine.Value;
     public static ProjNetCrsTransformFactory CrsFactory => s_crsFactory.Value;
-    public static EncDotNet.S100.Features.FeatureCatalogueManager FeatureCatalogueManager =>
+    public static FeatureCatalogueManager FeatureCatalogueManager =>
         s_featureCatalogueManager.Value;
 
     public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
@@ -31,9 +34,9 @@ internal static class SharedInfrastructure
         var managerCtor = factoryType.GetConstructor(
             [
                 typeof(PortrayalCatalogueManager),
-                typeof(Scripting.ILuaEngine),
-                typeof(Pipelines.ICrsTransformFactory),
-                typeof(EncDotNet.S100.Features.FeatureCatalogueManager)
+                typeof(ILuaEngine),
+                typeof(ICrsTransformFactory),
+                typeof(FeatureCatalogueManager)
             ]);
         if (managerCtor is not null)
         {
@@ -44,8 +47,8 @@ internal static class SharedInfrastructure
         var resolverCtor = factoryType.GetConstructor(
             [
                 typeof(PortrayalCatalogueManager),
-                typeof(Scripting.ILuaEngine),
-                typeof(Pipelines.ICrsTransformFactory),
+                typeof(ILuaEngine),
+                typeof(ICrsTransformFactory),
                 typeof(Func<string, Stream?>)
             ]);
         if (resolverCtor is not null)
