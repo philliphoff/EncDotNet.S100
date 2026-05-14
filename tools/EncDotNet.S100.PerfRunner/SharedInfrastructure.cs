@@ -24,8 +24,41 @@ internal static class SharedInfrastructure
     public static EncDotNet.S100.Features.FeatureCatalogueManager FeatureCatalogueManager =>
         s_featureCatalogueManager.Value;
 
-    public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory() =>
-        new(CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager);
+    public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
+    {
+        var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
+
+        var managerCtor = factoryType.GetConstructor(
+            [
+                typeof(PortrayalCatalogueManager),
+                typeof(Scripting.ILuaEngine),
+                typeof(Pipelines.ICrsTransformFactory),
+                typeof(EncDotNet.S100.Features.FeatureCatalogueManager)
+            ]);
+        if (managerCtor is not null)
+        {
+            return (Datasets.Pipelines.DatasetPipelineFactory)managerCtor.Invoke(
+                [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager]);
+        }
+
+        var resolverCtor = factoryType.GetConstructor(
+            [
+                typeof(PortrayalCatalogueManager),
+                typeof(Scripting.ILuaEngine),
+                typeof(Pipelines.ICrsTransformFactory),
+                typeof(Func<string, Stream?>)
+            ]);
+        if (resolverCtor is not null)
+        {
+            Func<string, Stream?> resolver = Specification.TryOpenFeatureCatalogue;
+            return (Datasets.Pipelines.DatasetPipelineFactory)resolverCtor.Invoke(
+                [CatalogueManager, LuaEngine, CrsFactory, resolver]);
+        }
+
+        throw new MissingMethodException(
+            nameof(Datasets.Pipelines.DatasetPipelineFactory),
+            ".ctor(PortrayalCatalogueManager, ILuaEngine, ICrsTransformFactory, ...)");
+    }
 
     private static PortrayalCatalogueManager CreateCatalogueManager()
     {
