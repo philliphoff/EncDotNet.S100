@@ -24,11 +24,22 @@ namespace EncDotNet.S100.Features;
 /// cache slot per product name.
 /// </para>
 /// </remarks>
-public sealed class FeatureCatalogueManager : ICatalogueProvider<FeatureCatalogue>
+public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<FeatureCatalogue>
 {
     private readonly Func<SpecRef, Stream?> _resolver;
     private readonly ConcurrentDictionary<SpecRef, Lazy<FeatureCatalogue?>> _catalogues = new();
     private readonly ConcurrentDictionary<SpecRef, Lazy<FeatureCatalogueDecoder?>> _decoders = new();
+    private readonly ConcurrentDictionary<SpecRef, IAssetSource> _sources = new();
+
+    private const string FeatureCatalogueAssetName = "FeatureCatalogue.xml";
+
+    private static SpecRef ToSpec(string productSpec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+        if (!SpecName.TryNormalize(productSpec, out var name))
+            throw new ArgumentException($"'{productSpec}' is not a recognised product specification name.", nameof(productSpec));
+        return new SpecRef(name, default);
+    }
 
     /// <summary>
     /// Initializes a new <see cref="FeatureCatalogueManager"/> with a string-based
@@ -120,7 +131,24 @@ public sealed class FeatureCatalogueManager : ICatalogueProvider<FeatureCatalogu
     {
         Stream? stream;
         try { stream = _resolver(spec); }
-        catch { return null; }
+        catch { stream = null; }
+
+        // Resolver wins; the IAssetSource registered via SetSource is a
+        // bundled fallback for specs the resolver does not handle. This
+        // preserves the existing CLI / settings override behaviour while
+        // letting Specification.CreateFeatureCatalogueSource provide
+        // caching access to bundled FCs.
+        if (stream is null && _sources.TryGetValue(spec, out var source))
+        {
+            try
+            {
+                stream = source.OpenAsync(FeatureCatalogueAssetName).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         if (stream is null) return null;
 
@@ -137,6 +165,68 @@ public sealed class FeatureCatalogueManager : ICatalogueProvider<FeatureCatalogu
             // degrades to raw codes and portrayal falls back gracefully.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Registers an <see cref="IAssetSource"/> as the bundled fallback for
+    /// the given product specification. The resolver delegate supplied to
+    /// the manager constructor still takes precedence; the source is only
+    /// consulted when the resolver returns <c>null</c> for that spec.
+    /// </summary>
+    /// <remarks>
+    /// The manager assumes ownership of <paramref name="source"/> for
+    /// disposal purposes — a subsequent <see cref="SetSource(SpecRef, IAssetSource)"/>
+    /// for the same spec disposes the previous source, and
+    /// <see cref="Dispose"/> disposes every registered source. The source
+    /// is expected to expose a <c>FeatureCatalogue.xml</c> asset matching
+    /// the convention used by
+    /// <c>EncDotNet.S100.Specifications.Specification</c>.
+    /// </remarks>
+    public void SetSource(string productSpec, IAssetSource source) =>
+        SetSource(ToSpec(productSpec), source);
+
+    /// <summary>
+    /// Registers an <see cref="IAssetSource"/> for the given spec reference.
+    /// See <see cref="SetSource(string, IAssetSource)"/> for the precedence
+    /// rules and disposal semantics.
+    /// </summary>
+    public void SetSource(SpecRef spec, IAssetSource source)
+    {
+        if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
+        ArgumentNullException.ThrowIfNull(source);
+
+        // Evict any cached parse result so the new source is consulted on
+        // the next access.
+        _catalogues.TryRemove(spec, out _);
+        _decoders.TryRemove(spec, out _);
+
+        // Atomically swap the source and dispose any prior entry.
+        var previous = _sources.AddOrUpdate(
+            spec,
+            _ => source,
+            (_, existing) =>
+            {
+                if (!ReferenceEquals(existing, source))
+                {
+                    try { existing.Dispose(); } catch { /* best-effort */ }
+                }
+                return source;
+            });
+        _ = previous; // suppress unused
+    }
+
+    /// <summary>
+    /// Disposes every <see cref="IAssetSource"/> registered through
+    /// <see cref="SetSource(SpecRef, IAssetSource)"/>. Cached catalogues
+    /// themselves are plain in-memory objects and do not require disposal.
+    /// </summary>
+    public void Dispose()
+    {
+        foreach (var source in _sources.Values)
+        {
+            try { source.Dispose(); } catch { /* best-effort */ }
+        }
+        _sources.Clear();
     }
 
     /// <inheritdoc />
