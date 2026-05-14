@@ -44,16 +44,28 @@ public sealed class DatasetPipelineFactory
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
 
+    /// <summary>
+    /// Creates a new factory. The supplied
+    /// <paramref name="featureCatalogueManager"/> is shared across every
+    /// processor this factory produces, so its FC parse cache survives
+    /// for the lifetime of the manager — not just the lifetime of the
+    /// factory.
+    /// </summary>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
-        Func<string, Stream?>? featureCatalogueResolver = null)
+        FeatureCatalogueManager featureCatalogueManager)
     {
+        ArgumentNullException.ThrowIfNull(catalogueManager);
+        ArgumentNullException.ThrowIfNull(luaEngine);
+        ArgumentNullException.ThrowIfNull(crsTransformFactory);
+        ArgumentNullException.ThrowIfNull(featureCatalogueManager);
+
         _catalogueManager = catalogueManager;
         _luaEngine = luaEngine;
         _crsTransformFactory = crsTransformFactory;
-        _featureCatalogueManager = new FeatureCatalogueManager(featureCatalogueResolver);
+        _featureCatalogueManager = featureCatalogueManager;
     }
 
     /// <summary>

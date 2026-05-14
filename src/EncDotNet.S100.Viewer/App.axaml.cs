@@ -116,6 +116,26 @@ public partial class App : Application
         services.AddSingleton<IDatasetCatalogSource>(
             sp => sp.GetRequiredService<DatasetCatalogAggregator>());
 
+        // Feature-catalogue parsing is shared across every dataset load
+        // — the manager's parse cache must survive across factory
+        // rebuilds. The resolver delegate consults the viewer-level
+        // overrides service so transient CLI catalogues and persisted
+        // settings remain observable even though the manager itself is
+        // a singleton.
+        services.AddSingleton<FeatureCatalogueOverrides>();
+        services.AddSingleton<EncDotNet.S100.Features.FeatureCatalogueManager>(sp =>
+        {
+            var overrides = sp.GetRequiredService<FeatureCatalogueOverrides>();
+            return new EncDotNet.S100.Features.FeatureCatalogueManager(
+                (string spec) => overrides.Open(spec));
+        });
+        services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
+            new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
+                sp.GetRequiredService<PortrayalCatalogueManager>(),
+                new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
+                new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>()));
+
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IRecentFilesService, RecentFilesService>();
