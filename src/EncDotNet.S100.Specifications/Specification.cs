@@ -63,6 +63,40 @@ public static class Specification
     }
 
     /// <summary>
+    /// Returns true if a bundled Feature Catalogue exists for the given product specification.
+    /// </summary>
+    public static bool HasFeatureCatalogue(string productSpec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+
+        string normalized = productSpec.Replace("-", "");
+        string resourceName = $"{ContentPrefix}.{normalized}.fc.FeatureCatalogue.xml";
+        return ResourceAssembly.GetManifestResourceInfo(resourceName) is not null;
+    }
+
+    /// <summary>
+    /// Creates an <see cref="IAssetSource"/> rooted at the bundled Feature
+    /// Catalogue directory for the given product specification. The source
+    /// is wrapped in a <see cref="CachingAssetSource"/> so repeated reads
+    /// of <c>FeatureCatalogue.xml</c> are served from memory after the
+    /// first read.
+    /// </summary>
+    /// <param name="productSpec">The product specification identifier (e.g. "S-101", "S-102").</param>
+    /// <returns>An asset source for the bundled Feature Catalogue contents.</returns>
+    /// <remarks>
+    /// This parallels <see cref="CreatePortrayalCatalogueSource(string)"/>
+    /// and lets callers register the bundled FC with
+    /// <c>FeatureCatalogueManager.SetSource</c> so the parse cache can be
+    /// preceded by an asset-bytes cache. See S-100 Edition 5.2.1 Part 4 §6
+    /// for the Feature Catalogue model.
+    /// </remarks>
+    public static IAssetSource CreateFeatureCatalogueSource(string productSpec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+        return new CachingAssetSource(CreateAssetSource(productSpec, "fc"));
+    }
+
+    /// <summary>
     /// Returns true if a bundled Portrayal Catalogue exists for the given product specification.
     /// </summary>
     public static bool HasPortrayalCatalogue(string productSpec)
@@ -84,7 +118,11 @@ public static class Specification
     {
         ArgumentException.ThrowIfNullOrEmpty(productSpec);
 
-        return CreateAssetSource(productSpec, "pc");
+        // Wrap the embedded source in a caching decorator so repeated
+        // reads of the same Portrayal Catalogue asset (Lua source, XSLT
+        // templates, SVG symbols, palette XML; see S-100 Edition 5.2.1
+        // Part 9 §3) are served from memory after the first read.
+        return new CachingAssetSource(CreateAssetSource(productSpec, "pc"));
     }
 
     private static EmbeddedAssetSource CreateAssetSource(string productSpec, string subfolder)

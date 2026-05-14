@@ -116,6 +116,44 @@ public partial class App : Application
         services.AddSingleton<IDatasetCatalogSource>(
             sp => sp.GetRequiredService<DatasetCatalogAggregator>());
 
+        // Feature-catalogue parsing is shared across every dataset load
+        // — the manager's parse cache must survive across factory
+        // rebuilds. The resolver delegate consults the viewer-level
+        // overrides service so transient CLI catalogues and persisted
+        // settings remain observable even though the manager itself is
+        // a singleton.
+        services.AddSingleton<FeatureCatalogueOverrides>();
+        services.AddSingleton<EncDotNet.S100.Features.FeatureCatalogueManager>(sp =>
+        {
+            var overrides = sp.GetRequiredService<FeatureCatalogueOverrides>();
+            var manager = new EncDotNet.S100.Features.FeatureCatalogueManager(
+                (string spec) => overrides.Open(spec));
+
+            // Register the bundled Feature Catalogue for every available
+            // spec as a long-lived IAssetSource so repeated parses go
+            // through CachingAssetSource (see PR #59 / Specification
+            // .CreateFeatureCatalogueSource). The resolver delegate still
+            // wins, so transient CLI overrides and persisted user
+            // settings continue to take precedence; this only changes
+            // how the bundled fallback is opened. Mirrors the bundled
+            // Portrayal Catalogue seeding in PortrayalCatalogueSeeder.
+            foreach (var spec in Specifications.Specification.AvailableSpecs)
+            {
+                if (Specifications.Specification.HasFeatureCatalogue(spec))
+                {
+                    manager.SetSource(spec, Specifications.Specification.CreateFeatureCatalogueSource(spec));
+                }
+            }
+
+            return manager;
+        });
+        services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
+            new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
+                sp.GetRequiredService<PortrayalCatalogueManager>(),
+                new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
+                new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>()));
+
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IRecentFilesService, RecentFilesService>();

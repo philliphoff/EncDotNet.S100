@@ -77,11 +77,14 @@ public sealed class RenderHarness : IDisposable
         _catalogueManager = catalogueManager;
         _ownsCatalogueManager = ownsCatalogueManager;
 
+        var featureCatalogueManager =
+            new EncDotNet.S100.Features.FeatureCatalogueManager(featureCatalogueResolver);
+
         _factory = new DatasetPipelineFactory(
             _catalogueManager,
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
-            featureCatalogueResolver);
+            featureCatalogueManager);
     }
 
     /// <summary>

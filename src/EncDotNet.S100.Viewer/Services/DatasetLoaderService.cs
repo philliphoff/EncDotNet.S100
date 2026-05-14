@@ -29,6 +29,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly ViewerSettings _settings;
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly PortrayalCatalogueSeeder _catalogueSeeder;
+    private readonly FeatureCatalogueOverrides _fcOverrides;
+    private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
     private readonly S128DatasetCatalogSource _s128CatalogSource;
     private readonly SettingsViewModel _settingsVm;
@@ -58,7 +60,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
 
     private IMapHost? _mapHost;
-    private DatasetPipelineFactory? _pipelineFactory;
 
     // Coalesce slider scrubs into a single render pass after the user has
     // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
@@ -71,6 +72,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ViewerSettings settings,
         PortrayalCatalogueManager catalogueManager,
         PortrayalCatalogueSeeder catalogueSeeder,
+        FeatureCatalogueOverrides fcOverrides,
+        DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
         S128DatasetCatalogSource s128CatalogSource,
         SettingsViewModel settingsVm,
@@ -82,6 +85,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(catalogueSeeder);
+        ArgumentNullException.ThrowIfNull(fcOverrides);
+        ArgumentNullException.ThrowIfNull(pipelineFactory);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(s128CatalogSource);
         ArgumentNullException.ThrowIfNull(settingsVm);
@@ -93,6 +98,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _settings = settings;
         _catalogueManager = catalogueManager;
         _catalogueSeeder = catalogueSeeder;
+        _fcOverrides = fcOverrides;
+        _pipelineFactory = pipelineFactory;
         _recentFiles = recentFiles;
         _s128CatalogSource = s128CatalogSource;
         _settingsVm = settingsVm;
@@ -130,14 +137,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _mapHost = host;
 
         var transientFcPaths = _catalogueSeeder.Seed(options);
-
-        _pipelineFactory = new DatasetPipelineFactory(
-            _catalogueManager,
-            new MoonSharpLuaEngine(),
-            new ProjNetCrsTransformFactory(),
-            spec => transientFcPaths.TryGetValue(spec, out var p) ? File.OpenRead(p)
-                  : _settings.FeatureCataloguePaths.TryGetValue(spec, out var sp) ? File.OpenRead(sp)
-                  : Specifications.Specification.TryOpenFeatureCatalogue(spec));
+        _fcOverrides.SetTransientPaths(transientFcPaths);
 
         // Re-render every loaded dataset whenever the user changes a setting
         // that affects portrayal output (palette / display scale). These are
@@ -213,8 +213,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         try
         {
             var processor = await Task.Run(() => fromExchangeSet
-                ? _pipelineFactory!.CreateProcessor(entry.Source!, entry.RelativePath!, spec)
-                : _pipelineFactory!.CreateProcessor(entry.FilePath), token);
+                ? _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec)
+                : _pipelineFactory.CreateProcessor(entry.FilePath), token);
             _processors[entry] = processor;
 
             // Surface S-128 catalogues into the Dataset Catalog panel.
@@ -674,7 +674,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private void EnsureInitialized()
     {
-        if (_mapHost is null || _pipelineFactory is null)
+        if (_mapHost is null)
             throw new InvalidOperationException("DatasetLoaderService.Initialize must be called before LoadAsync.");
     }
 }
