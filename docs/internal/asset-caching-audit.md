@@ -379,8 +379,30 @@ PR-1/2/3 land and the remaining hot fetches are profiled.
 | PR-A: Race-free `PortrayalCatalogueManager` | Appendix §2.7-A | **Shipped** (PR #60) | `philliphoff/catalogue-identity-segment-2` off `main` |
 | PR-B: `FeatureCatalogueManager` as viewer singleton | Appendix §2.7-B | **Shipped** (PR #61) | same branch |
 | PR-C: `IAssetSource`-shaped FC manager config | Appendix §2.7-C | **Shipped** (PR #62) | same branch |
-| Wire FC `SetSource` into `App.axaml.cs` | PR-C follow-up | Pending (small, ~10 lines) | after PR-B/C merge |
+| Wire FC `SetSource` into `App.axaml.cs` | PR-C follow-up | **Shipped** (PR #63) | `philliphoff/fc-setsource-app-wiring` (stacked on PR-B/C) |
 | PR-1 → PR-N | §5 | Pending |  |
+
+### Wiring follow-up outcome (2026-05-14)
+
+- `App.ConfigureServices` registers
+  `Specification.CreateFeatureCatalogueSource(spec)` with the singleton
+  `FeatureCatalogueManager` for every `Specification.AvailableSpecs`
+  entry that has a bundled FC, mirroring the `PortrayalCatalogueSeeder`
+  bundled-PC loop.
+- `FeatureCatalogueOverrides.Open` no longer falls back to
+  `Specification.TryOpenFeatureCatalogue`; it returns `null` when no
+  CLI / persisted-settings path applies. That is what lets the
+  registered `IAssetSource` (a `CachingAssetSource` over the bundled
+  FC) fire on the resolver-miss path inside
+  `FeatureCatalogueManager.ParseCatalogue`.
+- Bundled FC bytes are now served from memory after the first parse;
+  transient CLI overrides and persisted user-settings paths continue
+  to win.
+- Tests: new `FeatureCatalogueOverridesTests` covering (a) empty
+  overrides return `null`, (b) transient path still wins, (c) every
+  `AvailableSpecs` entry parses through the bundled-`SetSource` path
+  with no resolver overrides. Full
+  `dotnet test --configuration Release` green.
 
 ### PR-0 outcome (2026-05-13)
 
