@@ -84,8 +84,9 @@ When adding a typed model for a new product spec:
 |---|---|---|
 | S-421 | `S421RoutePlan` | Original precedent; refactored in Pass 1 to consume the shared abstractions. |
 | S-124 | `S124NavigationalWarning` | Pass 1 second consumer. |
+| S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
 
-Other GML-encoded specs (S-122, S-125, S-127, S-128, S-129, S-131,
+Other GML-encoded specs (S-125, S-127, S-128, S-129, S-131,
 S-201, S-411) are intentionally deferred to a future *Pass 2* —
 the shared abstractions are validated against the first two
 consumers before being rolled out further.

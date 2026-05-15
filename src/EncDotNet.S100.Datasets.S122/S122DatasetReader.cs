@@ -22,6 +22,8 @@ internal static class S122DatasetReader
         "http://www.iho.int/s100gml/5.0",
     ];
 
+    private static readonly XNamespace XLinkNs = "http://www.w3.org/1999/xlink";
+
     // S-122 feature type codes (per FC 2.0.0, S-122 § Feature Catalogue).
     private static readonly HashSet<string> FeatureTypeCodes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -252,7 +254,7 @@ internal static class S122DatasetReader
         var featureType = element.Name.LocalName;
 
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element, s100Ns);
+        var (simpleAttrs, complexAttrs, references) = ParseAttributes(element, s100Ns);
 
         return new S122Feature
         {
@@ -265,6 +267,7 @@ internal static class S122DatasetReader
             InteriorRings = interiorRings,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = references,
         };
     }
 
@@ -273,7 +276,7 @@ internal static class S122DatasetReader
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var typeCode = element.Name.LocalName;
 
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element, s100Ns);
+        var (simpleAttrs, complexAttrs, references) = ParseAttributes(element, s100Ns);
 
         return new S122InformationType
         {
@@ -281,6 +284,7 @@ internal static class S122DatasetReader
             TypeCode = typeCode,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = references,
         };
     }
 
@@ -349,10 +353,11 @@ internal static class S122DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S122ComplexAttribute>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S122ComplexAttribute>, ImmutableArray<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S122ComplexAttribute>();
+        var refs = ImmutableArray.CreateBuilder<GmlReference>();
 
         foreach (var child in element.Elements())
         {
@@ -364,12 +369,27 @@ internal static class S122DatasetReader
                 child.Name.Namespace == s100Ns)
                 continue;
 
+            // xlink:href cross-reference — surface as a typed reference rather
+            // than an attribute. The element's local name is the association
+            // role (e.g. "theAuthority", "theContactDetails"; S-122 FC 2.0.0 §Roles).
+            var href = child.Attribute(XLinkNs + "href")?.Value;
+            if (href is not null)
+            {
+                refs.Add(new GmlReference
+                {
+                    Role = localName,
+                    Href = href,
+                    ArcRole = child.Attribute(XLinkNs + "arcrole")?.Value,
+                });
+                continue;
+            }
+
             if (child.HasElements)
             {
                 var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
                 foreach (var sub in child.Elements())
                 {
-                    if (!sub.HasElements)
+                    if (!sub.HasElements && sub.Attribute(XLinkNs + "href") is null)
                     {
                         subAttrs[sub.Name.LocalName] = sub.Value;
                     }
@@ -390,7 +410,7 @@ internal static class S122DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple.ToImmutable(), complex.ToImmutable(), refs.ToImmutable());
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)
