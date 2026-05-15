@@ -40,6 +40,15 @@ public sealed class S421Waypoint
     /// </summary>
     public S421Leg? OutgoingLeg { get; init; }
 
+    /// <summary>
+    /// The leg arriving at this waypoint — the <see cref="OutgoingLeg"/> of
+    /// the previous waypoint in route order. The first waypoint of a route
+    /// has no incoming leg. Populated during projection in a second pass
+    /// after all waypoints and legs are materialised; see
+    /// <see cref="S421RoutePlan.From"/>.
+    /// </summary>
+    public S421Leg? IncomingLeg { get; internal set; }
+
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
     public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
 }
@@ -55,6 +64,29 @@ public sealed class S421Leg
 
     /// <summary>The leg's curve geometry as an ordered sequence of positions.</summary>
     public required ImmutableArray<GeoPosition> Coordinates { get; init; }
+
+    /// <summary>
+    /// The waypoint at the start of this leg — the waypoint whose
+    /// <see cref="S421Waypoint.OutgoingLeg"/> is this leg. Populated during
+    /// projection in a second pass after all waypoints and legs are
+    /// materialised; see <see cref="S421RoutePlan.From"/>. Nullable to
+    /// tolerate malformed fixtures where the leg is referenced from no
+    /// waypoint.
+    /// Spec reference: S-421 Annex A "RouteWaypointLeg" / "RouteWaypoint"
+    /// (FC) — a leg connects two consecutive waypoints in route order.
+    /// </summary>
+    public S421Waypoint? StartWaypoint { get; internal set; }
+
+    /// <summary>
+    /// The waypoint at the end of this leg — the next waypoint in route
+    /// order after <see cref="StartWaypoint"/>. Populated during projection
+    /// in a second pass after all waypoints and legs are materialised; see
+    /// <see cref="S421RoutePlan.From"/>. Nullable to tolerate malformed
+    /// fixtures where the originating waypoint has no successor.
+    /// Spec reference: S-421 Annex A "RouteWaypointLeg" / "RouteWaypoint"
+    /// (FC) — a leg connects two consecutive waypoints in route order.
+    /// </summary>
+    public S421Waypoint? EndWaypoint { get; internal set; }
 
     /// <summary>FC code <c>routeWaypointLegStarboardXTDL</c> (metres).</summary>
     public double? StarboardCrossTrackDistanceLimit { get; init; }

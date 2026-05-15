@@ -44,7 +44,11 @@ projection on top:
   `xlink:href` cross-references and parsing primitive values
   (`int`, `double`, `bool`, `DateTimeOffset`).
 - **`S421Route`** with `Info`, `Waypoints`, `Legs`, `ActionPoints`, `Schedules`.
-- **`S421Waypoint`** with `OutgoingLeg` graph navigation.
+- **`S421Waypoint`** with typed `OutgoingLeg` and `IncomingLeg`
+  bidirectional navigation along the route.
+- **`S421Leg`** with typed `StartWaypoint` / `EndWaypoint` endpoint
+  references, so consumers holding a leg can reach both of its
+  bounding waypoints without coordinate matching.
 - **`S421ActionPoint`**, **`S421Schedule`** + variants (Manual / Calculated /
   Recommended), **`S421ScheduleElement`**.
 - Anything the typed model does not understand is preserved on each object's
@@ -106,6 +110,14 @@ foreach (var wp in plan.Route.Waypoints)
     Console.WriteLine(
         $"  WP{wp.WaypointNumber} {wp.Position.Latitude:F4}, {wp.Position.Longitude:F4}"
         + (leg is not null ? $" → leg {leg.Id}" : ""));
+}
+
+// Walk the route via typed endpoint references — no href parsing required.
+var cursor = plan.Route.Waypoints.FirstOrDefault();
+while (cursor?.OutgoingLeg is { } leg)
+{
+    Console.WriteLine($"  leg {leg.Id}: {leg.StartWaypoint?.Id} → {leg.EndWaypoint?.Id}");
+    cursor = leg.EndWaypoint;
 }
 
 foreach (var d in diagnostics) Console.WriteLine(d);

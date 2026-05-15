@@ -225,7 +225,46 @@ public sealed class S421RoutePlan
             waypoints.Add(ProjectWaypoint(wptFeature, leg, ctx));
         }
 
-        return (waypoints.ToImmutable(), legs.ToImmutable());
+        var waypointArray = waypoints.ToImmutable();
+        LinkLegEndpoints(waypointArray, ctx);
+        return (waypointArray, legs.ToImmutable());
+    }
+
+    /// <summary>
+    /// Second pass that wires <see cref="S421Leg.StartWaypoint"/>,
+    /// <see cref="S421Leg.EndWaypoint"/>, and
+    /// <see cref="S421Waypoint.IncomingLeg"/> from the ordered waypoint
+    /// array. Topology is taken from document order plus the
+    /// <c>routeWaypointLeg</c> xlinks already resolved in the first pass —
+    /// we do not match by coordinates. Emits a
+    /// <c>"route.leg.endpoint.missing"</c> warning if the final waypoint
+    /// still carries an <see cref="S421Waypoint.OutgoingLeg"/> (i.e. the
+    /// leg has no successor waypoint to terminate at).
+    /// </summary>
+    private static void LinkLegEndpoints(ImmutableArray<S421Waypoint> waypoints, ProjectionContext ctx)
+    {
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            var leg = waypoints[i].OutgoingLeg;
+            if (leg is null) continue;
+
+            leg.StartWaypoint = waypoints[i];
+            if (i + 1 < waypoints.Length)
+            {
+                leg.EndWaypoint = waypoints[i + 1];
+                waypoints[i + 1].IncomingLeg = leg;
+            }
+            else
+            {
+                ctx.Report(new ProjectionDiagnostic
+                {
+                    Severity = DiagnosticSeverity.Warning,
+                    Message = $"RouteWaypointLeg '{leg.Id}' has no successor waypoint to terminate at.",
+                    Code = "route.leg.endpoint.missing",
+                    RelatedId = leg.Id,
+                });
+            }
+        }
     }
 
     private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? leg, ProjectionContext ctx)
