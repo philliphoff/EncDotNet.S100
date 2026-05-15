@@ -87,8 +87,9 @@ When adding a typed model for a new product spec:
 | S-128 | `S128CatalogueDataset` | Pass 2 — catalogue of nautical products. |
 | S-125 | `S125AtonDataset` | Pass 2 — marine aids to navigation. |
 | S-201 | `S201AtonDataset` | Pass 2 — IALA AtoN information. |
+| S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
 | S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
 
-Other GML-encoded specs (S-122, S-129, S-131, S-411) are intentionally
+Other GML-encoded specs (S-129, S-131, S-411) are intentionally
 deferred to a future pass — the shared abstractions continue to be
 validated against new consumers before being rolled out further.

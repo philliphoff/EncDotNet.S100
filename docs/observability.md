@@ -80,8 +80,6 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | `s100.coverage.cells` | histogram | `{cells}` | `s100.product` |
 | `s100.xslt.transform.duration` | histogram | `ms` | `s100.xslt.rule` |
 | `s100.xslt.compile.duration` | histogram | `ms` | `s100.xslt.rule` |
-| `s100.xslt.cache.hit.count` | counter | `{hits}` | — |
-| `s100.xslt.cache.miss.count` | counter | `{misses}` | — |
 
 ### Asset I/O metrics (`EncDotNet.S100.Core`)
 
@@ -114,9 +112,11 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | `s100.render.frame.duration` | histogram | `ms` | — |
 | `s100.render.instructions.processed.count` | histogram | `{instructions}` | — |
 | `s100.render.styles.applied.count` | histogram | `{styles}` | — |
-| `s100.symbol.resolve.duration` | histogram | `ms` | `s100.symbol.result` |
-| `s100.symbol.cache.hit.count` | counter | `{hits}` | — |
-| `s100.symbol.cache.miss.count` | counter | `{misses}` | — |
+| `s100.symbol.resolve.duration` | histogram | `ms` | `s100.symbol.result`, `s100.product` |
+| `s100.symbol.cache.hit.count` | counter | `{hits}` | `s100.product` |
+| `s100.symbol.cache.miss.count` | counter | `{misses}` | `s100.product` |
+| `s100.pattern.cache.hit.count` | counter | `{hits}` | `s100.product` |
+| `s100.pattern.cache.miss.count` | counter | `{misses}` | `s100.product` |
 
 ### Skia renderer metrics (`EncDotNet.S100.Renderers.Skia`)
 
@@ -130,6 +130,59 @@ useful for orders-of-magnitude comparisons, not exact attribution.
 | Instrument | Type | Unit | Tags |
 |---|---|---|---|
 | `s100.viewer.command.duration` | histogram | `ms` | `s100.viewer.command` |
+
+### Cache counters
+
+Every cache that lives between the spec catalogues, dataset processors,
+and the renderer emits a hit / miss counter so the audit-recommended
+`PR-CACHE-7` visibility is available out of the box. All counters are
+plain `Counter<long>` with value `1` per event so a histogram of the
+counter directly gives a hit / miss rate.
+
+| Instrument | Source | Unit | Tags |
+|---|---|---|---|
+| `s100.symbol.cache.hit.count` | `EncDotNet.S100.Renderers.Mapsui` | `{hits}` | `s100.product` |
+| `s100.symbol.cache.miss.count` | `EncDotNet.S100.Renderers.Mapsui` | `{misses}` | `s100.product` |
+| `s100.pattern.cache.hit.count` | `EncDotNet.S100.Renderers.Mapsui` | `{hits}` | `s100.product` |
+| `s100.pattern.cache.miss.count` | `EncDotNet.S100.Renderers.Mapsui` | `{misses}` | `s100.product` |
+| `s100.portrayal.cache.hit.count` | `EncDotNet.S100.Portrayals` | `{hits}` | `s100.product`, `s100.asset.kind` |
+| `s100.portrayal.cache.miss.count` | `EncDotNet.S100.Portrayals` | `{misses}` | `s100.product`, `s100.asset.kind` |
+| `s100.lua.source.cache.hit.count` | `EncDotNet.S100.Portrayals` | `{hits}` | `s100.product` |
+| `s100.lua.source.cache.miss.count` | `EncDotNet.S100.Portrayals` | `{misses}` | `s100.product` |
+| `s100.featurecatalogue.cache.hit.count` | `EncDotNet.S100.Features` | `{hits}` | `s100.product` |
+| `s100.featurecatalogue.cache.miss.count` | `EncDotNet.S100.Features` | `{misses}` | `s100.product` |
+
+Notes:
+
+- `s100.product` is the spec name (`S-101`, `S-124`, `S-131`, …).
+- `s100.asset.kind` on the portrayal counter is one of: `xslt`, `svg`,
+  `line_style`, `area_fill`, `palette`, `lua_script`, `lua_source`.
+  (Same tag name is reused for asset-source I/O metrics with a
+  disjoint value set — disambiguate by counter name.)
+- The Lua-source cache emits both the dedicated
+  `s100.lua.source.cache.*` counter and a `s100.portrayal.cache.*`
+  counter with `s100.asset.kind=lua_source` so dashboards that group
+  on the generic portrayal counter still see the Lua source bucket.
+- The symbol / pattern counters previously had no tags. They now carry
+  `s100.product`, set by each dataset processor when it constructs the
+  per-pipeline `MapsuiDisplayListRenderer`.
+
+In a `PerfReport summarise` markdown report the rows look like:
+
+```
+| Metric | Sum |
+| s100.symbol.cache.hit.count[s100.product=S-101] | 4123 |
+| s100.symbol.cache.miss.count[s100.product=S-101] | 38 |
+| s100.portrayal.cache.hit.count[s100.product=S-101][s100.asset.kind=svg] | 412 |
+| s100.lua.source.cache.hit.count[s100.product=S-101] | 24 |
+| s100.featurecatalogue.cache.hit.count[s100.product=S-101] | 19 |
+```
+
+Use `PerfReport diff <baseline.jsonl> <candidate.jsonl>` to see how
+those numbers shift across runs. A healthy warm scenario shows
+`hit.count >> miss.count` for the symbol and portrayal counters and a
+non-zero `featurecatalogue.cache.hit.count` (every dataset open after
+the first reuses the cached catalogue).
 
 ## Wiring it up — the viewer
 

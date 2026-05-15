@@ -56,3 +56,49 @@ Key types include:
 ```sh
 dotnet add package EncDotNet.S100.Datasets.S122
 ```
+
+## Strongly-typed data model
+
+In addition to the feature-bag `S122Dataset`, the library exposes a
+strongly-typed projection rooted at `S122MarineProtectedAreaDataset`
+under `EncDotNet.S100.Datasets.S122.DataModel`. It uses the shared
+typed-model abstractions in `EncDotNet.S100.Core.DataModel`
+(`XlinkResolver`, `ProjectionContext`, `GeoPosition`,
+`AttributeParser`, `ExtraAttributes`) and follows the same pattern
+as the S-124 / S-125 / S-128 / S-201 projections.
+
+```csharp
+using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Datasets.S122.DataModel;
+
+var dataset = S122Dataset.Open("122TESTDATASET.gml");
+var typed = S122MarineProtectedAreaDataset.From(dataset, out var diagnostics);
+
+foreach (var mpa in typed.MarineProtectedAreas)
+{
+    Console.WriteLine($"{mpa.Id}: cat={mpa.CategoryOfMarineProtectedArea}, designation={mpa.Designation}");
+
+    foreach (var infoRef in mpa.InformationReferences)
+        Console.WriteLine($"  -> {infoRef.Role}: {infoRef.Target.TypeCode} #{infoRef.Target.Id}");
+}
+
+foreach (var diag in diagnostics)
+    Console.WriteLine($"[{diag.Severity}] {diag.Code}: {diag.Message}");
+```
+
+Notes:
+
+- Typed projection is purely **additive** — the portrayal pipeline
+  continues to run off the feature-bag dataset and is unchanged.
+- `From()` throws only when the source dataset has no features and no
+  information types; everything else surfaces as a
+  `ProjectionDiagnostic` (unresolved xlinks, attribute parse
+  failures, etc.).
+- `xlink:href` associations (e.g. `theAuthority`, `theInformation`,
+  `theCartographicText`) are resolved into typed
+  `S122InformationReference` / `S122FeatureReference` records.
+  The raw `GmlReference` list is also preserved on every typed
+  object for callers that need role / arcrole / href verbatim.
+- Unrecognised feature / information types are preserved as
+  `S122OtherFeature` / `S122OtherInformationType` so future-edition
+  catalogues round-trip without information loss.

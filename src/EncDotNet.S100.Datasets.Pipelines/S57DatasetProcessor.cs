@@ -117,6 +117,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         var vectorRenderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"S-57: {_fileName}",
+            Product = "S-57",
             Palette = palette,
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,

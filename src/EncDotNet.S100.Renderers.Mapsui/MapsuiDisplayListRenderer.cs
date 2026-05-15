@@ -48,6 +48,16 @@ public sealed class MapsuiDisplayListRenderer
     public string LayerName { get; set; } = "S-101 Vector";
 
     /// <summary>
+    /// Optional S-100 product identifier (e.g. <c>"S-101"</c>, <c>"S-131"</c>)
+    /// used as the <c>s100.product</c> dimension on cache and render-frame
+    /// metrics. Set by dataset processors so cache hit/miss counts can be
+    /// attributed by product. When <see langword="null"/>, the counter is
+    /// emitted without a product tag (preserving legacy behaviour for
+    /// direct callers).
+    /// </summary>
+    public string? Product { get; set; }
+
+    /// <summary>
     /// The color palette to use for resolving S-100 color tokens.
     /// When set, overrides the built-in fallback colors.
     /// </summary>
@@ -814,18 +824,25 @@ public sealed class MapsuiDisplayListRenderer
 
         var entry = cache.GetOrAddSymbol(Palette, symbolRef, out var wasCached, ProduceSymbolEntry);
 
+        // Tag cache + resolve metrics with the active product (when known)
+        // so dashboards can attribute hit/miss counts to S-101 vs. S-131
+        // vs. an unconfigured caller.
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, Product);
+
         if (wasCached)
         {
-            S100Diag.Telemetry.SymbolCacheHit.Add(1);
+            S100Diag.Telemetry.SymbolCacheHit.Add(1, productTag);
             S100Diag.Telemetry.SymbolResolveDuration.Record(
                 (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+                productTag,
                 new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, "hit"));
             return entry;
         }
 
-        S100Diag.Telemetry.SymbolCacheMiss.Add(1);
+        S100Diag.Telemetry.SymbolCacheMiss.Add(1, productTag);
         S100Diag.Telemetry.SymbolResolveDuration.Record(
             (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+            productTag,
             new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, entry.Source is null ? "fallback" : "miss"));
         return entry;
     }
@@ -872,7 +889,21 @@ public sealed class MapsuiDisplayListRenderer
             return null;
 
         var cache = AssetCache ?? _localAssetCache;
-        return cache.GetOrAddPatternTile(Palette, fillName, out _, ProducePatternTile);
+        var tile = cache.GetOrAddPatternTile(Palette, fillName, out var wasCached, ProducePatternTile);
+
+        // Pattern cache counters (PR-CACHE-7 in the asset-caching audit) so
+        // every reuse of a rasterised pattern tile is visible alongside the
+        // symbol cache counters.
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, Product);
+        if (wasCached)
+        {
+            S100Diag.Telemetry.PatternCacheHit.Add(1, productTag);
+        }
+        else
+        {
+            S100Diag.Telemetry.PatternCacheMiss.Add(1, productTag);
+        }
+        return tile;
     }
 
     private byte[]? ProducePatternTile(string fillName)
