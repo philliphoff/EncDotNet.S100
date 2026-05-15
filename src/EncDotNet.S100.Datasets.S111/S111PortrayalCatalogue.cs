@@ -16,6 +16,20 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 {
     private readonly PortrayalCatalogueProvider _provider;
 
+    // PR-4 (asset-caching audit §6): palette storage lives on the
+    // provider's IPortrayalAssetCache. The bundled S-111 colour profile
+    // is a single XML file that contains all three palettes
+    // (Day/Dusk/Night), so on first access we eager-load all three into
+    // the shared cache (gated by IPortrayalAssetCache.PalettesLoaded).
+    // Two S-111 catalogue instances that share a provider — or two
+    // providers sharing a PortrayalCatalogueManager-owned cache for
+    // SpecRef("S-111", _) — therefore open the colour-profile asset at
+    // most once.
+    //
+    // Thread-safety: PortrayalAssetCache uses non-concurrent
+    // dictionaries; PR-6 of the audit tracks hardening.
+    private readonly IPortrayalAssetCache _cache;
+
     /// <summary>
     /// Speed band definitions matching the S-111 Ed.2.0.0 portrayal catalogue XSLT.
     /// Each band maps a speed range (knots) to a color token and arrow symbol.
@@ -41,6 +55,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
+        _cache = provider.AssetCache;
     }
 
     public SpecRef Spec => new("S-111", default);
@@ -52,23 +67,19 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public void SwitchPalette(PaletteType type)
     {
-        var paletteName = type switch
-        {
-            PaletteType.Day => "Day",
-            PaletteType.Dusk => "Dusk",
-            PaletteType.Night => "Night",
-            _ => "Day",
-        };
+        EnsurePalettesLoaded();
 
-        ActivePalette = LoadColorPalette(paletteName);
+        if (!_cache.Palettes.TryGetValue(type, out var palette))
+        {
+            throw new KeyNotFoundException($"Color palette '{type}' not found in the S-111 portrayal catalogue.");
+        }
+
+        ActivePalette = palette;
     }
 
     public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
-        if (ActivePalette.Colors.Count == 0)
-        {
-            ActivePalette = LoadColorPalette("Day");
-        }
+        EnsurePalettesLoaded();
 
         var colorBands = new List<ColorBand>();
 
@@ -120,13 +131,53 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public IReadOnlyList<ContourStyle> Contours => [];
 
-    private ColorPalette LoadColorPalette(string paletteName)
+    /// <summary>
+    /// Eager-loads the Day/Dusk/Night palettes from the S-111 colour-profile
+    /// asset into the shared <see cref="IPortrayalAssetCache.Palettes"/> on
+    /// first access. Subsequent calls are a no-op thanks to the sticky
+    /// <see cref="IPortrayalAssetCache.PalettesLoaded"/> flag (PR-3). The
+    /// S-111 portrayal catalogue ships a single <c>colorProfile.xml</c>
+    /// that contains all three palettes, so we read it once and pull each
+    /// palette out by name in turn — opening the asset stream per palette
+    /// because <see cref="ColorProfileReader.Read(Stream, string)"/>
+    /// consumes its argument.
+    /// </summary>
+    private void EnsurePalettesLoaded()
     {
+        if (_cache.PalettesLoaded)
+        {
+            if (ActivePalette.Colors.Count == 0
+                && _cache.Palettes.TryGetValue(PaletteType.Day, out var cachedDay))
+            {
+                ActivePalette = cachedDay;
+            }
+            return;
+        }
+
         var colorProfileItem = _provider.Catalogue.ColorProfiles.FirstOrDefault()
             ?? throw new InvalidOperationException("S-111 portrayal catalogue does not contain a color profile.");
 
-        using var stream = _provider.FetchAssetAsync(colorProfileItem, "ColorProfiles")
-            .GetAwaiter().GetResult();
-        return ColorProfileReader.Read(stream, paletteName);
+        foreach (var (type, name) in new[]
+        {
+            (PaletteType.Day, "Day"),
+            (PaletteType.Dusk, "Dusk"),
+            (PaletteType.Night, "Night"),
+        })
+        {
+            using var stream = _provider.FetchAssetAsync(colorProfileItem, "ColorProfiles")
+                .GetAwaiter().GetResult();
+            var palette = ColorProfileReader.Read(stream, name);
+            if (palette.Colors.Count > 0)
+            {
+                _cache.Palettes[type] = palette;
+            }
+        }
+
+        _cache.PalettesLoaded = true;
+
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        {
+            ActivePalette = dayPalette;
+        }
     }
 }
