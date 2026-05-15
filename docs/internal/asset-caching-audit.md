@@ -381,7 +381,41 @@ PR-1/2/3 land and the remaining hot fetches are profiled.
 | PR-C: `IAssetSource`-shaped FC manager config | Appendix §2.7-C | **Shipped** (PR #62) | same branch |
 | Wire FC `SetSource` into `App.axaml.cs` | PR-C follow-up | **Shipped** (PR #63) | `philliphoff/fc-setsource-app-wiring` (stacked on PR-B/C) |
 | PR-1: Share `MapsuiDisplayListRenderer` symbol/pattern caches | §6 PR-1 | **Shipped** (PR #64) | `philliphoff/share-mapsui-render-asset-cache` off `main` |
-| PR-2 → PR-N | §5 | Pending |  |
+| PR-2: Cache S-101 / S-131 Lua sources at the catalogue level | §6 PR-2 | **Shipped** (PR #66) | `philliphoff/cache-lua-sources-pr2` off `main` |
+| PR-3 → PR-N | §5 | Pending |  |
+
+### PR-2 outcome (2026-05-14)
+
+- New `public string? GetLuaSource(string fileName)` on both
+  `S101PortrayalCatalogue` and `S131PortrayalCatalogue`, backed by a
+  per-catalogue case-insensitive `Dictionary<string,string?>`. Caches
+  both successful reads (immutable `string`) and negative lookups
+  (cached `null`) so MoonSharp's `require()` does not retry missing
+  files on every call.
+- `S101LuaRuleExecutor` and `S131LuaRuleExecutor` rewired: both
+  `LoadRuleSource("main.lua")` and the `Script.Options.ScriptLoader`
+  delegate now consult the catalogue cache. The per-execution
+  `moduleCache` dictionaries were removed (now redundant). The
+  MoonSharp `Script` instance itself is still constructed per
+  `Execute()` for sandbox isolation.
+- Executor ctors switched from `PortrayalCatalogueProvider` →
+  per-spec catalogue (provider exposed internally on the catalogue).
+  Call sites updated: `S101DatasetProcessor`, `S131DatasetProcessor`,
+  `S57DatasetProcessor`, `S101PatternFillDiagnosticTests`, and
+  `tools/TestS101Lua`.
+- Tests: new `LuaSourceCacheTests` in
+  `EncDotNet.S100.Pipelines.Tests` use a `CountingAssetSource`
+  decorator to assert `IAssetSource.OpenAsync` is called exactly once
+  per Lua file across N reads (positive cache), at most once per
+  missing file (negative cache), and that two catalogue instances
+  cache independently. `Pipelines.Tests` 240 → 244; full
+  `dotnet test --configuration Release` green.
+- Bundled `content/S101/pc/Rules/**` and `content/S131/pc/**`
+  untouched. Existing `GetLuaScript` / `_luaScripts` cache on the
+  catalogues (a different lookup path) left in place — out of PR-2
+  scope.
+- Eliminates the ~10–15 per-render `OpenAsync` + `StreamReader` +
+  `ReadToEnd()` round-trips on every S-101 / S-131 render.
 
 ### PR-1 outcome (2026-05-14)
 
