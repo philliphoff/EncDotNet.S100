@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
+using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 
@@ -247,6 +248,223 @@ public class S421RoutePlanTests
         var extra = plan.Route.Info!.ExtraAttributes;
         Assert.True(extra.ContainsKey("routeInfoDraftMax"));
         Assert.Equal("1000.0", extra["routeInfoDraftMax"]);
+    }
+
+    // ── Cross-reference resolution: Route → WP → Leg → endpoint WP ──
+
+    /// <summary>
+    /// Builds a synthetic, fully self-consistent S-421 dataset with
+    /// <paramref name="waypointCount"/> waypoints and (waypointCount - 1)
+    /// legs, so the typed-model bidirectional endpoint linking can be
+    /// exercised on a fixture whose <c>gml:id</c>s actually resolve. The
+    /// IEC sample fixtures (GFULL/GBASIC) have intentional id mismatches
+    /// that make most waypoints unresolvable and so cannot drive these
+    /// tests on their own.
+    /// </summary>
+    private static S421Dataset BuildSyntheticRoute(int waypointCount, bool referenceLegBeyondLastWaypoint = false)
+    {
+        if (waypointCount < 2)
+            throw new ArgumentOutOfRangeException(nameof(waypointCount));
+
+        var emptyAttrs = ImmutableDictionary<string, string>.Empty;
+        var emptyComplex = ImmutableArray<S421ComplexAttribute>.Empty;
+
+        var features = ImmutableArray.CreateBuilder<S421Feature>();
+
+        // Route → routeWaypoints container.
+        features.Add(new S421Feature
+        {
+            Id = "RTE",
+            FeatureType = "Route",
+            GeometryType = GmlGeometryType.None,
+            Points = ImmutableArray<(double, double)>.Empty,
+            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            ExteriorRing = ImmutableArray<(double, double)>.Empty,
+            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Attributes = emptyAttrs,
+            ComplexAttributes = emptyComplex,
+            References = ImmutableArray.Create(new GmlReference
+            {
+                Role = "routeWaypoints",
+                Href = "#RTE.WPTS",
+            }),
+        });
+
+        // RouteWaypoints container with routeWaypoint xlinks.
+        var containerRefs = ImmutableArray.CreateBuilder<GmlReference>();
+        for (int i = 1; i <= waypointCount; i++)
+        {
+            containerRefs.Add(new GmlReference { Role = "routeWaypoint", Href = $"#RTE.WPT.{i}" });
+        }
+        features.Add(new S421Feature
+        {
+            Id = "RTE.WPTS",
+            FeatureType = "RouteWaypoints",
+            GeometryType = GmlGeometryType.None,
+            Points = ImmutableArray<(double, double)>.Empty,
+            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            ExteriorRing = ImmutableArray<(double, double)>.Empty,
+            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Attributes = emptyAttrs,
+            ComplexAttributes = emptyComplex,
+            References = containerRefs.ToImmutable(),
+        });
+
+        // Waypoints + legs. Each waypoint except the last gets an outgoing
+        // leg; the legs themselves are added as separate features.
+        int legCount = waypointCount - 1 + (referenceLegBeyondLastWaypoint ? 1 : 0);
+        for (int i = 1; i <= waypointCount; i++)
+        {
+            var refs = ImmutableArray.CreateBuilder<GmlReference>();
+            bool hasOutgoing = i < waypointCount || referenceLegBeyondLastWaypoint;
+            if (hasOutgoing)
+            {
+                refs.Add(new GmlReference
+                {
+                    Role = "routeWaypointLeg",
+                    Href = $"#RTE.WPT.LEG.{i}",
+                });
+            }
+
+            features.Add(new S421Feature
+            {
+                Id = $"RTE.WPT.{i}",
+                FeatureType = "RouteWaypoint",
+                GeometryType = GmlGeometryType.Point,
+                Points = ImmutableArray.Create((60.0 + 0.01 * i, 25.0 + 0.01 * i)),
+                Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+                ExteriorRing = ImmutableArray<(double, double)>.Empty,
+                InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+                Attributes = ImmutableDictionary<string, string>.Empty.Add("routeWaypointID", i.ToString()),
+                ComplexAttributes = emptyComplex,
+                References = refs.ToImmutable(),
+            });
+        }
+
+        for (int i = 1; i <= legCount; i++)
+        {
+            features.Add(new S421Feature
+            {
+                Id = $"RTE.WPT.LEG.{i}",
+                FeatureType = "RouteWaypointLeg",
+                GeometryType = GmlGeometryType.Curve,
+                Points = ImmutableArray<(double, double)>.Empty,
+                Curves = ImmutableArray.Create(
+                    ImmutableArray.Create(
+                        (60.0 + 0.01 * i, 25.0 + 0.01 * i),
+                        (60.0 + 0.01 * (i + 1), 25.0 + 0.01 * (i + 1)))),
+                ExteriorRing = ImmutableArray<(double, double)>.Empty,
+                InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+                Attributes = emptyAttrs,
+                ComplexAttributes = emptyComplex,
+                References = ImmutableArray<GmlReference>.Empty,
+            });
+        }
+
+        return new S421Dataset
+        {
+            ProductIdentifier = "S-421",
+            DatasetIdentifier = "synthetic",
+            Features = features.ToImmutable(),
+            InformationTypes = ImmutableArray<S421InformationType>.Empty,
+        };
+    }
+
+    [Fact]
+    public void Synthetic_LegStartWaypointMatchesOriginatingWaypoint()
+    {
+        var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
+        Assert.Equal(4, plan.Route.Waypoints.Length);
+        Assert.Equal(3, plan.Route.Legs.Length);
+
+        for (int i = 0; i < plan.Route.Waypoints.Length - 1; i++)
+        {
+            var wp = plan.Route.Waypoints[i];
+            Assert.NotNull(wp.OutgoingLeg);
+            Assert.Same(wp, wp.OutgoingLeg!.StartWaypoint);
+        }
+    }
+
+    [Fact]
+    public void Synthetic_LegEndWaypointMatchesNextWaypoint()
+    {
+        var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
+
+        for (int i = 0; i < plan.Route.Waypoints.Length - 1; i++)
+        {
+            var wp = plan.Route.Waypoints[i];
+            var next = plan.Route.Waypoints[i + 1];
+            Assert.Same(next, wp.OutgoingLeg!.EndWaypoint);
+        }
+    }
+
+    [Fact]
+    public void Synthetic_IncomingLegMirrorsPreviousOutgoingLeg()
+    {
+        var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
+
+        // First waypoint has no incoming leg.
+        Assert.Null(plan.Route.Waypoints[0].IncomingLeg);
+
+        for (int i = 1; i < plan.Route.Waypoints.Length; i++)
+        {
+            var prev = plan.Route.Waypoints[i - 1];
+            var current = plan.Route.Waypoints[i];
+            Assert.NotNull(current.IncomingLeg);
+            Assert.Same(prev.OutgoingLeg, current.IncomingLeg);
+        }
+    }
+
+    [Fact]
+    public void Synthetic_LastWaypointHasNoOutgoingLeg()
+    {
+        var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
+        var last = plan.Route.Waypoints[^1];
+        Assert.Null(last.OutgoingLeg);
+    }
+
+    [Fact]
+    public void Synthetic_FullWalkFromRouteThroughLegsBackToWaypoints()
+    {
+        // End-to-end traversal: starting at plan.Route, walk forward via
+        // wp.OutgoingLeg.EndWaypoint and collect waypoint ids; the result
+        // must match plan.Route.Waypoints in order.
+        var plan = S421RoutePlan.From(BuildSyntheticRoute(5), out var diagnostics);
+        Assert.Empty(diagnostics);
+
+        var walked = new List<string>();
+        var cursor = plan.Route.Waypoints[0];
+        walked.Add(cursor.Id);
+        while (cursor.OutgoingLeg is { } leg)
+        {
+            Assert.Same(cursor, leg.StartWaypoint);
+            Assert.NotNull(leg.EndWaypoint);
+            cursor = leg.EndWaypoint!;
+            walked.Add(cursor.Id);
+        }
+
+        Assert.Equal(
+            plan.Route.Waypoints.Select(w => w.Id).ToArray(),
+            walked.ToArray());
+    }
+
+    [Fact]
+    public void Synthetic_EmitsDiagnosticWhenTerminalWaypointHasOutgoingLeg()
+    {
+        // Build a dataset where the LAST waypoint also references a leg —
+        // the projection should flag this as route.leg.endpoint.missing
+        // (there is no successor waypoint to terminate at), not throw.
+        var plan = S421RoutePlan.From(
+            BuildSyntheticRoute(3, referenceLegBeyondLastWaypoint: true),
+            out var diagnostics);
+
+        var terminalLeg = plan.Route.Waypoints[^1].OutgoingLeg;
+        Assert.NotNull(terminalLeg);
+        Assert.Null(terminalLeg!.EndWaypoint);
+
+        Assert.Contains(diagnostics, d =>
+            d.Severity == DiagnosticSeverity.Warning &&
+            d.Code == "route.leg.endpoint.missing");
     }
 
     [Fact]
