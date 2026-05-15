@@ -281,7 +281,7 @@ into focused packages:
 | **EncDotNet.S100.Datasets.S128** | S-128 catalogue of nautical products reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S129** | S-129 under keel clearance reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S131** | S-131 marine harbour infrastructure reader and Lua portrayal pipeline (GML+Lua hybrid). |
-| **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA, authority-to-authority exchange) reader and XSLT portrayal pipeline. |
+| **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA, authority-to-authority exchange) reader, XSLT portrayal pipeline, and strongly-typed AtoN inventory data model. |
 | **EncDotNet.S100.Datasets.S411** | S-411 sea ice reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model. |

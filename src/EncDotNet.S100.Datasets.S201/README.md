@@ -79,6 +79,111 @@ Key types:
   implementation that loads XSLT rules, symbols, line styles, area
   fills, and color palettes from the bundled catalogue.
 
+## Strongly-typed data model
+
+`S201Dataset` is a faithful but loosely-typed feature bag — attributes
+arrive as `ImmutableDictionary<string, string>`, xlinks are unresolved
+strings, and equipment ↔ host-structure subordination must be walked
+by hand. The **`EncDotNet.S100.Datasets.S201.DataModel`** namespace
+adds a strongly-typed projection on top of that bag:
+
+- **`S201AtonInventory`** — root entity. Exposes typed views
+  (`Structures`, `Equipment`, `ElectronicAtoNs`), plus the resolved
+  `Aggregations`, `Associations`, `StatusInformation`,
+  `PositioningInformation`, `FixingMethods`, and `SpatialQualities`
+  collections.
+- **`S201AtonObject`** (abstract base) — the common AtoN attributes
+  shared by every concrete leaf: identifier, lifecycle dates
+  (`InstallationDate`, `FixedDateRange`, `PeriodicDateRange`),
+  inspection metadata, source provenance, AtoN status timeline, and
+  geometry as an enum (`S201GeometryKind`) plus a flat
+  `ImmutableArray<GeoPosition>`.
+- **`S201StructureObject`** — concrete subclass for beacons, buoys,
+  landmarks, lighthouses, light vessels, offshore platforms, etc.
+  Adds `AtoNNumber`, `AidAvailabilityCategory`, `Condition`,
+  `ContactAddress`, the resolved `MountedEquipment`, and typed
+  `PositioningInformation` / `FixingMethods` bindings.
+- **`S201Equipment`** — concrete subclass for daymarks, fog signals,
+  radar reflectors, racons, power sources, etc. Exposes the
+  back-resolved `HostStructure` (the headline subordination
+  value-add).
+- **`S201Light`** — `Equipment` subclass collapsing the four FC
+  light leaves (`LightSectored`, `LightAllAround`,
+  `LightAirObstruction`, `LightFogDetector`) into a single class
+  discriminated by `LightKind`. Adds `Height`, `Status` codes,
+  `VerticalDatum`, `VerticalLength`, `EffectiveIntensity`,
+  `PeakIntensity`.
+- **`S201ElectronicAtoN`** — collapses the three AIS-AtoN FC leaves
+  (`VirtualAISAidToNavigation`, `PhysicalAISAidToNavigation`,
+  `SyntheticAISAidToNavigation`) into one class discriminated by
+  `AisAtonKind`. Carries `MmsiCode`, AIS `Status`, and (for
+  Physical / Synthetic variants) the resolved `HostStructure`.
+- **`S201GenericAtonObject`** — fallback for AtoN features the
+  typed model has no dedicated subclass for (e.g. `NavigationLine`,
+  `DataCoverage`, `DangerousFeature`). Carries the common
+  `S201AtonObject` attributes plus geometry and round-trips
+  everything else through `ExtraAttributes`.
+
+The projection is **read-only** and **never throws** except when the
+source dataset has neither features nor information types. Every
+other failure — unresolved xlinks, attribute parse errors,
+unexpected target types — surfaces as a
+`ProjectionDiagnostic` entry on the `out` parameter.
+
+### How this differs from the S-125 typed model
+
+Both S-201 and S-125 carry AtoN data, but they are independent
+specifications with different audiences (operational vs ECDIS
+display). The S-201 typed model exposes:
+
+1. **Equipment ↔ host-structure subordination** as a typed
+   bidirectional reference (`Equipment.HostStructure`,
+   `Structure.MountedEquipment`).
+2. **AtoN lifecycle** (`InstallationDate`, `FixedDateRange`,
+   `PeriodicDateRange`) on every AtoN.
+3. **AtoN status timeline** via the `AtoNStatus` info-binding,
+   including the `ChangeTypes` codelist.
+4. **Positioning / fixing-method bindings** on structures.
+5. **Remote monitoring system** metadata on equipment.
+
+The two typed models share **only** the abstractions in
+`EncDotNet.S100.Core.DataModel` (`GeoPosition`,
+`ProjectionDiagnostic`, `ProjectionContext`, `XlinkResolver`,
+`AttributeParser`, `ExtraAttributes`). They do **not** share any
+spec-level types. If your application consumes both, project each
+dataset to its own typed model and reconcile at the call site.
+
+### Quick start (typed model)
+
+```csharp
+using EncDotNet.S100.Datasets.S201;
+using EncDotNet.S100.Datasets.S201.DataModel;
+
+var dataset = S201Dataset.Open("aton.gml");
+var inventory = S201AtonInventory.From(dataset, out var diagnostics);
+
+// Walk the inventory by host structure.
+foreach (var structure in inventory.Structures)
+{
+    Console.WriteLine($"{structure.FeatureClass} {structure.AtoNNumber}");
+    foreach (var equipment in structure.MountedEquipment)
+    {
+        var kind = equipment is S201Light light
+            ? $"Light/{light.Kind}"
+            : equipment.FeatureClass;
+        Console.WriteLine($"  → {kind} {equipment.Id}");
+    }
+}
+
+// Filter AIS AtoNs by kind.
+foreach (var ais in inventory.ElectronicAtoNs.Where(a => a.Kind == AisAtonKind.Virtual))
+    Console.WriteLine($"Virtual AIS {ais.Id} MMSI={ais.MmsiCode}");
+
+// Diagnostics are non-fatal.
+foreach (var d in diagnostics)
+    Console.Error.WriteLine($"{d.Severity} {d.Code}: {d.Message}");
+```
+
 ## Notes
 
 - S-201 Edition 2.0.0 application schema namespace is
