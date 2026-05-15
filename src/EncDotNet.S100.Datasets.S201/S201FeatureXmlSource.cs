@@ -30,6 +30,17 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
         _dataset = dataset;
     }
 
+    /// <summary>
+    /// Translates listed-value attribute labels (e.g.
+    /// <c>Port-Hand Lateral Mark</c>) to their FC numeric codes
+    /// (e.g. <c>1</c>) so the upstream S-201 XSLT predicates — which match
+    /// on numeric codes — fire correctly. Real-world S-201 producers
+    /// emit labels; the bundled portrayal catalogue assumes codes. See
+    /// S-201 Edition 2.0.0 §11.
+    /// </summary>
+    protected override string TransformAttributeValue(string code, string value)
+        => S201ListedValueIndex.Normalize(code, value);
+
     /// <inheritdoc/>
     protected override void WriteFeatureExtensions(S201Feature feature, XElement featureElement)
     {

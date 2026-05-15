@@ -102,7 +102,7 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
             }
 
             foreach (var (code, value) in feature.Attributes)
-                featureElement.Add(new XElement(code, value));
+                featureElement.Add(new XElement(code, TransformAttributeValue(code, value)));
 
             foreach (var complex in feature.GmlComplexAttributes)
                 featureElement.Add(BuildComplexAttributeElement(complex));
@@ -147,9 +147,21 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
     {
         var el = new XElement(complex.Code);
         foreach (var (subCode, subValue) in complex.SubAttributes)
-            el.Add(new XElement(subCode, subValue));
+            el.Add(new XElement(subCode, TransformAttributeValue(subCode, subValue)));
         return el;
     }
+
+    /// <summary>
+    /// Transforms an attribute value before it is written to the FeatureXML.
+    /// Default returns the value unchanged. Override for specs whose upstream
+    /// XSLT portrayal rules require attribute values in a canonical form
+    /// (e.g. listed-value numeric codes rather than the human-readable
+    /// labels emitted by some producers).
+    /// </summary>
+    /// <param name="code">The attribute code.</param>
+    /// <param name="value">The original attribute value.</param>
+    /// <returns>The value to write into FeatureXML.</returns>
+    protected virtual string TransformAttributeValue(string code, string value) => value;
 
     /// <summary>Emits a point into the registry and a reference into the feature.</summary>
     protected static void EmitPointRef(
