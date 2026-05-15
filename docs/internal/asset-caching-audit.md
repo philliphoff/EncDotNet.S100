@@ -380,7 +380,31 @@ PR-1/2/3 land and the remaining hot fetches are profiled.
 | PR-B: `FeatureCatalogueManager` as viewer singleton | Appendix §2.7-B | **Shipped** (PR #61) | same branch |
 | PR-C: `IAssetSource`-shaped FC manager config | Appendix §2.7-C | **Shipped** (PR #62) | same branch |
 | Wire FC `SetSource` into `App.axaml.cs` | PR-C follow-up | **Shipped** (PR #63) | `philliphoff/fc-setsource-app-wiring` (stacked on PR-B/C) |
-| PR-1 → PR-N | §5 | Pending |  |
+| PR-1: Share `MapsuiDisplayListRenderer` symbol/pattern caches | §6 PR-1 | **Shipped** (PR #64) | `philliphoff/share-mapsui-render-asset-cache` off `main` |
+| PR-2 → PR-N | §5 | Pending |  |
+
+### PR-1 outcome (2026-05-14)
+
+- New `MapsuiRenderAssetCache` in `EncDotNet.S100.Renderers.Mapsui`,
+  with per-palette `ConcurrentDictionary` sub-caches for processed-SVG
+  data URI strings and rasterised pattern-tile PNGs. Palette-segmented
+  for correctness — `SvgProcessor.Process` recolours fills/strokes per
+  palette, so a single non-segmented cache would have returned wrong
+  colours on palette switch.
+- `MapsuiDisplayListRenderer` gains an additive `AssetCache` property;
+  unset → falls back to a per-instance cache, so existing tests and
+  third-party callers are unaffected.
+- All four dataset processors that build the renderer now own a
+  long-lived `MapsuiRenderAssetCache` for the processor's lifetime:
+  `S101DatasetProcessor`, `S131DatasetProcessor`, `S57DatasetProcessor`,
+  `GmlDatasetProcessorBase<TFeature>`. Re-renders of the same dataset
+  (palette toggle, time scrub, mariner-setting change, display-scale
+  change) skip SVG re-processing and PNG re-rasterization.
+- Tests: three new xunit tests in `EncDotNet.S100.Pipelines.Tests`
+  cover shared-cache reuse, per-palette segmentation, and the unshared
+  fallback. `Pipelines.Tests` 237 → 240; full
+  `dotnet test --configuration Release` green.
+- `Renderers.Mapsui/README.md` updated with a usage paragraph.
 
 ### Wiring follow-up outcome (2026-05-14)
 
