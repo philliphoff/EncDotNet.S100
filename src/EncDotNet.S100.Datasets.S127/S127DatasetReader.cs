@@ -23,6 +23,7 @@ internal static class S127DatasetReader
     // S-100 Part 10b GML namespaces — accept both 5.0 (current) and 1.0 (legacy).
     private static readonly XNamespace S100Ns5 = "http://www.iho.int/s100gml/5.0";
     private static readonly XNamespace S100Ns1 = "http://www.iho.int/S100/profile/s100gml/1.0";
+    private static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
 
     public static S127Dataset Read(Stream stream)
     {
@@ -85,7 +86,7 @@ internal static class S127DatasetReader
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element);
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element);
+        var (simpleAttrs, complexAttrs, featureRefs) = ParseAttributes(element);
 
         return new S127Feature
         {
@@ -98,13 +99,14 @@ internal static class S127DatasetReader
             InteriorRings = interiorRings,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            FeatureReferences = featureRefs,
         };
     }
 
     private static S127InformationType ParseInformationType(XElement element)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element);
+        var (simpleAttrs, complexAttrs, _) = ParseAttributes(element);
 
         return new S127InformationType
         {
@@ -179,10 +181,11 @@ internal static class S127DatasetReader
                 (e.Name.Namespace == S100Ns5 ||
                  e.Name.Namespace == S100Ns1 ||
                  e.Name.NamespaceName.Contains("s100gml/", StringComparison.OrdinalIgnoreCase)));
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S127ComplexAttribute>) ParseAttributes(XElement element)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S127ComplexAttribute>, ImmutableArray<S127FeatureReference>) ParseAttributes(XElement element)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S127ComplexAttribute>();
+        var featureRefs = ImmutableArray.CreateBuilder<S127FeatureReference>();
 
         foreach (var child in element.Elements())
         {
@@ -194,6 +197,26 @@ internal static class S127DatasetReader
                 child.Name.Namespace == S100Ns5 ||
                 child.Name.Namespace == S100Ns1)
                 continue;
+
+            // xlink:href-bearing children are feature-to-feature references
+            // (e.g. <S127:theAuthority xlink:href="#auth1"/>). Capture them
+            // as typed references so the strongly-typed projection can
+            // resolve them via XlinkResolver.
+            var hrefAttr = child.Attribute(XlinkNs + "href");
+            if (hrefAttr is not null && !string.IsNullOrEmpty(hrefAttr.Value))
+            {
+                var href = hrefAttr.Value;
+                if (href.StartsWith('#')) href = href[1..];
+                if (!string.IsNullOrEmpty(href))
+                {
+                    featureRefs.Add(new S127FeatureReference
+                    {
+                        Role = localName,
+                        FeatureRef = href,
+                    });
+                }
+                continue;
+            }
 
             if (child.HasElements)
             {
@@ -218,7 +241,7 @@ internal static class S127DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple.ToImmutable(), complex.ToImmutable(), featureRefs.ToImmutable());
     }
 
     /// <summary>

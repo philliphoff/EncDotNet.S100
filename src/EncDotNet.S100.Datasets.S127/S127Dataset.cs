@@ -85,6 +85,18 @@ public sealed class S127Feature : IGmlFeature
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S127ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <summary>
+    /// Feature-to-feature association references captured from
+    /// <c>xlink:href</c>-bearing child elements (e.g. the
+    /// <c>theAuthority</c> role binding a service to an
+    /// <c>Authority</c> feature — S-127 Edition 2.0.0 §12). Each entry
+    /// preserves the source role name and the raw <c>xlink:href</c> with
+    /// the leading <c>#</c> stripped, so the strongly-typed projection
+    /// can resolve them through <see cref="EncDotNet.S100.DataModel.XlinkResolver"/>.
+    /// </summary>
+    public ImmutableArray<S127FeatureReference> FeatureReferences { get; init; } =
+        ImmutableArray<S127FeatureReference>.Empty;
+
     /// <inheritdoc/>
     IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
@@ -117,6 +129,23 @@ public sealed class S127ComplexAttribute : IGmlComplexAttribute
 
     /// <summary>Sub-attribute values keyed by code.</summary>
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+}
+
+/// <summary>
+/// A reference from an <see cref="S127Feature"/> to another
+/// <see cref="S127Feature"/>, captured from an <c>xlink:href</c>-bearing
+/// child element. Examples include the <c>theAuthority</c> role binding
+/// services such as <c>VesselTrafficServiceArea</c> or
+/// <c>PilotBoardingPlace</c> to their administering <c>Authority</c>
+/// (S-127 Edition 2.0.0 §12).
+/// </summary>
+public sealed class S127FeatureReference
+{
+    /// <summary>The role / association name as written in the source GML.</summary>
+    public required string Role { get; init; }
+
+    /// <summary>The referenced feature's <c>gml:id</c> (with any leading <c>#</c> stripped).</summary>
+    public required string FeatureRef { get; init; }
 }
 
 
