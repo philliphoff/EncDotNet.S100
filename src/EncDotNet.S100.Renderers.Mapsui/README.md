@@ -18,6 +18,27 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - Text alignment, mm offsets, and `textLine` start/end offsets (Relative or Absolute) are honoured per S-100 Part 9 §11.4.
 - `LineStyleProvider`, `SymbolProvider`, and `AreaFillProvider` callbacks let the host project plug in a portrayal catalogue without coupling the renderer to a specific dataset library.
 
+### Sharing processed-SVG and pattern-tile work across renders
+
+`MapsuiDisplayListRenderer` resolves SVG symbols and rasterises area-fill pattern tiles lazily on first reference. The processed-SVG output depends on the active `ColorPalette` (fill/stroke colours are recoloured against the palette), and pattern-tile rasterisation is comparatively expensive.
+
+When a single dataset is re-rendered repeatedly — typical when toggling palettes, scrubbing time-steps, or changing mariner settings — assign a single `MapsuiRenderAssetCache` instance to the renderer's `AssetCache` property on every `Render()` call:
+
+```csharp
+private readonly MapsuiRenderAssetCache _renderAssetCache = new();
+
+// per Render():
+var renderer = new MapsuiDisplayListRenderer
+{
+    Palette = palette,
+    AssetCache = _renderAssetCache,
+    SymbolProvider = name => catalogue.GetSymbol(name).SvgContent,
+    AreaFillProvider = name => catalogue.GetAreaFill(name),
+};
+```
+
+The cache segments entries per palette (`Day` / `Dusk` / `Night`) so flipping back and forth keeps every palette warm. When `AssetCache` is unset, the renderer falls back to a per-instance cache, which preserves legacy behaviour for ad-hoc / one-shot callers.
+
 ## Installation
 
 ```sh
