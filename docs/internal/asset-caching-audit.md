@@ -383,7 +383,44 @@ PR-1/2/3 land and the remaining hot fetches are profiled.
 | PR-1: Share `MapsuiDisplayListRenderer` symbol/pattern caches | §6 PR-1 | **Shipped** (PR #64) | `philliphoff/share-mapsui-render-asset-cache` off `main` |
 | PR-2: Cache S-101 / S-131 Lua sources at the catalogue level | §6 PR-2 | **Shipped** (PR #66) | `philliphoff/cache-lua-sources-pr2` off `main` |
 | PR-3: Move per-catalogue caches to spec level via `IPortrayalAssetCache` | §6 PR-3 | **Shipped** (PR #67) | `philliphoff/pr-3-spec-level-portrayal-cache` off `main` |
-| PR-4 → PR-N | §5 | Pending |  |
+| PR-4: Fix S-111 palette re-load | §6 PR-4 | **Shipped** (PR #68) | `philliphoff/s111-palette-cache` off `main` |
+| PR-5 → PR-N | §5 | Pending (PR-5 subsumed by PR-0) |  |
+
+### PR-4 outcome (2026-05-14)
+
+- Approach: **eager-load all three palettes on first access**.
+  S-111 bundles a single `colorProfile.xml` containing Day / Dusk /
+  Night, so `EnsurePalettesLoaded()` opens that asset three times
+  (once per palette name — `ColorProfileReader.Read` consumes its
+  stream) and stuffs the results into the PR-3
+  `provider.AssetCache.Palettes` slot, gated by the sticky
+  `PalettesLoaded` flag. Mirrors the S-101 "manifest entry name
+  unspecified → load each palette from the same file" branch. Day
+  is installed as the default `ActivePalette` after the load.
+- Defensive re-load removed: the
+  `ActivePalette.Colors.Count == 0` re-load branch inside
+  `ResolveColorScheme` is gone — replaced by an
+  `EnsurePalettesLoaded()` call so first-render without an explicit
+  `SwitchPalette` still warms Day. `SwitchPalette` is now a pure
+  cache lookup that throws `KeyNotFoundException` on a real miss
+  (matches S-101). Private `LoadColorPalette` helper deleted.
+- Tests: new
+  `tests/EncDotNet.S100.Pipelines.Tests/S111PaletteCacheTests.cs`
+  (2 tests, both pass) using the `CountingAssetSource` decorator
+  pattern from PR-3:
+  1. `Repeated_SwitchPalette_calls_open_color_profile_only_once` —
+     Day → Night → Dusk → Day produces exactly 3 opens (initial
+     eager load) and zero thereafter.
+  2. `ResolveColorScheme_does_not_reopen_color_profile_after_SwitchPalette` —
+     5 `ResolveColorScheme` calls add zero opens.
+  Added a `Datasets.S111` project reference to
+  `Pipelines.Tests.csproj`. Pipelines.Tests 249 → 251; full
+  `dotnet test --configuration Release` green.
+- Open count is 3 (not 1) because `ColorProfileReader.Read`
+  consumes its stream — the audit explicitly blessed `at most once
+  per palette type`. Tightening to a single open would require a
+  `ColorProfileReader.ReadAll(stream)` API; left as a future
+  follow-up.
 
 ### PR-3 outcome (2026-05-14)
 
