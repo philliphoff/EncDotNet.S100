@@ -69,6 +69,15 @@ public sealed class S122Feature : IGmlFeature
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S122ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <summary>
+    /// References to other features and information types resolved via
+    /// <c>xlink:href</c>. The role of each reference is the local name of
+    /// the GML element that carried the <c>xlink:href</c> attribute
+    /// (e.g. <c>theAuthority</c>, <c>theContactDetails</c>,
+    /// <c>theCartographicText</c>; see S-122 FC 2.0.0 §Roles).
+    /// </summary>
+    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+
     /// <inheritdoc/>
     IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
 }
@@ -89,6 +98,15 @@ public sealed class S122InformationType : IGmlInformationType
 
     /// <summary>Complex attribute groups.</summary>
     public required ImmutableArray<S122ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <summary>
+    /// References to other features and information types resolved via
+    /// <c>xlink:href</c>. The role of each reference is the local name of
+    /// the GML element that carried the <c>xlink:href</c> attribute
+    /// (e.g. <c>theAuthority</c>, <c>theContactDetails</c>; see S-122 FC
+    /// 2.0.0 §Roles).
+    /// </summary>
+    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
 }
 
 /// <summary>
