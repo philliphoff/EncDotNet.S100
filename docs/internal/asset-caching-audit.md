@@ -382,7 +382,50 @@ PR-1/2/3 land and the remaining hot fetches are profiled.
 | Wire FC `SetSource` into `App.axaml.cs` | PR-C follow-up | **Shipped** (PR #63) | `philliphoff/fc-setsource-app-wiring` (stacked on PR-B/C) |
 | PR-1: Share `MapsuiDisplayListRenderer` symbol/pattern caches | §6 PR-1 | **Shipped** (PR #64) | `philliphoff/share-mapsui-render-asset-cache` off `main` |
 | PR-2: Cache S-101 / S-131 Lua sources at the catalogue level | §6 PR-2 | **Shipped** (PR #66) | `philliphoff/cache-lua-sources-pr2` off `main` |
-| PR-3 → PR-N | §5 | Pending |  |
+| PR-3: Move per-catalogue caches to spec level via `IPortrayalAssetCache` | §6 PR-3 | **Shipped** (PR #67) | `philliphoff/pr-3-spec-level-portrayal-cache` off `main` |
+| PR-4 → PR-N | §5 | Pending |  |
+
+### PR-3 outcome (2026-05-14)
+
+- New `src/EncDotNet.S100.Portrayals/PortrayalAssetCache.cs` —
+  `IPortrayalAssetCache` interface + `PortrayalAssetCache` impl.
+  Slots: `CompiledXslt`, `Symbols`, `LineStyles`, `AreaFills`,
+  `Palettes` (case-insensitive), `LuaScripts`, `LuaSources`
+  (case-insensitive, nullable values to preserve PR-2 negative
+  caching), and a sticky `PalettesLoaded` flag. Plain `Dictionary<,>`
+  per audit guidance; concurrency hardening deferred to PR-6.
+- Fields moved off each catalogue → into `provider.AssetCache`:
+  `_compiledXslt`, `_symbols`, `_lineStyles`, `_areaFills`,
+  `_palettes`, `_palettesLoaded`, `_luaScripts`, `_luaSources`.
+  Done in `S101PortrayalCatalogue`, `S131PortrayalCatalogue`, and
+  `GmlPortrayalCatalogueBase`. Loading logic stays in the
+  catalogues. `ActivePalette` and `_rules` remain per-instance.
+- `PortrayalCatalogueManager` now owns
+  `ConcurrentDictionary<SpecRef, IPortrayalAssetCache>
+  _assetCaches` and a `GetOrCreateAssetCache` helper. The cache is
+  attached via a new internal
+  `PortrayalCatalogueProvider.AttachAssetCache` in both `SetSource`
+  and the `GetProvider` lazy factory path; entries are evicted when
+  the backing path/source changes and cleared on `Dispose`.
+- Public surface preserved: ctors and public members of
+  `S101PortrayalCatalogue`, `S131PortrayalCatalogue`,
+  `GmlPortrayalCatalogueBase`, and `PortrayalCatalogueManager` are
+  unchanged. Only new public surface lives on
+  `PortrayalCatalogueProvider` (lazy `AssetCache` property;
+  `AttachAssetCache` is `internal`).
+- Tests: new `SpecLevelAssetCacheTests` in
+  `EncDotNet.S100.Pipelines.Tests` add 5 tests using a
+  `CountingAssetSource` decorator (PR-2 pattern). They prove two
+  catalogue instances for the same spec share the cache (single
+  `OpenAsync` per XSLT / symbol / line style / Lua file) and that
+  two catalogue instances for *different* specs do not share. Suite
+  244 → 249 in that project; full
+  `dotnet test --configuration Release` green.
+- `protected virtual LoadPalettes(Dictionary<,>)` signature kept
+  intact (S-411 overrides it) by exposing an internal
+  `PortrayalAssetCache.PalettesDictionary` view onto the same data.
+  PR-4 (S-111 palette re-load) and PR-6 (ConcurrentDictionary
+  hardening) intentionally left untouched.
 
 ### PR-2 outcome (2026-05-14)
 
