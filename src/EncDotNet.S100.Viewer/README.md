@@ -115,7 +115,7 @@ layers) is loaded.
 
 A dedicated activity-bar entry opens the ECDIS Display Controls
 panel. It lists each loaded **vector** product specification
-(S-101, S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-411, S-421)
+(S-101, S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421)
 with a flat checkbox list of viewing groups sourced from the spec's
 portrayal catalogue. Unchecking a viewing group hides its features
 from the rendered output.

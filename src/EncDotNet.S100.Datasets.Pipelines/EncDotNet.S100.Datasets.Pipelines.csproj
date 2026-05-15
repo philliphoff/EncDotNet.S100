@@ -22,6 +22,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S129\EncDotNet.S100.Datasets.S129.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S131\EncDotNet.S100.Datasets.S131.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S201\EncDotNet.S100.Datasets.S201.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />

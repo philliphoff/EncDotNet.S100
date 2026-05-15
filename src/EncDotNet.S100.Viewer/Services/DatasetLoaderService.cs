@@ -464,6 +464,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S125DatasetProcessor
                 => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
+            S201DatasetProcessor
+                => new S201RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S127DatasetProcessor
                 => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             S129DatasetProcessor
