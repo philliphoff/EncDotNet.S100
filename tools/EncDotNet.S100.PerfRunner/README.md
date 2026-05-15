@@ -33,6 +33,7 @@ dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-warm \
 | `s101-render-warm` | S-101 pipeline + Mapsui display-list render (headless). |
 | `s102-coverage` | S-102 HDF5 bathymetry: coverage pipeline + render. |
 | `s124-vector` | S-124 GML navigational warnings: XSLT-only vector pipeline. |
+| `s201-vector` | S-201 GML AtoN information: XSLT-only vector pipeline. |
 | `exchange-set-open` | Open a synthetic exchange set and walk all datasets. |
 
 ## Output

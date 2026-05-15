@@ -715,7 +715,7 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="EcdisPanel_NoSpecs" xml:space="preserve">
     <value>No vector datasets loaded.
-Open an S-101, S-124, S-125, or S-421 dataset to see display controls here.</value>
+Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls here.</value>
   </data>
   <data name="EcdisPanel_OverrideCountFormat" xml:space="preserve">
     <value>{0} overrides</value>

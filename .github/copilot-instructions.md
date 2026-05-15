@@ -20,6 +20,7 @@ EncDotNet.S100 is a set of .NET libraries and a cross-platform desktop viewer fo
 | **S-128** | Catalogue of Nautical Products — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-129** | Under Keel Clearance Management — GML encoded (S-100 Part 10b) |
 | **S-131** | Marine Harbour Infrastructure — GML encoded (S-100 Part 10b), Lua portrayal (Part 9A) |
+| **S-201** | Aids to Navigation Information (IALA, authority-to-authority exchange) — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-411** | Sea Ice Information — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **S-421** | Route Plans (IEC 63173-2) — GML encoded (S-100 Part 10b), XSLT portrayal |
 | **ISO 8211** | Record format used by S-101 datasets; read via `EncDotNet.Iso8211` NuGet package |
@@ -48,6 +49,7 @@ src/
   EncDotNet.S100.Datasets.S128/      # S-128 catalogue of nautical products reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
   EncDotNet.S100.Datasets.S131/      # S-131 marine harbour infrastructure reader + GML/Lua portrayal
+  EncDotNet.S100.Datasets.S201/      # S-201 aids to navigation information (IALA) reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
@@ -59,6 +61,7 @@ tests/
   EncDotNet.S100.Datasets.S124.Tests/
   EncDotNet.S100.Datasets.S125.Tests/
   EncDotNet.S100.Datasets.S131.Tests/
+  EncDotNet.S100.Datasets.S201.Tests/
   EncDotNet.S100.Datasets.S421.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
@@ -89,7 +92,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 - **Abstraction-first**: concrete I/O implementations (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`, `ZipAssetSource`) are hidden behind interfaces defined in `EncDotNet.S100.Core` and injected by callers.
 - **Two pipeline types**:
   - *Coverage pipeline* — `ICoverageSource` → `CoveragePipeline` → `ICoverageRenderer<T>` (used by S-102, S-104, S-111).
-  - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-125, S-127, S-131, S-421).
+  - *Vector pipeline* — `IVectorSource` + `IVectorPortrayalCatalogue` → `VectorPipeline` → `DrawingInstruction` list (used by S-101, S-124, S-125, S-127, S-131, S-201, S-421).
   - S-131 is a **GML+Lua hybrid**: GML-encoded data with Lua portrayal (Part 9A). The bridge is `S131LuaDataProvider` which adapts GML features to the same Lua Host API that S-101 uses.
 - **Bundled specifications**: `EncDotNet.S100.Specifications` embeds official FCs/PCs and exposes them via `Specification.OpenFeatureCatalogueAsync()` / `Specification.CreatePortrayalCatalogueSource()`.
 
@@ -141,6 +144,7 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
   | S-128, catalogue of nautical products, electronic products, physical products, S-100 services | `s128-catalogue` |
   | S-129, under keel clearance, UKC | `s129-ukc` |
   | S-131, marine harbour infrastructure, berths, bollards, mooring buoys | `s131-marine-harbour` |
+  | S-201, IALA aids to navigation information, AtoN-authority exchange (NOT ECDIS — use s125-aton for ECDIS) | `s201-aton-information` |
   | S-411, sea ice, ice information, icebergs, ice edges | `s411-sea-ice` |
   | S-421, route plans, voyage plans, waypoints, route legs | `s421-route-plans` |
 
