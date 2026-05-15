@@ -91,6 +91,20 @@ public sealed class S125Feature : IGmlFeature
     /// rules can resolve cross-references.
     /// </summary>
     public required ImmutableArray<S125InformationReference> InformationReferences { get; init; }
+
+    /// <summary>
+    /// Feature-to-feature association references (e.g. the <c>parent</c> role of
+    /// the <c>StructureEquipment</c> association binding a light to its host
+    /// beacon, or the <c>peerAtonAggregation</c> role on
+    /// <c>AtonAggregation</c>). Each entry preserves the original role name and
+    /// the raw <c>xlink:href</c> value so the strongly-typed projection (S-125
+    /// Edition 1.0.0 §AtonStatusIndicationAssociation, §StructureEquipment,
+    /// §AtonAggregations, §AtonAssociations, §PhysicalAIS, §SyntheticAIS,
+    /// §VirtualAIS, §DangerousFeatureAssociation, §RangeSystem) can resolve
+    /// them at projection time.
+    /// </summary>
+    public ImmutableArray<S125FeatureReference> FeatureReferences { get; init; } =
+        ImmutableArray<S125FeatureReference>.Empty;
 }
 
 /// <summary>
@@ -137,6 +151,25 @@ public sealed class S125InformationReference
 
     /// <summary>The referenced information type's gml:id (without leading <c>#</c>).</summary>
     public required string InformationRef { get; init; }
+}
+
+/// <summary>
+/// A reference from a feature to another feature, captured from an
+/// <c>xlink:href</c>-bearing child element whose target is a
+/// <see cref="S125Feature"/> rather than an <see cref="S125InformationType"/>.
+/// Examples include the <c>parent</c> / <c>child</c> roles of the
+/// <c>StructureEquipment</c> feature association (S-125 Edition 1.0.0
+/// §StructureEquipment), the <c>peerAtonAggregation</c> /
+/// <c>atonAggregationBy</c> roles of <c>AtonAggregations</c>, and the AIS
+/// broadcast association roles.
+/// </summary>
+public sealed class S125FeatureReference
+{
+    /// <summary>The role / association name as written in the source GML.</summary>
+    public required string Role { get; init; }
+
+    /// <summary>The referenced feature's gml:id (without leading <c>#</c>).</summary>
+    public required string FeatureRef { get; init; }
 }
 
 

@@ -26,6 +26,50 @@ Key types:
 - **`S125FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
 - **`S125PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
+## Strongly-typed data model
+
+The `EncDotNet.S100.Datasets.S125.DataModel` namespace provides a
+read-only projection of `S125Dataset` into a domain-shaped object graph
+rooted at `S125AtonDataset`. Aids are exposed as typed shapes
+(`S125Buoy`, `S125Beacon`, `S125Light`, `S125AisAton`, `S125Structure`,
+`S125Equipment`) under the common `IS125Aid` interface. AtoN status
+bindings (`AtoNStatus` xlink → `AtonStatusInformation`) and
+equipment-on-structure relationships (`parent` xlink → host beacon /
+landmark) are resolved into navigable properties so callers can ask
+domain questions without walking the feature bag.
+
+The projection is permissive — unresolved xlinks, attribute parse
+failures, and similar issues surface as `ProjectionDiagnostic` entries
+rather than exceptions. Only a fully empty dataset (no features and no
+information types) causes `From(...)` to throw.
+
+### Quick start (typed model)
+
+```csharp
+using EncDotNet.S100.Datasets.S125;
+using EncDotNet.S100.Datasets.S125.DataModel;
+
+var dataset = S125Dataset.Open("path/to/aton.gml");
+var typed = S125AtonDataset.From(dataset, out var diagnostics);
+
+foreach (var aid in typed.Aids)
+{
+    var status = aid.Status?.IsOperational switch
+    {
+        true => "operational",
+        false => "non-operational",
+        null => "no status",
+    };
+    Console.WriteLine($"{aid.FeatureType} {aid.Id}: {status}");
+
+    if (aid is S125AisAton ais && ais.IsVirtual)
+        Console.WriteLine("  (virtual AIS — no physical presence)");
+
+    if (aid.HostStructure is { } host)
+        Console.WriteLine($"  mounted on {host.FeatureType} {host.Id}");
+}
+```
+
 ## Notes
 
 - S-125 application schema namespace is `http://www.iho.int/S125/1.0`; geometry uses the S-100 GML 5.0 profile namespace `http://www.iho.int/s100gml/5.0`. Older sample datasets that still declare the S-100 GML 1.0 profile are read transparently.

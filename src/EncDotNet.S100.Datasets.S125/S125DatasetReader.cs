@@ -84,23 +84,30 @@ internal static class S125DatasetReader
             productId = dsInfo.Element(s100Ns + "productIdentifier")?.Value;
         }
 
-        var features = ImmutableArray.CreateBuilder<S125Feature>();
-        foreach (var member in EnumerateChildren(root, datasetNs, "member"))
-        {
-            foreach (var element in member.Elements())
-            {
-                if (!IsFeatureType(element.Name, datasetNs)) continue;
-                features.Add(ParseFeature(element, s100Ns));
-            }
-        }
-
+        // Two-pass parse: index information-type ids first so xlink-href
+        // children on features can be classified as information references
+        // (target is an imember) vs. feature references (target is a member).
+        var informationTypeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var informationTypes = ImmutableArray.CreateBuilder<S125InformationType>();
         foreach (var imember in EnumerateChildren(root, datasetNs, "imember"))
         {
             foreach (var element in imember.Elements())
             {
                 if (!IsInformationType(element.Name, datasetNs)) continue;
-                informationTypes.Add(ParseInformationType(element, s100Ns));
+                var info = ParseInformationType(element, s100Ns);
+                informationTypes.Add(info);
+                if (!string.IsNullOrEmpty(info.Id))
+                    informationTypeIds.Add(info.Id);
+            }
+        }
+
+        var features = ImmutableArray.CreateBuilder<S125Feature>();
+        foreach (var member in EnumerateChildren(root, datasetNs, "member"))
+        {
+            foreach (var element in member.Elements())
+            {
+                if (!IsFeatureType(element.Name, datasetNs)) continue;
+                features.Add(ParseFeature(element, s100Ns, informationTypeIds));
             }
         }
 
@@ -142,7 +149,7 @@ internal static class S125DatasetReader
         return S100Ns_5_0;
     }
 
-    private static S125Feature ParseFeature(XElement element, XNamespace s100Ns)
+    private static S125Feature ParseFeature(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
             ?? element.Attribute("id")?.Value
@@ -150,7 +157,7 @@ internal static class S125DatasetReader
         var featureType = element.Name.LocalName;
 
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
-        var (simpleAttrs, complexAttrs, infoRefs) = ParseAttributes(element, s100Ns);
+        var (simpleAttrs, complexAttrs, infoRefs, featureRefs) = ParseAttributes(element, s100Ns, informationTypeIds);
 
         return new S125Feature
         {
@@ -164,6 +171,7 @@ internal static class S125DatasetReader
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
             InformationReferences = infoRefs,
+            FeatureReferences = featureRefs,
         };
     }
 
@@ -174,7 +182,11 @@ internal static class S125DatasetReader
             ?? "";
         var typeCode = element.Name.LocalName;
 
-        var (simpleAttrs, complexAttrs, _) = ParseAttributes(element, s100Ns);
+        // Information types do not themselves carry feature-to-feature xlinks
+        // in the S-125 1.0.0 model. Pass an empty id-set so any xlink child
+        // (if encountered) falls through to the information-reference branch
+        // for backwards compatibility.
+        var (simpleAttrs, complexAttrs, _, _) = ParseAttributes(element, s100Ns, _emptyIdSet);
 
         return new S125InformationType
         {
@@ -184,6 +196,8 @@ internal static class S125DatasetReader
             ComplexAttributes = complexAttrs,
         };
     }
+
+    private static readonly HashSet<string> _emptyIdSet = new(StringComparer.OrdinalIgnoreCase);
 
     // ── Geometry ───────────────────────────────────────────────────────
 
@@ -234,11 +248,12 @@ internal static class S125DatasetReader
         return (geometryType, points, curves, exteriorRing, interiorRings);
     }    // ── Attributes ─────────────────────────────────────────────────────
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S125ComplexAttribute>, ImmutableArray<S125InformationReference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    private static (ImmutableDictionary<string, string>, ImmutableArray<S125ComplexAttribute>, ImmutableArray<S125InformationReference>, ImmutableArray<S125FeatureReference>) ParseAttributes(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S125ComplexAttribute>();
         var infoRefs = ImmutableArray.CreateBuilder<S125InformationReference>();
+        var featureRefs = ImmutableArray.CreateBuilder<S125FeatureReference>();
 
         foreach (var child in element.Elements())
         {
@@ -249,17 +264,33 @@ internal static class S125DatasetReader
                 child.Name.Namespace == s100Ns)
                 continue;
 
-            // Information binding: child carries an xlink:href or informationRef
-            // pointing at an imember's gml:id. (S-125 PC's AtoNStatus association.)
+            // Cross-reference binding: child carries an xlink:href or
+            // informationRef. Classify by target:
+            //  - if the fragment id is a known information-type id, emit an
+            //    information reference (existing behaviour);
+            //  - otherwise emit a feature reference (S-125 1.0.0
+            //    §StructureEquipment / §AtonAggregations / §PhysicalAIS / …).
             var href = child.Attribute(XlinkNs + "href")?.Value
                 ?? child.Attribute("informationRef")?.Value;
             if (!string.IsNullOrEmpty(href) && !child.HasElements && string.IsNullOrEmpty(child.Value))
             {
-                infoRefs.Add(new S125InformationReference
+                var trimmed = href.TrimStart('#');
+                if (informationTypeIds.Contains(trimmed))
                 {
-                    Role = localName,
-                    InformationRef = href.TrimStart('#'),
-                });
+                    infoRefs.Add(new S125InformationReference
+                    {
+                        Role = localName,
+                        InformationRef = trimmed,
+                    });
+                }
+                else
+                {
+                    featureRefs.Add(new S125FeatureReference
+                    {
+                        Role = localName,
+                        FeatureRef = trimmed,
+                    });
+                }
                 continue;
             }
 
@@ -287,7 +318,7 @@ internal static class S125DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), infoRefs.ToImmutable());
+        return (simple.ToImmutable(), complex.ToImmutable(), infoRefs.ToImmutable(), featureRefs.ToImmutable());
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)
