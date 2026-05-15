@@ -97,17 +97,20 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
     {
         if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
 
-        if (_catalogues.TryGetValue(spec, out var existing) && existing.IsValueCreated)
-        {
-            FeatureCatalogueCacheMetrics.RecordHit(spec.Name);
-            return existing.Value;
-        }
-
+        var miss = false;
         var lazy = _catalogues.GetOrAdd(spec, key =>
         {
-            FeatureCatalogueCacheMetrics.RecordMiss(key.Name);
+            miss = true;
             return new Lazy<FeatureCatalogue?>(() => ParseCatalogue(key));
         });
+        if (miss)
+        {
+            FeatureCatalogueCacheMetrics.RecordMiss(spec.Name);
+        }
+        else
+        {
+            FeatureCatalogueCacheMetrics.RecordHit(spec.Name);
+        }
         return lazy.Value;
     }
 
