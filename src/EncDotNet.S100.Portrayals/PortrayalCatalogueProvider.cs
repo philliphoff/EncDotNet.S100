@@ -43,6 +43,56 @@ public sealed class PortrayalCatalogueProvider : IDisposable
     /// </summary>
     public PortrayalCatalogue Catalogue { get; }
 
+    private IPortrayalAssetCache? _assetCache;
+
+    /// <summary>
+    /// The decoded-asset cache that backs every catalogue wrapper
+    /// (compiled XSLT, SVG symbols, line styles, area fills, palettes,
+    /// Lua scripts, Lua source strings).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Defaults to a fresh per-provider <see cref="PortrayalAssetCache"/>
+    /// the first time it is read. <see cref="PortrayalCatalogueManager"/>
+    /// stamps a <em>shared</em> per-<c>SpecRef</c> cache here (via
+    /// <see cref="AttachAssetCache"/>) before handing the provider out,
+    /// so two catalogue wrappers for the same spec share asset storage
+    /// (asset-caching audit §6 PR-3).
+    /// </para>
+    /// <para>
+    /// Direct callers of <see cref="OpenAsync(IAssetSource, string, CancellationToken)"/>
+    /// — primarily tests — get an isolated per-provider cache, which
+    /// preserves the contract verified by
+    /// <c>LuaSourceCacheTests.S101_GetLuaSource_independent_caches_per_catalogue_instance</c>.
+    /// </para>
+    /// </remarks>
+    public IPortrayalAssetCache AssetCache => _assetCache ??= new PortrayalAssetCache();
+
+    /// <summary>
+    /// Attaches a pre-existing <see cref="IPortrayalAssetCache"/> to
+    /// this provider. Called by <see cref="PortrayalCatalogueManager"/>
+    /// when materialising a provider so all catalogue wrappers for the
+    /// same <c>SpecRef</c> share one cache. May be called at most once
+    /// before any catalogue reads <see cref="AssetCache"/>.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="cache"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// An asset cache has already been associated with this provider
+    /// (either through a prior <see cref="AttachAssetCache"/> call or
+    /// through lazy default-construction on first <see cref="AssetCache"/>
+    /// read).
+    /// </exception>
+    internal void AttachAssetCache(IPortrayalAssetCache cache)
+    {
+        ArgumentNullException.ThrowIfNull(cache);
+        if (_assetCache is not null)
+        {
+            throw new InvalidOperationException(
+                "An asset cache has already been associated with this provider.");
+        }
+        _assetCache = cache;
+    }
+
     /// <summary>
     /// Opens a <see cref="PortrayalCatalogueProvider"/> by reading the catalogue from the given source.
     /// </summary>

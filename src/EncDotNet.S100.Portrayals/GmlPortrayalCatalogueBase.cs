@@ -24,13 +24,22 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
 {
     private readonly PortrayalCatalogueProvider _provider;
 
+    // PR-3 (asset-caching audit §6): every GML-XSLT catalogue subclass
+    // (S-122, S-124, S-125, S-127, S-128, S-129, S-201, S-411, S-421)
+    // routes its decoded XSLT / SVG / line-style / area-fill / palette
+    // storage through the provider's IPortrayalAssetCache. When
+    // PortrayalCatalogueManager owns the cache, two open datasets of
+    // the same spec pay each underlying asset open at most once.
+    //
+    // Thread-safety: PortrayalAssetCache uses non-concurrent
+    // dictionaries. Today each GML dataset processor reads and writes
+    // these slots on a single pipeline thread per dataset; two
+    // pipelines running concurrently against catalogues that share a
+    // manager-owned cache would race. PR-6 of the audit tracks
+    // hardening to ConcurrentDictionary.
+    private readonly IPortrayalAssetCache _cache;
+
     private IReadOnlyList<PortrayalRule>? _rules;
-    private readonly Dictionary<string, XslCompiledTransform> _compiledXslt = new();
-    private readonly Dictionary<string, SvgSymbol> _symbols = new();
-    private readonly Dictionary<string, LineStyle> _lineStyles = new();
-    private readonly Dictionary<string, AreaFill> _areaFills = new();
-    private readonly Dictionary<PaletteType, ColorPalette> _palettes = new();
-    private bool _palettesLoaded;
 
     /// <summary>
     /// Initializes a new <see cref="GmlPortrayalCatalogueBase"/> backed by
@@ -40,6 +49,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
+        _cache = provider.AssetCache;
         DisplayModeMembership.Bind(DisplayModes, ViewingGroups, _provider.Catalogue);
     }
 
@@ -68,7 +78,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     {
         EnsurePalettesLoaded();
 
-        if (_palettes.TryGetValue(type, out var palette))
+        if (_cache.Palettes.TryGetValue(type, out var palette))
         {
             ActivePalette = palette;
         }
@@ -87,11 +97,18 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
 
     private void EnsurePalettesLoaded()
     {
-        if (_palettesLoaded) return;
-        _palettesLoaded = true;
-        LoadPalettes(_palettes);
+        if (_cache.PalettesLoaded)
+        {
+            if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayCached))
+            {
+                ActivePalette = dayCached;
+            }
+            return;
+        }
+        _cache.PalettesLoaded = true;
+        LoadPalettes(((PortrayalAssetCache)_cache).PalettesDictionary);
 
-        if (_palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
         {
             ActivePalette = dayPalette;
         }
@@ -205,14 +222,14 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// </summary>
     public virtual XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        if (_compiledXslt.TryGetValue(ruleName, out var cached)) return cached;
+        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached)) return cached;
 
         var ruleFile = _provider.Catalogue.RuleFiles
             .FirstOrDefault(r => r.Id.Equals(ruleName, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Rule '{ruleName}' not found in the portrayal catalogue.");
 
         var transform = LoadXsltRule(ruleFile);
-        _compiledXslt[ruleName] = transform;
+        _cache.CompiledXslt[ruleName] = transform;
         return transform;
     }
 
@@ -222,7 +239,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// </summary>
     protected void CacheCompiledRule(string ruleName, XslCompiledTransform transform)
     {
-        _compiledXslt[ruleName] = transform;
+        _cache.CompiledXslt[ruleName] = transform;
     }
 
     /// <summary>Loads and compiles an XSLT rule file with telemetry.</summary>
@@ -284,7 +301,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the SVG symbol with the given name, loading and caching it on first access.</summary>
     public SvgSymbol GetSymbol(string symbolName)
     {
-        if (_symbols.TryGetValue(symbolName, out var cached)) return cached;
+        if (_cache.Symbols.TryGetValue(symbolName, out var cached)) return cached;
 
         var catalogItem = _provider.Catalogue.Symbols
             .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
@@ -300,7 +317,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
             SvgContent = svgContent,
         };
 
-        _symbols[symbolName] = symbol;
+        _cache.Symbols[symbolName] = symbol;
         return symbol;
     }
 
@@ -309,7 +326,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the line style with the given name, loading and caching it on first access.</summary>
     public LineStyle GetLineStyle(string name)
     {
-        if (_lineStyles.TryGetValue(name, out var cached)) return cached;
+        if (_cache.LineStyles.TryGetValue(name, out var cached)) return cached;
 
         var catalogItem = _provider.Catalogue.LineStyles
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
@@ -318,7 +335,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         using var stream = _provider.FetchAssetAsync(catalogItem, "LineStyles").GetAwaiter().GetResult();
         var style = LineStyleReader.Read(stream, name);
 
-        _lineStyles[name] = style;
+        _cache.LineStyles[name] = style;
         return style;
     }
 
@@ -327,7 +344,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the area fill with the given name, loading and caching it on first access.</summary>
     public AreaFill GetAreaFill(string name)
     {
-        if (_areaFills.TryGetValue(name, out var cached)) return cached;
+        if (_cache.AreaFills.TryGetValue(name, out var cached)) return cached;
 
         var catalogItem = _provider.Catalogue.AreaFills
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
@@ -336,7 +353,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         using var stream = _provider.FetchAssetAsync(catalogItem, "AreaFills").GetAwaiter().GetResult();
         var fill = AreaFillReader.Read(stream, name);
 
-        _areaFills[name] = fill;
+        _cache.AreaFills[name] = fill;
         return fill;
     }
 
