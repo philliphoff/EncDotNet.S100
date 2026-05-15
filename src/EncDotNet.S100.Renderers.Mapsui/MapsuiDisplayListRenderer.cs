@@ -85,8 +85,19 @@ public sealed class MapsuiDisplayListRenderer
     /// </summary>
     public double TextScale { get; set; } = 1.0;
 
-    // Caches processed SVG data URIs and pivot metrics keyed by symbol name.
-    private readonly Dictionary<string, SymbolEntry> _symbolDataUriCache = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Optional shared cache for processed-SVG symbol entries and rasterised
+    /// pattern tiles. When set, the renderer routes its symbol/pattern
+    /// lookups through this cache so re-renders of the same dataset (e.g.
+    /// after a palette toggle, time-step scrub, or mariner-setting change)
+    /// reuse the SVG processing + pattern rasterization work. When unset
+    /// (the default), a per-renderer cache is used, preserving legacy
+    /// behaviour for ad-hoc / one-shot callers such as tests.
+    /// </summary>
+    public MapsuiRenderAssetCache? AssetCache { get; set; }
+
+    // Per-renderer fallback used when AssetCache is null.
+    private readonly MapsuiRenderAssetCache _localAssetCache = new();
 
     /// <summary>
     /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
@@ -96,15 +107,12 @@ public sealed class MapsuiDisplayListRenderer
     /// <c>RelativeOffset</c> consumes; the millimetre offset is retained in
     /// case a future code path needs an absolute-pixel translation.
     /// </summary>
-    private readonly record struct SymbolEntry(
+    internal readonly record struct SymbolEntry(
         string? Source,
         double PivotOffsetXMm,
         double PivotOffsetYMm,
         double RelativeOffsetX,
         double RelativeOffsetY);
-
-    // Caches rasterized pattern tile PNG bytes keyed by area fill name.
-    private readonly Dictionary<string, byte[]?> _patternTileCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Renders the supplied display list against the geometry provided by
@@ -802,23 +810,31 @@ public sealed class MapsuiDisplayListRenderer
             return default;
 
         var resolveStart = Stopwatch.GetTimestamp();
+        var cache = AssetCache ?? _localAssetCache;
 
-        if (_symbolDataUriCache.TryGetValue(symbolRef, out var cached))
+        var entry = cache.GetOrAddSymbol(Palette, symbolRef, out var wasCached, ProduceSymbolEntry);
+
+        if (wasCached)
         {
             S100Diag.Telemetry.SymbolCacheHit.Add(1);
             S100Diag.Telemetry.SymbolResolveDuration.Record(
                 (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
                 new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, "hit"));
-            return cached;
+            return entry;
         }
 
         S100Diag.Telemetry.SymbolCacheMiss.Add(1);
+        S100Diag.Telemetry.SymbolResolveDuration.Record(
+            (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+            new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, entry.Source is null ? "fallback" : "miss"));
+        return entry;
+    }
 
-        SymbolEntry entry = default;
-        string resultTag = "fallback";
+    private SymbolEntry ProduceSymbolEntry(string symbolRef)
+    {
         try
         {
-            var svgContent = SymbolProvider(symbolRef);
+            var svgContent = SymbolProvider!(symbolRef);
             if (svgContent is not null)
             {
                 // Recover S-100 Part 9 §11.5 pivot placement from the *raw*
@@ -828,13 +844,12 @@ public sealed class MapsuiDisplayListRenderer
                 // collapse onto the same point.
                 var pivot = SvgPivotMetrics.TryParse(svgContent);
                 var processed = SvgProcessor.Process(svgContent, Palette);
-                entry = new SymbolEntry(
+                return new SymbolEntry(
                     "svg-content://" + processed,
                     pivot?.PivotToBoundsCenterMm.X ?? 0.0,
                     pivot?.PivotToBoundsCenterMm.Y ?? 0.0,
                     pivot?.RelativeOffset.X ?? 0.0,
                     pivot?.RelativeOffset.Y ?? 0.0);
-                resultTag = "miss";
             }
         }
         catch
@@ -842,11 +857,7 @@ public sealed class MapsuiDisplayListRenderer
             // Symbol not found or malformed — fall back to dot
         }
 
-        _symbolDataUriCache[symbolRef] = entry;
-        S100Diag.Telemetry.SymbolResolveDuration.Record(
-            (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
-            new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, resultTag));
-        return entry;
+        return default;
     }
 
     // ── Pattern tile rasterization ─────────────────────────────────────
@@ -860,20 +871,22 @@ public sealed class MapsuiDisplayListRenderer
         if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
             return null;
 
-        if (_patternTileCache.TryGetValue(fillName, out var cached))
-            return cached;
+        var cache = AssetCache ?? _localAssetCache;
+        return cache.GetOrAddPatternTile(Palette, fillName, out _, ProducePatternTile);
+    }
 
-        byte[]? result = null;
+    private byte[]? ProducePatternTile(string fillName)
+    {
         try
         {
-            var areaFill = AreaFillProvider(fillName);
+            var areaFill = AreaFillProvider!(fillName);
             if (areaFill?.PatternSymbol is not null)
             {
-                var svgContent = SymbolProvider(areaFill.PatternSymbol);
+                var svgContent = SymbolProvider!(areaFill.PatternSymbol);
                 if (svgContent is not null)
                 {
                     var processed = SvgProcessor.Process(svgContent, Palette);
-                    result = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                    return SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
                 }
             }
         }
@@ -882,8 +895,7 @@ public sealed class MapsuiDisplayListRenderer
             // Area fill or symbol not found — skip pattern
         }
 
-        _patternTileCache[fillName] = result;
-        return result;
+        return null;
     }
 
     // ── S-100 Color resolution ─────────────────────────────────────────

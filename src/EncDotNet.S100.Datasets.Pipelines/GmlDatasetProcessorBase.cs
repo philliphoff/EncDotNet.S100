@@ -36,6 +36,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
+    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
 
     /// <summary>
     /// Initializes the shared processor state. Called by subclass constructors
@@ -136,6 +137,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         {
             LayerName = $"{Spec.Name}: {_fileName}",
             Palette = catalogue.ActivePalette,
+            AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = symbolName =>

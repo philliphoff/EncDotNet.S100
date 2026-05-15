@@ -46,6 +46,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
+    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
 
@@ -139,6 +140,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         {
             LayerName = $"S-131: {_fileName}",
             Palette = palette,
+            AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = symbolName =>
