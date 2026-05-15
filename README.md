@@ -278,7 +278,7 @@ into focused packages:
 | **EncDotNet.S100.Datasets.S124** | S-124 navigational warnings reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S125** | S-125 marine aids to navigation reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S127** | S-127 marine resources and services reader and XSLT portrayal pipeline. |
-| **EncDotNet.S100.Datasets.S128** | S-128 catalogue of nautical products reader and XSLT portrayal pipeline. |
+| **EncDotNet.S100.Datasets.S128** | S-128 catalogue of nautical products reader, XSLT portrayal pipeline, and typed `DataModel` projection with resolved supersedes navigation. |
 | **EncDotNet.S100.Datasets.S129** | S-129 under keel clearance reader and XSLT portrayal pipeline. |
 | **EncDotNet.S100.Datasets.S131** | S-131 marine harbour infrastructure reader and Lua portrayal pipeline (GML+Lua hybrid). |
 | **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA, authority-to-authority exchange) reader and XSLT portrayal pipeline. |
