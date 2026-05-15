@@ -49,6 +49,9 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     public SpecRef Spec => new("S-101", default);
     public string Edition => _provider.Catalogue.Version;
 
+    // Cached product tag used for cache metrics (avoids re-allocating strings).
+    private const string ProductTag = "S-101";
+
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
@@ -62,6 +65,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
             throw new KeyNotFoundException($"Color palette '{type}' not found in the portrayal catalogue.");
         }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
         ActivePalette = palette;
     }
 
@@ -221,8 +225,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached)) return cached;
+        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Xslt);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Xslt);
         var ruleFile = FindRuleFile(ruleName);
         var transform = LoadXsltRule(ruleFile);
         _cache.CompiledXslt[ruleName] = transform;
@@ -251,8 +260,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public Script GetLuaScript(string scriptName)
     {
-        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached)) return cached;
+        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
         var ruleFile = FindRuleFile(scriptName);
         var script = LoadLuaScript(ruleFile);
         _cache.LuaScripts[scriptName] = script;
@@ -296,8 +310,12 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
         ArgumentException.ThrowIfNullOrEmpty(fileName);
 
         if (_cache.LuaSources.TryGetValue(fileName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordLuaSourceHit(ProductTag);
             return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordLuaSourceMiss(ProductTag);
         string? source;
         try
         {
@@ -322,8 +340,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public SvgSymbol GetSymbol(string symbolName)
     {
-        if (_cache.Symbols.TryGetValue(symbolName, out var cached)) return cached;
+        if (_cache.Symbols.TryGetValue(symbolName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Svg);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Svg);
         var symbol = LoadSymbol(symbolName);
         _cache.Symbols[symbolName] = symbol;
         return symbol;
@@ -350,8 +373,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public LineStyle GetLineStyle(string name)
     {
-        if (_cache.LineStyles.TryGetValue(name, out var cached)) return cached;
+        if (_cache.LineStyles.TryGetValue(name, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LineStyle);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LineStyle);
         var style = LoadLineStyle(name);
         _cache.LineStyles[name] = style;
         return style;
@@ -371,8 +399,13 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     public AreaFill GetAreaFill(string name)
     {
-        if (_cache.AreaFills.TryGetValue(name, out var cached)) return cached;
+        if (_cache.AreaFills.TryGetValue(name, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.AreaFill);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.AreaFill);
         var fill = LoadAreaFill(name);
         _cache.AreaFills[name] = fill;
         return fill;

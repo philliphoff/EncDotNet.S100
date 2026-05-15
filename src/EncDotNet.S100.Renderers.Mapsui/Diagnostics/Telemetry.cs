@@ -41,11 +41,30 @@ internal static class Telemetry
         Meter.CreateCounter<long>(
             name: "s100.symbol.cache.hit.count",
             unit: "{hits}",
-            description: "Symbol cache hits during symbol resolution.");
+            description: "Symbol cache hits during symbol resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
 
     public static readonly Counter<long> SymbolCacheMiss =
         Meter.CreateCounter<long>(
             name: "s100.symbol.cache.miss.count",
             unit: "{misses}",
-            description: "Symbol cache misses during symbol resolution.");
+            description: "Symbol cache misses during symbol resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    /// <summary>
+    /// Pattern-tile cache hits during area-fill resolution. Tagged with
+    /// <c>s100.product</c> when the renderer is configured by a dataset
+    /// processor. Wired in <c>MapsuiDisplayListRenderer.GetPatternTilePng</c>
+    /// (per the asset-caching audit's PR-CACHE-7 recommendation).
+    /// </summary>
+    public static readonly Counter<long> PatternCacheHit =
+        Meter.CreateCounter<long>(
+            name: "s100.pattern.cache.hit.count",
+            unit: "{hits}",
+            description: "Pattern-tile cache hits during area-fill resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    /// <inheritdoc cref="PatternCacheHit"/>
+    public static readonly Counter<long> PatternCacheMiss =
+        Meter.CreateCounter<long>(
+            name: "s100.pattern.cache.miss.count",
+            unit: "{misses}",
+            description: "Pattern-tile cache misses during area-fill resolution (tile rasterisation triggered). Tagged with s100.product when the renderer is configured by a dataset processor.");
 }

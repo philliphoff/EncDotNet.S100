@@ -114,6 +114,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var vectorRenderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"S-101: {_fileName}",
+            Product = "S-101",
             Palette = palette,
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,

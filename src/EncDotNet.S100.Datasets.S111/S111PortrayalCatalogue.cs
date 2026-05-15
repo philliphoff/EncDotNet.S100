@@ -61,6 +61,8 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     public SpecRef Spec => new("S-111", default);
     public string Edition => _provider.Catalogue.Version ?? "2.0.0";
 
+    private const string ProductTag = "S-111";
+
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
@@ -74,6 +76,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
             throw new KeyNotFoundException($"Color palette '{type}' not found in the S-111 portrayal catalogue.");
         }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
         ActivePalette = palette;
     }
 

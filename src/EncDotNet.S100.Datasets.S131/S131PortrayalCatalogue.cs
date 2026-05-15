@@ -54,6 +54,8 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public SpecRef Spec => new("S-131", default);
 
+    private const string ProductTag = "S-131";
+
     /// <inheritdoc/>
     public string Edition => _provider.Catalogue.Version;
 
@@ -71,6 +73,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
         if (!_cache.Palettes.TryGetValue(type, out var palette))
             throw new KeyNotFoundException($"Color palette '{type}' not found in the S-131 portrayal catalogue.");
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
         ActivePalette = palette;
     }
 
@@ -206,8 +209,13 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached)) return cached;
+        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Xslt);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Xslt);
         var ruleFile = FindRuleFile(ruleName);
         using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
         using var reader = XmlReader.Create(stream);
@@ -222,8 +230,13 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public Script GetLuaScript(string scriptName)
     {
-        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached)) return cached;
+        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
+            return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
         var ruleFile = FindRuleFile(scriptName);
         using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
         using var reader = new StreamReader(stream);
@@ -257,8 +270,12 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
         ArgumentException.ThrowIfNullOrEmpty(fileName);
 
         if (_cache.LuaSources.TryGetValue(fileName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordLuaSourceHit(ProductTag);
             return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordLuaSourceMiss(ProductTag);
         string? source;
         try
         {
@@ -282,8 +299,12 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     public SvgSymbol GetSymbol(string symbolName)
     {
         if (_cache.Symbols.TryGetValue(symbolName, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Svg);
             return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Svg);
         var catalogItem = _provider.Catalogue.Symbols
             .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Symbol '{symbolName}' not found in the S-131 portrayal catalogue.");
@@ -300,8 +321,12 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     public LineStyle GetLineStyle(string name)
     {
         if (_cache.LineStyles.TryGetValue(name, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LineStyle);
             return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LineStyle);
         var catalogItem = _provider.Catalogue.LineStyles
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Line style '{name}' not found in the S-131 portrayal catalogue.");
@@ -316,8 +341,12 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     public AreaFill GetAreaFill(string name)
     {
         if (_cache.AreaFills.TryGetValue(name, out var cached))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.AreaFill);
             return cached;
+        }
 
+        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.AreaFill);
         var catalogItem = _provider.Catalogue.AreaFills
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Area fill '{name}' not found in the S-131 portrayal catalogue.");

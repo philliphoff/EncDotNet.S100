@@ -48,7 +48,22 @@ public static class TelemetryTags
     /// <summary>Renderer implementation: <c>mapsui</c> or <c>skia</c>.</summary>
     public const string RendererKind = "s100.renderer.kind";
 
-    /// <summary>Asset source type: <c>file</c>, <c>zip</c>, or <c>embedded</c>.</summary>
+    /// <summary>
+    /// Context-dependent asset kind. The value space depends on the
+    /// instrument:
+    /// <list type="bullet">
+    /// <item>For asset-source I/O metrics (e.g. future
+    /// <c>s100.asset.read.duration</c> emitters): <c>file</c>, <c>zip</c>,
+    /// or <c>embedded</c>.</item>
+    /// <item>For portrayal cache counters
+    /// (<c>s100.portrayal.cache.hit/miss.count</c>): one of <c>xslt</c>,
+    /// <c>svg</c>, <c>line_style</c>, <c>area_fill</c>, <c>palette</c>,
+    /// <c>lua_script</c>, <c>lua_source</c> — see
+    /// <c>EncDotNet.S100.Portrayals.Diagnostics.PortrayalAssetKinds</c>.</item>
+    /// </list>
+    /// Queries should disambiguate by counter name; the value space is
+    /// disjoint between the two contexts.
+    /// </summary>
     public const string AssetKind = "s100.asset.kind";
 
     /// <summary>Symbol resolution outcome: <c>hit</c>, <c>miss</c>, or <c>fallback</c>.</summary>
