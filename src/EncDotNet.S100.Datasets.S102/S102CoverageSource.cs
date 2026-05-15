@@ -61,7 +61,7 @@ public class S102CoverageSource : ICoverageSource
     public IReadOnlyList<DateTime> AvailableTimes => [];
     public void SelectTime(DateTime time) { }  // no-op
     
-    public SampledCoverage Sample(GridRegion region)
+    public virtual SampledCoverage Sample(GridRegion region)
     {
         var values = _coverage.Values;
         int gridRows = _coverage.NumPointsLatitudinal;

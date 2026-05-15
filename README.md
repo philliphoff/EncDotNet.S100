@@ -293,6 +293,12 @@ into focused packages:
 | **EncDotNet.S100.Renderers.Skia** | Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps. |
 | **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection. |
 
+### MCP server (in development)
+
+| Package | Description |
+|---|---|
+| **EncDotNet.S100.Mcp.Tools** | Foundation for a Model Context Protocol server: `IDatasetCatalog` abstraction and the tool surface (`list_datasets`, `describe_feature`, `sample_coverage`). Contains no MCP protocol code or transport — the protocol layer and viewer wiring land in PR MCP-2. See [its README](src/EncDotNet.S100.Mcp.Tools/README.md). |
+
 ## Building
 
 ```sh
