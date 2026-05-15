@@ -11,6 +11,7 @@ namespace EncDotNet.S100.Datasets.S129;
 internal static class S129DatasetReader
 {
     // S-100 Part 10b GML namespaces
+    private static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
     private static readonly XNamespace S100Ns1 = "http://www.iho.int/S100/profile/s100gml/1.0";
     private static readonly XNamespace S100Ns5 = "http://www.iho.int/s100gml/5.0";
 
@@ -81,7 +82,7 @@ internal static class S129DatasetReader
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
 
         // Parse attributes
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element, s100Ns);
+        var (simpleAttrs, complexAttrs, references) = ParseAttributes(element, s100Ns);
 
         return new S129Feature
         {
@@ -94,6 +95,7 @@ internal static class S129DatasetReader
             InteriorRings = interiorRings,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = references,
         };
     }
 
@@ -161,10 +163,11 @@ internal static class S129DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S129ComplexAttribute>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S129ComplexAttribute>, ImmutableArray<S129Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S129ComplexAttribute>();
+        var references = ImmutableArray.CreateBuilder<S129Reference>();
         var ns = element.Name.Namespace;
 
         foreach (var child in element.Elements())
@@ -175,6 +178,20 @@ internal static class S129DatasetReader
                 child.Name.Namespace == GmlNamespaces.Gml ||
                 child.Name.Namespace == s100Ns)
                 continue;
+
+            // xlink:href cross-reference on an empty-leaf element. Capture
+            // it as an S129Reference rather than as a simple attribute so
+            // the typed projection can resolve it through XlinkResolver.
+            var href = child.Attribute(XlinkNs + "href")?.Value;
+            if (!string.IsNullOrEmpty(href) && !child.HasElements && string.IsNullOrEmpty(child.Value))
+            {
+                references.Add(new S129Reference
+                {
+                    Role = localName,
+                    Href = href,
+                });
+                continue;
+            }
 
             if (child.HasElements)
             {
@@ -202,7 +219,7 @@ internal static class S129DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple.ToImmutable(), complex.ToImmutable(), references.ToImmutable());
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)
