@@ -44,6 +44,8 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
     /// <inheritdoc/>
     protected override void WriteFeatureExtensions(S201Feature feature, XElement featureElement)
     {
+        SynthesiseDefaultPortrayalAttributes(feature, featureElement);
+
         if (!feature.InformationReferences.IsDefaultOrEmpty)
         {
             foreach (var infoRef in feature.InformationReferences)
@@ -59,6 +61,122 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
             {
                 featureElement.Add(new XElement(featureRef.Role,
                     new XAttribute("featureRef", featureRef.TargetRef)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Synthesises spec-consistent default values for <c>buoyShape</c>,
+    /// <c>beaconShape</c>, and <c>colour</c> when a feature carries a
+    /// category attribute (e.g. <c>categoryOfLateralMark</c>) but omits
+    /// the geometric/colour attributes the upstream portrayal catalogue
+    /// requires to select a non-generic symbol. Without this, real-world
+    /// datasets that encode only category information fall through to the
+    /// generic <c>BOYGEN03</c>/default symbol (the "?" buoy).
+    /// </summary>
+    /// <remarks>
+    /// <para>Defaults follow IALA-A conventions (the value emitted by
+    /// most real-world S-201 producers via
+    /// <c>marksNavigationalSystemOf=IALA A</c>):</para>
+    /// <list type="bullet">
+    ///   <item><description>Port-Hand Lateral Mark → can buoy, red.</description></item>
+    ///   <item><description>Starboard-Hand Lateral Mark → conical buoy, green.</description></item>
+    ///   <item><description>Preferred Channel to Starboard → can, red with green band.</description></item>
+    ///   <item><description>Preferred Channel to Port → conical, green with red band.</description></item>
+    /// </list>
+    /// <para>Numeric codes correspond to the S-201 Edition 2.0.0 Feature
+    /// Catalogue listed-value entries (<c>buoyShape</c>: 1=Conical,
+    /// 2=Can, 4=Pillar; <c>colour</c>: 3=Red, 4=Green, 6=Yellow,
+    /// 2=Black).</para>
+    /// </remarks>
+    private static void SynthesiseDefaultPortrayalAttributes(S201Feature feature, XElement featureElement)
+    {
+        // Translate category to FC numeric code (the FC labels are what real
+        // datasets emit; TransformAttributeValue would have normalised them
+        // for elements already in feature.Attributes, but here we read from
+        // the source dictionary so we have to do the same lookup ourselves).
+        string? Get(string code) =>
+            feature.Attributes.TryGetValue(code, out var v)
+                ? S201ListedValueIndex.Normalize(code, v)
+                : null;
+
+        bool Has(string code) =>
+            featureElement.Element(code) is not null;
+
+        void AddIfMissing(string code, string value)
+        {
+            if (!Has(code))
+                featureElement.Add(new XElement(code, value));
+        }
+
+        switch (feature.FeatureType)
+        {
+            case "LateralBuoy":
+            {
+                var cat = Get("categoryOfLateralMark");
+                switch (cat)
+                {
+                    case "1": // Port-Hand
+                        AddIfMissing("buoyShape", "2"); // Can
+                        AddIfMissing("colour", "3"); // Red
+                        break;
+                    case "2": // Starboard-Hand
+                        AddIfMissing("buoyShape", "1"); // Conical
+                        AddIfMissing("colour", "4"); // Green
+                        break;
+                    case "3": // Preferred Channel to Starboard (red with green band)
+                        AddIfMissing("buoyShape", "2"); // Can
+                        AddIfMissing("colour", "3");
+                        break;
+                    case "4": // Preferred Channel to Port (green with red band)
+                        AddIfMissing("buoyShape", "1"); // Conical
+                        AddIfMissing("colour", "4");
+                        break;
+                }
+                break;
+            }
+
+            case "LateralBeacon":
+            {
+                var cat = Get("categoryOfLateralMark");
+                switch (cat)
+                {
+                    case "1": AddIfMissing("colour", "3"); break;
+                    case "2": AddIfMissing("colour", "4"); break;
+                    case "3": AddIfMissing("colour", "3"); break;
+                    case "4": AddIfMissing("colour", "4"); break;
+                }
+                break;
+            }
+
+            case "CardinalBuoy":
+            {
+                // IALA cardinal marks are pillar or spar with yellow + black bands.
+                AddIfMissing("buoyShape", "4"); // Pillar
+                AddIfMissing("colour", "2"); // Black (primary; band sequence varies)
+                break;
+            }
+
+            case "IsolatedDangerBuoy":
+            {
+                AddIfMissing("buoyShape", "4"); // Pillar
+                AddIfMissing("colour", "2"); // Black with red bands
+                break;
+            }
+
+            case "SafeWaterBuoy":
+            {
+                AddIfMissing("buoyShape", "3"); // Spherical
+                AddIfMissing("colour", "3"); // Red (with white vertical stripes)
+                break;
+            }
+
+            case "SpecialPurposeGeneralBuoy":
+            case "InstallationBuoy":
+            {
+                AddIfMissing("buoyShape", "4"); // Pillar
+                AddIfMissing("colour", "6"); // Yellow
+                break;
             }
         }
     }
