@@ -23,6 +23,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     private readonly EcdisDisplayState _state;
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly DatasetsViewModel _datasets;
+    private readonly EcdisLabelOverrideProvider _labelOverrides;
 
     /// <summary>
     /// Spec codes for coverage products that have no viewing-group
@@ -36,7 +37,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     public EcdisDisplayPanelViewModel(
         EcdisDisplayState state,
         PortrayalCatalogueManager catalogueManager,
-        DatasetsViewModel datasets)
+        DatasetsViewModel datasets,
+        EcdisLabelOverrideProvider? labelOverrides = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -45,6 +47,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _state = state;
         _catalogueManager = catalogueManager;
         _datasets = datasets;
+        _labelOverrides = labelOverrides ?? new EcdisLabelOverrideProvider();
 
         ResetAllOverridesCommand = new RelayCommand(() => _state.ClearAllOverrides());
         SetDisplayBaseCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.DisplayBase);
@@ -183,7 +186,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
                 var catalogue = provider.Catalogue;
                 if (catalogue.ViewingGroups.Count > 0)
                 {
-                    Specs.Add(new EcdisSpecViewModel(_state, spec, catalogue));
+                    Specs.Add(new EcdisSpecViewModel(_state, spec, catalogue, _labelOverrides));
                 }
             }
             catch

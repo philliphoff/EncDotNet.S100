@@ -34,6 +34,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Curated, human-friendly labels for ECDIS viewing groups.
+      One JSON per spec, loaded by EcdisLabelOverrideProvider.
+      Missing files are tolerated; adding a new spec without a
+      labels file simply means the viewer falls back to the raw PC
+      name / description for that spec.
+    -->
+    <EmbeddedResource Include="Resources\EcdisLabels\*.labels.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="CommunityToolkit.Mvvm" />

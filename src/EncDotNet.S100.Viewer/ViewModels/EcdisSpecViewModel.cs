@@ -20,7 +20,8 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
     public EcdisSpecViewModel(
         EcdisDisplayState state,
         string specCode,
-        PortrayalCatalogue catalogue)
+        PortrayalCatalogue catalogue,
+        EcdisLabelOverrideProvider? labels = null)
     {
         _state = state;
         SpecCode = specCode;
@@ -31,7 +32,18 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
         {
             if (int.TryParse(vg.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
             {
-                items.Add(new EcdisViewingGroupViewModel(state, specCode, id, vg.Description.Name));
+                string? overrideLabel = null;
+                if (labels is not null && labels.TryGetLabel(specCode, id, out var resolved))
+                {
+                    overrideLabel = resolved;
+                }
+                items.Add(new EcdisViewingGroupViewModel(
+                    state,
+                    specCode,
+                    id,
+                    vg.Description.Name,
+                    vg.Description.DescriptionText,
+                    overrideLabel));
             }
         }
         ViewingGroups = items;

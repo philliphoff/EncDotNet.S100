@@ -213,6 +213,7 @@ public partial class App : Application
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();
+        services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<MainViewModel>();
 

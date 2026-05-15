@@ -135,6 +135,43 @@ Per-spec and global "Reset overrides" buttons clear any
 user-hidden viewing groups. Override state is persisted in
 `settings.json` and restored on launch.
 
+#### Viewing-group labels
+
+The labels shown next to each checkbox come from the relevant
+Portrayal Catalogue's `<viewingGroup>/<description>/<name>`
+element. Those IHO-authored strings are wildly inconsistent across
+specs — mixed case, embedded `SY(...)` / `LC(...)` symbol
+references, and (in S-127 and S-421) bare numeric ids — so the
+viewer ships **curated labels** as embedded resources under
+`Resources/EcdisLabels/<spec>.labels.json` (e.g.
+`S101.labels.json`).
+
+The resolution chain for each row is:
+
+1. Curated `label` from the override file, if present.
+2. Raw PC `<name>`, when it is not just a numeric id.
+3. Raw PC `<description>`.
+4. Synthesised `Viewing group <id>`.
+
+The raw PC name and description remain available in each row's
+tooltip (`ToolTip.Tip`), preserving the symbol/feature acronyms
+that power users rely on.
+
+To curate a new spec, add a file `Resources/EcdisLabels/<Sxxx>.labels.json`
+with shape:
+
+```json
+{
+  "specCode": "S-xxx",
+  "groups": {
+    "<id>": { "label": "Human-friendly label" }
+  }
+}
+```
+
+Missing files, missing entries, and malformed JSON are all
+tolerated — the viewer simply falls back to the raw PC text.
+
 ## Time-varying datasets and the global time slider
 
 Three product specifications carry a time dimension:
