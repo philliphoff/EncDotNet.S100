@@ -3,6 +3,8 @@
 Library for reading and portraying [IHO/IALA S-201](https://github.com/IALA-IGO/S-201_AtoN-Information)
 (Aids to Navigation Information) datasets.
 
+![S-201 dataset rendered in the EncDotNet.S100 viewer](images/s201-viewer.png)
+
 ## What S-201 is — and how it differs from S-125
 
 S-201 is the **IALA-led** S-100 product specification for
