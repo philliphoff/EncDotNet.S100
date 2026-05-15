@@ -22,6 +22,14 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
     private readonly ConcurrentDictionary<SpecRef, string> _paths = new();
     private readonly ConcurrentDictionary<SpecRef, Lazy<PortrayalCatalogueProvider>> _providers = new();
 
+    // PR-3 (asset-caching audit §6): one decoded-asset cache per
+    // SpecRef, shared by every PortrayalCatalogueProvider — and
+    // therefore every catalogue wrapper — that this manager hands
+    // out for the spec. Two open datasets of the same product stop
+    // paying duplicate XSLT compile + SVG read + line style /
+    // area fill / palette / Lua source decode cost.
+    private readonly ConcurrentDictionary<SpecRef, IPortrayalAssetCache> _assetCaches = new();
+
     private static SpecRef ToSpec(string productSpec)
     {
         ArgumentException.ThrowIfNullOrEmpty(productSpec);
@@ -49,11 +57,14 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
 
         _paths[spec] = cataloguePath;
 
-        // Evict stale cached provider
+        // Evict stale cached provider + its asset cache (the assets on
+        // disk may have changed; we cannot keep serving decoded copies
+        // of the previous edition).
         if (_providers.TryRemove(spec, out var old) && old.IsValueCreated)
         {
             old.Value.Dispose();
         }
+        _assetCaches.TryRemove(spec, out _);
     }
 
     /// <summary>
@@ -113,15 +124,17 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
         ArgumentNullException.ThrowIfNull(source);
 
-        // Evict stale cached provider
+        // Evict stale cached provider + asset cache
         if (_providers.TryRemove(spec, out var old) && old.IsValueCreated)
         {
             old.Value.Dispose();
         }
+        _assetCaches.TryRemove(spec, out _);
 
         _paths.TryRemove(spec, out _);
 
         var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        provider.AttachAssetCache(GetOrCreateAssetCache(spec));
         // Pre-materialised lazy: callers see the provider immediately, and
         // the slot participates in the same Lazy-based eviction/Dispose
         // semantics as lazily-built providers.
@@ -176,12 +189,19 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
             () =>
             {
                 var source = FileSystemAssetSource.Create(path);
-                return PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+                var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+                provider.AttachAssetCache(GetOrCreateAssetCache(spec));
+                return provider;
             },
             LazyThreadSafetyMode.ExecutionAndPublication));
 
         return lazy.Value;
     }
+
+    // PR-3: ensure every provider for a given SpecRef hands its
+    // catalogue wrapper the same IPortrayalAssetCache instance.
+    private IPortrayalAssetCache GetOrCreateAssetCache(SpecRef spec) =>
+        _assetCaches.GetOrAdd(spec, static _ => new PortrayalAssetCache());
 
     /// <summary>
     /// Returns true if a catalogue is available for the given product spec
@@ -209,6 +229,7 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
         }
 
         _providers.Clear();
+        _assetCaches.Clear();
     }
 
     /// <inheritdoc />

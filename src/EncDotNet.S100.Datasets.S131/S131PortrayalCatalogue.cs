@@ -29,15 +29,14 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     private readonly PortrayalCatalogueProvider _provider;
     private readonly ILuaEngine? _luaEngine;
 
+    // PR-3 (asset-caching audit §6): see S101PortrayalCatalogue for the
+    // long-form rationale + thread-safety note. Identical model: the
+    // catalogue still owns the loading logic but storage lives on the
+    // provider's IPortrayalAssetCache so two S-131 catalogue wrappers
+    // for the same SpecRef share their decoded assets.
+    private readonly IPortrayalAssetCache _cache;
+
     private IReadOnlyList<PortrayalRule>? _rules;
-    private readonly Dictionary<string, XslCompiledTransform> _compiledXslt = new();
-    private readonly Dictionary<string, Script> _luaScripts = new();
-    private readonly Dictionary<string, string?> _luaSources = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, SvgSymbol> _symbols = new();
-    private readonly Dictionary<string, LineStyle> _lineStyles = new();
-    private readonly Dictionary<string, AreaFill> _areaFills = new();
-    private readonly Dictionary<PaletteType, ColorPalette> _palettes = new();
-    private bool _palettesLoaded;
 
     /// <summary>
     /// Initialises a new <see cref="S131PortrayalCatalogue"/> from the given
@@ -48,6 +47,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
         _luaEngine = luaEngine;
+        _cache = provider.AssetCache;
         DisplayModeMembership.Bind(DisplayModes, ViewingGroups, _provider.Catalogue);
     }
 
@@ -68,7 +68,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         EnsurePalettesLoaded();
 
-        if (!_palettes.TryGetValue(type, out var palette))
+        if (!_cache.Palettes.TryGetValue(type, out var palette))
             throw new KeyNotFoundException($"Color palette '{type}' not found in the S-131 portrayal catalogue.");
 
         ActivePalette = palette;
@@ -87,8 +87,13 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
 
     private void EnsurePalettesLoaded()
     {
-        if (_palettesLoaded) return;
-        _palettesLoaded = true;
+        if (_cache.PalettesLoaded)
+        {
+            if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayCached))
+                ActivePalette = dayCached;
+            return;
+        }
+        _cache.PalettesLoaded = true;
 
         foreach (var item in _provider.Catalogue.ColorProfiles)
         {
@@ -110,7 +115,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
                 {
                     using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
                     var palette = ColorProfileReader.Read(stream, paletteName);
-                    _palettes[paletteType.Value] = palette;
+                    _cache.Palettes[paletteType.Value] = palette;
                 }
                 catch
                 {
@@ -121,20 +126,20 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
             {
                 foreach (var (type, name) in new[] { (PaletteType.Day, "Day"), (PaletteType.Dusk, "Dusk"), (PaletteType.Night, "Night") })
                 {
-                    if (_palettes.ContainsKey(type)) continue;
+                    if (_cache.Palettes.ContainsKey(type)) continue;
                     try
                     {
                         using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
                         var palette = ColorProfileReader.Read(stream, name);
                         if (palette.Colors.Count > 0)
-                            _palettes[type] = palette;
+                            _cache.Palettes[type] = palette;
                     }
                     catch { }
                 }
             }
         }
 
-        if (_palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
             ActivePalette = dayPalette;
     }
 
@@ -201,14 +206,14 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        if (_compiledXslt.TryGetValue(ruleName, out var cached)) return cached;
+        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached)) return cached;
 
         var ruleFile = FindRuleFile(ruleName);
         using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
         using var reader = XmlReader.Create(stream);
         var transform = new XslCompiledTransform();
         transform.Load(reader);
-        _compiledXslt[ruleName] = transform;
+        _cache.CompiledXslt[ruleName] = transform;
         return transform;
     }
 
@@ -217,14 +222,14 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public Script GetLuaScript(string scriptName)
     {
-        if (_luaScripts.TryGetValue(scriptName, out var cached)) return cached;
+        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached)) return cached;
 
         var ruleFile = FindRuleFile(scriptName);
         using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
         using var reader = new StreamReader(stream);
         var source = reader.ReadToEnd();
         var script = new Script { Name = ruleFile.Id, Source = source };
-        _luaScripts[scriptName] = script;
+        _cache.LuaScripts[scriptName] = script;
         return script;
     }
 
@@ -251,7 +256,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         ArgumentException.ThrowIfNullOrEmpty(fileName);
 
-        if (_luaSources.TryGetValue(fileName, out var cached))
+        if (_cache.LuaSources.TryGetValue(fileName, out var cached))
             return cached;
 
         string? source;
@@ -267,7 +272,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
             source = null;
         }
 
-        _luaSources[fileName] = source;
+        _cache.LuaSources[fileName] = source;
         return source;
     }
 
@@ -276,7 +281,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     /// <inheritdoc/>
     public SvgSymbol GetSymbol(string symbolName)
     {
-        if (_symbols.TryGetValue(symbolName, out var cached))
+        if (_cache.Symbols.TryGetValue(symbolName, out var cached))
             return cached;
 
         var catalogItem = _provider.Catalogue.Symbols
@@ -287,14 +292,14 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
         using var reader = new StreamReader(stream);
         var svgContent = reader.ReadToEnd();
         var symbol = new SvgSymbol { Name = symbolName, SvgContent = svgContent };
-        _symbols[symbolName] = symbol;
+        _cache.Symbols[symbolName] = symbol;
         return symbol;
     }
 
     /// <inheritdoc/>
     public LineStyle GetLineStyle(string name)
     {
-        if (_lineStyles.TryGetValue(name, out var cached))
+        if (_cache.LineStyles.TryGetValue(name, out var cached))
             return cached;
 
         var catalogItem = _provider.Catalogue.LineStyles
@@ -303,14 +308,14 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
 
         using var stream = _provider.FetchAssetAsync(catalogItem, "LineStyles").GetAwaiter().GetResult();
         var lineStyle = LineStyleReader.Read(stream, name);
-        _lineStyles[name] = lineStyle;
+        _cache.LineStyles[name] = lineStyle;
         return lineStyle;
     }
 
     /// <inheritdoc/>
     public AreaFill GetAreaFill(string name)
     {
-        if (_areaFills.TryGetValue(name, out var cached))
+        if (_cache.AreaFills.TryGetValue(name, out var cached))
             return cached;
 
         var catalogItem = _provider.Catalogue.AreaFills
@@ -319,7 +324,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
 
         using var stream = _provider.FetchAssetAsync(catalogItem, "AreaFills").GetAwaiter().GetResult();
         var fill = AreaFillReader.Read(stream, name);
-        _areaFills[name] = fill;
+        _cache.AreaFills[name] = fill;
         return fill;
     }
 
