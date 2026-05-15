@@ -44,6 +44,7 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 | `S128ProductEntry` | Façade over an `S128Feature` whose type is one of the navigational product classes; surfaces strongly-typed accessors (`ProductSpecificationName`, `Status`, `CoverageRing`, etc.) |
 | `S128ProductStatus` | Heuristic enum: `InForce | Superseded | Withdrawn | Planned | Unknown` |
 | `S128CatalogueQuery` | Static helpers: `FilterByExtent`, `FilterByProductType`, `FilterBySpecification`, `FilterByStatus` |
+| `S128ProductCatalogue` (`DataModel/`) | Strongly-typed projection of the dataset as a catalogue of typed `S128CatalogueEntry` subclasses with resolved `Supersedes`/`SupersededBy` navigation. See [Strongly-typed data model](#strongly-typed-data-model). |
 | `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
 | `S128FeatureGeometryProvider` | `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer |
 | `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes) |
@@ -81,9 +82,57 @@ S-128 2.0.0 does not surface a single `status` enum on product entries.
 3. Otherwise defaults to `InForce`.
 
 Resolution of `theReference` xlink references with
-`ProductMapping/categoryOfProductMapping=1` (supersedes) is **not yet
-implemented** — see TODO in `S128CatalogueQuery`. Callers that need
-"superseded" semantics should resolve them at the catalogue level.
+`ProductMapping/categoryOfProductMapping=1` (supersedes) is handled by
+the typed-model projection — see
+[Strongly-typed data model](#strongly-typed-data-model).
+
+## Strongly-typed data model
+
+`EncDotNet.S100.Datasets.S128.DataModel.S128ProductCatalogue` projects
+the feature-bag `S128Dataset` into a strongly-typed catalogue with:
+
+- Polymorphic `Products` collection over the common
+  `S128CatalogueEntry` base; instances are sealed
+  `S128ElectronicProduct`, `S128PhysicalProduct`, or `S128Service`.
+- Dedicated typed records for `Producers`, `Distributors`,
+  `Contacts`, and `SectionHeaders` metadata.
+- **Resolved supersedes navigation.** Every `theReference` xlink with
+  `ProductMapping/categoryOfProductMapping=1`
+  ("Higher Priority Alternative", S-128 § 12) is resolved at
+  projection time. Each entry exposes `Supersedes` (forward
+  traversal) and `SupersededBy` (reverse traversal, populated by
+  inverting the forward map). Cycles and chains tolerated.
+- Other `categoryOfProductMapping` values surface in
+  `RelatedProducts` with their raw category text preserved for
+  future-edition compatibility.
+- Permissive projection: unresolved xlinks and parse failures emit
+  `ProjectionDiagnostic` entries rather than throwing. The projection
+  only throws when both `Features` and `InformationTypes` are empty.
+
+### Quick start (typed model)
+
+```csharp
+using EncDotNet.S100.Datasets.S128;
+using EncDotNet.S100.Datasets.S128.DataModel;
+
+var dataset = S128Dataset.Open("catalogue.gml");
+var catalogue = S128ProductCatalogue.From(dataset, out var diagnostics);
+
+foreach (var product in catalogue.Products)
+{
+    Console.WriteLine($"{product.FeatureType} {product.Id} " +
+        $"(ed. {product.EditionNumber}, spec {product.ProductSpecificationName})");
+
+    foreach (var superseded in product.Supersedes)
+        Console.WriteLine($"  supersedes → {superseded.Id}");
+
+    foreach (var successor in product.SupersededBy)
+        Console.WriteLine($"  superseded by → {successor.Id}");
+}
+
+foreach (var d in diagnostics)
+    Console.WriteLine(d);
+```
 
 ## Coordinate ordering
 
@@ -101,7 +150,10 @@ planned) styling is not in the upstream PC and is left as a TODO.
 
 ## Out of scope (this release)
 
-- Status-styled local XSLT rules.
+- Status-driven local XSLT styling (in-force / superseded /
+  withdrawn / planned). The data-model side of supersedes is now
+  resolved via `S128ProductCatalogue`; the corresponding XSLT
+  portrayal hook is still deferred.
 - Auto-downloading datasets pointed at by `onlineResource.linkage` URLs.
 - Dataset authoring / serialisation.
 - Multi-language label resolution.
