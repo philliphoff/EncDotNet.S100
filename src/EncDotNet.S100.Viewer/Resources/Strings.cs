@@ -318,4 +318,14 @@ internal static class Strings
     public static string Toast_DatasetCancelled => Get(nameof(Toast_DatasetCancelled));
     public static string Toast_Cancel => Get(nameof(Toast_Cancel));
     public static string Toast_ExchangeSetLoading => Get(nameof(Toast_ExchangeSetLoading));
+
+    // MCP server
+    public static string Status_McpRunning => Get(nameof(Status_McpRunning));
+    public static string Tooltip_McpEndpoint => Get(nameof(Tooltip_McpEndpoint));
+    public static string Tooltip_McpLoopback => Get(nameof(Tooltip_McpLoopback));
+    public static string Settings_McpSection => Get(nameof(Settings_McpSection));
+    public static string Settings_McpEnabled => Get(nameof(Settings_McpEnabled));
+    public static string Settings_McpEnabledTooltip => Get(nameof(Settings_McpEnabledTooltip));
+    public static string Settings_McpPort => Get(nameof(Settings_McpPort));
+    public static string Settings_McpPortTooltip => Get(nameof(Settings_McpPortTooltip));
 }

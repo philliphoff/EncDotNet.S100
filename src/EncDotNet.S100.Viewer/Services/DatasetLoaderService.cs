@@ -126,6 +126,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     public event Action<string?>? StatusChanged;
 
+    public event Action<DatasetEntry>? DatasetRemoved;
+
     private void SetStatus(string? text) => StatusChanged?.Invoke(text);
 
     public void Initialize(IMapHost host, ViewerCommandSettings? options)
@@ -401,6 +403,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _entryOrder.Remove(entry);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        DatasetRemoved?.Invoke(entry);
     }
 
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)

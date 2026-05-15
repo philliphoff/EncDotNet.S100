@@ -33,6 +33,7 @@ public class MainViewModelPickModeTests
         public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
+        public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
         public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;

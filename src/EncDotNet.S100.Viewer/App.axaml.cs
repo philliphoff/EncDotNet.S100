@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -90,6 +91,26 @@ public partial class App : Application
         // not in MainWindow) so the registration is independent of the view.
         s_services.GetRequiredService<DatasetCatalogAggregator>()
             .Add(s_services.GetRequiredService<S128DatasetCatalogSource>());
+
+        // Start (or leave disabled) the MCP server based on persisted settings.
+        // Failures are logged but never block app startup.
+        var mcpHost = s_services.GetRequiredService<McpServerHost>();
+        var settingsVm = s_services.GetRequiredService<SettingsViewModel>();
+        settingsVm.McpSettingsChanged += () =>
+        {
+            _ = mcpHost.Apply().ContinueWith(t =>
+            {
+                if (t.Exception is not null)
+                    LogCrash("McpServerHost", t.Exception.GetBaseException().ToString());
+            }, TaskScheduler.Default);
+        };
+        _ = mcpHost.Apply().ContinueWith(t =>
+        {
+            if (t.Exception is not null)
+            {
+                LogCrash("McpServerHost", t.Exception.GetBaseException().ToString());
+            }
+        }, TaskScheduler.Default);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -200,6 +221,15 @@ public partial class App : Application
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
+
+        // MCP server (loopback-only, off by default). The catalog adapter
+        // observes the existing dataset loader and re-opens dataset files
+        // for read-only MCP queries; the host owns server lifecycle.
+        services.AddSingleton<ViewerDatasetCatalog>();
+        services.AddSingleton<McpServerHost>(sp => new McpServerHost(
+            sp.GetRequiredService<ViewerDatasetCatalog>(),
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetService<ILoggerFactory>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

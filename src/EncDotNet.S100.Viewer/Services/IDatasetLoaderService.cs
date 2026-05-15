@@ -75,4 +75,12 @@ internal interface IDatasetLoaderService
     /// <see cref="MainViewModel.StatusText"/>.
     /// </summary>
     event Action<string?>? StatusChanged;
+
+    /// <summary>
+    /// Raised after <see cref="RemoveEntry"/> has dropped the entry from
+    /// the loader's processor cache. Consumers can use this to release
+    /// any per-entry state they kept alongside the loader (e.g. an
+    /// external MCP catalog snapshot).
+    /// </summary>
+    event Action<DatasetEntry>? DatasetRemoved;
 }

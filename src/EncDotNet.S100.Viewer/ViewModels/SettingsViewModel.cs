@@ -421,5 +421,54 @@ internal sealed class SettingsViewModel : ViewModelBase
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
+
+        _mcpEnabled = settings.McpEnabled;
+        _mcpPort = settings.McpPort;
+    }
+
+    /// <summary>
+    /// Raised when an MCP-related setting changes so the
+    /// <see cref="Services.McpServerHost"/> can reconcile.
+    /// </summary>
+    public event Action? McpSettingsChanged;
+
+    private bool _mcpEnabled;
+    /// <summary>
+    /// Whether the embedded MCP server should be running. Persisted to
+    /// <see cref="ViewerSettings.McpEnabled"/> and reconciled on change.
+    /// </summary>
+    public bool McpEnabled
+    {
+        get => _mcpEnabled;
+        set
+        {
+            if (SetProperty(ref _mcpEnabled, value))
+            {
+                _settings.McpEnabled = value;
+                _settings.Save();
+                McpSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    private int _mcpPort;
+    /// <summary>
+    /// TCP port for the MCP server. 0 means pick an ephemeral port.
+    /// Persisted to <see cref="ViewerSettings.McpPort"/>.
+    /// </summary>
+    public int McpPort
+    {
+        get => _mcpPort;
+        set
+        {
+            if (value < 0) value = 0;
+            if (value > 65535) value = 65535;
+            if (SetProperty(ref _mcpPort, value))
+            {
+                _settings.McpPort = value;
+                _settings.Save();
+                McpSettingsChanged?.Invoke();
+            }
+        }
     }
 }
