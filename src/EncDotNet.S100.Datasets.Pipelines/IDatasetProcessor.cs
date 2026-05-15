@@ -164,7 +164,7 @@ public sealed class FeatureInfo
 /// <summary>
 /// An xlink-style reference from one feature to another within the same
 /// dataset. Promoted from per-spec reference types (e.g.
-/// <c>S125InformationReference</c>, <c>S421Reference</c>) so that the
+/// <c>S125InformationReference</c>, <c>GmlReference</c>) so that the
 /// pick UI can offer uniform "follow reference" navigation across all
 /// GML-encoded products.
 /// </summary>

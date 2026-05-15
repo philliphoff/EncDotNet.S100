@@ -164,11 +164,11 @@ internal static class S421DatasetReader
         }
 
         return (geomType, points, curves, exterior, interiors);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S421ComplexAttribute>, ImmutableArray<S421Reference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S421ComplexAttribute>, ImmutableArray<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S421ComplexAttribute>();
-        var refs = ImmutableArray.CreateBuilder<S421Reference>();
+        var refs = ImmutableArray.CreateBuilder<GmlReference>();
 
         foreach (var child in element.Elements())
         {
@@ -184,7 +184,7 @@ internal static class S421DatasetReader
             var href = child.Attribute(XLinkNs + "href")?.Value;
             if (href is not null)
             {
-                refs.Add(new S421Reference
+                refs.Add(new GmlReference
                 {
                     Role = localName,
                     Href = href,

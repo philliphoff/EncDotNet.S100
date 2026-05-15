@@ -85,7 +85,7 @@ public sealed class S421Feature : IGmlFeature
     /// containing element's local name. Multiple references for the same role
     /// (e.g. <c>routeWaypoint</c>) are preserved in document order.
     /// </summary>
-    public required ImmutableArray<S421Reference> References { get; init; }
+    public required ImmutableArray<GmlReference> References { get; init; }
 }
 
 /// <summary>
@@ -106,7 +106,7 @@ public sealed class S421InformationType : IGmlInformationType
     public required ImmutableArray<S421ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <summary>Cross-references (xlink:href values).</summary>
-    public required ImmutableArray<S421Reference> References { get; init; }
+    public required ImmutableArray<GmlReference> References { get; init; }
 }
 
 /// <summary>
@@ -119,19 +119,4 @@ public sealed class S421ComplexAttribute : IGmlComplexAttribute
 
     /// <summary>Sub-attribute values keyed by code.</summary>
     public required ImmutableDictionary<string, string> SubAttributes { get; init; }
-}
-
-/// <summary>
-/// An xlink-style reference from one S-421 object to another.
-/// </summary>
-public sealed class S421Reference
-{
-    /// <summary>The local name of the containing element (the role, e.g. "routeInfo", "routeWaypoint").</summary>
-    public required string Role { get; init; }
-
-    /// <summary>The raw <c>xlink:href</c> value (e.g. "#RTE.WPT.1" or "RTE").</summary>
-    public required string Href { get; init; }
-
-    /// <summary>The <c>xlink:arcrole</c> value when present.</summary>
-    public string? ArcRole { get; init; }
 }
