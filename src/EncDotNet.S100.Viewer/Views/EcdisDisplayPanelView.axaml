@@ -101,8 +101,9 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:EcdisViewingGroupViewModel">
                                                 <CheckBox IsChecked="{Binding IsVisible}"
+                                                          ToolTip.Tip="{Binding Tooltip}"
                                                           Margin="0,1">
-                                                    <TextBlock Text="{Binding Name}"
+                                                    <TextBlock Text="{Binding DisplayLabel}"
                                                                TextTrimming="CharacterEllipsis" />
                                                 </CheckBox>
                                             </DataTemplate>

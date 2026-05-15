@@ -724,6 +724,10 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="EcdisPanel_CategoryHeader" xml:space="preserve">
     <value>Display Category</value>
   </data>
+  <data name="EcdisPanel_SynthesizedLabelFormat" xml:space="preserve">
+    <value>Viewing group {0}</value>
+    <comment>Fallback label when neither a curated override nor a usable Portrayal Catalogue name/description is available. {0} is the numeric viewing-group id.</comment>
+  </data>
 
   <!-- Measure Mode -->
   <data name="Tooltip_MeasureMode" xml:space="preserve">

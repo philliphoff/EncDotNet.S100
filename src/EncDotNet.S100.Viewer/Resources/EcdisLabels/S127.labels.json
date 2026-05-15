@@ -1,0 +1,12 @@
+{
+  "$schema": "./labels.schema.json",
+  "specCode": "S-127",
+  "_comment": "Curated viewer labels for S-127 viewing groups. The upstream PC names are bare numeric ids and the descriptions are empty, so labels are inferred from the features that reference each viewing group in src/EncDotNet.S100.Specifications/content/S127/pc/Rules/*.xsl.",
+  "groups": {
+    "31010": { "label": "Quality of non-bathymetric data" },
+    "31020": { "label": "Information areas and nautical publications" },
+    "31040": { "label": "Data coverage" },
+    "32400": { "label": "Pilot boarding places" },
+    "36050": { "label": "Vessel traffic services and waterway areas" }
+  }
+}
