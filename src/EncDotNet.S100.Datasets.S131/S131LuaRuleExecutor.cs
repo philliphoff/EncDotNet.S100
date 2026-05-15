@@ -35,7 +35,7 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
 {
     private readonly ILuaEngine _luaEngine;
     private readonly S131Dataset _dataset;
-    private readonly PortrayalCatalogueProvider _provider;
+    private readonly S131PortrayalCatalogue _catalogue;
     private readonly FeatureCatalogue _featureCatalogue;
 
     /// <summary>
@@ -145,17 +145,17 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
     public S131LuaRuleExecutor(
         ILuaEngine luaEngine,
         S131Dataset dataset,
-        PortrayalCatalogueProvider provider,
+        S131PortrayalCatalogue catalogue,
         FeatureCatalogue featureCatalogue)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(dataset);
-        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(catalogue);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
 
         _luaEngine = luaEngine;
         _dataset = dataset;
-        _provider = provider;
+        _catalogue = catalogue;
         _featureCatalogue = featureCatalogue;
     }
 
@@ -209,38 +209,25 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
 
         using var lua = _luaEngine.CreateContext();
 
-        // 1. Configure require() module loader
-        var moduleCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        // 1. Configure require() module loader via the catalogue's shared
+        //    source cache so repeated require() calls across renders re-use
+        //    the same in-memory string and never re-open the asset stream.
         lua.SetModuleLoader(moduleName =>
         {
             var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)
                 ? moduleName
                 : $"{moduleName}.lua";
 
-            if (moduleCache.TryGetValue(fileName, out var cached))
-                return cached;
-
-            try
-            {
-                using var stream = _provider.FetchRuleAsync(fileName)
-                    .GetAwaiter().GetResult();
-                using var reader = new StreamReader(stream);
-                var source = reader.ReadToEnd();
-                moduleCache[fileName] = source;
-                return source;
-            }
-            catch
-            {
-                moduleCache[fileName] = null;
-                return null;
-            }
+            return _catalogue.GetLuaSource(fileName);
         });
 
         // 2. Register all Host* functions
         dataProvider.RegisterHostFunctions(lua);
 
         // 3. Load and execute main.lua
-        string mainSource = LoadRuleSource("main.lua");
+        string mainSource = _catalogue.GetLuaSource("main.lua")
+            ?? throw new InvalidOperationException(
+                "S-131 portrayal catalogue is missing required rule file 'main.lua'.");
         lua.Execute(mainSource);
 
         // 3a. Spatial association shim
@@ -302,7 +289,7 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("local _cp = {}");
 
-        foreach (var cp in _provider.Catalogue.ContextParameters)
+        foreach (var cp in _catalogue.Provider.Catalogue.ContextParameters)
         {
             var escapedId = EscapeLuaString(cp.Id);
             var escapedType = EscapeLuaString(cp.Type);
@@ -342,14 +329,6 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
     {
         if (string.IsNullOrEmpty(s)) return "";
         return s.Replace("\\", "\\\\").Replace("'", "\\'");
-    }
-
-    private string LoadRuleSource(string fileName)
-    {
-        using var stream = _provider.FetchRuleAsync(fileName)
-            .GetAwaiter().GetResult();
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 }
 
