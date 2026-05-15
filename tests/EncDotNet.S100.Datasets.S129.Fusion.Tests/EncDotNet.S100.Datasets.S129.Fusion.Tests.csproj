@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S129\EncDotNet.S100.Datasets.S129.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S129.Fusion\EncDotNet.S100.Datasets.S129.Fusion.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
+  </ItemGroup>
+
+</Project>

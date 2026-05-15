@@ -54,3 +54,11 @@ foreach (var cp in typed.ControlPoints)
 dotnet add package EncDotNet.S100.Datasets.S129
 ```
 
+## See also
+
+- [`EncDotNet.S100.Datasets.S129.Fusion`](../EncDotNet.S100.Datasets.S129.Fusion/README.md)
+  — cross-product data-layer helpers that fuse an
+  `S129UnderKeelClearancePlan` with the S-102 / S-104 / S-421 datasets
+  it references (timeline iteration, reference resolution, route
+  binding). Strictly additive on top of the types in this library.
+
