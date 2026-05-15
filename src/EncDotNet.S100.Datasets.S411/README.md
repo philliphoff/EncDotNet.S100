@@ -23,6 +23,64 @@ Key types:
 - **`S411FeatureGeometryProvider`** — `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer.
 - **`S411PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
+## Typed data model
+
+In addition to the raw `S411Dataset` / `S411Feature` shapes used by the
+portrayal pipeline, the library exposes a strongly-typed projection under
+`EncDotNet.S100.Datasets.S411.DataModel` built on the shared
+`EncDotNet.S100.DataModel` abstractions in `EncDotNet.S100.Core`. This mirrors
+the typed projections added for S-124, S-125, S-128, and S-201 (see PRs
+[#69](https://github.com/philliphoff/EncDotNet.S100/pull/69),
+[#70](https://github.com/philliphoff/EncDotNet.S100/pull/70),
+[#71](https://github.com/philliphoff/EncDotNet.S100/pull/71), and
+[#72](https://github.com/philliphoff/EncDotNet.S100/pull/72)).
+
+Key types:
+
+- **`S411SeaIceInventory`** — top-level projection with a static
+  `From(S411Dataset, out IReadOnlyList<ProjectionDiagnostic>)` factory that
+  walks the source feature bag and produces typed subclasses.
+- **`S411IceFeature`** — abstract base. Concrete subclasses:
+  `S411SeaIce`, `S411LakeIce`, `S411Iceberg`, `S411IceEdge`, `S411IceLead`,
+  `S411IceThickness`, `S411SnowCover`, `S411StageOfMelt`,
+  `S411DataCoverage`, and `S411OtherFeature` (catch-all).
+- **`S411EggCode`** — typed bundle for the WMO egg-code attributes carried
+  by `SeaIce` / `LakeIce` features. Both vocabularies (JCOMM
+  `iceact`/`iceapc`/`icesod`/`iceflz` and the IHO 1.2.1 sample
+  `totalConcentration`/`snowDepth`) feed the same shape. List-valued JCOMM
+  attributes are preserved as raw text because real-world producers
+  serialise them as Python-list-style strings rather than the standard
+  WMO tokenisation.
+- **`S411GeometryKind`** — `None` / `Point` / `Curve` / `Surface`.
+
+Feature-type normalisation maps the JCOMM lowercase short codes
+(`seaice`, `lacice`, `icebrg`, `icelne`, `icethk`, `snwcvr`, `stgmlt`, …)
+to the canonical PascalCase Feature Catalogue class names. Both GML
+shapes therefore land on the same typed subclass, and consumers can
+dispatch on `NormalizedFeatureType` without caring which shape the
+dataset was emitted in. The raw element name remains available on
+`SourceFeatureType`.
+
+S-411 carries no information types and no xlink cross-references, so
+the projection does not need an `XlinkResolver` graph; it still threads
+a `ProjectionContext` so attribute-parse failures surface as
+`ProjectionDiagnostic` entries rather than exceptions. The projection
+only throws when the source dataset has no features at all.
+
+Example:
+
+```csharp
+using var s = File.OpenRead("ice.gml");
+var dataset = S411Dataset.Open(s);
+var inventory = S411SeaIceInventory.From(dataset, out var diagnostics);
+
+foreach (var seaIce in inventory.IceFeatures.OfType<S411SeaIce>())
+{
+    var conc = seaIce.EggCode?.TotalConcentration;
+    // ... dispatch on seaIce.NormalizedFeatureType / seaIce.GeometryKind
+}
+```
+
 ## Notes
 
 ### Two GML shapes in the wild
