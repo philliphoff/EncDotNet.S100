@@ -66,8 +66,32 @@ public sealed class S129Feature : IGmlFeature
     /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
     public required ImmutableArray<S129ComplexAttribute> ComplexAttributes { get; init; }
 
+    /// <summary>
+    /// xlink:href references carried on this feature's child elements
+    /// (S-100 Part 10b §7.2). Default empty when no cross-references are
+    /// present.
+    /// </summary>
+    public ImmutableArray<S129Reference> References { get; init; } =
+        ImmutableArray<S129Reference>.Empty;
+
     /// <inheritdoc/>
     IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+}
+
+/// <summary>
+/// An <c>xlink:href</c> cross-reference carried on a child element of an
+/// <see cref="S129Feature"/> (S-100 Part 10b §7.2). The <see cref="Role"/>
+/// is the local name of the child element (e.g. <c>"sourceRoute"</c>);
+/// the <see cref="Href"/> is the raw <c>xlink:href</c> value (either a
+/// fragment identifier like <c>"#WAYPOINT_03"</c> or an external URL).
+/// </summary>
+public sealed record S129Reference
+{
+    /// <summary>The local name of the referring child element (association role).</summary>
+    public required string Role { get; init; }
+
+    /// <summary>The raw <c>xlink:href</c> value.</summary>
+    public required string Href { get; init; }
 }
 
 /// <summary>

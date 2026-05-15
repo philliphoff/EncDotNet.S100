@@ -42,6 +42,7 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S125.Tests/EncDotNet.S100.Datasets.S125.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S127.Tests/EncDotNet.S100.Datasets.S127.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S128.Tests/EncDotNet.S100.Datasets.S128.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.S129.Tests/EncDotNet.S100.Datasets.S129.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S131.Tests/EncDotNet.S100.Datasets.S131.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S201.Tests/EncDotNet.S100.Datasets.S201.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S411.Tests/EncDotNet.S100.Datasets.S411.Tests.csproj" />
