@@ -84,8 +84,11 @@ When adding a typed model for a new product spec:
 |---|---|---|
 | S-421 | `S421RoutePlan` | Original precedent; refactored in Pass 1 to consume the shared abstractions. |
 | S-124 | `S124NavigationalWarning` | Pass 1 second consumer. |
+| S-128 | `S128CatalogueDataset` | Pass 2 — catalogue of nautical products. |
+| S-125 | `S125AtonDataset` | Pass 2 — marine aids to navigation. |
+| S-201 | `S201AtonDataset` | Pass 2 — IALA AtoN information. |
+| S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
 
-Other GML-encoded specs (S-122, S-125, S-127, S-128, S-129, S-131,
-S-201, S-411) are intentionally deferred to a future *Pass 2* —
-the shared abstractions are validated against the first two
-consumers before being rolled out further.
+Other GML-encoded specs (S-122, S-129, S-131, S-411) are intentionally
+deferred to a future pass — the shared abstractions continue to be
+validated against new consumers before being rolled out further.

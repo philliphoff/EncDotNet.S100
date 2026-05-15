@@ -43,6 +43,33 @@ var source = new S127FeatureXmlSource(dataset);
 var instructions = await new PortrayalPipeline().ProcessAsync(source, catalogue);
 ```
 
+## Strongly-typed data model
+
+Alongside the GML-faithful `S127Dataset` feature bag, the library exposes a strongly-typed projection rooted at `S127MarineServicesDataset` (namespace `EncDotNet.S100.Datasets.S127.DataModel`). It mirrors the typed projections in S-124, S-125, S-128, and S-201.
+
+```csharp
+using EncDotNet.S100.Datasets.S127;
+using EncDotNet.S100.Datasets.S127.DataModel;
+
+var dataset = S127Dataset.Open("marine_services.gml");
+var typed = S127MarineServicesDataset.From(dataset, out var diagnostics);
+
+foreach (var pbp in typed.Features.OfType<S127PilotBoardingPlace>())
+{
+    Console.WriteLine($"{pbp.Id}: {pbp.CategoryOfPilotBoardingPlace} / {pbp.Authority?.Id}");
+}
+```
+
+The projection:
+
+- Models the headline S-127 feature classes — `S127PilotBoardingPlace`, `S127RouteingMeasure`, `S127VesselTrafficServiceArea`, `S127ShipReportingService`, `S127SignalStation` (Traffic / Warning discriminator), `S127RegulatedArea` (covers `RestrictedArea`, `RestrictedAreaNavigational`, `MilitaryPracticeArea`, `CautionArea`, etc.), and `S127Authority`. Every other FC code falls through to a `S127OtherFeature` catch-all so no source geometry or attribute is lost.
+- Surfaces feature-to-feature `xlink:href` bindings (e.g. `theAuthority`) as typed `IS127Feature` references. Resolution is two-pass: every typed object is built first, then bound, so cycle-tolerant references work.
+- Handles geometry-less features (e.g. `Authority`) without throwing — `GeometryKind` is `None` and `Coordinates` is empty.
+- Reports unresolved xlinks and attribute parse failures as `ProjectionDiagnostic` entries (codes `xlink.unresolved`, `attribute.parse.int`); it only throws when the source dataset is fully empty.
+- Preserves source attributes verbatim on every typed shape via `ExtraAttributes` (consumed keys are excluded).
+
+The viewer, FeatureXML adapter, and XSLT portrayal pipeline continue to drive off `S127Dataset` and are unaffected by this layer.
+
 ## Spec compliance
 
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` is `lat lon` (EPSG:4326), per S-100 Part 10b §6.2.
