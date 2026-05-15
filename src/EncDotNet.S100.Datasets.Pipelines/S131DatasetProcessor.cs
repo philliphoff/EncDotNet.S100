@@ -139,6 +139,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         var vectorRenderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"S-131: {_fileName}",
+            Product = "S-131",
             Palette = palette,
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,

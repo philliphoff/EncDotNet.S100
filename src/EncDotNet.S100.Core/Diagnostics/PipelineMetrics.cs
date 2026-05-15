@@ -60,16 +60,4 @@ internal static class PipelineMetrics
             name: "s100.xslt.compile.duration",
             unit: "ms",
             description: "Wall-clock duration of compiling an XSLT rule (first load only).");
-
-    public static readonly Counter<long> XsltCacheHit =
-        Telemetry.Meter.CreateCounter<long>(
-            name: "s100.xslt.cache.hit.count",
-            unit: "{hits}",
-            description: "XSLT compiled-transform cache hits.");
-
-    public static readonly Counter<long> XsltCacheMiss =
-        Telemetry.Meter.CreateCounter<long>(
-            name: "s100.xslt.cache.miss.count",
-            unit: "{misses}",
-            description: "XSLT compiled-transform cache misses (compilation triggered).");
 }

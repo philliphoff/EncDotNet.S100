@@ -136,6 +136,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         var renderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"{Spec.Name}: {_fileName}",
+            Product = Spec.Name,
             Palette = catalogue.ActivePalette,
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,

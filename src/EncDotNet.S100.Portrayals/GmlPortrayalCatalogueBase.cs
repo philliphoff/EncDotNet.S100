@@ -80,6 +80,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
 
         if (_cache.Palettes.TryGetValue(type, out var palette))
         {
+            Diagnostics.PortrayalCacheMetrics.RecordHit(Spec.Name, Diagnostics.PortrayalAssetKinds.Palette);
             ActivePalette = palette;
         }
     }
@@ -222,8 +223,13 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// </summary>
     public virtual XslCompiledTransform GetCompiledRule(string ruleName)
     {
-        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached)) return cached;
+        if (_cache.CompiledXslt.TryGetValue(ruleName, out var cached))
+        {
+            Diagnostics.PortrayalCacheMetrics.RecordHit(Spec.Name, Diagnostics.PortrayalAssetKinds.Xslt);
+            return cached;
+        }
 
+        Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.Xslt);
         var ruleFile = _provider.Catalogue.RuleFiles
             .FirstOrDefault(r => r.Id.Equals(ruleName, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Rule '{ruleName}' not found in the portrayal catalogue.");
@@ -301,8 +307,13 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the SVG symbol with the given name, loading and caching it on first access.</summary>
     public SvgSymbol GetSymbol(string symbolName)
     {
-        if (_cache.Symbols.TryGetValue(symbolName, out var cached)) return cached;
+        if (_cache.Symbols.TryGetValue(symbolName, out var cached))
+        {
+            Diagnostics.PortrayalCacheMetrics.RecordHit(Spec.Name, Diagnostics.PortrayalAssetKinds.Svg);
+            return cached;
+        }
 
+        Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.Svg);
         var catalogItem = _provider.Catalogue.Symbols
             .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Symbol '{symbolName}' not found in the portrayal catalogue.");
@@ -326,8 +337,13 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the line style with the given name, loading and caching it on first access.</summary>
     public LineStyle GetLineStyle(string name)
     {
-        if (_cache.LineStyles.TryGetValue(name, out var cached)) return cached;
+        if (_cache.LineStyles.TryGetValue(name, out var cached))
+        {
+            Diagnostics.PortrayalCacheMetrics.RecordHit(Spec.Name, Diagnostics.PortrayalAssetKinds.LineStyle);
+            return cached;
+        }
 
+        Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.LineStyle);
         var catalogItem = _provider.Catalogue.LineStyles
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Line style '{name}' not found in the portrayal catalogue.");
@@ -344,8 +360,13 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     /// <summary>Returns the area fill with the given name, loading and caching it on first access.</summary>
     public AreaFill GetAreaFill(string name)
     {
-        if (_cache.AreaFills.TryGetValue(name, out var cached)) return cached;
+        if (_cache.AreaFills.TryGetValue(name, out var cached))
+        {
+            Diagnostics.PortrayalCacheMetrics.RecordHit(Spec.Name, Diagnostics.PortrayalAssetKinds.AreaFill);
+            return cached;
+        }
 
+        Diagnostics.PortrayalCacheMetrics.RecordMiss(Spec.Name, Diagnostics.PortrayalAssetKinds.AreaFill);
         var catalogItem = _provider.Catalogue.AreaFills
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? throw new KeyNotFoundException($"Area fill '{name}' not found in the portrayal catalogue.");
