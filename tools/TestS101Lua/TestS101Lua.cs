@@ -64,7 +64,8 @@ var mariner = MarinerSettings.Default;
 Console.WriteLine();
 Console.WriteLine("Running S-101 Lua portrayal pipeline...");
 var luaEngine = new MoonSharpLuaEngine();
-var portrayal = new S101LuaRuleExecutor(luaEngine, dataset, provider, fc);
+var catalogue = new S101PortrayalCatalogue(provider, luaEngine);
+var portrayal = new S101LuaRuleExecutor(luaEngine, dataset, catalogue, fc);
 
 var sw = System.Diagnostics.Stopwatch.StartNew();
 var emitted = portrayal.ExecuteRaw(mariner);

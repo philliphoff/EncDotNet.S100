@@ -23,7 +23,7 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 {
     private readonly ILuaEngine _luaEngine;
     private readonly S101Dataset _dataset;
-    private readonly PortrayalCatalogueProvider _provider;
+    private readonly S101PortrayalCatalogue _catalogue;
     private readonly FeatureCatalogue _featureCatalogue;
 
     /// <summary>
@@ -105,17 +105,17 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     public S101LuaRuleExecutor(
         ILuaEngine luaEngine,
         S101Dataset dataset,
-        PortrayalCatalogueProvider provider,
+        S101PortrayalCatalogue catalogue,
         FeatureCatalogue featureCatalogue)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(dataset);
-        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(catalogue);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
 
         _luaEngine = luaEngine;
         _dataset = dataset;
-        _provider = provider;
+        _catalogue = catalogue;
         _featureCatalogue = featureCatalogue;
     }
 
@@ -201,10 +201,11 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 
         using var lua = _luaEngine.CreateContext();
 
-        // 1. Configure require() to resolve modules from the Rules/ subdirectory.
-        //    Module source strings are cached so repeated require() calls (and
-        //    any future context re-creation) avoid redundant stream I/O.
-        var moduleCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        // 1. Configure require() to resolve modules from the Rules/ subdirectory
+        //    via the catalogue's shared source cache. The catalogue caches the
+        //    raw source string across renders, so repeated require() calls for
+        //    the same dataset re-use the same in-memory string and never re-
+        //    open the underlying asset stream.
         lua.SetModuleLoader(moduleName =>
         {
             // MoonSharp may pass the bare name (e.g. "S100Scripting") or with
@@ -213,30 +214,16 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
                 ? moduleName
                 : $"{moduleName}.lua";
 
-            if (moduleCache.TryGetValue(fileName, out var cached))
-                return cached;
-
-            try
-            {
-                using var stream = _provider.FetchRuleAsync(fileName)
-                    .GetAwaiter().GetResult();
-                using var reader = new StreamReader(stream);
-                var source = reader.ReadToEnd();
-                moduleCache[fileName] = source;
-                return source;
-            }
-            catch
-            {
-                moduleCache[fileName] = null;
-                return null;
-            }
+            return _catalogue.GetLuaSource(fileName);
         });
 
         // 2. Register all Host* functions on the Lua context
         dataProvider.RegisterHostFunctions(lua);
 
         // 3. Load and execute main.lua (which will require S100Scripting, PortrayalModel, etc.)
-        string mainSource = LoadRuleSource("main.lua");
+        string mainSource = _catalogue.GetLuaSource("main.lua")
+            ?? throw new InvalidOperationException(
+                "S-101 portrayal catalogue is missing required rule file 'main.lua'.");
         lua.Execute(mainSource);
 
         // 3a. Wrap HostFeatureGetSpatialAssociations so the raw data from the host
@@ -320,7 +307,7 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("local _cp = {}");
 
-        foreach (var cp in _provider.Catalogue.ContextParameters)
+        foreach (var cp in _catalogue.Provider.Catalogue.ContextParameters)
         {
             // Escape the default value for Lua string literal
             var escapedId = EscapeLuaString(cp.Id);
@@ -379,14 +366,6 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     {
         if (string.IsNullOrEmpty(s)) return "";
         return s.Replace("\\", "\\\\").Replace("'", "\\'");
-    }
-
-    private string LoadRuleSource(string fileName)
-    {
-        using var stream = _provider.FetchRuleAsync(fileName)
-            .GetAwaiter().GetResult();
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 }
 

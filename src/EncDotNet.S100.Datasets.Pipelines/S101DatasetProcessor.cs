@@ -102,7 +102,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         // Drive the unified VectorPipeline with the S-101 Lua rule executor
         // (Part 9A). XSLT rules in the S-101 catalogue (if any) are also
         // honoured by the pipeline.
-        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, _provider, fc);
+        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
         var featureSource = new S101FeatureXmlSource(_dataset);
         var pipeline = new PortrayalPipeline(executor);
         var portrayalLayer = pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner)

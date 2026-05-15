@@ -106,7 +106,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         s101Cat.SwitchPalette(paletteType);
         var palette = s101Cat.ActivePalette;
 
-        var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, _provider, fc);
+        var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
         var featureSource = new S101FeatureXmlSource(_translatedDataset);
         var pipeline = new PortrayalPipeline(executor);
         var portrayalLayer = pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner)

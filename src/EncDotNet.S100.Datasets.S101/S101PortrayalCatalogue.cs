@@ -23,6 +23,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     private IReadOnlyList<PortrayalRule>? _rules;
     private readonly Dictionary<string, XslCompiledTransform> _compiledXslt = new();
     private readonly Dictionary<string, Script> _luaScripts = new();
+    private readonly Dictionary<string, string?> _luaSources = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SvgSymbol> _symbols = new();
     private readonly Dictionary<string, LineStyle> _lineStyles = new();
     private readonly Dictionary<string, AreaFill> _areaFills = new();
@@ -255,6 +256,52 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
             Source = source,
         };
     }
+
+    /// <summary>
+    /// Returns the raw Lua source for the given bare filename inside the
+    /// portrayal catalogue's <c>Rules/</c> directory (e.g. <c>"main.lua"</c>,
+    /// <c>"S100Scripting.lua"</c>), caching the decoded string so subsequent
+    /// reads do not re-open the underlying <see cref="Core.IAssetSource"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Returns <see langword="null"/> (and caches <see langword="null"/>) if
+    /// the file cannot be fetched, so the MoonSharp module loader's
+    /// "missing module → return null" contract is preserved without retrying
+    /// failed lookups on every <c>require()</c> call.
+    /// </para>
+    /// <para>
+    /// This caches only the immutable <see cref="string"/> source. The
+    /// compiled Lua <c>Script</c> instance is intentionally constructed
+    /// per execution to preserve sandbox isolation (S-100 Part 9A).
+    /// </para>
+    /// </remarks>
+    public string? GetLuaSource(string fileName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(fileName);
+
+        if (_luaSources.TryGetValue(fileName, out var cached))
+            return cached;
+
+        string? source;
+        try
+        {
+            using var stream = _provider.FetchRuleAsync(fileName)
+                .GetAwaiter().GetResult();
+            using var reader = new StreamReader(stream);
+            source = reader.ReadToEnd();
+        }
+        catch
+        {
+            source = null;
+        }
+
+        _luaSources[fileName] = source;
+        return source;
+    }
+
+    /// <summary>The underlying portrayal catalogue provider.</summary>
+    internal PortrayalCatalogueProvider Provider => _provider;
 
     // ── Symbols ────────────────────────────────────────────────────────
 

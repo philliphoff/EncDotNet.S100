@@ -127,7 +127,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         // XSLT rules — so we provide an empty FeatureXML source to satisfy
         // the VectorPipeline contract. All drawing instructions come from the
         // Lua executor (Stage 4).
-        var executor = new S131LuaRuleExecutor(_luaEngine, _dataset, _provider, fc);
+        var executor = new S131LuaRuleExecutor(_luaEngine, _dataset, _catalogue, fc);
         var featureSource = new EmptyFeatureXmlSource();
         var pipeline = new PortrayalPipeline(executor);
         var portrayalLayer = pipeline.ProcessAsync(
