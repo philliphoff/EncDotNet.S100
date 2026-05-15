@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Gml;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Datasets.S421.DataModel;
 /// The projection is lossy by design — anything the typed model does not
 /// understand is preserved on the source <see cref="S421Dataset"/> and on
 /// the typed objects' <c>ExtraAttributes</c> dictionaries. Projection
-/// failures surface as <see cref="S421ProjectionDiagnostic"/> entries
+/// failures surface as <see cref="ProjectionDiagnostic"/> entries
 /// rather than exceptions, with the sole exception of a missing
 /// <c>Route</c> feature.
 /// </para>
@@ -46,36 +46,37 @@ public sealed class S421RoutePlan
     /// <exception cref="InvalidOperationException">
     /// Thrown if the dataset contains no <c>Route</c> feature.
     /// </exception>
-    public static S421RoutePlan From(S421Dataset dataset, out IReadOnlyList<S421ProjectionDiagnostic> diagnostics)
+    public static S421RoutePlan From(S421Dataset dataset, out IReadOnlyList<ProjectionDiagnostic> diagnostics)
     {
         ArgumentNullException.ThrowIfNull(dataset);
-        var diags = new List<S421ProjectionDiagnostic>();
 
-        var byId = BuildIdIndex(dataset);
+        var ctx = new ProjectionContext(BuildXlinkResolver(dataset));
+
         var routeFeature = dataset.Features.FirstOrDefault(f => f.FeatureType == "Route")
             ?? throw new InvalidOperationException("Dataset contains no Route feature.");
 
-        var routeInfo = ResolveRouteInfo(routeFeature, byId, diags);
-        var (waypoints, legs) = ResolveWaypointsAndLegs(routeFeature, byId, diags);
-        var actionPoints = ResolveActionPoints(routeFeature, byId, diags);
-        var schedules = ResolveSchedules(routeFeature, byId, diags);
+        var routeInfo = ResolveRouteInfo(routeFeature, ctx);
+        var (waypoints, legs) = ResolveWaypointsAndLegs(routeFeature, ctx);
+        var actionPoints = ResolveActionPoints(routeFeature, ctx);
+        var schedules = ResolveSchedules(routeFeature, ctx);
 
         var route = new S421Route
         {
             Id = routeFeature.Id,
             FormatVersion = routeFeature.Attributes.GetValueOrDefault("routeFormatVersion"),
             RouteId = routeFeature.Attributes.GetValueOrDefault("routeID"),
-            EditionNumber = ParseInt(routeFeature.Attributes.GetValueOrDefault("routeEditionNo")),
+            EditionNumber = AttributeParser.TryParseInt(
+                routeFeature.Attributes.GetValueOrDefault("routeEditionNo"), ctx, routeFeature.Id, "routeEditionNo"),
             Info = routeInfo,
             Waypoints = waypoints,
             Legs = legs,
             ActionPoints = actionPoints,
             Schedules = schedules,
-            ExtraAttributes = ExcludeKnown(routeFeature.Attributes,
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(routeFeature.Attributes,
                 "routeFormatVersion", "routeID", "routeEditionNo"),
         };
 
-        diagnostics = diags;
+        diagnostics = ctx.ToImmutableDiagnostics();
         return new S421RoutePlan
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
@@ -85,34 +86,18 @@ public sealed class S421RoutePlan
         };
     }
 
-    // ── ID index ─────────────────────────────────────────────────
+    // ── XLink index ──────────────────────────────────────────────
 
-    private static Dictionary<string, object> BuildIdIndex(S421Dataset dataset)
+    private static XlinkResolver BuildXlinkResolver(S421Dataset dataset)
     {
-        var index = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in dataset.Features)
-            if (!string.IsNullOrEmpty(f.Id)) index[f.Id] = f;
-        foreach (var i in dataset.InformationTypes)
-            if (!string.IsNullOrEmpty(i.Id)) index[i.Id] = i;
-        return index;
-    }
-
-    private static string NormaliseHref(string href) =>
-        href.StartsWith('#') ? href[1..] : href;
-
-    private static T? Resolve<T>(Dictionary<string, object> byId, string href, string role,
-        List<S421ProjectionDiagnostic> diags, string? relatedId = null) where T : class
-    {
-        var key = NormaliseHref(href);
-        if (byId.TryGetValue(key, out var obj) && obj is T typed) return typed;
-
-        diags.Add(new S421ProjectionDiagnostic
+        IEnumerable<KeyValuePair<string, object>> All()
         {
-            Severity = S421DiagnosticSeverity.Warning,
-            Message = $"Unresolved {role} reference '{href}'.",
-            RelatedId = relatedId,
-        });
-        return null;
+            foreach (var f in dataset.Features)
+                yield return new KeyValuePair<string, object>(f.Id, f);
+            foreach (var i in dataset.InformationTypes)
+                yield return new KeyValuePair<string, object>(i.Id, i);
+        }
+        return XlinkResolver.Build(All());
     }
 
     /// <summary>
@@ -124,39 +109,26 @@ public sealed class S421RoutePlan
     /// attribute payload of their own that the typed model uses, so a
     /// uniform reference list is sufficient.
     /// </summary>
-    private static (string Id, ImmutableArray<S421Reference> References)? ResolveContainer(
-        Dictionary<string, object> byId, string href, string role,
-        List<S421ProjectionDiagnostic> diags, string? relatedId = null)
+    private static (string Id, ImmutableArray<GmlReference> References)? ResolveContainer(
+        string href, string role, ProjectionContext ctx, string? relatedId = null)
     {
-        var key = NormaliseHref(href);
-        if (byId.TryGetValue(key, out var obj))
+        var obj = ctx.Xlinks.ResolveAny(href, role, ctx, relatedId);
+        return obj switch
         {
-            return obj switch
-            {
-                S421Feature f => (f.Id, f.References),
-                S421InformationType i => (i.Id, i.References),
-                _ => null,
-            };
-        }
-
-        diags.Add(new S421ProjectionDiagnostic
-        {
-            Severity = S421DiagnosticSeverity.Warning,
-            Message = $"Unresolved {role} reference '{href}'.",
-            RelatedId = relatedId,
-        });
-        return null;
+            S421Feature f => (f.Id, f.References),
+            S421InformationType i => (i.Id, i.References),
+            _ => null,
+        };
     }
 
     // ── RouteInfo ────────────────────────────────────────────────
 
-    private static S421RouteInfo? ResolveRouteInfo(S421Feature route,
-        Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags)
+    private static S421RouteInfo? ResolveRouteInfo(S421Feature route, ProjectionContext ctx)
     {
         var infoRef = route.References.FirstOrDefault(r => r.Role == "routeInfo");
         if (infoRef is null) return null;
 
-        var infoType = Resolve<S421InformationType>(byId, infoRef.Href, "routeInfo", diags, route.Id);
+        var infoType = ctx.Xlinks.Resolve<S421InformationType>(infoRef.Href, "routeInfo", ctx, route.Id);
         if (infoType is null) return null;
 
         var a = infoType.Attributes;
@@ -166,10 +138,10 @@ public sealed class S421RoutePlan
             Name = a.GetValueOrDefault("routeInfoName"),
             Author = a.GetValueOrDefault("routeInfoAuthor"),
             Description = a.GetValueOrDefault("routeInfoDescription"),
-            Status = ParseInt(a.GetValueOrDefault("routeInfoStatus")),
-            EditionTime = ParseDateTime(a.GetValueOrDefault("routeInfoEditionTime"), infoType.Id, "routeInfoEditionTime", diags),
-            ValidityStart = ParseDateTime(a.GetValueOrDefault("routeInfoValidityStart"), infoType.Id, "routeInfoValidityStart", diags),
-            ValidityEnd = ParseDateTime(a.GetValueOrDefault("routeInfoValidityEnd"), infoType.Id, "routeInfoValidityEnd", diags),
+            Status = AttributeParser.TryParseInt(a.GetValueOrDefault("routeInfoStatus"), ctx, infoType.Id, "routeInfoStatus"),
+            EditionTime = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeInfoEditionTime"), ctx, infoType.Id, "routeInfoEditionTime"),
+            ValidityStart = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeInfoValidityStart"), ctx, infoType.Id, "routeInfoValidityStart"),
+            ValidityEnd = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeInfoValidityEnd"), ctx, infoType.Id, "routeInfoValidityEnd"),
             DeparturePortId1 = a.GetValueOrDefault("routeInfoDeparturePortID1"),
             DeparturePortId2 = a.GetValueOrDefault("routeInfoDeparturePortID2"),
             DeparturePortCall = a.GetValueOrDefault("routeInfoDeparturePortCall"),
@@ -178,8 +150,8 @@ public sealed class S421RoutePlan
             ArrivalPortCall = a.GetValueOrDefault("routeInfoArrivalPortCall"),
             PreviousRouteReference = a.GetValueOrDefault("routeInfoReferencePrevRoute"),
             NextRouteReference = a.GetValueOrDefault("routeInfoReferenceNextRoute"),
-            Vessel = BuildVessel(a),
-            ExtraAttributes = ExcludeKnown(a,
+            Vessel = BuildVessel(a, ctx, infoType.Id),
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(a,
                 "routeInfoName", "routeInfoAuthor", "routeInfoDescription", "routeInfoStatus",
                 "routeInfoEditionTime", "routeInfoValidityStart", "routeInfoValidityEnd",
                 "routeInfoDeparturePortID1", "routeInfoDeparturePortID2", "routeInfoDeparturePortCall",
@@ -191,7 +163,7 @@ public sealed class S421RoutePlan
         };
     }
 
-    private static S421VesselInfo? BuildVessel(ImmutableDictionary<string, string> a)
+    private static S421VesselInfo? BuildVessel(ImmutableDictionary<string, string> a, ProjectionContext ctx, string relatedId)
     {
         bool any =
             a.ContainsKey("routeInfoVesselType") || a.ContainsKey("routeInfoVesselName") ||
@@ -203,28 +175,28 @@ public sealed class S421RoutePlan
 
         return new S421VesselInfo
         {
-            VesselType = ParseInt(a.GetValueOrDefault("routeInfoVesselType")),
+            VesselType = AttributeParser.TryParseInt(a.GetValueOrDefault("routeInfoVesselType"), ctx, relatedId, "routeInfoVesselType"),
             Name = a.GetValueOrDefault("routeInfoVesselName"),
             Mmsi = a.GetValueOrDefault("routeInfoVesselMMSI"),
             Callsign = a.GetValueOrDefault("routeInfoVesselCallsign"),
             Imo = a.GetValueOrDefault("routeInfoVesselIMO"),
             VoyageId = a.GetValueOrDefault("routeInfoVesselVoyage"),
-            HeightMeters = ParseDouble(a.GetValueOrDefault("routeInfoVesselHeight")),
-            LengthMeters = ParseDouble(a.GetValueOrDefault("routeInfoVesselLength")),
-            BeamMeters = ParseDouble(a.GetValueOrDefault("routeInfoVesselBeam")),
+            HeightMeters = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeInfoVesselHeight"), ctx, relatedId, "routeInfoVesselHeight"),
+            LengthMeters = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeInfoVesselLength"), ctx, relatedId, "routeInfoVesselLength"),
+            BeamMeters = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeInfoVesselBeam"), ctx, relatedId, "routeInfoVesselBeam"),
         };
     }
 
     // ── Waypoints + legs ─────────────────────────────────────────
 
     private static (ImmutableArray<S421Waypoint>, ImmutableArray<S421Leg>) ResolveWaypointsAndLegs(
-        S421Feature route, Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags)
+        S421Feature route, ProjectionContext ctx)
     {
         var wptsRef = route.References.FirstOrDefault(r => r.Role == "routeWaypoints");
         if (wptsRef is null)
             return (ImmutableArray<S421Waypoint>.Empty, ImmutableArray<S421Leg>.Empty);
 
-        var container = ResolveContainer(byId, wptsRef.Href, "routeWaypoints", diags, route.Id);
+        var container = ResolveContainer(wptsRef.Href, "routeWaypoints", ctx, route.Id);
         if (container is null)
             return (ImmutableArray<S421Waypoint>.Empty, ImmutableArray<S421Leg>.Empty);
 
@@ -234,29 +206,29 @@ public sealed class S421RoutePlan
         var waypoints = ImmutableArray.CreateBuilder<S421Waypoint>();
         foreach (var wptRef in container.Value.References.Where(r => r.Role == "routeWaypoint"))
         {
-            var wptFeature = Resolve<S421Feature>(byId, wptRef.Href, "routeWaypoint", diags, container.Value.Id);
+            var wptFeature = ctx.Xlinks.Resolve<S421Feature>(wptRef.Href, "routeWaypoint", ctx, container.Value.Id);
             if (wptFeature is null) continue;
 
             S421Leg? leg = null;
             var legRef = wptFeature.References.FirstOrDefault(r => r.Role == "routeWaypointLeg");
             if (legRef is not null)
             {
-                var legFeature = Resolve<S421Feature>(byId, legRef.Href, "routeWaypointLeg", diags, wptFeature.Id);
+                var legFeature = ctx.Xlinks.Resolve<S421Feature>(legRef.Href, "routeWaypointLeg", ctx, wptFeature.Id);
                 if (legFeature is not null)
                 {
-                    leg = ProjectLeg(legFeature);
+                    leg = ProjectLeg(legFeature, ctx);
                     if (seenLegs.Add(legFeature.Id))
                         legs.Add(leg);
                 }
             }
 
-            waypoints.Add(ProjectWaypoint(wptFeature, leg, diags));
+            waypoints.Add(ProjectWaypoint(wptFeature, leg, ctx));
         }
 
         return (waypoints.ToImmutable(), legs.ToImmutable());
     }
 
-    private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? leg, List<S421ProjectionDiagnostic> diags)
+    private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? leg, ProjectionContext ctx)
     {
         GeoPosition position = default;
         if (!f.Points.IsDefaultOrEmpty)
@@ -266,10 +238,11 @@ public sealed class S421RoutePlan
         }
         else
         {
-            diags.Add(new S421ProjectionDiagnostic
+            ctx.Report(new ProjectionDiagnostic
             {
-                Severity = S421DiagnosticSeverity.Warning,
+                Severity = DiagnosticSeverity.Warning,
                 Message = "RouteWaypoint has no point geometry.",
+                Code = "feature.geometry.missing",
                 RelatedId = f.Id,
             });
         }
@@ -277,20 +250,20 @@ public sealed class S421RoutePlan
         return new S421Waypoint
         {
             Id = f.Id,
-            WaypointNumber = ParseInt(f.Attributes.GetValueOrDefault("routeWaypointID")),
+            WaypointNumber = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("routeWaypointID"), ctx, f.Id, "routeWaypointID"),
             Name = f.Attributes.GetValueOrDefault("routeWaypointName"),
             ExternalReferenceId = f.Attributes.GetValueOrDefault("routeWaypointExternalReferenceID"),
-            Fixed = ParseBool(f.Attributes.GetValueOrDefault("routeWaypointFixed")),
-            TurnRadius = ParseDouble(f.Attributes.GetValueOrDefault("routeWaypointTurnRadius")),
+            Fixed = AttributeParser.TryParseBool(f.Attributes.GetValueOrDefault("routeWaypointFixed"), ctx, f.Id, "routeWaypointFixed"),
+            TurnRadius = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("routeWaypointTurnRadius"), ctx, f.Id, "routeWaypointTurnRadius"),
             Position = position,
             OutgoingLeg = leg,
-            ExtraAttributes = ExcludeKnown(f.Attributes,
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
                 "routeWaypointID", "routeWaypointName", "routeWaypointExternalReferenceID",
                 "routeWaypointFixed", "routeWaypointTurnRadius"),
         };
     }
 
-    private static S421Leg ProjectLeg(S421Feature f)
+    private static S421Leg ProjectLeg(S421Feature f, ProjectionContext ctx)
     {
         var coords = ImmutableArray.CreateBuilder<GeoPosition>();
         foreach (var curve in f.Curves)
@@ -302,23 +275,23 @@ public sealed class S421RoutePlan
         {
             Id = f.Id,
             Coordinates = coords.ToImmutable(),
-            StarboardCrossTrackDistanceLimit = ParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardXTDL")),
-            PortCrossTrackDistanceLimit = ParseDouble(a.GetValueOrDefault("routeWaypointLegPortXTDL")),
-            StarboardChannelLimit = ParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardCL")),
-            PortChannelLimit = ParseDouble(a.GetValueOrDefault("routeWaypointLegPortCL")),
-            SafetyContour = ParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyContour")),
-            SafetyDepth = ParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyDepth")),
-            GeometryTypeCode = ParseInt(a.GetValueOrDefault("routeWaypointLegGeometryType")),
-            SpeedOverGroundMin = ParseDouble(a.GetValueOrDefault("routeWaypointLegSOGMin")),
-            SpeedOverGroundMax = ParseDouble(a.GetValueOrDefault("routeWaypointLegSOGMax")),
-            SpeedThroughWaterMin = ParseDouble(a.GetValueOrDefault("routeWaypointLegSTWMin")),
-            SpeedThroughWaterMax = ParseDouble(a.GetValueOrDefault("routeWaypointLegSTWMax")),
-            Draft = ParseDouble(a.GetValueOrDefault("routeWaypointLegDraft")),
-            StaticUnderKeelClearance = ParseDouble(a.GetValueOrDefault("routeWaypointLegStaticUKC")),
-            DynamicUnderKeelClearance = ParseDouble(a.GetValueOrDefault("routeWaypointLegDynamicUKC")),
-            SafetyMargin = ParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyMargin")),
+            StarboardCrossTrackDistanceLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardXTDL"), ctx, f.Id, "routeWaypointLegStarboardXTDL"),
+            PortCrossTrackDistanceLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegPortXTDL"), ctx, f.Id, "routeWaypointLegPortXTDL"),
+            StarboardChannelLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegStarboardCL"), ctx, f.Id, "routeWaypointLegStarboardCL"),
+            PortChannelLimit = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegPortCL"), ctx, f.Id, "routeWaypointLegPortCL"),
+            SafetyContour = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyContour"), ctx, f.Id, "routeWaypointLegSafetyContour"),
+            SafetyDepth = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyDepth"), ctx, f.Id, "routeWaypointLegSafetyDepth"),
+            GeometryTypeCode = AttributeParser.TryParseInt(a.GetValueOrDefault("routeWaypointLegGeometryType"), ctx, f.Id, "routeWaypointLegGeometryType"),
+            SpeedOverGroundMin = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSOGMin"), ctx, f.Id, "routeWaypointLegSOGMin"),
+            SpeedOverGroundMax = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSOGMax"), ctx, f.Id, "routeWaypointLegSOGMax"),
+            SpeedThroughWaterMin = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSTWMin"), ctx, f.Id, "routeWaypointLegSTWMin"),
+            SpeedThroughWaterMax = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSTWMax"), ctx, f.Id, "routeWaypointLegSTWMax"),
+            Draft = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegDraft"), ctx, f.Id, "routeWaypointLegDraft"),
+            StaticUnderKeelClearance = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegStaticUKC"), ctx, f.Id, "routeWaypointLegStaticUKC"),
+            DynamicUnderKeelClearance = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegDynamicUKC"), ctx, f.Id, "routeWaypointLegDynamicUKC"),
+            SafetyMargin = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeWaypointLegSafetyMargin"), ctx, f.Id, "routeWaypointLegSafetyMargin"),
             Note = a.GetValueOrDefault("routeWaypointLegNote"),
-            ExtraAttributes = ExcludeKnown(a,
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(a,
                 "routeWaypointLegStarboardXTDL", "routeWaypointLegPortXTDL",
                 "routeWaypointLegStarboardCL", "routeWaypointLegPortCL",
                 "routeWaypointLegSafetyContour", "routeWaypointLegSafetyDepth",
@@ -333,26 +306,25 @@ public sealed class S421RoutePlan
 
     // ── Action points ────────────────────────────────────────────
 
-    private static ImmutableArray<S421ActionPoint> ResolveActionPoints(S421Feature route,
-        Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags)
+    private static ImmutableArray<S421ActionPoint> ResolveActionPoints(S421Feature route, ProjectionContext ctx)
     {
         var apRef = route.References.FirstOrDefault(r => r.Role == "routeActionPoints");
         if (apRef is null) return ImmutableArray<S421ActionPoint>.Empty;
 
-        var container = ResolveContainer(byId, apRef.Href, "routeActionPoints", diags, route.Id);
+        var container = ResolveContainer(apRef.Href, "routeActionPoints", ctx, route.Id);
         if (container is null) return ImmutableArray<S421ActionPoint>.Empty;
 
         var result = ImmutableArray.CreateBuilder<S421ActionPoint>();
         foreach (var apFeatureRef in container.Value.References.Where(r => r.Role == "routeActionPoint"))
         {
-            var ap = Resolve<S421Feature>(byId, apFeatureRef.Href, "routeActionPoint", diags, container.Value.Id);
+            var ap = ctx.Xlinks.Resolve<S421Feature>(apFeatureRef.Href, "routeActionPoint", ctx, container.Value.Id);
             if (ap is null) continue;
-            result.Add(ProjectActionPoint(ap));
+            result.Add(ProjectActionPoint(ap, ctx));
         }
         return result.ToImmutable();
     }
 
-    private static S421ActionPoint ProjectActionPoint(S421Feature f)
+    private static S421ActionPoint ProjectActionPoint(S421Feature f, ProjectionContext ctx)
     {
         S421ActionPointGeometryKind kind;
         ImmutableArray<GeoPosition> coords;
@@ -390,15 +362,15 @@ public sealed class S421RoutePlan
         return new S421ActionPoint
         {
             Id = f.Id,
-            ActionPointNumber = ParseInt(a.GetValueOrDefault("routeActionPointID")),
+            ActionPointNumber = AttributeParser.TryParseInt(a.GetValueOrDefault("routeActionPointID"), ctx, f.Id, "routeActionPointID"),
             Name = a.GetValueOrDefault("routeActionPointName"),
-            RadiusNauticalMiles = ParseDouble(a.GetValueOrDefault("routeActionPointRadius")),
-            TimeToActMinutes = ParseDouble(a.GetValueOrDefault("routeActionPointTimeToAct")),
-            RequiredAction = ParseInt(a.GetValueOrDefault("routeActionPointRequiredAction")),
+            RadiusNauticalMiles = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeActionPointRadius"), ctx, f.Id, "routeActionPointRadius"),
+            TimeToActMinutes = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeActionPointTimeToAct"), ctx, f.Id, "routeActionPointTimeToAct"),
+            RequiredAction = AttributeParser.TryParseInt(a.GetValueOrDefault("routeActionPointRequiredAction"), ctx, f.Id, "routeActionPointRequiredAction"),
             RequiredActionDescription = description,
             GeometryKind = kind,
             Coordinates = coords,
-            ExtraAttributes = ExcludeKnown(a,
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(a,
                 "routeActionPointID", "routeActionPointName", "routeActionPointRadius",
                 "routeActionPointTimeToAct", "routeActionPointRequiredAction",
                 "routeActionPointRequiredActionDescription",
@@ -408,60 +380,57 @@ public sealed class S421RoutePlan
 
     // ── Schedules ────────────────────────────────────────────────
 
-    private static ImmutableArray<S421Schedule> ResolveSchedules(S421Feature route,
-        Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags)
+    private static ImmutableArray<S421Schedule> ResolveSchedules(S421Feature route, ProjectionContext ctx)
     {
         var schRef = route.References.FirstOrDefault(r => r.Role == "routeSchedules");
         if (schRef is null) return ImmutableArray<S421Schedule>.Empty;
 
-        var container = ResolveContainer(byId, schRef.Href, "routeSchedules", diags, route.Id);
+        var container = ResolveContainer(schRef.Href, "routeSchedules", ctx, route.Id);
         if (container is null) return ImmutableArray<S421Schedule>.Empty;
 
         var result = ImmutableArray.CreateBuilder<S421Schedule>();
         foreach (var entry in container.Value.References.Where(r => r.Role == "routeSchedule"))
         {
-            var sched = Resolve<S421InformationType>(byId, entry.Href, "routeSchedule", diags, container.Value.Id);
+            var sched = ctx.Xlinks.Resolve<S421InformationType>(entry.Href, "routeSchedule", ctx, container.Value.Id);
             if (sched is null) continue;
-            result.Add(ProjectSchedule(sched, byId, diags));
+            result.Add(ProjectSchedule(sched, ctx));
         }
         return result.ToImmutable();
     }
 
-    private static S421Schedule ProjectSchedule(S421InformationType sched,
-        Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags)
+    private static S421Schedule ProjectSchedule(S421InformationType sched, ProjectionContext ctx)
     {
         var variants = ImmutableArray.CreateBuilder<S421ScheduleVariant>();
-        AddVariant(sched, "routeScheduleManual", S421ScheduleVariantKind.Manual, byId, diags, variants);
-        AddVariant(sched, "routeScheduleCalculated", S421ScheduleVariantKind.Calculated, byId, diags, variants);
-        AddVariant(sched, "routeScheduleRecommended", S421ScheduleVariantKind.Recommended, byId, diags, variants);
+        AddVariant(sched, "routeScheduleManual", S421ScheduleVariantKind.Manual, ctx, variants);
+        AddVariant(sched, "routeScheduleCalculated", S421ScheduleVariantKind.Calculated, ctx, variants);
+        AddVariant(sched, "routeScheduleRecommended", S421ScheduleVariantKind.Recommended, ctx, variants);
 
         var a = sched.Attributes;
         return new S421Schedule
         {
             Id = sched.Id,
-            ScheduleNumber = ParseInt(a.GetValueOrDefault("routeScheduleID")),
+            ScheduleNumber = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleID"), ctx, sched.Id, "routeScheduleID"),
             Name = a.GetValueOrDefault("routeScheduleName"),
             Variants = variants.ToImmutable(),
-            ExtraAttributes = ExcludeKnown(a, "routeScheduleID", "routeScheduleName"),
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(a, "routeScheduleID", "routeScheduleName"),
         };
     }
 
     private static void AddVariant(S421InformationType schedule, string role, S421ScheduleVariantKind kind,
-        Dictionary<string, object> byId, List<S421ProjectionDiagnostic> diags,
-        ImmutableArray<S421ScheduleVariant>.Builder output)
+        ProjectionContext ctx, ImmutableArray<S421ScheduleVariant>.Builder output)
     {
         var reference = schedule.References.FirstOrDefault(r => r.Role == role);
         if (reference is null) return;
 
-        var variant = Resolve<S421InformationType>(byId, reference.Href, role, diags, schedule.Id);
+        var variant = ctx.Xlinks.Resolve<S421InformationType>(reference.Href, role, ctx, schedule.Id);
         if (variant is null) return;
 
         var elements = ImmutableArray.CreateBuilder<S421ScheduleElement>();
         foreach (var elemRef in variant.References.Where(r => r.Role == "routeScheduleElement"))
         {
-            var elem = Resolve<S421InformationType>(byId, elemRef.Href, "routeScheduleElement", diags, variant.Id);
+            var elem = ctx.Xlinks.Resolve<S421InformationType>(elemRef.Href, "routeScheduleElement", ctx, variant.Id);
             if (elem is null) continue;
-            elements.Add(ProjectScheduleElement(elem, diags));
+            elements.Add(ProjectScheduleElement(elem, ctx));
         }
 
         output.Add(new S421ScheduleVariant
@@ -472,22 +441,22 @@ public sealed class S421RoutePlan
         });
     }
 
-    private static S421ScheduleElement ProjectScheduleElement(S421InformationType e, List<S421ProjectionDiagnostic> diags)
+    private static S421ScheduleElement ProjectScheduleElement(S421InformationType e, ProjectionContext ctx)
     {
         var a = e.Attributes;
         return new S421ScheduleElement
         {
             Id = e.Id,
-            WaypointNumber = ParseInt(a.GetValueOrDefault("routeWaypointId")),
-            PlannedSpeedOverGround = ParseDouble(a.GetValueOrDefault("routeScheduleElementPlanSOG")),
-            Etd = ParseDateTime(a.GetValueOrDefault("routeScheduleElementETD"), e.Id, "routeScheduleElementETD", diags),
-            Eta = ParseDateTime(a.GetValueOrDefault("routeScheduleElementETA"), e.Id, "routeScheduleElementETA", diags),
-            EtdWindowBeforeMinutes = ParseInt(a.GetValueOrDefault("routeScheduleElementETDWindowBefore")),
-            EtdWindowAfterMinutes = ParseInt(a.GetValueOrDefault("routeScheduleElementETDWindowAfter")),
-            EtaWindowBeforeMinutes = ParseInt(a.GetValueOrDefault("routeScheduleElementETAWindowBefore")),
-            EtaWindowAfterMinutes = ParseInt(a.GetValueOrDefault("routeScheduleElementETAWindowAfter")),
+            WaypointNumber = AttributeParser.TryParseInt(a.GetValueOrDefault("routeWaypointId"), ctx, e.Id, "routeWaypointId"),
+            PlannedSpeedOverGround = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeScheduleElementPlanSOG"), ctx, e.Id, "routeScheduleElementPlanSOG"),
+            Etd = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeScheduleElementETD"), ctx, e.Id, "routeScheduleElementETD"),
+            Eta = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeScheduleElementETA"), ctx, e.Id, "routeScheduleElementETA"),
+            EtdWindowBeforeMinutes = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleElementETDWindowBefore"), ctx, e.Id, "routeScheduleElementETDWindowBefore"),
+            EtdWindowAfterMinutes = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleElementETDWindowAfter"), ctx, e.Id, "routeScheduleElementETDWindowAfter"),
+            EtaWindowBeforeMinutes = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleElementETAWindowBefore"), ctx, e.Id, "routeScheduleElementETAWindowBefore"),
+            EtaWindowAfterMinutes = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleElementETAWindowAfter"), ctx, e.Id, "routeScheduleElementETAWindowAfter"),
             Note = a.GetValueOrDefault("routeScheduleElementNote"),
-            ExtraAttributes = ExcludeKnown(a,
+            ExtraAttributes = ExtraAttributes.ExcludeKnown(a,
                 "routeWaypointId",
                 "routeScheduleElementPlanSOG",
                 "routeScheduleElementETD", "routeScheduleElementETA",
@@ -495,48 +464,5 @@ public sealed class S421RoutePlan
                 "routeScheduleElementETAWindowBefore", "routeScheduleElementETAWindowAfter",
                 "routeScheduleElementNote"),
         };
-    }
-
-    // ── Primitive parsing ────────────────────────────────────────
-
-    private static int? ParseInt(string? value) =>
-        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ? r : null;
-
-    private static double? ParseDouble(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var r) ? r : null;
-
-    private static bool? ParseBool(string? value) => value switch
-    {
-        null => null,
-        "1" or "true" or "True" or "TRUE" => true,
-        "0" or "false" or "False" or "FALSE" => false,
-        _ => null,
-    };
-
-    private static DateTimeOffset? ParseDateTime(string? value, string relatedId, string code,
-        List<S421ProjectionDiagnostic> diags)
-    {
-        if (string.IsNullOrEmpty(value)) return null;
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var r))
-            return r;
-
-        diags.Add(new S421ProjectionDiagnostic
-        {
-            Severity = S421DiagnosticSeverity.Warning,
-            Message = $"Could not parse '{code}' value '{value}' as a date/time.",
-            RelatedId = relatedId,
-        });
-        return null;
-    }
-
-    private static ImmutableDictionary<string, string> ExcludeKnown(
-        ImmutableDictionary<string, string> source, params string[] knownKeys)
-    {
-        var known = new HashSet<string>(knownKeys, StringComparer.OrdinalIgnoreCase);
-        var b = ImmutableDictionary.CreateBuilder<string, string>();
-        foreach (var (k, v) in source)
-            if (!known.Contains(k)) b[k] = v;
-        return b.ToImmutable();
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
 

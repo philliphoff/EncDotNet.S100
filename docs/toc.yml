@@ -1,4 +1,6 @@
 - name: Documentation
   href: index.md
+- name: Typed data models
+  href: typed-data-models.md
 - name: Observability
   href: observability.md

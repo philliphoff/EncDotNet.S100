@@ -51,7 +51,16 @@ projection on top:
   `ExtraAttributes` dictionary, so extension and future-edition attributes
   round-trip verbatim.
 - Projection failures (unresolved references, unparseable date/times) surface
-  as `S421ProjectionDiagnostic` entries rather than exceptions.
+  as `ProjectionDiagnostic` entries (from `EncDotNet.S100.DataModel`) rather
+  than exceptions.
+
+> **Shared abstractions.** As of Pass 1 of the typed-model initiative, the
+> projection layer consumes the cross-cutting `ProjectionDiagnostic`,
+> `DiagnosticSeverity`, `GeoPosition`, `XlinkResolver`, `AttributeParser`,
+> and `ExtraAttributes` helpers from `EncDotNet.S100.DataModel` in
+> `EncDotNet.S100.Core`. The previous per-spec types
+> (`S421ProjectionDiagnostic`, `S421DiagnosticSeverity`, `S421Reference`)
+> have been removed.
 
 ## Installation
 
@@ -80,6 +89,7 @@ foreach (var wp in dataset.Features.Where(f => f.FeatureType == "RouteWaypoint")
 ### Quick start (typed model)
 
 ```csharp
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 

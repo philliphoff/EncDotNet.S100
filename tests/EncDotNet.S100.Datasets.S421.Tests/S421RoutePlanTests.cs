@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 
@@ -19,7 +20,7 @@ public class S421RoutePlanTests
         return S421Dataset.Open(path);
     }
 
-    private static S421RoutePlan Project(string fileName, out IReadOnlyList<S421ProjectionDiagnostic> diagnostics)
+    private static S421RoutePlan Project(string fileName, out IReadOnlyList<ProjectionDiagnostic> diagnostics)
         => S421RoutePlan.From(Load(fileName), out diagnostics);
 
     // ── Basic projection (GMIN) ──────────────────────────────────
@@ -208,7 +209,7 @@ public class S421RoutePlanTests
         // diagnostics rather than throw.
         Project("RTE-TEST-GFULL.s421.gml", out var diagnostics);
         Assert.Contains(diagnostics, d =>
-            d.Severity == S421DiagnosticSeverity.Warning &&
+            d.Severity == DiagnosticSeverity.Warning &&
             d.Message.Contains("routeWaypoint", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -251,9 +252,9 @@ public class S421RoutePlanTests
     [Fact]
     public void DiagnosticToString_IncludesSeverityAndMessage()
     {
-        var d = new S421ProjectionDiagnostic
+        var d = new ProjectionDiagnostic
         {
-            Severity = S421DiagnosticSeverity.Warning,
+            Severity = DiagnosticSeverity.Warning,
             Message = "X",
             RelatedId = "ID1",
         };

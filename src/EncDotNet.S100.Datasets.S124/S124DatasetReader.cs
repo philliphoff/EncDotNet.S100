@@ -10,8 +10,11 @@ namespace EncDotNet.S100.Datasets.S124;
 /// </summary>
 internal static class S124DatasetReader
 {
-    // S-100 Part 10b GML namespaces
+    // S-100 Part 10b GML namespaces (S-124 uses the legacy 1.0 profile in real-world data,
+    // but accept the 5.0 namespace as well for forward compatibility).
     private static readonly XNamespace S100Ns = "http://www.iho.int/S100/profile/s100gml/1.0";
+    private static readonly XNamespace S100Ns50 = "http://www.iho.int/s100gml/5.0";
+    private static readonly XNamespace XLinkNs = "http://www.w3.org/1999/xlink";
 
     // Known S-124 feature type codes
     private static readonly HashSet<string> FeatureTypeCodes = new(StringComparer.OrdinalIgnoreCase)
@@ -75,7 +78,6 @@ internal static class S124DatasetReader
                     informationTypes.Add(info);
             }
         }
-
         return new S124Dataset
         {
             ProductIdentifier = productId ?? "S-124",
@@ -94,7 +96,7 @@ internal static class S124DatasetReader
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element);
 
         // Parse attributes
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element);
+        var (simpleAttrs, complexAttrs, references) = ParseAttributes(element);
 
         return new S124Feature
         {
@@ -107,6 +109,7 @@ internal static class S124DatasetReader
             InteriorRings = interiorRings,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = references,
         };
     }
 
@@ -115,7 +118,7 @@ internal static class S124DatasetReader
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
         var typeCode = element.Name.LocalName;
 
-        var (simpleAttrs, complexAttrs) = ParseAttributes(element);
+        var (simpleAttrs, complexAttrs, references) = ParseAttributes(element);
 
         return new S124InformationType
         {
@@ -123,6 +126,7 @@ internal static class S124DatasetReader
             TypeCode = typeCode,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = references,
         };
     }
 
@@ -192,11 +196,11 @@ internal static class S124DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S124ComplexAttribute>) ParseAttributes(XElement element)
+    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S124ComplexAttribute>, ImmutableArray<GmlReference>) ParseAttributes(XElement element)
     {
         var simple = ImmutableDictionary.CreateBuilder<string, string>();
         var complex = ImmutableArray.CreateBuilder<S124ComplexAttribute>();
-        var ns = element.Name.Namespace;
+        var refs = ImmutableArray.CreateBuilder<GmlReference>();
 
         foreach (var child in element.Elements())
         {
@@ -205,8 +209,22 @@ internal static class S124DatasetReader
             // Skip geometry, GML id, and S-100 infrastructure elements
             if (localName is "geometry" or "boundedBy" ||
                 child.Name.Namespace == GmlNamespaces.Gml ||
-                child.Name.Namespace == S100Ns)
+                child.Name.Namespace == S100Ns ||
+                child.Name.Namespace == S100Ns50)
                 continue;
+
+            // xlink:href reference — captured as a typed reference rather than an attribute.
+            var href = child.Attribute(XLinkNs + "href")?.Value;
+            if (href is not null)
+            {
+                refs.Add(new GmlReference
+                {
+                    Role = localName,
+                    Href = href,
+                    ArcRole = child.Attribute(XLinkNs + "arcrole")?.Value,
+                });
+                continue;
+            }
 
             if (child.HasElements)
             {
@@ -214,7 +232,7 @@ internal static class S124DatasetReader
                 var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
                 foreach (var sub in child.Elements())
                 {
-                    if (!sub.HasElements)
+                    if (!sub.HasElements && sub.Attribute(XLinkNs + "href") is null)
                     {
                         subAttrs[sub.Name.LocalName] = sub.Value;
                     }
@@ -236,7 +254,7 @@ internal static class S124DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple.ToImmutable(), complex.ToImmutable(), refs.ToImmutable());
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)
