@@ -16,8 +16,21 @@ internal interface IToastService
     /// <summary>Shows a warning toast.</summary>
     void ShowWarning(string title, string? content = null);
 
-    /// <summary>Shows an error toast (longer delay, dismiss on click).</summary>
-    void ShowError(string title, string? content = null);
+    /// <summary>
+    /// Shows an error toast. When <paramref name="actionLabel"/> and
+    /// <paramref name="action"/> are both supplied, the toast renders an
+    /// action button that invokes <paramref name="action"/> on click.
+    /// When <paramref name="sticky"/> is true the toast does not
+    /// auto-dismiss; the user must click it (or the action button) to
+    /// remove it. Used by the dataset loader to surface a structured
+    /// short error message with a "Copy details" action.
+    /// </summary>
+    void ShowError(
+        string title,
+        string? content = null,
+        string? actionLabel = null,
+        Action? action = null,
+        bool sticky = false);
 
     /// <summary>
     /// Shows a persistent loading toast with an action button (e.g.

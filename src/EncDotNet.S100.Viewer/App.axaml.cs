@@ -216,22 +216,6 @@ public partial class App : Application
         services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<ShadUI.ToastManager>();
         services.AddSingleton<IToastService, ToastService>();
-        services.AddSingleton<IDatasetLoadFailureReporter>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILoggerFactory>()
-                .CreateLogger<WindowLoadFailureReporter>();
-            return new WindowLoadFailureReporter(
-                ownerResolver: () =>
-                {
-                    if (Avalonia.Application.Current?.ApplicationLifetime
-                        is IClassicDesktopStyleApplicationLifetime desktop)
-                    {
-                        return desktop.MainWindow;
-                    }
-                    return null;
-                },
-                logger: logger);
-        });
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();

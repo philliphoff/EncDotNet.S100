@@ -846,48 +846,21 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>TCP port to bind on 127.0.0.1. Use 0 to let the OS pick an ephemeral port.</value>
   </data>
 
-  <!-- Load-failure dialog -->
-  <data name="LoadFailureDialog_Title" xml:space="preserve">
-    <value>Couldn't load dataset</value>
+  <!-- Load-failure toast -->
+  <data name="Toast_DatasetErrorTitle" xml:space="preserve">
+    <value>Couldn't load {0}</value>
+    <comment>Toast title shown when a dataset open fails. {0} = dataset display name.</comment>
   </data>
-  <data name="LoadFailureDialog_NotSupportedBody" xml:space="preserve">
+  <data name="LoadFailureToast_NotSupportedBody" xml:space="preserve">
     <value>{0} dataset uses {1}, which is not yet supported.</value>
     <comment>{0} = product code (e.g. "S-104"); {1} = unsupported feature description.</comment>
   </data>
-  <data name="LoadFailureDialog_SchemaBody" xml:space="preserve">
+  <data name="LoadFailureToast_SchemaBody" xml:space="preserve">
     <value>This {0} file is missing or has an invalid '{1}' at '{2}'.</value>
     <comment>{0} = product code; {1} = attribute or dataset name; {2} = HDF5 group path.</comment>
   </data>
-  <data name="LoadFailureDialog_GenericBody" xml:space="preserve">
-    <value>{0}</value>
-    <comment>{0} = raw exception message for non-S100 exceptions.</comment>
-  </data>
-  <data name="LoadFailureDialog_FilePathLabel" xml:space="preserve">
-    <value>File:</value>
-  </data>
-  <data name="LoadFailureDialog_SpecReference" xml:space="preserve">
-    <value>Reference: {0}</value>
-    <comment>{0} = spec citation, e.g. "S-100 Part 10c §10.2.1.2".</comment>
-  </data>
-  <data name="LoadFailureDialog_ShowDetails" xml:space="preserve">
-    <value>Show details</value>
-  </data>
-  <data name="LoadFailureDialog_HideDetails" xml:space="preserve">
-    <value>Hide details</value>
-  </data>
-  <data name="LoadFailureDialog_CopyDetails" xml:space="preserve">
+  <data name="LoadFailureToast_CopyDetails" xml:space="preserve">
     <value>Copy details</value>
-  </data>
-  <data name="LoadFailureDialog_CopyDetailsTooltip" xml:space="preserve">
-    <value>Copy the full error details to the clipboard</value>
-  </data>
-  <data name="LoadFailureDialog_Close" xml:space="preserve">
-    <value>Close</value>
-  </data>
-  <data name="LoadFailureDialog_CloseTooltip" xml:space="preserve">
-    <value>Dismiss this dialog</value>
-  </data>
-  <data name="LoadFailureDialog_DetailsCopied" xml:space="preserve">
-    <value>Copied</value>
+    <comment>Label for the action button on the load-failure toast.</comment>
   </data>
 </root>
