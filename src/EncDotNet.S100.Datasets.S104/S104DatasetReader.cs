@@ -23,7 +23,7 @@ public static class S104DatasetReader
         var root = file.Root;
 
         int? horizontalCRS = root.AttributeExists("horizontalCRS")
-            ? root.ReadAttribute<int>("horizontalCRS")
+            ? (int)root.ReadInt64Attribute("horizontalCRS")
             : null;
 
         string? epoch = root.AttributeExists("epoch")
@@ -45,7 +45,7 @@ public static class S104DatasetReader
         var wlGroup = root.OpenGroup("WaterLevel");
 
         int dataCodingFormat = wlGroup.AttributeExists("dataCodingFormat")
-            ? wlGroup.ReadAttribute<byte>("dataCodingFormat")
+            ? (int)wlGroup.ReadInt64Attribute("dataCodingFormat")
             : 2;
 
         string? methodWaterLevelProduct = wlGroup.AttributeExists("methodWaterLevelProduct")
@@ -91,12 +91,12 @@ public static class S104DatasetReader
 
     private static void ReadInstance(IHdf5Group instance, List<WaterLevelCoverage> coverages)
     {
-        double originLat = instance.ReadAttribute<double>("gridOriginLatitude");
-        double originLon = instance.ReadAttribute<double>("gridOriginLongitude");
-        double spacingLat = instance.ReadAttribute<double>("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadAttribute<double>("gridSpacingLongitudinal");
-        int numLat = (int)instance.ReadAttribute<uint>("numPointsLatitudinal");
-        int numLon = (int)instance.ReadAttribute<uint>("numPointsLongitudinal");
+        double originLat = instance.ReadDoubleAttribute("gridOriginLatitude");
+        double originLon = instance.ReadDoubleAttribute("gridOriginLongitude");
+        double spacingLat = instance.ReadDoubleAttribute("gridSpacingLatitudinal");
+        double spacingLon = instance.ReadDoubleAttribute("gridSpacingLongitudinal");
+        int numLat = (int)instance.ReadInt64Attribute("numPointsLatitudinal");
+        int numLon = (int)instance.ReadInt64Attribute("numPointsLongitudinal");
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
@@ -117,7 +117,7 @@ public static class S104DatasetReader
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
 
-            var values = group.ReadDataset<WaterLevelValue>("values");
+            var values = ReadValues(group);
 
             coverages.Add(new WaterLevelCoverage
             {
@@ -132,5 +132,82 @@ public static class S104DatasetReader
                 Values = values,
             });
         }
+    }
+
+    /// <summary>
+    /// Reads the per-time-step <c>values</c> compound dataset and projects it
+    /// into <see cref="WaterLevelValue"/>s, tolerating producer variation in
+    /// member naming and trend encoding.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The S-104 Feature Catalogue names the compound members
+    /// <c>waterLevelHeight</c> and <c>waterLevelTrend</c>; observed UKHO
+    /// production files use <c>surfaceHeight</c> and <c>trend</c>; some
+    /// in-tree synthetic fixtures use the C# field names <c>Height</c> and
+    /// <c>Trend</c>. All three are accepted (case-insensitive).
+    /// </para>
+    /// <para>
+    /// <c>waterLevelTrend</c> is spec-encoded as a uint8 enumeration but UKHO
+    /// dcf2 files store it as <c>f32</c>; both are decoded.
+    /// </para>
+    /// </remarks>
+    private static WaterLevelValue[] ReadValues(IHdf5Group group)
+    {
+        var raw = group.ReadRawCompoundDataset("values");
+
+        var heightMember = raw.FindMember("waterLevelHeight", "surfaceHeight", "Height")
+            ?? throw new InvalidOperationException(
+                "S-104 'values' compound is missing a height member " +
+                "(expected 'waterLevelHeight', 'surfaceHeight', or 'Height').");
+
+        var trendMember = raw.FindMember("waterLevelTrend", "trend", "Trend");
+
+        var result = new WaterLevelValue[raw.RecordCount];
+        var span = raw.Data.AsSpan();
+
+        for (int i = 0; i < raw.RecordCount; i++)
+        {
+            var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
+
+            float height = heightMember.Kind switch
+            {
+                CompoundMemberKind.Float32 => System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
+                    record.Slice(heightMember.Offset, 4)),
+                CompoundMemberKind.Float64 => (float)System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
+                    record.Slice(heightMember.Offset, 8)),
+                _ => throw new NotSupportedException(
+                    $"S-104 height member '{heightMember.Name}' has unsupported kind {heightMember.Kind}."),
+            };
+
+            byte trend = 0;
+            if (trendMember is not null)
+            {
+                trend = trendMember.Kind switch
+                {
+                    CompoundMemberKind.UInt8 or CompoundMemberKind.Int8 =>
+                        record[trendMember.Offset],
+                    // UKHO dcf2 stores trend as f32 — round to nearest valid enum byte.
+                    CompoundMemberKind.Float32 => (byte)Math.Clamp(
+                        (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
+                            record.Slice(trendMember.Offset, 4))),
+                        0, 255),
+                    CompoundMemberKind.Float64 => (byte)Math.Clamp(
+                        (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
+                            record.Slice(trendMember.Offset, 8))),
+                        0, 255),
+                    CompoundMemberKind.UInt16 => (byte)Math.Clamp(
+                        (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(
+                            record.Slice(trendMember.Offset, 2)),
+                        0, 255),
+                    _ => throw new NotSupportedException(
+                        $"S-104 trend member '{trendMember.Name}' has unsupported kind {trendMember.Kind}."),
+                };
+            }
+
+            result[i] = new WaterLevelValue(height, trend);
+        }
+
+        return result;
     }
 }

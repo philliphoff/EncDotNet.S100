@@ -23,7 +23,7 @@ public static class S111DatasetReader
         var root = file.Root;
 
         int? horizontalCRS = root.AttributeExists("horizontalDatumValue")
-            ? root.ReadAttribute<int>("horizontalDatumValue")
+            ? (int)root.ReadInt64Attribute("horizontalDatumValue")
             : null;
 
         string? epoch = root.AttributeExists("epoch")
@@ -43,17 +43,17 @@ public static class S111DatasetReader
             : null;
 
         float? surfaceCurrentDepth = root.AttributeExists("surfaceCurrentDepth")
-            ? root.ReadAttribute<float>("surfaceCurrentDepth")
+            ? (float)root.ReadDoubleAttribute("surfaceCurrentDepth")
             : null;
 
         var scGroup = root.OpenGroup("SurfaceCurrent");
 
         int dataCodingFormat = scGroup.AttributeExists("dataCodingFormat")
-            ? scGroup.ReadAttribute<byte>("dataCodingFormat")
+            ? (int)scGroup.ReadInt64Attribute("dataCodingFormat")
             : 2;
 
         int? typeOfCurrentData = scGroup.AttributeExists("typeOfCurrentData")
-            ? scGroup.ReadAttribute<byte>("typeOfCurrentData")
+            ? (int)scGroup.ReadInt64Attribute("typeOfCurrentData")
             : null;
 
         var coverages = ReadCoverages(scGroup, dataCodingFormat);
@@ -96,12 +96,12 @@ public static class S111DatasetReader
 
     private static void ReadInstance(IHdf5Group instance, List<SurfaceCurrentCoverage> coverages)
     {
-        double originLat = instance.ReadAttribute<float>("gridOriginLatitude");
-        double originLon = instance.ReadAttribute<float>("gridOriginLongitude");
-        double spacingLat = instance.ReadAttribute<float>("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadAttribute<float>("gridSpacingLongitudinal");
-        int numLat = instance.ReadAttribute<int>("numPointsLatitudinal");
-        int numLon = instance.ReadAttribute<int>("numPointsLongitudinal");
+        double originLat = instance.ReadDoubleAttribute("gridOriginLatitude");
+        double originLon = instance.ReadDoubleAttribute("gridOriginLongitude");
+        double spacingLat = instance.ReadDoubleAttribute("gridSpacingLatitudinal");
+        double spacingLon = instance.ReadDoubleAttribute("gridSpacingLongitudinal");
+        int numLat = (int)instance.ReadInt64Attribute("numPointsLatitudinal");
+        int numLon = (int)instance.ReadInt64Attribute("numPointsLongitudinal");
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
@@ -122,7 +122,7 @@ public static class S111DatasetReader
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
 
-            var values = group.ReadDataset<SurfaceCurrentValue>("values");
+            var values = ReadValues(group);
 
             coverages.Add(new SurfaceCurrentCoverage
             {
@@ -138,4 +138,55 @@ public static class S111DatasetReader
             });
         }
     }
+
+    /// <summary>
+    /// Reads the per-time-step <c>values</c> compound dataset and projects it
+    /// into <see cref="SurfaceCurrentValue"/>s, tolerating producer variation
+    /// in member naming and numeric width.
+    /// </summary>
+    /// <remarks>
+    /// The S-111 Feature Catalogue names the compound members
+    /// <c>surfaceCurrentSpeed</c> and <c>surfaceCurrentDirection</c>; some
+    /// in-tree synthetic fixtures use the C# field names <c>Speed</c> and
+    /// <c>Direction</c>. Both are accepted (case-insensitive).
+    /// </remarks>
+    private static SurfaceCurrentValue[] ReadValues(IHdf5Group group)
+    {
+        var raw = group.ReadRawCompoundDataset("values");
+
+        var speedMember = raw.FindMember("surfaceCurrentSpeed", "Speed")
+            ?? throw new InvalidOperationException(
+                "S-111 'values' compound is missing a speed member " +
+                "(expected 'surfaceCurrentSpeed' or 'Speed').");
+
+        var directionMember = raw.FindMember("surfaceCurrentDirection", "Direction")
+            ?? throw new InvalidOperationException(
+                "S-111 'values' compound is missing a direction member " +
+                "(expected 'surfaceCurrentDirection' or 'Direction').");
+
+        var result = new SurfaceCurrentValue[raw.RecordCount];
+        var span = raw.Data.AsSpan();
+
+        for (int i = 0; i < raw.RecordCount; i++)
+        {
+            var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
+
+            float speed = ReadFloat(record, speedMember);
+            float direction = ReadFloat(record, directionMember);
+
+            result[i] = new SurfaceCurrentValue(speed, direction);
+        }
+
+        return result;
+    }
+
+    private static float ReadFloat(ReadOnlySpan<byte> record, CompoundMemberInfo member) => member.Kind switch
+    {
+        CompoundMemberKind.Float32 => System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
+            record.Slice(member.Offset, 4)),
+        CompoundMemberKind.Float64 => (float)System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
+            record.Slice(member.Offset, 8)),
+        _ => throw new NotSupportedException(
+            $"S-111 member '{member.Name}' has unsupported kind {member.Kind}."),
+    };
 }

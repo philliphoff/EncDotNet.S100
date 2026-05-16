@@ -21,7 +21,7 @@ public static class S102DatasetReader
         var root = file.Root;
 
         int? horizontalCRS = root.AttributeExists("horizontalCRS")
-            ? root.ReadAttribute<int>("horizontalCRS")
+            ? (int)root.ReadInt64Attribute("horizontalCRS")
             : null;
 
         string? epoch = root.AttributeExists("epoch")
@@ -72,12 +72,12 @@ public static class S102DatasetReader
 
     private static BathymetryCoverage ReadCoverage(IHdf5Group instance)
     {
-        double originLat = instance.ReadAttribute<double>("gridOriginLatitude");
-        double originLon = instance.ReadAttribute<double>("gridOriginLongitude");
-        double spacingLat = instance.ReadAttribute<double>("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadAttribute<double>("gridSpacingLongitudinal");
-        int numLat = instance.ReadAttribute<int>("numPointsLatitudinal");
-        int numLon = instance.ReadAttribute<int>("numPointsLongitudinal");
+        double originLat = instance.ReadDoubleAttribute("gridOriginLatitude");
+        double originLon = instance.ReadDoubleAttribute("gridOriginLongitude");
+        double spacingLat = instance.ReadDoubleAttribute("gridSpacingLatitudinal");
+        double spacingLon = instance.ReadDoubleAttribute("gridSpacingLongitudinal");
+        int numLat = (int)instance.ReadInt64Attribute("numPointsLatitudinal");
+        int numLon = (int)instance.ReadInt64Attribute("numPointsLongitudinal");
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
