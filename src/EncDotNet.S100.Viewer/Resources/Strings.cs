@@ -328,6 +328,13 @@ internal static class Strings
     public static string Settings_McpEnabledTooltip => Get(nameof(Settings_McpEnabledTooltip));
     public static string Settings_McpPort => Get(nameof(Settings_McpPort));
     public static string Settings_McpPortTooltip => Get(nameof(Settings_McpPortTooltip));
+    public static string Settings_McpPort_ResetToAuto => Get(nameof(Settings_McpPort_ResetToAuto));
+    public static string Settings_McpPort_ResetToAutoTooltip => Get(nameof(Settings_McpPort_ResetToAutoTooltip));
+    public static string Toast_McpPortConflictTitle => Get(nameof(Toast_McpPortConflictTitle));
+    public static string Toast_McpPortConflictBody => Get(nameof(Toast_McpPortConflictBody));
+    public static string Toast_McpPortFindAnother => Get(nameof(Toast_McpPortFindAnother));
+    public static string Toast_McpPortReassignedTitle => Get(nameof(Toast_McpPortReassignedTitle));
+    public static string Toast_McpPortReassignedBody => Get(nameof(Toast_McpPortReassignedBody));
 
     // Load-failure toast
     public static string Toast_DatasetErrorTitle => Get(nameof(Toast_DatasetErrorTitle));
