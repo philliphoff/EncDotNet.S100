@@ -145,7 +145,9 @@ public class CoveragePipelineTests
 
     private sealed class FakeCoverageSource : ICoverageSource
     {
-        private readonly Dictionary<string, float[,]> _fields;
+        private readonly Dictionary<string, float[]> _fields;
+        private readonly int _rows;
+        private readonly int _cols;
         private readonly float _noDataValue;
         private readonly double _originLat;
         private readonly double _originLon;
@@ -167,7 +169,18 @@ public class CoveragePipelineTests
             string verticalDatum = "MSL")
         {
             _noDataValue = noDataValue;
-            _fields = fields;
+            var first = fields.Values.First();
+            _rows = first.GetLength(0);
+            _cols = first.GetLength(1);
+            _fields = new Dictionary<string, float[]>();
+            foreach (var (name, arr) in fields)
+            {
+                var flat = new float[_rows * _cols];
+                for (int r = 0; r < _rows; r++)
+                    for (int c = 0; c < _cols; c++)
+                        flat[r * _cols + c] = arr[r, c];
+                _fields[name] = flat;
+            }
             _originLat = originLatitude;
             _originLon = originLongitude;
             _spacingLat = spacingLat;
@@ -177,14 +190,7 @@ public class CoveragePipelineTests
             _verticalDatum = verticalDatum;
         }
 
-        private (int Rows, int Cols) GridSize
-        {
-            get
-            {
-                var first = _fields.Values.First();
-                return (first.GetLength(0), first.GetLength(1));
-            }
-        }
+        private (int Rows, int Cols) GridSize => (_rows, _cols);
 
         public CoverageMetadata Metadata
         {

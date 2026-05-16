@@ -190,18 +190,73 @@ public class GridRegion
     }
 }
 
+/// <summary>
+/// A read-only 2-D view over a row-major flat <c>float</c> grid. Allows
+/// consumers to iterate sampled coverage data with familiar <c>[row,
+/// col]</c> indexing without paying the LOH cost of allocating a
+/// <c>float[,]</c> per sample (PR-F).
+/// </summary>
+public readonly struct CoverageGridView
+{
+    private readonly float[] _data;
+
+    public CoverageGridView(float[] data, int rows, int cols)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (rows < 0) throw new ArgumentOutOfRangeException(nameof(rows));
+        if (cols < 0) throw new ArgumentOutOfRangeException(nameof(cols));
+        if (data.Length < rows * cols)
+            throw new ArgumentException(
+                $"Backing array length ({data.Length}) is smaller than rows*cols ({rows * cols}).",
+                nameof(data));
+
+        _data = data;
+        Rows = rows;
+        Cols = cols;
+    }
+
+    /// <summary>Number of grid rows.</summary>
+    public int Rows { get; }
+
+    /// <summary>Number of grid columns.</summary>
+    public int Cols { get; }
+
+    /// <summary>Flat row-major span over the underlying data.</summary>
+    public ReadOnlySpan<float> Span => _data.AsSpan(0, Rows * Cols);
+
+    /// <summary>Indexer matching the legacy <c>float[,]</c> shape.</summary>
+    public float this[int row, int col] => _data[row * Cols + col];
+
+    /// <summary>Length of the longest axis (mirrors <c>float[,].GetLength</c>).</summary>
+    public int GetLength(int dimension) => dimension switch
+    {
+        0 => Rows,
+        1 => Cols,
+        _ => throw new ArgumentOutOfRangeException(nameof(dimension)),
+    };
+}
+
 public class SampledCoverage
 {
     public required GridRegion Region { get; init; }
     public required GridMetadata Metadata { get; init; }
-    
-    // Values keyed by field name
-    // Each array is [row, col] for the sampled region
-    public required IReadOnlyDictionary<string, float[,]> Values { get; init; }
-    
-    // Convenience accessors for common fields
-    public float[,] GetField(string fieldName) => Values[fieldName];
-    
+
+    /// <summary>
+    /// Per-field sampled values keyed by field name. Each value is a flat
+    /// row-major <c>float[]</c> of length <c>Rows*Cols</c>. Flat storage
+    /// avoids the LOH allocations a <c>float[,]</c> pair (depth +
+    /// uncertainty on a 1000×1000 S-102 grid is ~8 MB) would incur per
+    /// <see cref="ICoverageSource.Sample"/> call (PR-F).
+    /// </summary>
+    public required IReadOnlyDictionary<string, float[]> Values { get; init; }
+
+    /// <summary>Returns a 2-D view over the named field's flat backing array.</summary>
+    public CoverageGridView GetField(string fieldName)
+    {
+        var data = Values[fieldName];
+        return new CoverageGridView(data, Metadata.NumRows, Metadata.NumColumns);
+    }
+
     // Geolocate a grid cell within the sampled region
     public (double Longitude, double Latitude) GetPosition(int row, int col)
     {

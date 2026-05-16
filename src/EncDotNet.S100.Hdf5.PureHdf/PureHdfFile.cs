@@ -51,10 +51,14 @@ public sealed class PureHdfFile : IHdf5File
     private sealed class PureHdfGroup : IHdf5Group
     {
         private readonly IH5Group _group;
+        private readonly Lazy<IReadOnlyList<string>> _groupNames;
+        private readonly Lazy<HashSet<string>> _attributeNames;
 
         internal PureHdfGroup(IH5Group group)
         {
             _group = group;
+            _groupNames = new Lazy<IReadOnlyList<string>>(BuildGroupNames);
+            _attributeNames = new Lazy<HashSet<string>>(BuildAttributeNames);
         }
 
         public IHdf5Group OpenGroup(string name)
@@ -72,31 +76,33 @@ public sealed class PureHdfFile : IHdf5File
             }
         }
 
-        public IReadOnlyList<string> GroupNames
+        // Cached: PureHDF files are read-only in our usage. Building once and
+        // returning the same list avoids the O(N) child enumeration that
+        // S102DatasetReader.Read (and friends) trigger multiple times per group.
+        public IReadOnlyList<string> GroupNames => _groupNames.Value;
+
+        // Cached HashSet: AttributeExists is called repeatedly during reader
+        // schema validation (e.g. S102DatasetReader.Read does 5 probes on the
+        // root). HashSet lookup is O(1) vs the original O(N) attribute scan.
+        public bool AttributeExists(string name) => _attributeNames.Value.Contains(name);
+
+        private IReadOnlyList<string> BuildGroupNames()
         {
-            get
+            var names = new List<string>();
+            foreach (var child in _group.Children())
             {
-                var names = new List<string>();
-
-                foreach (var child in _group.Children())
-                {
-                    if (child is IH5Group g)
-                        names.Add(g.Name);
-                }
-
-                return names;
+                if (child is IH5Group g)
+                    names.Add(g.Name);
             }
+            return names;
         }
 
-        public bool AttributeExists(string name)
+        private HashSet<string> BuildAttributeNames()
         {
+            var names = new HashSet<string>(StringComparer.Ordinal);
             foreach (var attr in _group.Attributes())
-            {
-                if (attr.Name == name)
-                    return true;
-            }
-
-            return false;
+                names.Add(attr.Name);
+            return names;
         }
 
         public T ReadAttribute<T>(string name) where T : unmanaged

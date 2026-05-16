@@ -26,9 +26,10 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         var sampled = layer.Coverage;
         var colorScheme = layer.ColorScheme;
         var fieldData = sampled.GetField(colorScheme.FieldName);
+        var fieldSpan = fieldData.Span;
 
-        int rows = fieldData.GetLength(0);
-        int cols = fieldData.GetLength(1);
+        int rows = fieldData.Rows;
+        int cols = fieldData.Cols;
         S100Diag.Telemetry.CoverageCellsProcessed.Add((long)rows * cols);
 
         var bitmap = new SKBitmap(cols, rows, SKColorType.Rgba8888, SKAlphaType.Premul);
@@ -51,7 +52,7 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         for (int row = 0; row < rows; row++)
         for (int col = 0; col < cols; col++)
         {
-            float value = fieldData[row, col];
+            float value = fieldSpan[row * cols + col];
             var color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
             // Grid row 0 is the southernmost (bottom of image), so flip vertically.
             bitmap.SetPixel(col, rows - 1 - row, color);

@@ -6,6 +6,7 @@ using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using SkiaSharp;
+using System.Runtime.InteropServices;
 
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
@@ -38,6 +39,11 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.coverage.build");
         __activity?.SetTag("s100.render.target", "mapsui");
+        return RenderUnsafe(layer, viewport);
+    }
+
+    private unsafe ILayer RenderUnsafe(StyledCoverageLayer layer, PipelineViewport viewport)
+    {
         var sampled = layer.Coverage;
         var georeferencer = layer.Georeferencer;
         var colorScheme = layer.ColorScheme;
@@ -114,8 +120,17 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             cellSizeY = (mercMaxY - mercMinY) / outRows;
         }
 
-        // Render: for each grid node, place its color at the correct Mercator pixel
-        using var bmp = new SKBitmap(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul);
+        // Render: for each grid node, place its color at the correct Mercator pixel.
+        // Fill a uint[] (RGBA8888) buffer directly to avoid the per-pixel
+        // managed→native round-trip that SKBitmap.SetPixel performs. On a
+        // 2000×2000 grid this saves ~4M P/Invoke crossings per render.
+        int pixelCount = outCols * outRows;
+        var pixels = new uint[pixelCount];
+
+        // Pre-resolve band colors to packed RGBA8888 (matches SKColorType.Rgba8888).
+        var bandPacked = new uint[bands.Length];
+        for (int i = 0; i < bands.Length; i++)
+            bandPacked[i] = PackRgba(bands[i].Color);
 
         for (int r = 0; r < srcRows; r++)
         for (int c = 0; c < srcCols; c++)
@@ -124,24 +139,29 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
             if (isNoData) continue;
 
-            SKColor color = SKColors.Transparent;
+            uint packed = 0;
             for (int b = 0; b < bands.Length; b++)
             {
                 if (value >= bands[b].Min && value < bands[b].Max)
                 {
-                    color = bands[b].Color;
+                    packed = bandPacked[b];
                     break;
                 }
             }
-            if (color.Alpha == 0) continue;
+            if (packed == 0) continue;
 
             var (mx, my) = nodePositions[r, c];
             int px = (int)((mx - mercMinX) / cellSizeX);
             int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
 
             if (px >= 0 && px < outCols && py >= 0 && py < outRows)
-                bmp.SetPixel(px, py, color);
+                pixels[py * outCols + px] = packed;
         }
+
+        using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
+        // Bulk-copy the pixel buffer into the bitmap's native backing store.
+        var pixelSpan = MemoryMarshal.AsBytes(pixels.AsSpan());
+        pixelSpan.CopyTo(new Span<byte>((void*)bmp.GetPixels(), pixelCount * 4));
 
         // Encode to PNG
         using var image = SKImage.FromBitmap(bmp);
@@ -163,5 +183,20 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             Style = null,
             Opacity = Opacity,
         };
+    }
+
+    /// <summary>
+    /// Pack an <see cref="SKColor"/> into a 32-bit little-endian RGBA8888
+    /// pixel (matching <see cref="SKColorType.Rgba8888"/>). Premultiplied
+    /// alpha is applied so the result is suitable for a Premul bitmap.
+    /// </summary>
+    private static uint PackRgba(SKColor c)
+    {
+        byte a = c.Alpha;
+        byte r = a == 255 ? c.Red : (byte)((c.Red * a + 127) / 255);
+        byte g = a == 255 ? c.Green : (byte)((c.Green * a + 127) / 255);
+        byte b = a == 255 ? c.Blue : (byte)((c.Blue * a + 127) / 255);
+        // Memory order on little-endian: R G B A → uint = A<<24 | B<<16 | G<<8 | R
+        return ((uint)a << 24) | ((uint)b << 16) | ((uint)g << 8) | r;
     }
 }
