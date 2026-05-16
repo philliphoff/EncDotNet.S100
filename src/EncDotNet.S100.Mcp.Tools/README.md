@@ -183,6 +183,7 @@ IDatasetCatalog catalog = host.Catalog;
 var list = new ListDatasetsTool(catalog);
 var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
+var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
 
@@ -235,6 +236,27 @@ if (features.TryGetValue(out var page))
         Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
     }
 }
+
+// Sample a coverage product at every vertex of a polyline. Useful for
+// route-level questions like "minimum depth along this leg" or "max
+// current speed along this transit". Per-vertex misses (OutOfBounds /
+// NoDataAtPoint) surface as null entries rather than aborting the
+// whole call, so a partial route still returns usable data.
+var route = new GeoPolyline(ImmutableArray.Create(
+    new GeoPoint(47.60, -122.35),
+    new GeoPoint(47.62, -122.33),
+    new GeoPoint(47.64, -122.31)));
+var depths = await sampleAlong.InvokeAsync(new SampleCoverageAlongRequest(
+    new SpecRef("S-102", new SpecVersion(2, 1, 0)),
+    route));
+if (depths.TryGetValue(out var series))
+{
+    foreach (var s in series.Samples)
+    {
+        var d = s.Result?.Value as DepthSample;
+        Console.WriteLine($"v{s.VertexIndex} depth={d?.DepthMeters}m");
+    }
+}
 ```
 
 ## Out of scope (PR MCP-1)
@@ -248,4 +270,3 @@ if (features.TryGetValue(out var page))
   (S-122/S-125/S-127/S-128/S-129/S-131/S-201/S-411/S-421 return their
   feature attributes via the generic `GmlFeatureDescriber`, but
   references arrive as an empty list pending per-spec resolution).
-- S-104 / S-111 sampling (only S-102 is wired end-to-end).
