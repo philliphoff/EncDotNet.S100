@@ -105,6 +105,19 @@ internal static class LoadedDatasetFactory
             new S104CoverageData(source ?? S104Synth.Source()));
     }
 
+    public static LoadedDataset S104Stations(
+        string id,
+        S104StationSeriesDataset dataset,
+        BoundingBox? bounds = null)
+    {
+        return new LoadedDataset(
+            new DatasetId(id),
+            S104Spec,
+            bounds ?? Box(),
+            null,
+            new S104StationSeriesData(dataset));
+    }
+
     public static LoadedDataset S111(
         string id,
         BoundingBox? bounds = null,
