@@ -1,5 +1,6 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
+using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools.Catalog;
 
@@ -12,8 +13,8 @@ namespace EncDotNet.S100.Mcp.Tools.Catalog;
 /// <param name="TimeRange">Time interval covered by the dataset, or <c>null</c> for static products.</param>
 /// <param name="Data">Typed payload — see <see cref="LoadedDatasetData"/> variants.</param>
 public sealed record LoadedDataset(
-    DatasetId Id,
-    SpecRef Spec,
-    BoundingBox Bounds,
-    TimeRange? TimeRange,
-    LoadedDatasetData Data);
+    [property: Description("Stable identifier for the dataset within the catalog session.")] DatasetId Id,
+    [property: Description("Product specification (name and edition) the dataset declares conformance to.")] SpecRef Spec,
+    [property: Description("Geographic extent of the dataset (decimal degrees, WGS-84).")] BoundingBox Bounds,
+    [property: Description("Time interval covered by the dataset (UTC); null for static products such as S-102.")] TimeRange? TimeRange,
+    [property: Description("Typed payload carrying the parsed model or coverage handle.")] LoadedDatasetData Data);

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
@@ -20,9 +21,9 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// each waypoint at the same instant" queries. Ignored for S-102.
 /// </param>
 public sealed record SampleCoverageAlongRequest(
-    SpecRef Spec,
-    GeoPolyline Polyline,
-    DateTimeOffset? Time = null);
+    [property: Description("Coverage spec to sample (S-102, S-104, or S-111).")] SpecRef Spec,
+    [property: Description("Polyline to sample. Each vertex is sampled at its coordinate; the polyline's CorridorWidthMeters is ignored (corridor width applies to membership queries, not point sampling).")] GeoPolyline Polyline,
+    [property: Description("Optional UTC ISO-8601 time selector applied identically to every vertex; for time-varying products (S-104, S-111) only. Ignored for S-102.")] DateTimeOffset? Time = null);
 
 /// <summary>
 /// A single sample along the polyline.
@@ -47,8 +48,8 @@ public sealed record CoverageSampleAlong(
 /// <param name="Spec">The spec that was sampled.</param>
 /// <param name="Samples">One entry per polyline vertex, in input order.</param>
 public sealed record SampleCoverageAlongResult(
-    SpecRef Spec,
-    ImmutableArray<CoverageSampleAlong> Samples);
+    [property: Description("The coverage spec that was sampled.")] SpecRef Spec,
+    [property: Description("One entry per polyline vertex, in input order. Per-vertex misses (point outside coverage or no data) surface as a sample with a null Result.")] ImmutableArray<CoverageSampleAlong> Samples);
 
 /// <summary>
 /// Samples a coverage product (<see cref="SampleCoverageTool"/>) at

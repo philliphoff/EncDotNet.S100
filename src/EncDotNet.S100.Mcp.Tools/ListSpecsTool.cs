@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -16,9 +17,9 @@ public sealed record ListSpecsRequest();
 /// invoke against this spec in the current session.
 /// </param>
 public sealed record SpecSummary(
-    string Name,
-    int LoadedDatasetCount,
-    SpecCapabilities Capabilities);
+    [property: Description("Canonical spec name, e.g. \"S-101\", \"S-124\".")] string Name,
+    [property: Description("Number of datasets of this spec currently loaded in the host catalog.")] int LoadedDatasetCount,
+    [property: Description("Capability flags advertising which MCP tools the agent can productively invoke against this spec in the current session.")] SpecCapabilities Capabilities);
 
 /// <summary>
 /// Per-spec capability flags. All flags are conservative — they reflect
@@ -46,7 +47,7 @@ public sealed record SpecCapabilities(
     bool CanSampleCoverage);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
-public sealed record ListSpecsResult(ImmutableArray<SpecSummary> Specs);
+public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] ImmutableArray<SpecSummary> Specs);
 
 /// <summary>
 /// Returns the product specifications this MCP-tools assembly knows

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
@@ -27,11 +28,11 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="Page">Zero-based page index.</param>
 /// <param name="PageSize">Page size; clamped to 1..500.</param>
 public sealed record QueryFeaturesRequest(
-    GeoQuery Query,
-    SpecRef? Spec = null,
-    string? FeatureType = null,
-    int Page = 0,
-    int PageSize = 50);
+    [property: Description("Spatial query envelope (point / box / polygon / polyline). Intersection is computed against each feature's bounding box.")] GeoQuery Query,
+    [property: Description("Optional spec filter; null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
+    [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? FeatureType = null,
+    [property: Description("Zero-based page index into the result set.")] int Page = 0,
+    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
 
 /// <summary>
 /// Per-feature summary returned by <see cref="QueryFeaturesTool"/>.
@@ -50,11 +51,11 @@ public sealed record FeatureMatch(
 
 /// <summary>Result of <see cref="QueryFeaturesTool"/>.</summary>
 public sealed record QueryFeaturesResult(
-    ImmutableArray<FeatureMatch> Features,
-    int Page,
-    int PageSize,
-    int TotalCount,
-    bool HasMore);
+    [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] ImmutableArray<FeatureMatch> Features,
+    [property: Description("Echoed (and floored) zero-based page index.")] int Page,
+    [property: Description("Echoed (and clamped) page size.")] int PageSize,
+    [property: Description("Total number of matching features across all pages.")] int TotalCount,
+    [property: Description("True if additional pages remain after the current one.")] bool HasMore);
 
 /// <summary>
 /// Returns features from loaded GML-encoded vector datasets whose

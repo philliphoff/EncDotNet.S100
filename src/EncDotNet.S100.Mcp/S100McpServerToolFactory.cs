@@ -89,13 +89,14 @@ internal static class S100McpServerToolFactory
         var description =
             "Lists the S-100 datasets currently loaded in the host (viewer or CLI). " +
             "Supports optional spec and bounding-box filters and pagination. " +
-            "Returns dataset IDs, spec, bounds, and time range.";
+            "Returns dataset IDs, spec, bounds (decimal degrees, WGS-84), and UTC time range. " +
+            "Read-only and side-effect free.";
 
         var del = ([Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] string? spec = null,
-                   [Description("Optional bounding box south latitude (decimal degrees, WGS-84). Pass null to omit the bbox filter; if any one of south/west/north/east is supplied, all four must be.")] double? south = null,
-                   [Description("Optional bounding box west longitude.")] double? west = null,
-                   [Description("Optional bounding box north latitude.")] double? north = null,
-                   [Description("Optional bounding box east longitude.")] double? east = null,
+                   [Description("Optional bounding-box south latitude (decimal degrees, WGS-84). Pass null to omit the bbox filter; if any one of south/west/north/east is supplied, all four must be.")] double? south = null,
+                   [Description("Optional bounding-box west longitude (decimal degrees, WGS-84).")] double? west = null,
+                   [Description("Optional bounding-box north latitude (decimal degrees, WGS-84).")] double? north = null,
+                   [Description("Optional bounding-box east longitude (decimal degrees, WGS-84).")] double? east = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    CancellationToken ct = default) =>
@@ -119,13 +120,13 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateDescribeFeatureTool(DescribeFeatureTool inner)
     {
         var description =
-            "Returns spec, feature-type code, attributes (as JSON), and xlink-resolved cross-references " +
-            "for a single feature in a loaded dataset. Supports S-122, S-124, S-125, S-127, S-128, S-129, " +
+            "Returns spec, feature-type code, attributes (as a JSON object), and xlink-resolved cross-references " +
+            "for a single feature in a loaded vector dataset. Supports S-122, S-124, S-125, S-127, S-128, S-129, " +
             "S-131, S-201, S-411, and S-421. References for backfilled GML specs are currently returned empty " +
-            "(spec-specific reference resolution is staged).";
+            "(spec-specific reference resolution is staged). Read-only and side-effect free.";
 
-        var del = ([Description("Stable dataset ID returned by list_datasets.")] string datasetId,
-                   [Description("The feature's GML id within the dataset.")] string featureId,
+        var del = ([Description("Stable dataset identifier returned by list_datasets.")] string datasetId,
+                   [Description("GML id of the feature within the dataset.")] string featureId,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -143,15 +144,17 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateSampleCoverageTool(SampleCoverageTool inner)
     {
         var description =
-            "Samples a coverage product at a single latitude/longitude, returning the nearest grid " +
-            "cell's value. Supports S-102 (bathymetric surfaces), S-104 (water levels), and S-111 " +
-            "(surface currents). For time-varying products (S-104, S-111) pass an optional ISO-8601 " +
-            "time; omitting it selects the first available time step.";
+            "Samples a coverage product at a single latitude/longitude (decimal degrees, WGS-84). " +
+            "Returns the value of the nearest grid cell — no interpolation, no bbox aggregation. " +
+            "Supports S-102 (depth and optional uncertainty in metres, positive down), " +
+            "S-104 (water-level height in metres and decoded trend at the nearest time step), and " +
+            "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step). " +
+            "Times outside a dataset's range clamp to its first or last step. Read-only and side-effect free.";
 
-        var del = ([Description("Spec of the coverage to sample (e.g. \"S-102/2.1.0\").")] string spec,
-                   [Description("Sample latitude in decimal degrees, WGS-84.")] double latitude,
-                   [Description("Sample longitude in decimal degrees, WGS-84.")] double longitude,
-                   [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
+        var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\").")] string spec,
+                   [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
+                   [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
+                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. Nearest time step is selected; times outside the dataset range clamp to the first or last step.")] DateTimeOffset? time = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(

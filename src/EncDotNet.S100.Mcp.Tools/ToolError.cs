@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
@@ -15,7 +16,9 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// wire format flexible while giving in-process callers a typed
 /// surface they can match on.
 /// </remarks>
-public abstract record ToolError(string Code, string Message);
+public abstract record ToolError(
+    [property: Description("Stable error code; safe to switch on.")] string Code,
+    [property: Description("Human-readable error message; not localised.")] string Message);
 
 /// <summary>
 /// A tool argument failed validation (e.g. latitude or longitude
@@ -23,32 +26,56 @@ public abstract record ToolError(string Code, string Message);
 /// names the request property that was rejected and
 /// <paramref name="Reason"/> describes why.
 /// </summary>
-public sealed record InvalidArgument(string Parameter, string Reason) : ToolError(
+[Description("Raised when a tool argument fails validation (e.g. a latitude or longitude outside the WGS-84 range).")]
+public sealed record InvalidArgument(
+    [property: Description("Name of the request property that was rejected.")] string Parameter,
+    [property: Description("Human-readable description of why the value was rejected; not localised.")] string Reason) : ToolError(
     "invalid_argument",
     $"Invalid argument '{Parameter}': {Reason}.");
 
 /// <summary>The named dataset is not present in the catalog snapshot.</summary>
-public sealed record DatasetNotFound(DatasetId Id) : ToolError(
+/// <param name="Id">The dataset identifier that could not be resolved.</param>
+[Description("Raised when the requested datasetId is not present in the current catalog snapshot.")]
+public sealed record DatasetNotFound(
+    [property: Description("The dataset identifier that could not be resolved.")] DatasetId Id) : ToolError(
     "dataset_not_found",
     $"Dataset '{Id}' is not present in the catalog.");
 
 /// <summary>The dataset was unloaded after the catalog snapshot was taken but before the read completed.</summary>
-public sealed record DatasetClosedDuringQuery(DatasetId Id) : ToolError(
+/// <param name="Id">The dataset whose coverage handle was disposed mid-read.</param>
+[Description("Raised when a coverage handle was disposed between the catalog snapshot and the read; safe to retry once the dataset is reopened.")]
+public sealed record DatasetClosedDuringQuery(
+    [property: Description("The dataset whose coverage handle was disposed mid-read.")] DatasetId Id) : ToolError(
     "dataset_closed_during_query",
     $"Dataset '{Id}' was closed while the query was in flight; retry once the dataset is reopened.");
 
 /// <summary>No loaded dataset of the requested spec covers the supplied lat/lon.</summary>
-public sealed record NoDatasetCoversPoint(double Latitude, double Longitude) : ToolError(
+/// <param name="Latitude">Requested latitude (decimal degrees, WGS-84).</param>
+/// <param name="Longitude">Requested longitude (decimal degrees, WGS-84).</param>
+[Description("Raised when no loaded dataset's bounds contain the requested point (decimal degrees, WGS-84).")]
+public sealed record NoDatasetCoversPoint(
+    [property: Description("Requested latitude in decimal degrees, WGS-84.")] double Latitude,
+    [property: Description("Requested longitude in decimal degrees, WGS-84.")] double Longitude) : ToolError(
     "no_dataset_covers_point",
     $"No loaded dataset's bounds contain the point ({Latitude}, {Longitude}).");
 
 /// <summary>The named feature is not present in the named dataset.</summary>
-public sealed record FeatureNotFound(DatasetId Id, string FeatureId) : ToolError(
+/// <param name="Id">The dataset that was searched.</param>
+/// <param name="FeatureId">The feature identifier that could not be located.</param>
+[Description("Raised when the requested featureId is not present in the named dataset.")]
+public sealed record FeatureNotFound(
+    [property: Description("The dataset that was searched.")] DatasetId Id,
+    [property: Description("The feature identifier that could not be located.")] string FeatureId) : ToolError(
     "feature_not_found",
     $"Feature '{FeatureId}' is not present in dataset '{Id}'.");
 
 /// <summary>The tool does not (yet) support the requested spec.</summary>
-public sealed record SpecNotSupportedForTool(SpecRef Spec, string Tool) : ToolError(
+/// <param name="Spec">The product specification carried by the dataset.</param>
+/// <param name="Tool">The tool that has no end-to-end implementation for this spec.</param>
+[Description("Raised when the tool has no end-to-end implementation for the dataset's product specification.")]
+public sealed record SpecNotSupportedForTool(
+    [property: Description("The product specification carried by the dataset.")] SpecRef Spec,
+    [property: Description("Name of the tool that has no end-to-end implementation for this spec.")] string Tool) : ToolError(
     "spec_not_supported_for_tool",
     $"Spec '{Spec}' is not supported by tool '{Tool}'.");
 
@@ -59,7 +86,14 @@ public sealed record SpecNotSupportedForTool(SpecRef Spec, string Tool) : ToolEr
 /// requested spec is loaded at all — callers may want to retry once a
 /// dataset is loaded — by carrying the dataset spec.
 /// </summary>
-public sealed record OutOfBounds(SpecRef Spec, double Latitude, double Longitude) : ToolError(
+/// <param name="Spec">The product specification that was searched.</param>
+/// <param name="Latitude">Requested latitude (decimal degrees, WGS-84).</param>
+/// <param name="Longitude">Requested longitude (decimal degrees, WGS-84).</param>
+[Description("Raised when the requested point lies outside the bounds of every loaded dataset of the requested spec.")]
+public sealed record OutOfBounds(
+    [property: Description("The product specification that was searched.")] SpecRef Spec,
+    [property: Description("Requested latitude in decimal degrees, WGS-84.")] double Latitude,
+    [property: Description("Requested longitude in decimal degrees, WGS-84.")] double Longitude) : ToolError(
     "out_of_bounds",
     $"Point ({Latitude}, {Longitude}) is outside the bounds of every loaded {Spec.Name} dataset.");
 
@@ -68,11 +102,16 @@ public sealed record OutOfBounds(SpecRef Spec, double Latitude, double Longitude
 /// spec-defined no-data fill value. The cell index and time step are
 /// surfaced in the message so callers can correlate with the source grid.
 /// </summary>
+/// <param name="Id">The dataset that produced the no-data cell.</param>
+/// <param name="Row">Zero-based row index of the resolved cell.</param>
+/// <param name="Column">Zero-based column index of the resolved cell.</param>
+/// <param name="Time">UTC instant of the selected time step, or null for static products.</param>
+[Description("Raised when the resolved grid cell carries the spec-defined no-data fill value (e.g. 1,000,000 in S-102).")]
 public sealed record NoDataAtPoint(
-    DatasetId Id,
-    int Row,
-    int Column,
-    DateTime? Time) : ToolError(
+    [property: Description("The dataset that produced the no-data cell.")] DatasetId Id,
+    [property: Description("Zero-based row index of the resolved cell in the source grid.")] int Row,
+    [property: Description("Zero-based column index of the resolved cell in the source grid.")] int Column,
+    [property: Description("UTC instant of the selected time step, or null for static products.")] DateTime? Time) : ToolError(
     "no_data_at_point",
     Time is null
         ? $"Cell ({Row}, {Column}) in dataset '{Id}' carries the no-data fill value."
@@ -84,7 +123,14 @@ public sealed record NoDataAtPoint(
 /// Distinguished from <see cref="SpecNotSupportedForTool"/> in that the
 /// spec itself is supported — only this particular variant isn't yet.
 /// </summary>
-public sealed record NotSupportedYet(SpecRef Spec, string Tool, string Reason) : ToolError(
+/// <param name="Spec">The product specification carried by the dataset.</param>
+/// <param name="Tool">The tool that supports the spec but not this particular variant.</param>
+/// <param name="Reason">Single-sentence reason explaining what is not yet wired.</param>
+[Description("Raised when the spec is supported by the tool, but this specific dataset shape is not yet wired (e.g. S-104 data coding format other than 2).")]
+public sealed record NotSupportedYet(
+    [property: Description("The product specification carried by the dataset.")] SpecRef Spec,
+    [property: Description("Name of the tool that supports the spec but not this particular variant.")] string Tool,
+    [property: Description("Single-sentence reason explaining what is not yet wired.")] string Reason) : ToolError(
     "not_supported_yet",
     $"Spec '{Spec}' is supported by tool '{Tool}', but: {Reason}.");
 
@@ -96,6 +142,8 @@ public sealed record NotSupportedYet(SpecRef Spec, string Tool, string Reason) :
 /// Distinguished from <see cref="InvalidArgument"/> in that a single
 /// scalar is well-formed but the *composite* shape is not.
 /// </summary>
-public sealed record GeometryInvalid(string Parameter, string Reason) : ToolError(
+public sealed record GeometryInvalid(
+    [property: Description("Name of the request parameter that carried the invalid geometry.")] string Parameter,
+    [property: Description("Human-readable reason the geometry was rejected (e.g. \"polygon has fewer than 4 vertices\", \"north < south\").")] string Reason) : ToolError(
     "geometry_invalid",
     $"Geometry in '{Parameter}' is invalid: {Reason}.");

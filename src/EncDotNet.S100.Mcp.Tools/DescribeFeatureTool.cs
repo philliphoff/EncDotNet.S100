@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using System.Text.Json;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Spec;
@@ -6,7 +7,11 @@ using EncDotNet.S100.Mcp.Tools.Spec;
 namespace EncDotNet.S100.Mcp.Tools;
 
 /// <summary>Request payload for <see cref="DescribeFeatureTool"/>.</summary>
-public sealed record DescribeFeatureRequest(DatasetId DatasetId, string FeatureId);
+/// <param name="DatasetId">Stable dataset identifier returned by list_datasets.</param>
+/// <param name="FeatureId">GML id of the feature within the dataset.</param>
+public sealed record DescribeFeatureRequest(
+    [property: Description("Stable dataset identifier returned by list_datasets.")] DatasetId DatasetId,
+    [property: Description("GML id of the feature within the dataset.")] string FeatureId);
 
 /// <summary>Result of <see cref="DescribeFeatureTool"/>.</summary>
 /// <param name="Spec">The spec the feature was parsed from.</param>
@@ -14,10 +19,10 @@ public sealed record DescribeFeatureRequest(DatasetId DatasetId, string FeatureI
 /// <param name="Attributes">Serialised attribute payload as JSON.</param>
 /// <param name="References">xlink-style cross references resolved against the catalog snapshot.</param>
 public sealed record DescribeFeatureResult(
-    Core.SpecRef Spec,
-    string FeatureTypeName,
-    JsonElement Attributes,
-    ImmutableArray<FeatureReference> References);
+    [property: Description("Product specification and edition the feature was parsed from.")] Core.SpecRef Spec,
+    [property: Description("Spec-defined feature type code (e.g. \"NavwarnPart\").")] string FeatureTypeName,
+    [property: Description("Serialised attribute payload as a JSON object; structure follows the spec's Feature Catalogue.")] JsonElement Attributes,
+    [property: Description("xlink-style cross references projected against the catalog snapshot.")] ImmutableArray<FeatureReference> References);
 
 /// <summary>
 /// A cross-reference from one feature to another, projected from the
@@ -29,11 +34,11 @@ public sealed record DescribeFeatureResult(
 /// <param name="TargetFeatureId">The target feature ID, if extractable from the href.</param>
 /// <param name="Resolved"><c>true</c> when both target dataset and feature ID were located in the snapshot.</param>
 public sealed record FeatureReference(
-    string Role,
-    string Href,
-    DatasetId? TargetDatasetId,
-    string? TargetFeatureId,
-    bool Resolved);
+    [property: Description("Association role name (the local element name carrying xlink:href).")] string Role,
+    [property: Description("Raw xlink:href value as it appeared in the source GML.")] string Href,
+    [property: Description("Identifier of the dataset containing the target, if locatable in the catalog snapshot; null otherwise.")] DatasetId? TargetDatasetId,
+    [property: Description("Target feature id if extractable from the href; null otherwise.")] string? TargetFeatureId,
+    [property: Description("True when both the target dataset and feature id were located in the catalog snapshot.")] bool Resolved);
 
 /// <summary>
 /// Describes a single feature in a loaded dataset. Dispatches to a

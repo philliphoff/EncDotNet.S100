@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace EncDotNet.S100.Core;
 
 /// <summary>
@@ -29,9 +31,11 @@ public readonly record struct SpecRef
     /// The product specification short name in canonical <c>"S-NNN"</c> form
     /// (e.g. <c>"S-101"</c>, <c>"S-102"</c>).
     /// </summary>
+    [Description("Canonical product specification short name (e.g. \"S-101\").")]
     public string Name { get; }
 
     /// <summary>The product specification edition.</summary>
+    [Description("Product specification edition as a semantic version (major.minor.patch).")]
     public SpecVersion Edition { get; }
 
     /// <summary>

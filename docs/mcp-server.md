@@ -8,6 +8,50 @@ The server is **off by default** and **listens on the loopback
 address only**. There is no authentication; the loopback isolation is
 the only protection in v1.
 
+## Field conventions
+
+Every MCP tool in this server follows the same conventions for the
+JSON it returns, so agents do not need to look up units, axes, or
+casing per-field. Anything that deviates is called out in the
+individual field's `[Description]`.
+
+| Concern | Convention |
+|---|---|
+| Coordinate reference system | WGS-84 (EPSG:4326). |
+| Coordinate values | Decimal degrees. Latitude range `-90..+90`; longitude range `-180..+180`. |
+| Bounding boxes | Four scalars labelled `southLatitude`, `westLongitude`, `northLatitude`, `eastLongitude` — never a bare pair. |
+| Times | UTC, ISO-8601. Time intervals are inclusive at both ends. |
+| Distances | Metres. |
+| Depths | Metres, positive down (matches S-102's vertical-datum convention). |
+| Water levels | Metres, positive up (matches S-104's vertical-datum convention). |
+| Current speeds | Canonical unit is metres per second (S-111 §10.2.5). Knots are provided alongside as a convenience (`speedKnots = m/s × 1.94384`). |
+| Bearings | Degrees from true north, clockwise, range `0..360`. |
+| JSON property naming | lower camelCase across every tool (driven by `JsonSerializerDefaults.Web`). |
+| Discriminated unions | Variant carries a `$kind` discriminator string (e.g. `"depth"`, `"waterLevel"`, `"surfaceCurrent"`). |
+| Errors | `isError = true` with payload `{ code, message, details }` — `code` is the stable switch key, `message` is human-readable, `details` carries the typed members of the error. |
+
+Every public property on a tool request, tool result, or `ToolError`
+subtype carries a `[System.ComponentModel.Description]` attribute with
+a single sentence stating the unit / CRS / semantics. A reflection
+contract test (`AnnotationContractTests`) enforces this.
+
+### Known unit warts
+
+These are pre-existing inconsistencies in the underlying dataset
+libraries that the MCP layer does **not** currently normalise. Agents
+should consult the `units` field on a per-payload basis rather than
+assume canonical units for these cases.
+
+- **S-111 current speed.** S-111 grids encoded as data coding format 2
+  (regularly-gridded time-series) surface speeds with `units = "knots"`,
+  while data coding format 8 (time series at fixed stations) surface
+  speeds with `units = "metres/second"`. The two values come from
+  different paths in `EncDotNet.S100.Datasets.S111` and have not yet
+  been normalised. TODO: pick one canonical unit at the MCP boundary
+  (almost certainly metres/second, matching the strongly-typed
+  `speedMetresPerSecond` field on `SurfaceCurrentSample` /
+  `SurfaceCurrentStationSample`) and rescale the other path.
+
 ## Enable it
 
 1. Open the viewer.
