@@ -11,9 +11,9 @@ using ModelContextProtocol.Server;
 namespace EncDotNet.S100.Mcp;
 
 /// <summary>
-/// Builds <see cref="McpServerTool"/> wrappers around the three
-/// MCP-1 tools (<see cref="ListDatasetsTool"/>,
-/// <see cref="DescribeFeatureTool"/>, <see cref="SampleCoverageTool"/>),
+/// Builds <see cref="McpServerTool"/> wrappers around the MCP-1 tools
+/// (<see cref="ListDatasetsTool"/>, <see cref="DescribeFeatureTool"/>,
+/// <see cref="SampleCoverageTool"/>, <see cref="FindAtTool"/>),
 /// translating <see cref="ToolResult{T}"/> outcomes into MCP
 /// <see cref="CallToolResult"/> payloads.
 /// </summary>
@@ -64,11 +64,13 @@ internal static class S100McpServerToolFactory
     public static IEnumerable<McpServerTool> CreateTools(
         ListDatasetsTool listDatasets,
         DescribeFeatureTool describeFeature,
-        SampleCoverageTool sampleCoverage)
+        SampleCoverageTool sampleCoverage,
+        FindAtTool findAt)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
         yield return CreateSampleCoverageTool(sampleCoverage);
+        yield return CreateFindAtTool(findAt);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -155,6 +157,40 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = SampleCoverageTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateFindAtTool(FindAtTool inner)
+    {
+        var description =
+            "Returns every dataset currently loaded in the host (viewer or CLI) whose declared " +
+            "bounding box contains the supplied lat/lon point. Coordinates are decimal degrees, " +
+            "WGS-84. Containment is bbox-only — a positive result means the point lies inside the " +
+            "dataset's declared rectangle, not that the point has actual cell coverage (call " +
+            "sample_coverage to read a value). Optionally filtered by spec. Returns dataset IDs, " +
+            "spec, bounds, and time range, with pagination.";
+
+        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
+                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
+                   [Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Zero-based page index.")] int page = 0,
+                   [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new FindAtRequest(
+                        latitude,
+                        longitude,
+                        ParseSpec(spec),
+                        page,
+                        pageSize),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = "find_at",
             Description = description,
             SerializerOptions = JsonOptions,
         });

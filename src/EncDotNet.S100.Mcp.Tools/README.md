@@ -125,6 +125,7 @@ The five error variants implemented in this PR:
 | `no_dataset_covers_point`     | No loaded dataset's bounds contain the requested lat/lon.             |
 | `feature_not_found`           | The named feature is not present in the named dataset.                |
 | `spec_not_supported_for_tool` | The tool does not (yet) support the requested spec.                   |
+| `invalid_argument`            | A request property failed validation (e.g. latitude / longitude out of WGS-84 range). |
 
 ## Spec strategy pattern
 
@@ -132,11 +133,22 @@ The five error variants implemented in this PR:
 `FeatureDescriberRegistry` keyed on `SpecRef.Name`. Each describer
 implements an internal `ISpecFeatureDescriber` strategy.
 
-This PR ships `S124FeatureDescriber` end-to-end (lookup, attribute
-serialisation, complex-attribute serialisation, xlink-reference
-projection across the catalog). Other specs fall through to a
-`SpecNotSupportedForTool` error until their describers are added in
-follow-up PRs.
+The registry currently wires five describers:
+
+| Spec   | Describer                  | Feature id convention                                                                                       |
+|--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
+| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`.                                                                        |
+| S-102  | `S102FeatureDescriber`     | Coverage path `BathymetryCoverage[.01]` (bare `BathymetryCoverage` accepted).                               |
+| S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
+| S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
+| S-124  | `S124FeatureDescriber`     | GML `gml:id` of the warning feature.                                                                        |
+
+For the coverage describers (S-102/S-104/S-111) the result returns
+instance-level metadata (origin, spacing, grid dimensions, CRS,
+bounding box, NoData value, value ranges, time-step counts, station
+counts, ...) — coverage instances do not xlink to each other, so
+`References` is always empty. Specs without a registered describer
+return `SpecNotSupportedForTool`.
 
 ## Usage
 
@@ -151,6 +163,7 @@ IDatasetCatalog catalog = host.Catalog;
 var list = new ListDatasetsTool(catalog);
 var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
+var findAt = new FindAtTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -158,6 +171,19 @@ if (listed.TryGetValue(out var summary))
     foreach (var ds in summary.Datasets)
     {
         Console.WriteLine($"{ds.Id} ({ds.Spec})");
+    }
+}
+
+// Which loaded datasets cover this point? (bbox-only — does not check
+// per-cell coverage or NoData masks.)
+var hits = await findAt.InvokeAsync(new FindAtRequest(
+    Latitude: 50.77,
+    Longitude: -1.30));
+if (hits.TryGetValue(out var hit))
+{
+    foreach (var ds in hit.Datasets)
+    {
+        Console.WriteLine($"{ds.Id} ({ds.Spec}) covers the point.");
     }
 }
 

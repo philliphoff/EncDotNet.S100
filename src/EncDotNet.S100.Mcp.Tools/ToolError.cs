@@ -20,6 +20,16 @@ public abstract record ToolError(
     [property: Description("Stable error code; safe to switch on.")] string Code,
     [property: Description("Human-readable error message; not localised.")] string Message);
 
+/// <summary>
+/// A tool argument failed validation (e.g. latitude or longitude
+/// outside the valid WGS-84 range). The <paramref name="Parameter"/>
+/// names the request property that was rejected and
+/// <paramref name="Reason"/> describes why.
+/// </summary>
+public sealed record InvalidArgument(string Parameter, string Reason) : ToolError(
+    "invalid_argument",
+    $"Invalid argument '{Parameter}': {Reason}.");
+
 /// <summary>The named dataset is not present in the catalog snapshot.</summary>
 /// <param name="Id">The dataset identifier that could not be resolved.</param>
 [Description("Raised when the requested datasetId is not present in the current catalog snapshot.")]
