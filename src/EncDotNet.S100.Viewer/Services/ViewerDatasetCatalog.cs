@@ -82,10 +82,22 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     {
         if (_disposed) return;
 
-        // Only ingest plain on-disk entries; exchange-set bytes live
-        // inside an IAssetSource the catalog has no contract for.
-        if (entry.IsFromExchangeSet) return;
-        if (string.IsNullOrEmpty(entry.FilePath) || !File.Exists(entry.FilePath)) return;
+        // Plain on-disk entries: require the file to be present so any
+        // downstream consumer that DOES need a path can find one.
+        // Exchange-set entries instead carry an IAssetSource +
+        // RelativePath and are read via streams further down — no on-disk
+        // path is required.
+        if (!entry.IsFromExchangeSet
+            && (string.IsNullOrEmpty(entry.FilePath) || !File.Exists(entry.FilePath)))
+        {
+            return;
+        }
+
+        if (entry.IsFromExchangeSet
+            && (entry.Source is null || string.IsNullOrEmpty(entry.RelativePath)))
+        {
+            return;
+        }
 
         LoadedDataset? projected;
         try
@@ -139,7 +151,6 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     {
         var id = new DatasetId(entry.DisplayName);
         var spec = entry.ProductSpec;
-        var path = entry.FilePath;
 
         // DatasetPipelineFactory.DetectProductSpec returns the literal
         // string "S-57" for ENC .000 files that pass the S-57 DSPM
@@ -152,71 +163,92 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         // to differentiate.
         return spec switch
         {
-            "S-101" or "S-57" => ProjectS101(id, path),
-            "S-102" => ProjectS102(id, path),
-            "S-104" => ProjectS104(id, path),
-            "S-111" => ProjectS111(id, path),
-            "S-122" => ProjectGml(id, "S-122", path, p =>
+            "S-101" or "S-57" => ProjectS101(id, entry),
+            "S-102" => ProjectS102(id, entry),
+            "S-104" => ProjectS104(id, entry),
+            "S-111" => ProjectS111(id, entry),
+            "S-122" => ProjectGml(id, "S-122", entry, stream =>
             {
-                var model = S122Dataset.Open(p);
+                var model = S122Dataset.Open(stream);
                 return (new S122DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-124" => ProjectGml(id, "S-124", path, p =>
+            "S-124" => ProjectGml(id, "S-124", entry, stream =>
             {
-                var model = S124Dataset.Open(p);
+                var model = S124Dataset.Open(stream);
                 return (new S124DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-125" => ProjectGml(id, "S-125", path, p =>
+            "S-125" => ProjectGml(id, "S-125", entry, stream =>
             {
-                var model = S125Dataset.Open(p);
+                var model = S125Dataset.Open(stream);
                 return (new S125DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-127" => ProjectGml(id, "S-127", path, p =>
+            "S-127" => ProjectGml(id, "S-127", entry, stream =>
             {
-                var model = S127Dataset.Open(p);
+                var model = S127Dataset.Open(stream);
                 return (new S127DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-128" => ProjectGml(id, "S-128", path, p =>
+            "S-128" => ProjectGml(id, "S-128", entry, stream =>
             {
-                var model = S128Dataset.Open(p);
+                var model = S128Dataset.Open(stream);
                 return (new S128DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-129" => ProjectGml(id, "S-129", path, p =>
+            "S-129" => ProjectGml(id, "S-129", entry, stream =>
             {
-                var model = S129Dataset.Open(p);
+                var model = S129Dataset.Open(stream);
                 return (new S129DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-131" => ProjectGml(id, "S-131", path, p =>
+            "S-131" => ProjectGml(id, "S-131", entry, stream =>
             {
-                var model = S131Dataset.Open(p);
+                var model = S131Dataset.Open(stream);
                 return (new S131DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-201" => ProjectGml(id, "S-201", path, p =>
+            "S-201" => ProjectGml(id, "S-201", entry, stream =>
             {
-                var model = S201Dataset.Open(p);
+                var model = S201Dataset.Open(stream);
                 return (new S201DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-411" => ProjectGml(id, "S-411", path, p =>
+            "S-411" => ProjectGml(id, "S-411", entry, stream =>
             {
-                var model = S411Dataset.Open(p);
+                var model = S411Dataset.Open(stream);
                 return (new S411DatasetData(model), ComputeGmlBounds(model.Features));
             }),
-            "S-421" => ProjectGml(id, "S-421", path, p =>
+            "S-421" => ProjectGml(id, "S-421", entry, stream =>
             {
-                var model = S421Dataset.Open(p);
+                var model = S421Dataset.Open(stream);
                 return (new S421DatasetData(model), ComputeGmlBounds(model.Features));
             }),
             _ => null,
         };
     }
 
+    /// <summary>
+    /// Opens the dataset bytes for <paramref name="entry"/> — either from
+    /// disk (plain entry) or from its <see cref="DatasetEntry.Source"/>
+    /// asset source (exchange-set entry). The returned stream must be
+    /// disposed by the caller.
+    /// </summary>
+    private static Stream OpenEntryStream(DatasetEntry entry)
+    {
+        if (entry.IsFromExchangeSet)
+        {
+            // IAssetSource.OpenAsync is effectively synchronous for the
+            // FileSystem / Zip backings used by the viewer (see
+            // ZipAssetSource.OpenAsync), so blocking here is benign and
+            // keeps TryProject synchronous like the rest of the catalog
+            // event chain.
+            return entry.Source!.OpenAsync(entry.RelativePath!).GetAwaiter().GetResult();
+        }
+        return File.OpenRead(entry.FilePath);
+    }
+
     private static LoadedDataset ProjectGml(
         DatasetId id,
         string specName,
-        string path,
-        Func<string, (LoadedDatasetData Data, BoundingBox? Bounds)> open)
+        DatasetEntry entry,
+        Func<Stream, (LoadedDatasetData Data, BoundingBox? Bounds)> open)
     {
-        var (data, bounds) = open(path);
+        using var stream = OpenEntryStream(entry);
+        var (data, bounds) = open(stream);
         return new LoadedDataset(
             id,
             new SpecRef(specName, default),
@@ -225,9 +257,10 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             data);
     }
 
-    private static LoadedDataset ProjectS101(DatasetId id, string path)
+    private static LoadedDataset ProjectS101(DatasetId id, DatasetEntry entry)
     {
-        var dataset = S101Dataset.Open(path);
+        using var stream = OpenEntryStream(entry);
+        var dataset = S101Dataset.Open(stream);
         // S-101 features carry packed spatial coordinates that require
         // the coordinate multiplication factors plus a join across the
         // feature / spatial / coordinate records to recover lat/lon —
@@ -243,15 +276,14 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             new S101DatasetData(dataset));
     }
 
-    private static LoadedDataset ProjectS102(DatasetId id, string path)
+    private static LoadedDataset ProjectS102(DatasetId id, DatasetEntry entry)
     {
         // S102DatasetReader.Read fully materialises every coverage's
         // values into managed BathymetryValue[] arrays before
         // returning (see S102DatasetReader.ReadCoverage), so the
-        // backing HDF5 file can be closed immediately. The
-        // S102CoverageSource that S102CoverageData carries does not
-        // need a live IHdf5File handle.
-        using var file = PureHdfFile.Open(path);
+        // backing HDF5 file (and its stream) can be closed immediately.
+        using var stream = OpenEntryStream(entry);
+        using var file = PureHdfFile.Open(stream);
         var dataset = S102DatasetReader.Read(file);
         var source = new S102CoverageSource(dataset);
         var bounds = ComputeS102Bounds(dataset) ?? WorldBounds;
@@ -263,12 +295,13 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             new S102CoverageData(source));
     }
 
-    private static LoadedDataset ProjectS104(DatasetId id, string path)
+    private static LoadedDataset ProjectS104(DatasetId id, DatasetEntry entry)
     {
         // S104DatasetReader.Read materialises every time-step's value
         // grid into a managed WaterLevelValue[] before returning, so
-        // the file handle can be disposed eagerly.
-        using var file = PureHdfFile.Open(path);
+        // the file handle (and its stream) can be disposed eagerly.
+        using var stream = OpenEntryStream(entry);
+        using var file = PureHdfFile.Open(stream);
         var dataset = S104DatasetReader.Read(file);
         var source = new S104CoverageSource(dataset);
         var bounds = ComputeS104Bounds(dataset) ?? WorldBounds;
@@ -280,12 +313,13 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             new S104CoverageData(source));
     }
 
-    private static LoadedDataset ProjectS111(DatasetId id, string path)
+    private static LoadedDataset ProjectS111(DatasetId id, DatasetEntry entry)
     {
         // S111DatasetReader.Read materialises every time-step's value
         // grid into managed arrays before returning, so the file
-        // handle can be disposed eagerly.
-        using var file = PureHdfFile.Open(path);
+        // handle (and its stream) can be disposed eagerly.
+        using var stream = OpenEntryStream(entry);
+        using var file = PureHdfFile.Open(stream);
         var dataset = S111DatasetReader.Read(file);
         var source = new S111CoverageSource(dataset);
         var bounds = ComputeS111Bounds(dataset) ?? WorldBounds;

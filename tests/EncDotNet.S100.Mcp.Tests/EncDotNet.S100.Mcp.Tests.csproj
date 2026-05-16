@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S122\EncDotNet.S100.Datasets.S122.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S124\EncDotNet.S100.Datasets.S124.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S131\EncDotNet.S100.Datasets.S131.csproj" />
@@ -39,6 +41,8 @@
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\LoadedDatasetFactory.cs" Link="Fakes\LoadedDatasetFactory.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101Synth.cs" Link="Fakes\S101Synth.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S102Synth.cs" Link="Fakes\S102Synth.cs" />
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S104Synth.cs" Link="Fakes\S104Synth.cs" />
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S111Synth.cs" Link="Fakes\S111Synth.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S124Synth.cs" Link="Fakes\S124Synth.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S131Synth.cs" Link="Fakes\S131Synth.cs" />
   </ItemGroup>
