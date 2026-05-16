@@ -112,8 +112,11 @@ public sealed class S100McpServer : IAsyncDisposable
         var describeFeature = new DescribeFeatureTool(_catalog);
         var sampleCoverage = new SampleCoverageTool(_catalog);
         var findAt = new FindAtTool(_catalog);
+        var queryFeatures = new QueryFeaturesTool(_catalog);
+        var sampleCoverageAlong = new SampleCoverageAlongTool(_catalog);
+        var listSpecs = new ListSpecsTool(_catalog);
         var tools = S100McpServerToolFactory
-            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt)
+            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt, queryFeatures, sampleCoverageAlong, listSpecs)
             .ToArray();
 
         builder.Services
