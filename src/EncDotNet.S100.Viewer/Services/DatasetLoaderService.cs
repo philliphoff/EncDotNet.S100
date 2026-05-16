@@ -38,6 +38,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly IToastService _toasts;
+    private readonly IDatasetLoadFailureReporter _failureReporter;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -80,7 +81,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         GlobalTimeService globalTime,
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
-        IToastService toasts)
+        IToastService toasts,
+        IDatasetLoadFailureReporter failureReporter)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -94,6 +96,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
         ArgumentNullException.ThrowIfNull(marinerSettings);
         ArgumentNullException.ThrowIfNull(toasts);
+        ArgumentNullException.ThrowIfNull(failureReporter);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -107,6 +110,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
         _toasts = toasts;
+        _failureReporter = failureReporter;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
@@ -303,7 +307,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             SetStatus(string.Format(Strings.Status_Error, ex.Message));
             _toasts.ShowError(Strings.Toast_DatasetError,
                 string.Format(Strings.Status_Error, ex.Message));
-            Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
+            await _failureReporter.ReportAsync(entry, ex);
         }
     }
 

@@ -328,4 +328,19 @@ internal static class Strings
     public static string Settings_McpEnabledTooltip => Get(nameof(Settings_McpEnabledTooltip));
     public static string Settings_McpPort => Get(nameof(Settings_McpPort));
     public static string Settings_McpPortTooltip => Get(nameof(Settings_McpPortTooltip));
+
+    // Load-failure dialog
+    public static string LoadFailureDialog_Title => Get(nameof(LoadFailureDialog_Title));
+    public static string LoadFailureDialog_NotSupportedBody => Get(nameof(LoadFailureDialog_NotSupportedBody));
+    public static string LoadFailureDialog_SchemaBody => Get(nameof(LoadFailureDialog_SchemaBody));
+    public static string LoadFailureDialog_GenericBody => Get(nameof(LoadFailureDialog_GenericBody));
+    public static string LoadFailureDialog_FilePathLabel => Get(nameof(LoadFailureDialog_FilePathLabel));
+    public static string LoadFailureDialog_SpecReference => Get(nameof(LoadFailureDialog_SpecReference));
+    public static string LoadFailureDialog_ShowDetails => Get(nameof(LoadFailureDialog_ShowDetails));
+    public static string LoadFailureDialog_HideDetails => Get(nameof(LoadFailureDialog_HideDetails));
+    public static string LoadFailureDialog_CopyDetails => Get(nameof(LoadFailureDialog_CopyDetails));
+    public static string LoadFailureDialog_CopyDetailsTooltip => Get(nameof(LoadFailureDialog_CopyDetailsTooltip));
+    public static string LoadFailureDialog_Close => Get(nameof(LoadFailureDialog_Close));
+    public static string LoadFailureDialog_CloseTooltip => Get(nameof(LoadFailureDialog_CloseTooltip));
+    public static string LoadFailureDialog_DetailsCopied => Get(nameof(LoadFailureDialog_DetailsCopied));
 }
