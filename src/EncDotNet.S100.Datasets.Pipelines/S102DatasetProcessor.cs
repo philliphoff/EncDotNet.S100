@@ -15,13 +15,15 @@ using Mapsui;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S102DatasetProcessor : IDatasetProcessor
+public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
     private readonly S102PortrayalCatalogue _catalogue;
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly string _fileName;
+    private readonly PortrayalPipeline _pipeline;
+    private readonly MapsuiCoverageRenderer _renderer;
 
     public SpecRef Spec => new("S-102", default);
 
@@ -88,7 +90,23 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
         var provider = catalogueManager.GetProvider("S-102");
         _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { FourShades = true };
 
+        // Hoist pipeline + renderer to fields: Render() is invoked many times
+        // (each Mapsui redraw) but neither holds per-render state, so a single
+        // instance is safe and avoids repeated allocation on the hot path.
+        _pipeline = new PortrayalPipeline();
+        _renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        {
+            LayerName = $"S-102: {_fileName}",
+        };
+
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+    }
+
+    public void Dispose()
+    {
+        // PortrayalPipeline and MapsuiCoverageRenderer are not currently
+        // disposable, but keep Dispose explicit so future allocations to these
+        // fields can be cleaned up here without further plumbing.
     }
 
     public DatasetResult Render(RenderContext? context = null)
@@ -107,15 +125,12 @@ public sealed class S102DatasetProcessor : IDatasetProcessor
             ScaleDenominator = 50_000,
         };
 
-        var pipeline = new PortrayalPipeline();
+        var pipeline = _pipeline;
         var layer = pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default)
             .GetAwaiter().GetResult();
         var styledLayer = (StyledCoverageLayer)layer;
 
-        var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
-        {
-            LayerName = $"S-102: {_fileName}",
-        };
+        var renderer = _renderer;
 
         var mapLayer = renderer.Render(styledLayer, viewport);
         var extent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
