@@ -109,6 +109,7 @@ The five error variants implemented in this PR:
 | `no_dataset_covers_point`     | No loaded dataset's bounds contain the requested lat/lon.             |
 | `feature_not_found`           | The named feature is not present in the named dataset.                |
 | `spec_not_supported_for_tool` | The tool does not (yet) support the requested spec.                   |
+| `invalid_argument`            | A request property failed validation (e.g. latitude / longitude out of WGS-84 range). |
 
 ## Spec strategy pattern
 
@@ -146,6 +147,7 @@ IDatasetCatalog catalog = host.Catalog;
 var list = new ListDatasetsTool(catalog);
 var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
+var findAt = new FindAtTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -153,6 +155,19 @@ if (listed.TryGetValue(out var summary))
     foreach (var ds in summary.Datasets)
     {
         Console.WriteLine($"{ds.Id} ({ds.Spec})");
+    }
+}
+
+// Which loaded datasets cover this point? (bbox-only — does not check
+// per-cell coverage or NoData masks.)
+var hits = await findAt.InvokeAsync(new FindAtRequest(
+    Latitude: 50.77,
+    Longitude: -1.30));
+if (hits.TryGetValue(out var hit))
+{
+    foreach (var ds in hit.Datasets)
+    {
+        Console.WriteLine($"{ds.Id} ({ds.Spec}) covers the point.");
     }
 }
 
