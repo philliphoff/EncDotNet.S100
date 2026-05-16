@@ -466,6 +466,51 @@ internal sealed class MainViewModel : ViewModelBase
         });
     }
 
+    private void OnMcpPortConflict(object? sender, McpPortConflictEventArgs e)
+    {
+        var conflictPort = e.Port;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _toasts.ShowError(
+                title: Strings.Toast_McpPortConflictTitle,
+                content: string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    Strings.Toast_McpPortConflictBody,
+                    conflictPort),
+                actionLabel: Strings.Toast_McpPortFindAnother,
+                action: () => _ = FindAnotherMcpPortAsync(),
+                sticky: true);
+        });
+    }
+
+    private async Task FindAnotherMcpPortAsync()
+    {
+        if (_mcpServerHost is not { } host) return;
+
+        int? newPort;
+        try
+        {
+            newPort = await host.ResetPortAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            newPort = null;
+        }
+
+        if (newPort is { } port)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _toasts.ShowInfo(
+                    title: Strings.Toast_McpPortReassignedTitle,
+                    content: string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        Strings.Toast_McpPortReassignedBody,
+                        port));
+            });
+        }
+    }
+
     public MainViewModel(
         ViewerSettings settings,
         FeatureCataloguesViewModel featureCatalogues,
@@ -513,6 +558,7 @@ internal sealed class MainViewModel : ViewModelBase
         if (_mcpServerHost is { } host)
         {
             host.ServerChanged += (_, _) => AttachToMcpServer();
+            host.McpPortConflict += OnMcpPortConflict;
             AttachToMcpServer();
         }
         if (_statusPresenter is { } presenter)

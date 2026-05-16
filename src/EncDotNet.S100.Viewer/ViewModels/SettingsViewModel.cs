@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Windows.Input;
 using Avalonia.Media;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -424,7 +426,15 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         _mcpEnabled = settings.McpEnabled;
         _mcpPort = settings.McpPort;
+        ResetMcpPortCommand = new RelayCommand(() => McpPort = 0);
     }
+
+    /// <summary>
+    /// Command bound to the "Reset to auto" button in Settings.
+    /// Clears the persisted MCP port so the next bind picks an
+    /// ephemeral port (which the host then persists back).
+    /// </summary>
+    public ICommand ResetMcpPortCommand { get; }
 
     /// <summary>
     /// Raised when an MCP-related setting changes so the
