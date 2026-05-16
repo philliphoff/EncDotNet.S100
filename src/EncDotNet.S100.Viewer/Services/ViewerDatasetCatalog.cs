@@ -3,16 +3,21 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S125;
 using EncDotNet.S100.Datasets.S127;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S129;
+using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Gml;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -136,39 +141,116 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var spec = entry.ProductSpec;
         var path = entry.FilePath;
 
+        // DatasetPipelineFactory.DetectProductSpec returns the literal
+        // string "S-57" for ENC .000 files that pass the S-57 DSPM
+        // discriminator (see DatasetPipelineFactory.cs:94) and "S-101"
+        // for everything else with that extension. The MCP surface
+        // treats both as S-101 — the S-57 → S-101 adapter is what the
+        // viewer's render pipeline ultimately uses for portrayal, so
+        // exposing them under a single canonical spec name keeps the
+        // tool surface predictable. The catalog itself does not need
+        // to differentiate.
         return spec switch
         {
+            "S-101" or "S-57" => ProjectS101(id, path),
             "S-102" => ProjectS102(id, path),
-            "S-122" => Project(id, "S-122", path, p => new S122DatasetData(S122Dataset.Open(p))),
-            "S-124" => Project(id, "S-124", path, p => new S124DatasetData(S124Dataset.Open(p))),
-            "S-125" => Project(id, "S-125", path, p => new S125DatasetData(S125Dataset.Open(p))),
-            "S-127" => Project(id, "S-127", path, p => new S127DatasetData(S127Dataset.Open(p))),
-            "S-128" => Project(id, "S-128", path, p => new S128DatasetData(S128Dataset.Open(p))),
-            "S-129" => Project(id, "S-129", path, p => new S129DatasetData(S129Dataset.Open(p))),
-            "S-201" => Project(id, "S-201", path, p => new S201DatasetData(S201Dataset.Open(p))),
-            "S-411" => Project(id, "S-411", path, p => new S411DatasetData(S411Dataset.Open(p))),
-            "S-421" => Project(id, "S-421", path, p => new S421DatasetData(S421Dataset.Open(p))),
+            "S-104" => ProjectS104(id, path),
+            "S-111" => ProjectS111(id, path),
+            "S-122" => ProjectGml(id, "S-122", path, p =>
+            {
+                var model = S122Dataset.Open(p);
+                return (new S122DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-124" => ProjectGml(id, "S-124", path, p =>
+            {
+                var model = S124Dataset.Open(p);
+                return (new S124DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-125" => ProjectGml(id, "S-125", path, p =>
+            {
+                var model = S125Dataset.Open(p);
+                return (new S125DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-127" => ProjectGml(id, "S-127", path, p =>
+            {
+                var model = S127Dataset.Open(p);
+                return (new S127DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-128" => ProjectGml(id, "S-128", path, p =>
+            {
+                var model = S128Dataset.Open(p);
+                return (new S128DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-129" => ProjectGml(id, "S-129", path, p =>
+            {
+                var model = S129Dataset.Open(p);
+                return (new S129DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-131" => ProjectGml(id, "S-131", path, p =>
+            {
+                var model = S131Dataset.Open(p);
+                return (new S131DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-201" => ProjectGml(id, "S-201", path, p =>
+            {
+                var model = S201Dataset.Open(p);
+                return (new S201DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-411" => ProjectGml(id, "S-411", path, p =>
+            {
+                var model = S411Dataset.Open(p);
+                return (new S411DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
+            "S-421" => ProjectGml(id, "S-421", path, p =>
+            {
+                var model = S421Dataset.Open(p);
+                return (new S421DatasetData(model), ComputeGmlBounds(model.Features));
+            }),
             _ => null,
         };
     }
 
-    private static LoadedDataset Project(
+    private static LoadedDataset ProjectGml(
         DatasetId id,
         string specName,
         string path,
-        Func<string, LoadedDatasetData> openData)
+        Func<string, (LoadedDatasetData Data, BoundingBox? Bounds)> open)
     {
-        var data = openData(path);
+        var (data, bounds) = open(path);
         return new LoadedDataset(
             id,
             new SpecRef(specName, default),
-            WorldBounds,
+            bounds ?? WorldBounds,
             null,
             data);
     }
 
-    private static LoadedDataset? ProjectS102(DatasetId id, string path)
+    private static LoadedDataset ProjectS101(DatasetId id, string path)
     {
+        var dataset = S101Dataset.Open(path);
+        // S-101 features carry packed spatial coordinates that require
+        // the coordinate multiplication factors plus a join across the
+        // feature / spatial / coordinate records to recover lat/lon —
+        // see S-100 Part 10a §3. That work belongs with the S-101
+        // describe implementation, so we fall back to world bounds for
+        // now; the MCP tool surface still lists the dataset and other
+        // tools can dispatch on it.
+        return new LoadedDataset(
+            id,
+            new SpecRef("S-101", default),
+            WorldBounds,
+            null,
+            new S101DatasetData(dataset));
+    }
+
+    private static LoadedDataset ProjectS102(DatasetId id, string path)
+    {
+        // S102DatasetReader.Read fully materialises every coverage's
+        // values into managed BathymetryValue[] arrays before
+        // returning (see S102DatasetReader.ReadCoverage), so the
+        // backing HDF5 file can be closed immediately. The
+        // S102CoverageSource that S102CoverageData carries does not
+        // need a live IHdf5File handle.
         using var file = PureHdfFile.Open(path);
         var dataset = S102DatasetReader.Read(file);
         var source = new S102CoverageSource(dataset);
@@ -179,6 +261,40 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             bounds,
             null,
             new S102CoverageData(source));
+    }
+
+    private static LoadedDataset ProjectS104(DatasetId id, string path)
+    {
+        // S104DatasetReader.Read materialises every time-step's value
+        // grid into a managed WaterLevelValue[] before returning, so
+        // the file handle can be disposed eagerly.
+        using var file = PureHdfFile.Open(path);
+        var dataset = S104DatasetReader.Read(file);
+        var source = new S104CoverageSource(dataset);
+        var bounds = ComputeS104Bounds(dataset) ?? WorldBounds;
+        return new LoadedDataset(
+            id,
+            new SpecRef("S-104", default),
+            bounds,
+            null,
+            new S104CoverageData(source));
+    }
+
+    private static LoadedDataset ProjectS111(DatasetId id, string path)
+    {
+        // S111DatasetReader.Read materialises every time-step's value
+        // grid into managed arrays before returning, so the file
+        // handle can be disposed eagerly.
+        using var file = PureHdfFile.Open(path);
+        var dataset = S111DatasetReader.Read(file);
+        var source = new S111CoverageSource(dataset);
+        var bounds = ComputeS111Bounds(dataset) ?? WorldBounds;
+        return new LoadedDataset(
+            id,
+            new SpecRef("S-111", default),
+            bounds,
+            null,
+            new S111CoverageData(source));
     }
 
     private static BoundingBox? ComputeS102Bounds(S102Dataset dataset)
@@ -192,6 +308,84 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var north = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
         var east = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
         return new BoundingBox(south, west, north, east);
+    }
+
+    private static BoundingBox? ComputeS104Bounds(S104Dataset dataset)
+    {
+        if (dataset.Coverages is null || dataset.Coverages.Count == 0) return null;
+        var cov = dataset.Coverages[0];
+        if (cov.NumPointsLatitudinal <= 0 || cov.NumPointsLongitudinal <= 0) return null;
+
+        var south = cov.OriginLatitude;
+        var west = cov.OriginLongitude;
+        var north = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
+        var east = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
+        return new BoundingBox(south, west, north, east);
+    }
+
+    private static BoundingBox? ComputeS111Bounds(S111Dataset dataset)
+    {
+        if (dataset.Coverages is null || dataset.Coverages.Count == 0) return null;
+        var cov = dataset.Coverages[0];
+        if (cov.NumPointsLatitudinal <= 0 || cov.NumPointsLongitudinal <= 0) return null;
+
+        var south = cov.OriginLatitude;
+        var west = cov.OriginLongitude;
+        var north = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
+        var east = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
+        return new BoundingBox(south, west, north, east);
+    }
+
+    /// <summary>
+    /// Computes a lat/lon bounding box covering every coordinate
+    /// referenced by the supplied GML features (points, curves, ring
+    /// vertices). Returns <c>null</c> when no feature carries any
+    /// geometry — container-style features such as S-131
+    /// <c>Authority</c> or S-127 <c>Authority</c> are valid in their
+    /// respective product specs but produce no bounds, in which case
+    /// callers fall back to <see cref="WorldBounds"/>.
+    /// </summary>
+    private static BoundingBox? ComputeGmlBounds<TFeature>(IEnumerable<TFeature> features)
+        where TFeature : IGmlFeature
+    {
+        if (features is null) return null;
+
+        double minLat = double.PositiveInfinity, maxLat = double.NegativeInfinity;
+        double minLon = double.PositiveInfinity, maxLon = double.NegativeInfinity;
+        bool any = false;
+
+        void Expand(double lat, double lon)
+        {
+            any = true;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+        }
+
+        foreach (var feature in features)
+        {
+            if (feature is null) continue;
+            if (!feature.Points.IsDefaultOrEmpty)
+            {
+                foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
+            }
+            if (!feature.Curves.IsDefaultOrEmpty)
+            {
+                foreach (var curve in feature.Curves)
+                {
+                    if (curve.IsDefaultOrEmpty) continue;
+                    foreach (var (lat, lon) in curve) Expand(lat, lon);
+                }
+            }
+            if (!feature.ExteriorRing.IsDefaultOrEmpty)
+            {
+                foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
+            }
+        }
+
+        if (!any) return null;
+        return new BoundingBox(minLat, minLon, maxLat, maxLon);
     }
 
     /// <inheritdoc />

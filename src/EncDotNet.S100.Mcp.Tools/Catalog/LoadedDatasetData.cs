@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
@@ -7,6 +8,7 @@ using EncDotNet.S100.Datasets.S125;
 using EncDotNet.S100.Datasets.S127;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S129;
+using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
@@ -20,6 +22,18 @@ namespace EncDotNet.S100.Mcp.Tools.Catalog;
 /// (HDF5-encoded coverage products).
 /// </summary>
 public abstract record LoadedDatasetData;
+
+/// <summary>
+/// S-101 Electronic Navigational Chart typed dataset.
+/// </summary>
+/// <remarks>
+/// Carries the parsed <see cref="S101Dataset"/> handle. The MCP
+/// <c>describe_feature</c> tool returns
+/// <see cref="EncDotNet.S100.Mcp.Tools.SpecNotSupportedForTool"/> for
+/// S-101 today (see <c>S101FeatureDescriber</c>); the variant exists so
+/// <c>list_datasets</c> can surface ENCs loaded into the viewer.
+/// </remarks>
+public sealed record S101DatasetData(S101Dataset Dataset) : LoadedDatasetData;
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>
 public sealed record S122DatasetData(S122Dataset Model) : LoadedDatasetData;
@@ -38,6 +52,9 @@ public sealed record S128DatasetData(S128Dataset Model) : LoadedDatasetData;
 
 /// <summary>S-129 Under Keel Clearance typed model.</summary>
 public sealed record S129DatasetData(S129Dataset Model) : LoadedDatasetData;
+
+/// <summary>S-131 Marine Harbour Infrastructure typed model.</summary>
+public sealed record S131DatasetData(S131Dataset Model) : LoadedDatasetData;
 
 /// <summary>S-201 Aids to Navigation Information typed model.</summary>
 public sealed record S201DatasetData(S201Dataset Model) : LoadedDatasetData;

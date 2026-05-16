@@ -24,6 +24,7 @@ public sealed class FeatureDescriberRegistry
     /// <summary>Default registry, containing the describers shipped with this assembly.</summary>
     public static FeatureDescriberRegistry Default { get; } = new FeatureDescriberRegistry(
     [
+        new S101FeatureDescriber(),
         new S124FeatureDescriber(),
     ]);
 

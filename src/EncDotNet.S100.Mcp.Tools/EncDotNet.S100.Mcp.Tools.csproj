@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
@@ -16,6 +17,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S127\EncDotNet.S100.Datasets.S127.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S129\EncDotNet.S100.Datasets.S129.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S131\EncDotNet.S100.Datasets.S131.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S201\EncDotNet.S100.Datasets.S201.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
