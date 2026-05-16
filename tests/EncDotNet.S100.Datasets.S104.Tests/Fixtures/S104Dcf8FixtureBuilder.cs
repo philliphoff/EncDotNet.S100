@@ -35,6 +35,16 @@ internal static class S104Dcf8FixtureBuilder
         [H5Name("longitude")] public float Longitude;
     }
 
+    /// <summary>
+    /// UKHO-style short member names <c>lat</c>/<c>long</c> seen in the
+    /// real <c>104UK_..._dcf8.hdf5</c> astronomical-prediction trial cells.
+    /// </summary>
+    public struct GeometryRowShort
+    {
+        [H5Name("lat")] public float Lat;
+        [H5Name("long")] public float Long;
+    }
+
     public sealed class Station<TRow> where TRow : struct
     {
         public required string Identifier { get; init; }
@@ -55,7 +65,9 @@ internal static class S104Dcf8FixtureBuilder
         string path,
         IReadOnlyList<Station<TRow>> stations,
         bool includePositioning = true,
-        double? waterLevelTrendThreshold = null)
+        double? waterLevelTrendThreshold = null,
+        bool useShortGeometryNames = false,
+        bool positioningUnderInstance = false)
         where TRow : struct
     {
         var instanceGroups = new Dictionary<string, object>();
@@ -116,14 +128,31 @@ internal static class S104Dcf8FixtureBuilder
 
         if (includePositioning)
         {
-            var geom = new GeometryRow[stations.Count];
-            for (int i = 0; i < stations.Count; i++)
-                geom[i] = new GeometryRow { Latitude = stations[i].Latitude, Longitude = stations[i].Longitude };
-
-            file["Positioning"] = new H5Group
+            object geom;
+            if (useShortGeometryNames)
             {
-                ["geometryValues"] = geom,
-            };
+                var arr = new GeometryRowShort[stations.Count];
+                for (int i = 0; i < stations.Count; i++)
+                    arr[i] = new GeometryRowShort { Lat = stations[i].Latitude, Long = stations[i].Longitude };
+                geom = arr;
+            }
+            else
+            {
+                var arr = new GeometryRow[stations.Count];
+                for (int i = 0; i < stations.Count; i++)
+                    arr[i] = new GeometryRow { Latitude = stations[i].Latitude, Longitude = stations[i].Longitude };
+                geom = arr;
+            }
+
+            var positioningGroup = new H5Group { ["geometryValues"] = geom };
+            if (positioningUnderInstance)
+            {
+                instance["Positioning"] = positioningGroup;
+            }
+            else
+            {
+                file["Positioning"] = positioningGroup;
+            }
         }
 
         var options = new H5WriteOptions(

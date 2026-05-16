@@ -144,6 +144,51 @@ public class S104Dcf8ReaderTests
         finally { File.Delete(path); }
     }
 
+    /// <summary>
+    /// UKHO <c>104UK_..._dcf8.hdf5</c> astronomical-prediction trial cells
+    /// use the short geometry member names <c>lat</c>/<c>long</c> and place
+    /// the <c>Positioning</c> group under <c>/WaterLevel/WaterLevel.NN</c>
+    /// instead of at the file root. The reader must tolerate both
+    /// variations (S-104 Ed 2.0.0 §10.2.3).
+    /// </summary>
+    [Fact]
+    public void ReadAny_UkhoShortGeometryNames_PositioningUnderInstance_RoundTrips()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var stations = new[]
+            {
+                Station("0031", 50.75f, -1.5f, new[]
+                {
+                    new S104Dcf8FixtureBuilder.UkhoValueRow { SurfaceHeight = 1.1f, Trend = 2 },
+                    new S104Dcf8FixtureBuilder.UkhoValueRow { SurfaceHeight = 1.3f, Trend = 2 },
+                }),
+                Station("0033", 50.80f, -1.4f, new[]
+                {
+                    new S104Dcf8FixtureBuilder.UkhoValueRow { SurfaceHeight = 0.9f, Trend = 1 },
+                    new S104Dcf8FixtureBuilder.UkhoValueRow { SurfaceHeight = 0.7f, Trend = 1 },
+                }),
+            };
+            S104Dcf8FixtureBuilder.WriteFile(
+                path, stations,
+                useShortGeometryNames: true,
+                positioningUnderInstance: true);
+
+            using var file = PureHdfFile.Open(path);
+            var any = S104DatasetReader.ReadAny(file);
+            var model = ((S104DatasetData.StationSeries)any).Dataset;
+
+            Assert.Equal(2, model.Stations.Count);
+            Assert.Equal("0031", model.Stations[0].Identifier);
+            Assert.Equal(50.75, model.Stations[0].Latitude, 3);
+            Assert.Equal(-1.5, model.Stations[0].Longitude, 3);
+            Assert.Equal("0033", model.Stations[1].Identifier);
+            Assert.Equal(50.80, model.Stations[1].Latitude, 3);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void ReadAny_F32Trend_RoundsAndClamps()
     {

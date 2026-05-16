@@ -408,7 +408,7 @@ public static class S104DatasetReader
                 innerException: ex);
         }
 
-        var latMember = raw.FindMember("latitude", "Latitude")
+        var latMember = raw.FindMember("latitude", "Latitude", "lat", "Lat")
             ?? throw new S100DatasetSchemaException(
                 product: "S-104",
                 file: null,
@@ -419,7 +419,7 @@ public static class S104DatasetReader
                     "S-104", null, "/Positioning/geometryValues", "latitude",
                     "S-104 Edition 2.0.0 §10.2.3"));
 
-        var lonMember = raw.FindMember("longitude", "Longitude")
+        var lonMember = raw.FindMember("longitude", "Longitude", "long", "Long", "lon", "Lon")
             ?? throw new S100DatasetSchemaException(
                 product: "S-104",
                 file: null,
