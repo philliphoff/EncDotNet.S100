@@ -26,7 +26,10 @@ public abstract record ToolError(
 /// names the request property that was rejected and
 /// <paramref name="Reason"/> describes why.
 /// </summary>
-public sealed record InvalidArgument(string Parameter, string Reason) : ToolError(
+[Description("Raised when a tool argument fails validation (e.g. a latitude or longitude outside the WGS-84 range).")]
+public sealed record InvalidArgument(
+    [property: Description("Name of the request property that was rejected.")] string Parameter,
+    [property: Description("Human-readable description of why the value was rejected; not localised.")] string Reason) : ToolError(
     "invalid_argument",
     $"Invalid argument '{Parameter}': {Reason}.");
 
