@@ -35,6 +35,23 @@ subtype carries a `[System.ComponentModel.Description]` attribute with
 a single sentence stating the unit / CRS / semantics. A reflection
 contract test (`AnnotationContractTests`) enforces this.
 
+### Known unit warts
+
+These are pre-existing inconsistencies in the underlying dataset
+libraries that the MCP layer does **not** currently normalise. Agents
+should consult the `units` field on a per-payload basis rather than
+assume canonical units for these cases.
+
+- **S-111 current speed.** S-111 grids encoded as data coding format 2
+  (regularly-gridded time-series) surface speeds with `units = "knots"`,
+  while data coding format 8 (time series at fixed stations) surface
+  speeds with `units = "metres/second"`. The two values come from
+  different paths in `EncDotNet.S100.Datasets.S111` and have not yet
+  been normalised. TODO: pick one canonical unit at the MCP boundary
+  (almost certainly metres/second, matching the strongly-typed
+  `speedMetresPerSecond` field on `SurfaceCurrentSample` /
+  `SurfaceCurrentStationSample`) and rescale the other path.
+
 ## Enable it
 
 1. Open the viewer.
