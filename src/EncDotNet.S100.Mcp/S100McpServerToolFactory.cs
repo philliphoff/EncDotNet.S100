@@ -73,7 +73,8 @@ internal static class S100McpServerToolFactory
         FindAtTool findAt,
         QueryFeaturesTool queryFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
-        ListSpecsTool listSpecs)
+        ListSpecsTool listSpecs,
+        ListTimeStepsTool listTimeSteps)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
@@ -82,6 +83,7 @@ internal static class S100McpServerToolFactory
         yield return CreateQueryFeaturesTool(queryFeatures);
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
+        yield return CreateListTimeStepsTool(listTimeSteps);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -290,6 +292,28 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = ListSpecsTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateListTimeStepsTool(ListTimeStepsTool inner)
+    {
+        var description =
+            "Returns the available UTC time-step instants for a time-varying coverage dataset " +
+            "(S-104 water level, S-111 surface currents). Use this to ground temporal questions " +
+            "before issuing sample_coverage or sample_coverage_along — the agent can discover the " +
+            "first/last instant, the cadence (when uniform), and the full list of valid times. " +
+            "For S-102 (static bathymetry) the times array is empty. Read-only and side-effect free.";
+
+        var del = ([Description("Identifier of a currently loaded time-varying coverage dataset (typically obtained from list_datasets).")] string datasetId,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(new ListTimeStepsRequest(new DatasetId(datasetId)), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = ListTimeStepsTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

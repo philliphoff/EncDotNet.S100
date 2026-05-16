@@ -30,6 +30,7 @@ public class S100McpServerRoundTripTests
                 "find_at",
                 "list_datasets",
                 "list_specs",
+                "list_time_steps",
                 "query_features",
                 "sample_coverage",
                 "sample_coverage_along",
@@ -292,7 +293,31 @@ public class S100McpServerRoundTripTests
             Assert.NotNull(caps["canQueryFeatures"]);
             Assert.NotNull(caps["canDescribeFeature"]);
             Assert.NotNull(caps["canSampleCoverage"]);
+            Assert.NotNull(caps["canListTimeSteps"]);
         }
+    }
+
+    [Fact]
+    public async Task ListTimeSteps_round_trip_returns_cadence_for_S104()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S104("wl-1"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync(
+            "list_time_steps",
+            new Dictionary<string, object?> { ["datasetId"] = "wl-1" });
+
+        Assert.False(result.IsError ?? false, $"list_time_steps returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var times = payload["times"]!.AsArray();
+        Assert.NotEmpty(times);
+        Assert.NotNull(payload["firstTime"]);
+        Assert.NotNull(payload["lastTime"]);
+        Assert.NotNull(payload["cadence"]);
+        Assert.Equal("S-104", payload["spec"]!["name"]!.GetValue<string>());
     }
 
     [Fact]

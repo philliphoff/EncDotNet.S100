@@ -56,7 +56,8 @@ The server exposes the read-only tools defined by
 | `find_at` | Datasets whose declared bbox contains a point or intersects a `GeoQuery` envelope |
 | `query_features` | Features from loaded GML datasets that intersect a spatial query (point / box / polygon / polyline) |
 | `sample_coverage_along` | Per-vertex coverage samples for a polyline (S-102 / S-104 / S-111) |
-| `list_specs` | Spec catalogue with per-spec capability flags (query / describe / sample) |
+| `list_specs` | Spec catalogue with per-spec capability flags (query / describe / sample / list time-steps) |
+| `list_time_steps` | Available UTC time-step instants (+ cadence) for a time-varying coverage dataset (S-104 / S-111) |
 
 Spatial queries are passed as a JSON envelope on the `query` (or
 `polyline`) parameter:
