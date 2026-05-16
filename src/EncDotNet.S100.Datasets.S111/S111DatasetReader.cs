@@ -6,15 +6,46 @@ namespace EncDotNet.S100.Datasets.S111;
 
 /// <summary>
 /// Reads an S-111 Surface Currents dataset from an HDF5 file via the
-/// <see cref="IHdf5File"/> abstraction. Currently supports data coding format 2
-/// (regular grid) only.
+/// <see cref="IHdf5File"/> abstraction. Supports data coding format 2
+/// (regular grid) and data coding format 8 (time series at fixed
+/// stations; S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
 /// </summary>
 public static class S111DatasetReader
 {
     /// <summary>
-    /// Reads an <see cref="S111Dataset"/> from the given HDF5 file.
+    /// Reads an <see cref="S111Dataset"/> from the given HDF5 file. Throws
+    /// <see cref="S100DatasetNotSupportedException"/> if the dataset is
+    /// not dcf2 (regularly-gridded). Use <see cref="ReadAny"/> to handle
+    /// both dcf2 and dcf8.
     /// </summary>
     public static S111Dataset Read(IHdf5File file)
+    {
+        var any = ReadAny(file);
+        return any switch
+        {
+            S111DatasetData.GriddedCoverage g => g.Dataset,
+            S111DatasetData.StationSeries => throw new S100DatasetNotSupportedException(
+                product: "S-111",
+                file: null,
+                feature: "data coding format 8 (time series at fixed stations)",
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatNotSupported(
+                    "S-111", null,
+                    "data coding format 8 (time series at fixed stations)",
+                    "S-100 Part 10c §10.2.1",
+                    "Use S111DatasetReader.ReadAny to handle dcf8 station series.")),
+            _ => throw new InvalidOperationException("Unhandled S111DatasetData variant."),
+        };
+    }
+
+    /// <summary>
+    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf8
+    /// <see cref="S111StationSeriesDataset"/> from the given HDF5 file,
+    /// dispatching on the <c>/SurfaceCurrent/dataCodingFormat</c> attribute
+    /// (S-100 Part 10c §10.2.1). Other data coding formats raise
+    /// <see cref="S100DatasetNotSupportedException"/>.
+    /// </summary>
+    public static S111DatasetData ReadAny(IHdf5File file)
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
         __activity?.SetTag("s100.product", "S-111");
@@ -65,9 +96,35 @@ public static class S111DatasetReader
             ? (int)scGroup.ReadInt64Attribute("typeOfCurrentData")
             : null;
 
+        if (dataCodingFormat == 8)
+        {
+            var stations = ReadStationSeries(root, scGroup);
+            DateTime? minTime = null, maxTime = null;
+            foreach (var s in stations)
+            {
+                if (minTime is null || s.StartTime < minTime) minTime = s.StartTime;
+                if (maxTime is null || s.EndTime > maxTime) maxTime = s.EndTime;
+            }
+
+            return new S111DatasetData.StationSeries(new S111StationSeriesDataset
+            {
+                HorizontalCRS = horizontalCRS,
+                Epoch = epoch,
+                GeographicIdentifier = geographicIdentifier,
+                IssueDate = issueDate,
+                Metadata = metadata,
+                SurfaceCurrentDepth = surfaceCurrentDepth,
+                DataCodingFormat = 8,
+                TypeOfCurrentData = typeOfCurrentData,
+                Stations = stations,
+                MinTime = minTime,
+                MaxTime = maxTime,
+            });
+        }
+
         var coverages = ReadCoverages(scGroup, dataCodingFormat);
 
-        return new S111Dataset
+        return new S111DatasetData.GriddedCoverage(new S111Dataset
         {
             HorizontalCRS = horizontalCRS,
             Epoch = epoch,
@@ -78,7 +135,7 @@ public static class S111DatasetReader
             DataCodingFormat = dataCodingFormat,
             TypeOfCurrentData = typeOfCurrentData,
             Coverages = coverages,
-        };
+        });
     }
 
     private static List<SurfaceCurrentCoverage> ReadCoverages(IHdf5Group scGroup, int dataCodingFormat)
@@ -227,4 +284,261 @@ public static class S111DatasetReader
         _ => throw new NotSupportedException(
             $"S-111 member '{member.Name}' has unsupported kind {member.Kind}."),
     };
+
+    // -------------------------------------------------------------------
+    // dcf8 — time series at fixed stations (S-111 Edition 2.0.0 §10.2.3 / §10.2.7)
+    // -------------------------------------------------------------------
+
+    /// <summary>
+    /// Reads every <c>SurfaceCurrent.NN</c> instance group's per-station
+    /// time-series payload and joins it against
+    /// <c>/Positioning/geometryValues</c> (S-111 Edition 2.0.0 §10.2.3,
+    /// mirroring S-104 §10.2.3 / S-100 Part 10c §10.2.6), returning one
+    /// <see cref="SurfaceCurrentStation"/> per <c>Group_NNN</c>.
+    /// </summary>
+    /// <remarks>
+    /// Per spec §10.2.3 the i-th row of <c>geometryValues</c> is the
+    /// position of the i-th station (Group_001 → row 0). Positions are
+    /// shared across every <c>SurfaceCurrent.NN</c> instance under
+    /// <c>/SurfaceCurrent/</c>.
+    /// </remarks>
+    private static IReadOnlyList<SurfaceCurrentStation> ReadStationSeries(IHdf5Group root, IHdf5Group scGroup)
+    {
+        var positions = ReadStationPositions(root);
+
+        var stations = new List<SurfaceCurrentStation>();
+
+        foreach (var instanceName in scGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("SurfaceCurrent.", StringComparison.Ordinal))
+                continue;
+
+            var instance = scGroup.OpenGroup(instanceName);
+            var instancePath = $"/SurfaceCurrent/{instanceName}";
+            ReadStationInstance(instance, instancePath, positions, stations);
+        }
+
+        return stations;
+    }
+
+    private static List<(double Lat, double Lon)> ReadStationPositions(IHdf5Group root)
+    {
+        // S-111 Edition 2.0.0 §10.2.3 — station positions live in a
+        // /Positioning group containing a compound 'geometryValues'
+        // dataset with members 'latitude' and 'longitude'. Some legacy
+        // tooling places the group under /SurfaceCurrent/SurfaceCurrent.NN;
+        // accept either.
+        IHdf5Group? positioningGroup = null;
+        if (root.GroupNames.Contains("Positioning"))
+        {
+            positioningGroup = root.OpenGroup("Positioning");
+        }
+        else if (root.GroupNames.Contains("SurfaceCurrent"))
+        {
+            var sc = root.OpenGroup("SurfaceCurrent");
+            foreach (var name in sc.GroupNames)
+            {
+                if (!name.StartsWith("SurfaceCurrent.", StringComparison.Ordinal)) continue;
+                var inst = sc.OpenGroup(name);
+                if (inst.GroupNames.Contains("Positioning"))
+                {
+                    positioningGroup = inst.OpenGroup("Positioning");
+                    break;
+                }
+            }
+        }
+
+        if (positioningGroup is null)
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: "/Positioning",
+                attributeOrDataset: "Positioning/geometryValues",
+                specReference: "S-111 Edition 2.0.0 §10.2.3",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, "/Positioning", "Positioning/geometryValues",
+                    "S-111 Edition 2.0.0 §10.2.3"));
+        }
+
+        RawCompoundDataset raw;
+        try
+        {
+            raw = positioningGroup.ReadRawCompoundDataset("geometryValues");
+        }
+        catch (Exception ex)
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: "/Positioning",
+                attributeOrDataset: "Positioning/geometryValues",
+                specReference: "S-111 Edition 2.0.0 §10.2.3",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, "/Positioning", "Positioning/geometryValues",
+                    "S-111 Edition 2.0.0 §10.2.3"),
+                innerException: ex);
+        }
+
+        var latMember = raw.FindMember("latitude", "Latitude", "lat", "Lat")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: "/Positioning/geometryValues",
+                attributeOrDataset: "latitude",
+                specReference: "S-111 Edition 2.0.0 §10.2.3",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, "/Positioning/geometryValues", "latitude",
+                    "S-111 Edition 2.0.0 §10.2.3"));
+
+        var lonMember = raw.FindMember("longitude", "Longitude", "long", "Long", "lon", "Lon")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: "/Positioning/geometryValues",
+                attributeOrDataset: "longitude",
+                specReference: "S-111 Edition 2.0.0 §10.2.3",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, "/Positioning/geometryValues", "longitude",
+                    "S-111 Edition 2.0.0 §10.2.3"));
+
+        var positions = new List<(double Lat, double Lon)>(raw.RecordCount);
+        var span = raw.Data.AsSpan();
+        for (int i = 0; i < raw.RecordCount; i++)
+        {
+            var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
+            double lat = ReadFloatingPointMember(record, latMember);
+            double lon = ReadFloatingPointMember(record, lonMember);
+            positions.Add((lat, lon));
+        }
+        return positions;
+    }
+
+    private static double ReadFloatingPointMember(ReadOnlySpan<byte> record, CompoundMemberInfo member) =>
+        member.Kind switch
+        {
+            CompoundMemberKind.Float32 => System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
+                record.Slice(member.Offset, 4)),
+            CompoundMemberKind.Float64 => System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
+                record.Slice(member.Offset, 8)),
+            _ => throw new NotSupportedException(
+                $"S-111 Positioning member '{member.Name}' has unsupported kind {member.Kind}."),
+        };
+
+    private static void ReadStationInstance(
+        IHdf5Group instance,
+        string instancePath,
+        IReadOnlyList<(double Lat, double Lon)> positions,
+        List<SurfaceCurrentStation> stations)
+    {
+        const string Spec = "S-111 Edition 2.0.0 §10.2.7";
+
+        int numberOfStations = instance.AttributeExists("numberOfStations")
+            ? (int)instance.ReadInt64Attribute("numberOfStations")
+            : 0;
+
+        int stationIndex = 0;
+        foreach (var groupName in instance.GroupNames)
+        {
+            if (!groupName.StartsWith("Group_", StringComparison.Ordinal))
+                continue;
+
+            var groupPath = $"{instancePath}/{groupName}";
+            var group = instance.OpenGroup(groupName);
+
+            string stationId = group.AttributeExists("stationIdentification")
+                ? group.ReadStringAttribute("stationIdentification")
+                : groupName;
+
+            string startStr = group.ReadRequiredStringAttribute(
+                "startDateTime", "S-111", null, groupPath, Spec);
+            string endStr = group.ReadRequiredStringAttribute(
+                "endDateTime", "S-111", null, groupPath, Spec);
+
+            DateTime startTime = ParseTimestamp(startStr);
+            DateTime endTime = ParseTimestamp(endStr);
+
+            int numberOfTimes = (int)group.ReadRequiredInt64Attribute(
+                "numberOfTimes", "S-111", null, groupPath, Spec);
+            long intervalSeconds = group.ReadRequiredInt64Attribute(
+                "timeRecordInterval", "S-111", null, groupPath, Spec);
+            var interval = TimeSpan.FromSeconds(intervalSeconds);
+
+            var (speeds, directions) = ReadStationValues(group, numberOfTimes);
+
+            if (stationIndex >= positions.Count)
+            {
+                throw new S100DatasetSchemaException(
+                    product: "S-111",
+                    file: null,
+                    groupPath: "/Positioning/geometryValues",
+                    attributeOrDataset: "Positioning/geometryValues",
+                    specReference: "S-111 Edition 2.0.0 §10.2.3",
+                    message: ExceptionMessageFormatter.FormatSchema(
+                        "S-111", null, "/Positioning/geometryValues", "Positioning/geometryValues",
+                        "S-111 Edition 2.0.0 §10.2.3")
+                    + $" Position row {stationIndex} missing for station '{stationId}'.");
+            }
+            var (lat, lon) = positions[stationIndex];
+
+            stations.Add(new SurfaceCurrentStation
+            {
+                Identifier = stationId,
+                Latitude = lat,
+                Longitude = lon,
+                StartTime = startTime,
+                EndTime = endTime,
+                TimeRecordInterval = interval,
+                NumberOfTimes = numberOfTimes,
+                SpeedsMetresPerSecond = speeds,
+                DirectionsDegreesTrue = directions,
+            });
+
+            stationIndex++;
+        }
+
+        // numberOfStations is an authoritative spec-declared count; if a
+        // file claims more than it actually delivers, we tolerate the
+        // shortfall (consistent with the spec's allowance for trailing
+        // empty groups), but we don't try to invent stations.
+        _ = numberOfStations;
+    }
+
+    private static DateTime ParseTimestamp(string s)
+    {
+        return DateTime.ParseExact(
+            s,
+            ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+    }
+
+    private static (float[] Speeds, float[] Directions) ReadStationValues(IHdf5Group group, int numberOfTimes)
+    {
+        var raw = group.ReadRawCompoundDataset("values");
+
+        var speedMember = raw.FindMember("surfaceCurrentSpeed", "speed", "Speed")
+            ?? throw new InvalidOperationException(
+                "S-111 dcf8 station 'values' compound is missing a speed member " +
+                "(expected 'surfaceCurrentSpeed', 'speed', or 'Speed').");
+
+        var directionMember = raw.FindMember("surfaceCurrentDirection", "direction", "Direction")
+            ?? throw new InvalidOperationException(
+                "S-111 dcf8 station 'values' compound is missing a direction member " +
+                "(expected 'surfaceCurrentDirection', 'direction', or 'Direction').");
+
+        int count = Math.Min(raw.RecordCount, numberOfTimes);
+        var speeds = new float[count];
+        var directions = new float[count];
+        var span = raw.Data.AsSpan();
+
+        for (int i = 0; i < count; i++)
+        {
+            var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
+            speeds[i] = ReadFloat(record, speedMember);
+            directions[i] = ReadFloat(record, directionMember);
+        }
+
+        return (speeds, directions);
+    }
 }

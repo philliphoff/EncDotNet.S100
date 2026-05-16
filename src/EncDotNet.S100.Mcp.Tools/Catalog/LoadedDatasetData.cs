@@ -87,3 +87,9 @@ public sealed record S104StationSeriesData(S104StationSeriesDataset Dataset) : L
 
 /// <summary>S-111 Surface Currents coverage handle.</summary>
 public sealed record S111CoverageData(S111CoverageSource Source) : LoadedDatasetData;
+
+/// <summary>
+/// S-111 Surface Currents station-series dataset (dcf8 — time series at
+/// fixed stations; see S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
+/// </summary>
+public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : LoadedDatasetData;
