@@ -25,6 +25,9 @@ public sealed class FeatureDescriberRegistry
     public static FeatureDescriberRegistry Default { get; } = new FeatureDescriberRegistry(
     [
         new S101FeatureDescriber(),
+        new S102FeatureDescriber(),
+        new S104FeatureDescriber(),
+        new S111FeatureDescriber(),
         new S124FeatureDescriber(),
     ]);
 

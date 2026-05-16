@@ -17,6 +17,12 @@ public class S102CoverageSource : ICoverageSource
         _dataset = dataset;
         _coverage = dataset.Coverages[coverageIndex];
     }
+
+    /// <summary>The underlying S-102 dataset wrapped by this source.</summary>
+    public S102Dataset Dataset => _dataset;
+
+    /// <summary>The single bathymetry coverage instance this source exposes.</summary>
+    public BathymetryCoverage Coverage => _coverage;
     
     public CoverageMetadata Metadata => new CoverageMetadata
     {
