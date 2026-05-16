@@ -845,4 +845,22 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Settings_McpPortTooltip" xml:space="preserve">
     <value>TCP port to bind on 127.0.0.1. Use 0 to let the OS pick an ephemeral port.</value>
   </data>
+
+  <!-- Load-failure toast -->
+  <data name="Toast_DatasetErrorTitle" xml:space="preserve">
+    <value>Couldn't load {0}</value>
+    <comment>Toast title shown when a dataset open fails. {0} = dataset display name.</comment>
+  </data>
+  <data name="LoadFailureToast_NotSupportedBody" xml:space="preserve">
+    <value>{0} dataset uses {1}, which is not yet supported.</value>
+    <comment>{0} = product code (e.g. "S-104"); {1} = unsupported feature description.</comment>
+  </data>
+  <data name="LoadFailureToast_SchemaBody" xml:space="preserve">
+    <value>This {0} file is missing or has an invalid '{1}' at '{2}'.</value>
+    <comment>{0} = product code; {1} = attribute or dataset name; {2} = HDF5 group path.</comment>
+  </data>
+  <data name="LoadFailureToast_CopyDetails" xml:space="preserve">
+    <value>Copy details</value>
+    <comment>Label for the action button on the load-failure toast.</comment>
+  </data>
 </root>

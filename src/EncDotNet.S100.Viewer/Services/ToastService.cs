@@ -20,6 +20,14 @@ internal sealed class ToastService : IToastService
     /// <summary>Default auto-dismiss delay for errors (seconds).</summary>
     private const double LongDelay = 15;
 
+    /// <summary>
+    /// Effectively-infinite delay used for sticky toasts that must
+    /// stay on screen until the user dismisses them. ShadUI takes the
+    /// delay in seconds; 365 days is large enough to never trigger in
+    /// any normal session and small enough not to risk overflow.
+    /// </summary>
+    private const double StickyDelay = 60.0 * 60.0 * 24.0 * 365.0;
+
     /// <summary>Long delay for loading toasts so they stay visible during the operation.</summary>
     private const double LoadingDelay = 300;
 
@@ -72,15 +80,23 @@ internal sealed class ToastService : IToastService
     }
 
     /// <inheritdoc />
-    public void ShowError(string title, string? content = null)
+    public void ShowError(
+        string title,
+        string? content = null,
+        string? actionLabel = null,
+        Action? action = null,
+        bool sticky = false)
     {
         var builder = _manager.CreateToast(title)
             .OnBottomRight()
-            .WithDelay(LongDelay)
+            .WithDelay(sticky ? StickyDelay : LongDelay)
             .DismissOnClick();
 
         if (content is not null)
             builder = builder.WithContent(content);
+
+        if (actionLabel is not null && action is not null)
+            builder = builder.WithAction(actionLabel, action);
 
         builder.ShowError();
     }

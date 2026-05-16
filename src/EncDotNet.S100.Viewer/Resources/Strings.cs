@@ -328,4 +328,10 @@ internal static class Strings
     public static string Settings_McpEnabledTooltip => Get(nameof(Settings_McpEnabledTooltip));
     public static string Settings_McpPort => Get(nameof(Settings_McpPort));
     public static string Settings_McpPortTooltip => Get(nameof(Settings_McpPortTooltip));
+
+    // Load-failure toast
+    public static string Toast_DatasetErrorTitle => Get(nameof(Toast_DatasetErrorTitle));
+    public static string LoadFailureToast_NotSupportedBody => Get(nameof(LoadFailureToast_NotSupportedBody));
+    public static string LoadFailureToast_SchemaBody => Get(nameof(LoadFailureToast_SchemaBody));
+    public static string LoadFailureToast_CopyDetails => Get(nameof(LoadFailureToast_CopyDetails));
 }

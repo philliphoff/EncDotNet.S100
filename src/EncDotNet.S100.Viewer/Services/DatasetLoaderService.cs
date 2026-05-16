@@ -300,10 +300,46 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             {
                 _toasts.DismissAll();
             }
+
+            // Shape the toast around the innermost structured S-100
+            // exception (when present) so the user sees a friendly
+            // one-liner instead of a raw stack trace. The full
+            // ToString() is still available via the "Copy details"
+            // action button; the toast itself sticks around until
+            // explicitly dismissed.
+            var failure = LoadFailureViewModel.FromException(
+                entry.DisplayName, entry.FilePath, ex);
             SetStatus(string.Format(Strings.Status_Error, ex.Message));
-            _toasts.ShowError(Strings.Toast_DatasetError,
-                string.Format(Strings.Status_Error, ex.Message));
-            Console.Error.WriteLine($"Failed to load {entry.FilePath}:\n{ex}");
+            _toasts.ShowError(
+                title: string.Format(Strings.Toast_DatasetErrorTitle, entry.DisplayName),
+                content: failure.PrimaryMessage,
+                actionLabel: Strings.LoadFailureToast_CopyDetails,
+                action: () => CopyTextToClipboard(failure.Details),
+                sticky: true);
+        }
+    }
+
+    /// <summary>
+    /// Copies <paramref name="text"/> to the system clipboard via the
+    /// active main window. Used by the load-failure toast's
+    /// "Copy details" action. Best-effort: any failure is swallowed so
+    /// a flaky clipboard backend never crashes the dataset open path.
+    /// </summary>
+    private static void CopyTextToClipboard(string text)
+    {
+        try
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow is { } mainWindow
+                && Avalonia.Controls.TopLevel.GetTopLevel(mainWindow)?.Clipboard is { } clipboard)
+            {
+                _ = clipboard.SetTextAsync(text);
+            }
+        }
+        catch
+        {
+            // Best-effort; clipboard access can fail on some Linux WMs.
         }
     }
 
