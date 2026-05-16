@@ -53,10 +53,44 @@ The project intentionally has **no MCP SDK, no Avalonia, and no viewer
 reference**. The same tool surface can therefore be hosted by a CLI, a
 headless service, or a different viewer in the future.
 
-## `IDatasetCatalog`
+## Geometry primitives
 
-The abstraction is in `EncDotNet.S100.Mcp.Tools.Catalog` and exposes a
-single property + an event:
+Spatial inputs to tools are typed as `GeoQuery`, a discriminated union
+over the four shapes the surface needs:
+
+| Variant            | Carries                                | Use case                              |
+|--------------------|----------------------------------------|---------------------------------------|
+| `GeoQuery.Point`    | `GeoPoint(lat, lon)`                   | "at this position"                    |
+| `GeoQuery.Box`      | `GeoBoundingBox(s, w, n, e)`           | "within this rectangle"               |
+| `GeoQuery.Polygon`  | `GeoPolygon(closed ring of GeoPoints)` | "inside this area"                    |
+| `GeoQuery.Polyline` | `GeoPolyline(vertices, corridorWidthMeters?)` | "along this route / line"     |
+
+Every variant projects to a coarse `GeoBoundingBox` via
+`GetBoundingBox()`. Polylines with a non-null `CorridorWidthMeters`
+inflate the bbox by an equirectangular metres-to-degrees
+approximation; this is suitable for "near this route" coarse filtering
+and matches the precision of the underlying dataset bounding boxes.
+
+All inputs are validated with `GeoQueryValidator.Validate(...)`, which
+returns:
+
+- `null` on success;
+- `InvalidArgument` for a scalar that's out of range (lat/lon, NaN,
+  negative corridor width);
+- `GeometryInvalid` for a composite-shape failure (unclosed polygon
+  ring, polygon with < 4 points, polyline with < 2 vertices, inverted
+  bounding box, antimeridian-crossing bounding box).
+
+`SpatialPredicates` exposes the planar primitives every tool reuses:
+`Intersects(box, GeoQuery)`, `Contains(box, GeoPoint)`, and
+`ContainsPoint(polygonRing, GeoPoint)` (ray-cast).
+
+The legacy `FindAtRequest(Latitude, Longitude, ...)` shape continues
+to work; tools that accept a `GeoQuery` carry it as an optional
+`Query` property that, when supplied, takes precedence over the
+scalar lat/lon fields.
+
+## `IDatasetCatalog`
 
 ```csharp
 public interface IDatasetCatalog
@@ -126,6 +160,7 @@ The five error variants implemented in this PR:
 | `feature_not_found`           | The named feature is not present in the named dataset.                |
 | `spec_not_supported_for_tool` | The tool does not (yet) support the requested spec.                   |
 | `invalid_argument`            | A request property failed validation (e.g. latitude / longitude out of WGS-84 range). |
+| `geometry_invalid`            | A composite-shape input failed validation (unclosed polygon ring, antimeridian-crossing bbox, etc.). |
 
 ## Spec strategy pattern
 
@@ -155,6 +190,7 @@ return `SpecNotSupportedForTool`.
 ```csharp
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Mcp.Tools.Geometry;
 
 // A host (e.g. the viewer) implements IDatasetCatalog and publishes
 // LoadedDataset instances whenever its loaded set changes.
@@ -163,7 +199,9 @@ IDatasetCatalog catalog = host.Catalog;
 var list = new ListDatasetsTool(catalog);
 var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
+var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
+var queryFeatures = new QueryFeaturesTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -196,6 +234,45 @@ if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
 {
     Console.WriteLine($"Depth at point: {d.DepthMeters} m");
 }
+
+// What GML features overlap a bounding box? query_features works across
+// every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
+// S-201/S-411/S-421) via the shared IGmlFeature abstraction. Pass any
+// GeoQuery variant — point, bbox, polygon, or polyline (with optional
+// corridor width). Results are paginated.
+var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
+    Spec: new SpecRef("S-124", default),       // any S-124 edition
+    FeatureType: "NavwarnPart",
+    PageSize: 50));
+if (features.TryGetValue(out var page))
+{
+    foreach (var match in page.Features)
+    {
+        Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
+    }
+}
+
+// Sample a coverage product at every vertex of a polyline. Useful for
+// route-level questions like "minimum depth along this leg" or "max
+// current speed along this transit". Per-vertex misses (OutOfBounds /
+// NoDataAtPoint) surface as null entries rather than aborting the
+// whole call, so a partial route still returns usable data.
+var route = new GeoPolyline(ImmutableArray.Create(
+    new GeoPoint(47.60, -122.35),
+    new GeoPoint(47.62, -122.33),
+    new GeoPoint(47.64, -122.31)));
+var depths = await sampleAlong.InvokeAsync(new SampleCoverageAlongRequest(
+    new SpecRef("S-102", new SpecVersion(2, 1, 0)),
+    route));
+if (depths.TryGetValue(out var series))
+{
+    foreach (var s in series.Samples)
+    {
+        var d = s.Result?.Value as DepthSample;
+        Console.WriteLine($"v{s.VertexIndex} depth={d?.DepthMeters}m");
+    }
+}
 ```
 
 ## Out of scope (PR MCP-1)
@@ -205,5 +282,7 @@ if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
 - Pan/zoom/screenshot tools.
 - Search / NL tools.
 - Write-back tools.
-- Comprehensive feature describer coverage for every spec.
-- S-104 / S-111 sampling (only S-102 is wired end-to-end).
+- Comprehensive xlink reference resolution for backfilled describers
+  (S-122/S-125/S-127/S-128/S-129/S-131/S-201/S-411/S-421 return their
+  feature attributes via the generic `GmlFeatureDescriber`, but
+  references arrive as an empty list pending per-spec resolution).

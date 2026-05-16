@@ -133,3 +133,17 @@ public sealed record NotSupportedYet(
     [property: Description("Single-sentence reason explaining what is not yet wired.")] string Reason) : ToolError(
     "not_supported_yet",
     $"Spec '{Spec}' is supported by tool '{Tool}', but: {Reason}.");
+
+/// <summary>
+/// A supplied geometry is structurally invalid (e.g. an unclosed
+/// polygon ring, a polyline with fewer than two vertices, a bounding
+/// box whose north edge is south of its south edge, or an
+/// antimeridian-crossing bounding box where <c>west &gt; east</c>).
+/// Distinguished from <see cref="InvalidArgument"/> in that a single
+/// scalar is well-formed but the *composite* shape is not.
+/// </summary>
+public sealed record GeometryInvalid(
+    [property: Description("Name of the request parameter that carried the invalid geometry.")] string Parameter,
+    [property: Description("Human-readable reason the geometry was rejected (e.g. \"polygon has fewer than 4 vertices\", \"north < south\").")] string Reason) : ToolError(
+    "geometry_invalid",
+    $"Geometry in '{Parameter}' is invalid: {Reason}.");

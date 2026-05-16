@@ -45,7 +45,7 @@ client, `mcp-inspector`, etc.).
 
 ## Tools
 
-The server exposes exactly the three tools defined by
+The server exposes the read-only tools defined by
 `EncDotNet.S100.Mcp.Tools`:
 
 | Tool name | Returns |
@@ -53,6 +53,20 @@ The server exposes exactly the three tools defined by
 | `list_datasets` | Per-dataset summaries (id, spec, name, extent) |
 | `describe_feature` | Spec / feature type / attributes for a feature in a dataset |
 | `sample_coverage` | Sampled value at a lat/lon for a coverage dataset (S-102 / S-104 / S-111) |
+| `find_at` | Datasets whose declared bbox contains a point or intersects a `GeoQuery` envelope |
+| `query_features` | Features from loaded GML datasets that intersect a spatial query (point / box / polygon / polyline) |
+| `sample_coverage_along` | Per-vertex coverage samples for a polyline (S-102 / S-104 / S-111) |
+| `list_specs` | Spec catalogue with per-spec capability flags (query / describe / sample) |
+
+Spatial queries are passed as a JSON envelope on the `query` (or
+`polyline`) parameter:
+
+```json
+{"kind": "point",    "latitude": 47.6, "longitude": -122.3}
+{"kind": "box",      "south": 47, "west": -123, "north": 48, "east": -122}
+{"kind": "polygon",  "ring": [[47, -123], [48, -123], [48, -122], [47, -123]]}
+{"kind": "polyline", "vertices": [[47.6, -122.3], [47.7, -122.4]], "corridorWidthMeters": 1000}
+```
 
 See `src/EncDotNet.S100.Mcp.Tools/README.md` for the full tool
 contract, request/response schemas, and error codes.

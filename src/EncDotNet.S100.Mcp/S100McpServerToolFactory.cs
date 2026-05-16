@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Pipelines;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -53,6 +54,10 @@ internal static class S100McpServerToolFactory
                             DerivedTypes =
                             {
                                 new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(DepthSample), "depth"),
+                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(WaterLevelSample), "water_level"),
+                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(WaterLevelStationSample), "water_level_station"),
+                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(SurfaceCurrentSample), "surface_current"),
+                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(SurfaceCurrentStationSample), "surface_current_station"),
                             },
                         };
                     }
@@ -65,12 +70,18 @@ internal static class S100McpServerToolFactory
         ListDatasetsTool listDatasets,
         DescribeFeatureTool describeFeature,
         SampleCoverageTool sampleCoverage,
-        FindAtTool findAt)
+        FindAtTool findAt,
+        QueryFeaturesTool queryFeatures,
+        SampleCoverageAlongTool sampleCoverageAlong,
+        ListSpecsTool listSpecs)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
         yield return CreateSampleCoverageTool(sampleCoverage);
         yield return CreateFindAtTool(findAt);
+        yield return CreateQueryFeaturesTool(queryFeatures);
+        yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
+        yield return CreateListSpecsTool(listSpecs);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -109,10 +120,10 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateDescribeFeatureTool(DescribeFeatureTool inner)
     {
         var description =
-            "Returns spec, feature-type code, attributes (as a JSON object) and xlink-resolved cross-references " +
-            "for a single feature in a loaded vector dataset. Per-spec strategy: S-124 (Navigational Warnings) is " +
-            "wired end-to-end today; other vector specs return spec_not_supported_for_tool. " +
-            "Read-only and side-effect free.";
+            "Returns spec, feature-type code, attributes (as a JSON object), and xlink-resolved cross-references " +
+            "for a single feature in a loaded vector dataset. Supports S-122, S-124, S-125, S-127, S-128, S-129, " +
+            "S-131, S-201, S-411, and S-421. References for backfilled GML specs are currently returned empty " +
+            "(spec-specific reference resolution is staged). Read-only and side-effect free.";
 
         var del = ([Description("Stable dataset identifier returned by list_datasets.")] string datasetId,
                    [Description("GML id of the feature within the dataset.")] string featureId,
@@ -135,9 +146,9 @@ internal static class S100McpServerToolFactory
         var description =
             "Samples a coverage product at a single latitude/longitude (decimal degrees, WGS-84). " +
             "Returns the value of the nearest grid cell — no interpolation, no bbox aggregation. " +
-            "S-102 returns depth (and optional uncertainty) in metres, positive down. " +
-            "S-104 returns water-level height (metres) and the decoded trend at the nearest time step. " +
-            "S-111 returns current speed (m/s and knots) and direction (degrees from true north, 0..360) at the nearest time step. " +
+            "Supports S-102 (depth and optional uncertainty in metres, positive down), " +
+            "S-104 (water-level height in metres and decoded trend at the nearest time step), and " +
+            "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step). " +
             "Times outside a dataset's range clamp to its first or last step. Read-only and side-effect free.";
 
         var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\").")] string spec,
@@ -166,17 +177,20 @@ internal static class S100McpServerToolFactory
     {
         var description =
             "Returns every dataset currently loaded in the host (viewer or CLI) whose declared " +
-            "bounding box contains the supplied lat/lon point. Coordinates are decimal degrees, " +
-            "WGS-84. Containment is bbox-only — a positive result means the point lies inside the " +
-            "dataset's declared rectangle, not that the point has actual cell coverage (call " +
-            "sample_coverage to read a value). Optionally filtered by spec. Returns dataset IDs, " +
-            "spec, bounds, and time range, with pagination.";
+            "bounding box contains or intersects the supplied geographic query. The simplest call " +
+            "is point-based (latitude/longitude in WGS-84 decimal degrees); for richer spatial " +
+            "selection (bbox / polygon / polyline), pass the optional 'query' JSON envelope and the " +
+            "tool will use it in place of the lat/lon point. Containment is bbox-only — a positive " +
+            "result means the point lies inside the dataset's declared rectangle, not that the " +
+            "point has actual cell coverage (call sample_coverage to read a value). Optionally " +
+            "filtered by spec. Returns dataset IDs, spec, bounds, and time range, with pagination.";
 
-        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
-                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
+        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90]. Ignored when 'query' is supplied.")] double latitude,
+                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180]. Ignored when 'query' is supplied.")] double longitude,
                    [Description("Optional spec filter (e.g. \"S-101/1.2.0\"); null matches every spec.")] string? spec = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   [Description("Optional spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}. When supplied, overrides latitude/longitude.")] string? query = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -185,7 +199,8 @@ internal static class S100McpServerToolFactory
                         longitude,
                         ParseSpec(spec),
                         page,
-                        pageSize),
+                        pageSize,
+                        ParseGeoQuery(query)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -196,8 +211,135 @@ internal static class S100McpServerToolFactory
         });
     }
 
+    private static McpServerTool CreateQueryFeaturesTool(QueryFeaturesTool inner)
+    {
+        var description =
+            "Returns features from loaded GML-encoded vector datasets whose geometry intersects a " +
+            "geographic query (point / bounding box / polygon / polyline). Supports S-122, S-124, " +
+            "S-125, S-127, S-128, S-129, S-131, S-201, S-411, and S-421. Each result includes the " +
+            "dataset ID, spec, feature ID, feature type, and bounding box — follow up with " +
+            "describe_feature for full attributes. Pagination is server-side.";
+
+        var del = ([Description("Spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] string query,
+                   [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
+                   [Description("Zero-based page index.")] int page = 0,
+                   [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new QueryFeaturesRequest(
+                        ParseGeoQuery(query) ?? throw new ArgumentException("query is required.", nameof(query)),
+                        ParseSpec(spec),
+                        featureType,
+                        page,
+                        pageSize),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = QueryFeaturesTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateSampleCoverageAlongTool(SampleCoverageAlongTool inner)
+    {
+        var description =
+            "Samples a coverage product (S-102 / S-104 / S-111) at every vertex of a polyline, " +
+            "returning per-vertex results in input order. Vertices that fall outside coverage or " +
+            "have no data return null entries so the agent can still use the rest of the route. " +
+            "For time-varying products (S-104, S-111), the optional time applies identically to " +
+            "every vertex — useful for \"depth/level/current at each waypoint at the same instant\". " +
+            "The polyline's corridor width is ignored (corridors apply to membership queries, not " +
+            "point sampling).";
+
+        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\").")] string spec,
+                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
+                   [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new SampleCoverageAlongRequest(
+                        ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
+                        ParsePolyline(polyline),
+                        time),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SampleCoverageAlongTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateListSpecsTool(ListSpecsTool inner)
+    {
+        var description =
+            "Returns the S-100 specs the server is built against and, for each spec, the number of " +
+            "loaded datasets and the tools applicable to it (query_features / describe_feature / " +
+            "sample_coverage). Use this to introspect what the agent can ask in the current session " +
+            "before issuing spatial or temporal queries.";
+
+        var del = (CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(new ListSpecsRequest(), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = ListSpecsTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
     private static SpecRef? ParseSpec(string? spec)
         => string.IsNullOrWhiteSpace(spec) ? null : SpecRef.Parse(spec);
+
+    private static GeoQuery? ParseGeoQuery(string? queryJson)
+        => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);
+
+    private static GeoPolyline ParsePolyline(string polylineJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(polylineJson);
+        // Accept either a bare polyline object {"vertices":[…]} or the
+        // full GeoQuery polyline envelope so callers can copy/paste the
+        // same shape used by query_features.
+        using var doc = JsonDocument.Parse(polylineJson);
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("polyline must be a JSON object.", nameof(polylineJson));
+        }
+
+        // If the caller sent a {"kind":"polyline",…} envelope, reuse the GeoQuery reader.
+        if (root.TryGetProperty("kind", out var _))
+        {
+            var query = GeoQueryJsonReader.Parse(polylineJson);
+            if (query is GeoQuery.Polyline pl)
+            {
+                return pl.Value;
+            }
+            throw new ArgumentException("polyline query envelope must have kind='polyline'.", nameof(polylineJson));
+        }
+
+        // Otherwise expect {"vertices":[[lat,lon],…], "corridorWidthMeters":w?}
+        // — synthesise an envelope and reuse the same parser.
+        var synthesized = new JsonObject
+        {
+            ["kind"] = "polyline",
+            ["vertices"] = JsonNode.Parse(root.GetProperty("vertices").GetRawText()),
+        };
+        if (root.TryGetProperty("corridorWidthMeters", out var widthEl)
+            && widthEl.ValueKind != JsonValueKind.Null)
+        {
+            synthesized["corridorWidthMeters"] = widthEl.GetDouble();
+        }
+        var parsed = GeoQueryJsonReader.Parse(synthesized.ToJsonString(JsonOptions));
+        return ((GeoQuery.Polyline)parsed).Value;
+    }
 
     private static BoundingBox? ParseBox(double? south, double? west, double? north, double? east)
     {

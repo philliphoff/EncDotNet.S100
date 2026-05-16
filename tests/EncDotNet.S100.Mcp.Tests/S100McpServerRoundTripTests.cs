@@ -1,8 +1,12 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Gml;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
+using EncDotNet.S100.Pipelines;
 using ModelContextProtocol.Protocol;
 
 namespace EncDotNet.S100.Mcp.Tests;
@@ -10,7 +14,7 @@ namespace EncDotNet.S100.Mcp.Tests;
 public class S100McpServerRoundTripTests
 {
     [Fact]
-    public async Task ListTools_returns_four_tools_with_schemas()
+    public async Task ListTools_returns_seven_tools_with_schemas()
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
@@ -19,7 +23,18 @@ public class S100McpServerRoundTripTests
         var tools = await client.ListToolsAsync();
         var names = tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(new[] { "describe_feature", "find_at", "list_datasets", "sample_coverage" }, names);
+        Assert.Equal(
+            new[]
+            {
+                "describe_feature",
+                "find_at",
+                "list_datasets",
+                "list_specs",
+                "query_features",
+                "sample_coverage",
+                "sample_coverage_along",
+            },
+            names);
         foreach (var tool in tools)
         {
             // ProtocolTool exposes the JSON schema; ensure it is non-empty.
@@ -170,6 +185,139 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
         Assert.Equal("latitude", payload["details"]!["parameter"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_returns_matching_features()
+    {
+        var feature = new S124Feature
+        {
+            Id = "feat-1",
+            FeatureType = "NavwarnPart",
+            GeometryType = GmlGeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("warningInformation", "Test warning text."),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(feature);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-1", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.NotEmpty(features);
+        Assert.Equal("feat-1", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("NavwarnPart", features[0]!["featureType"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_invalid_query_json_returns_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"unknown"}""",
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for unknown query kind.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("internal_error", payload["code"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SampleCoverageAlong_round_trip_returns_per_vertex_results()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S102("synth-bathy-1",
+                bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+                source: S102Synth.Source(S102Synth.Dataset(depth: 17.5f, uncertainty: 0.5f))));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-102/2.1.0",
+            ["polyline"] = """{"vertices":[[0.01,0.01],[0.02,0.02],[50.0,50.0]]}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"sample_coverage_along returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var samples = payload["samples"]!.AsArray();
+        Assert.Equal(3, samples.Count);
+        // First two vertices are inside the bathy bounds and should resolve.
+        Assert.NotNull(samples[0]!["result"]);
+        Assert.NotNull(samples[1]!["result"]);
+        // Last vertex is far outside any coverage — per-vertex miss -> null.
+        Assert.Null(samples[2]!["result"]);
+    }
+
+    [Fact]
+    public async Task ListSpecs_round_trip_returns_capabilities()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S102("synth-bathy-1"),
+            LoadedDatasetFactory.S124("synth-warn-1"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("list_specs", new Dictionary<string, object?>());
+
+        Assert.False(result.IsError ?? false, $"list_specs returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var specs = payload["specs"]!.AsArray();
+        Assert.NotEmpty(specs);
+        // Every entry exposes its capability flags.
+        foreach (var entry in specs)
+        {
+            Assert.NotNull(entry!["name"]);
+            var caps = entry!["capabilities"]!.AsObject();
+            Assert.NotNull(caps["canQueryFeatures"]);
+            Assert.NotNull(caps["canDescribeFeature"]);
+            Assert.NotNull(caps["canSampleCoverage"]);
+        }
+    }
+
+    [Fact]
+    public async Task FindAt_with_box_query_envelope_returns_intersecting_datasets()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("warn-here", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10)),
+            LoadedDatasetFactory.S124("warn-elsewhere", bounds: LoadedDatasetFactory.Box(50, 50, 60, 60)));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        {
+            // latitude/longitude are ignored when 'query' is supplied.
+            ["latitude"] = 0.0,
+            ["longitude"] = 0.0,
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var datasets = payload["datasets"]!.AsArray();
+        Assert.Single(datasets);
+        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
     }
 
     private static JsonObject ParseSingleJson(CallToolResult result)
