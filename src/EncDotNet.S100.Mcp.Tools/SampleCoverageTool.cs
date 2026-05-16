@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -19,23 +20,31 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// selected; times outside the dataset's range clamp to the first or last step.
 /// </param>
 public sealed record SampleCoverageRequest(
-    SpecRef Spec,
-    double Latitude,
-    double Longitude,
-    DateTimeOffset? Time = null);
+    [property: Description("Spec of the coverage to sample (S-102, S-104, or S-111).")] SpecRef Spec,
+    [property: Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double Latitude,
+    [property: Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double Longitude,
+    [property: Description("UTC ISO-8601 time selector for time-varying products; ignored for S-102. Null selects the first time step; non-null selects the nearest step (clamped to the dataset range).")] DateTimeOffset? Time = null);
 
 /// <summary>Result of <see cref="SampleCoverageTool"/>.</summary>
+/// <param name="DatasetId">Dataset that produced the sample.</param>
+/// <param name="Latitude">Latitude that was requested, echoed back (decimal degrees, WGS-84).</param>
+/// <param name="Longitude">Longitude that was requested, echoed back (decimal degrees, WGS-84).</param>
+/// <param name="Value">Typed sample payload; discriminated on the JSON <c>$kind</c> property.</param>
 public sealed record SampleCoverageResult(
-    DatasetId DatasetId,
-    double Latitude,
-    double Longitude,
-    SampledValue Value);
+    [property: Description("Identifier of the dataset that produced the sample.")] DatasetId DatasetId,
+    [property: Description("Latitude that was requested, echoed back in decimal degrees, WGS-84.")] double Latitude,
+    [property: Description("Longitude that was requested, echoed back in decimal degrees, WGS-84.")] double Longitude,
+    [property: Description("Typed sample payload; the JSON \"$kind\" discriminator selects the variant.")] SampledValue Value);
 
 /// <summary>Discriminated payload returned by <see cref="SampleCoverageTool"/>.</summary>
 public abstract record SampledValue;
 
 /// <summary>S-102 depth sample (metres below the vertical datum, positive down).</summary>
-public sealed record DepthSample(double DepthMeters, double? UncertaintyMeters) : SampledValue;
+/// <param name="DepthMeters">Depth in metres below the vertical datum, positive down (per S-102).</param>
+/// <param name="UncertaintyMeters">Vertical uncertainty in metres at the resolved cell; null when the source dataset has no uncertainty layer.</param>
+public sealed record DepthSample(
+    [property: Description("Depth in metres below the vertical datum, positive down (per S-102).")] double DepthMeters,
+    [property: Description("Vertical uncertainty in metres at the resolved cell; null when the source dataset has no uncertainty layer.")] double? UncertaintyMeters) : SampledValue;
 
 /// <summary>
 /// S-104 water level sample read from a dcf8 ("time series at fixed
@@ -51,14 +60,14 @@ public sealed record DepthSample(double DepthMeters, double? UncertaintyMeters) 
 /// <param name="StationLatitude">Latitude of the matched station.</param>
 /// <param name="StationLongitude">Longitude of the matched station.</param>
 public sealed record WaterLevelStationSample(
-    string StationId,
-    double StationDistanceMetres,
-    double WaterLevelHeight,
-    string Trend,
-    DateTime SampleTime,
-    DateTimeOffset? RequestedTime,
-    double StationLatitude,
-    double StationLongitude) : SampledValue;
+    [property: Description("Reporting station identifier (S-104 stationIdentification).")] string StationId,
+    [property: Description("Great-circle distance from requested point to the station, in metres.")] double StationDistanceMetres,
+    [property: Description("Water level height in metres relative to the vertical datum, positive up (per S-104).")] double WaterLevelHeight,
+    [property: Description("S-104 decoded trend: \"decreasing\", \"increasing\", \"steady\", \"unknown\" (S-104 §10.2.2). Raw integer surfaced as a string for unrecognised values.")] string Trend,
+    [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
+    [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
+    [property: Description("Latitude of the matched station, decimal degrees, WGS-84.")] double StationLatitude,
+    [property: Description("Longitude of the matched station, decimal degrees, WGS-84.")] double StationLongitude) : SampledValue;
 
 /// <summary>
 /// S-104 water level sample at the nearest grid cell and time step.
@@ -76,14 +85,14 @@ public sealed record WaterLevelStationSample(
 /// <param name="CellCentreLatitude">Latitude of the resolved cell centre.</param>
 /// <param name="CellCentreLongitude">Longitude of the resolved cell centre.</param>
 public sealed record WaterLevelSample(
-    double WaterLevelHeight,
-    string Trend,
-    DateTime SampleTime,
-    DateTimeOffset? RequestedTime,
-    int Row,
-    int Column,
-    double CellCentreLatitude,
-    double CellCentreLongitude) : SampledValue;
+    [property: Description("Water level height in metres relative to the vertical datum, positive up (per S-104).")] double WaterLevelHeight,
+    [property: Description("S-104 decoded trend: \"decreasing\", \"increasing\", \"steady\", \"unknown\" (S-104 §10.2.2). Raw integer surfaced as a string for unrecognised values.")] string Trend,
+    [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
+    [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
+    [property: Description("Zero-based row index of the resolved cell in the source grid.")] int Row,
+    [property: Description("Zero-based column index of the resolved cell in the source grid.")] int Column,
+    [property: Description("Latitude of the resolved cell centre, decimal degrees, WGS-84.")] double CellCentreLatitude,
+    [property: Description("Longitude of the resolved cell centre, decimal degrees, WGS-84.")] double CellCentreLongitude) : SampledValue;
 
 /// <summary>
 /// S-111 surface current sample at the nearest grid cell and time step.
@@ -102,15 +111,15 @@ public sealed record WaterLevelSample(
 /// <param name="CellCentreLatitude">Latitude of the resolved cell centre.</param>
 /// <param name="CellCentreLongitude">Longitude of the resolved cell centre.</param>
 public sealed record SurfaceCurrentSample(
-    double SpeedMetresPerSecond,
-    double SpeedKnots,
-    double DirectionDegreesTrue,
-    DateTime SampleTime,
-    DateTimeOffset? RequestedTime,
-    int Row,
-    int Column,
-    double CellCentreLatitude,
-    double CellCentreLongitude) : SampledValue;
+    [property: Description("Current speed in metres per second — canonical S-111 unit (§10.2.5).")] double SpeedMetresPerSecond,
+    [property: Description("Current speed in knots (m/s × 1.94384), provided as a convenience.")] double SpeedKnots,
+    [property: Description("Direction the current is flowing toward, in degrees from true north, clockwise, 0..360.")] double DirectionDegreesTrue,
+    [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
+    [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
+    [property: Description("Zero-based row index of the resolved cell in the source grid.")] int Row,
+    [property: Description("Zero-based column index of the resolved cell in the source grid.")] int Column,
+    [property: Description("Latitude of the resolved cell centre, decimal degrees, WGS-84.")] double CellCentreLatitude,
+    [property: Description("Longitude of the resolved cell centre, decimal degrees, WGS-84.")] double CellCentreLongitude) : SampledValue;
 
 /// <summary>
 /// S-111 surface current sample read from a dcf8 ("time series at
@@ -128,15 +137,15 @@ public sealed record SurfaceCurrentSample(
 /// <param name="StationLatitude">Latitude of the matched station.</param>
 /// <param name="StationLongitude">Longitude of the matched station.</param>
 public sealed record SurfaceCurrentStationSample(
-    string StationId,
-    double StationDistanceMetres,
-    double SpeedMetresPerSecond,
-    double SpeedKnots,
-    double DirectionDegreesTrue,
-    DateTime SampleTime,
-    DateTimeOffset? RequestedTime,
-    double StationLatitude,
-    double StationLongitude) : SampledValue;
+    [property: Description("Reporting station identifier (S-111 stationIdentification).")] string StationId,
+    [property: Description("Great-circle distance from requested point to the station, in metres.")] double StationDistanceMetres,
+    [property: Description("Current speed in metres per second — canonical S-111 unit (§10.2.5).")] double SpeedMetresPerSecond,
+    [property: Description("Current speed in knots (m/s × 1.94384), provided as a convenience.")] double SpeedKnots,
+    [property: Description("Direction the current is flowing toward, in degrees from true north, clockwise, 0..360.")] double DirectionDegreesTrue,
+    [property: Description("UTC instant of the time step actually selected for this sample.")] DateTime SampleTime,
+    [property: Description("UTC instant the caller asked for, or null if unspecified.")] DateTimeOffset? RequestedTime,
+    [property: Description("Latitude of the matched station, decimal degrees, WGS-84.")] double StationLatitude,
+    [property: Description("Longitude of the matched station, decimal degrees, WGS-84.")] double StationLongitude) : SampledValue;
 
 /// <summary>
 /// Samples a coverage product at a single lat/lon, returning the nearest

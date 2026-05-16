@@ -6,6 +6,22 @@ abstraction and the tool surface only** — no MCP protocol code, no
 viewer code, no transport. PR MCP-2 will layer the wire protocol on
 top of this.
 
+## Field conventions
+
+Every public property on every record that crosses the MCP wire —
+requests, results, payload variants, `ToolError` subtypes, and the
+shared `BoundingBox` / `SpecRef` / `TimeRange` / `DatasetId` types —
+carries a `[System.ComponentModel.Description]` attribute with a
+single-sentence statement of units, coordinate reference system, and
+semantics. The conventions (degrees decimal WGS-84, UTC ISO-8601,
+metres, m/s + knots, depths positive down, bearings 0..360 from true
+north, lower camelCase JSON keys) are documented in
+[`docs/mcp-server.md`](../../docs/mcp-server.md#field-conventions).
+
+A reflection-based test (`AnnotationContractTests` in
+`tests/EncDotNet.S100.Mcp.Tools.Tests`) enforces that every newly
+added wire-crossing property carries a non-empty `[Description]`.
+
 ## Architecture
 
 ```

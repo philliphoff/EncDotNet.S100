@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace EncDotNet.S100.Mcp.Tools.Catalog;
 
 /// <summary>
@@ -12,6 +14,7 @@ namespace EncDotNet.S100.Mcp.Tools.Catalog;
 public readonly record struct DatasetId
 {
     /// <summary>The underlying opaque identifier value.</summary>
+    [Description("Opaque catalog-scoped identifier; stable for the lifetime of the host session.")]
     public string Value { get; }
 
     /// <summary>Creates a new <see cref="DatasetId"/>.</summary>
