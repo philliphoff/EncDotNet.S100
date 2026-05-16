@@ -107,12 +107,13 @@ public sealed class S100McpServer : IAsyncDisposable
             k.Limits.KeepAliveTimeout = _options.IdleTimeout;
         });
 
-        // Register the three MCP-1 tools as in-process singletons.
+        // Register the MCP-1 tools as in-process singletons.
         var listDatasets = new ListDatasetsTool(_catalog);
         var describeFeature = new DescribeFeatureTool(_catalog);
         var sampleCoverage = new SampleCoverageTool(_catalog);
+        var findAt = new FindAtTool(_catalog);
         var tools = S100McpServerToolFactory
-            .CreateTools(listDatasets, describeFeature, sampleCoverage)
+            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt)
             .ToArray();
 
         builder.Services

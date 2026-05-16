@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Mcp.Tests;
 public class S100McpServerRoundTripTests
 {
     [Fact]
-    public async Task ListTools_returns_three_tools_with_schemas()
+    public async Task ListTools_returns_four_tools_with_schemas()
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
@@ -19,7 +19,7 @@ public class S100McpServerRoundTripTests
         var tools = await client.ListToolsAsync();
         var names = tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(new[] { "describe_feature", "list_datasets", "sample_coverage" }, names);
+        Assert.Equal(new[] { "describe_feature", "find_at", "list_datasets", "sample_coverage" }, names);
         foreach (var tool in tools)
         {
             // ProtocolTool exposes the JSON schema; ensure it is non-empty.
@@ -127,6 +127,49 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         Assert.Equal("dataset_not_found", payload["code"]!.GetValue<string>());
         Assert.False(string.IsNullOrEmpty(payload["message"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task FindAt_round_trip_returns_matching_datasets()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("warn-here", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10)),
+            LoadedDatasetFactory.S124("warn-elsewhere", bounds: LoadedDatasetFactory.Box(50, 50, 60, 60)));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        {
+            ["latitude"] = 5.0,
+            ["longitude"] = 5.0,
+        });
+
+        Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var datasets = payload["datasets"]!.AsArray();
+        Assert.Single(datasets);
+        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
+        Assert.Equal(1, payload["totalCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task FindAt_invalid_latitude_returns_structured_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
+        {
+            ["latitude"] = 95.0,
+            ["longitude"] = 0.0,
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for out-of-range latitude.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
+        Assert.Equal("latitude", payload["details"]!["parameter"]!.GetValue<string>());
     }
 
     private static JsonObject ParseSingleJson(CallToolResult result)
