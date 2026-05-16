@@ -5,6 +5,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
+using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -73,7 +74,8 @@ internal static class S100McpServerToolFactory
         FindAtTool findAt,
         QueryFeaturesTool queryFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
-        ListSpecsTool listSpecs)
+        ListSpecsTool listSpecs,
+        ListTimeStepsTool listTimeSteps)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
@@ -82,6 +84,7 @@ internal static class S100McpServerToolFactory
         yield return CreateQueryFeaturesTool(queryFeatures);
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
+        yield return CreateListTimeStepsTool(listTimeSteps);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -155,6 +158,7 @@ internal static class S100McpServerToolFactory
                    [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
                    [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
                    [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. Nearest time step is selected; times outside the dataset range clamp to the first or last step.")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field. Takes precedence over 'time'.")] string? times = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -162,7 +166,8 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
                         latitude,
                         longitude,
-                        time),
+                        time,
+                        ParseTimeQuery(times)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -223,6 +228,7 @@ internal static class S100McpServerToolFactory
         var del = ([Description("Spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] string query,
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
+                   [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    CancellationToken ct = default) =>
@@ -232,6 +238,7 @@ internal static class S100McpServerToolFactory
                         ParseGeoQuery(query) ?? throw new ArgumentException("query is required.", nameof(query)),
                         ParseSpec(spec),
                         featureType,
+                        ParseTimeQuery(times),
                         page,
                         pageSize),
                     ct));
@@ -258,13 +265,15 @@ internal static class S100McpServerToolFactory
         var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\").")] string spec,
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
                    [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
                     new SampleCoverageAlongRequest(
                         ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
                         ParsePolyline(polyline),
-                        time),
+                        time,
+                        ParseTimeQuery(times)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -295,11 +304,36 @@ internal static class S100McpServerToolFactory
         });
     }
 
+    private static McpServerTool CreateListTimeStepsTool(ListTimeStepsTool inner)
+    {
+        var description =
+            "Returns the available UTC time-step instants for a time-varying coverage dataset " +
+            "(S-104 water level, S-111 surface currents). Use this to ground temporal questions " +
+            "before issuing sample_coverage or sample_coverage_along — the agent can discover the " +
+            "first/last instant, the cadence (when uniform), and the full list of valid times. " +
+            "For S-102 (static bathymetry) the times array is empty. Read-only and side-effect free.";
+
+        var del = ([Description("Identifier of a currently loaded time-varying coverage dataset (typically obtained from list_datasets).")] string datasetId,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(new ListTimeStepsRequest(new DatasetId(datasetId)), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = ListTimeStepsTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
     private static SpecRef? ParseSpec(string? spec)
         => string.IsNullOrWhiteSpace(spec) ? null : SpecRef.Parse(spec);
 
     private static GeoQuery? ParseGeoQuery(string? queryJson)
         => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);
+
+    private static TimeQuery? ParseTimeQuery(string? timesJson)
+        => string.IsNullOrWhiteSpace(timesJson) ? null : TimeQueryJsonReader.Parse(timesJson);
 
     private static GeoPolyline ParsePolyline(string polylineJson)
     {

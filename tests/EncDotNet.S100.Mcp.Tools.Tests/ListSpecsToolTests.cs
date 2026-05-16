@@ -60,15 +60,25 @@ public class ListSpecsToolTests
         Assert.True(s102.Capabilities.CanSampleCoverage);
         Assert.False(s102.Capabilities.CanQueryFeatures);
         Assert.True(s102.Capabilities.CanDescribeFeature);
+        // S-102 is static; no time-step listing.
+        Assert.False(s102.Capabilities.CanListTimeSteps);
 
         // S-124 is GML vector; not a coverage product.
         Assert.False(s124.Capabilities.CanSampleCoverage);
         Assert.True(s124.Capabilities.CanQueryFeatures);
         Assert.True(s124.Capabilities.CanDescribeFeature);
+        Assert.False(s124.Capabilities.CanListTimeSteps);
 
         // S-101 is neither coverage nor GML — describer only.
         Assert.False(s101.Capabilities.CanSampleCoverage);
         Assert.False(s101.Capabilities.CanQueryFeatures);
         Assert.True(s101.Capabilities.CanDescribeFeature);
+        Assert.False(s101.Capabilities.CanListTimeSteps);
+
+        // S-104 / S-111 are time-varying coverage products.
+        var s104 = value.Specs.Single(s => s.Name == "S-104");
+        var s111 = value.Specs.Single(s => s.Name == "S-111");
+        Assert.True(s104.Capabilities.CanListTimeSteps);
+        Assert.True(s111.Capabilities.CanListTimeSteps);
     }
 }

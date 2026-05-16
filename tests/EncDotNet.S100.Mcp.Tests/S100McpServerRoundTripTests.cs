@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Mcp.Tools;
@@ -30,6 +32,7 @@ public class S100McpServerRoundTripTests
                 "find_at",
                 "list_datasets",
                 "list_specs",
+                "list_time_steps",
                 "query_features",
                 "sample_coverage",
                 "sample_coverage_along",
@@ -241,6 +244,64 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task QueryFeatures_round_trip_with_times_filters_out_disjoint_validity()
+    {
+        var inWindow = MakeS122WithFixedRange("in", "2024-01-01", "2024-12-31");
+        var outOfWindow = MakeS122WithFixedRange("out", "2030-01-01", "2030-12-31");
+        var s122 = new S122Dataset
+        {
+            Features = ImmutableArray.Create(inWindow, outOfWindow),
+            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+        };
+        var loaded = new LoadedDataset(
+            new DatasetId("mpa-1"),
+            new SpecRef("S-122", new SpecVersion(1, 0, 0)),
+            LoadedDatasetFactory.Box(0, 0, 10, 10),
+            null,
+            new S122DatasetData(s122));
+        var catalog = McpTestHelpers.NewCatalog(loaded);
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["times"] = """{"kind":"instant","t":"2024-06-15T12:00:00Z"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("in", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    private static S122Feature MakeS122WithFixedRange(string id, string start, string end)
+    {
+        var sub = ImmutableDictionary<string, string>.Empty
+            .Add("dateStart", start)
+            .Add("dateEnd", end);
+        return new S122Feature
+        {
+            Id = id,
+            FeatureType = "MarineProtectedArea",
+            GeometryType = GmlGeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            {
+                Code = "fixedDateRange",
+                SubAttributes = sub,
+            }),
+        };
+    }
+
+
+    [Fact]
     public async Task SampleCoverageAlong_round_trip_returns_per_vertex_results()
     {
         var catalog = McpTestHelpers.NewCatalog(
@@ -292,8 +353,62 @@ public class S100McpServerRoundTripTests
             Assert.NotNull(caps["canQueryFeatures"]);
             Assert.NotNull(caps["canDescribeFeature"]);
             Assert.NotNull(caps["canSampleCoverage"]);
+            Assert.NotNull(caps["canListTimeSteps"]);
         }
     }
+
+    [Fact]
+    public async Task ListTimeSteps_round_trip_returns_cadence_for_S104()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S104("wl-1"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync(
+            "list_time_steps",
+            new Dictionary<string, object?> { ["datasetId"] = "wl-1" });
+
+        Assert.False(result.IsError ?? false, $"list_time_steps returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var times = payload["times"]!.AsArray();
+        Assert.NotEmpty(times);
+        Assert.NotNull(payload["firstTime"]);
+        Assert.NotNull(payload["lastTime"]);
+        Assert.NotNull(payload["cadence"]);
+        Assert.Equal("S-104", payload["spec"]!["name"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SampleCoverage_round_trip_with_times_range_returns_series()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S104("wl-series"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-104/2.0.0",
+            ["latitude"] = 0.01,
+            ["longitude"] = 0.01,
+            ["times"] = """{"kind":"range","from":"2024-01-01T00:00:00Z","to":"2024-01-01T02:00:00Z"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var series = payload["series"]!.AsArray();
+        Assert.Equal(3, series.Count);
+        foreach (var step in series)
+        {
+            Assert.NotNull(step!["sampleTime"]);
+            Assert.NotNull(step["requestedTime"]);
+            Assert.NotNull(step["value"]);
+        }
+    }
+
 
     [Fact]
     public async Task FindAt_with_box_query_envelope_returns_intersecting_datasets()

@@ -41,10 +41,15 @@ public sealed record SpecSummary(
 /// <c>true</c> when <see cref="SampleCoverageTool"/> can sample a
 /// scalar / vector value at a point for this spec.
 /// </param>
+/// <param name="CanListTimeSteps">
+/// <c>true</c> when <see cref="ListTimeStepsTool"/> can enumerate time
+/// steps for this spec (i.e. it is a time-varying coverage product).
+/// </param>
 public sealed record SpecCapabilities(
-    bool CanQueryFeatures,
-    bool CanDescribeFeature,
-    bool CanSampleCoverage);
+    [property: Description("True when query_features can enumerate features for this spec.")] bool CanQueryFeatures,
+    [property: Description("True when describe_feature has a describer registered for this spec.")] bool CanDescribeFeature,
+    [property: Description("True when sample_coverage can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
+    [property: Description("True when list_time_steps can enumerate time steps for this spec (time-varying coverage products only).")] bool CanListTimeSteps);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
 public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] ImmutableArray<SpecSummary> Specs);
@@ -102,6 +107,13 @@ public sealed class ListSpecsTool
         "S-102", "S-104", "S-111",
     };
 
+    // Time-varying coverage specs (subset of CoverageSpecs) that
+    // ListTimeStepsTool can enumerate. S-102 is static.
+    private static readonly HashSet<string> TimeVaryingCoverageSpecs = new(StringComparer.Ordinal)
+    {
+        "S-104", "S-111",
+    };
+
     // Specs with a registered describer.
     private static readonly HashSet<string> DescribableSpecs = new(StringComparer.Ordinal)
     {
@@ -145,7 +157,8 @@ public sealed class ListSpecsTool
             var caps = new SpecCapabilities(
                 CanQueryFeatures: GmlVectorSpecs.Contains(name),
                 CanDescribeFeature: DescribableSpecs.Contains(name),
-                CanSampleCoverage: CoverageSpecs.Contains(name));
+                CanSampleCoverage: CoverageSpecs.Contains(name),
+                CanListTimeSteps: TimeVaryingCoverageSpecs.Contains(name));
             summaries.Add(new SpecSummary(name, loaded, caps));
         }
 
