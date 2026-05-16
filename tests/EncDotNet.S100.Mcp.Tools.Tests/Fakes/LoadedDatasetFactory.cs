@@ -130,4 +130,17 @@ internal static class LoadedDatasetFactory
             null,
             new S111CoverageData(source ?? S111Synth.Source()));
     }
+
+    public static LoadedDataset S111Stations(
+        string id,
+        S111StationSeriesDataset dataset,
+        BoundingBox? bounds = null)
+    {
+        return new LoadedDataset(
+            new DatasetId(id),
+            S111Spec,
+            bounds ?? Box(),
+            null,
+            new S111StationSeriesData(dataset));
+    }
 }

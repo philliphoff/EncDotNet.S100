@@ -113,6 +113,32 @@ public sealed record SurfaceCurrentSample(
     double CellCentreLongitude) : SampledValue;
 
 /// <summary>
+/// S-111 surface current sample read from a dcf8 ("time series at
+/// fixed stations") dataset — picks the nearest station to the
+/// requested position and the nearest time step within that station's
+/// series (S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
+/// </summary>
+/// <param name="StationId">Reporting station identifier (S-111 <c>stationIdentification</c>).</param>
+/// <param name="StationDistanceMetres">Great-circle distance from requested point to the station, metres.</param>
+/// <param name="SpeedMetresPerSecond">Speed in metres per second — canonical S-111 unit (§10.2.5).</param>
+/// <param name="SpeedKnots">Speed in knots, computed as <c>m/s × 1.94384</c> for convenience.</param>
+/// <param name="DirectionDegreesTrue">Direction in degrees from true north, clockwise (0..360).</param>
+/// <param name="SampleTime">Actual time step (UTC) selected for this sample.</param>
+/// <param name="RequestedTime">The time the caller asked for, or <c>null</c> if unspecified.</param>
+/// <param name="StationLatitude">Latitude of the matched station.</param>
+/// <param name="StationLongitude">Longitude of the matched station.</param>
+public sealed record SurfaceCurrentStationSample(
+    string StationId,
+    double StationDistanceMetres,
+    double SpeedMetresPerSecond,
+    double SpeedKnots,
+    double DirectionDegreesTrue,
+    DateTime SampleTime,
+    DateTimeOffset? RequestedTime,
+    double StationLatitude,
+    double StationLongitude) : SampledValue;
+
+/// <summary>
 /// Samples a coverage product at a single lat/lon, returning the nearest
 /// grid cell's value. Supports S-102 (depth + uncertainty), S-104
 /// (water level height + trend, nearest time step), and S-111
@@ -419,33 +445,58 @@ public sealed class SampleCoverageTool
         S111Dataset? bestModel = null;
         SurfaceCurrentCoverage? bestCoverage = null;
         double bestArea = double.PositiveInfinity;
-        bool anyS111 = false;
+        bool anyS111Gridded = false;
+        bool anyS111StationSeries = false;
         foreach (var dataset in snapshot)
         {
-            if (dataset.Data is not S111CoverageData s111) continue;
-            anyS111 = true;
-            var model = s111.Source.Dataset;
-            if (model.Coverages.Count == 0) continue;
-            var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
-            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-            if (area < bestArea)
+            switch (dataset.Data)
             {
-                bestArea = area;
-                bestDataset = dataset;
-                bestSource = s111.Source;
-                bestModel = model;
-                bestCoverage = probe;
+                case S111CoverageData s111:
+                {
+                    anyS111Gridded = true;
+                    var model = s111.Source.Dataset;
+                    if (model.Coverages.Count == 0) break;
+                    var probe = model.Coverages[0];
+                    if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
+                    var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+                    if (area < bestArea)
+                    {
+                        bestArea = area;
+                        bestDataset = dataset;
+                        bestSource = s111.Source;
+                        bestModel = model;
+                        bestCoverage = probe;
+                    }
+                    break;
+                }
+                case S111StationSeriesData:
+                    anyS111StationSeries = true;
+                    break;
             }
         }
 
-        if (bestDataset is null || bestModel is null || bestCoverage is null || bestSource is null)
+        if (bestDataset is not null && bestModel is not null && bestCoverage is not null && bestSource is not null)
         {
-            return ToolResult<SampleCoverageResult>.Err(anyS111
-                ? new OutOfBounds(request.Spec, request.Latitude, request.Longitude)
-                : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+            return SampleS111Gridded(request, bestDataset, bestSource, bestModel, bestCoverage);
         }
 
+        if (anyS111StationSeries)
+        {
+            return SampleS111StationSeries(request, snapshot);
+        }
+
+        return ToolResult<SampleCoverageResult>.Err(anyS111Gridded
+            ? new OutOfBounds(request.Spec, request.Latitude, request.Longitude)
+            : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+    }
+
+    private static ToolResult<SampleCoverageResult> SampleS111Gridded(
+        SampleCoverageRequest request,
+        LoadedDataset bestDataset,
+        S111CoverageSource bestSource,
+        S111Dataset bestModel,
+        SurfaceCurrentCoverage bestCoverage)
+    {
         if (bestModel.DataCodingFormat != 2)
         {
             return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
@@ -492,6 +543,72 @@ public sealed class SampleCoverageTool
             return ToolResult<SampleCoverageResult>.Err(
                 new DatasetClosedDuringQuery(bestDataset.Id));
         }
+    }
+
+    /// <summary>
+    /// Sample a loaded dcf8 S-111 station-series dataset (S-111 Edition
+    /// 2.0.0 §10.2.3 / §10.2.7). Finds the nearest station across every
+    /// loaded dcf8 dataset by great-circle distance with no max-distance
+    /// cap, then picks the nearest time step within that station's series.
+    /// </summary>
+    private static ToolResult<SampleCoverageResult> SampleS111StationSeries(
+        SampleCoverageRequest request,
+        System.Collections.Immutable.ImmutableArray<LoadedDataset> snapshot)
+    {
+        LoadedDataset? bestDataset = null;
+        SurfaceCurrentStation? bestStation = null;
+        double bestDistance = double.PositiveInfinity;
+
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S111StationSeriesData ss) continue;
+            foreach (var station in ss.Dataset.Stations)
+            {
+                var d = GreatCircleMetres(request.Latitude, request.Longitude, station.Latitude, station.Longitude);
+                if (d < bestDistance)
+                {
+                    bestDistance = d;
+                    bestStation = station;
+                    bestDataset = dataset;
+                }
+            }
+        }
+
+        if (bestDataset is null || bestStation is null)
+        {
+            return ToolResult<SampleCoverageResult>.Err(
+                new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+        }
+
+        var requestedAsUtc = request.Time?.UtcDateTime;
+        DateTime sampleTime;
+        int idx;
+        if (requestedAsUtc is null)
+        {
+            idx = 0;
+            sampleTime = bestStation.StartTime;
+        }
+        else
+        {
+            idx = bestStation.NearestTimeIndex(requestedAsUtc.Value);
+            sampleTime = bestStation.TimeAt(idx);
+        }
+
+        var speed = bestStation.SpeedsMetresPerSecond[idx];
+        return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+            bestDataset.Id,
+            request.Latitude,
+            request.Longitude,
+            new SurfaceCurrentStationSample(
+                bestStation.Identifier,
+                bestDistance,
+                speed,
+                speed * MetresPerSecondToKnots,
+                bestStation.DirectionsDegreesTrue[idx],
+                DateTime.SpecifyKind(sampleTime, DateTimeKind.Utc),
+                request.Time,
+                bestStation.Latitude,
+                bestStation.Longitude)));
     }
 
     /// <summary>
