@@ -174,6 +174,7 @@ return `SpecNotSupportedForTool`.
 ```csharp
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Mcp.Tools.Geometry;
 
 // A host (e.g. the viewer) implements IDatasetCatalog and publishes
 // LoadedDataset instances whenever its loaded set changes.
@@ -183,6 +184,7 @@ var list = new ListDatasetsTool(catalog);
 var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
 var findAt = new FindAtTool(catalog);
+var queryFeatures = new QueryFeaturesTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -214,6 +216,24 @@ var depth = await sample.InvokeAsync(new SampleCoverageRequest(
 if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
 {
     Console.WriteLine($"Depth at point: {d.DepthMeters} m");
+}
+
+// What GML features overlap a bounding box? query_features works across
+// every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
+// S-201/S-411/S-421) via the shared IGmlFeature abstraction. Pass any
+// GeoQuery variant — point, bbox, polygon, or polyline (with optional
+// corridor width). Results are paginated.
+var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
+    Spec: new SpecRef("S-124", default),       // any S-124 edition
+    FeatureType: "NavwarnPart",
+    PageSize: 50));
+if (features.TryGetValue(out var page))
+{
+    foreach (var match in page.Features)
+    {
+        Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
+    }
 }
 ```
 
