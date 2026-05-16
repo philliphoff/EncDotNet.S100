@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S111;
+using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -68,7 +69,18 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         using (datasetStream)
         using (var hdf5 = PureHdfFile.Open(datasetStream))
         {
-            _dataset = S111DatasetReader.Read(hdf5);
+            try
+            {
+                _dataset = S111DatasetReader.Read(hdf5);
+            }
+            catch (S100DatasetSchemaException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
+            catch (S100DatasetNotSupportedException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
         }
         _source = new S111CoverageSource(_dataset);
 
