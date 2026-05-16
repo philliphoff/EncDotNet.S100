@@ -3,8 +3,10 @@ using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using System.Collections.Immutable;
 using System.ComponentModel;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -19,22 +21,55 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// step of the matched coverage is used. When supplied, the nearest time step is
 /// selected; times outside the dataset's range clamp to the first or last step.
 /// </param>
+/// <param name="Times">
+/// Optional richer temporal query. Takes precedence over <paramref name="Time"/>
+/// when supplied. <c>Instant</c> behaves like <paramref name="Time"/>; <c>Range</c>
+/// and <c>Series</c> populate <see cref="SampleCoverageResult.Series"/> with a
+/// per-step entry. Currently honoured for gridded S-104 and S-111; ignored
+/// elsewhere.
+/// </param>
 public sealed record SampleCoverageRequest(
     [property: Description("Spec of the coverage to sample (S-102, S-104, or S-111).")] SpecRef Spec,
     [property: Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double Latitude,
     [property: Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double Longitude,
-    [property: Description("UTC ISO-8601 time selector for time-varying products; ignored for S-102. Null selects the first time step; non-null selects the nearest step (clamped to the dataset range).")] DateTimeOffset? Time = null);
+    [property: Description("UTC ISO-8601 time selector for time-varying products; ignored for S-102. Null selects the first time step; non-null selects the nearest step (clamped to the dataset range).")] DateTimeOffset? Time = null,
+    [property: Description("Optional TimeQuery (instant / range / series). Takes precedence over 'Time'. Range/Series populate the result's 'Series' field with one entry per dataset step in window.")] TimeQuery? Times = null);
 
 /// <summary>Result of <see cref="SampleCoverageTool"/>.</summary>
 /// <param name="DatasetId">Dataset that produced the sample.</param>
 /// <param name="Latitude">Latitude that was requested, echoed back (decimal degrees, WGS-84).</param>
 /// <param name="Longitude">Longitude that was requested, echoed back (decimal degrees, WGS-84).</param>
 /// <param name="Value">Typed sample payload; discriminated on the JSON <c>$kind</c> property.</param>
+/// <param name="Series">
+/// Optional per-time-step series, populated when the request's
+/// <see cref="SampleCoverageRequest.Times"/> is a <c>Range</c> or <c>Series</c>
+/// and the matched dataset is a supported time-varying coverage. Null for
+/// single-instant queries, for S-102, and for station-series datasets (which
+/// currently honour only single-instant time selection).
+/// </param>
 public sealed record SampleCoverageResult(
     [property: Description("Identifier of the dataset that produced the sample.")] DatasetId DatasetId,
     [property: Description("Latitude that was requested, echoed back in decimal degrees, WGS-84.")] double Latitude,
     [property: Description("Longitude that was requested, echoed back in decimal degrees, WGS-84.")] double Longitude,
-    [property: Description("Typed sample payload; the JSON \"$kind\" discriminator selects the variant.")] SampledValue Value);
+    [property: Description("Typed sample payload; the JSON \"$kind\" discriminator selects the variant.")] SampledValue Value,
+    [property: Description("Optional per-step series; populated when the request's Times is Range/Series and the dataset is gridded S-104 or S-111.")] ImmutableArray<TimedSampledValue>? Series = null);
+
+/// <summary>
+/// A single entry in a <see cref="SampleCoverageResult.Series"/>: the
+/// dataset's actual time-step instant alongside the sampled value at the
+/// requested cell.
+/// </summary>
+/// <param name="SampleTime">UTC instant of the time step actually selected for this entry.</param>
+/// <param name="RequestedTime">
+/// UTC instant the caller asked for. For <c>Range</c> queries this is the
+/// dataset's step instant itself (the window selected it); for <c>Series</c>
+/// queries this is the enumerated series instant the step was snapped to.
+/// </param>
+/// <param name="Value">Typed sample payload, or <c>null</c> when the cell has no data at this step.</param>
+public sealed record TimedSampledValue(
+    [property: Description("UTC instant of the time step actually selected for this entry.")] DateTime SampleTime,
+    [property: Description("UTC instant the caller asked for (the dataset step for Range; the enumerated instant for Series).")] DateTimeOffset RequestedTime,
+    [property: Description("Typed sample payload, or null when the cell has no data at this step.")] SampledValue? Value);
 
 /// <summary>Discriminated payload returned by <see cref="SampleCoverageTool"/>.</summary>
 public abstract record SampledValue;
@@ -185,13 +220,35 @@ public sealed class SampleCoverageTool
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(request.Spec.Name switch
+        // Normalise the temporal selector: if Times is an Instant, lower
+        // it onto the legacy 'Time' field so the existing single-instant
+        // paths apply unchanged. Range/Series dispatch to a windowed path.
+        var effective = request;
+        if (request.Times is TimeQuery.Instant inst)
         {
-            "S-102" => SampleS102(request),
-            "S-104" => SampleS104(request),
-            "S-111" => SampleS111(request),
+            effective = request with { Time = inst.Value, Times = null };
+        }
+
+        if (effective.Times is TimeQuery.Range or TimeQuery.Series)
+        {
+            return Task.FromResult(effective.Spec.Name switch
+            {
+                "S-102" => ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
+                    effective.Spec, Name, "S-102 has no time dimension; supply 'Time'/'Times' only for S-104 or S-111")),
+                "S-104" => SampleS104Windowed(effective),
+                "S-111" => SampleS111Windowed(effective),
+                _ => ToolResult<SampleCoverageResult>.Err(
+                    new SpecNotSupportedForTool(effective.Spec, Name)),
+            });
+        }
+
+        return Task.FromResult(effective.Spec.Name switch
+        {
+            "S-102" => SampleS102(effective),
+            "S-104" => SampleS104(effective),
+            "S-111" => SampleS111(effective),
             _ => ToolResult<SampleCoverageResult>.Err(
-                new SpecNotSupportedForTool(request.Spec, Name)),
+                new SpecNotSupportedForTool(effective.Spec, Name)),
         });
     }
 
@@ -618,6 +675,306 @@ public sealed class SampleCoverageTool
                 request.Time,
                 bestStation.Latitude,
                 bestStation.Longitude)));
+    }
+
+    /// <summary>
+    /// Windowed S-104 sampling: dispatched when <see cref="SampleCoverageRequest.Times"/>
+    /// is <see cref="TimeQuery.Range"/> or <see cref="TimeQuery.Series"/>. Only the
+    /// gridded (dcf=2) path is currently honoured — station-series datasets fall back
+    /// to the existing single-instant behaviour.
+    /// </summary>
+    private ToolResult<SampleCoverageResult> SampleS104Windowed(SampleCoverageRequest request)
+    {
+        var snapshot = _catalog.Datasets;
+        LoadedDataset? bestDataset = null;
+        S104Dataset? bestModel = null;
+        WaterLevelCoverage? bestCoverage = null;
+        double bestArea = double.PositiveInfinity;
+        bool anyS104Gridded = false;
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S104CoverageData s104) continue;
+            anyS104Gridded = true;
+            var model = s104.Source.Dataset;
+            if (model.Coverages.Count == 0) continue;
+            var probe = model.Coverages[0];
+            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+            if (area < bestArea)
+            {
+                bestArea = area;
+                bestDataset = dataset;
+                bestModel = model;
+                bestCoverage = probe;
+            }
+        }
+
+        if (bestDataset is null || bestModel is null || bestCoverage is null)
+        {
+            return ToolResult<SampleCoverageResult>.Err(anyS104Gridded
+                ? new NotSupportedYet(request.Spec, Name, "windowed time queries are only supported for gridded S-104 (dcf=2); no in-bounds gridded dataset was found")
+                : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+        }
+
+        if (bestModel.DataCodingFormat != 2)
+        {
+            return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
+                request.Spec, Name,
+                $"data coding format {bestModel.DataCodingFormat} is not yet supported (only dcf=2 / regular grid)"));
+        }
+
+        var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
+        if (instants.Length == 0)
+        {
+            var (from, to) = request.Times!.GetWindow();
+            return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
+                "times", from, to,
+                firstStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(firstStep.Value, DateTimeKind.Utc)),
+                lastStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(lastStep.Value, DateTimeKind.Utc))));
+        }
+
+        try
+        {
+            var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
+            var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
+            var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
+
+            var series = ImmutableArray.CreateBuilder<TimedSampledValue>(instants.Length);
+            SampledValue? firstValue = null;
+            DateTime firstSampleTime = default;
+            foreach (var (requestedInstant, stepIndex) in instants)
+            {
+                var step = bestModel.Coverages[stepIndex];
+                var idx = row * step.NumPointsLongitudinal + col;
+                var value = step.Values[idx];
+                SampledValue? sampled;
+                if (value.Height == S104CoverageSource.FillValue)
+                {
+                    sampled = null;
+                }
+                else
+                {
+                    sampled = new WaterLevelSample(
+                        value.Height,
+                        DecodeWaterLevelTrend(value.Trend),
+                        DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc),
+                        requestedInstant,
+                        row,
+                        col,
+                        cellLat,
+                        cellLon);
+                }
+                var stepTimeUtc = DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc);
+                series.Add(new TimedSampledValue(stepTimeUtc, requestedInstant, sampled));
+                if (firstValue is null && sampled is not null)
+                {
+                    firstValue = sampled;
+                    firstSampleTime = stepTimeUtc;
+                }
+            }
+
+            // Fall back to a placeholder Value if every step had NoData,
+            // since SampleCoverageResult.Value is non-nullable.
+            firstValue ??= new WaterLevelSample(
+                double.NaN, "unknown", firstSampleTime == default
+                    ? DateTime.SpecifyKind(bestModel.Coverages[instants[0].StepIndex].TimePoint, DateTimeKind.Utc)
+                    : firstSampleTime,
+                instants[0].RequestedTime, 0, 0, cellLat, cellLon);
+
+            return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+                bestDataset.Id,
+                request.Latitude,
+                request.Longitude,
+                firstValue,
+                series.MoveToImmutable()));
+        }
+        catch (ObjectDisposedException)
+        {
+            return ToolResult<SampleCoverageResult>.Err(
+                new DatasetClosedDuringQuery(bestDataset.Id));
+        }
+    }
+
+    /// <summary>
+    /// Windowed S-111 sampling — mirror of <see cref="SampleS104Windowed"/>.
+    /// </summary>
+    private ToolResult<SampleCoverageResult> SampleS111Windowed(SampleCoverageRequest request)
+    {
+        var snapshot = _catalog.Datasets;
+        LoadedDataset? bestDataset = null;
+        S111Dataset? bestModel = null;
+        SurfaceCurrentCoverage? bestCoverage = null;
+        double bestArea = double.PositiveInfinity;
+        bool anyS111Gridded = false;
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S111CoverageData s111) continue;
+            anyS111Gridded = true;
+            var model = s111.Source.Dataset;
+            if (model.Coverages.Count == 0) continue;
+            var probe = model.Coverages[0];
+            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+            if (area < bestArea)
+            {
+                bestArea = area;
+                bestDataset = dataset;
+                bestModel = model;
+                bestCoverage = probe;
+            }
+        }
+
+        if (bestDataset is null || bestModel is null || bestCoverage is null)
+        {
+            return ToolResult<SampleCoverageResult>.Err(anyS111Gridded
+                ? new NotSupportedYet(request.Spec, Name, "windowed time queries are only supported for gridded S-111 (dcf=2); no in-bounds gridded dataset was found")
+                : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+        }
+
+        if (bestModel.DataCodingFormat != 2)
+        {
+            return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
+                request.Spec, Name,
+                $"data coding format {bestModel.DataCodingFormat} is not yet supported (only dcf=2 / regular grid)"));
+        }
+
+        var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
+        if (instants.Length == 0)
+        {
+            var (from, to) = request.Times!.GetWindow();
+            return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
+                "times", from, to,
+                firstStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(firstStep.Value, DateTimeKind.Utc)),
+                lastStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(lastStep.Value, DateTimeKind.Utc))));
+        }
+
+        try
+        {
+            var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
+            var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
+            var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
+
+            var series = ImmutableArray.CreateBuilder<TimedSampledValue>(instants.Length);
+            SampledValue? firstValue = null;
+            DateTime firstSampleTime = default;
+            foreach (var (requestedInstant, stepIndex) in instants)
+            {
+                var step = bestModel.Coverages[stepIndex];
+                var idx = row * step.NumPointsLongitudinal + col;
+                var value = step.Values[idx];
+                SampledValue? sampled;
+                if (value.Speed == S111CoverageSource.FillValue)
+                {
+                    sampled = null;
+                }
+                else
+                {
+                    sampled = new SurfaceCurrentSample(
+                        value.Speed,
+                        value.Speed * MetresPerSecondToKnots,
+                        value.Direction,
+                        DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc),
+                        requestedInstant,
+                        row,
+                        col,
+                        cellLat,
+                        cellLon);
+                }
+                var stepTimeUtc = DateTime.SpecifyKind(step.TimePoint, DateTimeKind.Utc);
+                series.Add(new TimedSampledValue(stepTimeUtc, requestedInstant, sampled));
+                if (firstValue is null && sampled is not null)
+                {
+                    firstValue = sampled;
+                    firstSampleTime = stepTimeUtc;
+                }
+            }
+
+            firstValue ??= new SurfaceCurrentSample(
+                double.NaN, double.NaN, double.NaN,
+                firstSampleTime == default
+                    ? DateTime.SpecifyKind(bestModel.Coverages[instants[0].StepIndex].TimePoint, DateTimeKind.Utc)
+                    : firstSampleTime,
+                instants[0].RequestedTime, 0, 0, cellLat, cellLon);
+
+            return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+                bestDataset.Id,
+                request.Latitude,
+                request.Longitude,
+                firstValue,
+                series.MoveToImmutable()));
+        }
+        catch (ObjectDisposedException)
+        {
+            return ToolResult<SampleCoverageResult>.Err(
+                new DatasetClosedDuringQuery(bestDataset.Id));
+        }
+    }
+
+    /// <summary>
+    /// Resolves the time-step indices for a windowed <see cref="TimeQuery"/>:
+    /// <list type="bullet">
+    /// <item><description><see cref="TimeQuery.Range"/>: every dataset step whose
+    /// <c>TimePoint</c> falls within the window, with the step's own time used as
+    /// the requested-time echo.</description></item>
+    /// <item><description><see cref="TimeQuery.Series"/>: one entry per enumerated
+    /// instant, snapped to the nearest dataset step; consecutive duplicates are
+    /// suppressed but the agent's requested instants are preserved.</description></item>
+    /// </list>
+    /// Returns an empty array when no overlap exists.
+    /// </summary>
+    private static ImmutableArray<(DateTimeOffset RequestedTime, int StepIndex)> ResolveStepIndices<TCoverage>(
+        IReadOnlyList<TCoverage> coverages,
+        TimeQuery query,
+        out DateTime? firstStep,
+        out DateTime? lastStep)
+        where TCoverage : class
+    {
+        firstStep = coverages.Count == 0 ? null : GetTimePoint(coverages[0]);
+        lastStep = coverages.Count == 0 ? null : GetTimePoint(coverages[coverages.Count - 1]);
+        if (coverages.Count == 0)
+        {
+            return ImmutableArray<(DateTimeOffset, int)>.Empty;
+        }
+
+        switch (query)
+        {
+            case TimeQuery.Range r:
+            {
+                var fromUtc = r.From.UtcDateTime;
+                var toUtc = r.To.UtcDateTime;
+                var builder = ImmutableArray.CreateBuilder<(DateTimeOffset, int)>();
+                for (int i = 0; i < coverages.Count; i++)
+                {
+                    var tp = GetTimePoint(coverages[i]);
+                    if (tp >= fromUtc && tp <= toUtc)
+                    {
+                        builder.Add((new DateTimeOffset(DateTime.SpecifyKind(tp, DateTimeKind.Utc)), i));
+                    }
+                }
+                return builder.ToImmutable();
+            }
+            case TimeQuery.Series s:
+            {
+                var enumerated = s.Enumerate();
+                var builder = ImmutableArray.CreateBuilder<(DateTimeOffset, int)>(enumerated.Length);
+                int? lastIndex = null;
+                foreach (var instant in enumerated)
+                {
+                    var idx = SelectTimeStep(coverages, instant);
+                    if (lastIndex == idx)
+                    {
+                        // Preserve the requested-time echo but skip duplicate dataset rows.
+                        builder.Add((instant, idx));
+                        continue;
+                    }
+                    builder.Add((instant, idx));
+                    lastIndex = idx;
+                }
+                return builder.ToImmutable();
+            }
+            default:
+                return ImmutableArray<(DateTimeOffset, int)>.Empty;
+        }
     }
 
     /// <summary>

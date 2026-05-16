@@ -3,6 +3,7 @@ using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
+using EncDotNet.S100.Mcp.Tools.Time;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -20,10 +21,16 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// Applied identically to every vertex — useful for "depth/level at
 /// each waypoint at the same instant" queries. Ignored for S-102.
 /// </param>
+/// <param name="Times">
+/// Optional richer temporal query, applied identically to every vertex.
+/// Takes precedence over <paramref name="Time"/>. Range/Series produce
+/// per-vertex series (see <see cref="SampleCoverageResult.Series"/>).
+/// </param>
 public sealed record SampleCoverageAlongRequest(
     [property: Description("Coverage spec to sample (S-102, S-104, or S-111).")] SpecRef Spec,
     [property: Description("Polyline to sample. Each vertex is sampled at its coordinate; the polyline's CorridorWidthMeters is ignored (corridor width applies to membership queries, not point sampling).")] GeoPolyline Polyline,
-    [property: Description("Optional UTC ISO-8601 time selector applied identically to every vertex; for time-varying products (S-104, S-111) only. Ignored for S-102.")] DateTimeOffset? Time = null);
+    [property: Description("Optional UTC ISO-8601 time selector applied identically to every vertex; for time-varying products (S-104, S-111) only. Ignored for S-102.")] DateTimeOffset? Time = null,
+    [property: Description("Optional TimeQuery (instant / range / series) applied identically to every vertex; takes precedence over 'Time'.")] TimeQuery? Times = null);
 
 /// <summary>
 /// A single sample along the polyline.
@@ -117,7 +124,7 @@ public sealed class SampleCoverageAlongTool
             cancellationToken.ThrowIfCancellationRequested();
             var v = vertices[i];
             var inner = await _sampler.InvokeAsync(
-                new SampleCoverageRequest(request.Spec, v.Latitude, v.Longitude, request.Time),
+                new SampleCoverageRequest(request.Spec, v.Latitude, v.Longitude, request.Time, request.Times),
                 cancellationToken).ConfigureAwait(false);
 
             // Request-level errors (unsupported spec) propagate; per-

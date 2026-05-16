@@ -147,3 +147,24 @@ public sealed record GeometryInvalid(
     [property: Description("Human-readable reason the geometry was rejected (e.g. \"polygon has fewer than 4 vertices\", \"north < south\").")] string Reason) : ToolError(
     "geometry_invalid",
     $"Geometry in '{Parameter}' is invalid: {Reason}.");
+
+/// <summary>
+/// A supplied <c>TimeQuery</c> Range or Series falls entirely outside
+/// the dataset's available time-step range (no overlap at all), so no
+/// samples can be produced. Single-instant queries clamp instead of
+/// erroring; this variant fires only for windowed/series queries.
+/// </summary>
+/// <param name="Parameter">Name of the request parameter that carried the out-of-range query.</param>
+/// <param name="WindowStart">Inclusive start of the requested window (UTC ISO-8601).</param>
+/// <param name="WindowEnd">Inclusive end of the requested window (UTC ISO-8601).</param>
+/// <param name="DatasetFirstTime">First time step available in the matched dataset (UTC ISO-8601), if any.</param>
+/// <param name="DatasetLastTime">Last time step available in the matched dataset (UTC ISO-8601), if any.</param>
+[Description("Raised when a TimeQuery Range or Series window falls entirely outside the matched dataset's available time-step range.")]
+public sealed record TimeOutOfRange(
+    [property: Description("Name of the request parameter that carried the out-of-range time query.")] string Parameter,
+    [property: Description("Inclusive start of the requested window, UTC ISO-8601.")] DateTimeOffset WindowStart,
+    [property: Description("Inclusive end of the requested window, UTC ISO-8601.")] DateTimeOffset WindowEnd,
+    [property: Description("First time step available in the matched dataset, UTC ISO-8601; null when the dataset has no time steps.")] DateTimeOffset? DatasetFirstTime,
+    [property: Description("Last time step available in the matched dataset, UTC ISO-8601; null when the dataset has no time steps.")] DateTimeOffset? DatasetLastTime) : ToolError(
+    "time_out_of_range",
+    $"Time query in '{Parameter}' [{WindowStart:o} .. {WindowEnd:o}] is outside the dataset's range.");

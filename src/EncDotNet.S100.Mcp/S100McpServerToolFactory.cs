@@ -5,6 +5,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
+using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -157,6 +158,7 @@ internal static class S100McpServerToolFactory
                    [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
                    [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
                    [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. Nearest time step is selected; times outside the dataset range clamp to the first or last step.")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field. Takes precedence over 'time'.")] string? times = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -164,7 +166,8 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
                         latitude,
                         longitude,
-                        time),
+                        time,
+                        ParseTimeQuery(times)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -260,13 +263,15 @@ internal static class S100McpServerToolFactory
         var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\").")] string spec,
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
                    [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
                     new SampleCoverageAlongRequest(
                         ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
                         ParsePolyline(polyline),
-                        time),
+                        time,
+                        ParseTimeQuery(times)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -324,6 +329,9 @@ internal static class S100McpServerToolFactory
 
     private static GeoQuery? ParseGeoQuery(string? queryJson)
         => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);
+
+    private static TimeQuery? ParseTimeQuery(string? timesJson)
+        => string.IsNullOrWhiteSpace(timesJson) ? null : TimeQueryJsonReader.Parse(timesJson);
 
     private static GeoPolyline ParsePolyline(string polylineJson)
     {

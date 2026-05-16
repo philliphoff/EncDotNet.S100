@@ -321,6 +321,36 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task SampleCoverage_round_trip_with_times_range_returns_series()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S104("wl-series"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-104/2.0.0",
+            ["latitude"] = 0.01,
+            ["longitude"] = 0.01,
+            ["times"] = """{"kind":"range","from":"2024-01-01T00:00:00Z","to":"2024-01-01T02:00:00Z"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var series = payload["series"]!.AsArray();
+        Assert.Equal(3, series.Count);
+        foreach (var step in series)
+        {
+            Assert.NotNull(step!["sampleTime"]);
+            Assert.NotNull(step["requestedTime"]);
+            Assert.NotNull(step["value"]);
+        }
+    }
+
+
+    [Fact]
     public async Task FindAt_with_box_query_envelope_returns_intersecting_datasets()
     {
         var catalog = McpTestHelpers.NewCatalog(
