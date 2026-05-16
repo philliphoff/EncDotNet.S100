@@ -17,6 +17,16 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// </remarks>
 public abstract record ToolError(string Code, string Message);
 
+/// <summary>
+/// A tool argument failed validation (e.g. latitude or longitude
+/// outside the valid WGS-84 range). The <paramref name="Parameter"/>
+/// names the request property that was rejected and
+/// <paramref name="Reason"/> describes why.
+/// </summary>
+public sealed record InvalidArgument(string Parameter, string Reason) : ToolError(
+    "invalid_argument",
+    $"Invalid argument '{Parameter}': {Reason}.");
+
 /// <summary>The named dataset is not present in the catalog snapshot.</summary>
 public sealed record DatasetNotFound(DatasetId Id) : ToolError(
     "dataset_not_found",
