@@ -9,6 +9,16 @@ public sealed class CoverageColorScheme
     public required IReadOnlyList<ColorBand> Bands { get; init; }
 
     /// <summary>
+    /// Optional colour applied to cells whose value equals the
+    /// coverage's no-data sentinel. When <c>null</c>, the renderer
+    /// leaves no-data cells transparent (legacy behaviour). When set,
+    /// the renderer paints them with this hex colour — typically the
+    /// portrayal catalogue's <c>NODTA</c> token resolved against the
+    /// active palette (S-100 Part 9 colour-table semantics).
+    /// </summary>
+    public string? NoDataColor { get; init; }
+
+    /// <summary>
     /// Resolves a value to a colour hex string using the bands.
     /// Returns <c>null</c> for no-data or out-of-range values.
     /// </summary>

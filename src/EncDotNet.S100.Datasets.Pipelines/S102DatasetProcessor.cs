@@ -88,7 +88,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
         _source = new S102CoverageSource(_dataset);
 
         var provider = catalogueManager.GetProvider("S-102");
-        _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { FourShades = true };
+        _catalogue = new S102PortrayalCatalogue(luaEngine, provider);
 
         // Hoist pipeline + renderer to fields: Render() is invoked many times
         // (each Mapsui redraw) but neither holds per-render state, so a single

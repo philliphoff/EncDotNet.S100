@@ -10,7 +10,7 @@ description: |
   depth surfaces, uncertainty grids, HDF5 bathymetry,
   BathymetryCoverage, CoverageCell layout, depth shading,
   S102DatasetReader, S102CoverageSource, S102PortrayalCatalogue,
-  CoverageLayerBuilder, adding S-102 features, reviewing for S-102
+  PC-driven Lua portrayal, adding S-102 features, reviewing for S-102
   spec compliance, RenderS102 tool changes. DO NOT USE FOR: S-104
   water levels (use s104-water-level), S-111 currents (use
   s111-surface-currents), generic HDF5 access (use s100-framework).
@@ -43,8 +43,10 @@ description: |
    `numPointsLongitudinal`, etc.).
 2. `depth` and `uncertainty` are float32 compound dataset members; do
    not silently widen to float64 in the public API.
-3. NODATA fill value is **1,000,000f** (not NaN). Honor it in
-   `CoverageLayerBuilder` and any renderer.
+3. NODATA fill value is **1,000,000f** (not NaN). Honor it via
+   `S102CoverageSource.FillValue` → `CoverageMetadata.NoDataValue` and
+   surface it through `CoverageColorScheme.NoDataColor` so the renderer
+   paints fill cells with the active palette's `NODTA` token.
 4. Grid origin is the **node position of the first grid point**, not a
    cell edge; bitmap extents need a half-cell pad.
 5. Grid row 0 is the **southernmost** row; bitmaps draw row 0 at top —

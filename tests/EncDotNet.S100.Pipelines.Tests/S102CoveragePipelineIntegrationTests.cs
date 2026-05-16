@@ -40,8 +40,8 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         _provider.Dispose();
     }
 
-    private S102PortrayalCatalogue CreateCatalogue(bool fourShades = true) =>
-        new(_engine, _provider) { FourShades = fourShades };
+    private S102PortrayalCatalogue CreateCatalogue() =>
+        new(_engine, _provider);
 
     [Fact]
     public async Task EndToEnd_ReadsHdf5_ProducesStyledLayer()
@@ -66,9 +66,10 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = CreateCatalogue(fourShades: true);
+        var catalogue = CreateCatalogue();
         var mariner = new MarinerSettings
         {
+            FourShades = true,
             ShallowContour = 2.0,
             SafetyContour = 30.0,
             DeepContour = 30.0,
@@ -147,9 +148,10 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         using var hdf5 = PureHdfFile.Open(TestDataFile);
         var dataset = S102DatasetReader.Read(hdf5);
         var source = new S102CoverageSource(dataset);
-        var catalogue = CreateCatalogue(fourShades: false);
+        var catalogue = CreateCatalogue();
         var mariner = new MarinerSettings
         {
+            FourShades = false,
             SafetyContour = 30.0,
         };
 
@@ -174,9 +176,10 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
     [Fact]
     public void S102PortrayalCatalogue_FourShades_ProducesExpectedBands()
     {
-        var catalogue = CreateCatalogue(fourShades: true);
+        var catalogue = CreateCatalogue();
         var mariner = new MarinerSettings
         {
+            FourShades = true,
             ShallowContour = 2.0,
             SafetyContour = 10.0,
             DeepContour = 30.0,
@@ -199,9 +202,10 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
     [Fact]
     public void S102PortrayalCatalogue_TwoShades_ProducesExpectedBands()
     {
-        var catalogue = CreateCatalogue(fourShades: false);
+        var catalogue = CreateCatalogue();
         var mariner = new MarinerSettings
         {
+            FourShades = false,
             SafetyContour = 10.0,
         };
 

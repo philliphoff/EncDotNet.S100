@@ -460,7 +460,7 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Safety Contour</value>
   </data>
   <data name="Tooltip_SafetyContour" xml:space="preserve">
-    <value>Depth boundary between safe and unsafe water for own ship (S-101 PC SafetyContour).</value>
+    <value>Depth boundary between safe and unsafe water for own ship (S-101 / S-102 PC SafetyContour).</value>
   </data>
   <data name="Settings_SafetyDepth" xml:space="preserve">
     <value>Safety Depth</value>
@@ -472,19 +472,19 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Shallow Contour</value>
   </data>
   <data name="Tooltip_ShallowContour" xml:space="preserve">
-    <value>Inner boundary of the four-shade scheme (S-101 PC ShallowContour). Must be ≤ Safety Contour.</value>
+    <value>Inner boundary of the four-shade scheme (S-101 / S-102 PC ShallowContour). Must be ≤ Safety Contour.</value>
   </data>
   <data name="Settings_DeepContour" xml:space="preserve">
     <value>Deep Contour</value>
   </data>
   <data name="Tooltip_DeepContour" xml:space="preserve">
-    <value>Outer boundary of the four-shade scheme (S-101 PC DeepContour). Must be ≥ Safety Contour.</value>
+    <value>Outer boundary of the four-shade scheme (S-101 / S-102 PC DeepContour). Must be ≥ Safety Contour.</value>
   </data>
   <data name="Settings_FourShades" xml:space="preserve">
     <value>Four-shade depth scheme</value>
   </data>
   <data name="Tooltip_FourShades" xml:space="preserve">
-    <value>When on, depth areas use four shades using the Shallow/Safety/Deep contours; when off, only two shades are used (S-101 PC FourShades).</value>
+    <value>When on, depth areas use four shades using the Shallow/Safety/Deep contours; when off, only two shades are used (S-101 / S-102 PC FourShades).</value>
   </data>
   <data name="Settings_ShallowWaterDangers" xml:space="preserve">
     <value>Highlight shallow-water dangers</value>
