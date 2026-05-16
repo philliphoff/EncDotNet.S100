@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -14,11 +15,11 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="Page">Zero-based page index.</param>
 /// <param name="PageSize">Page size; clamped to 1..500.</param>
 public sealed record FindAtRequest(
-    double Latitude,
-    double Longitude,
-    SpecRef? Spec = null,
-    int Page = 0,
-    int PageSize = 50);
+    [property: Description("Query latitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-90, 90].")] double Latitude,
+    [property: Description("Query longitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-180, 180].")] double Longitude,
+    [property: Description("Optional spec filter; null matches every spec.")] SpecRef? Spec = null,
+    [property: Description("Zero-based page index into the result set.")] int Page = 0,
+    [property: Description("Maximum datasets per page; clamped to the range 1..500.")] int PageSize = 50);
 
 /// <summary>Result of <see cref="FindAtTool"/>.</summary>
 /// <param name="Datasets">Datasets whose declared bounding box contains the query point, in catalog insertion order.</param>
@@ -27,11 +28,11 @@ public sealed record FindAtRequest(
 /// <param name="TotalCount">Total number of matching datasets across all pages.</param>
 /// <param name="HasMore"><c>true</c> if additional pages remain.</param>
 public sealed record FindAtResult(
-    ImmutableArray<DatasetSummary> Datasets,
-    int Page,
-    int PageSize,
-    int TotalCount,
-    bool HasMore);
+    [property: Description("Datasets whose declared bounding box contains the query point, in catalog insertion order.")] ImmutableArray<DatasetSummary> Datasets,
+    [property: Description("Echoed (and floored) zero-based page index.")] int Page,
+    [property: Description("Echoed (and clamped) page size.")] int PageSize,
+    [property: Description("Total number of matching datasets across all pages.")] int TotalCount,
+    [property: Description("True if additional pages of matches remain after this one.")] bool HasMore);
 
 /// <summary>
 /// Returns every loaded dataset whose declared bounding box contains the

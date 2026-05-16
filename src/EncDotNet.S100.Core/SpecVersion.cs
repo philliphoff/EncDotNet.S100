@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 
 namespace EncDotNet.S100.Core;
@@ -21,12 +22,15 @@ namespace EncDotNet.S100.Core;
 public readonly record struct SpecVersion : IComparable<SpecVersion>
 {
     /// <summary>Major component (backward-incompatible change boundary).</summary>
+    [Description("Major component (backward-incompatible change boundary).")]
     public int Major { get; }
 
     /// <summary>Minor component (backward-compatible additions).</summary>
+    [Description("Minor component (backward-compatible additions).")]
     public int Minor { get; }
 
     /// <summary>Clarification component (editorial-only changes).</summary>
+    [Description("Clarification component (editorial-only changes).")]
     public int Clarification { get; }
 
     /// <summary>
