@@ -175,6 +175,21 @@ public class DescribeFeatureToolTests
     }
 
     [Fact]
+    public async Task Returns_SpecNotSupported_for_S101_describe_stub()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-1"));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-1"), "f1"));
+
+        Assert.True(result.TryGetError(out var error));
+        var unsupported = Assert.IsType<SpecNotSupportedForTool>(error);
+        Assert.Equal("S-101", unsupported.Spec.Name);
+        Assert.Equal(DescribeFeatureTool.Name, unsupported.Tool);
+    }
+
+    [Fact]
     public async Task Empty_references_collection_returns_no_references()
     {
         var catalog = new FakeDatasetCatalog();

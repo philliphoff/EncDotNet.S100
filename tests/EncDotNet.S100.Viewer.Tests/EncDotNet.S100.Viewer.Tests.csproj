@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,12 +26,19 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S125\EncDotNet.S100.Datasets.S125.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\datasets\S125\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S421\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S421\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S131\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S131\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S104\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S104\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S111\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S111\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S101\S-101\DATASET_FILES\*.000" CopyToOutputDirectory="PreserveNewest" Link="TestData\S101\DATASET_FILES\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S57\US5MA1BO\*.000" CopyToOutputDirectory="PreserveNewest" Link="TestData\S57\US5MA1BO\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
