@@ -44,14 +44,15 @@ public class S104DatasetReaderErrorTests
         var path = Path.GetTempFileName() + ".h5";
         try
         {
-            WriteFileWithDcf(path, dcf: 8);
+            // dcf=3 (ungeorectified grid) is not yet implemented.
+            WriteFileWithDcf(path, dcf: 3);
 
             using var file = PureHdfFile.Open(path);
             var ex = Assert.Throws<S100DatasetNotSupportedException>(() => S104DatasetReader.Read(file));
 
             Assert.Equal("S-104", ex.Product);
-            Assert.Contains("8", ex.Feature);
-            Assert.Contains("time series at fixed stations", ex.Feature);
+            Assert.Contains("3", ex.Feature);
+            Assert.Contains("ungeorectified", ex.Feature);
             Assert.Contains("not yet supported", ex.Message);
         }
         finally { File.Delete(path); }

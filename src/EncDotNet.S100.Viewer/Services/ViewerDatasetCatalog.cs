@@ -297,20 +297,29 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
 
     private static LoadedDataset ProjectS104(DatasetId id, DatasetEntry entry)
     {
-        // S104DatasetReader.Read materialises every time-step's value
-        // grid into a managed WaterLevelValue[] before returning, so
-        // the file handle (and its stream) can be disposed eagerly.
+        // S104DatasetReader.ReadAny materialises every time-step's value
+        // grid (or per-station series) into managed arrays before
+        // returning, so the file handle can be disposed eagerly.
         using var stream = OpenEntryStream(entry);
         using var file = PureHdfFile.Open(stream);
-        var dataset = S104DatasetReader.Read(file);
-        var source = new S104CoverageSource(dataset);
-        var bounds = ComputeS104Bounds(dataset) ?? WorldBounds;
-        return new LoadedDataset(
-            id,
-            new SpecRef("S-104", default),
-            bounds,
-            null,
-            new S104CoverageData(source));
+        var data = S104DatasetReader.ReadAny(file);
+        return data switch
+        {
+            S104DatasetData.GriddedCoverage g => new LoadedDataset(
+                id,
+                new SpecRef("S-104", default),
+                ComputeS104Bounds(g.Dataset) ?? WorldBounds,
+                null,
+                new S104CoverageData(new S104CoverageSource(g.Dataset))),
+            S104DatasetData.StationSeries s => new LoadedDataset(
+                id,
+                new SpecRef("S-104", default),
+                ComputeS104StationSeriesBounds(s.Dataset) ?? WorldBounds,
+                ComputeS104StationSeriesTimeRange(s.Dataset),
+                new S104StationSeriesData(s.Dataset)),
+            _ => throw new InvalidOperationException(
+                $"Unexpected S-104 dataset variant {data.GetType().Name}."),
+        };
     }
 
     private static LoadedDataset ProjectS111(DatasetId id, DatasetEntry entry)
@@ -355,6 +364,38 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var north = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
         var east = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
         return new BoundingBox(south, west, north, east);
+    }
+
+    /// <summary>
+    /// Bounding box covering all stations in an S-104 dcf8 dataset.
+    /// Returns <c>null</c> for an empty station set (caller falls back to
+    /// <see cref="WorldBounds"/>). See S-104 Edition 2.0.0 §10.2.3.
+    /// </summary>
+    private static BoundingBox? ComputeS104StationSeriesBounds(S104StationSeriesDataset dataset)
+    {
+        if (dataset.Stations.Count == 0) return null;
+        double south = double.PositiveInfinity, west = double.PositiveInfinity;
+        double north = double.NegativeInfinity, east = double.NegativeInfinity;
+        foreach (var s in dataset.Stations)
+        {
+            if (s.Latitude < south) south = s.Latitude;
+            if (s.Latitude > north) north = s.Latitude;
+            if (s.Longitude < west) west = s.Longitude;
+            if (s.Longitude > east) east = s.Longitude;
+        }
+        // A single station yields a zero-extent box; pad slightly so the
+        // viewer can zoom to it.
+        if (Math.Abs(north - south) < 1e-9) { south -= 0.01; north += 0.01; }
+        if (Math.Abs(east - west) < 1e-9) { west -= 0.01; east += 0.01; }
+        return new BoundingBox(south, west, north, east);
+    }
+
+    private static TimeRange? ComputeS104StationSeriesTimeRange(S104StationSeriesDataset dataset)
+    {
+        if (dataset.Stations.Count == 0 || dataset.MinTime is null || dataset.MaxTime is null) return null;
+        var start = new DateTimeOffset(DateTime.SpecifyKind(dataset.MinTime.Value, DateTimeKind.Utc));
+        var end = new DateTimeOffset(DateTime.SpecifyKind(dataset.MaxTime.Value, DateTimeKind.Utc));
+        return new TimeRange(start, end);
     }
 
     private static BoundingBox? ComputeS111Bounds(S111Dataset dataset)

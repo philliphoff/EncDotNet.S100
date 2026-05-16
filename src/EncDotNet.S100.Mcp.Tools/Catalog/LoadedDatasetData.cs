@@ -76,8 +76,14 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 /// </remarks>
 public sealed record S102CoverageData(S102CoverageSource Source) : LoadedDatasetData;
 
-/// <summary>S-104 Water Level coverage handle.</summary>
+/// <summary>S-104 Water Level coverage handle (dcf2 — regular grid).</summary>
 public sealed record S104CoverageData(S104CoverageSource Source) : LoadedDatasetData;
+
+/// <summary>
+/// S-104 Water Level station-series dataset (dcf8 — time series at fixed
+/// stations; see S-104 Edition 2.0.0 §10.2.3 / §10.2.7).
+/// </summary>
+public sealed record S104StationSeriesData(S104StationSeriesDataset Dataset) : LoadedDatasetData;
 
 /// <summary>S-111 Surface Currents coverage handle.</summary>
 public sealed record S111CoverageData(S111CoverageSource Source) : LoadedDatasetData;

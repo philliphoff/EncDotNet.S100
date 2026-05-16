@@ -38,6 +38,29 @@ public abstract record SampledValue;
 public sealed record DepthSample(double DepthMeters, double? UncertaintyMeters) : SampledValue;
 
 /// <summary>
+/// S-104 water level sample read from a dcf8 ("time series at fixed
+/// stations") dataset — picks the nearest station to the requested
+/// position and the nearest time step within that station's series.
+/// </summary>
+/// <param name="StationId">Reporting station identifier (S-104 <c>stationIdentification</c>).</param>
+/// <param name="StationDistanceMetres">Great-circle distance from requested point to the station, metres.</param>
+/// <param name="WaterLevelHeight">Water level height in metres relative to the vertical datum.</param>
+/// <param name="Trend">Decoded S-104 trend (see <see cref="WaterLevelSample"/>).</param>
+/// <param name="SampleTime">Actual time step (UTC) selected for this sample.</param>
+/// <param name="RequestedTime">The time the caller asked for, or <c>null</c> if unspecified.</param>
+/// <param name="StationLatitude">Latitude of the matched station.</param>
+/// <param name="StationLongitude">Longitude of the matched station.</param>
+public sealed record WaterLevelStationSample(
+    string StationId,
+    double StationDistanceMetres,
+    double WaterLevelHeight,
+    string Trend,
+    DateTime SampleTime,
+    DateTimeOffset? RequestedTime,
+    double StationLatitude,
+    double StationLongitude) : SampledValue;
+
+/// <summary>
 /// S-104 water level sample at the nearest grid cell and time step.
 /// </summary>
 /// <param name="WaterLevelHeight">Water level height in metres relative to the vertical datum.</param>
@@ -196,41 +219,68 @@ public sealed class SampleCoverageTool
     {
         var snapshot = _catalog.Datasets;
 
-        // Pick the best (highest-resolution) S-104 dataset whose bounds contain the point.
+        // First: prefer dcf2 gridded coverage whose bounds contain the
+        // point. This preserves existing behaviour where a colocated
+        // gridded forecast wins over a sparse station file.
         LoadedDataset? bestDataset = null;
         S104CoverageSource? bestSource = null;
         S104Dataset? bestModel = null;
         WaterLevelCoverage? bestCoverage = null;
         double bestArea = double.PositiveInfinity;
-        bool anyS104 = false;
+        bool anyS104Gridded = false;
+        bool anyS104StationSeries = false;
         foreach (var dataset in snapshot)
         {
-            if (dataset.Data is not S104CoverageData s104) continue;
-            anyS104 = true;
-            var model = s104.Source.Dataset;
-            if (model.Coverages.Count == 0) continue;
-            // Use the first coverage's grid to characterise the instance —
-            // every time-step in an S-104 instance shares the same grid.
-            var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
-            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-            if (area < bestArea)
+            switch (dataset.Data)
             {
-                bestArea = area;
-                bestDataset = dataset;
-                bestSource = s104.Source;
-                bestModel = model;
-                bestCoverage = probe;
+                case S104CoverageData s104:
+                {
+                    anyS104Gridded = true;
+                    var model = s104.Source.Dataset;
+                    if (model.Coverages.Count == 0) break;
+                    var probe = model.Coverages[0];
+                    if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
+                    var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
+                    if (area < bestArea)
+                    {
+                        bestArea = area;
+                        bestDataset = dataset;
+                        bestSource = s104.Source;
+                        bestModel = model;
+                        bestCoverage = probe;
+                    }
+                    break;
+                }
+                case S104StationSeriesData:
+                    anyS104StationSeries = true;
+                    break;
             }
         }
 
-        if (bestDataset is null || bestModel is null || bestCoverage is null || bestSource is null)
+        if (bestDataset is not null && bestModel is not null && bestCoverage is not null && bestSource is not null)
         {
-            return ToolResult<SampleCoverageResult>.Err(anyS104
-                ? new OutOfBounds(request.Spec, request.Latitude, request.Longitude)
-                : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+            return SampleS104Gridded(request, bestDataset, bestSource, bestModel, bestCoverage);
         }
 
+        // No gridded match. Fall back to nearest-station across all
+        // loaded dcf8 station-series datasets (no max-distance cap).
+        if (anyS104StationSeries)
+        {
+            return SampleS104StationSeries(request, snapshot);
+        }
+
+        return ToolResult<SampleCoverageResult>.Err(anyS104Gridded
+            ? new OutOfBounds(request.Spec, request.Latitude, request.Longitude)
+            : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+    }
+
+    private static ToolResult<SampleCoverageResult> SampleS104Gridded(
+        SampleCoverageRequest request,
+        LoadedDataset bestDataset,
+        S104CoverageSource bestSource,
+        S104Dataset bestModel,
+        WaterLevelCoverage bestCoverage)
+    {
         if (bestModel.DataCodingFormat != 2)
         {
             return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
@@ -277,6 +327,87 @@ public sealed class SampleCoverageTool
             return ToolResult<SampleCoverageResult>.Err(
                 new DatasetClosedDuringQuery(bestDataset.Id));
         }
+    }
+
+    /// <summary>
+    /// Sample a loaded dcf8 station-series dataset (S-104 Edition 2.0.0
+    /// §10.2.3 / §10.2.7). Finds the nearest station across every loaded
+    /// dcf8 dataset by great-circle distance with no max-distance cap,
+    /// then picks the nearest time step within that station's series.
+    /// </summary>
+    private static ToolResult<SampleCoverageResult> SampleS104StationSeries(
+        SampleCoverageRequest request,
+        System.Collections.Immutable.ImmutableArray<LoadedDataset> snapshot)
+    {
+        LoadedDataset? bestDataset = null;
+        WaterLevelStation? bestStation = null;
+        double bestDistance = double.PositiveInfinity;
+
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S104StationSeriesData ss) continue;
+            foreach (var station in ss.Dataset.Stations)
+            {
+                var d = GreatCircleMetres(request.Latitude, request.Longitude, station.Latitude, station.Longitude);
+                if (d < bestDistance)
+                {
+                    bestDistance = d;
+                    bestStation = station;
+                    bestDataset = dataset;
+                }
+            }
+        }
+
+        if (bestDataset is null || bestStation is null)
+        {
+            return ToolResult<SampleCoverageResult>.Err(
+                new NoDatasetCoversPoint(request.Latitude, request.Longitude));
+        }
+
+        var requestedAsUtc = request.Time?.UtcDateTime;
+        DateTime sampleTime;
+        int idx;
+        if (requestedAsUtc is null)
+        {
+            idx = 0;
+            sampleTime = bestStation.StartTime;
+        }
+        else
+        {
+            idx = bestStation.NearestTimeIndex(requestedAsUtc.Value);
+            sampleTime = bestStation.TimeAt(idx);
+        }
+
+        return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
+            bestDataset.Id,
+            request.Latitude,
+            request.Longitude,
+            new WaterLevelStationSample(
+                bestStation.Identifier,
+                bestDistance,
+                bestStation.Heights[idx],
+                DecodeWaterLevelTrend(bestStation.Trends[idx]),
+                DateTime.SpecifyKind(sampleTime, DateTimeKind.Utc),
+                request.Time,
+                bestStation.Latitude,
+                bestStation.Longitude)));
+    }
+
+    // Spherical-earth great-circle distance, matching the accuracy bar
+    // of other catalog tools.
+    private const double EarthRadiusMetres = 6_371_000.0;
+
+    private static double GreatCircleMetres(double lat1, double lon1, double lat2, double lon2)
+    {
+        var phi1 = lat1 * Math.PI / 180.0;
+        var phi2 = lat2 * Math.PI / 180.0;
+        var dPhi = (lat2 - lat1) * Math.PI / 180.0;
+        var dLambda = (lon2 - lon1) * Math.PI / 180.0;
+        var a = Math.Sin(dPhi / 2) * Math.Sin(dPhi / 2)
+              + Math.Cos(phi1) * Math.Cos(phi2)
+              * Math.Sin(dLambda / 2) * Math.Sin(dLambda / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return EarthRadiusMetres * c;
     }
 
     private ToolResult<SampleCoverageResult> SampleS111(SampleCoverageRequest request)
