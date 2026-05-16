@@ -122,16 +122,20 @@ public class S104CoverageSource : ICoverageSource
         var rows = (rowEnd - rowStart) / region.RowStride;
         var cols = (colEnd - colStart) / region.ColStride;
 
-        var height = new float[rows, cols];
-        var trend = new float[rows, cols];
+        // Flat row-major storage (PR-F).
+        var height = new float[rows * cols];
+        var trend = new float[rows * cols];
 
         for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
         {
-            int srcIdx = (rowStart + r * region.RowStride) * gridCols
-                       + (colStart + c * region.ColStride);
-            height[r, c] = values[srcIdx].Height;
-            trend[r, c] = (float)values[srcIdx].Trend;
+            int dstRowBase = r * cols;
+            int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
+            for (int c = 0; c < cols; c++)
+            {
+                int srcIdx = srcRowBase + c * region.ColStride;
+                height[dstRowBase + c] = values[srcIdx].Height;
+                trend[dstRowBase + c] = (float)values[srcIdx].Trend;
+            }
         }
 
         return new SampledCoverage
@@ -146,7 +150,7 @@ public class S104CoverageSource : ICoverageSource
                 SpacingLatitudinal = coverage.SpacingLatitudinal * region.RowStride,
                 SpacingLongitudinal = coverage.SpacingLongitudinal * region.ColStride,
             },
-            Values = new Dictionary<string, float[,]>
+            Values = new Dictionary<string, float[]>
             {
                 ["waterLevelHeight"] = height,
                 ["waterLevelTrend"] = trend,

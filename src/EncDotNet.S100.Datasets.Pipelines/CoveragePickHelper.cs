@@ -61,7 +61,7 @@ public static class CoveragePickHelper
         var sampled = source.Sample(new GridRegion(row, row + 1, col, col + 1, 1, 1));
         var values = new Dictionary<string, float>(StringComparer.Ordinal);
         foreach (var (name, array) in sampled.Values)
-            values[name] = array[0, 0];
+            values[name] = array[0];
 
         return new SamplePoint
         {

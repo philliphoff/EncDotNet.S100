@@ -152,12 +152,22 @@ public class SkiaCoverageRendererTests
             {
                 Region = GridRegion.Full,
                 Metadata = gridMeta,
-                Values = new Dictionary<string, float[,]> { ["depth"] = depths },
+                Values = new Dictionary<string, float[]> { ["depth"] = Flatten(depths) },
             },
             ColorScheme = TestColorScheme,
             NoDataValue = noDataValue,
             Georeferencer = new GridGeoreferencer(gridMeta, "EPSG:4326"),
         };
+    }
+
+    private static float[] Flatten(float[,] src)
+    {
+        int rows = src.GetLength(0), cols = src.GetLength(1);
+        var flat = new float[rows * cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                flat[r * cols + c] = src[r, c];
+        return flat;
     }
 
     private static StyledCoverageLayer MakeStyledLayer(

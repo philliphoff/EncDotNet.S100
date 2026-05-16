@@ -110,16 +110,20 @@ public class S111CoverageSource : ICoverageSource
         var rows = (rowEnd - rowStart) / region.RowStride;
         var cols = (colEnd - colStart) / region.ColStride;
 
-        var speed = new float[rows, cols];
-        var direction = new float[rows, cols];
+        // Flat row-major storage (PR-F).
+        var speed = new float[rows * cols];
+        var direction = new float[rows * cols];
 
         for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
         {
-            int srcIdx = (rowStart + r * region.RowStride) * gridCols
-                       + (colStart + c * region.ColStride);
-            speed[r, c] = values[srcIdx].Speed;
-            direction[r, c] = values[srcIdx].Direction;
+            int dstRowBase = r * cols;
+            int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
+            for (int c = 0; c < cols; c++)
+            {
+                int srcIdx = srcRowBase + c * region.ColStride;
+                speed[dstRowBase + c] = values[srcIdx].Speed;
+                direction[dstRowBase + c] = values[srcIdx].Direction;
+            }
         }
 
         return new SampledCoverage
@@ -134,7 +138,7 @@ public class S111CoverageSource : ICoverageSource
                 SpacingLatitudinal = coverage.SpacingLatitudinal * region.RowStride,
                 SpacingLongitudinal = coverage.SpacingLongitudinal * region.ColStride,
             },
-            Values = new Dictionary<string, float[,]>
+            Values = new Dictionary<string, float[]>
             {
                 ["surfaceCurrentSpeed"] = speed,
                 ["surfaceCurrentDirection"] = direction,

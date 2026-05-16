@@ -66,26 +66,32 @@ public class S102CoverageSource : ICoverageSource
         var values = _coverage.Values;
         int gridRows = _coverage.NumPointsLatitudinal;
         int gridCols = _coverage.NumPointsLongitudinal;
-        
+
         // Apply region subsetting
-        var (rowStart, rowEnd, colStart, colEnd) = 
+        var (rowStart, rowEnd, colStart, colEnd) =
             region.Resolve(gridRows, gridCols);
-        
+
         var rows = (rowEnd - rowStart) / region.RowStride;
         var cols = (colEnd - colStart) / region.ColStride;
-        
-        var depth = new float[rows, cols];
-        var uncertainty = new float[rows, cols];
-        
+
+        // Flat row-major storage (PR-F): a 1000×1000 grid is 4 MB per field
+        // on the LOH as float[,]; flat float[] avoids the 2-D bracket header
+        // allocation and lets consumers iterate via Span<float>.
+        var depth = new float[rows * cols];
+        var uncertainty = new float[rows * cols];
+
         for (int r = 0; r < rows; r++)
-        for (int c = 0; c < cols; c++)
         {
-            int srcIdx = (rowStart + r * region.RowStride) * gridCols
-                       + (colStart + c * region.ColStride);
-            depth[r, c] = values[srcIdx].Depth;
-            uncertainty[r, c] = values[srcIdx].Uncertainty;
+            int dstRowBase = r * cols;
+            int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
+            for (int c = 0; c < cols; c++)
+            {
+                int srcIdx = srcRowBase + c * region.ColStride;
+                depth[dstRowBase + c] = values[srcIdx].Depth;
+                uncertainty[dstRowBase + c] = values[srcIdx].Uncertainty;
+            }
         }
-        
+
         return new SampledCoverage
         {
             Region = region,
@@ -98,7 +104,7 @@ public class S102CoverageSource : ICoverageSource
                 SpacingLatitudinal = _coverage.SpacingLatitudinal * region.RowStride,
                 SpacingLongitudinal = _coverage.SpacingLongitudinal * region.ColStride,
             },
-            Values = new Dictionary<string, float[,]>
+            Values = new Dictionary<string, float[]>
             {
                 ["depth"] = depth,
                 ["uncertainty"] = uncertainty,

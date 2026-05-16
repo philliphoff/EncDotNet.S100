@@ -122,15 +122,15 @@ public class CoveragePickHelperTests
             var ce = region.ColEnd ?? Metadata.GridMetadata.NumColumns;
             var rows = re - rs;
             var cols = ce - cs;
-            var slice = new float[rows, cols];
+            var slice = new float[rows * cols];
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
-                    slice[r, c] = _depths[rs + r, cs + c];
+                    slice[r * cols + c] = _depths[rs + r, cs + c];
             return new SampledCoverage
             {
                 Region = region,
                 Metadata = Metadata.GridMetadata,
-                Values = new Dictionary<string, float[,]> { ["depth"] = slice },
+                Values = new Dictionary<string, float[]> { ["depth"] = slice },
             };
         }
     }

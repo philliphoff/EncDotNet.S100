@@ -629,6 +629,6 @@ public sealed class SampleCoverageTool
         {
             return null;
         }
-        return data[0, 0];
+        return data[0];
     }
 }
