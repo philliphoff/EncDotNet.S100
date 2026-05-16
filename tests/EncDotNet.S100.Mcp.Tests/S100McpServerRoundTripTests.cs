@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Mcp.Tools;
@@ -240,6 +242,64 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         Assert.Equal("internal_error", payload["code"]!.GetValue<string>());
     }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_with_times_filters_out_disjoint_validity()
+    {
+        var inWindow = MakeS122WithFixedRange("in", "2024-01-01", "2024-12-31");
+        var outOfWindow = MakeS122WithFixedRange("out", "2030-01-01", "2030-12-31");
+        var s122 = new S122Dataset
+        {
+            Features = ImmutableArray.Create(inWindow, outOfWindow),
+            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+        };
+        var loaded = new LoadedDataset(
+            new DatasetId("mpa-1"),
+            new SpecRef("S-122", new SpecVersion(1, 0, 0)),
+            LoadedDatasetFactory.Box(0, 0, 10, 10),
+            null,
+            new S122DatasetData(s122));
+        var catalog = McpTestHelpers.NewCatalog(loaded);
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["times"] = """{"kind":"instant","t":"2024-06-15T12:00:00Z"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("in", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    private static S122Feature MakeS122WithFixedRange(string id, string start, string end)
+    {
+        var sub = ImmutableDictionary<string, string>.Empty
+            .Add("dateStart", start)
+            .Add("dateEnd", end);
+        return new S122Feature
+        {
+            Id = id,
+            FeatureType = "MarineProtectedArea",
+            GeometryType = GmlGeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            {
+                Code = "fixedDateRange",
+                SubAttributes = sub,
+            }),
+        };
+    }
+
 
     [Fact]
     public async Task SampleCoverageAlong_round_trip_returns_per_vertex_results()

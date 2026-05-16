@@ -54,7 +54,7 @@ The server exposes the read-only tools defined by
 | `describe_feature` | Spec / feature type / attributes for a feature in a dataset |
 | `sample_coverage` | Sampled value at a lat/lon for a coverage dataset (S-102 / S-104 / S-111); optional `times` JSON envelope (instant / range / series) populates a per-step `series` array for S-104 / S-111 |
 | `find_at` | Datasets whose declared bbox contains a point or intersects a `GeoQuery` envelope |
-| `query_features` | Features from loaded GML datasets that intersect a spatial query (point / box / polygon / polyline) |
+| `query_features` | Features from loaded GML datasets that intersect a spatial query (point / box / polygon / polyline); optional `times` envelope filters out features whose `fixedDateRange`/`periodicDateRange` is disjoint from the window (features without validity metadata are always included) |
 | `sample_coverage_along` | Per-vertex coverage samples for a polyline (S-102 / S-104 / S-111); supports the same `times` envelope as `sample_coverage`, applied per vertex |
 | `list_specs` | Spec catalogue with per-spec capability flags (query / describe / sample / list time-steps) |
 | `list_time_steps` | Available UTC time-step instants (+ cadence) for a time-varying coverage dataset (S-104 / S-111) |
