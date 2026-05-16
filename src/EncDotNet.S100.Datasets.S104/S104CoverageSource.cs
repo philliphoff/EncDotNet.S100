@@ -26,6 +26,9 @@ public class S104CoverageSource : ICoverageSource
         _selectedTimeIndex = 0;
     }
 
+    /// <summary>The underlying parsed S-104 dataset.</summary>
+    public S104Dataset Dataset => _dataset;
+
     /// <inheritdoc/>
     public CoverageMetadata Metadata
     {

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -175,18 +176,99 @@ public class DescribeFeatureToolTests
     }
 
     [Fact]
-    public async Task Returns_SpecNotSupported_for_S101_describe_stub()
+    public async Task S101_describes_feature_by_bare_RCID()
     {
+        var feature = S101Synth.Feature(rcid: 12345, featureTypeCode: 30,
+            attributes: new[] { ((ushort)42, "5.0") });
+        var featureTypes = new Dictionary<ushort, string> { [30] = "DEPARE" }.ToImmutableDictionary();
+        var attrTypes = new Dictionary<ushort, string> { [42] = "DRVAL1" }.ToImmutableDictionary();
+        var ds = S101Synth.Dataset("enc-1", ImmutableArray.Create(feature), featureTypes, attrTypes);
+
         var catalog = new FakeDatasetCatalog();
-        catalog.Add(LoadedDatasetFactory.S101("enc-1"));
+        catalog.Add(LoadedDatasetFactory.S101("enc-1", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-1"), "f1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-1"), "12345"));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("DEPARE", value.FeatureTypeName);
+        var attrs = value.Attributes.GetProperty("attributes");
+        Assert.Equal(1, attrs.GetArrayLength());
+        Assert.Equal("DRVAL1", attrs[0].GetProperty("acronym").GetString());
+        Assert.Equal("5.0", attrs[0].GetProperty("value").GetString());
+        Assert.Equal("Point", value.Attributes.GetProperty("geometryPrimitive").GetString());
+    }
+
+    [Fact]
+    public async Task S101_describes_feature_by_composite_FRID()
+    {
+        var feature = S101Synth.Feature(rcid: 42, featureTypeCode: 73);
+        var ds = S101Synth.Dataset("enc-2", ImmutableArray.Create(feature));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-2", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-2"), "100:42:1"));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("73", value.FeatureTypeName);
+    }
+
+    [Fact]
+    public async Task S101_returns_FeatureNotFound_for_unknown_RCID()
+    {
+        var feature = S101Synth.Feature(rcid: 1, featureTypeCode: 30);
+        var ds = S101Synth.Dataset("enc-3", ImmutableArray.Create(feature));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-3", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-3"), "99999"));
 
         Assert.True(result.TryGetError(out var error));
-        var unsupported = Assert.IsType<SpecNotSupportedForTool>(error);
-        Assert.Equal("S-101", unsupported.Spec.Name);
-        Assert.Equal(DescribeFeatureTool.Name, unsupported.Tool);
+        Assert.IsType<FeatureNotFound>(error);
+    }
+
+    [Fact]
+    public async Task S101_returns_FeatureNotFound_for_non_S101_RCNM_composite()
+    {
+        var feature = S101Synth.Feature(rcid: 1, featureTypeCode: 30);
+        var ds = S101Synth.Dataset("enc-4", ImmutableArray.Create(feature));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-4", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        // RCNM 110 = spatial point record, not a feature record (100).
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-4"), "110:1"));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<FeatureNotFound>(error);
+    }
+
+    [Fact]
+    public async Task S101_falls_back_to_numeric_codes_when_no_catalogue_loaded()
+    {
+        var feature = S101Synth.Feature(rcid: 7, featureTypeCode: 30,
+            attributes: new[] { ((ushort)42, "5.0") });
+        var ds = S101Synth.Dataset("enc-5", ImmutableArray.Create(feature));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-5", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-5"), "7"));
+
+        Assert.True(result.TryGetValue(out var value));
+        // No feature catalogue → fall back to numeric feature type code string.
+        Assert.Equal("30", value.FeatureTypeName);
+        var attrs = value.Attributes.GetProperty("attributes");
+        Assert.Equal(1, attrs.GetArrayLength());
+        // No attribute catalogue → acronym is null but code is still present.
+        Assert.Equal(JsonValueKind.Null, attrs[0].GetProperty("acronym").ValueKind);
+        Assert.Equal(42, attrs[0].GetProperty("code").GetInt32());
     }
 
     [Fact]

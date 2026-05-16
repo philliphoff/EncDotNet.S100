@@ -129,16 +129,41 @@ public class ViewerDatasetCatalogTests
     }
 
     [Fact]
-    public void Exchange_set_entry_is_skipped()
+    public void Exchange_set_entry_with_in_memory_payload_is_projected()
+    {
+        // Reads the bundled S-124 fixture and serves it from an
+        // IAssetSource (the exchange-set surface). The catalog must
+        // accept it even though there is no on-disk FilePath, because
+        // LoadedDatasetData already carries everything downstream
+        // consumers need.
+        var fixture = Path("S124", "navwarn_point.gml");
+        Skip.IfNot(File.Exists(fixture), $"Missing fixture {fixture}");
+        var bytes = File.ReadAllBytes(fixture);
+
+        var loader = new FakeDatasetLoaderService();
+        using var catalog = new ViewerDatasetCatalog(loader);
+        var entry = new DatasetEntry(
+            filePath: string.Empty,
+            productSpec: "S-124",
+            source: new FakeAssetSource(bytes),
+            relativePath: "navwarn_point.gml",
+            displayName: "navwarn_point.gml");
+
+        loader.RaiseLoaded(entry);
+
+        var loaded = Assert.Single(catalog.Datasets);
+        Assert.Equal("S-124", loaded.Spec.Name);
+        Assert.IsType<S124DatasetData>(loaded.Data);
+    }
+
+    [Fact]
+    public void On_disk_entry_with_missing_file_is_skipped()
     {
         var loader = new FakeDatasetLoaderService();
         using var catalog = new ViewerDatasetCatalog(loader);
         var entry = new DatasetEntry(
-            filePath: "ignored.gml",
-            productSpec: "S-124",
-            source: new FakeAssetSource(),
-            relativePath: "ignored.gml",
-            displayName: "ignored.gml");
+            filePath: "/does/not/exist.gml",
+            productSpec: "S-124");
 
         loader.RaiseLoaded(entry);
 
@@ -174,8 +199,14 @@ public class ViewerDatasetCatalogTests
 
     private sealed class FakeAssetSource : IAssetSource
     {
+        private readonly byte[] _bytes;
+
+        public FakeAssetSource() : this(Array.Empty<byte>()) { }
+
+        public FakeAssetSource(byte[] bytes) { _bytes = bytes; }
+
         public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Stream>(new MemoryStream());
+            Task.FromResult<Stream>(new MemoryStream(_bytes, writable: false));
 
         public void Dispose() { }
     }

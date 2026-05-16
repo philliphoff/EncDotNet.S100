@@ -41,3 +41,39 @@ public sealed record FeatureNotFound(DatasetId Id, string FeatureId) : ToolError
 public sealed record SpecNotSupportedForTool(SpecRef Spec, string Tool) : ToolError(
     "spec_not_supported_for_tool",
     $"Spec '{Spec}' is not supported by tool '{Tool}'.");
+
+/// <summary>
+/// The requested point falls outside the spatial bounds of every loaded
+/// dataset of the requested spec. Distinguished from
+/// <see cref="NoDatasetCoversPoint"/> in cases where no dataset of the
+/// requested spec is loaded at all — callers may want to retry once a
+/// dataset is loaded — by carrying the dataset spec.
+/// </summary>
+public sealed record OutOfBounds(SpecRef Spec, double Latitude, double Longitude) : ToolError(
+    "out_of_bounds",
+    $"Point ({Latitude}, {Longitude}) is outside the bounds of every loaded {Spec.Name} dataset.");
+
+/// <summary>
+/// The grid cell at the resolved (row, col) and time step carries the
+/// spec-defined no-data fill value. The cell index and time step are
+/// surfaced in the message so callers can correlate with the source grid.
+/// </summary>
+public sealed record NoDataAtPoint(
+    DatasetId Id,
+    int Row,
+    int Column,
+    DateTime? Time) : ToolError(
+    "no_data_at_point",
+    Time is null
+        ? $"Cell ({Row}, {Column}) in dataset '{Id}' carries the no-data fill value."
+        : $"Cell ({Row}, {Column}) at {Time:O} in dataset '{Id}' carries the no-data fill value.");
+
+/// <summary>
+/// The tool understands the requested spec but cannot yet handle this
+/// specific shape of dataset (e.g. S-104 data coding format other than 2).
+/// Distinguished from <see cref="SpecNotSupportedForTool"/> in that the
+/// spec itself is supported — only this particular variant isn't yet.
+/// </summary>
+public sealed record NotSupportedYet(SpecRef Spec, string Tool, string Reason) : ToolError(
+    "not_supported_yet",
+    $"Spec '{Spec}' is supported by tool '{Tool}', but: {Reason}.");
