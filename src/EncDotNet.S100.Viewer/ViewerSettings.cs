@@ -123,6 +123,23 @@ internal sealed class ViewerSettings
     /// </summary>
     public bool IsPickPanelVisible { get; set; } = true;
 
+    /// <summary>Whether the embedded MCP server should start when the viewer launches.</summary>
+    public bool McpEnabled { get; set; } = false;
+
+    /// <summary>
+    /// TCP port for the MCP server. 0 = pick an ephemeral port at
+    /// bind time (recommended).
+    /// </summary>
+    public int McpPort { get; set; } = 0;
+
+    /// <summary>
+    /// MCP server bind address. Loopback-only by default; not surfaced
+    /// in the settings UI to enforce the loopback-only stance for v1.
+    /// Power users can edit settings.json directly if they need to
+    /// pin to a specific loopback variant.
+    /// </summary>
+    public string McpBindAddress { get; set; } = "127.0.0.1";
+
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;
 

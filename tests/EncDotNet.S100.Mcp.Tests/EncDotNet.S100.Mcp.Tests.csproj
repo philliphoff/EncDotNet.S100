@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S122\EncDotNet.S100.Datasets.S122.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S124\EncDotNet.S100.Datasets.S124.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp\EncDotNet.S100.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
+  </ItemGroup>
+
+  <!--
+    Reuse the in-process fakes from the Mcp.Tools test project (synthetic
+    S-102 / S-124 datasets, the FakeDatasetCatalog, and LoadedDataset
+    factory helpers). Linked rather than duplicated so the two suites stay
+    in sync.
+  -->
+  <ItemGroup>
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\FakeDatasetCatalog.cs" Link="Fakes\FakeDatasetCatalog.cs" />
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\LoadedDatasetFactory.cs" Link="Fakes\LoadedDatasetFactory.cs" />
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S102Synth.cs" Link="Fakes\S102Synth.cs" />
+    <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S124Synth.cs" Link="Fakes\S124Synth.cs" />
+  </ItemGroup>
+
+</Project>

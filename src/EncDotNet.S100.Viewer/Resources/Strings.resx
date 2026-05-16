@@ -817,4 +817,32 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Toast_ExchangeSetLoading" xml:space="preserve">
     <value>Loading Exchange Set</value>
   </data>
+
+  <!-- MCP server -->
+  <data name="Status_McpRunning" xml:space="preserve">
+    <value>MCP :{0} · {1} clients</value>
+    <comment>Status-bar indicator. {0} = port number, {1} = active client count.</comment>
+  </data>
+  <data name="Tooltip_McpEndpoint" xml:space="preserve">
+    <value>MCP server listening on {0}</value>
+    <comment>Tooltip shown on the status-bar MCP indicator. {0} = full endpoint URI.</comment>
+  </data>
+  <data name="Tooltip_McpLoopback" xml:space="preserve">
+    <value>External agents on this machine can connect to this URI.</value>
+  </data>
+  <data name="Settings_McpSection" xml:space="preserve">
+    <value>MCP SERVER</value>
+  </data>
+  <data name="Settings_McpEnabled" xml:space="preserve">
+    <value>Enable MCP server</value>
+  </data>
+  <data name="Settings_McpEnabledTooltip" xml:space="preserve">
+    <value>Host a Streamable HTTP MCP server on the loopback address so external agents can query loaded datasets. Off by default.</value>
+  </data>
+  <data name="Settings_McpPort" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Settings_McpPortTooltip" xml:space="preserve">
+    <value>TCP port to bind on 127.0.0.1. Use 0 to let the OS pick an ephemeral port.</value>
+  </data>
 </root>

@@ -144,6 +144,15 @@
                 IsVisible="{Binding IsStatusBarVisible}">
             <DockPanel LastChildFill="True">
                 <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding McpStatusText}"
+                           IsVisible="{Binding IsMcpRunning}"
+                           FontSize="12"
+                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           ToolTip.Tip="{Binding McpTooltipText}" />
+                <TextBlock DockPanel.Dock="Right"
                            Text="{Binding MouseLatLonText}"
                            FontSize="12"
                            FontFamily="Menlo,Consolas,Courier New,monospace"

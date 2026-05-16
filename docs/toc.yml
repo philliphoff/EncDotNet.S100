@@ -4,3 +4,5 @@
   href: typed-data-models.md
 - name: Observability
   href: observability.md
+- name: MCP server
+  href: mcp-server.md

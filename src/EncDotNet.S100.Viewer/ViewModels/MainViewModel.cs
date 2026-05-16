@@ -400,6 +400,71 @@ internal sealed class MainViewModel : ViewModelBase
     public IAsyncRelayCommand<string> OpenRecentCommand { get; }
 
     private readonly IStatusPresenter? _statusPresenter;
+    private readonly McpServerHost? _mcpServerHost;
+    private EncDotNet.S100.Mcp.S100McpServer? _attachedMcpServer;
+
+    /// <summary>True when the embedded MCP server is currently listening.</summary>
+    public bool IsMcpRunning =>
+        _mcpServerHost?.Server is { IsRunning: true };
+
+    /// <summary>
+    /// Status-bar text describing the MCP server. Empty when not running.
+    /// </summary>
+    public string McpStatusText
+    {
+        get
+        {
+            var server = _mcpServerHost?.Server;
+            if (server is null || !server.IsRunning || server.Port is null)
+                return string.Empty;
+            return string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                Strings.Status_McpRunning,
+                server.Port,
+                server.ConnectionCount);
+        }
+    }
+
+    /// <summary>Tooltip describing the MCP server endpoint.</summary>
+    public string McpTooltipText
+    {
+        get
+        {
+            var server = _mcpServerHost?.Server;
+            if (server?.Endpoint is null)
+                return string.Empty;
+            return string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                Strings.Tooltip_McpEndpoint,
+                server.Endpoint) + " " + Strings.Tooltip_McpLoopback;
+        }
+    }
+
+    private void AttachToMcpServer()
+    {
+        if (_attachedMcpServer is { } prev)
+        {
+            prev.StateChanged -= OnMcpServerChanged;
+            prev.ConnectionsChanged -= OnMcpServerChanged;
+        }
+        _attachedMcpServer = _mcpServerHost?.Server;
+        if (_attachedMcpServer is { } next)
+        {
+            next.StateChanged += OnMcpServerChanged;
+            next.ConnectionsChanged += OnMcpServerChanged;
+        }
+        OnMcpServerChanged(null, EventArgs.Empty);
+    }
+
+    private void OnMcpServerChanged(object? sender, EventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsMcpRunning));
+            OnPropertyChanged(nameof(McpStatusText));
+            OnPropertyChanged(nameof(McpTooltipText));
+        });
+    }
 
     public MainViewModel(
         ViewerSettings settings,
@@ -418,6 +483,7 @@ internal sealed class MainViewModel : ViewModelBase
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
         IToastService toasts,
+        McpServerHost? mcpServerHost = null,
         IStatusPresenter? statusPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -443,6 +509,12 @@ internal sealed class MainViewModel : ViewModelBase
         _toasts = toasts;
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
+        _mcpServerHost = mcpServerHost;
+        if (_mcpServerHost is { } host)
+        {
+            host.ServerChanged += (_, _) => AttachToMcpServer();
+            AttachToMcpServer();
+        }
         if (_statusPresenter is { } presenter)
         {
             presenter.PropertyChanged += (_, e) =>
