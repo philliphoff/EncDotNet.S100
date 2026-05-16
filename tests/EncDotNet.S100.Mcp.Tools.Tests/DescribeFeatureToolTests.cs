@@ -21,8 +21,11 @@ public class DescribeFeatureToolTests
     }
 
     [Fact]
-    public async Task Returns_SpecNotSupported_for_unsupported_spec()
+    public async Task Returns_FeatureNotFound_for_unknown_feature_in_backfilled_spec()
     {
+        // S-122 is now supported via the generic GmlFeatureDescriber
+        // (PR-backfill), so an unknown feature returns FeatureNotFound
+        // rather than SpecNotSupportedForTool.
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S122("s122-ds"));
         var tool = new DescribeFeatureTool(catalog);
@@ -30,9 +33,9 @@ public class DescribeFeatureToolTests
         var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("s122-ds"), "x"));
 
         Assert.True(result.TryGetError(out var error));
-        var unsupported = Assert.IsType<SpecNotSupportedForTool>(error);
-        Assert.Equal("S-122", unsupported.Spec.Name);
-        Assert.Equal(DescribeFeatureTool.Name, unsupported.Tool);
+        var notFound = Assert.IsType<FeatureNotFound>(error);
+        Assert.Equal(new DatasetId("s122-ds"), notFound.Id);
+        Assert.Equal("x", notFound.FeatureId);
     }
 
     [Fact]

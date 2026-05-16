@@ -244,5 +244,8 @@ if (features.TryGetValue(out var page))
 - Pan/zoom/screenshot tools.
 - Search / NL tools.
 - Write-back tools.
-- Comprehensive feature describer coverage for every spec.
+- Comprehensive xlink reference resolution for backfilled describers
+  (S-122/S-125/S-127/S-128/S-129/S-131/S-201/S-411/S-421 return their
+  feature attributes via the generic `GmlFeatureDescriber`, but
+  references arrive as an empty list pending per-spec resolution).
 - S-104 / S-111 sampling (only S-102 is wired end-to-end).

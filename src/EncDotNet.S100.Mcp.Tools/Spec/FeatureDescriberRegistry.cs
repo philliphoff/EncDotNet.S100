@@ -29,6 +29,15 @@ public sealed class FeatureDescriberRegistry
         new S104FeatureDescriber(),
         new S111FeatureDescriber(),
         new S124FeatureDescriber(),
+        new GmlFeatureDescriber("S-122"),
+        new GmlFeatureDescriber("S-125"),
+        new GmlFeatureDescriber("S-127"),
+        new GmlFeatureDescriber("S-128"),
+        new GmlFeatureDescriber("S-129"),
+        new GmlFeatureDescriber("S-131"),
+        new GmlFeatureDescriber("S-201"),
+        new GmlFeatureDescriber("S-411"),
+        new GmlFeatureDescriber("S-421"),
     ]);
 
     internal ISpecFeatureDescriber? Get(string specName) =>
