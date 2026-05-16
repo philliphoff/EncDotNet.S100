@@ -13,6 +13,8 @@ public static class ScenarioRegistry
         Register(() => new Scenarios.S101PortrayWarmScenario());
         Register(() => new Scenarios.S101RenderWarmScenario());
         Register(() => new Scenarios.S102CoverageScenario());
+        Register(() => new Scenarios.S102CoverageOpenScenario());
+        Register(() => new Scenarios.S102CoverageRenderLargeScenario());
         Register(() => new Scenarios.S124VectorScenario());
         Register(() => new Scenarios.S201VectorScenario());
         Register(() => new Scenarios.ExchangeSetOpenScenario());
