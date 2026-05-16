@@ -63,6 +63,18 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         float noDataValue = layer.NoDataValue;
         bool noDataIsNaN = float.IsNaN(noDataValue);
 
+        // Optional NODTA fill colour for cells whose value equals the
+        // coverage's no-data sentinel. When the colour scheme leaves
+        // NoDataColor null we preserve legacy behaviour (transparent).
+        uint noDataPacked = 0;
+        bool noDataIsFilled = false;
+        if (!string.IsNullOrEmpty(colorScheme.NoDataColor))
+        {
+            var rgba = RgbaColor.FromHex(colorScheme.NoDataColor);
+            noDataPacked = PackRgba(new SKColor(rgba.R, rgba.G, rgba.B, rgba.A));
+            noDataIsFilled = noDataPacked != 0;
+        }
+
         // Build CRS transform: native grid CRS → WGS84
         var nativeToWgs84 = _transformFactory.Create(georeferencer.CRS, "EPSG:4326");
 
@@ -137,18 +149,26 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         {
             float value = fieldData[r, c];
             bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-            if (isNoData) continue;
 
-            uint packed = 0;
-            for (int b = 0; b < bands.Length; b++)
+            uint packed;
+            if (isNoData)
             {
-                if (value >= bands[b].Min && value < bands[b].Max)
-                {
-                    packed = bandPacked[b];
-                    break;
-                }
+                if (!noDataIsFilled) continue;
+                packed = noDataPacked;
             }
-            if (packed == 0) continue;
+            else
+            {
+                packed = 0;
+                for (int b = 0; b < bands.Length; b++)
+                {
+                    if (value >= bands[b].Min && value < bands[b].Max)
+                    {
+                        packed = bandPacked[b];
+                        break;
+                    }
+                }
+                if (packed == 0) continue;
+            }
 
             var (mx, my) = nodePositions[r, c];
             int px = (int)((mx - mercMinX) / cellSizeX);

@@ -8,33 +8,51 @@ using EncDotNet.S100.Core;
 namespace EncDotNet.S100.Datasets.S102;
 
 /// <summary>
-/// S-102 portrayal catalogue that executes the BathymetryCoverage.lua script
-/// from the official S-102 Portrayal Catalogue assets via an <see cref="ILuaEngine"/>.
-/// Supports both two-shade and four-shade depth colour schemes.
+/// S-102 portrayal catalogue that executes the bundled
+/// <c>BathymetryCoverage.lua</c> rule (S-102 Edition 3.0.0, Annex B)
+/// via an <see cref="ILuaEngine"/> and resolves the emitted colour
+/// tokens against the bundled Day / Dusk / Night palettes
+/// (<c>ColorProfiles/colorProfile.xml</c>, S-100 Part 9 §11).
 /// </summary>
 /// <remarks>
-/// The official S-102 Lua portrayal scripts define:
-/// <code>
-///   function BathymetryCoverage(feature, featurePortrayal, contextParameters)
-/// </code>
-/// which emits drawing instructions via <c>featurePortrayal:AddInstructions(...)</c>.
-/// This class provides stub <c>feature</c> and <c>featurePortrayal</c> objects,
-/// captures the emitted instructions, and parses them into a <see cref="CoverageColorScheme"/>.
+/// <para>
+/// The bundled Lua rule emits one <c>CoverageColor:&lt;TOKEN&gt;;LookupEntry:&lt;label&gt;,&lt;min&gt;,&lt;max&gt;,&lt;interval&gt;</c>
+/// instruction per depth band. The bands depend on the four S-102
+/// context parameters supplied via <see cref="MarinerSettings"/>:
+/// <c>FourShades</c>, <c>SafetyContour</c>, <c>ShallowContour</c>,
+/// <c>DeepContour</c>. Invariants
+/// (<c>ShallowContour ≤ SafetyContour ≤ DeepContour</c>) are clamped
+/// rather than throwing — the viewer surface area is a settings panel
+/// and bad inputs must not crash the render pipeline.
+/// </para>
+/// <para>
+/// Cells whose depth equals <see cref="S102CoverageSource.FillValue"/>
+/// resolve to the palette's <c>NODTA</c> token via
+/// <see cref="CoverageColorScheme.NoDataColor"/>.
+/// </para>
 /// </remarks>
 public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
 {
-    // IHO S-52 Day palette sRGB colours for depth tokens (defaults when palette has no entry)
-    private static readonly Dictionary<string, string> DefaultColorTokens = new()
+    // Last-resort fallback if the bundled colour profile cannot be
+    // loaded. These are the sRGB values from the official S-102 Day
+    // palette so that a renderer always has *some* spec-aligned colours
+    // for the five depth tokens (and a grey for NoData). They are
+    // only used when palette loading fails entirely.
+    private static readonly Dictionary<string, string> FallbackDayTokens = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["DEPIT"] = "#58AF9C",
-        ["DEPVS"] = "#61B7FF",
-        ["DEPMS"] = "#82CAFF",
-        ["DEPMD"] = "#A7D9FB",
         ["DEPDW"] = "#C9EDFF",
+        ["DEPMD"] = "#A7D9FB",
+        ["DEPMS"] = "#82CAFF",
+        ["DEPVS"] = "#61B7FF",
+        ["DEPIT"] = "#58AF9C",
+        ["NODTA"] = "#A3B4B7",
     };
+
+    private const string ProductTag = "S-102";
 
     private readonly ILuaEngine _luaEngine;
     private readonly PortrayalCatalogueProvider _provider;
+    private readonly IPortrayalAssetCache _cache;
     private string? _cachedLuaSource;
 
     /// <summary>
@@ -48,6 +66,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         ArgumentNullException.ThrowIfNull(provider);
         _luaEngine = luaEngine;
         _provider = provider;
+        _cache = provider.AssetCache;
     }
 
     public SpecRef Spec => new("S-102", default);
@@ -58,36 +77,51 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
-    /// <summary>Whether to use four depth shading bands (true) or two (false).</summary>
-    public bool FourShades { get; set; } = true;
-
     public void SwitchPalette(PaletteType type)
     {
-        ActivePalette = ColorPalette.FromType(type);
+        EnsurePalettesLoaded();
+
+        if (_cache.Palettes.TryGetValue(type, out var palette))
+        {
+            ActivePalette = palette;
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(
+                ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
+        }
+        else
+        {
+            // No palette available for the requested mood — keep
+            // whichever palette is currently active (Day, if loaded)
+            // rather than wiping back to the empty Default.
+        }
     }
 
     public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        EnsurePalettesLoaded();
+
+        var (fourShades, safetyContour, shallowContour, deepContour) = ClampParameters(settings);
+
         using var lua = _luaEngine.CreateContext();
 
-        // Capture drawing instructions emitted by the Lua script
         var instructions = new List<string>();
 
-        // Provide a contextParameters table matching the S-102 PC context parameter IDs
+        // The four S-102 PC context parameters
+        // (S-102 Edition 3.0.0 §portrayal_catalogue.xml §context).
         var contextParams = new Dictionary<string, object?>
         {
-            ["FourShades"] = FourShades,
-            ["SafetyContour"] = settings.SafetyContour,
-            ["ShallowContour"] = settings.ShallowContour,
-            ["DeepContour"] = settings.DeepContour,
+            ["FourShades"] = fourShades,
+            ["SafetyContour"] = safetyContour,
+            ["ShallowContour"] = shallowContour,
+            ["DeepContour"] = deepContour,
             ["SafetyDepth"] = settings.SafetyDepth,
         };
         lua.SetGlobal("contextParameters", contextParams);
 
-        // Provide a stub featurePortrayal with AddInstructions method
-        // The real script calls: featurePortrayal:AddInstructions(str)
-        // In Lua, obj:Method(arg) is sugar for obj.Method(obj, arg),
-        // so we register a global function and wire it via a table.
+        // Stub featurePortrayal.AddInstructions that captures every
+        // emitted drawing instruction; the script invokes it via
+        // `featurePortrayal:AddInstructions(str)` (Lua method-call
+        // sugar — translates to AddInstructions(obj, str)).
         lua.SetGlobal("_addInstructions",
             (Action<string>)(instr => instructions.Add(instr)));
 
@@ -99,19 +133,146 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             feature = { Code = 'BathymetryCoverage' }
             """);
 
-        // Load and execute the BathymetryCoverage.lua script
         string luaSource = GetLuaSource();
         lua.Execute(luaSource);
 
-        // Invoke BathymetryCoverage(feature, featurePortrayal, contextParameters) from Lua—
-        // all three arguments are already globals, so we avoid marshalling round-trips
-        // that would strip methods from the featurePortrayal table.
+        // Invoke BathymetryCoverage(feature, featurePortrayal, contextParameters)
+        // with the three globals we set up above.
         lua.Execute("BathymetryCoverage(feature, featurePortrayal, contextParameters)");
 
         return ParseDrawingInstructions(instructions);
     }
 
     public IReadOnlyList<ContourStyle> Contours => [];
+
+    // ── Palettes ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Loads the bundled Day / Dusk / Night palettes from the S-102
+    /// colour profile manifest (S-102 §Annex B; S-100 Part 9 §11). Mirrors
+    /// the pattern used by <c>S101PortrayalCatalogue.EnsurePalettesLoaded</c>:
+    /// scans <c>PortrayalCatalogue.ColorProfiles</c>, fetches each via
+    /// <see cref="PortrayalCatalogueProvider.FetchAssetAsync(CatalogItem, string, System.Threading.CancellationToken)"/>
+    /// from the conventional <c>ColorProfiles/</c> subdirectory, and
+    /// stores parsed palettes on the shared
+    /// <see cref="IPortrayalAssetCache"/>. The S-102 colour profile
+    /// uses the multi-palette form
+    /// (<c>&lt;palette name="Day|Dusk|Night"&gt;</c>) so a single
+    /// manifest entry yields all three palettes.
+    /// </summary>
+    private void EnsurePalettesLoaded()
+    {
+        if (_cache.PalettesLoaded)
+        {
+            if (ActivePalette.Colors.Count == 0 &&
+                _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+            {
+                ActivePalette = dayPalette;
+            }
+            return;
+        }
+        _cache.PalettesLoaded = true;
+
+        foreach (var item in _provider.Catalogue.ColorProfiles)
+        {
+            var manifestName = item.Description.Name;
+            if (string.IsNullOrEmpty(manifestName))
+            {
+                manifestName = Path.GetFileNameWithoutExtension(item.FileName);
+            }
+
+            var paletteType = manifestName switch
+            {
+                var n when n.Contains("Day", StringComparison.OrdinalIgnoreCase) => PaletteType.Day,
+                var n when n.Contains("Dusk", StringComparison.OrdinalIgnoreCase) => PaletteType.Dusk,
+                var n when n.Contains("Night", StringComparison.OrdinalIgnoreCase) => PaletteType.Night,
+                _ => (PaletteType?)null,
+            };
+
+            if (paletteType is not null)
+            {
+                try
+                {
+                    using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                    var palette = ColorProfileReader.Read(stream, manifestName);
+                    _cache.Palettes[paletteType.Value] = palette;
+                }
+                catch (Exception)
+                {
+                    // Skip gracefully — fall through to fallback colours
+                    // at instruction-parse time.
+                }
+            }
+            else
+            {
+                // Single manifest entry that contains multiple named
+                // palettes (the S-102 layout). Try Day / Dusk / Night.
+                foreach (var (type, name) in new[] { (PaletteType.Day, "Day"), (PaletteType.Dusk, "Dusk"), (PaletteType.Night, "Night") })
+                {
+                    if (_cache.Palettes.ContainsKey(type)) continue;
+                    try
+                    {
+                        using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                        var palette = ColorProfileReader.Read(stream, name);
+                        if (palette.Colors.Count > 0)
+                        {
+                            _cache.Palettes[type] = palette;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Skip gracefully.
+                    }
+                }
+            }
+        }
+
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayFinal))
+        {
+            ActivePalette = dayFinal;
+        }
+    }
+
+    // ── Context parameters ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Pulls the four S-102 context parameters from
+    /// <see cref="MarinerSettings"/> and clamps them so the resulting
+    /// band layout is monotonic (Shallow ≤ Safety ≤ Deep). Bad input
+    /// is logged via <see cref="System.Diagnostics.Debug.WriteLine(string)"/>
+    /// — we never throw because these values originate in viewer
+    /// sliders where transient out-of-order states are normal.
+    /// </summary>
+    private static (bool FourShades, double Safety, double Shallow, double Deep) ClampParameters(MarinerSettings settings)
+    {
+        double safety = settings.SafetyContour;
+        double shallow = settings.ShallowContour;
+        double deep = settings.DeepContour;
+
+        bool clamped = false;
+        if (shallow > safety)
+        {
+            shallow = safety;
+            clamped = true;
+        }
+        if (deep < safety)
+        {
+            deep = safety;
+            clamped = true;
+        }
+
+        if (clamped)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[S-102 portrayal] Invariant Shallow ≤ Safety ≤ Deep violated " +
+                $"(Shallow={settings.ShallowContour}, Safety={settings.SafetyContour}, " +
+                $"Deep={settings.DeepContour}); clamped to ({shallow}, {safety}, {deep}).");
+        }
+
+        return (settings.FourShades, safety, shallow, deep);
+    }
+
+    // ── Lua source ─────────────────────────────────────────────────────
 
     private string GetLuaSource()
     {
@@ -135,18 +296,34 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         return _cachedLuaSource;
     }
 
+    // ── Drawing-instruction parser ─────────────────────────────────────
+
     /// <summary>
-    /// Parses the drawing instruction strings emitted by BathymetryCoverage.lua
-    /// into a <see cref="CoverageColorScheme"/>.
+    /// Parses the drawing instruction strings emitted by
+    /// <c>BathymetryCoverage.lua</c> into a
+    /// <see cref="CoverageColorScheme"/>.
     /// </summary>
     /// <remarks>
-    /// The script emits instructions like:
+    /// Each emitted instruction is a semicolon-separated directive list, e.g.:
     /// <code>
     ///   CoverageColor:DEPVS,0;LookupEntry:Shallow Water,0,30,geLtInterval;CoverageFill:depth
     ///   CoverageColor:DEPIT,0;LookupEntry:Intertidal,,0,ltSemiInterval
     /// </code>
-    /// Each instruction string contains semicolon-separated directives. We extract
-    /// <c>CoverageColor</c> and <c>LookupEntry</c> pairs to build color bands.
+    /// <para>
+    /// Empty <c>min</c> means the band extends to negative infinity
+    /// (<c>ltSemiInterval</c> — drying / intertidal). Empty <c>max</c>
+    /// means the band extends to positive infinity
+    /// (<c>geSemiInterval</c> — deep water). The <c>≥ min … &lt; max</c>
+    /// inequality used here matches the rule's <c>geLtInterval</c>
+    /// semantics: a depth value exactly equal to <c>SafetyContour</c>
+    /// falls in the band whose lower bound is <c>SafetyContour</c>.
+    /// </para>
+    /// <para>
+    /// The active palette's <c>NODTA</c> token (if any) is surfaced via
+    /// <see cref="CoverageColorScheme.NoDataColor"/> so the renderer
+    /// can paint S-102 fill cells (<see cref="S102CoverageSource.FillValue"/>)
+    /// rather than leaving them transparent.
+    /// </para>
     /// </remarks>
     private CoverageColorScheme ParseDrawingInstructions(List<string> instructions)
     {
@@ -157,8 +334,8 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         {
             string? currentToken = null;
             string? label = null;
-            float minValue = float.MinValue;
-            float maxValue = float.MaxValue;
+            float minValue = float.NegativeInfinity;
+            float maxValue = float.PositiveInfinity;
 
             var directives = instruction.Split(';');
             foreach (var directive in directives)
@@ -181,7 +358,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                     case "LookupEntry":
                     {
                         // LookupEntry:label,min,max,intervalType
-                        // min/max may be empty for semi-intervals
+                        // min/max may be empty for semi-intervals.
                         var parts = value.Split(',');
                         label = parts.Length > 0 ? parts[0] : null;
 
@@ -213,16 +390,24 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             }
         }
 
-        return new CoverageColorScheme { FieldName = fieldName ?? "depth", Bands = bands };
+        // Resolve NODTA via the active palette (Day-palette grey by
+        // default in the bundled colour profile). If the palette has
+        // not loaded for any reason, fall back to the S-102 Day NODTA.
+        var noDataColor = ResolveColorToken("NODTA");
+
+        return new CoverageColorScheme
+        {
+            FieldName = fieldName ?? "depth",
+            Bands = bands,
+            NoDataColor = noDataColor,
+        };
     }
 
     private string ResolveColorToken(string token)
     {
-        // Try the active palette first, then fall back to default IHO S-52 colours
-        var resolved = ActivePalette.Resolve(token);
-        if (resolved != "#000000")
-            return resolved;
+        if (ActivePalette.TryResolve(token, out var hex))
+            return hex;
 
-        return DefaultColorTokens.TryGetValue(token, out var hex) ? hex : "#000000";
+        return FallbackDayTokens.TryGetValue(token, out var fallback) ? fallback : "#000000";
     }
 }
