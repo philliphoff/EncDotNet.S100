@@ -43,9 +43,17 @@ public static class S104DatasetReader
             : null;
 
         var wlGroup = root.OpenGroup("WaterLevel");
+        const string WaterLevelPath = "/WaterLevel";
 
+        // S-104 Edition 2.0.0 §10.2 — every WaterLevel container carries
+        // a dataCodingFormat enum that selects the per-instance layout.
         int dataCodingFormat = wlGroup.AttributeExists("dataCodingFormat")
-            ? (int)wlGroup.ReadInt64Attribute("dataCodingFormat")
+            ? (int)wlGroup.ReadRequiredInt64Attribute(
+                "dataCodingFormat",
+                product: "S-104",
+                file: null,
+                groupPath: WaterLevelPath,
+                specReference: "S-100 Part 10c §10.2.1")
             : 2;
 
         string? methodWaterLevelProduct = wlGroup.AttributeExists("methodWaterLevelProduct")
@@ -71,8 +79,15 @@ public static class S104DatasetReader
     {
         if (dataCodingFormat != 2)
         {
-            throw new NotSupportedException(
-                $"Data coding format {dataCodingFormat} is not yet supported. Only format 2 (regular grid) is implemented.");
+            string feature = $"data coding format {dataCodingFormat} ({DataCodingFormatName(dataCodingFormat)})";
+            throw new S100DatasetNotSupportedException(
+                product: "S-104",
+                file: null,
+                feature: feature,
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatNotSupported(
+                    "S-104", null, feature, "S-100 Part 10c §10.2.1",
+                    "Only format 2 (regular grid) is currently implemented."));
         }
 
         var coverages = new List<WaterLevelCoverage>();
@@ -83,20 +98,42 @@ public static class S104DatasetReader
                 continue;
 
             var instance = wlGroup.OpenGroup(instanceName);
-            ReadInstance(instance, coverages);
+            ReadInstance(instance, coverages, $"/WaterLevel/{instanceName}");
         }
 
         return coverages;
     }
 
-    private static void ReadInstance(IHdf5Group instance, List<WaterLevelCoverage> coverages)
+    /// <summary>
+    /// Human-readable label for the S-100 data coding format enumeration
+    /// (S-100 Part 10c §10.2.1 Table). Used only in error messages, not
+    /// in dispatch logic.
+    /// </summary>
+    private static string DataCodingFormatName(int dcf) => dcf switch
     {
-        double originLat = instance.ReadDoubleAttribute("gridOriginLatitude");
-        double originLon = instance.ReadDoubleAttribute("gridOriginLongitude");
-        double spacingLat = instance.ReadDoubleAttribute("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadDoubleAttribute("gridSpacingLongitudinal");
-        int numLat = (int)instance.ReadInt64Attribute("numPointsLatitudinal");
-        int numLon = (int)instance.ReadInt64Attribute("numPointsLongitudinal");
+        1 => "time series at fixed stations (irregular)",
+        2 => "regularly-gridded arrays",
+        3 => "ungeorectified grid",
+        4 => "moving platform",
+        5 => "irregular grid",
+        6 => "variable cell size",
+        7 => "TIN",
+        8 => "time series at fixed stations",
+        9 => "stationwise arrays",
+        _ => "unknown",
+    };
+
+    private static void ReadInstance(IHdf5Group instance, List<WaterLevelCoverage> coverages, string instancePath)
+    {
+        // S-100 Part 10c §10.2.1.2 — the grid-georef attributes are
+        // required on every dcf2 WaterLevel.NN instance group.
+        const string Spec = "S-100 Part 10c §10.2.1.2";
+        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-104", null, instancePath, Spec);
+        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-104", null, instancePath, Spec);
+        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-104", null, instancePath, Spec);
+        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-104", null, instancePath, Spec);
+        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-104", null, instancePath, Spec);
+        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-104", null, instancePath, Spec);
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")

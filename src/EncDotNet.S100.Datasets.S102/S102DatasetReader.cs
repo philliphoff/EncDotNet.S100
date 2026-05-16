@@ -64,20 +64,24 @@ public static class S102DatasetReader
                 continue;
 
             var instance = bcGroup.OpenGroup(instanceName);
-            coverages.Add(ReadCoverage(instance));
+            coverages.Add(ReadCoverage(instance, $"/BathymetryCoverage/{instanceName}"));
         }
 
         return coverages;
     }
 
-    private static BathymetryCoverage ReadCoverage(IHdf5Group instance)
+    private static BathymetryCoverage ReadCoverage(IHdf5Group instance, string instancePath)
     {
-        double originLat = instance.ReadDoubleAttribute("gridOriginLatitude");
-        double originLon = instance.ReadDoubleAttribute("gridOriginLongitude");
-        double spacingLat = instance.ReadDoubleAttribute("gridSpacingLatitudinal");
-        double spacingLon = instance.ReadDoubleAttribute("gridSpacingLongitudinal");
-        int numLat = (int)instance.ReadInt64Attribute("numPointsLatitudinal");
-        int numLon = (int)instance.ReadInt64Attribute("numPointsLongitudinal");
+        // S-102 Edition 3.0.0 §12.6 — BathymetryCoverage.NN groups carry
+        // the mandatory grid-georef attributes inherited from the S-100
+        // gridded-coverage profile (S-100 Part 10c §10.2.1.2).
+        const string Spec = "S-100 Part 10c §10.2.1.2";
+        double originLat = instance.ReadRequiredDoubleAttribute("gridOriginLatitude", "S-102", null, instancePath, Spec);
+        double originLon = instance.ReadRequiredDoubleAttribute("gridOriginLongitude", "S-102", null, instancePath, Spec);
+        double spacingLat = instance.ReadRequiredDoubleAttribute("gridSpacingLatitudinal", "S-102", null, instancePath, Spec);
+        double spacingLon = instance.ReadRequiredDoubleAttribute("gridSpacingLongitudinal", "S-102", null, instancePath, Spec);
+        int numLat = (int)instance.ReadRequiredInt64Attribute("numPointsLatitudinal", "S-102", null, instancePath, Spec);
+        int numLon = (int)instance.ReadRequiredInt64Attribute("numPointsLongitudinal", "S-102", null, instancePath, Spec);
 
         string? startSequence = instance.AttributeExists("startSequence")
             ? instance.ReadStringAttribute("startSequence")
