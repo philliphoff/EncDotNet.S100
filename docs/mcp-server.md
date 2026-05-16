@@ -36,7 +36,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | Tool | Purpose |
 |---|---|
 | `list_datasets` | Summarises every dataset currently loaded in the viewer. |
-| `describe_feature` | Returns spec, feature type, and attributes for a feature id in a given dataset. |
+| `describe_feature` | Returns spec, feature type, and attributes for a feature id in a given dataset. Supported specs: S-101 (RCID), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), and S-124 (`gml:id`). |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 
 ## Sample agent prompts

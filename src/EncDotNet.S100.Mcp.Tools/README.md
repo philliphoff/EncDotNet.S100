@@ -116,11 +116,22 @@ The five error variants implemented in this PR:
 `FeatureDescriberRegistry` keyed on `SpecRef.Name`. Each describer
 implements an internal `ISpecFeatureDescriber` strategy.
 
-This PR ships `S124FeatureDescriber` end-to-end (lookup, attribute
-serialisation, complex-attribute serialisation, xlink-reference
-projection across the catalog). Other specs fall through to a
-`SpecNotSupportedForTool` error until their describers are added in
-follow-up PRs.
+The registry currently wires five describers:
+
+| Spec   | Describer                  | Feature id convention                                                                                       |
+|--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
+| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`.                                                                        |
+| S-102  | `S102FeatureDescriber`     | Coverage path `BathymetryCoverage[.01]` (bare `BathymetryCoverage` accepted).                               |
+| S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
+| S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
+| S-124  | `S124FeatureDescriber`     | GML `gml:id` of the warning feature.                                                                        |
+
+For the coverage describers (S-102/S-104/S-111) the result returns
+instance-level metadata (origin, spacing, grid dimensions, CRS,
+bounding box, NoData value, value ranges, time-step counts, station
+counts, ...) — coverage instances do not xlink to each other, so
+`References` is always empty. Specs without a registered describer
+return `SpecNotSupportedForTool`.
 
 ## Usage
 
