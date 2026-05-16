@@ -87,3 +87,15 @@ public sealed record NoDataAtPoint(
 public sealed record NotSupportedYet(SpecRef Spec, string Tool, string Reason) : ToolError(
     "not_supported_yet",
     $"Spec '{Spec}' is supported by tool '{Tool}', but: {Reason}.");
+
+/// <summary>
+/// A supplied geometry is structurally invalid (e.g. an unclosed
+/// polygon ring, a polyline with fewer than two vertices, a bounding
+/// box whose north edge is south of its south edge, or an
+/// antimeridian-crossing bounding box where <c>west &gt; east</c>).
+/// Distinguished from <see cref="InvalidArgument"/> in that a single
+/// scalar is well-formed but the *composite* shape is not.
+/// </summary>
+public sealed record GeometryInvalid(string Parameter, string Reason) : ToolError(
+    "geometry_invalid",
+    $"Geometry in '{Parameter}' is invalid: {Reason}.");

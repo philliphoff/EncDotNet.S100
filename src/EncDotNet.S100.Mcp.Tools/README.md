@@ -37,10 +37,44 @@ The project intentionally has **no MCP SDK, no Avalonia, and no viewer
 reference**. The same tool surface can therefore be hosted by a CLI, a
 headless service, or a different viewer in the future.
 
-## `IDatasetCatalog`
+## Geometry primitives
 
-The abstraction is in `EncDotNet.S100.Mcp.Tools.Catalog` and exposes a
-single property + an event:
+Spatial inputs to tools are typed as `GeoQuery`, a discriminated union
+over the four shapes the surface needs:
+
+| Variant            | Carries                                | Use case                              |
+|--------------------|----------------------------------------|---------------------------------------|
+| `GeoQuery.Point`    | `GeoPoint(lat, lon)`                   | "at this position"                    |
+| `GeoQuery.Box`      | `GeoBoundingBox(s, w, n, e)`           | "within this rectangle"               |
+| `GeoQuery.Polygon`  | `GeoPolygon(closed ring of GeoPoints)` | "inside this area"                    |
+| `GeoQuery.Polyline` | `GeoPolyline(vertices, corridorWidthMeters?)` | "along this route / line"     |
+
+Every variant projects to a coarse `GeoBoundingBox` via
+`GetBoundingBox()`. Polylines with a non-null `CorridorWidthMeters`
+inflate the bbox by an equirectangular metres-to-degrees
+approximation; this is suitable for "near this route" coarse filtering
+and matches the precision of the underlying dataset bounding boxes.
+
+All inputs are validated with `GeoQueryValidator.Validate(...)`, which
+returns:
+
+- `null` on success;
+- `InvalidArgument` for a scalar that's out of range (lat/lon, NaN,
+  negative corridor width);
+- `GeometryInvalid` for a composite-shape failure (unclosed polygon
+  ring, polygon with < 4 points, polyline with < 2 vertices, inverted
+  bounding box, antimeridian-crossing bounding box).
+
+`SpatialPredicates` exposes the planar primitives every tool reuses:
+`Intersects(box, GeoQuery)`, `Contains(box, GeoPoint)`, and
+`ContainsPoint(polygonRing, GeoPoint)` (ray-cast).
+
+The legacy `FindAtRequest(Latitude, Longitude, ...)` shape continues
+to work; tools that accept a `GeoQuery` carry it as an optional
+`Query` property that, when supplied, takes precedence over the
+scalar lat/lon fields.
+
+## `IDatasetCatalog`
 
 ```csharp
 public interface IDatasetCatalog
@@ -110,6 +144,7 @@ The five error variants implemented in this PR:
 | `feature_not_found`           | The named feature is not present in the named dataset.                |
 | `spec_not_supported_for_tool` | The tool does not (yet) support the requested spec.                   |
 | `invalid_argument`            | A request property failed validation (e.g. latitude / longitude out of WGS-84 range). |
+| `geometry_invalid`            | A composite-shape input failed validation (unclosed polygon ring, antimeridian-crossing bbox, etc.). |
 
 ## Spec strategy pattern
 
