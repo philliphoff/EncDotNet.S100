@@ -26,4 +26,10 @@
     <Content Include="..\datasets\S131\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="EncDotNet.S100.DataModel" />
+    <Using Include="EncDotNet.S100.Datasets.S131" />
+    <Using Include="EncDotNet.S100.Datasets.S131.DataModel" />
+  </ItemGroup>
+
 </Project>

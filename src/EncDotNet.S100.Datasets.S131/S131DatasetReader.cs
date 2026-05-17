@@ -151,7 +151,7 @@ internal static class S131DatasetReader
             ?? "";
         var typeCode = element.Name.LocalName;
 
-        var (simpleAttrs, complexAttrs, _) = ParseAttributes(element);
+        var (simpleAttrs, complexAttrs, refs) = ParseAttributes(element);
 
         return new S131InformationType
         {
@@ -159,6 +159,7 @@ internal static class S131DatasetReader
             TypeCode = typeCode,
             Attributes = simpleAttrs,
             ComplexAttributes = complexAttrs,
+            References = refs,
         };
     }
 

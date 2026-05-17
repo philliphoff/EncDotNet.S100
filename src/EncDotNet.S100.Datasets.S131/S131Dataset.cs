@@ -111,6 +111,16 @@ public sealed class S131InformationType : IGmlInformationType
 
     /// <summary>Complex attribute groups.</summary>
     public required ImmutableArray<S131ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <summary>
+    /// Cross-references parsed from <c>xlink:href</c> attributes on the
+    /// information type's child elements (e.g. an <c>Authority</c> info
+    /// type binding its <c>theContactDetails</c> / <c>theApplicability</c>
+    /// peers). Defaults to an empty array for information types that do
+    /// not carry outgoing references.
+    /// </summary>
+    public ImmutableArray<S131Reference> References { get; init; } =
+        ImmutableArray<S131Reference>.Empty;
 }
 
 /// <summary>
