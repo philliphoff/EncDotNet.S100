@@ -132,6 +132,31 @@ the unmodified PC. The adapter handles both GML shapes described above.
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` follows the S-100 Part 10b convention of **lat lon** for `EPSG:4326`.
 - The S-411 Portrayal Catalogue ships several top-level XSLT entry points (`mainRule`, plus per-ice-class rules such as `SeaiceClass1ARule`). Only `mainRule` is exposed as an active portrayal rule by default; class-specific rules are still loadable by name via `GetCompiledRule`.
 
+## Validation rules
+
+`EncDotNet.S100.Datasets.S411.Validation.S411SeaIceRules` exposes a pilot
+rule pack (8 rules) for an `S411SeaIceInventory`, mirroring the S-421 rule
+pack (PR [#100](https://github.com/philliphoff/EncDotNet.S100/pull/100)).
+Rule identifiers follow `S411-R-{clause}`:
+
+| Rule | Severity | Summary |
+|------|----------|---------|
+| `S411-R-3.1` | Error | Feature coordinates must lie within WGS-84 lat/lon ranges (S-100 Part 10b §6.2). |
+| `S411-R-3.2` | Error | Surface features must have a closed ring with ≥ 4 coordinates. |
+| `S411-R-3.3` | Error | Curve features must have ≥ 2 vertices. |
+| `S411-R-4.1` | Warning | Egg-code `totalConcentration` must be one of the S-411 Annex A enumerated WMO codes. |
+| `S411-R-4.2` | Error | `iceAverageThickness` must be ≥ 0 when present. |
+| `S411-R-4.3` | Error | Egg-code `snowDepth` must be ≥ 0 when present. |
+| `S411-R-4.4` | Warning | `icebergSize` must be one of the S-411 Annex A enumerated codes (1–9, 99). |
+| `S411-R-5.1` | Error | Feature identifiers must be unique across the dataset. |
+
+Rules bind to the typed projection (`S411SeaIceInventory`, `S411IceFeature`
+subclasses) and are therefore agnostic to the two real-world GML shapes
+(JCOMM/Canadian Ice Service operational shape and IHO 1.2.1 sample shape).
+Use `S411SeaIceRules.Validate(inventory)` for a one-shot run against the
+default rule set, or compose a custom set via
+`ValidationRuleSet<S411SeaIceInventory>`.
+
 ## License
 
 The bundled S-411 specification assets in `EncDotNet.S100.Specifications` are © JCOMM/IHO and used in accordance with their open-publication terms; see <https://github.com/iho-ohi/S-411-Product-Specification>.
