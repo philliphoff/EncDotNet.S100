@@ -45,6 +45,7 @@ upstream sample (`DistributorInformation`, `ProducerInformation`,
 | `S128ProductStatus` | Heuristic enum: `InForce | Superseded | Withdrawn | Planned | Unknown` |
 | `S128CatalogueQuery` | Static helpers: `FilterByExtent`, `FilterByProductType`, `FilterBySpecification`, `FilterByStatus` |
 | `S128ProductCatalogue` (`DataModel/`) | Strongly-typed projection of the dataset as a catalogue of typed `S128CatalogueEntry` subclasses with resolved `Supersedes`/`SupersededBy` navigation. See [Strongly-typed data model](#strongly-typed-data-model). |
+| `S128CatalogueRules` (`Validation/`) | Default pilot rule pack for `S128ProductCatalogue` (rule IDs `S128-R-12.*` traced to S-128 § 12). See [Validation](#validation). |
 | `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
 | `S128FeatureGeometryProvider` | `IFeatureGeometryProvider` adapter for the unified Mapsui display-list renderer |
 | `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes) |
@@ -138,6 +139,43 @@ foreach (var d in diagnostics)
 
 Per S-100 Part 10b §6.2, all coordinates inside `<gml:pos>` /
 `<gml:posList>` for `EPSG:4326` are **lat lon**.
+
+## Validation
+
+`Validation/S128CatalogueRules.cs` ships a pilot pack of seven Tier-1 /
+Tier-2 rules over `S128ProductCatalogue`. Rule identifiers follow the
+convention `S128-R-{clause}` and trace to clauses of S-128 Edition
+2.0.0 (§ 12 Feature Catalogue, plus S-100 Part 10b §6 for geometry).
+
+| Rule ID | Severity | Summary |
+|---|---|---|
+| `S128-R-12.1` | Error | When present, every catalogue entry's `editionNumber` is ≥ 1. |
+| `S128-R-12.2` | Error | When both are present, `issueDate ≤ updateDate`. |
+| `S128-R-12.3` | Error | Every coverage coordinate lies in the WGS-84 lat/lon ranges. |
+| `S128-R-12.4` | Error | `Surface` exterior rings have ≥ 4 vertices and are closed. |
+| `S128-R-12.5` | Error | Product `gml:id` values are unique across the catalogue. |
+| `S128-R-12.6` | Warning | `onlineResource/linkage` values parse as absolute URIs when present. |
+| `S128-R-12.7` | Warning | The catalogue carries at least one `ProducerInformation` or `DistributorInformation` record. |
+
+Run the default pack:
+
+```csharp
+using EncDotNet.S100.Datasets.S128;
+using EncDotNet.S100.Datasets.S128.DataModel;
+using EncDotNet.S100.Datasets.S128.Validation;
+
+await using var stream = File.OpenRead("catalogue.gml");
+var dataset = S128Dataset.Open(stream);
+var catalogue = S128ProductCatalogue.From(dataset, out _);
+
+var report = S128CatalogueRules.Validate(catalogue);
+foreach (var f in report.Findings)
+    Console.WriteLine($"[{f.Severity}] {f.RuleId}: {f.Message}");
+```
+
+Tier-3 cross-dataset rules (e.g. cross-referencing catalogue entries
+against actually loaded S-1xx datasets) are deferred until the MCP
+`validate_all` surface lands.
 
 ## Portrayal
 
