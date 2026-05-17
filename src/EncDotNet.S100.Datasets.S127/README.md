@@ -70,6 +70,38 @@ The projection:
 
 The viewer, FeatureXML adapter, and XSLT portrayal pipeline continue to drive off `S127Dataset` and are unaffected by this layer.
 
+## Validation
+
+`EncDotNet.S100.Datasets.S127.Validation.S127MarineServicesRules` exposes a pilot rule set of Tier-1 / Tier-2 validation rules that operate on `S127MarineServicesDataset`. Rule identifiers follow the `S127-R-{clause}` convention and trace back to S-127 Edition 2.0.0 § references.
+
+```csharp
+using EncDotNet.S100.Datasets.S127;
+using EncDotNet.S100.Datasets.S127.DataModel;
+using EncDotNet.S100.Datasets.S127.Validation;
+
+var dataset = S127Dataset.Open("marine_services.gml");
+var typed = S127MarineServicesDataset.From(dataset, out _);
+var report = S127MarineServicesRules.Validate(typed);
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"{finding.RuleId} [{finding.Severity}] {finding.Message}");
+```
+
+Default rules:
+
+| Rule ID | Summary | Severity |
+| --- | --- | --- |
+| `S127-R-12.1` | Coordinates must lie within WGS-84 lat/lon ranges (S-100 Part 10b §6.2). | Error |
+| `S127-R-12.2` | `PilotBoardingPlace` features must carry a non-empty geometry. | Error |
+| `S127-R-12.3` | Surface exterior rings must have ≥4 vertices and be closed. | Error |
+| `S127-R-12.4` | Curve geometries must have ≥2 vertices. | Error |
+| `S127-R-12.5` | Vessel-size limit minimums (length / draught / beam) must not exceed their maximums. | Warning |
+| `S127-R-12.6` | Availability time-of-day / date ranges must have start ≤ end. | Warning |
+| `S127-R-12.7` | Feature identifiers must be unique within the dataset. | Error |
+| `S127-R-12.8` | `Authority` features should carry a non-empty `authorityName`. | Warning |
+
+Container-style features (e.g. `Authority`) without geometry are tolerated — they trivially pass geometry-shape rules. Two candidate rules — VTS report-point geometry (deferred pending cross-feature xlink resolution) and closed-enumeration validity for `categoryOfService` (deferred pending typed enum surfaces) — are intentionally not included; see the class-level remarks in `S127MarineServicesRules` for the reasoning.
+
 ## Spec compliance
 
 - Coordinate ordering in `<gml:pos>` / `<gml:posList>` is `lat lon` (EPSG:4326), per S-100 Part 10b §6.2.
