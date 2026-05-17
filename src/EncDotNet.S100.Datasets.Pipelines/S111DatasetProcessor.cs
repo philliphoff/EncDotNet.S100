@@ -37,6 +37,23 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
     // dcf8 only
     private readonly S111StationSeriesDataset? _stationSeries;
     private readonly IReadOnlyList<DateTime> _stationTimes = Array.Empty<DateTime>();
+    private readonly Dictionary<string, SurfaceCurrentStation> _stationsById = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Last time-step selected via <see cref="Render"/> for dcf8 station
+    /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
+    /// at the same time the rendered arrow is showing. <c>null</c> until
+    /// the first render.
+    /// </summary>
+    private DateTime? _stationSelectedTime;
+
+    /// <summary>
+    /// Prefix used on <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>
+    /// tags for dcf8 station-series point features. The remainder is the
+    /// station identifier. <see cref="GetFeatureInfo"/> recognises this
+    /// prefix to route station picks back through this processor.
+    /// </summary>
+    internal const string StationFeatureRefPrefix = "station:";
 
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S111DatasetData _data;
@@ -117,6 +134,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             case S111DatasetData.StationSeries s:
                 _stationSeries = s.Dataset;
                 _stationTimes = ComputeStationUnionTimes(s.Dataset);
+                foreach (var station in s.Dataset.Stations)
+                {
+                    _stationsById[station.Identifier] = station;
+                }
                 // dcf8 uses an inline arrow glyph — no portrayal
                 // catalogue required.
                 break;
@@ -237,6 +258,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             selectedTime = ds.MinTime ?? DateTime.UtcNow;
         }
 
+        _stationSelectedTime = selectedTime;
+
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
 
         var features = new List<IFeature>(ds.Stations.Count);
@@ -269,6 +292,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             {
                 Geometry = new Point(mx, my),
             };
+            feature[MapsuiDisplayListRenderer.FeatureRefKey] =
+                StationFeatureRefPrefix + station.Identifier;
             feature["StationId"] = station.Identifier;
             feature["SpeedMetresPerSecond"] = speed;
             feature["SpeedKnots"] = speed * 1.9438444924406046;
@@ -361,7 +386,106 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         return minScale + (maxScale - minScale) * t;
     }
 
-    public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+    /// <summary>
+    /// Resolves dcf8 station picks routed via the Mapsui
+    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/> tag the
+    /// arrow layer attaches to each station point. Refs are formatted as
+    /// <c>"station:&lt;id&gt;"</c> (see <see cref="StationFeatureRefPrefix"/>).
+    /// For dcf2 gridded datasets and other refs this returns <c>null</c>;
+    /// callers should fall back to <see cref="GetCoverageInfo"/>.
+    /// </summary>
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        ArgumentNullException.ThrowIfNull(featureRef);
+
+        if (_stationSeries is null) return null;
+        if (!featureRef.StartsWith(StationFeatureRefPrefix, StringComparison.Ordinal))
+            return null;
+
+        var id = featureRef[StationFeatureRefPrefix.Length..];
+        if (!_stationsById.TryGetValue(id, out var station))
+            return null;
+
+        return BuildStationFeatureInfo(station, _stationSelectedTime);
+    }
+
+    private FeatureInfo BuildStationFeatureInfo(SurfaceCurrentStation station, DateTime? time)
+    {
+        var selectedTime = time ?? station.StartTime;
+        int idx = station.NearestTimeIndex(selectedTime);
+        var speed = station.SpeedsMetresPerSecond[idx];
+        var direction = station.DirectionsDegreesTrue[idx];
+        var sampleTime = station.TimeAt(idx);
+        var speedKnots = speed * 1.9438444924406046;
+
+        return new FeatureInfo
+        {
+            FeatureRef = StationFeatureRefPrefix + station.Identifier,
+            FeatureType = "SurfaceCurrent",
+            FeatureTypeName = "Surface Current (Station)",
+            Attributes = new List<PickAttribute>
+            {
+                new()
+                {
+                    Code = "stationIdentification",
+                    Name = "Station",
+                    RawValue = station.Identifier,
+                },
+                new()
+                {
+                    Code = "stationPosition",
+                    Name = "Position",
+                    RawValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:0.######},{1:0.######}",
+                        station.Latitude, station.Longitude),
+                    DisplayValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:0.####}°, {1:0.####}°",
+                        station.Latitude, station.Longitude),
+                },
+                new()
+                {
+                    Code = "surfaceCurrentSpeed",
+                    Name = "Current Speed",
+                    RawValue = speed.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} m/s ({speedKnots.ToString("0.##", CultureInfo.InvariantCulture)} kn)",
+                },
+                new()
+                {
+                    Code = "surfaceCurrentDirection",
+                    Name = "Current Direction (going to)",
+                    RawValue = direction.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{direction.ToString("0.#", CultureInfo.InvariantCulture)}°",
+                },
+                new()
+                {
+                    Code = "timePoint",
+                    Name = "Time",
+                    RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
+                },
+                new()
+                {
+                    Code = "sampleCount",
+                    Name = "Sample Count",
+                    RawValue = station.NumberOfTimes.ToString(CultureInfo.InvariantCulture),
+                },
+                new()
+                {
+                    Code = "timeRange",
+                    Name = "Time Range",
+                    RawValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:u}/{1:u}",
+                        station.StartTime, station.EndTime),
+                    DisplayValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:u} → {1:u}",
+                        station.StartTime, station.EndTime),
+                },
+            },
+        };
+    }
 
     /// <summary>
     /// Samples the surface-current grid at the supplied geographic

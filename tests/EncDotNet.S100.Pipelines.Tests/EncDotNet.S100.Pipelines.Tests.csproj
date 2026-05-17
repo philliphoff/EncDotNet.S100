@@ -2,6 +2,13 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <!--
+      CS0649 fires on fixture-row variants from the linked S-104 / S-111
+      dcf8 fixture builders that aren't exercised by the pipeline tests
+      (only some row shapes are used here). Suppressed locally rather
+      than modifying the original test sources.
+    -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,6 +44,20 @@
   <ItemGroup>
     <Content Include="..\datasets\S102\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S102\PortrayalCatalogue\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!--
+    Reuse the dcf8 HDF5 fixture builders from the S-104 / S-111 reader-test
+    projects rather than duplicating them. Linked compile means the source
+    files participate in this assembly under the same namespace but as
+    internal types, which matches the original visibility. NoWarn silences
+    CS0649 for fixture row variants that aren't exercised by these tests.
+  -->
+  <ItemGroup>
+    <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104Dcf8FixtureBuilder.cs"
+             Link="Fixtures\S104Dcf8FixtureBuilder.cs" />
+    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf8FixtureBuilder.cs"
+             Link="Fixtures\S111Dcf8FixtureBuilder.cs" />
   </ItemGroup>
 
 </Project>
