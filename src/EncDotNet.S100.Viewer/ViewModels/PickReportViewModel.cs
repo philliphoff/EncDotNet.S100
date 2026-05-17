@@ -161,6 +161,7 @@ internal sealed class PickReportViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(hits);
 
+        DisposeHitResources();
         Hits.Clear();
         foreach (var hit in hits)
             Hits.Add(hit);
@@ -213,6 +214,7 @@ internal sealed class PickReportViewModel : ViewModelBase
     /// <summary>Clears all pick state and sets <see cref="HasPick"/> to false.</summary>
     public void Clear()
     {
+        DisposeHitResources();
         Hits.Clear();
         // SelectedHit setter rejects identical references; clear the backing
         // field directly so we always raise PropertyChanged when something
@@ -249,6 +251,8 @@ internal sealed class PickReportViewModel : ViewModelBase
             References.Clear();
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasReferences));
+            OnPropertyChanged(nameof(SelectedStationSeries));
+            OnPropertyChanged(nameof(HasStationSeries));
             return;
         }
 
@@ -267,5 +271,24 @@ internal sealed class PickReportViewModel : ViewModelBase
         foreach (var reference in hit.References)
             References.Add(reference);
         OnPropertyChanged(nameof(HasReferences));
+
+        OnPropertyChanged(nameof(SelectedStationSeries));
+        OnPropertyChanged(nameof(HasStationSeries));
+    }
+
+    /// <summary>
+    /// Station time-series view model attached to <see cref="SelectedHit"/>,
+    /// or <c>null</c> when the selected hit is not a station observation.
+    /// Bound by the pick panel's chart section.
+    /// </summary>
+    public StationTimeSeriesViewModel? SelectedStationSeries => _selectedHit?.StationSeries;
+
+    /// <summary>True when <see cref="SelectedStationSeries"/> is non-null.</summary>
+    public bool HasStationSeries => _selectedHit?.StationSeries is not null;
+
+    private void DisposeHitResources()
+    {
+        foreach (var hit in Hits)
+            hit.StationSeries?.Dispose();
     }
 }

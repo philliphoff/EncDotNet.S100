@@ -389,6 +389,42 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_FollowReference" xml:space="preserve">
     <value>Show the referenced feature's details</value>
   </data>
+  <!-- Pick panel: station time-series chart -->
+  <data name="Pick_Chart_Title_WaterLevel" xml:space="preserve">
+    <value>Water Level</value>
+    <comment>Title above the water-level chart in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_Chart_Title_SurfaceCurrentSpeed" xml:space="preserve">
+    <value>Surface Current Speed</value>
+    <comment>Title above the surface-current speed chart in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_Chart_Title_SurfaceCurrentDirection" xml:space="preserve">
+    <value>Surface Current Direction</value>
+    <comment>Title above the surface-current direction chart in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_Chart_Axis_Time" xml:space="preserve">
+    <value>Time (UTC)</value>
+  </data>
+  <data name="Pick_Chart_Axis_HeightMetres" xml:space="preserve">
+    <value>Height (m)</value>
+  </data>
+  <data name="Pick_Chart_Axis_SpeedMetresPerSecond" xml:space="preserve">
+    <value>Speed (m/s)</value>
+  </data>
+  <data name="Pick_Chart_Axis_DirectionDegrees" xml:space="preserve">
+    <value>Direction (°)</value>
+  </data>
+  <data name="Pick_Chart_NowMarker" xml:space="preserve">
+    <value>Now</value>
+    <comment>Label for the vertical "current time" marker on station charts.</comment>
+  </data>
+  <data name="Pick_Chart_NoSamples" xml:space="preserve">
+    <value>(no samples to plot)</value>
+  </data>
+  <data name="Pick_Chart_StationAttributes" xml:space="preserve">
+    <value>STATION ATTRIBUTES</value>
+    <comment>Header for the collapsed attribute Expander shown below a station chart.</comment>
+  </data>
   <data name="Tooltip_Search" xml:space="preserve">
     <value>Search Features</value>
   </data>

@@ -355,6 +355,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "WaterLevel",
             FeatureTypeName = "Water Level (Station)",
+            StationSeries = BuildStationSeriesSnapshot(station),
             Attributes = new List<PickAttribute>
             {
                 new()
@@ -414,6 +415,36 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                         CultureInfo.InvariantCulture,
                         "{0:u} → {1:u}",
                         station.StartTime, station.EndTime),
+                },
+            },
+        };
+    }
+
+    private static StationTimeSeriesSnapshot BuildStationSeriesSnapshot(WaterLevelStation station)
+    {
+        var times = new DateTime[station.NumberOfTimes];
+        for (var i = 0; i < station.NumberOfTimes; i++)
+            times[i] = station.TimeAt(i);
+
+        return new StationTimeSeriesSnapshot
+        {
+            StationId = station.Identifier,
+            StationName = station.Identifier,
+            Latitude = station.Latitude,
+            Longitude = station.Longitude,
+            Times = times,
+            Channels = new[]
+            {
+                new StationTimeSeriesChannel
+                {
+                    Key = "waterLevelHeight",
+                    DisplayName = "Water Level Height",
+                    Unit = "m",
+                    Values = station.Heights,
+                    // S-104 dcf8 producers commonly use -9999 as the
+                    // missing-sample sentinel; viewers filter it out so
+                    // the chart doesn't spike.
+                    FillValue = -9999f,
                 },
             },
         };

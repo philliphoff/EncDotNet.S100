@@ -38,6 +38,7 @@
     <PackageVersion Include="MoonSharp" Version="2.0.0" />
     <PackageVersion Include="ProjNet" Version="2.0.0" />
     <PackageVersion Include="PureHDF" Version="2.1.2" />
+    <PackageVersion Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.0.4" />
     <PackageVersion Include="ShadUI" Version="0.1.6" />
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />

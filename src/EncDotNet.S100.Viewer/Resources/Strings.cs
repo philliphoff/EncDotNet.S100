@@ -167,6 +167,18 @@ internal static class Strings
     public static string Pick_ReferencesHeader => Get(nameof(Pick_ReferencesHeader));
     public static string Pick_ReferenceItemFormat => Get(nameof(Pick_ReferenceItemFormat));
 
+    // Pick panel: station time-series chart
+    public static string Pick_Chart_Title_WaterLevel => Get(nameof(Pick_Chart_Title_WaterLevel));
+    public static string Pick_Chart_Title_SurfaceCurrentSpeed => Get(nameof(Pick_Chart_Title_SurfaceCurrentSpeed));
+    public static string Pick_Chart_Title_SurfaceCurrentDirection => Get(nameof(Pick_Chart_Title_SurfaceCurrentDirection));
+    public static string Pick_Chart_Axis_Time => Get(nameof(Pick_Chart_Axis_Time));
+    public static string Pick_Chart_Axis_HeightMetres => Get(nameof(Pick_Chart_Axis_HeightMetres));
+    public static string Pick_Chart_Axis_SpeedMetresPerSecond => Get(nameof(Pick_Chart_Axis_SpeedMetresPerSecond));
+    public static string Pick_Chart_Axis_DirectionDegrees => Get(nameof(Pick_Chart_Axis_DirectionDegrees));
+    public static string Pick_Chart_NowMarker => Get(nameof(Pick_Chart_NowMarker));
+    public static string Pick_Chart_NoSamples => Get(nameof(Pick_Chart_NoSamples));
+    public static string Pick_Chart_StationAttributes => Get(nameof(Pick_Chart_StationAttributes));
+
     // Settings
     public static string Settings_Heading => Get(nameof(Settings_Heading));
     public static string Settings_AccentColor => Get(nameof(Settings_AccentColor));

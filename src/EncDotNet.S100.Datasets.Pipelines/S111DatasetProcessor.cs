@@ -423,6 +423,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             FeatureRef = StationFeatureRefPrefix + station.Identifier,
             FeatureType = "SurfaceCurrent",
             FeatureTypeName = "Surface Current (Station)",
+            StationSeries = BuildStationSeriesSnapshot(station),
             Attributes = new List<PickAttribute>
             {
                 new()
@@ -482,6 +483,41 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                         CultureInfo.InvariantCulture,
                         "{0:u} → {1:u}",
                         station.StartTime, station.EndTime),
+                },
+            },
+        };
+    }
+
+    private static StationTimeSeriesSnapshot BuildStationSeriesSnapshot(SurfaceCurrentStation station)
+    {
+        var times = new DateTime[station.NumberOfTimes];
+        for (var i = 0; i < station.NumberOfTimes; i++)
+            times[i] = station.TimeAt(i);
+
+        return new StationTimeSeriesSnapshot
+        {
+            StationId = station.Identifier,
+            StationName = station.Identifier,
+            Latitude = station.Latitude,
+            Longitude = station.Longitude,
+            Times = times,
+            Channels = new[]
+            {
+                new StationTimeSeriesChannel
+                {
+                    Key = "surfaceCurrentSpeed",
+                    DisplayName = "Surface Current Speed",
+                    Unit = "m/s",
+                    Values = station.SpeedsMetresPerSecond,
+                    FillValue = -9999f,
+                },
+                new StationTimeSeriesChannel
+                {
+                    Key = "surfaceCurrentDirection",
+                    DisplayName = "Surface Current Direction",
+                    Unit = "°",
+                    Values = station.DirectionsDegreesTrue,
+                    FillValue = -9999f,
                 },
             },
         };
