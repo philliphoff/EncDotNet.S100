@@ -195,6 +195,35 @@ foreach (var feature in dataset.Features)
 }
 ```
 
+## Validation
+
+`S131HarbourInfrastructureRules.Default` is a pilot rule set of
+Tier-1/Tier-2 checks that run against a typed
+`S131HarbourInfrastructureDataset`. Each rule's ID traces to an S-131
+or S-100 spec clause.
+
+| Rule ID | Description | Severity |
+|---|---|---|
+| `S131-R-1.1` | `HarbourPhysicalInfrastructure` features must have non-empty geometry (container `HarbourFacility` exempt). | Error |
+| `S131-R-1.2` | `Layout` features must have non-empty geometry. | Error |
+| `S131-R-2.1` | `availableBerthingLength`, when present, must be a non-negative numeric value (metres). | Warning |
+| `S131-R-3.1` | Every coordinate must lie within the WGS-84 lat/lon ranges (S-100 Part 10b §6.2). | Error |
+| `S131-R-3.2` | Surface rings must have ≥ 4 vertices and be closed (first = last). | Error |
+| `S131-R-4.1` | Feature and information-type `gml:id` values must be unique within the dataset. | Error |
+| `S131-R-5.1` | All `xlink:href` references must resolve to a peer in the dataset (covers both feature and information-type axes). | Warning |
+| `S131-R-6.1` | Feature and information-type codes must be declared in the S-131 Feature Catalogue. | Warning |
+
+```csharp
+var typed = S131HarbourInfrastructureDataset.From(dataset, out _);
+var report = S131HarbourInfrastructureRules.Validate(typed);
+foreach (var f in report.Findings)
+    Console.WriteLine($"[{f.Severity}] {f.RuleId}: {f.Message}");
+```
+
+Tier-3 cross-dataset rules (e.g. cross-checking `Berth` depths against
+a loaded S-102 bathymetric surface) are out of scope here; they would
+reach sibling datasets via `ValidationContext.Services`.
+
 ## Dependencies
 
 - `EncDotNet.S100.Core` — GML abstractions, pipeline interfaces
