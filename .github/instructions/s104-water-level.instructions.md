@@ -20,3 +20,12 @@ When modifying S-104 code:
   spec-derived constants, attribute names, or group paths.
 - Any new public API requires a matching xunit test (use `SkippableFact`
   when a real HDF5 file is required).
+- **Portrayal is synthesised by design.** IHO publishes no official S-104
+  portrayal catalogue (the spec treats water levels as input to ECDIS
+  depth adjustment, not a visual layer). `S104PortrayalCatalogue` ships
+  hand-coded Day / Dusk / Night band tables and per-palette `NoDataColor`
+  values purely for viewer parity with S-102 / S-111. Do **not** invent
+  a synthetic IHO-shaped PC under `content/S104/pc/`; that directory
+  stays `.gitkeep`-only until IHO publishes one. If you change the band
+  table, preserve the Day palette byte-for-byte (backward compatibility)
+  and update `S104PortrayalCatalogueTests` accordingly.
