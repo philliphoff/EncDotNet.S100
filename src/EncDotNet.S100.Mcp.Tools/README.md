@@ -168,7 +168,7 @@ The five error variants implemented in this PR:
 `FeatureDescriberRegistry` keyed on `SpecRef.Name`. Each describer
 implements an internal `ISpecFeatureDescriber` strategy.
 
-The registry currently wires five describers:
+The registry currently wires six describers:
 
 | Spec   | Describer                  | Feature id convention                                                                                       |
 |--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
@@ -177,6 +177,7 @@ The registry currently wires five describers:
 | S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
 | S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
 | S-124  | `S124FeatureDescriber`     | GML `gml:id` of the warning feature.                                                                        |
+| S-129  | `S129FeatureDescriber`     | GML `gml:id` of the plan-metadata, plan-area, (almost-)non-navigable-area, or control-point feature.        |
 
 For the coverage describers (S-102/S-104/S-111) the result returns
 instance-level metadata (origin, spacing, grid dimensions, CRS,
@@ -283,6 +284,6 @@ if (depths.TryGetValue(out var series))
 - Search / NL tools.
 - Write-back tools.
 - Comprehensive xlink reference resolution for backfilled describers
-  (S-122/S-125/S-127/S-128/S-129/S-131/S-201/S-411/S-421 return their
+  (S-122/S-125/S-127/S-128/S-131/S-201/S-411/S-421 return their
   feature attributes via the generic `GmlFeatureDescriber`, but
   references arrive as an empty list pending per-spec resolution).
