@@ -27,6 +27,14 @@ internal sealed class PickHit
     /// <summary>Product specification of the source dataset (e.g. "S-101").</summary>
     public string? ProductSpec { get; init; }
 
+    /// <summary>
+    /// Optional time-series view model used by the pick panel to render a
+    /// chart when this hit represents a fixed-station observation
+    /// (S-104 / S-111 dcf=8). <c>null</c> for every other feature shape;
+    /// when set, the panel shows a chart section above the attribute list.
+    /// </summary>
+    public StationTimeSeriesViewModel? StationSeries { get; init; }
+
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 

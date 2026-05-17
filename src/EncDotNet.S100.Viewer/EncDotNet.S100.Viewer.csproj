@@ -61,6 +61,7 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FluentIcons.Avalonia.Fluent" />
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" />
     <PackageReference Include="Mapsui.Avalonia" />
     <PackageReference Include="ShadUI" />
     <PackageReference Include="Spectre.Console.Cli" />

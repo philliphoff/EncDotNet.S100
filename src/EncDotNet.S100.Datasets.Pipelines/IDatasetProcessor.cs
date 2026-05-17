@@ -159,6 +159,17 @@ public sealed class FeatureInfo
     /// </summary>
     public IReadOnlyList<FeatureReference> References { get; init; }
         = System.Array.Empty<FeatureReference>();
+
+    /// <summary>
+    /// Full time-series snapshot for the feature when it represents a
+    /// fixed-station observation (S-104 / S-111 data-coding-format-8
+    /// stations). <c>null</c> for every other feature shape — including
+    /// gridded coverage samples synthesised by
+    /// <see cref="IDatasetProcessor.GetCoverageInfo"/>. Viewers use this
+    /// to render the pick panel's time-series chart without re-querying
+    /// the processor as the global clock moves.
+    /// </summary>
+    public StationTimeSeriesSnapshot? StationSeries { get; init; }
 }
 
 /// <summary>

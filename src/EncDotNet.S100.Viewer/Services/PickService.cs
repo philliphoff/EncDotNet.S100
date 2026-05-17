@@ -147,20 +147,46 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hits.Add(new PickHit
-            {
-                FeatureType = info.FeatureType,
-                FeatureTypeName = info.FeatureTypeName,
-                FeatureRef = info.FeatureRef,
-                DatasetFileName = owningEntry.DisplayName,
-                ProductSpec = processor.Spec.Name,
-                Attributes = info.Attributes,
-                References = info.References,
-                OwningProcessor = processor,
-            });
+            hits.Add(BuildHit(info, owningEntry.DisplayName, processor));
         }
 
         return hits;
+    }
+
+    /// <summary>
+    /// Wraps a processor <see cref="FeatureInfo"/> into a <see cref="PickHit"/>,
+    /// including a viewer-side <see cref="StationTimeSeriesViewModel"/> when
+    /// the underlying info carries a station snapshot.
+    /// </summary>
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor)
+    {
+        return new PickHit
+        {
+            FeatureType = info.FeatureType,
+            FeatureTypeName = info.FeatureTypeName,
+            FeatureRef = info.FeatureRef,
+            DatasetFileName = datasetFileName,
+            ProductSpec = processor.Spec.Name,
+            Attributes = info.Attributes,
+            References = info.References,
+            OwningProcessor = processor,
+            StationSeries = BuildStationSeriesViewModel(info, processor),
+        };
+    }
+
+    private StationTimeSeriesViewModel? BuildStationSeriesViewModel(FeatureInfo info, IDatasetProcessor processor)
+    {
+        if (info.StationSeries is not { } snapshot)
+            return null;
+
+        // Per-product viewmodel selection mirrors the pipeline shape: S-104
+        // exposes a single height channel; S-111 exposes speed + direction.
+        return processor.Spec.Name switch
+        {
+            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime),
+            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime),
+            _ => null,
+        };
     }
 
     public bool NavigateToReference(FeatureReference reference)
@@ -215,20 +241,7 @@ internal sealed class PickService : IPickService
         if (info is null)
             return false;
 
-        _pickReport.SetPicks(new[]
-        {
-            new PickHit
-            {
-                FeatureType = info.FeatureType,
-                FeatureTypeName = info.FeatureTypeName,
-                FeatureRef = info.FeatureRef,
-                DatasetFileName = datasetFileName,
-                ProductSpec = processor.Spec.Name,
-                Attributes = info.Attributes,
-                References = info.References,
-                OwningProcessor = processor,
-            },
-        });
+        _pickReport.SetPicks(new[] { BuildHit(info, datasetFileName, processor) });
 
         _status.StatusText = string.Format(
             Resources.Strings.Status_FeatureSummary,
@@ -288,17 +301,7 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hit = new PickHit
-            {
-                FeatureType = info.FeatureType,
-                FeatureTypeName = info.FeatureTypeName,
-                FeatureRef = info.FeatureRef,
-                DatasetFileName = entry.DisplayName,
-                ProductSpec = processor.Spec.Name,
-                Attributes = info.Attributes,
-                References = info.References,
-                OwningProcessor = processor,
-            };
+            hit = BuildHit(info, entry.DisplayName, processor);
             return true;
         }
 
