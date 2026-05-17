@@ -70,6 +70,36 @@ foreach (var aid in typed.Aids)
 }
 ```
 
+## Validation
+
+The `EncDotNet.S100.Datasets.S125.Validation` namespace exposes
+`S125AtonRules.Default`, a `ValidationRuleSet<S125AtonDataset>` of
+normative checks built on the typed `S125AtonDataset` projection. The
+pilot pack covers:
+
+| Rule | Severity | Summary |
+| ---- | -------- | ------- |
+| `S125-R-1.1` | Error   | Aid position lat/lon in WGS-84 ranges (S-100 Part 10b §6.2) |
+| `S125-R-1.2` | Error   | Aid `gml:id` unique within the dataset |
+| `S125-R-2.1` | Error   | AIS aid carries a 9-digit `mMSICode` |
+| `S125-R-3.1` | Error   | `AtonStatusInformation.changeTypes` in {1..5} |
+| `S125-R-3.2` | Error   | Status date range `dateStart ≤ dateEnd` |
+| `S125-R-4.1` | Warning | `AtonAggregation` / `AtonAssociation` binds ≥ 1 aid |
+| `S125-R-5.1` | Warning | `AtonStatusIndication` has a point geometry |
+
+```csharp
+var raw = S125Dataset.Open("aids.gml");
+var typed = S125AtonDataset.From(raw, out _);
+var report = S125AtonRules.Validate(typed);
+foreach (var f in report.Findings)
+    Console.WriteLine($"{f.Severity} {f.RuleId} {f.RelatedFeatureId}: {f.Message}");
+```
+
+Projection-time issues (unresolved xlinks, duplicate ids) are not
+exposed on the typed model and so are not surfaced as rules; capture
+the `out IReadOnlyList<ProjectionDiagnostic>` from
+`S125AtonDataset.From` if you need them.
+
 ## Notes
 
 - S-125 application schema namespace is `http://www.iho.int/S125/1.0`; geometry uses the S-100 GML 5.0 profile namespace `http://www.iho.int/s100gml/5.0`. Older sample datasets that still declare the S-100 GML 1.0 profile are read transparently.
