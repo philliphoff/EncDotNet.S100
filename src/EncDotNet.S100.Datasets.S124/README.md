@@ -81,3 +81,40 @@ foreach (var part in warning.Parts)
 foreach (var d in diagnostics) Console.WriteLine(d);
 ```
 
+## Validation
+
+The `EncDotNet.S100.Datasets.S124.Validation` namespace provides a pack of
+normative rules built on the `EncDotNet.S100.Validation` framework. Rule
+identifiers follow the convention `S124-R-{clause}`, traceable back to the
+S-124 (Edition 1.0.0) Feature Catalogue or to S-100 Part 10b for shared
+encoding constraints.
+
+```csharp
+using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Datasets.S124.DataModel;
+using EncDotNet.S100.Datasets.S124.Validation;
+
+var dataset = S124Dataset.Open("navwarn.gml");
+var warning = S124NavigationalWarning.From(dataset, out _);
+
+var report = S124NavigationalWarningRules.Validate(warning);
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
+```
+
+The default rule set covers eight Tier-1/Tier-2 rules:
+
+| Rule | Description |
+|---|---|
+| `S124-R-1.1` | A navigational warning must contain at least one `NavwarnPart`. |
+| `S124-R-2.1` | Every navigational warning must include a `NavwarnPreamble`. |
+| `S124-R-2.2` | `messageSeriesIdentifier` must carry a positive warning number and a plausible year. |
+| `S124-R-3.1` | `NAVAREA` must be one of the IMO NAVAREA codes (I…XXI). |
+| `S124-R-4.1` | All coordinates must lie within the WGS-84 lat/lon ranges. |
+| `S124-R-4.2` | Surface exterior rings must be closed and contain at least four positions. |
+| `S124-R-5.1` | Each `NavwarnPart` must carry non-empty warning text. |
+| `S124-R-6.1` | A `References` information type that sets `referenceCategory` must include `messageReference`. |
+
+Tier-3 cross-dataset rules (e.g. resolving the referenced warning of a
+cancellation against a sibling catalogue) are out of scope for this pack.
+
