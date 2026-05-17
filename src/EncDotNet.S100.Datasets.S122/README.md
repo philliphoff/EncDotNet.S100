@@ -102,3 +102,41 @@ Notes:
 - Unrecognised feature / information types are preserved as
   `S122OtherFeature` / `S122OtherInformationType` so future-edition
   catalogues round-trip without information loss.
+
+## Validation
+
+The library ships a default rule pack for the typed dataset projection
+at `EncDotNet.S100.Datasets.S122.Validation.S122MarineProtectedAreaRules`.
+It follows the framework introduced for S-421 in PR #100 — see
+`EncDotNet.S100.Core/Validation/` for `IValidationRule<TModel>`,
+`ValidationRuleSet`, `ValidationFinding`, `ValidationSeverity`.
+
+```csharp
+using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Datasets.S122.DataModel;
+using EncDotNet.S100.Datasets.S122.Validation;
+
+var dataset = S122Dataset.Open("122TESTDATASET.gml");
+var typed = S122MarineProtectedAreaDataset.From(dataset, out _);
+var report = S122MarineProtectedAreaRules.Validate(typed);
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
+```
+
+The default rule pack contains seven rules:
+
+| Rule ID        | Severity | Summary                                                           |
+| -------------- | -------- | ----------------------------------------------------------------- |
+| `S122-R-3.1`   | Warning  | Features that declare a Point/Curve/Surface kind must have coords. |
+| `S122-R-4.1`   | Error    | All coordinates must lie within WGS-84 lat/lon ranges.            |
+| `S122-R-5.1`   | Error    | Surface features need a closed exterior ring (≥4 coords, first=last). |
+| `S122-R-6.1`   | Error    | Feature `gml:id` values must be unique within the dataset.        |
+| `S122-R-6.2`   | Error    | Information-type `gml:id` values must be unique within the dataset. |
+| `S122-R-7.1`   | Warning  | When present, `scaleMinimum` must be a positive denominator (≥1). |
+| `S122-R-9.1`   | Warning  | When present, `productIdentifier` must start with `S-122`.        |
+
+Tier-3 cross-dataset rules (e.g. an S-122 restricted area overlapping
+an S-101 routing zone) are deliberately out of scope for this pack;
+they will land alongside the MCP `validate_all` surface that exposes
+sibling datasets via `ValidationContext.Services`.
