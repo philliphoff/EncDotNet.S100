@@ -62,3 +62,24 @@ dotnet add package EncDotNet.S100.Datasets.S129
   it references (timeline iteration, reference resolution, route
   binding). Strictly additive on top of the types in this library.
 
+## Validation
+
+The `Validation/` namespace provides a default rule pack for the typed
+projection (mirroring the pattern introduced for S-421 in PR #100):
+
+- **`S129UkcRules`** — a static class exposing each rule as a typed
+  `IValidationRule<S129UnderKeelClearancePlan>` property, composed
+  into `S129UkcRules.Default` (a `ValidationRuleSet<…>`), with a
+  `Validate(plan)` convenience wrapper that runs the default set.
+- Rule identifiers follow `S129-R-{clause}` and cite the relevant
+  S-129 Edition 2.0.0 feature-catalogue elements in their XML doc
+  comments. The pilot set covers seven Tier-1 / Tier-2 rules:
+  plan-validity-period inversion, control-point time monotonicity,
+  WGS-84 coordinate bounds across every feature, plan-area geometry
+  populated, positive maximum draught, finite UKC / speed
+  measurements, and control-point geometry presence.
+- Tier-3 cross-dataset rules — e.g. comparing a control point's UKC
+  margin against a sibling S-102 bathymetric grid — are intentionally
+  deferred to the MCP `validate_all` surface and the `S129Fusion`
+  library.
+
