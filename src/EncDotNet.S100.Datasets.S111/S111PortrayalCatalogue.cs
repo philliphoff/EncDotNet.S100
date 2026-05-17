@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Xml.Linq;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
@@ -8,48 +6,50 @@ using EncDotNet.S100.Core;
 namespace EncDotNet.S100.Datasets.S111;
 
 /// <summary>
-/// Portrayal catalogue for S-111 Surface Currents.
-/// Loads the official IHO color profile from the <see cref="PortrayalCatalogueProvider"/>
-/// and parses speed band definitions from the XSLT rules.
+/// Portrayal catalogue for S-111 Surface Currents (Ed 2.0.0).
+/// Loads the official IHO colour profile (Day/Dusk/Night) and the
+/// surface-current speed-band table from the bundled portrayal
+/// catalogue assets.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Palettes are cached on the shared <see cref="IPortrayalAssetCache"/>
+/// (PR-3 / PR-4 of the asset-caching audit). The parsed speed-band
+/// table is cached on the catalogue instance itself rather than on the
+/// shared cache: the table is the only consumer, the parser runs once
+/// per catalogue lifetime, and a per-instance field avoids growing
+/// <see cref="IPortrayalAssetCache"/>'s public surface for a
+/// single-spec asset.
+/// </para>
+/// <para>
+/// The speed-band table, symbol references and the three scale
+/// constants are parsed from <c>Rules/select_arrow.xsl</c> via
+/// <see cref="S111SpeedBandReader"/>; no spec-derived constants are
+/// hard-coded in this catalogue.
+/// </para>
+/// </remarks>
 public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 {
     private readonly PortrayalCatalogueProvider _provider;
-
-    // PR-4 (asset-caching audit §6): palette storage lives on the
-    // provider's IPortrayalAssetCache. The bundled S-111 colour profile
-    // is a single XML file that contains all three palettes
-    // (Day/Dusk/Night), so on first access we eager-load all three into
-    // the shared cache (gated by IPortrayalAssetCache.PalettesLoaded).
-    // Two S-111 catalogue instances that share a provider — or two
-    // providers sharing a PortrayalCatalogueManager-owned cache for
-    // SpecRef("S-111", _) — therefore open the colour-profile asset at
-    // most once.
-    //
-    // Thread-safety: PortrayalAssetCache uses non-concurrent
-    // dictionaries; PR-6 of the audit tracks hardening.
     private readonly IPortrayalAssetCache _cache;
 
     /// <summary>
-    /// Speed band definitions matching the S-111 Ed.2.0.0 portrayal catalogue XSLT.
-    /// Each band maps a speed range (knots) to a color token and arrow symbol.
+    /// Per-instance cache of the parsed speed-band table. Sticky once
+    /// <see cref="_bandsLoaded"/> flips to <c>true</c>. See the
+    /// type-level remarks for the per-instance vs. shared-cache
+    /// decision.
     /// </summary>
-    private static readonly (float Min, float Max, string Token, string Symbol, bool ScaleByValue, float ScaleFactor, string Label)[] Bands =
-    [
-        (0.0f, 0.5f, "SCBN1", "SCAROW01", false, 0.40f, "0–0.5 kn"),
-        (0.5f, 1.0f, "SCBN2", "SCAROW02", false, 0.40f, "0.5–1 kn"),
-        (1.0f, 2.0f, "SCBN3", "SCAROW03", false, 0.40f, "1–2 kn"),
-        (2.0f, 3.0f, "SCBN4", "SCAROW04", true, 0.20f, "2–3 kn"),
-        (3.0f, 5.0f, "SCBN5", "SCAROW05", true, 0.20f, "3–5 kn"),
-        (5.0f, 7.0f, "SCBN6", "SCAROW06", true, 0.20f, "5–7 kn"),
-        (7.0f, 10.0f, "SCBN7", "SCAROW07", true, 0.20f, "7–10 kn"),
-        (10.0f, 13.0f, "SCBN8", "SCAROW08", true, 0.20f, "10–13 kn"),
-        (13.0f, float.MaxValue, "SCBN9", "SCAROW09", false, 2.60f, "> 13 kn"),
-    ];
+    private IReadOnlyList<S111SpeedBandReader.SpeedBand>? _bands;
+    private bool _bandsLoaded;
+
+    private const string SpeedFieldName = "surfaceCurrentSpeed";
+    private const string DirectionFieldName = "surfaceCurrentDirection";
+    private const string ProductTag = "S-111";
 
     /// <summary>
     /// Creates a catalogue backed by a real portrayal catalogue provider.
-    /// Colors are loaded from the color profile; speed bands from the XSLT rules.
+    /// Colours come from the bundled colour profile; speed bands from
+    /// the bundled XSLT rules.
     /// </summary>
     public S111PortrayalCatalogue(PortrayalCatalogueProvider provider)
     {
@@ -61,10 +61,9 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     public SpecRef Spec => new("S-111", default);
     public string Edition => _provider.Catalogue.Version ?? "2.0.0";
 
-    private const string ProductTag = "S-111";
-
     /// <summary>The identity of the underlying portrayal catalogue XML, when available.</summary>
     public CatalogueRef? CatalogueRef => _provider.Catalogue.CatalogueRef;
+
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     public void SwitchPalette(PaletteType type)
@@ -83,67 +82,69 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         EnsurePalettesLoaded();
+        var bands = EnsureSpeedBandsLoaded();
 
-        var colorBands = new List<ColorBand>();
-
-        foreach (var (min, max, token, symbol, scaleByValue, scaleFactor, label) in Bands)
+        var colorBands = new List<ColorBand>(bands.Count);
+        foreach (var band in bands)
         {
-            if (!ActivePalette.TryResolve(token, out var color))
-                throw new InvalidOperationException($"Color token '{token}' not found in the S-111 color profile.");
+            if (!ActivePalette.TryResolve(band.ColorToken, out var color))
+            {
+                throw new InvalidOperationException(
+                    $"Color token '{band.ColorToken}' not found in the S-111 color profile.");
+            }
 
             colorBands.Add(new ColorBand
             {
-                MinValue = min,
-                MaxValue = max,
+                MinValue = band.Min,
+                MaxValue = band.Max,
                 Color = color,
-                Label = label,
+                Label = band.Label,
             });
         }
 
         return new CoverageColorScheme
         {
-            FieldName = "surfaceCurrentSpeed",
+            FieldName = SpeedFieldName,
             Bands = colorBands,
+            NoDataColor = ResolveNoDataColor(),
         };
     }
 
     public CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings)
     {
-        var symbolBands = new List<SymbolBand>();
+        var bands = EnsureSpeedBandsLoaded();
 
-        foreach (var (min, max, token, symbol, scaleByValue, scaleFactor, label) in Bands)
+        var symbolBands = new List<SymbolBand>(bands.Count);
+        foreach (var band in bands)
         {
             symbolBands.Add(new SymbolBand
             {
-                MinValue = min,
-                MaxValue = max,
-                SymbolRef = symbol,
-                ScaleByValue = scaleByValue,
-                ScaleFactor = scaleFactor,
-                Label = label,
+                MinValue = band.Min,
+                MaxValue = band.Max,
+                SymbolRef = band.SymbolRef,
+                ScaleByValue = band.ScaleByValue,
+                ScaleFactor = band.ScaleFactor,
+                Label = band.Label,
             });
         }
 
         return new CoverageSymbolScheme
         {
-            ValueFieldName = "surfaceCurrentSpeed",
-            RotationFieldName = "surfaceCurrentDirection",
+            ValueFieldName = SpeedFieldName,
+            RotationFieldName = DirectionFieldName,
             Bands = symbolBands,
         };
     }
 
     public IReadOnlyList<ContourStyle> Contours => [];
 
+    // ── Palettes ───────────────────────────────────────────────────────
+
     /// <summary>
     /// Eager-loads the Day/Dusk/Night palettes from the S-111 colour-profile
     /// asset into the shared <see cref="IPortrayalAssetCache.Palettes"/> on
     /// first access. Subsequent calls are a no-op thanks to the sticky
-    /// <see cref="IPortrayalAssetCache.PalettesLoaded"/> flag (PR-3). The
-    /// S-111 portrayal catalogue ships a single <c>colorProfile.xml</c>
-    /// that contains all three palettes, so we read it once and pull each
-    /// palette out by name in turn — opening the asset stream per palette
-    /// because <see cref="ColorProfileReader.Read(Stream, string)"/>
-    /// consumes its argument.
+    /// <see cref="IPortrayalAssetCache.PalettesLoaded"/> flag.
     /// </summary>
     private void EnsurePalettesLoaded()
     {
@@ -182,5 +183,51 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         {
             ActivePalette = dayPalette;
         }
+    }
+
+    // ── Speed bands ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Lazily parses the speed-band table from
+    /// <c>Rules/select_arrow.xsl</c> on first access; sticky on
+    /// <see cref="_bandsLoaded"/>.
+    /// </summary>
+    private IReadOnlyList<S111SpeedBandReader.SpeedBand> EnsureSpeedBandsLoaded()
+    {
+        if (_bandsLoaded && _bands is not null)
+        {
+            return _bands;
+        }
+
+        var ruleFile = _provider.Catalogue.RuleFiles
+            .FirstOrDefault(r => r.FileName.Contains("select_arrow", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException(
+                "S-111 portrayal catalogue does not contain a select_arrow rule file.");
+
+        using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
+        _bands = S111SpeedBandReader.Read(stream);
+        _bandsLoaded = true;
+        return _bands;
+    }
+
+    // ── NoData colour ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Picks the no-data fill colour for the active palette. S-111
+    /// ships no <c>NODTA</c> token, so we fall back to <c>CHBLK</c>
+    /// (present in all three bundled palettes); failing both we leave
+    /// the cell transparent (legacy behaviour).
+    /// </summary>
+    private string? ResolveNoDataColor()
+    {
+        if (ActivePalette.TryResolve("NODTA", out var nodta) && !string.IsNullOrEmpty(nodta))
+        {
+            return nodta;
+        }
+        if (ActivePalette.TryResolve("CHBLK", out var chblk) && !string.IsNullOrEmpty(chblk))
+        {
+            return chblk;
+        }
+        return "#00000000";
     }
 }

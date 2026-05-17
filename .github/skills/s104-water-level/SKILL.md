@@ -55,3 +55,13 @@ description: |
 - Trend is an enumeration, not a delta — never compute it client-side.
 - Vertical datum (`verticalDatum`) varies by producer; surface it
   through the source rather than assuming MLLW.
+- **Portrayal is synthesised, not spec-driven.** S-104 Edition 2.0.0
+  has no official IHO portrayal catalogue — the spec treats water
+  levels as input to ECDIS depth adjustment rather than a visual
+  layer. `S104PortrayalCatalogue` ships hand-coded Day / Dusk / Night
+  band tables and per-palette `NoDataColor` values for viewer parity
+  with S-102 / S-111. The Day palette is preserved byte-for-byte for
+  backward compatibility; Dusk is HLS (saturation × 0.70, lightness
+  × 0.85) of Day; Night is hand-picked ECDIS-style dark navy / olive.
+  Do **not** invent a synthetic IHO-shaped PC under `content/S104/pc/`
+  (kept `.gitkeep`-only by design).
