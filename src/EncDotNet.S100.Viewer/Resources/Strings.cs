@@ -42,6 +42,15 @@ internal static class Strings
     public static string Pane_DatasetTab_Dataset => Get(nameof(Pane_DatasetTab_Dataset));
     public static string Pane_DatasetTab_Layers => Get(nameof(Pane_DatasetTab_Layers));
     public static string Pane_DatasetTab_NoLayers => Get(nameof(Pane_DatasetTab_NoLayers));
+    public static string Pane_DatasetTab_Validation => Get(nameof(Pane_DatasetTab_Validation));
+    public static string Pane_Validation_NoFindings => Get(nameof(Pane_Validation_NoFindings));
+    public static string Pane_Validation_NoRulePack => Get(nameof(Pane_Validation_NoRulePack));
+    public static string Pane_Validation_CountsSummaryFormat => Get(nameof(Pane_Validation_CountsSummaryFormat));
+    public static string Pane_Validation_RelatedFeatureFormat => Get(nameof(Pane_Validation_RelatedFeatureFormat));
+    public static string Pane_Validation_Severity_Error => Get(nameof(Pane_Validation_Severity_Error));
+    public static string Pane_Validation_Severity_Warning => Get(nameof(Pane_Validation_Severity_Warning));
+    public static string Pane_Validation_Severity_Info => Get(nameof(Pane_Validation_Severity_Info));
+    public static string Tooltip_ValidationBadge => Get(nameof(Tooltip_ValidationBadge));
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
     public static string Pane_Search => Get(nameof(Pane_Search));

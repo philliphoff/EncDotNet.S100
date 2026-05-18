@@ -6,6 +6,8 @@ using System.Linq;
 using System.Xml;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S131;
+using EncDotNet.S100.Datasets.S131.DataModel;
+using EncDotNet.S100.Datasets.S131.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
@@ -13,6 +15,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -49,6 +52,8 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     private readonly MapsuiRenderAssetCache _renderAssetCache = new();
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     /// <inheritdoc/>
     public SpecRef Spec => new("S-131", default);
@@ -218,6 +223,20 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
                 FeatureTypeName = _decoder?.ResolveFeatureTypeName(f.FeatureType),
             };
         }
+    }
+
+    /// <inheritdoc/>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S131HarbourInfrastructureDataset.From(raw, out _),
+                S131HarbourInfrastructureRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
     }
 
     private void EnsureDecoder()

@@ -1,9 +1,12 @@
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S125;
+using EncDotNet.S100.Datasets.S125.DataModel;
+using EncDotNet.S100.Datasets.S125.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -15,6 +18,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
 {
     private readonly S125Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     /// <inheritdoc />
     public override SpecRef Spec => new("S-125", default);
@@ -85,4 +90,18 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
 
     protected override string BuildInfoSuffix() =>
         $"Information types: {_dataset.InformationTypes.Length}";
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S125AtonDataset.From(raw, out _),
+                S125AtonRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 }

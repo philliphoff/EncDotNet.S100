@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -170,6 +171,139 @@ internal sealed class DatasetEntry : ViewModelBase
         _currentTime is { } t
             ? string.Format(CultureInfo.CurrentCulture, Strings.DatasetEntry_CurrentTimeFormat, t)
             : string.Empty;
+
+    // ── Validation report ────────────────────────────────────────────
+    //
+    // Surfaced in the Validation tab of the dataset properties panel.
+    // Populated once per load by DatasetLoaderService after Render
+    // succeeds. A null Validation means the spec has no rule pack yet
+    // (S-101 / S-102 / S-104 / S-111 / S-201 / S-57); an empty Findings
+    // collection on a non-null Validation means the rules ran and
+    // found nothing.
+
+    private ValidationReport? _validation;
+    /// <summary>
+    /// Aggregated validation findings for this dataset, or <c>null</c>
+    /// when the spec has no rule pack defined. Set once at load time
+    /// by <see cref="Services.DatasetLoaderService"/> via
+    /// <see cref="SetValidationReport"/>.
+    /// </summary>
+    public ValidationReport? Validation => _validation;
+
+    /// <summary><c>true</c> when a rule pack ran (regardless of finding count).</summary>
+    public bool HasValidationRulePack => _validation is not null;
+
+    /// <summary>
+    /// Read-only display models for the report's findings, in the
+    /// order the rules emitted them. Empty when no rule pack ran or
+    /// the report contains no findings.
+    /// </summary>
+    public IReadOnlyList<ValidationFindingViewModel> Findings { get; private set; } =
+        Array.Empty<ValidationFindingViewModel>();
+
+    /// <summary>Total findings across all severities.</summary>
+    public int ValidationFindingCount =>
+        _validation?.Findings.IsDefaultOrEmpty == false ? _validation.Findings.Length : 0;
+
+    /// <summary>Number of <see cref="ValidationSeverity.Error"/> findings.</summary>
+    public int ValidationErrorCount =>
+        _validation?.Findings.IsDefaultOrEmpty == false
+            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Error)
+            : 0;
+
+    /// <summary>Number of <see cref="ValidationSeverity.Warning"/> findings.</summary>
+    public int ValidationWarningCount =>
+        _validation?.Findings.IsDefaultOrEmpty == false
+            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Warning)
+            : 0;
+
+    /// <summary>Number of <see cref="ValidationSeverity.Info"/> findings.</summary>
+    public int ValidationInfoCount =>
+        _validation?.Findings.IsDefaultOrEmpty == false
+            ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Info)
+            : 0;
+
+    /// <summary><c>true</c> when the report contains at least one finding.</summary>
+    public bool HasValidationFindings => ValidationFindingCount > 0;
+
+    /// <summary>
+    /// Drives the badge severity class: <c>true</c> when at least one
+    /// Error finding exists. Wired to a <c>Classes.Error</c> binding on
+    /// the badge Border so styling stays in XAML — no value converter.
+    /// </summary>
+    public bool BadgeIsError => ValidationErrorCount > 0;
+
+    /// <summary><c>true</c> when there are warnings but no errors.</summary>
+    public bool BadgeIsWarning => ValidationErrorCount == 0 && ValidationWarningCount > 0;
+
+    /// <summary><c>true</c> when only info-severity findings are present.</summary>
+    public bool BadgeIsInfo =>
+        ValidationErrorCount == 0 && ValidationWarningCount == 0 && ValidationInfoCount > 0;
+
+    /// <summary>
+    /// Localised tooltip for the count badge, e.g.
+    /// <c>"3 validation findings (1 errors, 2 warnings, 0 info)"</c>.
+    /// </summary>
+    public string ValidationBadgeTooltip => string.Format(
+        CultureInfo.CurrentCulture,
+        Strings.Tooltip_ValidationBadge,
+        ValidationFindingCount,
+        ValidationErrorCount,
+        ValidationWarningCount,
+        ValidationInfoCount);
+
+    /// <summary>
+    /// Localised counts summary shown above the findings list when
+    /// findings are present.
+    /// </summary>
+    public string ValidationCountsSummary => string.Format(
+        CultureInfo.CurrentCulture,
+        Strings.Pane_Validation_CountsSummaryFormat,
+        ValidationFindingCount,
+        ValidationErrorCount,
+        ValidationWarningCount,
+        ValidationInfoCount);
+
+    /// <summary>
+    /// Localised message rendered when the Findings list is empty —
+    /// either "No findings." (rule pack ran clean) or
+    /// "Validation rules not yet defined for {spec}." (no rule pack).
+    /// </summary>
+    public string ValidationEmptyStateMessage =>
+        HasValidationRulePack
+            ? Strings.Pane_Validation_NoFindings
+            : string.Format(CultureInfo.CurrentCulture, Strings.Pane_Validation_NoRulePack, ProductSpec);
+
+    /// <summary>
+    /// Replaces the cached validation report and raises change
+    /// notifications for every derived property. Pass <c>null</c> to
+    /// reset (e.g. on reload), pass <see cref="ValidationReport.Empty"/>
+    /// or a report with findings to populate. Safe to call from any
+    /// thread; consumers are responsible for marshalling to the UI
+    /// thread when needed.
+    /// </summary>
+    public void SetValidationReport(ValidationReport? report)
+    {
+        _validation = report;
+        Findings = report is null || report.Findings.IsDefaultOrEmpty
+            ? Array.Empty<ValidationFindingViewModel>()
+            : report.Findings.Select(f => new ValidationFindingViewModel(f)).ToArray();
+
+        OnPropertyChanged(nameof(Validation));
+        OnPropertyChanged(nameof(Findings));
+        OnPropertyChanged(nameof(HasValidationRulePack));
+        OnPropertyChanged(nameof(ValidationFindingCount));
+        OnPropertyChanged(nameof(ValidationErrorCount));
+        OnPropertyChanged(nameof(ValidationWarningCount));
+        OnPropertyChanged(nameof(ValidationInfoCount));
+        OnPropertyChanged(nameof(HasValidationFindings));
+        OnPropertyChanged(nameof(BadgeIsError));
+        OnPropertyChanged(nameof(BadgeIsWarning));
+        OnPropertyChanged(nameof(BadgeIsInfo));
+        OnPropertyChanged(nameof(ValidationBadgeTooltip));
+        OnPropertyChanged(nameof(ValidationCountsSummary));
+        OnPropertyChanged(nameof(ValidationEmptyStateMessage));
+    }
 
     public DatasetEntry(string filePath, string productSpec)
         : this(filePath, productSpec, source: null, relativePath: null, displayName: null)

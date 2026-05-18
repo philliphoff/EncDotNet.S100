@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -84,6 +85,31 @@ public interface IDatasetProcessor
     /// default empty enumeration.
     /// </remarks>
     IEnumerable<FeatureSummary> EnumerateFeatures() => System.Array.Empty<FeatureSummary>();
+
+    /// <summary>
+    /// Runs the spec's normative validation rule pack against this
+    /// processor's parsed dataset and returns the aggregated report,
+    /// or <c>null</c> when no rule pack is available for the spec
+    /// (e.g. coverage products and S-101 / S-201 / S-57 today).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset and does
+    /// not depend on the current palette, opacity, or selected time
+    /// step; callers cache the report rather than re-running it on
+    /// every render. Implementations should run the projection
+    /// (<c>S125AtonDataset.From(...)</c>, etc.) lazily and cache the
+    /// resulting <see cref="ValidationReport"/> on a private field so
+    /// repeated calls are cheap.
+    /// </para>
+    /// <para>
+    /// A return value of <c>null</c> means "no rule pack is yet
+    /// defined for this spec" — distinct from
+    /// <see cref="ValidationReport.Empty"/>, which means "rules were
+    /// evaluated and found nothing".
+    /// </para>
+    /// </remarks>
+    ValidationReport? Validate() => null;
 }
 
 /// <summary>

@@ -9,6 +9,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -208,6 +209,23 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             };
         }
     }
+
+    /// <summary>
+    /// Hook for spec-specific subclasses to run their normative
+    /// validation rule pack against the parsed dataset. Returns
+    /// <c>null</c> by default, signalling that no rule pack is
+    /// defined for this product.
+    /// </summary>
+    /// <remarks>
+    /// Overrides should typically delegate to
+    /// <c>ValidationRunner.Run(...)</c> so that an
+    /// <see cref="System.InvalidOperationException"/> from the typed
+    /// projection (e.g. an empty dataset) surfaces as an empty
+    /// report rather than propagating out of <see cref="Validate"/>.
+    /// Overrides should also cache the result so repeated calls are
+    /// cheap.
+    /// </remarks>
+    public virtual ValidationReport? Validate() => null;
 
     private FeatureInfo BuildFeatureInfo(TFeature feature)
     {
