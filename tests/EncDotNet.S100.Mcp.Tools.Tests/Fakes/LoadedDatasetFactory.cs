@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
+using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -18,6 +19,7 @@ internal static class LoadedDatasetFactory
     public static SpecRef S124Spec => new("S-124", new SpecVersion(1, 1, 0));
     public static SpecRef S122Spec => new("S-122", new SpecVersion(1, 0, 0));
     public static SpecRef S131Spec => new("S-131", new SpecVersion(1, 0, 0));
+    public static SpecRef S129Spec => new("S-129", new SpecVersion(2, 0, 0));
     public static SpecRef S102Spec => new("S-102", new SpecVersion(2, 1, 0));
     public static SpecRef S104Spec => new("S-104", new SpecVersion(1, 0, 0));
     public static SpecRef S111Spec => new("S-111", new SpecVersion(1, 2, 0));
@@ -77,6 +79,19 @@ internal static class LoadedDatasetFactory
             bounds ?? Box(),
             null,
             new S131DatasetData(model ?? S131Synth.Dataset()));
+    }
+
+    public static LoadedDataset S129(
+        string id,
+        S129Dataset? model = null,
+        BoundingBox? bounds = null)
+    {
+        return new LoadedDataset(
+            new DatasetId(id),
+            S129Spec,
+            bounds ?? Box(),
+            null,
+            new S129DatasetData(model ?? S129Synth.Dataset(S129Synth.Plan(), S129Synth.PlanArea())));
     }
 
     public static LoadedDataset S102(

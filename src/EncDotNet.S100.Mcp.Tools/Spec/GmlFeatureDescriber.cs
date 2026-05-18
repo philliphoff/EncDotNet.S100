@@ -12,7 +12,7 @@ namespace EncDotNet.S100.Mcp.Tools.Spec;
 /// <remarks>
 /// <para>
 /// One instance is registered per spec name (S-122, S-125, S-127,
-/// S-128, S-129, S-131, S-201, S-411, S-421). The describer serialises
+/// S-128, S-131, S-201, S-411, S-421). The describer serialises
 /// the feature's identity, type, geometry kind, simple attributes, and
 /// complex attributes — the minimum set of information an agent needs
 /// after locating features with <see cref="QueryFeaturesTool"/>.

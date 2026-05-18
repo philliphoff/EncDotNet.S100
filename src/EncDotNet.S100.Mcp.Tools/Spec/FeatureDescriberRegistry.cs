@@ -33,7 +33,7 @@ public sealed class FeatureDescriberRegistry
         new GmlFeatureDescriber("S-125"),
         new GmlFeatureDescriber("S-127"),
         new GmlFeatureDescriber("S-128"),
-        new GmlFeatureDescriber("S-129"),
+        new S129FeatureDescriber(),
         new GmlFeatureDescriber("S-131"),
         new GmlFeatureDescriber("S-201"),
         new GmlFeatureDescriber("S-411"),
