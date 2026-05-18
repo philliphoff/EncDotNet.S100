@@ -2,15 +2,20 @@ using System;
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S129;
+using EncDotNet.S100.Datasets.S129.DataModel;
+using EncDotNet.S100.Datasets.S129.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
 {
     private readonly S129Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public override SpecRef Spec => new("S-129", default);
     protected override string ProductDescription => "Under Keel Clearance Management";
@@ -60,6 +65,20 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new GmlFeatureXmlSource<S129Feature>(_dataset.Features);
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S129UnderKeelClearancePlan.From(raw, out _),
+                S129UkcRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 
     protected override IReadOnlyList<DrawingInstruction> PostProcessInstructions(
         IReadOnlyList<DrawingInstruction> instructions) => ApplyAreaFillFallback(instructions);

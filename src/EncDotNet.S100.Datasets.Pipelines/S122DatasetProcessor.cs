@@ -1,15 +1,20 @@
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Datasets.S122.DataModel;
+using EncDotNet.S100.Datasets.S122.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
 {
     private readonly S122Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public override SpecRef Spec => new("S-122", default);
     protected override string ProductDescription => "Marine Protected Areas";
@@ -60,4 +65,18 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new GmlFeatureXmlSource<S122Feature>(_dataset.Features);
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S122MarineProtectedAreaDataset.From(raw, out _),
+                S122MarineProtectedAreaRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 }

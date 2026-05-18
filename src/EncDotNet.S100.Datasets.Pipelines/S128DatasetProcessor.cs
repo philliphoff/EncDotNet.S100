@@ -1,15 +1,20 @@
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S128;
+using EncDotNet.S100.Datasets.S128.DataModel;
+using EncDotNet.S100.Datasets.S128.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
 {
     private readonly S128Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public override SpecRef Spec => new("S-128", default);
     protected override string ProductDescription => "Catalogue of Nautical Products";
@@ -62,4 +67,18 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S128FeatureXmlSource(_dataset);
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S128ProductCatalogue.From(raw, out _),
+                S128CatalogueRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 }

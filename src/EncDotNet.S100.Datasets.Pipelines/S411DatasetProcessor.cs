@@ -2,10 +2,13 @@ using System;
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S411.DataModel;
+using EncDotNet.S100.Datasets.S411.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -13,6 +16,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
 {
     private readonly S411Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public override SpecRef Spec => new("S-411", default);
     protected override string ProductDescription => "Sea Ice";
@@ -71,6 +76,20 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new S411FeatureXmlSource(_dataset);
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S411SeaIceInventory.From(raw, out _),
+                S411SeaIceRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 
     protected override DatasetResult? CheckPreRender(RenderContext? context)
     {

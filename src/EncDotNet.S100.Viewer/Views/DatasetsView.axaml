@@ -91,6 +91,52 @@
                 </DataTemplate>
             </Setter>
         </Style>
+
+        <!--
+          Severity badge that decorates the Validation tab header when
+          findings are present. Colour comes from severity-keyed
+          classes (Error / Warning / Info) which the view model
+          toggles via three boolean properties — no value converter
+          required.
+        -->
+        <Style Selector="Border.ValidationBadge">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="6,1,6,1" />
+            <Setter Property="MinWidth" Value="18" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.ValidationBadge.Error">
+            <Setter Property="Background" Value="#D13438" />
+        </Style>
+        <Style Selector="Border.ValidationBadge.Warning">
+            <Setter Property="Background" Value="#CA5010" />
+        </Style>
+        <Style Selector="Border.ValidationBadge.Info">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.ValidationBadge > TextBlock">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+          Severity-keyed colour for the FluentIcon glyph rendered next
+          to each finding row. The icon name is set by the view model
+          (ErrorCircle / Warning / Info) and the class drives colour.
+        -->
+        <Style Selector="ic|FluentIcon.SeverityIcon.Error">
+            <Setter Property="Foreground" Value="#D13438" />
+        </Style>
+        <Style Selector="ic|FluentIcon.SeverityIcon.Warning">
+            <Setter Property="Foreground" Value="#CA5010" />
+        </Style>
+        <Style Selector="ic|FluentIcon.SeverityIcon.Info">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
     </UserControl.Styles>
 
     <DockPanel>
@@ -496,6 +542,92 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                </Panel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <!-- Validation findings (per-spec rule packs;
+                             empty-state for specs with no pack). The
+                             header carries a count badge when findings
+                             are present; severity drives the badge
+                             colour via three boolean classes on the
+                             view model. -->
+                        <TabItem>
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static loc:Strings.Pane_DatasetTab_Validation}"
+                                               LetterSpacing="1"
+                                               VerticalAlignment="Center" />
+                                    <Border Classes="ValidationBadge"
+                                            Classes.Error="{Binding SelectedEntry.BadgeIsError, FallbackValue=False}"
+                                            Classes.Warning="{Binding SelectedEntry.BadgeIsWarning, FallbackValue=False}"
+                                            Classes.Info="{Binding SelectedEntry.BadgeIsInfo, FallbackValue=False}"
+                                            IsVisible="{Binding SelectedEntry.HasValidationFindings, FallbackValue=False}"
+                                            ToolTip.Tip="{Binding SelectedEntry.ValidationBadgeTooltip}">
+                                        <TextBlock Text="{Binding SelectedEntry.ValidationFindingCount}" />
+                                    </Border>
+                                </StackPanel>
+                            </TabItem.Header>
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <Panel Margin="8,8,8,8">
+                                    <!-- Empty state: either "no rule pack" or "no findings". -->
+                                    <TextBlock IsVisible="{Binding !SelectedEntry.HasValidationFindings, FallbackValue=True}"
+                                               Text="{Binding SelectedEntry.ValidationEmptyStateMessage}"
+                                               Opacity="0.6"
+                                               TextWrapping="Wrap"
+                                               HorizontalAlignment="Center"
+                                               TextAlignment="Center" />
+                                    <StackPanel Spacing="8"
+                                                IsVisible="{Binding SelectedEntry.HasValidationFindings, FallbackValue=False}">
+                                        <TextBlock Text="{Binding SelectedEntry.ValidationCountsSummary}"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.8"
+                                                   FontSize="12" />
+                                        <ItemsControl ItemsSource="{Binding SelectedEntry.Findings}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Spacing="10" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ValidationFindingViewModel">
+                                                    <Grid ColumnDefinitions="Auto,*"
+                                                          RowDefinitions="Auto,Auto,Auto"
+                                                          ColumnSpacing="8"
+                                                          RowSpacing="2">
+                                                        <ic:FluentIcon Grid.Row="0" Grid.Column="0"
+                                                                       Grid.RowSpan="3"
+                                                                       Icon="{Binding SeverityIcon}"
+                                                                       IconVariant="Regular"
+                                                                       FontSize="16"
+                                                                       Classes="SeverityIcon"
+                                                                       Classes.Error="{Binding IsError}"
+                                                                       Classes.Warning="{Binding IsWarning}"
+                                                                       Classes.Info="{Binding IsInfo}"
+                                                                       VerticalAlignment="Top"
+                                                                       Margin="0,2,0,0"
+                                                                       ToolTip.Tip="{Binding SeverityLabel}" />
+                                                        <TextBlock Grid.Row="0" Grid.Column="1"
+                                                                   Text="{Binding RuleId}"
+                                                                   FontFamily="Consolas,Menlo,monospace"
+                                                                   FontSize="11"
+                                                                   Opacity="0.75" />
+                                                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                                                   Text="{Binding Message}"
+                                                                   TextWrapping="Wrap"
+                                                                   FontSize="12" />
+                                                        <TextBlock Grid.Row="2" Grid.Column="1"
+                                                                   Text="{Binding RelatedFeatureLine}"
+                                                                   FontSize="11"
+                                                                   Opacity="0.6"
+                                                                   IsVisible="{Binding HasRelatedFeature}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </Panel>
                             </ScrollViewer>
                         </TabItem>

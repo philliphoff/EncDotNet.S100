@@ -1,9 +1,12 @@
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S127;
+using EncDotNet.S100.Datasets.S127.DataModel;
+using EncDotNet.S100.Datasets.S127.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -15,6 +18,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
 {
     private readonly S127Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public override SpecRef Spec => new("S-127", default);
     protected override string ProductDescription => "Marine Resources and Services";
@@ -64,4 +69,18 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new GmlFeatureXmlSource<S127Feature>(_dataset.Features);
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S127MarineServicesDataset.From(raw, out _),
+                S127MarineServicesRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 }

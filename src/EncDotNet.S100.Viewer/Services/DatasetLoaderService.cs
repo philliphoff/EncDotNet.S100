@@ -259,6 +259,17 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             entry.Info = result.Info;
             entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
 
+            // Run the spec's normative validation rule pack against
+            // the parsed dataset. Validation is a pure function of the
+            // parsed model so we only do this once per load; ECDIS
+            // / palette / time-step changes never re-run it. A null
+            // return means the spec has no rule pack defined yet —
+            // distinct from an empty report — and the Validation tab
+            // surfaces those two states with different empty-state
+            // messages.
+            var validation = await Task.Run(() => SafeValidate(processor), token);
+            entry.SetValidationReport(validation);
+
             // Dismiss the loading toast before showing the result.
             // Exchange-set entries don't show per-dataset toasts.
             if (!fromExchangeSet)
@@ -473,6 +484,29 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 list.AddRange(ls);
         }
         return list;
+    }
+
+    /// <summary>
+    /// Runs the processor's spec-specific validation rule pack and
+    /// swallows any exception so a buggy rule cannot abort a dataset
+    /// load. Returns the report on success, the processor's null on
+    /// "no rule pack for this spec", or null on exception.
+    /// </summary>
+    private static EncDotNet.S100.Validation.ValidationReport? SafeValidate(IDatasetProcessor processor)
+    {
+        try
+        {
+            return processor.Validate();
+        }
+        catch (Exception ex)
+        {
+            // Defensive — individual rule failures are already
+            // captured as synthetic Error findings by ValidationRuleSet.
+            // This catches the unlikely case where projection or rule
+            // pack construction itself throws.
+            System.Diagnostics.Debug.WriteLine($"[validation] {processor.Spec.Name}: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
     }
 
     private RenderContext CreateRenderContext(IDatasetProcessor processor, DateTime? timeStep = null)
