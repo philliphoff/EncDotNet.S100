@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -72,12 +75,80 @@ public static class FeatureInfoBuilder
 
     private static PickAttribute BuildLeaf(string code, string value, FeatureCatalogueDecoder? decoder)
     {
+        double? depthMetres = TryParseKnownDepthMetres(code, value);
         return new PickAttribute
         {
             Code = code,
             Name = decoder?.ResolveAttributeName(code),
             RawValue = value,
             DisplayValue = decoder?.ResolveListedValue(code, value),
+            DepthMetresValue = depthMetres,
+            Children = [],
+        };
+    }
+
+    /// <summary>
+    /// Well-known S-100 depth-typed attribute codes (and their S-57-era
+    /// aliases) whose raw values are interpreted as metres below the
+    /// vertical datum. The set is intentionally narrow: it covers the
+    /// attributes whose semantics demand mariner-selectable depth units
+    /// (S-100 Part 9 §4.2) and excludes vertical-distance attributes that
+    /// represent heights, elevations, or clearances above the water.
+    /// </summary>
+    private static readonly HashSet<string> KnownDepthAttributeCodes =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            // S-101 (Edition 2.0.0, Feature Catalogue §SimpleAttributes).
+            "buriedDepth",                "BURDEP",
+            "depthRangeMinimumValue",     "DRVAL1",
+            "depthRangeMaximumValue",     "DRVAL2",
+            "valueOfDepthContour",        "VALDCO",
+            "valueOfSounding",            "VALSOU",
+            "defaultClearanceDepth",
+            "soundingDatumDepth",
+            // S-102 coverage pick (synthesised attributes — depth + vertical uncertainty in metres).
+            "depth",
+            "uncertainty",
+        };
+
+    /// <summary>
+    /// Returns the metres value of <paramref name="rawValue"/> when
+    /// <paramref name="code"/> is a known depth-typed attribute and the
+    /// value parses as a finite real (invariant culture). Returns
+    /// <c>null</c> for non-depth codes, non-numeric values, NaN/Infinity,
+    /// and dataset sentinel "NoData" markers (e.g. <c>"—"</c>) so the
+    /// presentation layer keeps showing the raw text untouched.
+    /// </summary>
+    internal static double? TryParseKnownDepthMetres(string code, string rawValue)
+    {
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(rawValue))
+            return null;
+        if (!KnownDepthAttributeCodes.Contains(code))
+            return null;
+        if (!double.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var metres))
+            return null;
+        if (!double.IsFinite(metres))
+            return null;
+        return metres;
+    }
+
+    /// <summary>
+    /// Builds a depth-typed <see cref="PickAttribute"/> for a value that
+    /// is already known to be metres (e.g. an S-102 coverage sample).
+    /// Sets <see cref="PickAttribute.DepthMetresValue"/> so the viewer
+    /// can re-format the value through the active <see cref="DepthUnit"/>
+    /// without re-parsing <see cref="PickAttribute.RawValue"/>.
+    /// </summary>
+    public static PickAttribute BuildDepthLeaf(string code, string name, double metres)
+    {
+        var raw = metres.ToString("0.##########", CultureInfo.InvariantCulture);
+        return new PickAttribute
+        {
+            Code = code,
+            Name = name,
+            RawValue = raw,
+            DisplayValue = DepthFormatting.Format(metres, DepthUnit.Metres),
+            DepthMetresValue = metres,
             Children = [],
         };
     }

@@ -177,6 +177,26 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         TimeAxis.Labeler = FormatTimeAxisLabel;
     }
 
+    /// <summary>
+    /// Formats a chart point's underlying <see cref="DateTime"/> (always
+    /// stored as UTC ticks via <see cref="DateTimePoint"/>) for display
+    /// in the per-point tooltip, honouring the mariner's selected
+    /// time-zone display (<see cref="TimeFormat"/>). Used by subclasses
+    /// to override the default LiveCharts2 tooltip, which otherwise
+    /// renders the raw UTC <c>DateTime.ToString()</c> regardless of the
+    /// chosen format (LiveCharts2 v2 has no awareness of local zones).
+    /// </summary>
+    protected internal string FormatTooltipDateTime(DateTime utc)
+    {
+        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        if (fmt == TimeFormat.Utc)
+            return DateTime.SpecifyKind(utc, DateTimeKind.Utc)
+                .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        return DateTime.SpecifyKind(utc, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("g", CultureInfo.CurrentCulture);
+    }
+
     private string FormatTimeAxisLabel(double ticks)
     {
         if (!double.IsFinite(ticks)) return string.Empty;

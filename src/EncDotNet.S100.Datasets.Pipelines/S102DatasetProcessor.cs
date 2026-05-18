@@ -178,6 +178,11 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
                 Name = "Depth",
                 RawValue = FormatFloat(depth, sample.NoDataValue),
                 DisplayValue = depth == sample.NoDataValue ? "—" : $"{depth.ToString("0.##", CultureInfo.InvariantCulture)} m",
+                // Surface the metres value so the viewer can re-format it
+                // through the mariner's DepthUnit (S-100 Part 9 §4.2).
+                // NoData cells keep DepthMetresValue null and remain rendered
+                // as the localised em-dash placeholder.
+                DepthMetresValue = depth == sample.NoDataValue ? null : (double?)depth,
             },
             new()
             {
@@ -185,6 +190,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
                 Name = "Uncertainty",
                 RawValue = FormatFloat(uncertainty, sample.NoDataValue),
                 DisplayValue = uncertainty == sample.NoDataValue ? "—" : $"{uncertainty.ToString("0.##", CultureInfo.InvariantCulture)} m",
+                DepthMetresValue = uncertainty == sample.NoDataValue ? null : (double?)uncertainty,
             },
         };
 

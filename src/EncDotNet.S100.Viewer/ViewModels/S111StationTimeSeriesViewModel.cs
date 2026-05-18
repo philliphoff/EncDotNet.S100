@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -46,6 +47,9 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
                 GeometrySize = 0,
                 GeometryStroke = null,
                 GeometryFill = null,
+                XToolTipLabelFormatter = p => FormatTooltipDateTime(
+                    new System.DateTime((long)p.Coordinate.SecondaryValue, System.DateTimeKind.Utc)),
+                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.##", CultureInfo.InvariantCulture) + " m/s",
             },
         };
 
@@ -60,6 +64,9 @@ internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewMode
                 GeometrySize = 0,
                 GeometryStroke = null,
                 GeometryFill = null,
+                XToolTipLabelFormatter = p => FormatTooltipDateTime(
+                    new System.DateTime((long)p.Coordinate.SecondaryValue, System.DateTimeKind.Utc)),
+                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.#", CultureInfo.InvariantCulture) + "°",
             },
         };
 
