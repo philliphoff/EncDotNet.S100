@@ -20,11 +20,18 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class TimelineViewModel : ViewModelBase
 {
     private readonly GlobalTimeService _service;
+    private readonly ITimeFormatProvider? _timeFormat;
 
     public TimelineViewModel(GlobalTimeService service)
+        : this(service, timeFormat: null)
+    {
+    }
+
+    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
+        _timeFormat = timeFormat;
 
         PreviousStepCommand = new RelayCommand(StepPrevious, CanStepPrevious);
         NextStepCommand = new RelayCommand(StepNext, CanStepNext);
@@ -38,6 +45,15 @@ internal sealed class TimelineViewModel : ViewModelBase
             ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
             ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
         };
+
+        if (_timeFormat is not null)
+        {
+            _timeFormat.TimeFormatChanged += _ =>
+            {
+                OnPropertyChanged(nameof(CurrentTimeLabel));
+                OnPropertyChanged(nameof(RangeLabel));
+            };
+        }
     }
 
     /// <summary>
@@ -221,10 +237,10 @@ internal sealed class TimelineViewModel : ViewModelBase
         }
     }
 
-    /// <summary>ISO-8601 UTC text for the currently selected time.</summary>
+    /// <summary>Display text for the currently selected time, formatted via <see cref="TimeFormatting"/>.</summary>
     public string CurrentTimeLabel =>
         _service.CurrentTime is { } t
-            ? t.ToString("u", CultureInfo.InvariantCulture)
+            ? TimeFormatting.Format(t, ActiveFormat)
             : string.Empty;
 
     /// <summary>"N steps from T0 to T1"-style summary of the timeline.</summary>
@@ -235,12 +251,15 @@ internal sealed class TimelineViewModel : ViewModelBase
             var samples = _service.AllSamples;
             if (samples.Count == 0 || _service.MinTime is null || _service.MaxTime is null)
                 return Strings.TimelinePanel_NoData;
+            var fmt = ActiveFormat;
             return string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.TimelinePanel_Range,
                 samples.Count,
-                _service.MinTime.Value,
-                _service.MaxTime.Value);
+                TimeFormatting.Format(_service.MinTime.Value, fmt),
+                TimeFormatting.Format(_service.MaxTime.Value, fmt));
         }
     }
+
+    private TimeFormat ActiveFormat => _timeFormat?.Current ?? TimeFormat.Local;
 }

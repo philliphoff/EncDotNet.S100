@@ -190,6 +190,11 @@ internal static class Strings
     public static string Settings_TextScale_Help => Get(nameof(Settings_TextScale_Help));
     public static string Settings_DistanceUnits => Get(nameof(Settings_DistanceUnits));
     public static string Settings_DistanceUnits_Help => Get(nameof(Settings_DistanceUnits_Help));
+    public static string Settings_TimeFormat_Label => Get(nameof(Settings_TimeFormat_Label));
+    public static string Settings_TimeFormat_Tooltip => Get(nameof(Settings_TimeFormat_Tooltip));
+    public static string Settings_TimeFormat_Local => Get(nameof(Settings_TimeFormat_Local));
+    public static string Settings_TimeFormat_Utc => Get(nameof(Settings_TimeFormat_Utc));
+    public static string Time_Utc_Suffix => Get(nameof(Time_Utc_Suffix));
 
     // Mariner settings (S-100 Part 9 §4.2)
     public static string Settings_MarinerSection => Get(nameof(Settings_MarinerSection));

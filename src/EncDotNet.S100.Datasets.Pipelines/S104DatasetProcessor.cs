@@ -396,6 +396,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                     Code = "timePoint",
                     Name = "Time",
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
+                    DateTimeValue = sampleTime,
                 },
                 new()
                 {
@@ -415,6 +416,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                         CultureInfo.InvariantCulture,
                         "{0:u} → {1:u}",
                         station.StartTime, station.EndTime),
+                    DateTimeRangeValue = (station.StartTime, station.EndTime),
                 },
             },
         };
@@ -496,6 +498,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                 Code = "timePoint",
                 Name = "Time",
                 RawValue = selectedTime.ToString("u", CultureInfo.InvariantCulture),
+                DateTimeValue = selectedTime,
             },
         };
 
@@ -571,6 +574,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                     Code = "timePoint",
                     Name = "Time",
                     RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
+                    DateTimeValue = sampleTime,
                 },
             },
         };

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -21,6 +22,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </remarks>
 internal sealed class PickReportViewModel : ViewModelBase
 {
+    private readonly ITimeFormatProvider? _timeFormat;
     private string? _featureType;
     private string? _featureTypeName;
     private string? _featureRef;
@@ -30,11 +32,93 @@ internal sealed class PickReportViewModel : ViewModelBase
     private PickHit? _selectedHit;
 
     public PickReportViewModel()
+        : this(timeFormat: null)
     {
+    }
+
+    public PickReportViewModel(ITimeFormatProvider? timeFormat)
+    {
+        _timeFormat = timeFormat;
         ClearCommand = new RelayCommand(Clear);
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
+
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+    }
+
+    private void OnTimeFormatChanged(TimeFormat _)
+    {
+        // Re-format attribute rows that carry typed date/time values so
+        // the displayed strings reflect the new setting immediately.
+        if (_selectedHit is null) return;
+        var reformatted = ReformatTimeAttributes(_selectedHit.Attributes);
+        Attributes.Clear();
+        foreach (var a in reformatted) Attributes.Add(a);
+        OnPropertyChanged(nameof(HasAttributes));
+    }
+
+    private IReadOnlyList<PickAttribute> ReformatTimeAttributes(IReadOnlyList<PickAttribute> source)
+    {
+        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        var list = new List<PickAttribute>(source.Count);
+        foreach (var attr in source)
+        {
+            list.Add(ReformatOne(attr, fmt));
+        }
+        return list;
+    }
+
+    private PickAttribute ReformatOne(PickAttribute attr, TimeFormat fmt)
+    {
+        var children = attr.Children.Count == 0
+            ? attr.Children
+            : (IReadOnlyList<PickAttribute>)ReformatTimeAttributes(attr.Children);
+
+        if (attr.DateTimeValue is { } dt)
+        {
+            return new PickAttribute
+            {
+                Code = attr.Code,
+                Name = attr.Name,
+                RawValue = attr.RawValue,
+                DisplayValue = TimeFormatting.Format(dt, fmt),
+                DateTimeValue = attr.DateTimeValue,
+                DateTimeRangeValue = attr.DateTimeRangeValue,
+                Children = children,
+            };
+        }
+
+        if (attr.DateTimeRangeValue is { } range)
+        {
+            return new PickAttribute
+            {
+                Code = attr.Code,
+                Name = attr.Name,
+                RawValue = attr.RawValue,
+                DisplayValue = TimeFormatting.FormatTimeRange(range.Start, range.End, fmt),
+                DateTimeValue = attr.DateTimeValue,
+                DateTimeRangeValue = attr.DateTimeRangeValue,
+                Children = children,
+            };
+        }
+
+        if (attr.Children.Count != 0 && !ReferenceEquals(children, attr.Children))
+        {
+            return new PickAttribute
+            {
+                Code = attr.Code,
+                Name = attr.Name,
+                RawValue = attr.RawValue,
+                DisplayValue = attr.DisplayValue,
+                DateTimeValue = attr.DateTimeValue,
+                DateTimeRangeValue = attr.DateTimeRangeValue,
+                Children = children,
+            };
+        }
+
+        return attr;
     }
 
     /// <summary>The picked feature's class/type code (e.g. "DepthArea", "LateralBuoy").</summary>
@@ -263,7 +347,7 @@ internal sealed class PickReportViewModel : ViewModelBase
         ProductSpec = hit.ProductSpec;
 
         Attributes.Clear();
-        foreach (var attr in hit.Attributes)
+        foreach (var attr in ReformatTimeAttributes(hit.Attributes))
             Attributes.Add(attr);
         OnPropertyChanged(nameof(HasAttributes));
 

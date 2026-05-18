@@ -34,6 +34,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 {
     private readonly GlobalTimeService? _globalTime;
+    private readonly ITimeFormatProvider? _timeFormat;
     private readonly RectangularSection _nowSection;
     private bool _disposed;
 
@@ -43,11 +44,15 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
     /// tests; when supplied, <see cref="GlobalTimeService.CurrentTimeChanged"/>
     /// is observed for the lifetime of this view model.
     /// </summary>
-    protected StationTimeSeriesViewModel(StationTimeSeriesSnapshot snapshot, GlobalTimeService? globalTime)
+    protected StationTimeSeriesViewModel(
+        StationTimeSeriesSnapshot snapshot,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Snapshot = snapshot;
         _globalTime = globalTime;
+        _timeFormat = timeFormat;
 
         _nowSection = new RectangularSection
         {
@@ -74,6 +79,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
             if (_globalTime.CurrentTime is { } current)
                 UpdateNowMarker(current);
         }
+
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
     }
 
     /// <summary>The raw snapshot that backs this view model.</summary>
@@ -128,6 +136,8 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
         _disposed = true;
         if (_globalTime is not null)
             _globalTime.CurrentTimeChanged -= OnGlobalTimeChanged;
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
     }
 
     /// <summary>
@@ -160,13 +170,23 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 
     private void OnGlobalTimeChanged(DateTime time) => UpdateNowMarker(time);
 
-    private static string FormatTimeAxisLabel(double ticks)
+    private void OnTimeFormatChanged(TimeFormat format)
+    {
+        // Force LiveCharts2 to re-evaluate the axis labels — the labeler
+        // closes over _timeFormat.Current so simply notifying is enough.
+        TimeAxis.Labeler = FormatTimeAxisLabel;
+    }
+
+    private string FormatTimeAxisLabel(double ticks)
     {
         if (!double.IsFinite(ticks)) return string.Empty;
         var t = (long)ticks;
         if (t < DateTime.MinValue.Ticks || t > DateTime.MaxValue.Ticks)
             return string.Empty;
         var dt = new DateTime(t, DateTimeKind.Utc);
-        return dt.ToString("HH:mm", CultureInfo.InvariantCulture);
+        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        if (fmt == TimeFormat.Utc)
+            return dt.ToString("HH:mm", CultureInfo.InvariantCulture);
+        return dt.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
     }
 }

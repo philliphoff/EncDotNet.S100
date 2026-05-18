@@ -467,6 +467,23 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Units used by the map scale bar.</value>
   </data>
 
+  <!-- Date/time formatting -->
+  <data name="Settings_TimeFormat_Label" xml:space="preserve">
+    <value>Time Format</value>
+  </data>
+  <data name="Settings_TimeFormat_Tooltip" xml:space="preserve">
+    <value>Controls how every date/time the viewer displays is formatted. Local uses the current system culture; UTC uses an unambiguous ISO 8601 form with a "UTC" suffix.</value>
+  </data>
+  <data name="Settings_TimeFormat_Local" xml:space="preserve">
+    <value>Local time</value>
+  </data>
+  <data name="Settings_TimeFormat_Utc" xml:space="preserve">
+    <value>UTC</value>
+  </data>
+  <data name="Time_Utc_Suffix" xml:space="preserve">
+    <value>UTC</value>
+  </data>
+
   <!-- Mariner settings (S-100 Part 9 §4.2) -->
   <data name="Settings_MarinerSection" xml:space="preserve">
     <value>Mariner Settings</value>
@@ -694,7 +711,7 @@ Open an S-128 dataset to populate this panel.</value>
     <value>TIMELINE</value>
   </data>
   <data name="TimelinePanel_Range" xml:space="preserve">
-    <value>{0} steps from {1:u} to {2:u}</value>
+    <value>{0} steps from {1} to {2}</value>
   </data>
   <data name="TimelinePanel_NoData" xml:space="preserve">
     <value>No time-varying datasets loaded.</value>

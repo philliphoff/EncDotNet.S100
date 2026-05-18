@@ -116,6 +116,28 @@
                 </ComboBox>
             </StackPanel>
 
+            <!-- Time Format -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_TimeFormat_Label}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_TimeFormat_Tooltip}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableTimeFormats}"
+                          SelectedItem="{Binding SelectedTimeFormat}"
+                          ToolTip.Tip="{x:Static loc:Strings.Settings_TimeFormat_Tooltip}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="viewer:TimeFormat">
+                            <TextBlock Text="{Binding Converter={x:Static viewer:TimeFormatNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />
             <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection}"

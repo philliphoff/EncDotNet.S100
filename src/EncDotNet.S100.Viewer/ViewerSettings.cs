@@ -53,6 +53,13 @@ internal sealed class ViewerSettings
     public string DistanceUnit { get; set; } = "NauticalMiles";
 
     /// <summary>
+    /// Display format for date/time values across the viewer
+    /// ("Local" or "Utc"). Defaults to <c>"Local"</c>. Stored as a
+    /// string for forward-compat with other enum-shaped settings.
+    /// </summary>
+    public string? TimeFormat { get; set; }
+
+    /// <summary>
     /// Active ECDIS display category — one of "DisplayBase",
     /// "Standard", "OtherInformation", "All". Defaults to Standard
     /// (S-100 Part 9 §11.7).

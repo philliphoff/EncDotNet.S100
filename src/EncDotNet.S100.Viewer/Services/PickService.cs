@@ -34,12 +34,13 @@ internal sealed class PickService : IPickService
     private readonly PickReportViewModel _pickReport;
     private readonly IStatusPresenter _status;
     private readonly GlobalTimeService? _globalTime;
+    private readonly ITimeFormatProvider? _timeFormat;
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
         IStatusPresenter status)
-        : this(loader, pickReport, status, globalTime: null)
+        : this(loader, pickReport, status, globalTime: null, timeFormat: null)
     {
     }
 
@@ -48,6 +49,16 @@ internal sealed class PickService : IPickService
         PickReportViewModel pickReport,
         IStatusPresenter status,
         GlobalTimeService? globalTime)
+        : this(loader, pickReport, status, globalTime, timeFormat: null)
+    {
+    }
+
+    public PickService(
+        IDatasetLoaderService loader,
+        PickReportViewModel pickReport,
+        IStatusPresenter status,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -56,6 +67,7 @@ internal sealed class PickService : IPickService
         _pickReport = pickReport;
         _status = status;
         _globalTime = globalTime;
+        _timeFormat = timeFormat;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -183,8 +195,8 @@ internal sealed class PickService : IPickService
         // exposes a single height channel; S-111 exposes speed + direction.
         return processor.Spec.Name switch
         {
-            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime),
-            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime),
+            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
+            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
             _ => null,
         };
     }
