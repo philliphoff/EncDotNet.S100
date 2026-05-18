@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -23,6 +25,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class PickReportViewModel : ViewModelBase
 {
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly IMarinerSettingsProvider? _marinerSettings;
     private string? _featureType;
     private string? _featureTypeName;
     private string? _featureRef;
@@ -32,13 +35,21 @@ internal sealed class PickReportViewModel : ViewModelBase
     private PickHit? _selectedHit;
 
     public PickReportViewModel()
-        : this(timeFormat: null)
+        : this(timeFormat: null, marinerSettings: null)
     {
     }
 
     public PickReportViewModel(ITimeFormatProvider? timeFormat)
+        : this(timeFormat, marinerSettings: null)
+    {
+    }
+
+    public PickReportViewModel(
+        ITimeFormatProvider? timeFormat,
+        IMarinerSettingsProvider? marinerSettings)
     {
         _timeFormat = timeFormat;
+        _marinerSettings = marinerSettings;
         ClearCommand = new RelayCommand(Clear);
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
@@ -46,35 +57,50 @@ internal sealed class PickReportViewModel : ViewModelBase
 
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+
+        if (_marinerSettings is not null)
+            _marinerSettings.Changed += OnMarinerSettingsChanged;
     }
 
     private void OnTimeFormatChanged(TimeFormat _)
     {
-        // Re-format attribute rows that carry typed date/time values so
-        // the displayed strings reflect the new setting immediately.
+        ReformatAttributesFromSelectedHit();
+    }
+
+    private void OnMarinerSettingsChanged(MarinerSettings _)
+    {
+        // DepthUnit is the only mariner setting the pick panel renders;
+        // re-run the same projection used for time-format changes so
+        // depth-typed rows pick up the new unit immediately.
+        ReformatAttributesFromSelectedHit();
+    }
+
+    private void ReformatAttributesFromSelectedHit()
+    {
         if (_selectedHit is null) return;
-        var reformatted = ReformatTimeAttributes(_selectedHit.Attributes);
+        var reformatted = ReformatTypedAttributes(_selectedHit.Attributes);
         Attributes.Clear();
         foreach (var a in reformatted) Attributes.Add(a);
         OnPropertyChanged(nameof(HasAttributes));
     }
 
-    private IReadOnlyList<PickAttribute> ReformatTimeAttributes(IReadOnlyList<PickAttribute> source)
+    private IReadOnlyList<PickAttribute> ReformatTypedAttributes(IReadOnlyList<PickAttribute> source)
     {
-        var fmt = _timeFormat?.Current ?? TimeFormat.Local;
+        var timeFmt = _timeFormat?.Current ?? TimeFormat.Local;
+        var depthUnit = _marinerSettings?.Current.DepthUnit ?? DepthUnit.Metres;
         var list = new List<PickAttribute>(source.Count);
         foreach (var attr in source)
         {
-            list.Add(ReformatOne(attr, fmt));
+            list.Add(ReformatOne(attr, timeFmt, depthUnit));
         }
         return list;
     }
 
-    private PickAttribute ReformatOne(PickAttribute attr, TimeFormat fmt)
+    private PickAttribute ReformatOne(PickAttribute attr, TimeFormat timeFmt, DepthUnit depthUnit)
     {
         var children = attr.Children.Count == 0
             ? attr.Children
-            : (IReadOnlyList<PickAttribute>)ReformatTimeAttributes(attr.Children);
+            : (IReadOnlyList<PickAttribute>)ReformatTypedAttributes(attr.Children);
 
         if (attr.DateTimeValue is { } dt)
         {
@@ -83,9 +109,10 @@ internal sealed class PickReportViewModel : ViewModelBase
                 Code = attr.Code,
                 Name = attr.Name,
                 RawValue = attr.RawValue,
-                DisplayValue = TimeFormatting.Format(dt, fmt),
+                DisplayValue = TimeFormatting.Format(dt, timeFmt),
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
+                DepthMetresValue = attr.DepthMetresValue,
                 Children = children,
             };
         }
@@ -97,9 +124,25 @@ internal sealed class PickReportViewModel : ViewModelBase
                 Code = attr.Code,
                 Name = attr.Name,
                 RawValue = attr.RawValue,
-                DisplayValue = TimeFormatting.FormatTimeRange(range.Start, range.End, fmt),
+                DisplayValue = TimeFormatting.FormatTimeRange(range.Start, range.End, timeFmt),
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
+                DepthMetresValue = attr.DepthMetresValue,
+                Children = children,
+            };
+        }
+
+        if (attr.DepthMetresValue is { } metres)
+        {
+            return new PickAttribute
+            {
+                Code = attr.Code,
+                Name = attr.Name,
+                RawValue = attr.RawValue,
+                DisplayValue = DepthFormatting.Format(metres, depthUnit),
+                DateTimeValue = attr.DateTimeValue,
+                DateTimeRangeValue = attr.DateTimeRangeValue,
+                DepthMetresValue = attr.DepthMetresValue,
                 Children = children,
             };
         }
@@ -114,6 +157,7 @@ internal sealed class PickReportViewModel : ViewModelBase
                 DisplayValue = attr.DisplayValue,
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
+                DepthMetresValue = attr.DepthMetresValue,
                 Children = children,
             };
         }
@@ -347,7 +391,7 @@ internal sealed class PickReportViewModel : ViewModelBase
         ProductSpec = hit.ProductSpec;
 
         Attributes.Clear();
-        foreach (var attr in ReformatTimeAttributes(hit.Attributes))
+        foreach (var attr in ReformatTypedAttributes(hit.Attributes))
             Attributes.Add(attr);
         OnPropertyChanged(nameof(HasAttributes));
 

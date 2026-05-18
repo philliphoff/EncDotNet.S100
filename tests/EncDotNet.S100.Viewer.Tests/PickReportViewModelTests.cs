@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -334,5 +337,78 @@ public class PickReportViewModelTests
         vm.NavigateCommand.Execute(null);
 
         Assert.False(invoked);
+    }
+
+    private sealed class StubMarinerSettings : IMarinerSettingsProvider
+    {
+        public MarinerSettings Current { get; private set; }
+        public StubMarinerSettings(MarinerSettings initial) => Current = initial;
+        public event Action<MarinerSettings>? Changed;
+        public void Update(MarinerSettings value)
+        {
+            Current = value;
+            Changed?.Invoke(value);
+        }
+    }
+
+    [Fact]
+    public void SetPick_FormatsDepthAttribute_InCurrentDepthUnit()
+    {
+        var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Feet });
+        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+
+        vm.SetPick(
+            featureType: "DepthArea",
+            featureTypeName: "Depth Area",
+            featureRef: "1",
+            datasetFileName: "x.000",
+            productSpec: "S-101",
+            attributes: new[]
+            {
+                new PickAttribute
+                {
+                    Code = "DRVAL1",
+                    Name = "Depth Range Min",
+                    RawValue = "10",
+                    DisplayValue = "10",
+                    DepthMetresValue = 10.0,
+                    Children = Array.Empty<PickAttribute>(),
+                },
+            });
+
+        // 10 m → ~32.8 ft via DepthFormatting.
+        Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
+    }
+
+    [Fact]
+    public void DepthUnitChange_Rewrites_DepthAttribute_DisplayValue_Live()
+    {
+        var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Metres });
+        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+
+        vm.SetPick(
+            featureType: "DepthArea",
+            featureTypeName: "Depth Area",
+            featureRef: "1",
+            datasetFileName: "x.000",
+            productSpec: "S-101",
+            attributes: new[]
+            {
+                new PickAttribute
+                {
+                    Code = "VALDCO",
+                    Name = "Value of Depth Contour",
+                    RawValue = "5",
+                    DisplayValue = "5 m",
+                    DepthMetresValue = 5.0,
+                    Children = Array.Empty<PickAttribute>(),
+                },
+            });
+
+        Assert.Contains("m", vm.Attributes[0].DisplayValue!);
+
+        mariner.Update(new MarinerSettings { DepthUnit = DepthUnit.Feet });
+
+        Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
     }
 }

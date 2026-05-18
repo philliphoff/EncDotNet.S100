@@ -92,4 +92,32 @@ public class StationTimeSeriesTimeFormatTests
 
         Assert.Equal("09:30", vm.TimeAxis.Labeler(ticks));
     }
+
+    [Fact]
+    public void Tooltip_UtcMode_FormatsAsUtcWithSuffix()
+    {
+        var snap = Synthetic();
+        var tf = new StubTimeFormat(TimeFormat.Utc);
+        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf);
+
+        var utc = new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc);
+        var label = vm.FormatTooltipDateTime(utc);
+
+        Assert.Equal("2026-01-01 09:30 UTC", label);
+    }
+
+    [Fact]
+    public void Tooltip_LocalMode_FormatsAsLocalShortDateTime()
+    {
+        var snap = Synthetic();
+        var tf = new StubTimeFormat(TimeFormat.Local);
+        using var vm = new S104StationTimeSeriesViewModel(snap, globalTime: null, timeFormat: tf);
+
+        var utc = new DateTime(2026, 1, 1, 9, 30, 0, DateTimeKind.Utc);
+        var label = vm.FormatTooltipDateTime(utc);
+
+        var expected = utc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+        Assert.Equal(expected, label);
+        Assert.DoesNotContain("UTC", label);
+    }
 }

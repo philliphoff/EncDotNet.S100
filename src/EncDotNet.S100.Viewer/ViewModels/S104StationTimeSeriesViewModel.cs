@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -37,6 +38,12 @@ internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewMode
                 GeometrySize = 0,
                 GeometryStroke = null,
                 GeometryFill = null,
+                // Override LiveCharts2's default tooltip (which prints the
+                // raw UTC DateTime regardless of mariner time-zone setting)
+                // with one that routes through FormatTooltipDateTime.
+                XToolTipLabelFormatter = p => FormatTooltipDateTime(
+                    new System.DateTime((long)p.Coordinate.SecondaryValue, System.DateTimeKind.Utc)),
+                YToolTipLabelFormatter = p => p.Coordinate.PrimaryValue.ToString("0.##", CultureInfo.InvariantCulture) + " m",
             },
         };
 

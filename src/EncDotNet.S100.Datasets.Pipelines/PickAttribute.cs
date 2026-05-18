@@ -58,6 +58,16 @@ public sealed class PickAttribute
     public (DateTime Start, DateTime End)? DateTimeRangeValue { get; init; }
 
     /// <summary>
+    /// Optional typed depth value (canonical metres) backing this attribute.
+    /// When set, presentation layers should re-format the value through the
+    /// active mariner <c>DepthUnit</c> setting (S-100 Part 9 §4.2) rather
+    /// than relying on <see cref="RawValue"/> or <see cref="DisplayValue"/>.
+    /// <see cref="RawValue"/> still carries the unit-less numeric metres
+    /// representation for non-UI consumers (serialization, MCP, tests).
+    /// </summary>
+    public double? DepthMetresValue { get; init; }
+
+    /// <summary>
     /// Sub-attributes of a complex attribute. Empty for simple attributes
     /// and for leaf rows of a complex attribute.
     /// </summary>
