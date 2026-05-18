@@ -19,8 +19,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class S111StationTimeSeriesViewModel : StationTimeSeriesViewModel
 {
-    public S111StationTimeSeriesViewModel(StationTimeSeriesSnapshot snapshot, GlobalTimeService? globalTime)
-        : base(snapshot, globalTime)
+    public S111StationTimeSeriesViewModel(
+        StationTimeSeriesSnapshot snapshot,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat = null)
+        : base(snapshot, globalTime, timeFormat)
     {
         var speedChannel = FindChannel(snapshot, "surfaceCurrentSpeed");
         var directionChannel = FindChannel(snapshot, "surfaceCurrentDirection");

@@ -105,6 +105,38 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     public event Action<DistanceUnit>? DistanceUnitChanged;
 
+    public static TimeFormat[] AvailableTimeFormats { get; } =
+    [
+        EncDotNet.S100.Viewer.TimeFormat.Local,
+        EncDotNet.S100.Viewer.TimeFormat.Utc,
+    ];
+
+    private TimeFormat _selectedTimeFormat;
+    /// <summary>
+    /// Display format used for every date/time the viewer surfaces.
+    /// Persisted to <see cref="ViewerSettings.TimeFormat"/>.
+    /// </summary>
+    public TimeFormat SelectedTimeFormat
+    {
+        get => _selectedTimeFormat;
+        set
+        {
+            if (SetProperty(ref _selectedTimeFormat, value))
+            {
+                _settings.TimeFormat = value.ToString();
+                _settings.Save();
+                TimeFormatChanged?.Invoke(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raised after <see cref="SelectedTimeFormat"/> changes and the
+    /// settings file has been saved. <see cref="Services.TimeFormatProvider"/>
+    /// listens for this and re-broadcasts to viewmodels.
+    /// </summary>
+    public event Action<TimeFormat>? TimeFormatChanged;
+
     // -------------------------------------------------------------------
     // Mariner settings (S-100 Part 9 §4.2).
     //
@@ -405,6 +437,9 @@ internal sealed class SettingsViewModel : ViewModelBase
         _distanceUnit = Enum.TryParse<DistanceUnit>(settings.DistanceUnit, ignoreCase: true, out var u)
             ? u
             : EncDotNet.S100.Viewer.DistanceUnit.NauticalMiles;
+        _selectedTimeFormat = Enum.TryParse<TimeFormat>(settings.TimeFormat, ignoreCase: true, out var tf)
+            ? tf
+            : EncDotNet.S100.Viewer.TimeFormat.Local;
 
         // Mariner settings — pull from JSON, falling back to MarinerSettings.Default.
         var def = MarinerSettings.Default;

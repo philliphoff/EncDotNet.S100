@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -39,6 +40,22 @@ public sealed class PickAttribute
     /// decoding applies.
     /// </summary>
     public string? DisplayValue { get; init; }
+
+    /// <summary>
+    /// Optional typed timestamp value backing this attribute. When set,
+    /// presentation layers should re-format the value through their own
+    /// date/time formatter rather than relying on <see cref="RawValue"/>
+    /// or <see cref="DisplayValue"/>. <see cref="RawValue"/> still
+    /// carries an ISO 8601 representation for non-UI consumers
+    /// (serialization, MCP, tests).
+    /// </summary>
+    public DateTime? DateTimeValue { get; init; }
+
+    /// <summary>
+    /// Optional typed time-range backing this attribute (start, end).
+    /// Same contract as <see cref="DateTimeValue"/>.
+    /// </summary>
+    public (DateTime Start, DateTime End)? DateTimeRangeValue { get; init; }
 
     /// <summary>
     /// Sub-attributes of a complex attribute. Empty for simple attributes

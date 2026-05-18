@@ -17,8 +17,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewModel
 {
-    public S104StationTimeSeriesViewModel(StationTimeSeriesSnapshot snapshot, GlobalTimeService? globalTime)
-        : base(snapshot, globalTime)
+    public S104StationTimeSeriesViewModel(
+        StationTimeSeriesSnapshot snapshot,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat = null)
+        : base(snapshot, globalTime, timeFormat)
     {
         var channel = FindChannel(snapshot, "waterLevelHeight");
         var points = channel is null ? new List<DateTimePoint>() : ProjectChannel(snapshot.Times, channel);

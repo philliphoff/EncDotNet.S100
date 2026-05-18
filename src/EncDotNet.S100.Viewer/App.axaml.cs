@@ -239,6 +239,7 @@ public partial class App : Application
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
+        services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
         services.AddSingleton<PickReportViewModel>();
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
