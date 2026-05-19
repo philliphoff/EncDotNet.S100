@@ -375,7 +375,12 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                         {
                             using var stream = _provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
                             using var reader = new StreamReader(stream);
-                            svgSource = reader.ReadToEnd();
+                            var rawSvg = reader.ReadToEnd();
+                            // Process SVG through palette color resolver and
+                            // wrap with the svg-content:// URI scheme that
+                            // Mapsui's ImageStyle expects.
+                            var processed = SvgProcessor.Process(rawSvg, _catalogue.ActivePalette);
+                            svgSource = "svg-content://" + processed;
                         }
                         svgCache[symbolRef] = svgSource ?? "";
                     }
