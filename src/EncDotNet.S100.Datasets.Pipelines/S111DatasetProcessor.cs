@@ -276,12 +276,14 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         // Resolve PC schemes if available (DCF 3 with catalogue loaded)
         CoverageColorScheme? colorScheme = null;
         CoverageSymbolScheme? symbolScheme = null;
-        if (_catalogue is not null)
+        Dictionary<string, string>? svgCache = null;
+        if (_catalogue is not null && _provider is not null)
         {
             _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
             var mariner = context?.Mariner ?? MarinerSettings.Default;
             colorScheme = _catalogue.ResolveColorScheme(mariner);
             symbolScheme = _catalogue.ResolveSymbolScheme(mariner);
+            svgCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
@@ -328,6 +330,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
 
             Color arrowColour;
             double symbolScale;
+            string? svgSource = null;
+            string? symbolRef = null;
 
             if (colorScheme is not null)
             {
@@ -337,12 +341,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                     ? ParseHexColor(hex)
                     : new Color(0x80, 0x80, 0x80); // grey fallback for out-of-range
 
-                // Use PC symbol scheme for scaling if available
+                // Use PC symbol scheme for scaling and SVG symbol if available
                 if (symbolScheme is not null)
                 {
                     var band = symbolScheme.Resolve(speed);
                     if (band is not null)
                     {
+                        symbolRef = band.SymbolRef;
                         symbolScale = band.ScaleByValue
                             ? band.ScaleFactor * speed
                             : band.ScaleFactor;
@@ -358,6 +363,25 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 {
                     symbolScale = SymbolScaleForSpeed(speed);
                 }
+
+                // Load SVG from PC if symbol ref resolved
+                if (symbolRef is not null && svgCache is not null && _provider is not null)
+                {
+                    if (!svgCache.TryGetValue(symbolRef, out svgSource))
+                    {
+                        var item = _provider.Catalogue.Symbols
+                            .FirstOrDefault(s => s.Id.Equals(symbolRef, StringComparison.OrdinalIgnoreCase));
+                        if (item is not null)
+                        {
+                            using var stream = _provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
+                            using var reader = new StreamReader(stream);
+                            svgSource = reader.ReadToEnd();
+                        }
+                        svgCache[symbolRef] = svgSource ?? "";
+                    }
+                    if (string.IsNullOrEmpty(svgSource))
+                        svgSource = null;
+                }
             }
             else
             {
@@ -366,19 +390,31 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 symbolScale = SymbolScaleForSpeed(speed);
             }
 
-            // Symbol orientation in Mapsui follows screen rotation
-            // (counter-clockwise positive); compass bearing increases
-            // clockwise from north, so negate. Geographic north on
-            // screen is "up", which corresponds to a zero-rotation
-            // arrow whose default orientation we treat as pointing up.
-            feature.Styles.Add(new SymbolStyle
+            // Symbol orientation: Mapsui rotation is counter-clockwise
+            // from east; compass bearing is clockwise from north. Negate
+            // to convert.
+            if (svgSource is not null)
             {
-                SymbolType = SymbolType.Triangle,
-                Fill = new Brush(arrowColour),
-                Outline = new Pen(arrowColour, 1.0),
-                SymbolScale = symbolScale,
-                SymbolRotation = -direction,
-            });
+                // PC SVG arrow symbol
+                feature.Styles.Add(new ImageStyle
+                {
+                    Image = new Image { Source = svgSource, RasterizeSvg = true },
+                    SymbolScale = symbolScale * 0.6,
+                    SymbolRotation = -direction,
+                });
+            }
+            else
+            {
+                // Triangle fallback
+                feature.Styles.Add(new SymbolStyle
+                {
+                    SymbolType = SymbolType.Triangle,
+                    Fill = new Brush(arrowColour),
+                    Outline = new Pen(arrowColour, 1.0),
+                    SymbolScale = symbolScale,
+                    SymbolRotation = -direction,
+                });
+            }
 
             features.Add(feature);
         }
