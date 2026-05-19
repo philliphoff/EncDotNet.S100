@@ -22,9 +22,10 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// Pipeline processor for S-111 surface-currents datasets. Branches
 /// between dcf2 (regular grid → coverage + arrow layers, see existing
-/// portrayal catalogue) and dcf8 (time series at fixed stations →
-/// station-arrow point layer; see S-111 Edition 2.0.0 §10.2.3 /
-/// §10.2.7).
+/// portrayal catalogue), dcf3 (ungeorectified grid → station-arrow
+/// point layer; S-100 Part 10c §10.2.1), and dcf8 (time series at
+/// fixed stations → station-arrow point layer; see S-111 Edition 2.0.0
+/// §10.2.3 / §10.2.7).
 /// </summary>
 public sealed class S111DatasetProcessor : IDatasetProcessor
 {
