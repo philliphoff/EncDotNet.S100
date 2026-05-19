@@ -139,8 +139,17 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 {
                     _stationsById[station.Identifier] = station;
                 }
-                // dcf8 uses an inline arrow glyph — no portrayal
-                // catalogue required.
+
+                // DCF 3 (ungeorectified grid) uses the portrayal catalogue
+                // for PC-faithful color/symbol rendering. DCF 8 (time series
+                // at fixed stations) uses inline arrow glyphs — no PC required.
+                if (s.Dataset.DataCodingFormat == 3
+                    && catalogueManager.HasCatalogue("S-111"))
+                {
+                    _provider = catalogueManager.GetProvider("S-111");
+                    _catalogue = new S111PortrayalCatalogue(_provider);
+                    Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+                }
                 break;
         }
     }
@@ -243,9 +252,12 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
     // ---- dcf8 station series rendering ---------------------------------
 
     /// <summary>
-    /// Projects each station to a single point feature with an arrow
+    /// Projects each station/node to a single point feature with an arrow
     /// glyph oriented along <c>DirectionsDegreesTrue</c> and scaled by
-    /// speed magnitude. Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
+    /// speed magnitude. When the portrayal catalogue is loaded (DCF 3),
+    /// colors and scale factors are resolved from the PC's speed-band
+    /// table; otherwise (DCF 8) a hardcoded palette is used.
+    /// Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
     /// </summary>
     private DatasetResult RenderStationSeries(S111StationSeriesDataset ds, RenderContext? context)
     {
@@ -260,6 +272,17 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         }
 
         _stationSelectedTime = selectedTime;
+
+        // Resolve PC schemes if available (DCF 3 with catalogue loaded)
+        CoverageColorScheme? colorScheme = null;
+        CoverageSymbolScheme? symbolScheme = null;
+        if (_catalogue is not null)
+        {
+            _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            var mariner = context?.Mariner ?? MarinerSettings.Default;
+            colorScheme = _catalogue.ResolveColorScheme(mariner);
+            symbolScheme = _catalogue.ResolveSymbolScheme(mariner);
+        }
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
 
@@ -303,7 +326,45 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             feature["Latitude"] = station.Latitude;
             feature["Longitude"] = station.Longitude;
 
-            var arrowColour = ColorByMagnitude(speed);
+            Color arrowColour;
+            double symbolScale;
+
+            if (colorScheme is not null)
+            {
+                // PC-faithful rendering: resolve color from speed bands
+                var hex = colorScheme.Resolve(speed);
+                arrowColour = hex is not null
+                    ? ParseHexColor(hex)
+                    : new Color(0x80, 0x80, 0x80); // grey fallback for out-of-range
+
+                // Use PC symbol scheme for scaling if available
+                if (symbolScheme is not null)
+                {
+                    var band = symbolScheme.Resolve(speed);
+                    if (band is not null)
+                    {
+                        symbolScale = band.ScaleByValue
+                            ? band.ScaleFactor * speed
+                            : band.ScaleFactor;
+                        // Clamp to reasonable visual range
+                        symbolScale = Math.Clamp(symbolScale, 0.20, 2.0);
+                    }
+                    else
+                    {
+                        symbolScale = 0.30; // minimum visible
+                    }
+                }
+                else
+                {
+                    symbolScale = SymbolScaleForSpeed(speed);
+                }
+            }
+            else
+            {
+                // Fallback (DCF 8): hardcoded palette
+                arrowColour = ColorByMagnitude(speed);
+                symbolScale = SymbolScaleForSpeed(speed);
+            }
 
             // Symbol orientation in Mapsui follows screen rotation
             // (counter-clockwise positive); compass bearing increases
@@ -315,7 +376,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 SymbolType = SymbolType.Triangle,
                 Fill = new Brush(arrowColour),
                 Outline = new Pen(arrowColour, 1.0),
-                SymbolScale = SymbolScaleForSpeed(speed),
+                SymbolScale = symbolScale,
                 SymbolRotation = -direction,
             });
 
@@ -333,7 +394,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             ? new MRect(0, 0, 0, 0)
             : new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
 
-        var info = $"{ds.GeographicIdentifier ?? _fileName} — {ds.Stations.Count} stations, " +
+        var dcfLabel = ds.DataCodingFormat == 3 ? "nodes" : "stations";
+        var info = $"{ds.GeographicIdentifier ?? _fileName} — {ds.Stations.Count} {dcfLabel}, " +
                    $"time: {selectedTime:u}";
 
         return new DatasetResult
@@ -343,6 +405,36 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Info = info,
             Spec = new SpecRef("S-111", default),
         };
+    }
+
+    /// <summary>
+    /// Parses a hex color string (e.g. "#RRGGBB" or "#AARRGGBB") into
+    /// a Mapsui <see cref="Color"/>.
+    /// </summary>
+    private static Color ParseHexColor(string hex)
+    {
+        var span = hex.AsSpan();
+        if (span.Length > 0 && span[0] == '#')
+            span = span[1..];
+
+        if (span.Length == 6)
+        {
+            int r = int.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            int g = int.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            int b = int.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return new Color(r, g, b);
+        }
+
+        if (span.Length == 8)
+        {
+            int a = int.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            int r = int.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            int g = int.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            int b = int.Parse(span[6..8], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return new Color(r, g, b, a);
+        }
+
+        return new Color(0x80, 0x80, 0x80);
     }
 
     private static IReadOnlyList<DateTime> ComputeStationUnionTimes(S111StationSeriesDataset ds)
