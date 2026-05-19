@@ -7,8 +7,10 @@ namespace EncDotNet.S100.Datasets.S111;
 /// <summary>
 /// Reads an S-111 Surface Currents dataset from an HDF5 file via the
 /// <see cref="IHdf5File"/> abstraction. Supports data coding format 2
-/// (regular grid) and data coding format 8 (time series at fixed
-/// stations; S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
+/// (regular grid), data coding format 3 (ungeorectified grid with
+/// explicit per-node positioning; S-100 Part 10c §10.2.1), and data
+/// coding format 8 (time series at fixed stations; S-111 Edition 2.0.0
+/// §10.2.3 / §10.2.7).
 /// </summary>
 public static class S111DatasetReader
 {
@@ -96,9 +98,11 @@ public static class S111DatasetReader
             ? (int)scGroup.ReadInt64Attribute("typeOfCurrentData")
             : null;
 
-        if (dataCodingFormat == 8)
+        if (dataCodingFormat is 3 or 8)
         {
-            var stations = ReadStationSeries(root, scGroup);
+            var stations = dataCodingFormat == 3
+                ? ReadUngeorectifiedGrid(root, scGroup)
+                : ReadStationSeries(root, scGroup);
             DateTime? minTime = null, maxTime = null;
             foreach (var s in stations)
             {
@@ -114,7 +118,7 @@ public static class S111DatasetReader
                 IssueDate = issueDate,
                 Metadata = metadata,
                 SurfaceCurrentDepth = surfaceCurrentDepth,
-                DataCodingFormat = 8,
+                DataCodingFormat = dataCodingFormat,
                 TypeOfCurrentData = typeOfCurrentData,
                 Stations = stations,
                 MinTime = minTime,
@@ -284,6 +288,198 @@ public static class S111DatasetReader
         _ => throw new NotSupportedException(
             $"S-111 member '{member.Name}' has unsupported kind {member.Kind}."),
     };
+
+    // -------------------------------------------------------------------
+    // dcf3 — ungeorectified grid (S-100 Part 10c §10.2.1)
+    // -------------------------------------------------------------------
+
+    /// <summary>
+    /// Reads an S-111 <em>data coding format 3</em> (ungeorectified grid)
+    /// dataset — each node has an explicit lat/lon from
+    /// <c>Positioning/geometryValues</c>, and each <c>Group_NNN</c> is a
+    /// time step with one <c>(speed, direction)</c> per node.
+    /// </summary>
+    /// <remarks>
+    /// DCF 3 is structurally a per-timestep snapshot of irregularly-positioned
+    /// nodes. To reuse the station-series rendering path, this method transposes
+    /// the data: each node becomes a <see cref="SurfaceCurrentStation"/> whose
+    /// time series is assembled from the node's value at each time step.
+    /// </remarks>
+    private static IReadOnlyList<SurfaceCurrentStation> ReadUngeorectifiedGrid(IHdf5Group root, IHdf5Group scGroup)
+    {
+        var allStations = new List<SurfaceCurrentStation>();
+
+        foreach (var instanceName in scGroup.GroupNames)
+        {
+            if (!instanceName.StartsWith("SurfaceCurrent.", StringComparison.Ordinal))
+                continue;
+
+            var instance = scGroup.OpenGroup(instanceName);
+            var instancePath = $"/SurfaceCurrent/{instanceName}";
+            ReadUngeorectifiedInstance(instance, instancePath, allStations);
+        }
+
+        return allStations;
+    }
+
+    private static void ReadUngeorectifiedInstance(
+        IHdf5Group instance,
+        string instancePath,
+        List<SurfaceCurrentStation> stations)
+    {
+        const string Spec = "S-100 Part 10c §10.2.1";
+
+        // Read per-node positions from Positioning/geometryValues under this instance.
+        var positions = ReadInstancePositions(instance, instancePath);
+        int nodeCount = positions.Count;
+
+        // Collect time-step groups in ascending order.
+        var timeGroupNames = instance.GroupNames
+            .Where(n => n.StartsWith("Group_", StringComparison.Ordinal))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        if (timeGroupNames.Count == 0)
+            return;
+
+        // Parse time info from the instance.
+        string firstTimeStr = instance.ReadRequiredStringAttribute(
+            "dateTimeOfFirstRecord", "S-111", null, instancePath, Spec);
+        string lastTimeStr = instance.ReadRequiredStringAttribute(
+            "dateTimeOfLastRecord", "S-111", null, instancePath, Spec);
+        DateTime firstTime = ParseTimestamp(firstTimeStr);
+        DateTime lastTime = ParseTimestamp(lastTimeStr);
+
+        long intervalSeconds = instance.ReadRequiredInt64Attribute(
+            "timeRecordInterval", "S-111", null, instancePath, Spec);
+        var interval = TimeSpan.FromSeconds(intervalSeconds);
+
+        int numberOfTimes = timeGroupNames.Count;
+
+        // Read all time steps: speeds[t][node], directions[t][node].
+        var allSpeeds = new float[numberOfTimes][];
+        var allDirections = new float[numberOfTimes][];
+
+        for (int t = 0; t < numberOfTimes; t++)
+        {
+            var group = instance.OpenGroup(timeGroupNames[t]);
+            var values = ReadValues(group);
+
+            var speeds = new float[nodeCount];
+            var directions = new float[nodeCount];
+            int valCount = Math.Min(values.Length, nodeCount);
+            for (int n = 0; n < valCount; n++)
+            {
+                speeds[n] = values[n].Speed;
+                directions[n] = values[n].Direction;
+            }
+
+            allSpeeds[t] = speeds;
+            allDirections[t] = directions;
+        }
+
+        // Transpose to per-node station series.
+        for (int n = 0; n < nodeCount; n++)
+        {
+            var nodeSpeeds = new float[numberOfTimes];
+            var nodeDirections = new float[numberOfTimes];
+            for (int t = 0; t < numberOfTimes; t++)
+            {
+                nodeSpeeds[t] = allSpeeds[t][n];
+                nodeDirections[t] = allDirections[t][n];
+            }
+
+            var (lat, lon) = positions[n];
+
+            stations.Add(new SurfaceCurrentStation
+            {
+                Identifier = $"Node_{n + 1:D3}",
+                Latitude = lat,
+                Longitude = lon,
+                StartTime = firstTime,
+                EndTime = lastTime,
+                TimeRecordInterval = interval,
+                NumberOfTimes = numberOfTimes,
+                SpeedsMetresPerSecond = nodeSpeeds,
+                DirectionsDegreesTrue = nodeDirections,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Reads node positions from <c>Positioning/geometryValues</c> under
+    /// a specific <c>SurfaceCurrent.NN</c> instance group (DCF 3 layout;
+    /// S-100 Part 10c §10.2.1).
+    /// </summary>
+    private static List<(double Lat, double Lon)> ReadInstancePositions(IHdf5Group instance, string instancePath)
+    {
+        if (!instance.GroupNames.Contains("Positioning"))
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: $"{instancePath}/Positioning",
+                attributeOrDataset: "Positioning/geometryValues",
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, $"{instancePath}/Positioning", "Positioning/geometryValues",
+                    "S-100 Part 10c §10.2.1"));
+        }
+
+        var posGroup = instance.OpenGroup("Positioning");
+
+        RawCompoundDataset raw;
+        try
+        {
+            raw = posGroup.ReadRawCompoundDataset("geometryValues");
+        }
+        catch (Exception ex)
+        {
+            throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: $"{instancePath}/Positioning",
+                attributeOrDataset: "geometryValues",
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, $"{instancePath}/Positioning", "geometryValues",
+                    "S-100 Part 10c §10.2.1"),
+                innerException: ex);
+        }
+
+        var latMember = raw.FindMember("latitude", "Latitude", "lat", "Lat")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: $"{instancePath}/Positioning/geometryValues",
+                attributeOrDataset: "latitude",
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, $"{instancePath}/Positioning/geometryValues", "latitude",
+                    "S-100 Part 10c §10.2.1"));
+
+        var lonMember = raw.FindMember("longitude", "Longitude", "long", "Long", "lon", "Lon")
+            ?? throw new S100DatasetSchemaException(
+                product: "S-111",
+                file: null,
+                groupPath: $"{instancePath}/Positioning/geometryValues",
+                attributeOrDataset: "longitude",
+                specReference: "S-100 Part 10c §10.2.1",
+                message: ExceptionMessageFormatter.FormatSchema(
+                    "S-111", null, $"{instancePath}/Positioning/geometryValues", "longitude",
+                    "S-100 Part 10c §10.2.1"));
+
+        var positions = new List<(double Lat, double Lon)>(raw.RecordCount);
+        var span = raw.Data.AsSpan();
+        for (int i = 0; i < raw.RecordCount; i++)
+        {
+            var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
+            double lat = ReadFloatingPointMember(record, latMember);
+            double lon = ReadFloatingPointMember(record, lonMember);
+            positions.Add((lat, lon));
+        }
+        return positions;
+    }
 
     // -------------------------------------------------------------------
     // dcf8 — time series at fixed stations (S-111 Edition 2.0.0 §10.2.3 / §10.2.7)
