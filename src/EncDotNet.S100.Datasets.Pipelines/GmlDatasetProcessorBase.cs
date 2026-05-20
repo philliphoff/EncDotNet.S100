@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
@@ -175,6 +176,17 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             Extent = ComputeExtent(),
             Info = info,
             Spec = Spec,
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: layer,
+                    // S-98 cross-dataset plane assignment per design note
+                    // §3 / §4.2. PR-L1 ships default planes only — no IC
+                    // override, no per-feature filter (TBD-5).
+                    Plane: InteroperabilityAuthority.Default.GetDefaultPlane(Spec.Name),
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName),
+            },
         };
     }
 

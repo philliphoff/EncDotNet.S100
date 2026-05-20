@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
@@ -145,6 +146,18 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
             Extent = extent,
             Info = info,
             Spec = new SpecRef("S-102", default),
+            StackEntries = new[]
+            {
+                // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
+                // ("gridded bathymetry replaces depth area and depth
+                // contours"). S-102 always emits a single coverage layer
+                // here; PR-L1 leaves WithinPlanePriority at 0.
+                new LayerStackEntry(
+                    Layer: mapLayer,
+                    Plane: EncDotNet.S100.Interoperability.S98DisplayPlane.Bathymetry,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName),
+            },
         };
     }
 

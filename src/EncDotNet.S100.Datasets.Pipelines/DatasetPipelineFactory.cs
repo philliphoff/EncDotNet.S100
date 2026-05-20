@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -31,6 +32,31 @@ public sealed class DatasetResult
     /// length must match <see cref="Layers"/>.
     /// </summary>
     public IReadOnlyList<string>? LayerNames { get; init; }
+
+    /// <summary>
+    /// S-98 cross-dataset stack metadata, parallel by index to
+    /// <see cref="Layers"/> when supplied (every entry's
+    /// <see cref="LayerStackEntry.Layer"/> appears in
+    /// <see cref="Layers"/> exactly once and at the same index).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// PR-L1 plumbing: each processor declares the S-98 display
+    /// plane every layer it emits should live in (S-98 Annex A
+    /// §4.4.1; S-98 Main §9.2.1). The viewer's dataset loader
+    /// pumps every loaded dataset's entries through
+    /// <see cref="LayerStackBuilder"/> to compute the global paint
+    /// order across products.
+    /// </para>
+    /// <para>
+    /// The <see cref="Layers"/> field stays in place — the two
+    /// collections must remain in sync (same length, same instances
+    /// in the same positions). The <c>Layers</c> field exists so
+    /// downstream code that doesn't care about plane metadata
+    /// remains source-compatible.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<LayerStackEntry>? StackEntries { get; init; }
 }
 
 /// <summary>

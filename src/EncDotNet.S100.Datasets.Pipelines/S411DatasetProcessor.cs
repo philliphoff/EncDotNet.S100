@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
@@ -103,6 +104,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
                 Extent = ComputeExtent(),
                 Info = $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})",
                 Spec = new SpecRef("S-411", default),
+                StackEntries = Array.Empty<LayerStackEntry>(),
             };
         }
         return null;

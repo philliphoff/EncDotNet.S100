@@ -4,9 +4,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
@@ -237,6 +239,29 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             : "";
         var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
 
+        // S-111 splits into colour-band (OnDemandSurface) and an
+        // optional arrow overlay (DynamicArrows). S-98 Annex A
+        // §A-6.9.1; existing portrayal catalogue declares the arrow
+        // sub-layer with intra-product displayPlane="OverRadar".
+        var stackEntries = new List<LayerStackEntry>
+        {
+            new(
+                Layer: colorLayer,
+                Plane: S98DisplayPlane.OnDemandSurface,
+                WithinPlanePriority: 0,
+                SourceDatasetId: _fileName,
+                SourceFeatureType: "s111.color-band"),
+        };
+        if (arrowLayer is not null)
+        {
+            stackEntries.Add(new LayerStackEntry(
+                Layer: arrowLayer,
+                Plane: S98DisplayPlane.DynamicArrows,
+                WithinPlanePriority: 10,
+                SourceDatasetId: _fileName,
+                SourceFeatureType: "s111.arrows"));
+        }
+
         return new DatasetResult
         {
             Layers = layers,
@@ -246,6 +271,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             LayerNames = arrowLayer is not null
                 ? new[] { "s111.color-band", "s111.arrows" }
                 : new[] { "s111.color-band" },
+            StackEntries = stackEntries,
         };
     }
 
@@ -445,6 +471,17 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Extent = extent,
             Info = info,
             Spec = new SpecRef("S-111", default),
+            // S-111 station glyphs (dcf3/dcf8) — point overlays on the
+            // catch-all OtherChartOverlays plane.
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: layer,
+                    Plane: S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName,
+                    SourceFeatureType: "s111.stations"),
+            },
         };
     }
 

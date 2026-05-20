@@ -5,11 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S131.DataModel;
 using EncDotNet.S100.Datasets.S131.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -181,6 +183,17 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
             Extent = layerExtent,
             Info = info,
             Spec = new SpecRef("S-131", default),
+            // S-131 (Marine Harbour Infrastructure) is out of S-98
+            // Annex A Table 1-1 scope, so default plane derives from
+            // MSC.530(106)/Rev.1 §App.2 layer 6 (catch-all overlays).
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: mapLayer,
+                    Plane: S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName),
+            },
         };
     }
 
