@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -137,7 +138,34 @@ internal sealed class PickService : IPickService
         var hits = new List<PickHit>();
         var seen = new HashSet<(IDatasetProcessor processor, string featureRef)>();
 
-        foreach (var record in mapInfo.MapInfoRecords)
+        // PR-L1 (S-98): rank multi-hit picks by the current S-98 layer
+        // stack so the user sees the topmost-painted feature first.
+        // Mapsui's MapInfoRecords arrive in scene-graph order which
+        // does not necessarily match the cross-dataset paint order
+        // computed by InteroperabilityAuthority.Sort. Re-sort here.
+        //
+        // S-98 Main §10.12 and Annex A §A-6.12 designate interrogation
+        // as "under development" — there is no normative pick-order
+        // rule yet. Top-of-stack-first matches user expectation that
+        // the visually frontmost feature gets reported first.
+        var stack = _loader.CurrentStackedLayers;
+        int StackIndex(ILayer? layer)
+        {
+            if (layer is null) return -1;
+            for (int i = 0; i < stack.Count; i++)
+                if (ReferenceEquals(stack[i], layer)) return i;
+            return -1;
+        }
+
+        // Higher stack index = drawn later = on top. Descending order
+        // means top-of-stack records are walked first; the dedup
+        // HashSet then locks in the topmost hit for each (processor,
+        // featureRef) key. A stable order-preserving sort keeps
+        // intra-layer ordering as Mapsui returned it.
+        var records = mapInfo.MapInfoRecords.ToList();
+        records.Sort((a, b) => StackIndex(b.Layer).CompareTo(StackIndex(a.Layer)));
+
+        foreach (var record in records)
         {
             if (record.Feature is not { } feature || record.Layer is not { } layer)
                 continue;

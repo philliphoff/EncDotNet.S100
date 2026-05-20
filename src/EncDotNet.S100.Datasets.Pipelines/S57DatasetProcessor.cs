@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -151,6 +153,18 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
             Extent = layerExtent,
             Info = info,
             Spec = new SpecRef("S-57", default),
+            // S-57 is the legacy ENC fallback; treat the whole layer
+            // as base-chart line-work + symbology on BaseChartOver
+            // (S-98 §9.2.1 layer 2). We do not split S-57 into areas
+            // vs lines in PR-L1 — the legacy renderer mixes them.
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: mapLayer,
+                    Plane: S98DisplayPlane.BaseChartOver,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName),
+            },
         };
     }
 

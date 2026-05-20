@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -38,9 +40,33 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly IToastService _toasts;
+    /// <summary>
+    /// Resolves the <em>currently active</em> cross-dataset paint-order
+    /// policy on each consult. Hosts can swap the authority at runtime
+    /// (e.g. flip from S-98 to strict load-order) and we re-sort the
+    /// stack in response to <see cref="IInteroperabilityAuthorityProvider.CurrentChanged"/>.
+    /// </summary>
+    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
+    /// <summary>
+    /// Per-entry S-98 layer-stack entries produced by the processor's
+    /// most recent render. Each entry's <see cref="LayerStackEntry.Layer"/>
+    /// also appears in <see cref="_entryLayers"/>. Populated from
+    /// <see cref="DatasetResult.StackEntries"/> when available; otherwise
+    /// synthesised through the active <see cref="IInteroperabilityAuthority"/>.
+    /// </summary>
+    private readonly Dictionary<DatasetEntry, IReadOnlyList<LayerStackEntry>> _entryStackEntries = new();
+    /// <summary>
+    /// Snapshot of the most recently computed S-98 layer stack
+    /// (bottom-of-paint-stack first; index 0 = drawn first / under
+    /// everything else). Mirrors what was just handed to
+    /// <see cref="IMapHost.ReorderDatasetLayers"/>. Refreshed whenever
+    /// the layer order changes so <see cref="PickService"/> can rank
+    /// multi-hit picks top-of-stack first.
+    /// </summary>
+    private IReadOnlyList<ILayer> _currentStackedLayers = Array.Empty<ILayer>();
     /// <summary>
     /// Per-entry sub-layer keys, parallel by index to
     /// <see cref="_entryLayers"/>. Null when the processor did not
@@ -80,7 +106,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         GlobalTimeService globalTime,
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
-        IToastService toasts)
+        IToastService toasts,
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -107,6 +134,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
         _toasts = toasts;
+        ArgumentNullException.ThrowIfNull(authorityProvider);
+        _authorityProvider = authorityProvider;
+        // Re-sort the live layer stack whenever the host swaps the
+        // active authority. Cheap when no datasets are loaded.
+        _authorityProvider.CurrentChanged += OnAuthorityChanged;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
@@ -116,6 +148,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors => _processorsView;
     public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers => _entryLayersView;
+
+    public IReadOnlyList<ILayer> CurrentStackedLayers => _currentStackedLayers;
+
+    public event Action? LayerStackChanged;
 
     public event Action<DatasetEntry>? DatasetLoaded;
 
@@ -244,7 +280,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var initialContext = CreateRenderContext(processor, initialTime);
             var result = await Task.Run(() => processor.Render(initialContext), token);
 
-            ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
+            ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
             // Exchange-set entries opt out of the per-dataset auto-zoom so
             // the union-extent zoom from `IExchangeSetService` (or the
             // user's manual Zoom-to-Extent toolbar action) wins. Without
@@ -393,7 +429,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var context = CreateRenderContext(proc, snapped);
                 var result = await Task.Run(() => proc.Render(context), token).ConfigureAwait(true);
 
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
             }
@@ -422,7 +458,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
                 var result = await Task.Run(() => proc.Render(context));
 
-                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames);
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;
             }
             catch (Exception ex)
@@ -444,12 +480,17 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         UnsubscribeSubLayers(entry);
         entry.SubLayers.Clear();
         _entryLayerKeys.Remove(entry);
+        _entryStackEntries.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
         _processors.Remove(entry);
         _entryOrder.Remove(entry);
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
+        // Publish the new (empty / smaller) stack so PickService and
+        // anyone else who cares drops references to the removed layers.
+        if (_mapHost is not null)
+            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
         DatasetRemoved?.Invoke(entry);
     }
 
@@ -472,17 +513,54 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private List<ILayer> FlattenLayerOrder()
     {
-        // _entryOrder is ordered top-of-stack-first (UI convention).
-        // MapsuiMapHost.ReorderDatasetLayers expects bottom-of-stack-
-        // first (lower indices in the layer collection are drawn
-        // earlier). Reverse here so the top-of-UI entry's layers end
-        // up at the highest layer index.
-        var list = new List<ILayer>();
-        for (int i = _entryOrder.Count - 1; i >= 0; i--)
+        // PR-L1 (S-98): defer the cross-dataset paint order to the
+        // S-98 interoperability authority. _entryOrder is top-of-UI
+        // first (mirrors the Datasets panel); the authority sorts
+        // by S-98 display plane (BaseChartUnder → EcdisAlerts) and
+        // uses input order as the final tiebreaker. We feed it
+        // bottom-of-UI first so the topmost-UI dataset wins ties
+        // (and lands at the highest layer index — drawn last, on
+        // top), preserving the prior behaviour for single-plane
+        // dataset stacks.
+        var perDataset = new List<IReadOnlyList<LayerStackEntry>>(_entryOrder.Count);
+        // _entryOrder is already top-of-UI first, which is exactly
+        // what LayerStackBuilder.Build expects. It internally walks
+        // bottom-up so the top-of-UI dataset wins within-plane ties.
+        for (int i = 0; i < _entryOrder.Count; i++)
         {
-            if (_entryLayers.TryGetValue(_entryOrder[i], out var ls))
-                list.AddRange(ls);
+            var entry = _entryOrder[i];
+            if (!_entryLayers.TryGetValue(entry, out var layers)) continue;
+
+            if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
+            {
+                perDataset.Add(stack);
+            }
+            else
+            {
+                // Fallback: processor didn't supply StackEntries. Drop
+                // each layer onto the spec's default plane with
+                // priority 0 so it still participates in S-98 ordering.
+                var specName = _processors.TryGetValue(entry, out var proc)
+                    ? proc.Spec.Name
+                    : "unknown";
+                var plane = _authorityProvider.Current.GetDefaultPlane(specName);
+                var synth = new List<LayerStackEntry>(layers.Count);
+                foreach (var l in layers)
+                {
+                    synth.Add(new LayerStackEntry(
+                        Layer: l,
+                        Plane: plane,
+                        WithinPlanePriority: 0,
+                        SourceDatasetId: entry.FilePath ?? entry.DisplayName));
+                }
+                perDataset.Add(synth);
+            }
         }
+
+        var sorted = LayerStackBuilder.Build(_authorityProvider.Current, perDataset);
+        var list = LayerStackBuilder.ToLayerList(sorted);
+        _currentStackedLayers = list;
+        LayerStackChanged?.Invoke();
         return list;
     }
 
@@ -551,13 +629,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         };
     }
 
-    private void ReplaceLayers(DatasetEntry entry, IReadOnlyList<ILayer> layers, IReadOnlyList<string>? layerKeys)
+    private void ReplaceLayers(
+        DatasetEntry entry,
+        IReadOnlyList<ILayer> layers,
+        IReadOnlyList<string>? layerKeys,
+        IReadOnlyList<LayerStackEntry>? stackEntries)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
 
         RemoveEntryLayers(entry);
         _entryLayers[entry] = layers;
         _entryLayerKeys[entry] = layerKeys;
+        // Keep _entryStackEntries in sync with _entryLayers. If the
+        // processor didn't supply StackEntries, FlattenLayerOrder will
+        // synthesise defaults below — but we still clear any stale
+        // entries from a previous render so they don't leak.
+        if (stackEntries is not null && stackEntries.Count > 0)
+            _entryStackEntries[entry] = stackEntries;
+        else
+            _entryStackEntries.Remove(entry);
 
         // Reconcile sub-layers (don't replace) so existing per-sub-layer
         // visibility / opacity choices survive palette switches and
@@ -581,19 +671,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             _mapHost!.AddLayer(layer);
         }
 
-        // First-time loads: the new entry goes to the TOP of the
-        // canonical order (matching DatasetsViewModel.Add which
-        // inserts at index 0). MapsuiMapHost already puts new layers
-        // on top of the dataset block by default, so a re-shuffle is
-        // only needed for re-renders.
+        // PR-L1 (S-98): always recompute the cross-dataset paint
+        // order after a load/re-render. The S-98 plane sort can
+        // place a newly-loaded dataset *under* existing layers
+        // (e.g. an S-102 bathymetry load arrives after S-101 line
+        // work — the bathy must sit between the ENC's area fills
+        // and its line work). Pre-PR-L1 we only re-shuffled on
+        // re-renders; that was correct for the old "load order
+        // wins" model.
         if (isFirstLoad)
         {
             _entryOrder.Insert(0, entry);
         }
-        else
-        {
-            _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
-        }
+        _mapHost!.ReorderDatasetLayers(FlattenLayerOrder());
     }
 
     /// <summary>
@@ -745,6 +835,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
             _entryLayers.Remove(entry);
         }
+    }
+
+    private void OnAuthorityChanged()
+    {
+        // The host swapped the active interoperability authority
+        // (e.g. flipped a viewer setting between S-98 and load-order).
+        // Re-flatten the current stack through the new authority's
+        // policy and push the result to the map host. Cheap when no
+        // datasets are loaded.
+        if (_mapHost is null) return;
+        if (_entryOrder.Count == 0) return;
+        _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
     }
 
     private void EnsureInitialized()

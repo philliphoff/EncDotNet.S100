@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
@@ -37,21 +38,34 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
+    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
     private readonly MapsuiRenderAssetCache _renderAssetCache = new();
 
     /// <summary>
     /// Initializes the shared processor state. Called by subclass constructors
     /// after parsing the dataset and creating the catalogue.
     /// </summary>
+    /// <param name="catalogue">Portrayal catalogue used by the XSLT pipeline.</param>
+    /// <param name="decoder">Optional feature-catalogue decoder for attribute decoding.</param>
+    /// <param name="fileName">Dataset file name (used in feature info).</param>
+    /// <param name="authorityProvider">
+    /// Resolves the cross-dataset paint-order authority each time the
+    /// processor builds a <see cref="LayerStackEntry"/>. Required —
+    /// processors receive the provider via DI rather than reaching
+    /// for a static singleton.
+    /// </param>
     protected GmlDatasetProcessorBase(
         GmlPortrayalCatalogueBase catalogue,
         FeatureCatalogueDecoder? decoder,
-        string fileName)
+        string fileName,
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
         _catalogue = catalogue;
         _decoder = decoder;
         _fileName = fileName;
+        _authorityProvider = authorityProvider;
 
         // Catalogue resolution is a one-shot per processor instance; emit
         // the diagnostic at construction so the per-Render hot path stays
@@ -175,6 +189,25 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             Extent = ComputeExtent(),
             Info = info,
             Spec = Spec,
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: layer,
+                    // S-98 cross-dataset plane assignment per design note
+                    // §3 / §4.2. PR-L1 ships default planes only — no IC
+                    // override, no per-feature filter (TBD-5).
+                    //
+                    // The plane is resolved through the currently active
+                    // authority (via the injected provider) so a runtime
+                    // policy swap (e.g. S-98 → strict load-order) takes
+                    // effect on the next render. The recorded plane is
+                    // the conceptual "where does this content belong?"
+                    // answer; sort policy is what the authority's Sort()
+                    // does with it.
+                    Plane: _authorityProvider.Current.GetDefaultPlane(Spec.Name),
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName),
+            },
         };
     }
 

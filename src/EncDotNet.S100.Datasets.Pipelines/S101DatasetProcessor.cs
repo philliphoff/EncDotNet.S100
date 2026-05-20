@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -110,10 +112,81 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
         Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
 
-        // Render to Mapsui layer
-        var vectorRenderer = new MapsuiDisplayListRenderer
+        // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
+        // S-101 area fills and S-101 line work / points / text. We split
+        // the S-101 display list along the AreaInstruction boundary into
+        // two Mapsui layers so the LayerStackBuilder can interleave S-102.
+        // PR-L0 TBD-3 resolved: split in the processor (double pipeline
+        // pass / type pre-filter) rather than the renderer. The double
+        // render is small per cell (< 5% per design note §4.2.1); a
+        // future v2 mitigation could be a single-pass dual-sink renderer
+        // if profiling on large datasets shows it matters.
+        var areaInstructions = prepared.Where(i => i is AreaInstruction).ToList();
+        var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
+
+        var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+
+        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas")
+            .Render(areaInstructions, geometryProvider);
+        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines")
+            .Render(otherInstructions, geometryProvider);
+
+        // Union the two layer extents (each is in EPSG:3857). Mapsui
+        // returns a zero-extent rect when a layer has no features, so
+        // skip such layers in the union.
+        var areaExtent = areaLayer.Extent;
+        var lineExtent = lineLayer.Extent;
+        var layerExtent = areaExtent is null
+            ? (lineExtent ?? new MRect(0, 0, 0, 0))
+            : (lineExtent is null ? areaExtent : areaExtent.Join(lineExtent));
+
+        Console.WriteLine($"[S101-Lua] Rendered {areaInstructions.Count} area + {otherInstructions.Count} non-area instructions");
+
+        var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
+                   $"{prepared.Count} instructions";
+
+        var layers = new ILayer[] { areaLayer, lineLayer };
+
+        return new DatasetResult
         {
-            LayerName = $"S-101: {_fileName}",
+            Layers = layers,
+            Extent = layerExtent,
+            Info = info,
+            Spec = new SpecRef("S-101", default),
+            // Sub-layer keys so the viewer's per-sub-layer disclosure
+            // can toggle areas vs line work independently.
+            LayerNames = new[] { "s101.areas", "s101.linework" },
+            StackEntries = new[]
+            {
+                // Area fills land on the deepest base-chart plane so
+                // S-102 (Bathymetry, 10) can sit on top of them.
+                new LayerStackEntry(
+                    Layer: areaLayer,
+                    Plane: S98DisplayPlane.BaseChartUnder,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName,
+                    SourceFeatureType: "area"),
+                // Line work, points, symbols, and text remain on the
+                // base-chart "over" plane (above Bathymetry).
+                new LayerStackEntry(
+                    Layer: lineLayer,
+                    Plane: S98DisplayPlane.BaseChartOver,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName,
+                    SourceFeatureType: "linework"),
+            },
+        };
+    }
+
+    private MapsuiDisplayListRenderer CreateRenderer(
+        S101PortrayalCatalogue catalogue,
+        ColorPalette palette,
+        RenderContext? context,
+        string suffix)
+    {
+        return new MapsuiDisplayListRenderer
+        {
+            LayerName = $"S-101 ({suffix}): {_fileName}",
             Product = "S-101",
             Palette = palette,
             AssetCache = _renderAssetCache,
@@ -123,7 +196,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             {
                 try
                 {
-                    var svg = s101Cat.GetSymbol(symbolName);
+                    var svg = catalogue.GetSymbol(symbolName);
                     return svg.SvgContent;
                 }
                 catch
@@ -135,7 +208,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             {
                 try
                 {
-                    return s101Cat.GetAreaFill(fillName);
+                    return catalogue.GetAreaFill(fillName);
                 }
                 catch
                 {
@@ -144,24 +217,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             },
             LineStyleProvider = name =>
             {
-                try { return s101Cat.GetLineStyle(name); }
+                try { return catalogue.GetLineStyle(name); }
                 catch { return null; }
             },
-        };
-        var geometryProvider = new S101FeatureGeometryProvider(_dataset);
-        var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
-        var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
-        Console.WriteLine($"[S101-Lua] Rendered {prepared.Count} instructions to Mapsui layer");
-
-        var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
-                   $"{prepared.Count} instructions";
-
-        return new DatasetResult
-        {
-            Layers = [mapLayer],
-            Extent = layerExtent,
-            Info = info,
-            Spec = new SpecRef("S-101", default),
         };
     }
 

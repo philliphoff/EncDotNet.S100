@@ -4,9 +4,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -188,6 +190,17 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
             Extent = extent,
             Info = info,
             Spec = new SpecRef("S-104", default),
+            // S-104 colour band → OnDemandSurface (S-98 Main §9.2.1
+            // layer 6 "Official on demand data"; Annex A §A-6.9.1).
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: colorLayer,
+                    Plane: S98DisplayPlane.OnDemandSurface,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName,
+                    SourceFeatureType: "s104.color-band"),
+            },
         };
     }
 
@@ -283,6 +296,18 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
             Extent = extent,
             Info = info,
             Spec = new SpecRef("S-104", default),
+            // S-104 station glyphs (PR-I) are point overlays drawn
+            // above coverage but below cautions, per the
+            // MSC.530(106)/Rev.1 §App.2 layer-6 catch-all reading.
+            StackEntries = new[]
+            {
+                new LayerStackEntry(
+                    Layer: layer,
+                    Plane: S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: _fileName,
+                    SourceFeatureType: "s104.stations"),
+            },
         };
     }
 

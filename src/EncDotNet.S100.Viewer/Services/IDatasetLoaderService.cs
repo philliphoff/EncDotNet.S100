@@ -62,6 +62,34 @@ internal interface IDatasetLoaderService
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
 
     /// <summary>
+    /// Snapshot of the current S-98-ordered layer stack across all
+    /// loaded datasets (bottom-of-paint-stack first; index 0 paints
+    /// under everything else). Updated whenever a dataset is loaded,
+    /// removed, re-rendered, or reordered. Consumed by
+    /// <see cref="PickService"/> so multi-hit picks return top-of-stack
+    /// hits first.
+    /// </summary>
+    /// <remarks>
+    /// Default implementation returns an empty list so test doubles
+    /// that don't care about layer ordering needn't override it.
+    /// </remarks>
+    IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+
+    /// <summary>
+    /// Raised after <see cref="CurrentStackedLayers"/> has been
+    /// recomputed (any load, remove, re-render, or reorder).
+    /// </summary>
+    /// <remarks>
+    /// Default implementation is a no-op event so test doubles that
+    /// don't fire layer-stack notifications needn't override it.
+    /// </remarks>
+    event Action? LayerStackChanged
+    {
+        add { }
+        remove { }
+    }
+
+    /// <summary>
     /// Raised on the calling thread (typically the UI thread) immediately
     /// after a dataset has been successfully rendered and its layers added
     /// to the map.

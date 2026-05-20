@@ -386,4 +386,94 @@ public class PickServiceTests
 
         Assert.Contains("ghost", viewModel.StatusText ?? string.Empty);
     }
+
+    private sealed class StackAwareLoader : IDatasetLoaderService
+    {
+        public StackAwareLoader(
+            IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> processors,
+            IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> entryLayers,
+            IReadOnlyList<ILayer> stackedLayers)
+        {
+            Processors = processors;
+            EntryLayers = entryLayers;
+            CurrentStackedLayers = stackedLayers;
+        }
+
+        public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
+        public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+        public IReadOnlyList<ILayer> CurrentStackedLayers { get; }
+        public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
+        public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
+        public event Action<string?>? StatusChanged { add { } remove { } }
+        public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+        public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReRenderAtTimeAsync(DateTime t, CancellationToken ct) => Task.CompletedTask;
+        public Task ReRenderAllAsync() => Task.CompletedTask;
+        public void RemoveEntry(DatasetEntry entry) { }
+        public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+    }
+
+    [Fact]
+    public void HandlePick_OrdersHitsByLayerStackTopFirst()
+    {
+        // PR-L1 (S-98): when Mapsui returns multiple hits across
+        // layers, PickService must re-order them so the topmost-painted
+        // layer's hit comes first — matching the visible Z-order.
+        var viewModel = CreateMainViewModel();
+        var entryA = new DatasetEntry("/tmp/a.gml", "S-101");
+        var entryB = new DatasetEntry("/tmp/b.gml", "S-102");
+        var entryC = new DatasetEntry("/tmp/c.gml", "S-124");
+
+        var procA = new StubProcessor("S-101", new FeatureInfo
+        {
+            FeatureRef = "fa", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+            Attributes = Array.Empty<PickAttribute>(),
+        });
+        var procB = new StubProcessor("S-102", new FeatureInfo
+        {
+            FeatureRef = "fb", FeatureType = "BathyCell", FeatureTypeName = "Bathy",
+            Attributes = Array.Empty<PickAttribute>(),
+        });
+        var procC = new StubProcessor("S-124", new FeatureInfo
+        {
+            FeatureRef = "fc", FeatureType = "Warning", FeatureTypeName = "Warning",
+            Attributes = Array.Empty<PickAttribute>(),
+        });
+
+        var layerA = new MemoryLayer("a");
+        var layerB = new MemoryLayer("b");
+        var layerC = new MemoryLayer("c");
+
+        // Stack is bottom-first; C ends up on top.
+        var stack = new ILayer[] { layerA, layerB, layerC };
+
+        var loader = new StackAwareLoader(
+            new Dictionary<DatasetEntry, IDatasetProcessor>
+            {
+                [entryA] = procA, [entryB] = procB, [entryC] = procC,
+            },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>
+            {
+                [entryA] = new[] { (ILayer)layerA },
+                [entryB] = new[] { (ILayer)layerB },
+                [entryC] = new[] { (ILayer)layerC },
+            },
+            stack);
+
+        var service = CreatePickService(loader, viewModel);
+
+        // Feed records in stack-ascending order (A, B, C). PickService
+        // must reorder them to top-first: C, B, A.
+        service.HandlePick(BuildMapInfo(new[]
+        {
+            MakeRecord(layerA, "fa"),
+            MakeRecord(layerB, "fb"),
+            MakeRecord(layerC, "fc"),
+        }));
+
+        Assert.Equal(3, viewModel.PickReport.Hits.Count);
+        Assert.Equal("fc", viewModel.PickReport.Hits[0].FeatureRef);
+        Assert.Equal("fb", viewModel.PickReport.Hits[1].FeatureRef);
+        Assert.Equal("fa", viewModel.PickReport.Hits[2].FeatureRef);
+    }
 }

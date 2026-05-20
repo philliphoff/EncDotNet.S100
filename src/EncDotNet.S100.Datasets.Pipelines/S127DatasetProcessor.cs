@@ -7,6 +7,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -28,8 +29,9 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
     public S127DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueManager)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, authorityProvider, featureCatalogueManager)
     {
     }
 
@@ -42,11 +44,13 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
+            authorityProvider,
             featureCatalogueManager)
     {
     }
@@ -55,11 +59,13 @@ public sealed class S127DatasetProcessor : GmlDatasetProcessorBase<S127Feature>
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager)
         : base(
             new S127PortrayalCatalogue(catalogueManager.GetProvider("S-127")),
             featureCatalogueManager?.GetDecoder("S-127"),
-            fileName)
+            fileName,
+            authorityProvider)
     {
         using (datasetStream)
         {

@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -27,8 +28,9 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
     public S201DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueManager)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, authorityProvider, featureCatalogueManager)
     {
     }
 
@@ -41,11 +43,13 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
+            authorityProvider,
             featureCatalogueManager)
     {
     }
@@ -54,11 +58,13 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager)
         : base(
             new S201PortrayalCatalogue(catalogueManager.GetProvider("S-201")),
             featureCatalogueManager?.GetDecoder("S-201"),
-            fileName)
+            fileName,
+            authorityProvider)
     {
         using (datasetStream)
         {
