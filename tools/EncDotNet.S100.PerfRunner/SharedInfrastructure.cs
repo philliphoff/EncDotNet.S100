@@ -30,23 +30,41 @@ internal static class SharedInfrastructure
     public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
     {
         var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
+        var pipelinesAssembly = factoryType.Assembly;
 
         // Newest shape (PR-L1): adds IInteroperabilityAuthorityProvider.
-        var providerType = typeof(Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider);
-        var providerCtor = factoryType.GetConstructor(
-            [
-                typeof(PortrayalCatalogueManager),
-                typeof(ILuaEngine),
-                typeof(ICrsTransformFactory),
-                typeof(FeatureCatalogueManager),
-                providerType,
-            ]);
-        if (providerCtor is not null)
+        // Resolved via reflection so this tooling stays compatible with base
+        // SHA library binaries that do not yet expose the Interoperability
+        // namespace.
+        var providerInterfaceType = pipelinesAssembly.GetType(
+            "EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider",
+            throwOnError: false);
+        if (providerInterfaceType is not null)
         {
-            var provider = new Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new Datasets.Pipelines.Interoperability.InteroperabilityAuthority());
-            return (Datasets.Pipelines.DatasetPipelineFactory)providerCtor.Invoke(
-                [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, provider]);
+            var providerCtor = factoryType.GetConstructor(
+                [
+                    typeof(PortrayalCatalogueManager),
+                    typeof(ILuaEngine),
+                    typeof(ICrsTransformFactory),
+                    typeof(FeatureCatalogueManager),
+                    providerInterfaceType,
+                ]);
+            if (providerCtor is not null)
+            {
+                var authorityType = pipelinesAssembly.GetType(
+                    "EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority",
+                    throwOnError: false);
+                var providerImplType = pipelinesAssembly.GetType(
+                    "EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider",
+                    throwOnError: false);
+                if (authorityType is not null && providerImplType is not null)
+                {
+                    var authority = Activator.CreateInstance(authorityType)!;
+                    var provider = Activator.CreateInstance(providerImplType, authority)!;
+                    return (Datasets.Pipelines.DatasetPipelineFactory)providerCtor.Invoke(
+                        [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, provider]);
+                }
+            }
         }
 
         var managerCtor = factoryType.GetConstructor(
