@@ -131,6 +131,13 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines")
             .Render(otherInstructions, geometryProvider);
 
+        // PR-L2 R-101-102-B: tag every Mapsui IFeature with its S-101
+        // feature-type code and (for DepthContour) its VALDCO depth
+        // value, so the S-98 rule engine can filter without re-running
+        // portrayal. See S98DefaultRules.SuppressS101DepthFeatures.
+        TagMapsuiFeaturesWithFeatureType(areaLayer);
+        TagMapsuiFeaturesWithFeatureType(lineLayer);
+
         // Union the two layer extents (each is in EPSG:3857). Mapsui
         // returns a zero-extent rect when a layer has no features, so
         // skip such layers in the union.
@@ -176,6 +183,53 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
                     SourceFeatureType: "linework"),
             },
         };
+    }
+
+    /// <summary>
+    /// Tags every Mapsui feature on <paramref name="layer"/> with the
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Interoperability.FeatureTagKeys.FeatureType"/>
+    /// (and, for <c>DepthContour</c>, the numeric depth value under
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Interoperability.FeatureTagKeys.DepthContourValue"/>).
+    /// </summary>
+    /// <remarks>
+    /// The Mapsui renderer stamps each <c>IFeature</c> with the
+    /// originating S-100 feature reference under
+    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>. We read
+    /// that, look up the originating <see cref="Pipelines.Vector.Feature"/>
+    /// in the lazily-built feature index, and copy the feature-type
+    /// code plus the safety-contour exception payload (VALDCO /
+    /// <c>valueOfDepthContour</c>, S-101 FC §3.1.1) onto the Mapsui
+    /// feature. This is the data the PR-L2 R-101-102-B rule consumes
+    /// to suppress depth area / contour features while preserving the
+    /// safety contour (MSC.232(82) §5.8).
+    /// </remarks>
+    private void TagMapsuiFeaturesWithFeatureType(ILayer layer)
+    {
+        if (layer is not MemoryLayer memoryLayer) return;
+
+        _featureIndex ??= BuildFeatureIndex();
+
+        foreach (var mapFeature in memoryLayer.Features)
+        {
+            if (mapFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
+                continue;
+
+            if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var id))
+                continue;
+
+            if (!_featureIndex.TryGetValue(id, out var feature))
+                continue;
+
+            mapFeature[Interoperability.FeatureTagKeys.FeatureType] = feature.FeatureType;
+
+            if (string.Equals(feature.FeatureType, "DepthContour", StringComparison.Ordinal) &&
+                feature.Attributes.TryGetValue("valueOfDepthContour", out var depthRaw) &&
+                depthRaw is not null)
+            {
+                mapFeature[Interoperability.FeatureTagKeys.DepthContourValue] = depthRaw;
+            }
+        }
     }
 
     private MapsuiDisplayListRenderer CreateRenderer(

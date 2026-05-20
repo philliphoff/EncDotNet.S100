@@ -71,4 +71,47 @@ public interface IInteroperabilityAuthority
     /// load-order tiebreaker.
     /// </remarks>
     IReadOnlyList<LayerStackEntry> Sort(IEnumerable<LayerStackEntry> entries);
+
+    /// <summary>
+    /// Applies S-98 inter-product rules to a sorted layer stack.
+    /// Each rule's <see cref="S98InteroperabilityRule.Condition"/>
+    /// is checked against the supplied
+    /// <paramref name="loadedDatasets"/> (plus optional mariner
+    /// settings); rules whose condition fires invoke their
+    /// <see cref="S98InteroperabilityRule.Effect"/> on the stack.
+    /// Rules execute in the enumeration order of
+    /// <paramref name="rules"/> — each rule's output is the next
+    /// rule's input.
+    /// </summary>
+    /// <param name="sortedStack">
+    /// The layer stack as produced by <see cref="Sort"/>. The input
+    /// is not mutated; rules return new lists.
+    /// </param>
+    /// <param name="loadedDatasets">
+    /// Snapshot of every dataset currently known to the loader.
+    /// Rules inspect product specs and active flags to decide
+    /// whether to fire.
+    /// </param>
+    /// <param name="mariner">
+    /// Optional active mariner-settings snapshot. Rules that depend
+    /// on viewer settings (e.g. R-101-102-B's safety-contour
+    /// exception per MSC.232(82) §5.8) read it; rules that don't
+    /// ignore it. <c>null</c> falls back to
+    /// <see cref="EncDotNet.S100.Pipelines.MarinerSettings.Default"/>.
+    /// </param>
+    /// <param name="rules">
+    /// Optional rule collection. Defaults to
+    /// <see cref="S98DefaultRules.Default"/>. Passing an empty
+    /// collection is a deliberate no-op (rules disabled).
+    /// </param>
+    /// <returns>
+    /// The post-rule layer stack. Layers may be replaced (suppressed
+    /// features removed) but the count is monotonic per rule —
+    /// rules cannot add new entries in v1.
+    /// </returns>
+    IReadOnlyList<LayerStackEntry> ApplyRules(
+        IReadOnlyList<LayerStackEntry> sortedStack,
+        IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
+        EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
+        IReadOnlyCollection<S98InteroperabilityRule>? rules = null);
 }

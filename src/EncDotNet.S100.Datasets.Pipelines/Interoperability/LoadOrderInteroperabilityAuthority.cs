@@ -67,4 +67,24 @@ public sealed class LoadOrderInteroperabilityAuthority : IInteroperabilityAuthor
         System.ArgumentNullException.ThrowIfNull(entries);
         return entries.OrderBy(e => e.WithinPlanePriority).ToList();
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The load-order authority deliberately bypasses S-98
+    /// inter-product rules: the contract of this authority is
+    /// "ignore S-98 entirely", and that includes Level-2 suppression.
+    /// Returns the stack unchanged regardless of which rule
+    /// collection is supplied. Hosts that want S-98 rules should use
+    /// <see cref="InteroperabilityAuthority"/> instead.
+    /// </remarks>
+    public IReadOnlyList<LayerStackEntry> ApplyRules(
+        IReadOnlyList<LayerStackEntry> sortedStack,
+        IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
+        EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
+        IReadOnlyCollection<S98InteroperabilityRule>? rules = null)
+    {
+        System.ArgumentNullException.ThrowIfNull(sortedStack);
+        System.ArgumentNullException.ThrowIfNull(loadedDatasets);
+        return sortedStack;
+    }
 }
