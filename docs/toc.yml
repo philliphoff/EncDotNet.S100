@@ -6,3 +6,5 @@
   href: observability.md
 - name: MCP server
   href: mcp-server.md
+- name: S-98 interoperability (design)
+  href: design/s98-interoperability.md
