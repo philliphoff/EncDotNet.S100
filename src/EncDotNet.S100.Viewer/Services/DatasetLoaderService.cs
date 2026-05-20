@@ -557,11 +557,50 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
 
-        var sorted = LayerStackBuilder.Build(_authorityProvider.Current, perDataset);
-        var list = LayerStackBuilder.ToLayerList(sorted);
+        var authority = _authorityProvider.Current;
+        var sorted = LayerStackBuilder.Build(authority, perDataset);
+
+        // PR-L2: apply S-98 inter-product rules (suppression, etc.)
+        // after the per-plane sort. The rule set is the default
+        // S98DefaultRules collection; rules read the mariner settings
+        // (e.g. SafetyContour for R-101-102-B's safety-contour
+        // exception per MSC.232(82) §5.8). LoadOrderInteroperabilityAuthority
+        // explicitly no-ops ApplyRules so the strict load-order mode
+        // is unaffected.
+        var loaded = BuildLoadedDatasetInfos();
+        var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
+
+        var list = LayerStackBuilder.ToLayerList(ruled);
         _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
         return list;
+    }
+
+    /// <summary>
+    /// Builds the snapshot of <see cref="LoadedDatasetInfo"/> values
+    /// the S-98 rule engine consumes. PR-L2 treats "loaded" as
+    /// "active" — there is no separate active/inactive concept yet
+    /// (PR-L3's Layer Controls UI will add one). An inactive entry
+    /// suppresses every rule that depends on its product.
+    /// </summary>
+    private IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos()
+    {
+        var result = new List<LoadedDatasetInfo>(_entryOrder.Count);
+        foreach (var entry in _entryOrder)
+        {
+            if (!_processors.TryGetValue(entry, out var proc)) continue;
+            // PR-L2: "loaded == active" — IsVisible is the closest
+            // viewer-side proxy for "currently displayed". An entry
+            // whose layer collection is empty (failed render) is
+            // treated as inactive so its absence doesn't accidentally
+            // suppress sibling products.
+            var datasetId = entry.FilePath ?? entry.DisplayName;
+            var active = entry.IsVisible
+                && _entryLayers.TryGetValue(entry, out var layers)
+                && layers.Count > 0;
+            result.Add(new LoadedDatasetInfo(datasetId, proc.Spec.Name, active));
+        }
+        return result;
     }
 
     /// <summary>

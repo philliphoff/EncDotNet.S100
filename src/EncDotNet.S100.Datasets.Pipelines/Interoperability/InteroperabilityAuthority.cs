@@ -127,4 +127,32 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
             .ThenBy(e => e.WithinPlanePriority)
             .ToList();
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<LayerStackEntry> ApplyRules(
+        IReadOnlyList<LayerStackEntry> sortedStack,
+        IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
+        EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
+        IReadOnlyCollection<S98InteroperabilityRule>? rules = null)
+    {
+        ArgumentNullException.ThrowIfNull(sortedStack);
+        ArgumentNullException.ThrowIfNull(loadedDatasets);
+
+        var ruleSet = rules ?? S98DefaultRules.Default;
+        if (ruleSet.Count == 0)
+        {
+            return sortedStack;
+        }
+
+        var context = new S98RuleContext(loadedDatasets, mariner);
+        IReadOnlyList<LayerStackEntry> current = sortedStack;
+        foreach (var rule in ruleSet)
+        {
+            if (rule.Condition(context))
+            {
+                current = rule.Effect(current, context);
+            }
+        }
+        return current;
+    }
 }

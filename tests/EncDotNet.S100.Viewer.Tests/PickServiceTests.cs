@@ -476,4 +476,66 @@ public class PickServiceTests
         Assert.Equal("fb", viewModel.PickReport.Hits[1].FeatureRef);
         Assert.Equal("fa", viewModel.PickReport.Hits[2].FeatureRef);
     }
+
+    [Fact]
+    public void HandlePick_AfterR_101_102_B_Suppression_ReturnsS102Hit()
+    {
+        // PR-L2 (S-98): when R-101-102-B suppresses S-101 DepthArea
+        // because an S-102 dataset is loaded, picking inside that area
+        // must return the S-102 feature (the now-topmost-visible hit
+        // at the pick location) — never the suppressed S-101 feature.
+        // We simulate the post-rule state: the stack contains a
+        // filtered S-101 areas layer (no DepthArea feature) and an
+        // S-102 layer above it. Mapsui consequently has no DepthArea
+        // feature to hit-test against; the pick resolves only to the
+        // S-102 record.
+        var viewModel = CreateMainViewModel();
+        var s101 = new DatasetEntry("/tmp/s101.000", "S-101");
+        var s102 = new DatasetEntry("/tmp/s102.h5", "S-102");
+
+        var procS101 = new StubProcessor("S-101", new FeatureInfo
+        {
+            FeatureRef = "land-1", FeatureType = "LandArea", FeatureTypeName = "Land Area",
+            Attributes = Array.Empty<PickAttribute>(),
+        });
+        var procS102 = new StubProcessor("S-102", new FeatureInfo
+        {
+            FeatureRef = "bathy-1", FeatureType = "BathymetryCoverage", FeatureTypeName = "Bathymetry",
+            Attributes = Array.Empty<PickAttribute>(),
+        });
+
+        var s101AreasFiltered = new MemoryLayer("s101.areas");
+        var s102Layer = new MemoryLayer("s102");
+
+        // Post-suppression stack: filtered S-101 areas (DepthArea gone)
+        // sits on plane BaseChartUnder; S-102 sits on plane Bathymetry
+        // above it.
+        var stack = new ILayer[] { s101AreasFiltered, s102Layer };
+
+        var loader = new StackAwareLoader(
+            new Dictionary<DatasetEntry, IDatasetProcessor>
+            {
+                [s101] = procS101,
+                [s102] = procS102,
+            },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>
+            {
+                [s101] = new[] { (ILayer)s101AreasFiltered },
+                [s102] = new[] { (ILayer)s102Layer },
+            },
+            stack);
+
+        var service = CreatePickService(loader, viewModel);
+
+        // Mapsui hit test produces only the S-102 record because the
+        // DepthArea feature is no longer in any visible layer.
+        service.HandlePick(BuildMapInfo(new[]
+        {
+            MakeRecord(s102Layer, "bathy-1"),
+        }));
+
+        Assert.Single(viewModel.PickReport.Hits);
+        Assert.Equal("bathy-1", viewModel.PickReport.Hits[0].FeatureRef);
+        Assert.Equal("BathymetryCoverage", viewModel.PickReport.FeatureType);
+    }
 }
