@@ -41,15 +41,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly IMarinerSettingsProvider _marinerSettings;
     private readonly IToastService _toasts;
     /// <summary>
-    /// Cross-dataset paint-order policy. The default S-98
-    /// implementation lives in
-    /// <see cref="InteroperabilityAuthority.Default"/>; alternative
-    /// strategies (e.g. strict load-order, top-of-UI-wins regardless
-    /// of plane) can be injected by the host. The authority is also
-    /// consulted as a fallback to fabricate <see cref="LayerStackEntry"/>
-    /// values for any processor that didn't supply them.
+    /// Resolves the <em>currently active</em> cross-dataset paint-order
+    /// policy on each consult. Hosts can swap the authority at runtime
+    /// (e.g. flip from S-98 to strict load-order) and we re-sort the
+    /// stack in response to <see cref="IInteroperabilityAuthorityProvider.CurrentChanged"/>.
     /// </summary>
-    private readonly IInteroperabilityAuthority _authority;
+    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -110,7 +107,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
         IToastService toasts,
-        IInteroperabilityAuthority? authority = null)
+        IInteroperabilityAuthorityProvider? authorityProvider = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -137,7 +134,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
         _toasts = toasts;
-        _authority = authority ?? InteroperabilityAuthority.Default;
+        _authorityProvider = authorityProvider ?? new InteroperabilityAuthorityProvider();
+        // Re-sort the live layer stack whenever the host swaps the
+        // active authority. Cheap when no datasets are loaded.
+        _authorityProvider.CurrentChanged += OnAuthorityChanged;
 
         _processorsView = new ReadOnlyDictionary<DatasetEntry, IDatasetProcessor>(_processors);
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
@@ -542,7 +542,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 var specName = _processors.TryGetValue(entry, out var proc)
                     ? proc.Spec.Name
                     : "unknown";
-                var plane = _authority.GetDefaultPlane(specName);
+                var plane = _authorityProvider.Current.GetDefaultPlane(specName);
                 var synth = new List<LayerStackEntry>(layers.Count);
                 foreach (var l in layers)
                 {
@@ -556,7 +556,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
 
-        var sorted = LayerStackBuilder.Build(_authority, perDataset);
+        var sorted = LayerStackBuilder.Build(_authorityProvider.Current, perDataset);
         var list = LayerStackBuilder.ToLayerList(sorted);
         _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
@@ -834,6 +834,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
             _entryLayers.Remove(entry);
         }
+    }
+
+    private void OnAuthorityChanged()
+    {
+        // The host swapped the active interoperability authority
+        // (e.g. flipped a viewer setting between S-98 and load-order).
+        // Re-flatten the current stack through the new authority's
+        // policy and push the result to the map host. Cheap when no
+        // datasets are loaded.
+        if (_mapHost is null) return;
+        if (_entryOrder.Count == 0) return;
+        _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
     }
 
     private void EnsureInitialized()

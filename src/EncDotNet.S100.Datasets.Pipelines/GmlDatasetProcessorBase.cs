@@ -183,6 +183,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
                     // S-98 cross-dataset plane assignment per design note
                     // §3 / §4.2. PR-L1 ships default planes only — no IC
                     // override, no per-feature filter (TBD-5).
+                    //
+                    // We stamp the canonical S-98 default plane at render
+                    // time rather than the *currently active* authority's
+                    // plane. The plane recorded here is the conceptual
+                    // ("which S-98 plane does this layer's content
+                    // belong to?") answer; the sort policy lives in
+                    // DatasetLoaderService via IInteroperabilityAuthorityProvider
+                    // and is free to ignore the recorded plane (e.g.
+                    // LoadOrderInteroperabilityAuthority does).
                     Plane: InteroperabilityAuthority.Default.GetDefaultPlane(Spec.Name),
                     WithinPlanePriority: 0,
                     SourceDatasetId: _fileName),
