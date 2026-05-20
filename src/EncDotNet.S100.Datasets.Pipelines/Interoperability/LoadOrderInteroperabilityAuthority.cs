@@ -39,20 +39,6 @@ public sealed class LoadOrderInteroperabilityAuthority : IInteroperabilityAuthor
     private readonly IInteroperabilityAuthority _planeOracle;
 
     /// <summary>
-    /// Process-wide singleton. The authority is stateless.
-    /// </summary>
-    public static LoadOrderInteroperabilityAuthority Default { get; } = new();
-
-    /// <summary>
-    /// Constructs a load-order authority that delegates default-plane
-    /// lookups to <see cref="InteroperabilityAuthority.Default"/>.
-    /// </summary>
-    public LoadOrderInteroperabilityAuthority()
-        : this(InteroperabilityAuthority.Default)
-    {
-    }
-
-    /// <summary>
     /// Constructs a load-order authority that delegates default-plane
     /// lookups to <paramref name="planeOracle"/>. Useful when the
     /// host wants informational plane labels from a custom table

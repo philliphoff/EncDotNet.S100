@@ -6,6 +6,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// Mutable default <see cref="IInteroperabilityAuthorityProvider"/>:
 /// holds a single <see cref="IInteroperabilityAuthority"/> reference
 /// that the host can swap at runtime (e.g. via a settings binding).
+/// The initial authority is required at construction time — hosts
+/// inject the chosen policy via DI; there is no static fallback.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,12 +25,13 @@ public sealed class InteroperabilityAuthorityProvider : IInteroperabilityAuthori
 
     /// <summary>
     /// Initialises a provider holding <paramref name="initial"/>.
-    /// Defaults to <see cref="InteroperabilityAuthority.Default"/>
-    /// when omitted — i.e. the canonical S-98 policy.
+    /// Required — there is no default fallback; hosts wire the
+    /// initial authority via DI.
     /// </summary>
-    public InteroperabilityAuthorityProvider(IInteroperabilityAuthority? initial = null)
+    public InteroperabilityAuthorityProvider(IInteroperabilityAuthority initial)
     {
-        _current = initial ?? InteroperabilityAuthority.Default;
+        ArgumentNullException.ThrowIfNull(initial);
+        _current = initial;
     }
 
     /// <inheritdoc />

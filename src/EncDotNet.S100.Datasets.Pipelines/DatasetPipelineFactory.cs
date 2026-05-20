@@ -69,29 +69,36 @@ public sealed class DatasetPipelineFactory
     private readonly ILuaEngine _luaEngine;
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
+    private readonly Interoperability.IInteroperabilityAuthorityProvider _authorityProvider;
 
     /// <summary>
     /// Creates a new factory. The supplied
     /// <paramref name="featureCatalogueManager"/> is shared across every
     /// processor this factory produces, so its FC parse cache survives
     /// for the lifetime of the manager — not just the lifetime of the
-    /// factory.
+    /// factory. The supplied <paramref name="authorityProvider"/> is
+    /// forwarded to every GML-based processor so they resolve the
+    /// cross-dataset paint-order authority through the host's DI
+    /// container rather than a static singleton.
     /// </summary>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        Interoperability.IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         ArgumentNullException.ThrowIfNull(featureCatalogueManager);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
 
         _catalogueManager = catalogueManager;
         _luaEngine = luaEngine;
         _crsTransformFactory = crsTransformFactory;
         _featureCatalogueManager = featureCatalogueManager;
+        _authorityProvider = authorityProvider;
     }
 
     /// <summary>
@@ -391,16 +398,16 @@ public sealed class DatasetPipelineFactory
             "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
-            "S-122" => new S122DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-124" => new S124DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-125" => new S125DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-127" => new S127DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-128" => new S128DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-129" => new S129DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
+            "S-122" => new S122DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-124" => new S124DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-125" => new S125DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-127" => new S127DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-128" => new S128DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-129" => new S129DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
             "S-131" => new S131DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-201" => new S201DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-411" => new S411DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
-            "S-421" => new S421DatasetProcessor(path, _catalogueManager, _featureCatalogueManager),
+            "S-201" => new S201DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-411" => new S411DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-421" => new S421DatasetProcessor(path, _catalogueManager, _authorityProvider, _featureCatalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }
@@ -444,16 +451,16 @@ public sealed class DatasetPipelineFactory
             "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),
-            "S-122" => new S122DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-124" => new S124DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-125" => new S125DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-127" => new S127DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-128" => new S128DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-129" => new S129DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
+            "S-122" => new S122DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-124" => new S124DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-125" => new S125DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-127" => new S127DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-128" => new S128DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-129" => new S129DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
             "S-131" => new S131DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
-            "S-201" => new S201DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-411" => new S411DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
-            "S-421" => new S421DatasetProcessor(source, relativePath, _catalogueManager, _featureCatalogueManager),
+            "S-201" => new S201DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-411" => new S411DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
+            "S-421" => new S421DatasetProcessor(source, relativePath, _catalogueManager, _authorityProvider, _featureCatalogueManager),
             _ => throw new NotSupportedException($"Pipeline not implemented for {spec}."),
         };
     }

@@ -55,7 +55,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// most recent render. Each entry's <see cref="LayerStackEntry.Layer"/>
     /// also appears in <see cref="_entryLayers"/>. Populated from
     /// <see cref="DatasetResult.StackEntries"/> when available; otherwise
-    /// synthesised with <see cref="InteroperabilityAuthority.Default"/>.
+    /// synthesised through the active <see cref="IInteroperabilityAuthority"/>.
     /// </summary>
     private readonly Dictionary<DatasetEntry, IReadOnlyList<LayerStackEntry>> _entryStackEntries = new();
     /// <summary>
@@ -107,7 +107,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
         IToastService toasts,
-        IInteroperabilityAuthorityProvider? authorityProvider = null)
+        IInteroperabilityAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -134,7 +134,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
         _toasts = toasts;
-        _authorityProvider = authorityProvider ?? new InteroperabilityAuthorityProvider();
+        ArgumentNullException.ThrowIfNull(authorityProvider);
+        _authorityProvider = authorityProvider;
         // Re-sort the live layer stack whenever the host swaps the
         // active authority. Cheap when no datasets are loaded.
         _authorityProvider.CurrentChanged += OnAuthorityChanged;

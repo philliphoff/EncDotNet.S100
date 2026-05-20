@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </summary>
 public class InteroperabilityAuthorityTests
 {
-    private readonly InteroperabilityAuthority _auth = InteroperabilityAuthority.Default;
+    private readonly InteroperabilityAuthority _auth = new();
 
     [Theory]
     [InlineData("S-101", null, S98DisplayPlane.BaseChartOver)]
@@ -127,7 +127,7 @@ public class InteroperabilityAuthorityTests
         var s101 = new[] { s101areas, s101lines };
 
         var sorted = LayerStackBuilder.Build(
-            LoadOrderInteroperabilityAuthority.Default,
+            new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority()),
             new IReadOnlyList<LayerStackEntry>[] { s101, s102 });
 
         // Bottom-of-UI dataset (s102) paints first, then s101's two
@@ -141,7 +141,7 @@ public class InteroperabilityAuthorityTests
         // The load-order authority's GetDefaultPlane delegates to the
         // S-98 oracle so layer-controls UIs can still annotate layers
         // with their conceptual plane even when sort order ignores it.
-        var lo = LoadOrderInteroperabilityAuthority.Default;
+        var lo = new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority());
         Assert.Equal(S98DisplayPlane.Bathymetry, lo.GetDefaultPlane("S-102"));
         Assert.Equal(S98DisplayPlane.CautionsAndWarnings, lo.GetDefaultPlane("S-124"));
         Assert.Equal(S98DisplayPlane.BaseChartUnder, lo.GetDefaultPlane("S-101", "area"));

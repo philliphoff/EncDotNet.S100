@@ -31,6 +31,24 @@ internal static class SharedInfrastructure
     {
         var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
 
+        // Newest shape (PR-L1): adds IInteroperabilityAuthorityProvider.
+        var providerType = typeof(Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider);
+        var providerCtor = factoryType.GetConstructor(
+            [
+                typeof(PortrayalCatalogueManager),
+                typeof(ILuaEngine),
+                typeof(ICrsTransformFactory),
+                typeof(FeatureCatalogueManager),
+                providerType,
+            ]);
+        if (providerCtor is not null)
+        {
+            var provider = new Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
+                new Datasets.Pipelines.Interoperability.InteroperabilityAuthority());
+            return (Datasets.Pipelines.DatasetPipelineFactory)providerCtor.Invoke(
+                [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, provider]);
+        }
+
         var managerCtor = factoryType.GetConstructor(
             [
                 typeof(PortrayalCatalogueManager),

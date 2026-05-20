@@ -48,12 +48,6 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// </remarks>
 public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
 {
-    /// <summary>
-    /// Process-wide singleton. The authority is stateless — every
-    /// caller is welcome to share this instance.
-    /// </summary>
-    public static InteroperabilityAuthority Default { get; } = new();
-
     /// <inheritdoc />
     public S98DisplayPlane GetDefaultPlane(string productSpec, string? featureTypeOrLayerKind = null)
     {

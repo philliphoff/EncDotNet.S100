@@ -150,12 +150,16 @@ public partial class App : Application
             return new EncDotNet.S100.Features.FeatureCatalogueManager(
                 (string spec) => overrides.Open(spec));
         });
+        services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
+                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
                 new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
                 new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
-                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>()));
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();

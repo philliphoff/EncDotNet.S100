@@ -32,7 +32,7 @@ public class FeatureReferenceIntegrationTests
         var path = TestData("S125", "aton_point.gml");
         Assert.True(File.Exists(path), $"Missing fixture: {path}");
 
-        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"));
+        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"), TestAuthority.NewS98Provider());
         // f1 = LateralBuoy with <S125:AtoNStatus xlink:href="#info1"/>
         var info = processor.GetFeatureInfo("f1");
 
@@ -48,7 +48,7 @@ public class FeatureReferenceIntegrationTests
     public void S125Processor_DoesNotLeakReferencesIntoAttributes()
     {
         var path = TestData("S125", "aton_point.gml");
-        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"));
+        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"), TestAuthority.NewS98Provider());
 
         var info = processor.GetFeatureInfo("f1");
 
@@ -62,7 +62,7 @@ public class FeatureReferenceIntegrationTests
         var path = TestData("S421", "RTE-TEST-GMIN.s421.gml");
         Assert.True(File.Exists(path), $"Missing fixture: {path}");
 
-        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"));
+        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"), TestAuthority.NewS98Provider());
         // RTE = Route, points at routeInfo / routeWaypoints / routeWaypointsCollection.
         var info = processor.GetFeatureInfo("RTE");
 
@@ -80,7 +80,7 @@ public class FeatureReferenceIntegrationTests
     public void S421Processor_LiftsWaypointBackReferenceIntoReferences()
     {
         var path = TestData("S421", "RTE-TEST-GMIN.s421.gml");
-        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"));
+        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"), TestAuthority.NewS98Provider());
 
         // RTE.WPT.1 = first RouteWaypoint, contains <routeWaypointCollection
         // xlink:href="#RTE.WPTS"/> + neighbour leg references.
@@ -96,7 +96,7 @@ public class FeatureReferenceIntegrationTests
     public void S421Processor_DoesNotLeakReferencesIntoAttributes()
     {
         var path = TestData("S421", "RTE-TEST-GMIN.s421.gml");
-        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"));
+        var processor = new S421DatasetProcessor(path, CreateCatalogueManager("S-421"), TestAuthority.NewS98Provider());
 
         var info = processor.GetFeatureInfo("RTE");
 

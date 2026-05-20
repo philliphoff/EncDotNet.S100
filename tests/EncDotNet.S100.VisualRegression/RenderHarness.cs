@@ -84,7 +84,9 @@ public sealed class RenderHarness : IDisposable
             _catalogueManager,
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
-            featureCatalogueManager);
+            featureCatalogueManager,
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
+                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
     }
 
     /// <summary>

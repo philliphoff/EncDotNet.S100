@@ -36,8 +36,9 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
     public S411DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, featureCatalogueManager)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, authorityProvider, featureCatalogueManager)
     {
     }
 
@@ -50,11 +51,13 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
+            authorityProvider,
             featureCatalogueManager)
     {
     }
@@ -63,11 +66,13 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
+        IInteroperabilityAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager)
         : base(
             new S411PortrayalCatalogue(catalogueManager.GetProvider("S-411")),
             featureCatalogueManager?.GetDecoder("S-411"),
-            fileName)
+            fileName,
+            authorityProvider)
     {
         using (datasetStream)
         {

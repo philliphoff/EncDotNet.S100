@@ -32,7 +32,7 @@ public class DatasetProcessorValidationTests
         var path = TestData("S125", "aton_point.gml");
         Assert.True(File.Exists(path), $"Missing fixture: {path}");
 
-        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"));
+        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"), TestAuthority.NewS98Provider());
 
         var report = processor.Validate();
 
@@ -45,7 +45,7 @@ public class DatasetProcessorValidationTests
     public void S125Processor_Validate_IsCachedAcrossCalls()
     {
         var path = TestData("S125", "aton_point.gml");
-        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"));
+        var processor = new S125DatasetProcessor(path, CreateCatalogueManager("S-125"), TestAuthority.NewS98Provider());
 
         var first = processor.Validate();
         var second = processor.Validate();
