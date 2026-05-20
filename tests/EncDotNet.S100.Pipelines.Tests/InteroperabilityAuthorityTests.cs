@@ -114,6 +114,39 @@ public class InteroperabilityAuthorityTests
         Assert.Equal(new[] { "s101a", "s102", "s101l" }, sorted.Select(e => e.SourceDatasetId).ToArray());
     }
 
+    [Fact]
+    public void LoadOrderAuthority_ignores_plane_and_uses_strict_dataset_ordering()
+    {
+        // Same input as the interleave test above, but the alternative
+        // authority must paint every layer of the bottom-of-UI dataset
+        // first, then every layer of the top-of-UI dataset — independent
+        // of S-98 plane.
+        var s102 = new[] { Entry("s102", S98DisplayPlane.Bathymetry) };
+        var s101areas = Entry("s101a", S98DisplayPlane.BaseChartUnder);
+        var s101lines = Entry("s101l", S98DisplayPlane.BaseChartOver);
+        var s101 = new[] { s101areas, s101lines };
+
+        var sorted = LayerStackBuilder.Build(
+            LoadOrderInteroperabilityAuthority.Default,
+            new IReadOnlyList<LayerStackEntry>[] { s101, s102 });
+
+        // Bottom-of-UI dataset (s102) paints first, then s101's two
+        // layers in processor-emitted order (areas first, lines on top).
+        Assert.Equal(new[] { "s102", "s101a", "s101l" }, sorted.Select(e => e.SourceDatasetId).ToArray());
+    }
+
+    [Fact]
+    public void LoadOrderAuthority_still_exposes_S98_default_planes_for_labels()
+    {
+        // The load-order authority's GetDefaultPlane delegates to the
+        // S-98 oracle so layer-controls UIs can still annotate layers
+        // with their conceptual plane even when sort order ignores it.
+        var lo = LoadOrderInteroperabilityAuthority.Default;
+        Assert.Equal(S98DisplayPlane.Bathymetry, lo.GetDefaultPlane("S-102"));
+        Assert.Equal(S98DisplayPlane.CautionsAndWarnings, lo.GetDefaultPlane("S-124"));
+        Assert.Equal(S98DisplayPlane.BaseChartUnder, lo.GetDefaultPlane("S-101", "area"));
+    }
+
     private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority = 0)
         => new(new MemoryLayer(id), plane, priority, id);
 }

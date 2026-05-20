@@ -10,12 +10,20 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// </summary>
 /// <remarks>
 /// <para>
-/// PR-L1 ships a fixed-table implementation
-/// (<see cref="InteroperabilityAuthority"/>) — there is <em>no</em>
-/// IC parsing, suppression, replacement, or hybridisation in this
-/// PR. Those Level 1+ behaviours are owned by PR-L2 once the IHO
-/// publishes a normative S-100 Part 16 IC schema and a viewer-side
-/// catalogue reader is in place.
+/// PR-L1 ships a fixed-table S-98 implementation
+/// (<see cref="InteroperabilityAuthority"/>) and a strict
+/// load-order alternative
+/// (<see cref="LoadOrderInteroperabilityAuthority"/>). Hosts can
+/// inject a custom implementation into
+/// <c>DatasetLoaderService</c> via its constructor's optional
+/// <c>authority</c> parameter to plug in a different policy
+/// (e.g. a viewer setting that toggles strict load-order, a
+/// deployment-specific rule pack, or a test-only deterministic
+/// stub). PR-L1 deliberately ships <em>no</em> IC parsing,
+/// suppression, replacement, or hybridisation; those Level 1+
+/// behaviours are owned by PR-L2 once the IHO publishes a
+/// normative S-100 Part 16 IC schema and a viewer-side catalogue
+/// reader is in place.
 /// </para>
 /// <para>
 /// The contract is pure — <c>(default plane lookup)</c> and
