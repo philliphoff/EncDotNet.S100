@@ -28,9 +28,16 @@
                        TextWrapping="Wrap" />
         </Border>
 
+        <!-- Body: empty state and populated tree share the fill slot
+             so the empty-state placeholder centres in the available
+             space (DockPanel only stretches its last child, so we
+             need a single fill container here). -->
+        <Grid>
+
         <!-- Empty state -->
         <Border IsVisible="{Binding IsEmpty}"
                 Padding="16"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Center">
             <StackPanel Spacing="8" HorizontalAlignment="Center">
                 <ic:FluentIcon Icon="Stack"
@@ -122,5 +129,6 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
+        </Grid>
     </DockPanel>
 </UserControl>
