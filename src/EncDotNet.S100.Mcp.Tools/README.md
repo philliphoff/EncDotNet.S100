@@ -168,6 +168,16 @@ The five error variants implemented in this PR:
 `FeatureDescriberRegistry` keyed on `SpecRef.Name`. Each describer
 implements an internal `ISpecFeatureDescriber` strategy.
 
+## Host-injected tools
+
+The eight tools above are catalog-only and live in this assembly. A
+host (e.g. the Avalonia viewer) may inject additional tools at
+runtime via `S100McpServerOptions.AdditionalTools` in
+`EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
+`render_to_image`, which captures the live map as a PNG — that tool
+necessarily depends on Mapsui / Skia and therefore deliberately does
+not live here. See `docs/mcp-server.md` for details.
+
 The registry currently wires six describers:
 
 | Spec   | Describer                  | Feature id convention                                                                                       |

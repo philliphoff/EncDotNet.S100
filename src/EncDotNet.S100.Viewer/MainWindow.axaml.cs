@@ -117,7 +117,9 @@ public partial class MainWindow : ShadUI.Window
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
-        _loader.Initialize(new MapsuiMapHost(MapControl), options);
+        var mapHost = new MapsuiMapHost(MapControl);
+        App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
+        _loader.Initialize(mapHost, options);
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
         {

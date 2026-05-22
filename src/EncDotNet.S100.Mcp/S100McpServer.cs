@@ -118,7 +118,12 @@ public sealed class S100McpServer : IAsyncDisposable
         var listTimeSteps = new ListTimeStepsTool(_catalog);
         var tools = S100McpServerToolFactory
             .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt, queryFeatures, sampleCoverageAlong, listSpecs, listTimeSteps)
-            .ToArray();
+            .ToList();
+
+        if (_options.AdditionalTools is { Count: > 0 } extra)
+        {
+            tools.AddRange(extra);
+        }
 
         builder.Services
             .AddMcpServer()

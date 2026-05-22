@@ -49,4 +49,28 @@ internal interface IMapHost
     /// map's navigator is unavailable).
     /// </summary>
     void ZoomToExtent(MRect extent);
+
+    /// <summary>
+    /// Captures the current map view as a PNG byte array.
+    /// </summary>
+    /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>
+    /// <param name="heightPx">Output image height in pixels (caller-clamped).</param>
+    /// <param name="pixelDensity">Display pixel density multiplier (1.0 = device-independent pixels).</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// PNG-encoded bytes of the current map state at the requested
+    /// size, or <see langword="null"/> when the underlying map has not
+    /// been initialised yet. The snapshot mirrors the user's current
+    /// viewport, palette, time step, and loaded datasets exactly —
+    /// nothing in the live map is mutated by this call.
+    /// </returns>
+    /// <remarks>
+    /// Implementations must be safe to call from any thread; they
+    /// marshal to the UI thread as needed.
+    /// </remarks>
+    System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(
+        int widthPx,
+        int heightPx,
+        double pixelDensity,
+        System.Threading.CancellationToken cancellationToken = default);
 }
