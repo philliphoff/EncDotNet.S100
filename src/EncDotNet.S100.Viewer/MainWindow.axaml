@@ -274,6 +274,23 @@
                         </ToggleButton>
                     </Grid>
 
+                    <!-- Layer Stack -->
+                    <Grid>
+                        <Border Width="3" HorizontalAlignment="Left"
+                                Background="{DynamicResource AccentBrush}"
+                                IsVisible="{Binding IsLayerStackSelected}" />
+                        <ToggleButton Classes="ActivityIcon"
+                                      IsChecked="{Binding IsLayerStackSelected, Mode=OneWay}"
+                                      Command="{Binding SelectLayerStackCommand}"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_LayerStack}"
+                                      Height="48"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center">
+                            <ic:FluentIcon Icon="Stack" IconVariant="Regular" FontSize="22" />
+                        </ToggleButton>
+                    </Grid>
+
                     <!-- Search -->
                     <Grid>
                         <Border Width="3" HorizontalAlignment="Left"
@@ -353,6 +370,8 @@
                                             IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
                         <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
+                        <views:LayerStackView DataContext="{Binding LayerStack}"
+                                              IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsLayerStackSelected}" />
                         <views:FeatureSearchView DataContext="{Binding Search}"
                                                  IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSearchSelected}" />
                         <views:SettingsView DataContext="{Binding Settings}"

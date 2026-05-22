@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Catalogs;
@@ -57,6 +58,12 @@ public class PickServiceTests
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
         public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
     private static MainViewModel CreateMainViewModel()
@@ -74,6 +81,7 @@ public class PickServiceTests
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(new EmptyCatalogSource()),
+            layerStack: new LayerStackViewModel(new StubLoader()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),
@@ -161,6 +169,12 @@ public class PickServiceTests
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
         public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
     private static MapInfo BuildMapInfo(IEnumerable<MapInfoRecord> records)
@@ -411,6 +425,11 @@ public class PickServiceTests
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
         public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
     [Fact]

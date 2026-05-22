@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.LayerStackView"
+             x:DataType="vm:LayerStackViewModel">
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Header: "Show empty planes" toggle. The pane title comes
+             from MainWindow's PaneTitle binding; this header only
+             carries the toggle so the tree starts at row 1. -->
+        <Border DockPanel.Dock="Top" Padding="8,4,8,6">
+            <CheckBox IsChecked="{Binding ShowEmptyPlanes, Mode=TwoWay}"
+                      Content="{x:Static loc:Strings.LayerStack_ShowEmptyPlanes}"
+                      ToolTip.Tip="{x:Static loc:Strings.LayerStack_ShowEmptyPlanes}" />
+        </Border>
+
+        <!-- Footer: Active vs. Visibility help text. -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="8,6,8,8"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding ActiveVsVisibilityHelp}"
+                       FontSize="11"
+                       Opacity="0.65"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Empty state -->
+        <Border IsVisible="{Binding IsEmpty}"
+                Padding="16"
+                VerticalAlignment="Center">
+            <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <ic:FluentIcon Icon="Stack"
+                               IconVariant="Regular"
+                               FontSize="32"
+                               Opacity="0.4"
+                               HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding EmptyMessage}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           Opacity="0.6"
+                           FontSize="12" />
+                <!-- TODO PR-L4 (TBD-7): PdC picker UX -->
+            </StackPanel>
+        </Border>
+
+        <!-- Populated state: tree of planes, each with a list of entries. -->
+        <ScrollViewer IsVisible="{Binding !IsEmpty}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Planes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LayerStackPlaneViewModel">
+                        <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                  Margin="4,2"
+                                  Padding="0">
+                            <Expander.Header>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Title}"
+                                               FontWeight="SemiBold"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ChildCountText}"
+                                               FontSize="11"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Expander.Header>
+
+                            <Panel>
+                                <!-- Empty placeholder when ShowEmptyPlanes is on. -->
+                                <TextBlock IsVisible="{Binding IsEmpty}"
+                                           Text="{x:Static loc:Strings.LayerStack_EmptyPlane_Placeholder}"
+                                           FontSize="11"
+                                           Opacity="0.5"
+                                           Margin="24,4,8,4" />
+
+                                <ItemsControl ItemsSource="{Binding Children}"
+                                              IsVisible="{Binding !IsEmpty}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:LayerStackEntryViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  ColumnSpacing="8"
+                                                  Margin="24,3,8,3">
+                                                <CheckBox Grid.Column="0"
+                                                          IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                          ToolTip.Tip="{x:Static loc:Strings.LayerStack_ActiveTooltip}"
+                                                          VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            Spacing="0">
+                                                    <TextBlock Text="{Binding DatasetLabel}"
+                                                               FontSize="12"
+                                                               ToolTip.Tip="{Binding DatasetId}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding SourceFeatureType}"
+                                                               IsVisible="{Binding HasSourceFeatureType}"
+                                                               FontSize="10"
+                                                               Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding PriorityText}"
+                                                           FontSize="10"
+                                                           Opacity="0.6"
+                                                           VerticalAlignment="Center"
+                                                           FontFamily="Consolas,Menlo,Monaco,monospace" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- TODO PR-L4 (TBD-11): unify ordering UX with DatasetsViewModel drag-reorder -->
+                            </Panel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

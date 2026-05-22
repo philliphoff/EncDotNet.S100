@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
@@ -69,25 +70,49 @@ internal interface IDatasetLoaderService
     /// <see cref="PickService"/> so multi-hit picks return top-of-stack
     /// hits first.
     /// </summary>
-    /// <remarks>
-    /// Default implementation returns an empty list so test doubles
-    /// that don't care about layer ordering needn't override it.
-    /// </remarks>
-    IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+    IReadOnlyList<ILayer> CurrentStackedLayers { get; }
 
     /// <summary>
-    /// Raised after <see cref="CurrentStackedLayers"/> has been
-    /// recomputed (any load, remove, re-render, or reorder).
+    /// Rich snapshot of the current S-98-ordered layer stack — same
+    /// order as <see cref="CurrentStackedLayers"/> but each entry
+    /// also carries its <see cref="S98DisplayPlane"/>, within-plane
+    /// priority, source dataset id, and (where applicable) source
+    /// feature type. Consumed by the Layer Stack panel
+    /// (<see cref="LayerStackViewModel"/>) to group rows by plane
+    /// and label each row with its provenance.
     /// </summary>
-    /// <remarks>
-    /// Default implementation is a no-op event so test doubles that
-    /// don't fire layer-stack notifications needn't override it.
-    /// </remarks>
-    event Action? LayerStackChanged
-    {
-        add { }
-        remove { }
-    }
+    IReadOnlyList<LayerStackEntry> CurrentStackEntries { get; }
+
+    /// <summary>
+    /// Raised after <see cref="CurrentStackedLayers"/> /
+    /// <see cref="CurrentStackEntries"/> have been recomputed (any
+    /// load, remove, re-render, reorder, or Active-flag toggle).
+    /// </summary>
+    event Action? LayerStackChanged;
+
+    /// <summary>
+    /// Returns whether the supplied dataset is currently <em>active</em>
+    /// for S-98 interoperability (i.e. participates in rule evaluation
+    /// and pick). Unknown ids default to active. See
+    /// <see cref="LoadedDatasetInfo.Active"/> for the distinction
+    /// between Active and <see cref="DatasetEntry.IsVisible"/>.
+    /// </summary>
+    bool GetActive(string datasetId);
+
+    /// <summary>
+    /// Sets the in-memory Active flag for the supplied dataset id and,
+    /// if the value changed, re-evaluates the S-98 layer stack and
+    /// fires <see cref="LayerStackChanged"/> and
+    /// <see cref="ActiveChanged"/>. The Active flag is process-local;
+    /// PR-L4 will persist it via <c>ViewerSettings</c>.
+    /// </summary>
+    void SetActive(string datasetId, bool active);
+
+    /// <summary>
+    /// Raised when <see cref="SetActive"/> changes a dataset's Active
+    /// flag. The string argument is the dataset id whose state flipped.
+    /// </summary>
+    event Action<string>? ActiveChanged;
 
     /// <summary>
     /// Raised on the calling thread (typically the UI thread) immediately
