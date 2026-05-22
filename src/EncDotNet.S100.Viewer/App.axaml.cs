@@ -240,6 +240,7 @@ public partial class App : Application
         services.AddSingleton<PortrayalCataloguesViewModel>();
         services.AddSingleton<DatasetsViewModel>();
         services.AddSingleton<CatalogPanelViewModel>();
+        services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();

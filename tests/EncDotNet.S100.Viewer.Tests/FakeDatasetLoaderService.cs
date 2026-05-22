@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
@@ -36,4 +37,10 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public event Action<DatasetEntry>? DatasetLoaded;
     public event Action<string?>? StatusChanged;
     public event Action<DatasetEntry>? DatasetRemoved;
+    public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+    public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+    public event Action? LayerStackChanged { add { } remove { } }
+    public bool GetActive(string datasetId) => true;
+    public void SetActive(string datasetId, bool active) { }
+    public event Action<string>? ActiveChanged { add { } remove { } }
 }

@@ -54,6 +54,25 @@ internal static class Strings
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
     public static string Pane_Search => Get(nameof(Pane_Search));
+    public static string Pane_LayerStack => Get(nameof(Pane_LayerStack));
+
+    // Layer Stack panel (PR-L3)
+    public static string LayerStack_PanelTitle => Get(nameof(LayerStack_PanelTitle));
+    public static string LayerStack_ShowEmptyPlanes => Get(nameof(LayerStack_ShowEmptyPlanes));
+    public static string LayerStack_EmptyPlane_Placeholder => Get(nameof(LayerStack_EmptyPlane_Placeholder));
+    public static string LayerStack_ActiveTooltip => Get(nameof(LayerStack_ActiveTooltip));
+    public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
+    public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
+    public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
+    public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
+    public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
+    public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
+    public static string LayerStack_Plane_BaseChartOver => Get(nameof(LayerStack_Plane_BaseChartOver));
+    public static string LayerStack_Plane_OtherChartOverlays => Get(nameof(LayerStack_Plane_OtherChartOverlays));
+    public static string LayerStack_Plane_CautionsAndWarnings => Get(nameof(LayerStack_Plane_CautionsAndWarnings));
+    public static string LayerStack_Plane_DynamicArrows => Get(nameof(LayerStack_Plane_DynamicArrows));
+    public static string LayerStack_Plane_MarinerOverlay => Get(nameof(LayerStack_Plane_MarinerOverlay));
+    public static string LayerStack_Plane_EcdisAlerts => Get(nameof(LayerStack_Plane_EcdisAlerts));
 
     // Search
     public static string Search_Placeholder => Get(nameof(Search_Placeholder));
@@ -68,6 +87,7 @@ internal static class Strings
     public static string Tooltip_PortrayalCatalogues => Get(nameof(Tooltip_PortrayalCatalogues));
     public static string Tooltip_Datasets => Get(nameof(Tooltip_Datasets));
     public static string Tooltip_Catalog => Get(nameof(Tooltip_Catalog));
+    public static string Tooltip_LayerStack => Get(nameof(Tooltip_LayerStack));
     public static string Tooltip_PickMode => Get(nameof(Tooltip_PickMode));
     public static string Tooltip_ZoomIn => Get(nameof(Tooltip_ZoomIn));
     public static string Tooltip_ZoomOut => Get(nameof(Tooltip_ZoomOut));

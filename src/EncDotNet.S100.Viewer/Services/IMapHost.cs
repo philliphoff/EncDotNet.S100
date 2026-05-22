@@ -31,10 +31,16 @@ internal interface IMapHost
     void RemoveLayer(ILayer layer);
 
     /// <summary>
-    /// Replaces the paint order of the host's dataset layers with the
-    /// supplied sequence, preserving the relative position of the
-    /// basemap (below) and any overlays (above). Layers not present in
-    /// the host's dataset set are ignored.
+    /// Replaces the host's dataset-layer slice with the supplied
+    /// sequence, preserving the relative position of the basemap
+    /// (below) and any tool overlays (above). The supplied list is
+    /// <b>authoritative</b>: any previously-tracked dataset layer not
+    /// present in the new sequence is removed from the map, and any
+    /// layer in the new sequence that the host has not seen before
+    /// (e.g. a rule-filtered MemoryLayer replica) is inserted and
+    /// tracked. Callers therefore use this method both to reorder and
+    /// to hide/replace dataset layers — including swapping out inactive
+    /// datasets when the user toggles their Active flag.
     /// </summary>
     void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers);
 

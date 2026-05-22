@@ -22,6 +22,7 @@ internal sealed class MainViewModel : ViewModelBase
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
     public DatasetsViewModel Datasets { get; }
     public CatalogPanelViewModel CatalogPanel { get; }
+    public LayerStackViewModel LayerStack { get; }
     public FeatureSearchViewModel Search { get; }
     public SettingsViewModel Settings { get; }
     public PickReportViewModel PickReport { get; }
@@ -48,6 +49,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
                 OnPropertyChanged(nameof(IsDatasetsSelected));
                 OnPropertyChanged(nameof(IsCatalogSelected));
+                OnPropertyChanged(nameof(IsLayerStackSelected));
                 OnPropertyChanged(nameof(IsSearchSelected));
                 OnPropertyChanged(nameof(IsSettingsSelected));
                 OnPropertyChanged(nameof(IsEcdisDisplaySelected));
@@ -67,6 +69,7 @@ internal sealed class MainViewModel : ViewModelBase
         ActivityKind.PortrayalCatalogues => Strings.Pane_PortrayalCatalogues,
         ActivityKind.Datasets => Strings.Pane_Datasets,
         ActivityKind.Catalog => Strings.Pane_Catalog,
+        ActivityKind.LayerStack => Strings.Pane_LayerStack,
         ActivityKind.Search => Strings.Pane_Search,
         ActivityKind.Settings => Strings.Pane_Settings,
         ActivityKind.EcdisDisplay => Strings.Pane_EcdisDisplay,
@@ -77,6 +80,7 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
     public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
     public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
+    public bool IsLayerStackSelected => _selectedActivity == ActivityKind.LayerStack;
     public bool IsSearchSelected => _selectedActivity == ActivityKind.Search;
     public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
     public bool IsEcdisDisplaySelected => _selectedActivity == ActivityKind.EcdisDisplay;
@@ -85,6 +89,7 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand SelectPortrayalCataloguesCommand { get; }
     public ICommand SelectDatasetsCommand { get; }
     public ICommand SelectCatalogCommand { get; }
+    public ICommand SelectLayerStackCommand { get; }
     public ICommand SelectSearchCommand { get; }
     public ICommand SelectSettingsCommand { get; }
     public ICommand SelectEcdisDisplayCommand { get; }
@@ -517,6 +522,7 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
         CatalogPanelViewModel catalogPanel,
+        LayerStackViewModel layerStack,
         FeatureSearchViewModel search,
         SettingsViewModel settingsViewModel,
         PickReportViewModel pickReport,
@@ -536,6 +542,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(catalogPanel);
+        ArgumentNullException.ThrowIfNull(layerStack);
         ArgumentNullException.ThrowIfNull(search);
         ArgumentNullException.ThrowIfNull(settingsViewModel);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -577,6 +584,7 @@ internal sealed class MainViewModel : ViewModelBase
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
         CatalogPanel = catalogPanel;
+        LayerStack = layerStack;
         Search = search;
         Settings = settingsViewModel;
         PickReport = pickReport;
@@ -595,6 +603,7 @@ internal sealed class MainViewModel : ViewModelBase
         SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
         SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
         SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
+        SelectLayerStackCommand = new RelayCommand(() => SelectedActivity = ActivityKind.LayerStack);
         SelectSearchCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Search);
         SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
         SelectEcdisDisplayCommand = new RelayCommand(() => SelectedActivity = ActivityKind.EcdisDisplay);
@@ -622,6 +631,7 @@ internal sealed class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
             OnPropertyChanged(nameof(IsDatasetsSelected));
             OnPropertyChanged(nameof(IsCatalogSelected));
+            OnPropertyChanged(nameof(IsLayerStackSelected));
             OnPropertyChanged(nameof(IsSearchSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(IsEcdisDisplaySelected));

@@ -9,4 +9,5 @@ internal enum ActivityKind
     Search,
     Settings,
     EcdisDisplay,
+    LayerStack,
 }

@@ -42,6 +42,61 @@
   <data name="Pane_Search" xml:space="preserve">
     <value>SEARCH</value>
   </data>
+  <data name="Pane_LayerStack" xml:space="preserve">
+    <value>LAYER STACK</value>
+  </data>
+
+  <!-- Layer Stack panel (PR-L3) -->
+  <data name="LayerStack_PanelTitle" xml:space="preserve">
+    <value>Layer Stack</value>
+  </data>
+  <data name="LayerStack_ShowEmptyPlanes" xml:space="preserve">
+    <value>Show empty planes</value>
+  </data>
+  <data name="LayerStack_EmptyPlane_Placeholder" xml:space="preserve">
+    <value>No datasets loaded.</value>
+  </data>
+  <data name="LayerStack_ActiveTooltip" xml:space="preserve">
+    <value>Active — when off, this dataset is removed from the cross-product paint stack and no longer influences S-98 interoperability rules or pick. Distinct from the per-dataset Visibility toggle on the Datasets panel.</value>
+  </data>
+  <data name="LayerStack_VisibilityVsActive_HelpText" xml:space="preserve">
+    <value>Active controls participation in S-98 rules and pick; Visibility (on the Datasets panel) only hides the rendered layers.</value>
+  </data>
+  <data name="LayerStack_ChildCountFormat" xml:space="preserve">
+    <value>{0}</value>
+    <comment>{0} = number of layer entries in this S-98 display plane.</comment>
+  </data>
+  <data name="LayerStack_PriorityFormat" xml:space="preserve">
+    <value>#{0}</value>
+    <comment>{0} = within-plane priority (S-100 Part 9 §10 drawingPriority).</comment>
+  </data>
+  <data name="LayerStack_Plane_BaseChartUnder" xml:space="preserve">
+    <value>Base chart (under)</value>
+  </data>
+  <data name="LayerStack_Plane_Bathymetry" xml:space="preserve">
+    <value>Bathymetry</value>
+  </data>
+  <data name="LayerStack_Plane_OnDemandSurface" xml:space="preserve">
+    <value>On-demand surface</value>
+  </data>
+  <data name="LayerStack_Plane_BaseChartOver" xml:space="preserve">
+    <value>Base chart (over)</value>
+  </data>
+  <data name="LayerStack_Plane_OtherChartOverlays" xml:space="preserve">
+    <value>Other chart overlays</value>
+  </data>
+  <data name="LayerStack_Plane_CautionsAndWarnings" xml:space="preserve">
+    <value>Cautions and warnings</value>
+  </data>
+  <data name="LayerStack_Plane_DynamicArrows" xml:space="preserve">
+    <value>Dynamic arrows</value>
+  </data>
+  <data name="LayerStack_Plane_MarinerOverlay" xml:space="preserve">
+    <value>Mariner overlay</value>
+  </data>
+  <data name="LayerStack_Plane_EcdisAlerts" xml:space="preserve">
+    <value>ECDIS alerts</value>
+  </data>
 
   <!-- Search panel -->
   <data name="Search_Placeholder" xml:space="preserve">
@@ -75,6 +130,9 @@
   </data>
   <data name="Tooltip_Catalog" xml:space="preserve">
     <value>Dataset Catalog</value>
+  </data>
+  <data name="Tooltip_LayerStack" xml:space="preserve">
+    <value>Layer Stack</value>
   </data>
   <data name="Tooltip_PickMode" xml:space="preserve">
     <value>Pick Mode (I) — single-tap to identify features</value>

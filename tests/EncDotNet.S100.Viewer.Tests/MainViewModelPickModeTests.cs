@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
@@ -41,6 +42,12 @@ public class MainViewModelPickModeTests
         public Task ReRenderAllAsync() => Task.CompletedTask;
         public void RemoveEntry(DatasetEntry entry) { }
         public void SetEntryOrder(IReadOnlyList<DatasetEntry> ordered) { }
+        public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
+        public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
+        public event Action? LayerStackChanged { add { } remove { } }
+        public bool GetActive(string datasetId) => true;
+        public void SetActive(string datasetId, bool active) { }
+        public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
     private static MainViewModel CreateViewModel()
@@ -59,6 +66,7 @@ public class MainViewModelPickModeTests
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
             catalogPanel: new CatalogPanelViewModel(catalogSource),
+            layerStack: new LayerStackViewModel(new StubDatasetLoaderService()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
             pickReport: new PickReportViewModel(),

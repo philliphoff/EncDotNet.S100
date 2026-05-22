@@ -68,6 +68,23 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     private IReadOnlyList<ILayer> _currentStackedLayers = Array.Empty<ILayer>();
     /// <summary>
+    /// Snapshot of the most recently computed S-98 layer stack as
+    /// <see cref="LayerStackEntry"/> records (bottom-of-paint-stack
+    /// first). Same order as <see cref="_currentStackedLayers"/>;
+    /// the Layer Stack panel
+    /// (<see cref="ViewModels.LayerStackViewModel"/>) groups these
+    /// by <see cref="S98DisplayPlane"/> for the tree view.
+    /// </summary>
+    private IReadOnlyList<LayerStackEntry> _currentStackEntries = Array.Empty<LayerStackEntry>();
+    /// <summary>
+    /// In-memory per-dataset Active flags. Keyed by dataset id (the
+    /// same identifier produced by <see cref="EntryId"/>). Missing
+    /// entries default to <c>true</c>. Process-local for PR-L3; PR-L4
+    /// will persist in <see cref="ViewerSettings"/>.
+    /// </summary>
+    // TODO PR-L4: persist Active in ViewerSettings
+    private readonly Dictionary<string, bool> _activeFlags = new(StringComparer.Ordinal);
+    /// <summary>
     /// Per-entry sub-layer keys, parallel by index to
     /// <see cref="_entryLayers"/>. Null when the processor did not
     /// supply per-layer names (single-layer products).
@@ -151,7 +168,32 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public IReadOnlyList<ILayer> CurrentStackedLayers => _currentStackedLayers;
 
+    public IReadOnlyList<LayerStackEntry> CurrentStackEntries => _currentStackEntries;
+
     public event Action? LayerStackChanged;
+
+    public event Action<string>? ActiveChanged;
+
+    public bool GetActive(string datasetId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(datasetId);
+        return !_activeFlags.TryGetValue(datasetId, out var v) || v;
+    }
+
+    public void SetActive(string datasetId, bool active)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(datasetId);
+        var previous = GetActive(datasetId);
+        if (previous == active) return;
+        _activeFlags[datasetId] = active;
+        // Recompute the cross-product stack so R-101-102-B (and any
+        // future Active-aware rules) re-evaluates with the new
+        // flag, and rebroadcast it through the map host so PickService
+        // / Layer Stack panel see the change.
+        if (_mapHost is not null)
+            _mapHost.ReorderDatasetLayers(FlattenLayerOrder());
+        ActiveChanged?.Invoke(datasetId);
+    }
 
     public event Action<DatasetEntry>? DatasetLoaded;
 
@@ -485,6 +527,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             entry.PropertyChanged -= OnEntryPropertyChanged;
         _processors.Remove(entry);
         _entryOrder.Remove(entry);
+        _activeFlags.Remove(EntryId(entry));
         _globalTime.Unregister(entry);
         _s128CatalogSource.RemoveDataset(entry.DisplayName);
         // Publish the new (empty / smaller) stack so PickService and
@@ -522,14 +565,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // (and lands at the highest layer index — drawn last, on
         // top), preserving the prior behaviour for single-plane
         // dataset stacks.
+        //
+        // PR-L3: we keep building the FULL plane-sorted list of
+        // entries (including inactive datasets) so the Layer Stack
+        // panel can still show their rows and let the user re-enable
+        // them. Only the rendered layer list (returned to the map
+        // host) is filtered to active entries; the snapshot stored
+        // in <see cref="_currentStackEntries"/> retains every entry.
         var perDataset = new List<IReadOnlyList<LayerStackEntry>>(_entryOrder.Count);
-        // _entryOrder is already top-of-UI first, which is exactly
-        // what LayerStackBuilder.Build expects. It internally walks
-        // bottom-up so the top-of-UI dataset wins within-plane ties.
         for (int i = 0; i < _entryOrder.Count; i++)
         {
             var entry = _entryOrder[i];
             if (!_entryLayers.TryGetValue(entry, out var layers)) continue;
+
+            var datasetId = EntryId(entry);
 
             if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
             {
@@ -551,7 +600,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                         Layer: l,
                         Plane: plane,
                         WithinPlanePriority: 0,
-                        SourceDatasetId: entry.FilePath ?? entry.DisplayName));
+                        SourceDatasetId: datasetId));
                 }
                 perDataset.Add(synth);
             }
@@ -570,18 +619,45 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var loaded = BuildLoadedDatasetInfos();
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
-        var list = LayerStackBuilder.ToLayerList(ruled);
+        // Cache the FULL ruled list (including inactive datasets) for
+        // the Layer Stack panel.
+        _currentStackEntries = ruled;
+
+        // PR-L3: filter inactive datasets out of the rendered layer
+        // list handed back to the map host. The active flag is the
+        // single source of truth: inactive entries don't paint and
+        // don't influence pick.
+        var renderEntries = new List<LayerStackEntry>(ruled.Count);
+        foreach (var e in ruled)
+        {
+            if (!GetActive(e.SourceDatasetId)) continue;
+            renderEntries.Add(e);
+        }
+
+        var list = LayerStackBuilder.ToLayerList(renderEntries);
         _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
         return list;
     }
 
     /// <summary>
+    /// Stable per-entry identifier matching
+    /// <see cref="LayerStackEntry.SourceDatasetId"/>. Used both as
+    /// the key for <see cref="_activeFlags"/> and as the dataset id
+    /// passed to <see cref="IInteroperabilityAuthority"/> rules.
+    /// </summary>
+    private static string EntryId(DatasetEntry entry) =>
+        entry.FilePath is { } p && p.Length > 0
+            ? System.IO.Path.GetFileName(p)
+            : entry.DisplayName;
+
+    /// <summary>
     /// Builds the snapshot of <see cref="LoadedDatasetInfo"/> values
-    /// the S-98 rule engine consumes. PR-L2 treats "loaded" as
-    /// "active" — there is no separate active/inactive concept yet
-    /// (PR-L3's Layer Controls UI will add one). An inactive entry
-    /// suppresses every rule that depends on its product.
+    /// the S-98 rule engine consumes. <c>Active</c> combines the
+    /// PR-L3 in-memory flag, the existing <c>DatasetEntry.IsVisible</c>
+    /// proxy, and a "did the processor actually produce layers?"
+    /// check so a failed render doesn't accidentally suppress
+    /// sibling products.
     /// </summary>
     private IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos()
     {
@@ -589,13 +665,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         foreach (var entry in _entryOrder)
         {
             if (!_processors.TryGetValue(entry, out var proc)) continue;
-            // PR-L2: "loaded == active" — IsVisible is the closest
-            // viewer-side proxy for "currently displayed". An entry
-            // whose layer collection is empty (failed render) is
-            // treated as inactive so its absence doesn't accidentally
-            // suppress sibling products.
-            var datasetId = entry.FilePath ?? entry.DisplayName;
-            var active = entry.IsVisible
+            var datasetId = EntryId(entry);
+            var active = GetActive(datasetId)
+                && entry.IsVisible
                 && _entryLayers.TryGetValue(entry, out var layers)
                 && layers.Count > 0;
             result.Add(new LoadedDatasetInfo(datasetId, proc.Spec.Name, active));
