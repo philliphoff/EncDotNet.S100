@@ -71,23 +71,31 @@ internal sealed class MapsuiMapHost : IMapHost
         }
         if (insertAt < 0) insertAt = Math.Min(1, map.Layers.Count);
 
-        // Remove every dataset layer (in any order) then re-insert in
-        // the requested order at the captured base index. Layers in
-        // `orderedDatasetLayers` that the host has never seen are
-        // skipped — the contract says they're ignored.
-        foreach (var l in orderedDatasetLayers)
+        // PR-L3 fix: treat the supplied list as the **authoritative**
+        // dataset-layer slice of <c>map.Layers</c>.
+        //
+        // 1. Any previously-known dataset layer that is NOT in the new
+        //    list must be removed from the map (e.g. a dataset whose
+        //    Active flag was just toggled off, or whose original layer
+        //    instance was just replaced by a rule-filtered MemoryLayer
+        //    such as the one produced by R-101-102-B).
+        // 2. Conversely, layers in the new list that the host has not
+        //    seen before — typically the rule-filtered replicas — must
+        //    be inserted *and* tracked so the next reorder cycle treats
+        //    them correctly.
+        foreach (var existing in _datasetLayers)
         {
-            if (_datasetLayers.Contains(l))
-                map.Layers.Remove(l);
+            map.Layers.Remove(existing);
         }
+        _datasetLayers.Clear();
+
         int idx = insertAt;
         foreach (var l in orderedDatasetLayers)
         {
-            if (_datasetLayers.Contains(l))
-            {
-                if (idx > map.Layers.Count) idx = map.Layers.Count;
-                map.Layers.Insert(idx++, l, 0);
-            }
+            if (l is null) continue;
+            if (idx > map.Layers.Count) idx = map.Layers.Count;
+            map.Layers.Insert(idx++, l, 0);
+            _datasetLayers.Add(l);
         }
     }
 

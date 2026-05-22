@@ -565,22 +565,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // (and lands at the highest layer index — drawn last, on
         // top), preserving the prior behaviour for single-plane
         // dataset stacks.
+        //
+        // PR-L3: we keep building the FULL plane-sorted list of
+        // entries (including inactive datasets) so the Layer Stack
+        // panel can still show their rows and let the user re-enable
+        // them. Only the rendered layer list (returned to the map
+        // host) is filtered to active entries; the snapshot stored
+        // in <see cref="_currentStackEntries"/> retains every entry.
         var perDataset = new List<IReadOnlyList<LayerStackEntry>>(_entryOrder.Count);
-        // _entryOrder is already top-of-UI first, which is exactly
-        // what LayerStackBuilder.Build expects. It internally walks
-        // bottom-up so the top-of-UI dataset wins within-plane ties.
         for (int i = 0; i < _entryOrder.Count; i++)
         {
             var entry = _entryOrder[i];
             if (!_entryLayers.TryGetValue(entry, out var layers)) continue;
 
-            // PR-L3: an inactive dataset is removed entirely from the
-            // cross-product paint stack — its layers don't paint and
-            // it doesn't influence R-101-102-B / siblings (that
-            // happens via BuildLoadedDatasetInfos below; this branch
-            // also stops the layers from being drawn at all).
             var datasetId = EntryId(entry);
-            if (!GetActive(datasetId)) continue;
 
             if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
             {
@@ -621,9 +619,23 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var loaded = BuildLoadedDatasetInfos();
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
-        var list = LayerStackBuilder.ToLayerList(ruled);
-        _currentStackedLayers = list;
+        // Cache the FULL ruled list (including inactive datasets) for
+        // the Layer Stack panel.
         _currentStackEntries = ruled;
+
+        // PR-L3: filter inactive datasets out of the rendered layer
+        // list handed back to the map host. The active flag is the
+        // single source of truth: inactive entries don't paint and
+        // don't influence pick.
+        var renderEntries = new List<LayerStackEntry>(ruled.Count);
+        foreach (var e in ruled)
+        {
+            if (!GetActive(e.SourceDatasetId)) continue;
+            renderEntries.Add(e);
+        }
+
+        var list = LayerStackBuilder.ToLayerList(renderEntries);
+        _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
         return list;
     }
@@ -635,7 +647,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// passed to <see cref="IInteroperabilityAuthority"/> rules.
     /// </summary>
     private static string EntryId(DatasetEntry entry) =>
-        entry.FilePath ?? entry.DisplayName;
+        entry.FilePath is { } p && p.Length > 0
+            ? System.IO.Path.GetFileName(p)
+            : entry.DisplayName;
 
     /// <summary>
     /// Builds the snapshot of <see cref="LoadedDatasetInfo"/> values
