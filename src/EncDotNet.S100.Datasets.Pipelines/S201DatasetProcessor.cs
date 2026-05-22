@@ -1,9 +1,12 @@
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S201;
+using EncDotNet.S100.Datasets.S201.DataModel;
+using EncDotNet.S100.Datasets.S201.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -16,6 +19,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
 {
     private readonly S201Dataset _dataset;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     /// <inheritdoc />
     public override SpecRef Spec => new("S-201", default);
@@ -106,4 +111,18 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
     /// <inheritdoc />
     protected override string BuildInfoSuffix() =>
         $"Information types: {_dataset.InformationTypes.Length}";
+
+    /// <inheritdoc />
+    public override ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ValidationRunner.Run(
+                _dataset,
+                static raw => S201AtonInventory.From(raw, out _),
+                S201AtonRules.Default);
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
 }
