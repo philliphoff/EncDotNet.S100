@@ -75,14 +75,47 @@ npx @modelcontextprotocol/inspector
 
 Set the transport to **Streamable HTTP**, paste the endpoint from the
 viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
-**Connect**. You should see three tools:
+**Connect**. You should see the following tools:
 
 | Tool | Purpose |
 |---|---|
 | `list_datasets` | Summarises every dataset currently loaded in the viewer. |
+| `list_specs` | Lists S-100 product specifications the host can read. |
+| `list_time_steps` | Lists time steps for a time-varying dataset (S-104, S-111, S-421). |
 | `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. |
 | `describe_feature` | Returns spec, feature type, and attributes for a feature id in a given dataset. Supported specs: S-101 (RCID), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
+| `query_features` | Returns features from loaded GML vector datasets whose geometry intersects a spatial query. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
+| `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
+| `render_to_image` *(viewer only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+
+### Image content blocks (`render_to_image`)
+
+`render_to_image` is the first tool in this codebase to return non-text
+MCP content. The response payload is a `CallToolResult` whose
+`Content` array contains, in order:
+
+1. an `ImageContentBlock` carrying base64-encoded PNG bytes with
+   `mimeType: "image/png"` — MCP clients render this inline;
+2. a `TextContentBlock` carrying a small JSON metadata envelope
+   (`width`, `height`, `pixelDensity`, `imageFormat`, `byteLength`,
+   optional `notes`) so agents still get structured echo of the
+   rendered dimensions.
+
+The snapshot is captured from a **clone** of the live Mapsui `Map`
+that shares the layer collection but owns its own navigator. The
+live map control is never mutated, so taking a snapshot does not
+disturb the user's view or trigger a redraw on screen. Viewport,
+palette, time step, and loaded datasets reflect the user's current
+view exactly.
+
+`render_to_image` is **viewer-only**: it is injected into the hosted
+MCP server by `EncDotNet.S100.Viewer` via the
+`S100McpServerOptions.AdditionalTools` extension point. A future
+headless MCP host would need to supply its own equivalent (or
+something domain-appropriate) — the catalog-only
+`EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
+dependency.
 
 ## Sample agent prompts
 

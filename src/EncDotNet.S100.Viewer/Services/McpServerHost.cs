@@ -5,7 +5,9 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Mcp;
+using EncDotNet.S100.Viewer.McpTools;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -25,6 +27,7 @@ internal sealed class McpServerHost : IAsyncDisposable
 {
     private readonly EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
+    private readonly IMapHostAccessor? _mapHostAccessor;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -34,12 +37,14 @@ internal sealed class McpServerHost : IAsyncDisposable
     public McpServerHost(
         EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
+        IMapHostAccessor? mapHostAccessor = null,
         ILoggerFactory? loggers = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
         _settings = settings;
+        _mapHostAccessor = mapHostAccessor;
         _loggers = loggers;
     }
 
@@ -107,10 +112,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             await StopCurrentAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        var additionalTools = BuildAdditionalTools();
         var options = new S100McpServerOptions
         {
             BindAddress = bindAddress,
             Port = port,
+            AdditionalTools = additionalTools,
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try
@@ -201,6 +208,13 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// <see cref="SocketError.AddressAlreadyInUse"/> as well as the
     /// .NET 10 <c>AddressInUseException</c> wrapper.
     /// </summary>
+    private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
+    {
+        if (_mapHostAccessor is null) return null;
+        var renderTool = new RenderToImageTool(_mapHostAccessor);
+        return new[] { RenderToImageMcpAdapter.Create(renderTool) };
+    }
+
     private static bool IsPortInUse(Exception ex)
     {
         for (var e = ex; e is not null; e = e.InnerException!)
