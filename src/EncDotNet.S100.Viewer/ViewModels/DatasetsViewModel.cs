@@ -282,12 +282,24 @@ internal sealed class DatasetEntry : ViewModelBase
     /// thread; consumers are responsible for marshalling to the UI
     /// thread when needed.
     /// </summary>
+    /// <summary>
+    /// Optional callback that zooms the live map to a finding's
+    /// extent. Set by <see cref="DatasetsViewModel"/> once the entry
+    /// is added to its <c>Entries</c> collection so finding
+    /// view-models built by <see cref="SetValidationReport"/> can
+    /// drive <see cref="Services.IMapHost.ZoomToExtent"/> through it.
+    /// Stays <c>null</c> in tests that don't construct the
+    /// view-model, in which case <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
+    /// is disabled.
+    /// </summary>
+    internal Action<Mapsui.MRect>? ZoomDispatcher { get; set; }
+
     public void SetValidationReport(ValidationReport? report)
     {
         _validation = report;
         Findings = report is null || report.Findings.IsDefaultOrEmpty
             ? Array.Empty<ValidationFindingViewModel>()
-            : report.Findings.Select(f => new ValidationFindingViewModel(f)).ToArray();
+            : report.Findings.Select(f => new ValidationFindingViewModel(f, ZoomDispatcher)).ToArray();
 
         OnPropertyChanged(nameof(Validation));
         OnPropertyChanged(nameof(Findings));
@@ -425,6 +437,28 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// of the Properties sub-panel.</summary>
     public bool HasSelection => _selectedEntry is not null;
 
+    private Action<Mapsui.MRect>? _zoomDispatcher;
+    /// <summary>
+    /// Routes <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
+    /// activations from individual finding view-models to the live
+    /// map's <see cref="Services.IMapHost.ZoomToExtent"/>. Set once by
+    /// the window after the map host is available; assigned to every
+    /// entry currently in <see cref="Entries"/> and to entries added
+    /// later.
+    /// </summary>
+    public Action<Mapsui.MRect>? ZoomDispatcher
+    {
+        get => _zoomDispatcher;
+        set
+        {
+            _zoomDispatcher = value;
+            foreach (var entry in Entries)
+            {
+                entry.ZoomDispatcher = value;
+            }
+        }
+    }
+
     public ICommand AddCommand { get; }
     public ICommand RemoveCommand { get; }
 
@@ -493,6 +527,15 @@ internal sealed class DatasetsViewModel : ViewModelBase
         {
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move)
                 _loader.SetEntryOrder(Entries.ToArray());
+
+            if (e.NewItems is not null && _zoomDispatcher is not null)
+            {
+                foreach (var item in e.NewItems)
+                {
+                    if (item is DatasetEntry entry)
+                        entry.ZoomDispatcher = _zoomDispatcher;
+                }
+            }
         };
 
         // Auto-unregister entries from the global time service when they

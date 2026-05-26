@@ -31,6 +31,14 @@ internal sealed class MapsuiMapHost : IMapHost
     /// </summary>
     private readonly HashSet<ILayer> _datasetLayers = new();
 
+    /// <summary>
+    /// Tracks overlay-tier layers added via
+    /// <see cref="AddOverlayLayer"/>. Held separately from
+    /// <see cref="_datasetLayers"/> so <see cref="ReorderDatasetLayers"/>
+    /// never moves or removes overlays.
+    /// </summary>
+    private readonly HashSet<ILayer> _overlayLayers = new();
+
     public MapsuiMapHost(MapControl mapControl)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
@@ -112,6 +120,22 @@ internal sealed class MapsuiMapHost : IMapHost
         {
             nav.ZoomToBox(extent.Grow(extent.Width * 0.1, extent.Height * 0.1));
         }
+    }
+
+    public void AddOverlayLayer(ILayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        var map = _mapControl.Map;
+        if (map is null) return;
+        if (!_overlayLayers.Add(layer)) return;
+        map.Layers.Add(layer);
+    }
+
+    public void RemoveOverlayLayer(ILayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        _overlayLayers.Remove(layer);
+        _mapControl.Map?.Layers.Remove(layer);
     }
 
     /// <inheritdoc />

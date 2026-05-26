@@ -38,6 +38,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly IExchangeSetService _exchangeSetService;
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
+    private ValidationOverlayService? _validationOverlay;
     private string? _screenshotPath;
 
     public MainWindow() : this(null) { }
@@ -120,6 +121,19 @@ public partial class MainWindow : ShadUI.Window
         var mapHost = new MapsuiMapHost(MapControl);
         App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
         _loader.Initialize(mapHost, options);
+        // Wire validation finding click-to-zoom: each finding view-model
+        // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
+        _viewModel.Datasets.ZoomDispatcher = mapHost.ZoomToExtent;
+        // Build the validation findings overlay layer that draws above
+        // all dataset layers for the currently-selected dataset. The
+        // service subscribes to the datasets view-model and lives for
+        // the lifetime of the window.
+        _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+        Closed += (_, _) =>
+        {
+            _validationOverlay?.Dispose();
+            _validationOverlay = null;
+        };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
         {

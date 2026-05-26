@@ -51,6 +51,8 @@ internal static class Strings
     public static string Pane_Validation_Severity_Warning => Get(nameof(Pane_Validation_Severity_Warning));
     public static string Pane_Validation_Severity_Info => Get(nameof(Pane_Validation_Severity_Info));
     public static string Tooltip_ValidationBadge => Get(nameof(Tooltip_ValidationBadge));
+    public static string Tooltip_FindingZoomTo => Get(nameof(Tooltip_FindingZoomTo));
+    public static string Tooltip_FindingNoSpatialLocation => Get(nameof(Tooltip_FindingNoSpatialLocation));
     public static string Pane_Catalog => Get(nameof(Pane_Catalog));
     public static string Pane_Settings => Get(nameof(Pane_Settings));
     public static string Pane_Search => Get(nameof(Pane_Search));
