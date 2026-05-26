@@ -575,7 +575,7 @@
                              are present; severity drives the badge
                              colour via three boolean classes on the
                              view model. -->
-                        <TabItem>
+                        <TabItem HeaderTemplate="{x:Null}">
                             <TabItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6"
                                             VerticalAlignment="Center">
