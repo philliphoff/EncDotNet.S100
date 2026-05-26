@@ -305,6 +305,12 @@
   <data name="Tooltip_ValidationBadge" xml:space="preserve">
     <value>{0} validation findings ({1} errors, {2} warnings, {3} info)</value>
   </data>
+  <data name="Tooltip_FindingZoomTo" xml:space="preserve">
+    <value>Zoom map to finding location.</value>
+  </data>
+  <data name="Tooltip_FindingNoSpatialLocation" xml:space="preserve">
+    <value>No spatial location for this finding.</value>
+  </data>
   <data name="Tooltip_TimelineSlider" xml:space="preserve">
     <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>

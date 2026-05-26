@@ -49,4 +49,16 @@ internal interface IMapHost
     /// map's navigator is unavailable).
     /// </summary>
     void ZoomToExtent(MRect extent);
+
+    /// <summary>
+    /// Adds an overlay-tier layer to the map, above all dataset
+    /// layers. Used by services such as the validation findings
+    /// overlay that need to draw above all datasets independently of
+    /// dataset ordering. Overlay layers are not tracked as dataset
+    /// layers and are never moved by <see cref="ReorderDatasetLayers"/>.
+    /// </summary>
+    void AddOverlayLayer(ILayer layer);
+
+    /// <summary>Removes a previously-added overlay layer.</summary>
+    void RemoveOverlayLayer(ILayer layer);
 }

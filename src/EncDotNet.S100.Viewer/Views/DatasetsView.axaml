@@ -137,6 +137,29 @@
         <Style Selector="ic|FluentIcon.SeverityIcon.Info">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
+
+        <!--
+          Clickable finding row: a borderless, transparent-background
+          Button that flashes a subtle hover highlight and switches to
+          the Hand cursor when enabled. Disabled rows (no spatial
+          location) stay flat with the default cursor.
+        -->
+        <Style Selector="Button.FindingRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,2,4,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.FindingRow:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+        </Style>
+        <Style Selector="Button.FindingRow:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListMediumBrush}" />
+        </Style>
+        <Style Selector="Button.FindingRow:not(:disabled)">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
     </UserControl.Styles>
 
     <DockPanel>
@@ -593,37 +616,42 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:ValidationFindingViewModel">
-                                                    <Grid ColumnDefinitions="Auto,*"
-                                                          RowDefinitions="Auto,Auto,Auto"
-                                                          ColumnSpacing="8"
-                                                          RowSpacing="2">
-                                                        <ic:FluentIcon Grid.Row="0" Grid.Column="0"
-                                                                       Grid.RowSpan="3"
-                                                                       Icon="{Binding SeverityIcon}"
-                                                                       IconVariant="Regular"
-                                                                       FontSize="16"
-                                                                       Classes="SeverityIcon"
-                                                                       Classes.Error="{Binding IsError}"
-                                                                       Classes.Warning="{Binding IsWarning}"
-                                                                       Classes.Info="{Binding IsInfo}"
-                                                                       VerticalAlignment="Top"
-                                                                       Margin="0,2,0,0"
-                                                                       ToolTip.Tip="{Binding SeverityLabel}" />
-                                                        <TextBlock Grid.Row="0" Grid.Column="1"
-                                                                   Text="{Binding RuleId}"
-                                                                   FontFamily="Consolas,Menlo,monospace"
-                                                                   FontSize="11"
-                                                                   Opacity="0.75" />
-                                                        <TextBlock Grid.Row="1" Grid.Column="1"
-                                                                   Text="{Binding Message}"
-                                                                   TextWrapping="Wrap"
-                                                                   FontSize="12" />
-                                                        <TextBlock Grid.Row="2" Grid.Column="1"
-                                                                   Text="{Binding RelatedFeatureLine}"
-                                                                   FontSize="11"
-                                                                   Opacity="0.6"
-                                                                   IsVisible="{Binding HasRelatedFeature}" />
-                                                    </Grid>
+                                                    <Button Classes="FindingRow"
+                                                            Command="{Binding ZoomToFindingCommand}"
+                                                            IsEnabled="{Binding HasSpatialLocation}"
+                                                            ToolTip.Tip="{Binding ZoomTooltip}">
+                                                        <Grid ColumnDefinitions="Auto,*"
+                                                              RowDefinitions="Auto,Auto,Auto"
+                                                              ColumnSpacing="8"
+                                                              RowSpacing="2">
+                                                            <ic:FluentIcon Grid.Row="0" Grid.Column="0"
+                                                                           Grid.RowSpan="3"
+                                                                           Icon="{Binding SeverityIcon}"
+                                                                           IconVariant="Regular"
+                                                                           FontSize="16"
+                                                                           Classes="SeverityIcon"
+                                                                           Classes.Error="{Binding IsError}"
+                                                                           Classes.Warning="{Binding IsWarning}"
+                                                                           Classes.Info="{Binding IsInfo}"
+                                                                           VerticalAlignment="Top"
+                                                                           Margin="0,2,0,0"
+                                                                           ToolTip.Tip="{Binding SeverityLabel}" />
+                                                            <TextBlock Grid.Row="0" Grid.Column="1"
+                                                                       Text="{Binding RuleId}"
+                                                                       FontFamily="Consolas,Menlo,monospace"
+                                                                       FontSize="11"
+                                                                       Opacity="0.75" />
+                                                            <TextBlock Grid.Row="1" Grid.Column="1"
+                                                                       Text="{Binding Message}"
+                                                                       TextWrapping="Wrap"
+                                                                       FontSize="12" />
+                                                            <TextBlock Grid.Row="2" Grid.Column="1"
+                                                                       Text="{Binding RelatedFeatureLine}"
+                                                                       FontSize="11"
+                                                                       Opacity="0.6"
+                                                                       IsVisible="{Binding HasRelatedFeature}" />
+                                                        </Grid>
+                                                    </Button>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
