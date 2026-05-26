@@ -230,9 +230,11 @@ public partial class App : Application
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
+        services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
+            sp.GetRequiredService<IMapHostAccessor>(),
             sp.GetService<ILoggerFactory>()));
 
         // View models

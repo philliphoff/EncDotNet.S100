@@ -1,8 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia.Threading;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
+using Mapsui.Rendering;
+using Mapsui.Rendering.Skia;
 using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -130,6 +136,63 @@ internal sealed class MapsuiMapHost : IMapHost
         ArgumentNullException.ThrowIfNull(layer);
         _overlayLayers.Remove(layer);
         _mapControl.Map?.Layers.Remove(layer);
+    }
+
+    /// <inheritdoc />
+    public async Task<byte[]?> RenderCurrentViewToPngAsync(
+        int widthPx,
+        int heightPx,
+        double pixelDensity,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Marshal to the UI thread: Mapsui's Map/Navigator state must
+        // not be read or mutated concurrently with the live control's
+        // own render loop, and Avalonia layers are UI-affine.
+        return await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var liveMap = _mapControl.Map;
+            if (liveMap is null) return null;
+
+            var liveNav = liveMap.Navigator;
+            var liveViewport = liveNav.Viewport;
+            if (liveViewport.Width <= 0 || liveViewport.Height <= 0) return null;
+
+            // Build a snapshot Map that shares the live Layers list (so
+            // styles, time-step content, palette switches, and any other
+            // mutable per-layer state mirror the user's current view
+            // exactly) but owns its own Navigator. The live map is
+            // therefore untouched: setting size / zoom on the clone
+            // does not trigger a redraw on screen.
+            var snapshot = new Map { CRS = liveMap.CRS, BackColor = liveMap.BackColor };
+            foreach (var layer in liveMap.Layers)
+            {
+                snapshot.Layers.Add(layer);
+            }
+
+            snapshot.Navigator.SetSize(widthPx, heightPx);
+
+            // Match the world-extent the user currently sees. With
+            // MBoxFit.Fit, aspect-ratio mismatches show slightly more
+            // area rather than cropping — acceptable for diagnostic
+            // snapshots; the requested pixel dimensions are exact.
+            var extent = liveViewport.ToExtent();
+            if (extent is not null && extent.Width > 0 && extent.Height > 0)
+            {
+                snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+            }
+
+            using var stream = new MapRenderer().RenderToBitmapStream(
+                snapshot,
+                pixelDensity: (float)pixelDensity,
+                renderFormat: RenderFormat.Png,
+                quality: 100);
+            stream.Position = 0;
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return ms.ToArray();
+        }).GetTask().ConfigureAwait(false);
     }
 
     /// <summary>

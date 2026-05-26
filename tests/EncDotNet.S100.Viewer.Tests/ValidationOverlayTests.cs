@@ -35,6 +35,8 @@ public class ValidationOverlayTests
         public void ZoomToExtent(MRect extent) => ZoomCalls.Add(extent);
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
+        public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)
+            => System.Threading.Tasks.Task.FromResult<byte[]?>(null);
     }
 
     private static ValidationFinding Finding(

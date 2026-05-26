@@ -119,6 +119,7 @@ public partial class MainWindow : ShadUI.Window
         // seed catalogues / build the pipeline factory from CLI options. The
         // loader subscribes to its own settings dependencies internally.
         var mapHost = new MapsuiMapHost(MapControl);
+        App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
         _loader.Initialize(mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
