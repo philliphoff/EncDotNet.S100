@@ -4,6 +4,7 @@
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+        xmlns:activities="using:EncDotNet.S100.Viewer.ViewModels.Activities"
         xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
@@ -28,6 +29,15 @@
     <shadui:Window.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
     </shadui:Window.Resources>
+
+    <shadui:Window.DataTemplates>
+        <!--
+          Single IDataTemplate that materialises any IActivityTab into its
+          UserControl (DataContext = tab.ViewModel). Adding a new tab is a
+          DI-only change in App.axaml.cs — no XAML edits needed here.
+        -->
+        <activities:ActivityTabViewTemplate />
+    </shadui:Window.DataTemplates>
 
     <shadui:Window.KeyBindings>
         <!-- Esc exits the active map tool (pick or measure). -->
@@ -185,146 +195,93 @@
                 Width="48"
                 Padding="0">
             <DockPanel>
-                <!-- Settings pinned at bottom -->
-                <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,4">
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsSettingsSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                                      Command="{Binding SelectSettingsCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Settings}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Settings" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-                </StackPanel>
+                <!--
+                  Activity-tab items. The set of tabs is the IActivityTab
+                  registry; the same ItemTemplate is used for both the
+                  pinned-bottom (Settings) and top groups. Adding a tab is
+                  a DI-only change in App.axaml.cs.
+                -->
+                <ItemsControl DockPanel.Dock="Bottom"
+                              Margin="0,4"
+                              ItemsSource="{Binding BottomTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid>
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                <!-- Top group: main activities -->
-                <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,4">
-                    <!-- Feature Catalogues -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsFeatureCataloguesSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
-                                      Command="{Binding SelectFeatureCataloguesCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FeatureCatalogues}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="BookOpen" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Portrayal Catalogues -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsPortrayalCataloguesSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
-                                      Command="{Binding SelectPortrayalCataloguesCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalCatalogues}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Datasets -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsDatasetsSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
-                                      Command="{Binding SelectDatasetsCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Datasets}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Dataset Catalog -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsCatalogSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsCatalogSelected, Mode=OneWay}"
-                                      Command="{Binding SelectCatalogCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Catalog}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Library" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Layer Stack -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsLayerStackSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsLayerStackSelected, Mode=OneWay}"
-                                      Command="{Binding SelectLayerStackCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_LayerStack}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Stack" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Search -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsSearchSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsSearchSelected, Mode=OneWay}"
-                                      Command="{Binding SelectSearchCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Search}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Search" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- ECDIS Display Controls -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsEcdisDisplaySelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsEcdisDisplaySelected, Mode=OneWay}"
-                                      Command="{Binding SelectEcdisDisplayCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisDisplay}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-                </StackPanel>
+                <ItemsControl DockPanel.Dock="Top"
+                              Margin="0,4"
+                              ItemsSource="{Binding TopTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid>
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </DockPanel>
         </Border>
 
@@ -360,25 +317,8 @@
                                    LetterSpacing="1" />
                     </Border>
 
-                    <!-- Pane content: show the appropriate view based on selection -->
-                    <Panel>
-                        <views:FeatureCataloguesView DataContext="{Binding FeatureCatalogues}"
-                                                     IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsFeatureCataloguesSelected}" />
-                        <views:PortrayalCataloguesView DataContext="{Binding PortrayalCatalogues}"
-                                                       IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
-                        <views:DatasetsView DataContext="{Binding Datasets}"
-                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
-                        <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
-                                                IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
-                        <views:LayerStackView DataContext="{Binding LayerStack}"
-                                              IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsLayerStackSelected}" />
-                        <views:FeatureSearchView DataContext="{Binding Search}"
-                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSearchSelected}" />
-                        <views:SettingsView DataContext="{Binding Settings}"
-                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
-                        <views:EcdisDisplayPanelView DataContext="{Binding EcdisDisplayPanel}"
-                                                     IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsEcdisDisplaySelected}" />
-                    </Panel>
+                    <!-- Pane content: resolved by ActivityTabViewTemplate from the selected tab. -->
+                    <ContentControl Content="{Binding SelectedTab}" />
                 </DockPanel>
             </Border>
 
