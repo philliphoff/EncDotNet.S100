@@ -188,6 +188,7 @@ internal static class Strings
 
     // Pick (Object Information) panel
     public static string Pick_PanelTitle => Get(nameof(Pick_PanelTitle));
+    public static string PickReport_EmptyState => Get(nameof(PickReport_EmptyState));
     public static string Pick_IdLabel => Get(nameof(Pick_IdLabel));
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));

@@ -72,4 +72,23 @@ internal interface IActivityTab
     /// the Settings tab so it doesn't become "sticky" across restarts.
     /// </summary>
     bool PersistAsLastSelected { get; }
+
+    /// <summary>
+    /// Which dock this tab lives in. Drives the
+    /// <c>LeftTabs</c>/<c>RightTabs</c>/<c>BottomTabs</c> partitioning
+    /// on <see cref="MainViewModel"/>. Added in PR-M4 so the Pick
+    /// Report and Timeline can be modelled as ordinary tabs rather
+    /// than bespoke panels.
+    /// </summary>
+    TabDock Dock { get; }
+
+    /// <summary>
+    /// When <c>true</c>, <see cref="MainViewModel"/> subscribes to the
+    /// tab view-model's <see cref="IActivityTabContentSignal.ContentBecameAvailable"/>
+    /// event (if the view-model implements it) and auto-opens the
+    /// owning dock and selects the tab when that event fires. The user
+    /// can still close the dock; the auto-open re-runs on the next
+    /// false→true content transition.
+    /// </summary>
+    bool AutoOpenOnContentSignal { get; }
 }

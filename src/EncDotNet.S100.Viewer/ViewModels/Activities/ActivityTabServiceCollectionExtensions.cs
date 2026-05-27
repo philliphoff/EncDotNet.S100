@@ -30,7 +30,9 @@ internal static class ActivityTabServiceCollectionExtensions
         string title,
         string tooltip,
         Func<Control> iconFactory,
-        bool persistAsLastSelected = true)
+        bool persistAsLastSelected = true,
+        TabDock dock = TabDock.Left,
+        bool autoOpenOnContentSignal = false)
         where TViewModel : class
         where TView : Control, new()
     {
@@ -47,7 +49,9 @@ internal static class ActivityTabServiceCollectionExtensions
             tooltip,
             iconFactory,
             sp.GetRequiredService<TViewModel>(),
-            persistAsLastSelected));
+            persistAsLastSelected,
+            dock,
+            autoOpenOnContentSignal));
 
         return services;
     }

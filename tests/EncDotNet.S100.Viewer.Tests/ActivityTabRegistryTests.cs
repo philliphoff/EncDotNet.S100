@@ -40,8 +40,16 @@ public sealed class ActivityTabRegistryTests : IDisposable
         public object ViewModel { get; init; } = new object();
         public Type ViewType { get; init; } = typeof(ContentControl);
         public bool PersistAsLastSelected { get; init; } = true;
+        public TabDock Dock { get; init; } = TabDock.Left;
+        public bool AutoOpenOnContentSignal { get; init; }
 
         public Control CreateIcon() => new ContentControl();
+    }
+
+    private sealed class SignalingViewModel : IActivityTabContentSignal
+    {
+        public event EventHandler? ContentBecameAvailable;
+        public void Raise() => ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource
@@ -121,8 +129,8 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(tabs);
 
         Assert.Equal(new[] { "A", "B", "C", "Z" }, vm.Tabs.Select(t => t.Id));
-        Assert.Equal(new[] { "A", "B", "C" }, vm.TopTabs.Select(t => t.Id));
-        Assert.Equal(new[] { "Z" }, vm.BottomTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "A", "B", "C" }, vm.LeftDockTopTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "Z" }, vm.LeftDockBottomTabs.Select(t => t.Id));
     }
 
     [Fact]
@@ -134,8 +142,8 @@ public sealed class ActivityTabRegistryTests : IDisposable
 
         vm.SelectTabCommand.Execute(b);
 
-        Assert.Same(b, vm.SelectedTab);
-        Assert.Equal("B", vm.SelectedTabId);
+        Assert.Same(b, vm.SelectedLeftTab);
+        Assert.Equal("B", vm.SelectedLeftTabId);
     }
 
     [Fact]
@@ -147,13 +155,13 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { datasets, a, b });
 
         // Startup defaults to Datasets.
-        Assert.Equal("Default", vm.PaneTitle);
+        Assert.Equal("Default", vm.LeftDockTitle);
 
         vm.SelectTabCommand.Execute(a);
-        Assert.Equal("Alpha", vm.PaneTitle);
+        Assert.Equal("Alpha", vm.LeftDockTitle);
 
         vm.SelectTabCommand.Execute(b);
-        Assert.Equal("Beta", vm.PaneTitle);
+        Assert.Equal("Beta", vm.LeftDockTitle);
     }
 
     [Fact]
@@ -183,7 +191,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
 
         vm.SelectTabCommand.Execute(settingsTab);
 
-        Assert.Same(settingsTab, vm.SelectedTab);
+        Assert.Same(settingsTab, vm.SelectedLeftTab);
         Assert.Equal("Datasets", settings.LastSelectedActivity);
     }
 
@@ -199,7 +207,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(search, vm.SelectedTab);
+        Assert.Same(search, vm.SelectedLeftTab);
         Assert.Equal("Search", settings.LastSelectedActivity);
     }
 
@@ -215,7 +223,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(datasets, vm.SelectedTab);
+        Assert.Same(datasets, vm.SelectedLeftTab);
     }
 
     [Fact]
@@ -226,7 +234,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(datasets, vm.SelectedTab);
+        Assert.Same(datasets, vm.SelectedLeftTab);
     }
 
     [Fact]
@@ -237,12 +245,12 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { search, datasets });
 
         vm.SelectTabCommand.Execute(search);
-        Assert.Same(search, vm.SelectedTab);
+        Assert.Same(search, vm.SelectedLeftTab);
 
         vm.SelectDefaultTab();
 
-        Assert.Same(datasets, vm.SelectedTab);
-        Assert.Equal("Datasets", vm.SelectedTabId);
+        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Equal("Datasets", vm.SelectedLeftTabId);
     }
 
     [Fact]
@@ -253,11 +261,11 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { alpha, beta });
 
         // Startup falls back to first tab when Datasets is absent.
-        Assert.Same(alpha, vm.SelectedTab);
+        Assert.Same(alpha, vm.SelectedLeftTab);
 
         vm.SelectTabCommand.Execute(beta);
         vm.SelectDefaultTab();
 
-        Assert.Same(alpha, vm.SelectedTab);
+        Assert.Same(alpha, vm.SelectedLeftTab);
     }
 }
