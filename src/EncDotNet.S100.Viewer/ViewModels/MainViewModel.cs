@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -8,6 +10,7 @@ using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
+using EncDotNet.S100.Viewer.ViewModels.Activities;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -31,69 +34,116 @@ internal sealed class MainViewModel : ViewModelBase
     public TextGroupToolbarViewModel TextToolbar { get; }
     public EcdisDisplayPanelViewModel EcdisDisplayPanel { get; }
 
-    private ActivityKind? _selectedActivity;
-    public ActivityKind? SelectedActivity
+    /// <summary>
+    /// Identifier of the default tab selected on a fresh launch (and the
+    /// fallback when a persisted <see cref="ViewerSettings.LastSelectedActivity"/>
+    /// no longer resolves to a registered tab).
+    /// </summary>
+    internal const string DefaultTabId = "Datasets";
+
+    private readonly IReadOnlyList<IActivityTab> _tabs;
+    private readonly Dictionary<string, IActivityTab> _tabsById;
+
+    /// <summary>All registered activity tabs, sorted by <see cref="IActivityTab.Order"/> ascending.</summary>
+    public IReadOnlyList<IActivityTab> Tabs => _tabs;
+
+    /// <summary>Tabs rendered in the top group of the activity bar (<see cref="IActivityTab.Order"/> &lt; 1000).</summary>
+    public IReadOnlyList<IActivityTab> TopTabs { get; }
+
+    /// <summary>Tabs pinned to the bottom of the activity bar (<see cref="IActivityTab.Order"/> &gt;= 1000).</summary>
+    public IReadOnlyList<IActivityTab> BottomTabs { get; }
+
+    private IActivityTab? _selectedTab;
+    /// <summary>
+    /// The active activity tab, or <c>null</c> when the pane is collapsed.
+    /// Clicking the already-selected tab toggles it off (preserves the
+    /// pre-refactor toggle behaviour).
+    /// </summary>
+    public IActivityTab? SelectedTab
     {
-        get => _selectedActivity;
+        get => _selectedTab;
         set
         {
-            // Toggle: clicking the same activity again hides the pane
-            if (_selectedActivity == value)
-                value = null;
-
-            if (SetProperty(ref _selectedActivity, value))
+            // Toggle: clicking the same tab again hides the pane.
+            if (_selectedTab is { } current && ReferenceEquals(current, value))
             {
+                value = null;
+            }
+
+            if (SetProperty(ref _selectedTab, value))
+            {
+                OnPropertyChanged(nameof(SelectedTabId));
                 OnPropertyChanged(nameof(IsPaneVisible));
                 OnPropertyChanged(nameof(PaneTitle));
-                OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
-                OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
-                OnPropertyChanged(nameof(IsDatasetsSelected));
-                OnPropertyChanged(nameof(IsCatalogSelected));
-                OnPropertyChanged(nameof(IsLayerStackSelected));
-                OnPropertyChanged(nameof(IsSearchSelected));
-                OnPropertyChanged(nameof(IsSettingsSelected));
-                OnPropertyChanged(nameof(IsEcdisDisplaySelected));
 
-                // Persist the last selected activity (Settings is transient, don't remember it)
-                _settings.LastSelectedActivity = value is ActivityKind.Settings ? null : value?.ToString();
-                _settings.Save();
+                // Persist the last selected tab. Settings (and any future
+                // transient tab) opts out via PersistAsLastSelected = false.
+                if (value is null || value.PersistAsLastSelected)
+                {
+                    _settings.LastSelectedActivity = value?.Id;
+                    _settings.Save();
+                }
             }
         }
     }
 
-    public bool IsPaneVisible => _selectedActivity.HasValue;
+    /// <summary>
+    /// Id of the active tab, or <c>null</c> when no tab is selected.
+    /// Bound by the activity-bar item template (via
+    /// <see cref="ActiveTabConverter"/>) and used for persistence.
+    /// </summary>
+    public string? SelectedTabId => _selectedTab?.Id;
 
-    public string PaneTitle => _selectedActivity switch
-    {
-        ActivityKind.FeatureCatalogues => Strings.Pane_FeatureCatalogues,
-        ActivityKind.PortrayalCatalogues => Strings.Pane_PortrayalCatalogues,
-        ActivityKind.Datasets => Strings.Pane_Datasets,
-        ActivityKind.Catalog => Strings.Pane_Catalog,
-        ActivityKind.LayerStack => Strings.Pane_LayerStack,
-        ActivityKind.Search => Strings.Pane_Search,
-        ActivityKind.Settings => Strings.Pane_Settings,
-        ActivityKind.EcdisDisplay => Strings.Pane_EcdisDisplay,
-        _ => string.Empty,
-    };
+    public bool IsPaneVisible => _selectedTab is not null;
 
-    public bool IsFeatureCataloguesSelected => _selectedActivity == ActivityKind.FeatureCatalogues;
-    public bool IsPortrayalCataloguesSelected => _selectedActivity == ActivityKind.PortrayalCatalogues;
-    public bool IsDatasetsSelected => _selectedActivity == ActivityKind.Datasets;
-    public bool IsCatalogSelected => _selectedActivity == ActivityKind.Catalog;
-    public bool IsLayerStackSelected => _selectedActivity == ActivityKind.LayerStack;
-    public bool IsSearchSelected => _selectedActivity == ActivityKind.Search;
-    public bool IsSettingsSelected => _selectedActivity == ActivityKind.Settings;
-    public bool IsEcdisDisplaySelected => _selectedActivity == ActivityKind.EcdisDisplay;
+    public string PaneTitle => _selectedTab?.Title ?? string.Empty;
 
-    public ICommand SelectFeatureCataloguesCommand { get; }
-    public ICommand SelectPortrayalCataloguesCommand { get; }
-    public ICommand SelectDatasetsCommand { get; }
-    public ICommand SelectCatalogCommand { get; }
-    public ICommand SelectLayerStackCommand { get; }
-    public ICommand SelectSearchCommand { get; }
-    public ICommand SelectSettingsCommand { get; }
-    public ICommand SelectEcdisDisplayCommand { get; }
+    /// <summary>
+    /// Single, parameterised command bound by every activity-bar
+    /// <c>ToggleButton</c> — the command parameter is the
+    /// <see cref="IActivityTab"/> that owns the button.
+    /// </summary>
+    public ICommand SelectTabCommand { get; }
+
     public ICommand TogglePrimarySideBarCommand { get; }
+
+    /// <summary>
+    /// Selects the default tab (<see cref="DefaultTabId"/>), falling back
+    /// to the first registered tab if the default isn't present. Used by
+    /// <see cref="MainWindow"/> when a command (Open Dataset, Open Recent,
+    /// Open Exchange Set, drag-drop) needs to force the Datasets pane open.
+    /// </summary>
+    public void SelectDefaultTab()
+    {
+        if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab))
+        {
+            if (!ReferenceEquals(_selectedTab, defaultTab))
+            {
+                SelectedTab = defaultTab;
+            }
+            return;
+        }
+
+        if (_tabs.Count > 0 && !ReferenceEquals(_selectedTab, _tabs[0]))
+        {
+            SelectedTab = _tabs[0];
+        }
+    }
+
+    /// <summary>
+    /// Selects the tab with the given <see cref="IActivityTab.Id"/>, or
+    /// no-ops if no such tab is registered. Convenience for tests and
+    /// for callers that hold an id (e.g. settings restore) rather than
+    /// the tab instance.
+    /// </summary>
+    public void SelectTab(string id)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(id);
+        if (_tabsById.TryGetValue(id, out var tab))
+        {
+            SelectedTab = tab;
+        }
+    }
 
     private string? _statusText;
     public string? StatusText
@@ -534,6 +584,7 @@ internal sealed class MainViewModel : ViewModelBase
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
         IToastService toasts,
+        IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
         IStatusPresenter? statusPresenter = null)
     {
@@ -599,42 +650,42 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPickPanelVisible));
         };
 
-        SelectFeatureCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.FeatureCatalogues);
-        SelectPortrayalCataloguesCommand = new RelayCommand(() => SelectedActivity = ActivityKind.PortrayalCatalogues);
-        SelectDatasetsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Datasets);
-        SelectCatalogCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Catalog);
-        SelectLayerStackCommand = new RelayCommand(() => SelectedActivity = ActivityKind.LayerStack);
-        SelectSearchCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Search);
-        SelectSettingsCommand = new RelayCommand(() => SelectedActivity = ActivityKind.Settings);
-        SelectEcdisDisplayCommand = new RelayCommand(() => SelectedActivity = ActivityKind.EcdisDisplay);
+        // Activity tab registry — ordered by IActivityTab.Order ascending.
+        // Tabs with Order >= 1000 are pinned to the bottom of the activity
+        // bar (currently only Settings) so the visual layout matches the
+        // pre-refactor DockPanel arrangement.
+        _tabs = (activityTabs ?? Array.Empty<IActivityTab>())
+            .OrderBy(t => t.Order)
+            .ToArray();
+        _tabsById = _tabs.ToDictionary(t => t.Id, StringComparer.Ordinal);
+        TopTabs = _tabs.Where(t => t.Order < 1000).ToArray();
+        BottomTabs = _tabs.Where(t => t.Order >= 1000).ToArray();
+
+        SelectTabCommand = new RelayCommand<IActivityTab>(tab =>
+        {
+            if (tab is not null) SelectedTab = tab;
+        });
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
         {
-            if (_selectedActivity.HasValue)
+            if (_selectedTab is not null)
             {
-                // Close the pane (set field directly, then notify)
-                _selectedActivity = null;
+                SelectedTab = null;
+                return;
+            }
+
+            // Re-open with the last persisted tab, falling back to the
+            // default tab (Datasets) if the persisted id is no longer
+            // registered.
+            if (settings.LastSelectedActivity is { } last
+                && _tabsById.TryGetValue(last, out var restored))
+            {
+                SelectedTab = restored;
             }
             else
             {
-                // Re-open with Datasets as default, or the last persisted activity
-                _selectedActivity = (settings.LastSelectedActivity is { } last
-                    && Enum.TryParse<ActivityKind>(last, out var restored))
-                    ? restored
-                    : ActivityKind.Datasets;
+                SelectDefaultTab();
             }
-
-            OnPropertyChanged(nameof(SelectedActivity));
-            OnPropertyChanged(nameof(IsPaneVisible));
-            OnPropertyChanged(nameof(PaneTitle));
-            OnPropertyChanged(nameof(IsFeatureCataloguesSelected));
-            OnPropertyChanged(nameof(IsPortrayalCataloguesSelected));
-            OnPropertyChanged(nameof(IsDatasetsSelected));
-            OnPropertyChanged(nameof(IsCatalogSelected));
-            OnPropertyChanged(nameof(IsLayerStackSelected));
-            OnPropertyChanged(nameof(IsSearchSelected));
-            OnPropertyChanged(nameof(IsSettingsSelected));
-            OnPropertyChanged(nameof(IsEcdisDisplaySelected));
         });
 
         _isStatusBarVisible = settings.IsStatusBarVisible;
@@ -695,11 +746,22 @@ internal sealed class MainViewModel : ViewModelBase
 
         OpenRecentCommand = new AsyncRelayCommand<string>(OpenRecentAsync);
 
-        // Restore last selected activity (set field directly to avoid re-saving)
-        if (settings.LastSelectedActivity is { } last
-            && Enum.TryParse<ActivityKind>(last, out var restored))
+        // Restore last selected tab. We assign _selectedTab directly so
+        // restoration doesn't re-write settings. If the persisted id is
+        // missing or stale, fall back to the default tab (Datasets), then
+        // defensively to the first registered tab — matching the spec.
+        if (settings.LastSelectedActivity is { } lastId
+            && _tabsById.TryGetValue(lastId, out var restoredTab))
         {
-            _selectedActivity = restored;
+            _selectedTab = restoredTab;
+        }
+        else if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab))
+        {
+            _selectedTab = defaultTab;
+        }
+        else if (_tabs.Count > 0)
+        {
+            _selectedTab = _tabs[0];
         }
     }
 
@@ -718,7 +780,7 @@ internal sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        SelectedActivity = ActivityKind.Datasets;
+        SelectDefaultTab();
         await Datasets.LoadFromPathAsync(path);
     }
 }

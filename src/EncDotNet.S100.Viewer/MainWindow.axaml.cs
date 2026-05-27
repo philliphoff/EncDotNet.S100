@@ -268,7 +268,7 @@ public partial class MainWindow : ShadUI.Window
         {
             Opened += async (_, _) =>
             {
-                _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+                _viewModel.SelectDefaultTab();
                 foreach (var datasetPath in datasetPaths)
                 {
                     var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath) ?? "S-101";
@@ -362,7 +362,7 @@ public partial class MainWindow : ShadUI.Window
         if (paths.Count == 0)
             return;
 
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        _viewModel.SelectDefaultTab();
 
         foreach (var path in paths)
         {
@@ -393,7 +393,7 @@ public partial class MainWindow : ShadUI.Window
 
     private async Task RunExchangeSetAsync(string sourcePath)
     {
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        _viewModel.SelectDefaultTab();
 
         var token = _viewModel.BeginExchangeSetLoad(sourcePath);
         var progress = new Progress<Services.ExchangeSetProgress>(
@@ -544,7 +544,7 @@ public partial class MainWindow : ShadUI.Window
         if (e.DataTransfer.TryGetFiles() is not { } files)
             return;
 
-        _viewModel.SelectedActivity = ViewModels.ActivityKind.Datasets;
+        _viewModel.SelectDefaultTab();
 
         foreach (var item in files)
         {
