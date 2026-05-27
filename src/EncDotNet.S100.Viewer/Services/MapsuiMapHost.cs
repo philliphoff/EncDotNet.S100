@@ -31,6 +31,15 @@ internal sealed class MapsuiMapHost : IMapHost
     /// </summary>
     private readonly HashSet<ILayer> _datasetLayers = new();
 
+    /// <summary>
+    /// Tracks overlay-tier layers added via
+    /// <see cref="AddOverlayLayer"/> — distinct from tool overlays
+    /// (e.g. measure chrome) which the viewer adds straight to
+    /// <c>Map.Layers</c>. Overlay-tier layers sit above the
+    /// dataset slice but below any subsequently-added tool overlays.
+    /// </summary>
+    private readonly HashSet<ILayer> _overlayLayers = new();
+
     public MapsuiMapHost(MapControl mapControl)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
@@ -114,6 +123,28 @@ internal sealed class MapsuiMapHost : IMapHost
         }
     }
 
+    public void AddOverlayLayer(ILayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        var map = _mapControl.Map;
+        if (map is null) return;
+        if (!_overlayLayers.Add(layer)) return;
+
+        // Insert above the dataset slice but below any subsequently-
+        // added tool overlays. We compute the slot as "after the last
+        // tracked dataset layer", which keeps the overlay stable even
+        // if the dataset slice is reordered later.
+        var insertAt = ComputeOverlayInsertIndex(map.Layers);
+        map.Layers.Insert(insertAt, layer, 0);
+    }
+
+    public void RemoveOverlayLayer(ILayer layer)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+        if (!_overlayLayers.Remove(layer)) return;
+        _mapControl.Map?.Layers.Remove(layer);
+    }
+
     /// <inheritdoc />
     public async Task<byte[]?> RenderCurrentViewToPngAsync(
         int widthPx,
@@ -185,6 +216,28 @@ internal sealed class MapsuiMapHost : IMapHost
         foreach (var l in layers)
         {
             if (_datasetLayers.Contains(l)) last = i;
+            i++;
+        }
+        if (last >= 0) return last + 1;
+        return Math.Min(1, layers.Count);
+    }
+
+    /// <summary>
+    /// Returns the index at which a new overlay-tier layer should be
+    /// inserted: just after the last existing dataset or overlay
+    /// layer the host tracks, or — when no such layer is present —
+    /// immediately above the basemap (index 1). Layers added straight
+    /// to <c>Map.Layers</c> by callers other than the host
+    /// (e.g. tool chrome) sort above this band naturally because
+    /// they were added later.
+    /// </summary>
+    private int ComputeOverlayInsertIndex(LayerCollection layers)
+    {
+        int last = -1;
+        int i = 0;
+        foreach (var l in layers)
+        {
+            if (_datasetLayers.Contains(l) || _overlayLayers.Contains(l)) last = i;
             i++;
         }
         if (last >= 0) return last + 1;

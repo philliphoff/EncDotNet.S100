@@ -45,6 +45,23 @@ internal interface IMapHost
     void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers);
 
     /// <summary>
+    /// Adds an overlay-tier layer to the map. Overlay layers sit
+    /// above all dataset layers and below tool overlays (e.g. the
+    /// measure-mode chrome). Intended for push-driven sources
+    /// (dynamic feature sources, validation findings overlays) that
+    /// want a stable z-order above the dataset stack without being
+    /// part of dataset reordering.
+    /// </summary>
+    void AddOverlayLayer(ILayer layer);
+
+    /// <summary>
+    /// Removes an overlay layer previously added via
+    /// <see cref="AddOverlayLayer"/>. No-op when the layer was not
+    /// tracked as an overlay.
+    /// </summary>
+    void RemoveOverlayLayer(ILayer layer);
+
+    /// <summary>
     /// Pans/zooms the navigator to the supplied extent (no-op when the
     /// map's navigator is unavailable).
     /// </summary>
