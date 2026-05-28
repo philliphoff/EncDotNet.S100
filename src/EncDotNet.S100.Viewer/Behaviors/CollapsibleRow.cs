@@ -41,10 +41,6 @@ internal static class CollapsibleRow
             defaultValue: null,
             defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
 
-    private static readonly AttachedProperty<bool> IsTrackingHeightProperty =
-        AvaloniaProperty.RegisterAttached<RowDefinition, bool>(
-            "IsTrackingHeight", typeof(CollapsibleRow));
-
     private static readonly AttachedProperty<double> RememberedHeightProperty =
         AvaloniaProperty.RegisterAttached<RowDefinition, double>(
             "RememberedHeight", typeof(CollapsibleRow), defaultValue: double.NaN);
@@ -65,25 +61,21 @@ internal static class CollapsibleRow
     {
         IsVisibleProperty.Changed.AddClassHandler<RowDefinition>(OnIsVisibleChanged);
         SavedHeightProperty.Changed.AddClassHandler<RowDefinition>(OnSavedHeightChanged);
+        RowDefinition.HeightProperty.Changed.AddClassHandler<RowDefinition>(OnHeightChanged);
+    }
+
+    private static void OnHeightChanged(RowDefinition row, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (!row.IsSet(SavedHeightProperty)) return;
+        var height = row.Height;
+        if (!height.IsAbsolute || height.Value <= 0) return;
+        var current = row.GetValue(SavedHeightProperty);
+        if (current is null || Math.Abs(current.Value - height.Value) > 0.5)
+            row.SetValue(SavedHeightProperty, height.Value);
     }
 
     private static void OnSavedHeightChanged(RowDefinition row, AvaloniaPropertyChangedEventArgs e)
     {
-        if (!row.GetValue(IsTrackingHeightProperty))
-        {
-            row.SetValue(IsTrackingHeightProperty, true);
-            row.PropertyChanged += (sender, args) =>
-            {
-                if (args.Property != RowDefinition.HeightProperty) return;
-                if (sender is not RowDefinition r) return;
-                var height = r.Height;
-                if (!height.IsAbsolute || height.Value <= 0) return;
-                var current = r.GetValue(SavedHeightProperty);
-                if (current is null || Math.Abs(current.Value - height.Value) > 0.5)
-                    r.SetValue(SavedHeightProperty, height.Value);
-            };
-        }
-
         if (e.NewValue is double v && v > 0 && row.GetValue(IsVisibleProperty))
         {
             if (!row.Height.IsAbsolute || Math.Abs(row.Height.Value - v) > 0.5)

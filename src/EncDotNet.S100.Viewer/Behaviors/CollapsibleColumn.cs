@@ -70,11 +70,6 @@ internal static class CollapsibleColumn
             defaultValue: null,
             defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
 
-    private static readonly AttachedProperty<bool> IsTrackingWidthProperty =
-        AvaloniaProperty.RegisterAttached<ColumnDefinition, bool>(
-            "IsTrackingWidth",
-            typeof(CollapsibleColumn));
-
     private static readonly AttachedProperty<double> RememberedWidthProperty =
         AvaloniaProperty.RegisterAttached<ColumnDefinition, double>(
             "RememberedWidth",
@@ -115,29 +110,27 @@ internal static class CollapsibleColumn
     {
         IsVisibleProperty.Changed.AddClassHandler<ColumnDefinition>(OnIsVisibleChanged);
         SavedWidthProperty.Changed.AddClassHandler<ColumnDefinition>(OnSavedWidthChanged);
+        // Push user-driven Width changes back to SavedWidth for every
+        // ColumnDefinition that opted in via SavedWidth binding. The
+        // class handler fires for all columns; we gate inside on IsSet.
+        ColumnDefinition.WidthProperty.Changed.AddClassHandler<ColumnDefinition>(OnWidthChanged);
+    }
+
+    private static void OnWidthChanged(ColumnDefinition column, AvaloniaPropertyChangedEventArgs e)
+    {
+        // Only push back for columns that opted in via SavedWidth binding.
+        // IsSet returns true once the binding has touched the property,
+        // even if the initial bound value is null (matches default).
+        if (!column.IsSet(SavedWidthProperty)) return;
+        var width = column.Width;
+        if (!width.IsAbsolute || width.Value <= 0) return;
+        var current = column.GetValue(SavedWidthProperty);
+        if (current is null || Math.Abs(current.Value - width.Value) > 0.5)
+            column.SetValue(SavedWidthProperty, width.Value);
     }
 
     private static void OnSavedWidthChanged(ColumnDefinition column, AvaloniaPropertyChangedEventArgs e)
     {
-        // First time SavedWidth is touched on this column, hook a one-time
-        // observer that pushes Width changes back into the bound property.
-        // Restricting the subscription to columns that opt-in (via
-        // SavedWidth binding) keeps the global property handler cheap.
-        if (!column.GetValue(IsTrackingWidthProperty))
-        {
-            column.SetValue(IsTrackingWidthProperty, true);
-            column.PropertyChanged += (sender, args) =>
-            {
-                if (args.Property != ColumnDefinition.WidthProperty) return;
-                if (sender is not ColumnDefinition c) return;
-                var width = c.Width;
-                if (!width.IsAbsolute || width.Value <= 0) return;
-                var current = c.GetValue(SavedWidthProperty);
-                if (current is null || Math.Abs(current.Value - width.Value) > 0.5)
-                    c.SetValue(SavedWidthProperty, width.Value);
-            };
-        }
-
         // Apply newly-bound saved width when the column is currently visible.
         if (e.NewValue is double v && v > 0 && column.GetValue(IsVisibleProperty))
         {
