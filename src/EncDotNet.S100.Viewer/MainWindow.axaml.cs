@@ -203,6 +203,14 @@ public partial class MainWindow : ShadUI.Window
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
 
+        // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
+        // background so the unrendered area outside the tile layer's
+        // extent visually blends with the chart's water.
+        if (MapControl.Map is { } mapForBackColor)
+        {
+            mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
+
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
         // render thread where we cannot intercept it.
