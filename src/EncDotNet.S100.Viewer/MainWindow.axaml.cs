@@ -132,19 +132,6 @@ public partial class MainWindow : ShadUI.Window
         // the lifetime of the window.
         _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
 
-        // PR-D2: dynamic-source overlay host. Subscribes to every
-        // registered IDynamicFeatureSource (own-ship in v1) and
-        // mounts a backing MemoryLayer on the overlay tier so the
-        // glyph paints above dataset layers.
-        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
-            mapHost,
-            App.Services,
-            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
-        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
-        {
-            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
-        }
-
         Closed += (_, _) =>
         {
             _validationOverlay?.Dispose();
@@ -219,6 +206,19 @@ public partial class MainWindow : ShadUI.Window
         };
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // PR-D2: dynamic-source overlay host. Registered *after* the
+        // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
+        // the overlay above the OSM tile layer rather than at index 0
+        // (where the subsequently-added basemap would cover it).
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
+            mapHost,
+            App.Services,
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
+        {
+            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
+        }
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
