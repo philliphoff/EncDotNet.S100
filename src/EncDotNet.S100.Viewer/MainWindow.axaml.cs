@@ -39,6 +39,8 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private ValidationOverlayService? _validationOverlay;
+    private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
+    private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
 
     public MainWindow() : this(null) { }
@@ -129,10 +131,15 @@ public partial class MainWindow : ShadUI.Window
         // service subscribes to the datasets view-model and lives for
         // the lifetime of the window.
         _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+
         Closed += (_, _) =>
         {
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
+            _dynamicSourceRegistrations.Clear();
+            _dynamicSourceOverlayHost?.Dispose();
+            _dynamicSourceOverlayHost = null;
         };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
@@ -199,6 +206,19 @@ public partial class MainWindow : ShadUI.Window
         };
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // PR-D2: dynamic-source overlay host. Registered *after* the
+        // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
+        // the overlay above the OSM tile layer rather than at index 0
+        // (where the subsequently-added basemap would cover it).
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
+            mapHost,
+            App.Services,
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
+        {
+            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
+        }
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the

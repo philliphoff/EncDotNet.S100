@@ -210,3 +210,39 @@ currently rendered at.
 - Animation (play/pause/speed) is intentionally out of scope;
   `GlobalTimeService.SetCurrentTime` is the obvious seam for a
   future timer-driven driver.
+
+## Own-ship overlay (PR-D2)
+
+A single moving point published through the dynamic-source
+abstraction (PR-D1). The toolbar **Location** toggle controls
+visibility; the setting is persisted via `ViewerSettings.OwnShipVisible`.
+
+Architecture:
+
+- `IOwnShipPositionProvider` is a thin push interface (`Current` +
+  `Updated`). The PR-D2 reference driver
+  `SyntheticOwnShipPositionProvider` dead-reckons along a fixed
+  course/speed on a 1 Hz timer (Solent — 50.8° N, 1.3° W, course
+  090° T, 5 m/s ≈ 9.7 kn). A future real-GPS / NMEA-replay driver
+  implements the same interface.
+- `OwnShipSource` is the `IDynamicFeatureSource` that converts
+  provider fixes into `DynamicFeature` snapshots (Id `"ownship"`,
+  Kind `"ownship"`, Point geometry) with an optional `DynamicMotion`
+  sidecar. SOG is converted from m/s (provider) to knots
+  (`DynamicMotion.SpeedOverGroundKn`); COG is mirrored to
+  `HeadingDeg` so the default renderer's predictor line draws.
+- Rendering uses the default `DefaultDynamicFeatureRenderer` (blue
+  disc + six-minute predictor). A custom `OwnShipRenderer` is
+  deferred until a second dynamic source coexists.
+
+**Caveats**
+
+- The synthetic driver is scaffolding — start position, course, and
+  speed are hard-coded constants, not user-configurable settings.
+- Layer Stack integration is deferred. The PR-D1 surface does not
+  yet expose a `DynamicSourceRegistration` adapter for the layer
+  panel; until it does, the toolbar toggle is the visibility
+  affordance.
+- "Centre on own-ship", picking the glyph, and time-axis integration
+  are all out of scope for PR-D2.
+

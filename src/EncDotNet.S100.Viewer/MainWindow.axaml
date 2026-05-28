@@ -440,6 +440,39 @@
                         <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <!--
+                      Own-ship overlay toggle (PR-D2). Mirrors the
+                      MeasureModeButton pattern: regular Button +
+                      a state class so the styling and sizing match
+                      the rest of the toolbar.
+                    -->
+                    <Button x:Name="OwnShipButton"
+                            Classes="Icon MapOverlay"
+                            Classes.ownShipActive="{Binding IsOwnShipVisible}"
+                            Command="{Binding ToggleOwnShipCommand}"
+                            IsVisible="{Binding IsOwnShipSourceAvailable}"
+                            ToolTip.Tip="{x:Static loc:Strings.OwnShip_Toggle_Tooltip}">
+                        <Button.Styles>
+                            <Style Selector="Button#OwnShipButton.ownShipActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#OwnShipButton.ownShipActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#OwnShipButton.ownShipActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#OwnShipButton.ownShipActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Location" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
                       Display category pill — compact label that opens
                       a flyout to switch between ECDIS display categories.
                     -->
