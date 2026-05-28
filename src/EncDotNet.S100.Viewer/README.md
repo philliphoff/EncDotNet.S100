@@ -234,15 +234,22 @@ Architecture:
 - Rendering uses the default `DefaultDynamicFeatureRenderer` (blue
   disc + six-minute predictor). A custom `OwnShipRenderer` is
   deferred until a second dynamic source coexists.
+- Layer Stack integration (PR-D2.1) surfaces every registered
+  `IDynamicFeatureSource` as a row in the `DynamicArrows` plane of
+  the Layer Stack panel. Each row exposes the source's display name
+  and a visibility checkbox; toggling the checkbox flips the
+  underlying overlay layer's `Enabled` flag through
+  `IDynamicFeatureSourceRegistry.SetVisible` and persists into
+  `ViewerSettings.DynamicSourceVisibility` (keyed by source Id).
+  Dynamic rows sort below dataset rows in the plane and are kept in
+  registration order. The legacy `ViewerSettings.OwnShipVisible`
+  bool is migrated into the dictionary on first load and mirrored
+  back on save for downgrade compatibility.
 
 **Caveats**
 
 - The synthetic driver is scaffolding — start position, course, and
   speed are hard-coded constants, not user-configurable settings.
-- Layer Stack integration is deferred. The PR-D1 surface does not
-  yet expose a `DynamicSourceRegistration` adapter for the layer
-  panel; until it does, the toolbar toggle is the visibility
-  affordance.
 - "Centre on own-ship", picking the glyph, and time-axis integration
-  are all out of scope for PR-D2.
+  are all out of scope for PR-D2 / PR-D2.1.
 

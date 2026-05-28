@@ -36,16 +36,27 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 /// <c>docs/design/dynamic-feature-source.md</c> §5 Q8.
 /// </para>
 /// </remarks>
-internal sealed class DynamicSourceOverlayHost : IDisposable
+internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSourceRegistry
 {
     private readonly IMapHost _mapHost;
     private readonly IServiceProvider _services;
     private readonly Action<Action> _marshal;
     private readonly ILogger<DynamicSourceOverlayHost> _logger;
     private readonly Dictionary<string, Registration> _byId = new(StringComparer.Ordinal);
+    // Registration order — preserved separately from _byId so the
+    // Layer Stack panel can render sources in the order they were
+    // registered (PR-D2.1 Q7). Mutated under _lock.
+    private readonly List<Registration> _ordered = new();
+    // Visibility map keyed by source id. Pre-seeded entries (set
+    // before Register) survive a later Register call so persisted
+    // visibility from ViewerSettings can be applied without a race.
+    private readonly Dictionary<string, bool> _visibility = new(StringComparer.Ordinal);
     private readonly object _lock = new();
 
     private static readonly DefaultDynamicFeatureRenderer s_defaultRenderer = new();
+
+    /// <inheritdoc />
+    public event Action? SourcesChanged;
 
     /// <summary>
     /// Creates a new overlay host.
@@ -102,6 +113,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable
         };
 
         var registration = new Registration(source, renderer, layer, this);
+        bool initialVisible;
 
         lock (_lock)
         {
@@ -111,12 +123,21 @@ internal sealed class DynamicSourceOverlayHost : IDisposable
                     $"A dynamic feature source with id '{source.Id}' is already registered.");
             }
             _byId[source.Id] = registration;
+            _ordered.Add(registration);
+
+            // Apply any pre-seeded visibility (e.g. from settings
+            // restored before MainWindow constructed the host).
+            initialVisible = !_visibility.TryGetValue(source.Id, out var v) || v;
+            _visibility[source.Id] = initialVisible;
         }
+
+        layer.Enabled = initialVisible;
 
         _marshal(() =>
         {
             _mapHost.AddOverlayLayer(layer);
             Rebuild(registration);
+            SourcesChanged?.Invoke();
         });
 
         source.Changed += registration.OnChanged;
@@ -171,10 +192,77 @@ internal sealed class DynamicSourceOverlayHost : IDisposable
         Registration[] regs;
         lock (_lock)
         {
-            regs = _byId.Values.ToArray();
+            regs = _ordered.ToArray();
             _byId.Clear();
+            _ordered.Clear();
         }
         foreach (var r in regs) r.DisposeInternal();
+        SourcesChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<DynamicSourceRegistrationInfo> Sources
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var list = new List<DynamicSourceRegistrationInfo>(_ordered.Count);
+                foreach (var r in _ordered)
+                {
+                    list.Add(new DynamicSourceRegistrationInfo(
+                        Id: r.Source.Id,
+                        DisplayName: r.Source.Metadata.DisplayName,
+                        Description: r.Source.Metadata.Description));
+                }
+                return list;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public bool GetVisible(string sourceId)
+    {
+        ArgumentNullException.ThrowIfNull(sourceId);
+        lock (_lock)
+        {
+            return !_visibility.TryGetValue(sourceId, out var v) || v;
+        }
+    }
+
+    /// <inheritdoc />
+    public void SetVisible(string sourceId, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(sourceId);
+
+        Registration? registration;
+        bool changed;
+        lock (_lock)
+        {
+            var hadEntry = _visibility.TryGetValue(sourceId, out var current);
+            changed = !hadEntry || current != visible;
+            if (changed) _visibility[sourceId] = visible;
+            _byId.TryGetValue(sourceId, out registration);
+        }
+
+        if (!changed) return;
+
+        if (registration is not null)
+        {
+            _marshal(() =>
+            {
+                registration.Layer.Enabled = visible;
+                registration.Layer.DataHasChanged();
+                SourcesChanged?.Invoke();
+            });
+        }
+        else
+        {
+            // Source not registered yet (seeding from settings).
+            // Still fire so subscribers re-render any stub VM rows
+            // that key off seeded values.
+            SourcesChanged?.Invoke();
+        }
     }
 
     /// <summary>Captured registration for one source.</summary>
@@ -213,8 +301,16 @@ internal sealed class DynamicSourceOverlayHost : IDisposable
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
             Source.Changed -= OnChanged;
-            lock (_host._lock) _host._byId.Remove(Source.Id);
-            _host._marshal(() => _host._mapHost.RemoveOverlayLayer(Layer));
+            lock (_host._lock)
+            {
+                _host._byId.Remove(Source.Id);
+                _host._ordered.Remove(this);
+            }
+            _host._marshal(() =>
+            {
+                _host._mapHost.RemoveOverlayLayer(Layer);
+                _host.SourcesChanged?.Invoke();
+            });
         }
 
         internal void DisposeInternal()

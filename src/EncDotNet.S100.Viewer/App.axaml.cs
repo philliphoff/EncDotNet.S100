@@ -250,6 +250,17 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
 
+        // PR-D2.1: dynamic-source registry accessor. The real registry
+        // is the DynamicSourceOverlayHost constructed in MainWindow
+        // (it needs IMapHost, which only exists after the MapControl
+        // initialises). The accessor is the indirection: view-models
+        // depend on it through IDynamicFeatureSourceRegistry; MainWindow
+        // assigns Current once the host is built. Mirrors
+        // IMapHostAccessor / MapHostAccessor below.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>());
+
         // MCP server (loopback-only, off by default). The catalog adapter
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.

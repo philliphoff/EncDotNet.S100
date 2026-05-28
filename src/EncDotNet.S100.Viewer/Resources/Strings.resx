@@ -59,6 +59,10 @@
   <data name="LayerStack_ActiveTooltip" xml:space="preserve">
     <value>Active — when off, this dataset is removed from the cross-product paint stack and no longer influences S-98 interoperability rules or pick. Distinct from the per-dataset Visibility toggle on the Datasets panel.</value>
   </data>
+  <data name="LayerStack_DynamicEntry_VisibilityTooltip" xml:space="preserve">
+    <value>Visibility — when off, this dynamic source's overlay is hidden from the map. The source keeps tracking in the background.</value>
+    <comment>Tooltip for the visibility checkbox on a dynamic-feature-source row in the Layer Stack (PR-D2.1).</comment>
+  </data>
   <data name="LayerStack_VisibilityVsActive_HelpText" xml:space="preserve">
     <value>Active controls participation in S-98 rules and pick; Visibility (on the Datasets panel) only hides the rendered layers.</value>
   </data>
@@ -1042,9 +1046,5 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="OwnShip_Description" xml:space="preserve">
     <value>The vessel's own position (synthetic for v1).</value>
     <comment>Longer description of the own-ship source for tooltips and settings panels.</comment>
-  </data>
-  <data name="OwnShip_Toggle_Tooltip" xml:space="preserve">
-    <value>Toggle the own-ship overlay</value>
-    <comment>Tooltip for the toolbar button that hides/shows the own-ship glyph.</comment>
   </data>
 </root>

@@ -289,41 +289,6 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleStatusBarCommand { get; }
 
-    // PR-D2 own-ship overlay toggle.
-    private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource? _ownShipSource;
-    private bool _isOwnShipVisible;
-
-    /// <summary>
-    /// Whether the own-ship overlay glyph is currently published by the
-    /// dynamic source (and therefore drawn on the overlay tier). Bound
-    /// to the toolbar toggle button and persisted via
-    /// <see cref="ViewerSettings.OwnShipVisible"/>.
-    /// </summary>
-    public bool IsOwnShipVisible
-    {
-        get => _isOwnShipVisible;
-        set
-        {
-            if (SetProperty(ref _isOwnShipVisible, value))
-            {
-                if (_ownShipSource is not null) _ownShipSource.IsEnabled = value;
-                _settings.OwnShipVisible = value;
-                _settings.Save();
-            }
-        }
-    }
-
-    /// <summary>Toggle the own-ship overlay visibility.</summary>
-    public ICommand ToggleOwnShipCommand { get; }
-
-    /// <summary>
-    /// True when own-ship is wired (the synthetic source resolved
-    /// from DI). The toolbar button binds its <c>IsVisible</c> to
-    /// this so callers that construct the view-model without a
-    /// source (legacy tests) get a clean tree.
-    /// </summary>
-    public bool IsOwnShipSourceAvailable => _ownShipSource is not null;
-
     /// <summary>
     /// Toggles the bottom dock open/closed. Kept for the existing
     /// View menu binding; in PR-M4 the dock contains the Timeline tab.
@@ -699,8 +664,7 @@ internal sealed class MainViewModel : ViewModelBase
         IToastService toasts,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        IStatusPresenter? statusPresenter = null,
-        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource? ownShipSource = null)
+        IStatusPresenter? statusPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -824,13 +788,6 @@ internal sealed class MainViewModel : ViewModelBase
         });
 
         _isStatusBarVisible = settings.IsStatusBarVisible;
-
-        // PR-D2 own-ship overlay. Resolve from DI; if absent (legacy
-        // test callers, design-time), the toggle hides itself.
-        _ownShipSource = ownShipSource;
-        _isOwnShipVisible = settings.OwnShipVisible;
-        if (_ownShipSource is not null) _ownShipSource.IsEnabled = _isOwnShipVisible;
-        ToggleOwnShipCommand = new RelayCommand(() => IsOwnShipVisible = !IsOwnShipVisible);
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
