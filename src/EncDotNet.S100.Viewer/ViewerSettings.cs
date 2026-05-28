@@ -40,8 +40,36 @@ internal sealed class ViewerSettings
     /// <summary>Selected color profile name: "Day", "Dusk", or "Night".</summary>
     public string ColorProfile { get; set; } = "Day";
 
-    /// <summary>Last selected activity pane, or null if none was open.</summary>
+    /// <summary>
+    /// Id of the last-selected left-dock activity tab, or <c>null</c> if
+    /// none was open. Name kept for back-compat with pre-PR-M3 settings
+    /// files; the corresponding right- and bottom-dock fields are
+    /// <see cref="LastSelectedRightTab"/> and <see cref="LastSelectedBottomTab"/>.
+    /// </summary>
     public string? LastSelectedActivity { get; set; }
+
+    /// <summary>Id of the last-selected right-dock activity tab (PR-M3).</summary>
+    public string? LastSelectedRightTab { get; set; }
+
+    /// <summary>Id of the last-selected bottom-dock activity tab (PR-M3).</summary>
+    public string? LastSelectedBottomTab { get; set; }
+
+    /// <summary>Whether the left dock (activity pane) was open at last shutdown. Default <c>true</c>.</summary>
+    public bool IsLeftDockOpen { get; set; } = true;
+
+    /// <summary>Whether the right dock was open at last shutdown. Default <c>false</c>.</summary>
+    public bool IsRightDockOpen { get; set; } = false;
+
+    /// <summary>Whether the bottom dock was open at last shutdown. Default <c>false</c>.</summary>
+    public bool IsBottomDockOpen { get; set; } = false;
+
+    /// <summary>
+    /// Persisted panel sizes — outer dock widths/height plus inner
+    /// splitter fractions for the Datasets and Catalog tabs.
+    /// Writes are debounced (500 ms) via <see cref="Services.DebouncedSettingsSaver"/>
+    /// so dragging splitters doesn't hammer the disk.
+    /// </summary>
+    public PanelSizes Panels { get; set; } = new();
 
     /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
     public double SymbolScale { get; set; } = 1.0;
@@ -269,4 +297,35 @@ internal sealed class ViewerSettings
     /// migration / mirror logic.
     /// </summary>
     internal const string OwnShipVisibilityKey = "ownship";
+}
+
+/// <summary>
+/// Persisted panel-size container (PR-M3). All fields are nullable;
+/// <c>null</c> means "use the XAML-defined default". Sizes are written
+/// through <see cref="Services.DebouncedSettingsSaver"/> so rapid
+/// splitter drags coalesce into a single disk write 500 ms after the
+/// last move.
+/// </summary>
+public sealed class PanelSizes
+{
+    /// <summary>Absolute pixel width of the left activity dock.</summary>
+    public double? LeftDockWidth { get; set; }
+
+    /// <summary>Absolute pixel width of the right dock.</summary>
+    public double? RightDockWidth { get; set; }
+
+    /// <summary>Absolute pixel height of the bottom dock.</summary>
+    public double? BottomDockHeight { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Datasets-tab inner splitter — the
+    /// share of vertical space occupied by the master list (top row).
+    /// </summary>
+    public double? DatasetsInnerSplit { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Catalog-tab inner splitter — the
+    /// share of vertical space occupied by the entry list (top row).
+    /// </summary>
+    public double? CatalogInnerSplit { get; set; }
 }

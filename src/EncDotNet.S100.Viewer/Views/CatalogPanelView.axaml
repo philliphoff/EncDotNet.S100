@@ -4,6 +4,7 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogPanelView"
              x:DataType="vm:CatalogPanelViewModel">
 
@@ -155,7 +156,8 @@
                       VerticalAlignment="Center"
                       ResizeDirection="Rows"
                       ResizeBehavior="PreviousAndNext"
-                      bh:HoverDelay.DelayMilliseconds="500" />
+                      bh:HoverDelay.DelayMilliseconds="500"
+                      bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).CatalogInnerSplit, Mode=TwoWay}" />
 
         <!-- Details panel. The header (title + status badge, or placeholder
              when no row is selected) is "sticky" and lives outside the

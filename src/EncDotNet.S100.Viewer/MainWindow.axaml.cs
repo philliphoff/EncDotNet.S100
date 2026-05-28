@@ -136,6 +136,9 @@ public partial class MainWindow : ShadUI.Window
         {
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            // PR-M3: flush any pending debounced size writes so the last
+            // splitter drag isn't lost on shutdown.
+            _viewModel.OnShutdown();
             foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
             _dynamicSourceRegistrations.Clear();
             App.Services.GetRequiredService<
@@ -209,6 +212,14 @@ public partial class MainWindow : ShadUI.Window
         };
 
         MapControl.Map?.Layers.Add(OpenStreetMap.CreateTileLayer());
+
+        // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
+        // background so the unrendered area outside the tile layer's
+        // extent visually blends with the chart's water.
+        if (MapControl.Map is { } mapForBackColor)
+        {
+            mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
 
         // PR-D2: dynamic-source overlay host. Registered *after* the
         // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
