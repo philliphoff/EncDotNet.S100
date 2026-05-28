@@ -440,6 +440,17 @@
                         <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <!--
+                      Own-ship overlay toggle (PR-D2). Hides the
+                      synthetic own-ship glyph when off.
+                    -->
+                    <ToggleButton x:Name="OwnShipButton"
+                                  Classes="Icon MapOverlay"
+                                  IsChecked="{Binding IsOwnShipVisible, Mode=TwoWay}"
+                                  IsVisible="{Binding IsOwnShipSourceAvailable}"
+                                  ToolTip.Tip="{x:Static loc:Strings.OwnShip_Toggle_Tooltip}">
+                        <ic:FluentIcon Icon="Location" IconVariant="Regular" FontSize="16" />
+                    </ToggleButton>
+                    <!--
                       Display category pill — compact label that opens
                       a flyout to switch between ECDIS display categories.
                     -->

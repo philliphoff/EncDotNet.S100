@@ -231,6 +231,25 @@ public partial class App : Application
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
+        // Own-ship dynamic source (PR-D2). Synthetic driver scaffolds
+        // a moving point at Solent (50.8°N 1.3°W) tracking due east
+        // at 5 m/s (~9.7 kn); a future real-GPS / NMEA-replay driver
+        // implements IOwnShipPositionProvider instead. The source is
+        // also exposed as IDynamicFeatureSource so the overlay host
+        // discovers it via GetServices&lt;IDynamicFeatureSource&gt;().
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(_ =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SyntheticOwnShipPositionProvider(
+                start: new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipPosition(
+                    Latitude: 50.8,
+                    Longitude: -1.3,
+                    CourseOverGroundDeg: 90.0,
+                    SpeedOverGroundMs: 5.0,
+                    Timestamp: DateTimeOffset.UtcNow),
+                cadence: TimeSpan.FromSeconds(1)));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+        services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
+
         // MCP server (loopback-only, off by default). The catalog adapter
         // observes the existing dataset loader and re-opens dataset files
         // for read-only MCP queries; the host owns server lifecycle.

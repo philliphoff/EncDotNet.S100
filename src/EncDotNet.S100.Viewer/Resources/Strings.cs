@@ -390,4 +390,9 @@ internal static class Strings
     public static string LoadFailureToast_NotSupportedBody => Get(nameof(LoadFailureToast_NotSupportedBody));
     public static string LoadFailureToast_SchemaBody => Get(nameof(LoadFailureToast_SchemaBody));
     public static string LoadFailureToast_CopyDetails => Get(nameof(LoadFailureToast_CopyDetails));
+
+    // Own-ship overlay (PR-D2)
+    public static string OwnShip_DisplayName => Get(nameof(OwnShip_DisplayName));
+    public static string OwnShip_Description => Get(nameof(OwnShip_Description));
+    public static string OwnShip_Toggle_Tooltip => Get(nameof(OwnShip_Toggle_Tooltip));
 }

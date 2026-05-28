@@ -115,6 +115,13 @@ internal sealed class ViewerSettings
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether the own-ship overlay (PR-D2) is visible. The synthetic
+    /// driver is always running; this flag controls whether the
+    /// source publishes the glyph to the dynamic-source overlay tier.
+    /// </summary>
+    public bool OwnShipVisible { get; set; } = true;
+
+    /// <summary>
     /// User preference for whether the bottom timeline panel is shown.
     /// When true the panel surfaces (in either an empty state or with
     /// a global slider, depending on whether any time-varying dataset

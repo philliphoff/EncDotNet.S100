@@ -39,6 +39,8 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private ValidationOverlayService? _validationOverlay;
+    private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
+    private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
 
     public MainWindow() : this(null) { }
@@ -129,10 +131,28 @@ public partial class MainWindow : ShadUI.Window
         // service subscribes to the datasets view-model and lives for
         // the lifetime of the window.
         _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+
+        // PR-D2: dynamic-source overlay host. Subscribes to every
+        // registered IDynamicFeatureSource (own-ship in v1) and
+        // mounts a backing MemoryLayer on the overlay tier so the
+        // glyph paints above dataset layers.
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
+            mapHost,
+            App.Services,
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
+        {
+            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
+        }
+
         Closed += (_, _) =>
         {
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
+            _dynamicSourceRegistrations.Clear();
+            _dynamicSourceOverlayHost?.Dispose();
+            _dynamicSourceOverlayHost = null;
         };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
