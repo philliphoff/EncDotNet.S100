@@ -51,7 +51,9 @@ public class LayerStackViewModelTests
         var vm = new LayerStackViewModel(loader);
 
         var plane = Assert.Single(vm.Planes);
-        var ids = plane.Children.Select(c => c.DatasetId).ToList();
+        var ids = plane.Children
+            .OfType<LayerStackEntryViewModel>()
+            .Select(c => c.DatasetId).ToList();
         Assert.Equal(new[] { "high.gml", "mid.gml", "low.gml" }, ids);
     }
 
@@ -113,7 +115,7 @@ public class LayerStackViewModelTests
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
         var vm = new LayerStackViewModel(loader);
 
-        var entry = vm.Planes[0].Children[0];
+        var entry = (LayerStackEntryViewModel)vm.Planes[0].Children[0];
         Assert.True(entry.IsActive); // default
 
         entry.IsActive = false;

@@ -34,10 +34,10 @@ public class RenderToImageToolTests
 
         public void AddLayer(ILayer layer) { }
         public void RemoveLayer(ILayer layer) { }
-        public void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers) { }
-        public void ZoomToExtent(MRect extent) { }
         public void AddOverlayLayer(ILayer layer) { }
         public void RemoveOverlayLayer(ILayer layer) { }
+        public void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers) { }
+        public void ZoomToExtent(MRect extent) { }
 
         public Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, CancellationToken ct = default)
         {

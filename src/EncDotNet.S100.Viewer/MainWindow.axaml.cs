@@ -39,6 +39,8 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private ValidationOverlayService? _validationOverlay;
+    private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
+    private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
 
     public MainWindow() : this(null) { }
@@ -129,6 +131,7 @@ public partial class MainWindow : ShadUI.Window
         // service subscribes to the datasets view-model and lives for
         // the lifetime of the window.
         _validationOverlay = new ValidationOverlayService(mapHost, _viewModel.Datasets);
+
         Closed += (_, _) =>
         {
             _validationOverlay?.Dispose();
@@ -136,6 +139,13 @@ public partial class MainWindow : ShadUI.Window
             // PR-M3: flush any pending debounced size writes so the last
             // splitter drag isn't lost on shutdown.
             _viewModel.OnShutdown();
+            foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
+            _dynamicSourceRegistrations.Clear();
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+                .Current = null;
+            _dynamicSourceOverlayHost?.Dispose();
+            _dynamicSourceOverlayHost = null;
         };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>
@@ -209,6 +219,45 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map is { } mapForBackColor)
         {
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
+
+        // PR-D2: dynamic-source overlay host. Registered *after* the
+        // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
+        // the overlay above the OSM tile layer rather than at index 0
+        // (where the subsequently-added basemap would cover it).
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost(
+            mapHost,
+            App.Services,
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+
+        // PR-D2.1: seed per-source visibility from persisted settings
+        // *before* the Register loop so each source's MemoryLayer.Enabled
+        // starts in the user's last-known state, then wire write-back so
+        // the Layer Stack panel's visibility toggle persists.
+        var viewerSettings = App.Services.GetRequiredService<ViewerSettings>();
+        foreach (var kv in viewerSettings.DynamicSourceVisibility)
+        {
+            _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
+        }
+        _dynamicSourceOverlayHost.SourcesChanged += () =>
+        {
+            foreach (var info in _dynamicSourceOverlayHost.Sources)
+            {
+                viewerSettings.DynamicSourceVisibility[info.Id] = _dynamicSourceOverlayHost.GetVisible(info.Id);
+            }
+            try { viewerSettings.Save(); } catch { /* best-effort */ }
+        };
+
+        // Attach the registry to the accessor so view-models resolved
+        // before window construction (e.g. LayerStackViewModel as a
+        // singleton) start seeing dynamic sources.
+        App.Services.GetRequiredService<
+            EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+            .Current = _dynamicSourceOverlayHost;
+
+        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
+        {
+            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
         }
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on

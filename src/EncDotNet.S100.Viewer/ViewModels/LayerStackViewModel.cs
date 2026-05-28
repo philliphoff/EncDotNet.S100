@@ -7,6 +7,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -34,6 +35,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal sealed class LayerStackViewModel : ViewModelBase
 {
     private readonly IDatasetLoaderService _loader;
+    private readonly IDynamicFeatureSourceRegistry? _dynamicSources;
     private readonly ITimeFormatProvider? _timeFormat;
     // PR-L4 reserve: kept on the field so the constructor still
     // captures it. _ = is enough to suppress unused-field warnings.
@@ -87,13 +89,19 @@ internal sealed class LayerStackViewModel : ViewModelBase
     /// <summary>"Active vs. Visibility" help text for the panel footer.</summary>
     public string ActiveVsVisibilityHelp => Strings.LayerStack_VisibilityVsActive_HelpText;
 
-    public LayerStackViewModel(IDatasetLoaderService loader, ITimeFormatProvider? timeFormat = null)
+    public LayerStackViewModel(
+        IDatasetLoaderService loader,
+        IDynamicFeatureSourceRegistry? dynamicSources = null,
+        ITimeFormatProvider? timeFormat = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
+        _dynamicSources = dynamicSources;
         _timeFormat = timeFormat;
         _ = _timeFormat; // reserved for PR-L4 per-entry timestamp display
         _loader.LayerStackChanged += OnLayerStackChanged;
+        if (_dynamicSources is not null)
+            _dynamicSources.SourcesChanged += OnLayerStackChanged;
         Rebuild();
     }
 
@@ -107,7 +115,8 @@ internal sealed class LayerStackViewModel : ViewModelBase
 
     /// <summary>
     /// Rebuilds the plane tree from the loader's current
-    /// <see cref="LayerStackEntry"/> snapshot. Preserves
+    /// <see cref="LayerStackEntry"/> snapshot plus any registered
+    /// dynamic feature sources (PR-D2.1). Preserves
     /// <see cref="LayerStackPlaneViewModel.IsExpanded"/> per plane
     /// across rebuilds via <see cref="_planeExpansion"/>.
     /// </summary>
@@ -135,20 +144,39 @@ internal sealed class LayerStackViewModel : ViewModelBase
             list.Add(e);
         }
 
+        // PR-D2.1: dynamic feature sources land in the DynamicArrows
+        // plane in registration order. Snapshot once here so the
+        // bucket sees a stable view even if the registry mutates
+        // mid-rebuild.
+        var dynamicSources = _dynamicSources?.Sources ?? Array.Empty<DynamicSourceRegistrationInfo>();
+
         foreach (var plane in PlanesTopFirst)
         {
             byPlane.TryGetValue(plane, out var planeEntries);
             var planeEntriesList = planeEntries ?? new List<LayerStackEntry>();
-            if (planeEntriesList.Count == 0 && !_showEmptyPlanes) continue;
+            var dynamicForPlane = plane == S98DisplayPlane.DynamicArrows
+                ? dynamicSources
+                : Array.Empty<DynamicSourceRegistrationInfo>();
 
-            // Within-plane order: render the child list top-of-plane
-            // first (highest WithinPlanePriority first) so the tree
-            // reads like the paint stack — top wins.
-            var children = planeEntriesList
+            if (planeEntriesList.Count == 0 && dynamicForPlane.Count == 0 && !_showEmptyPlanes)
+                continue;
+
+            // Dataset rows: highest WithinPlanePriority first so the
+            // tree reads like the paint stack — top wins.
+            var datasetChildren = planeEntriesList
                 .OrderByDescending(e => e.WithinPlanePriority)
                 .ThenBy(e => e.SourceDatasetId, StringComparer.Ordinal)
-                .Select(e => new LayerStackEntryViewModel(_loader, e))
-                .ToList();
+                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e));
+
+            // Dynamic rows: registration order (preserved by
+            // IDynamicFeatureSourceRegistry.Sources). Placed below
+            // dataset rows in the panel since datasets typically
+            // carry positive priorities; a future priority hint on
+            // DynamicSourceMetadata could change this.
+            var dynamicChildren = dynamicForPlane
+                .Select(info => (ViewModelBase)new LayerStackDynamicEntryViewModel(_dynamicSources!, info));
+
+            var children = datasetChildren.Concat(dynamicChildren).ToList();
 
             var isExpanded = !_planeExpansion.TryGetValue(plane, out var prev) || prev;
             var vm = new LayerStackPlaneViewModel(plane, children, isExpanded);
@@ -167,7 +195,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
 internal sealed class LayerStackPlaneViewModel : ViewModelBase
 {
     public S98DisplayPlane Plane { get; }
-    public IReadOnlyList<LayerStackEntryViewModel> Children { get; }
+    public IReadOnlyList<ViewModelBase> Children { get; }
 
     public string Title => Plane switch
     {
@@ -200,12 +228,64 @@ internal sealed class LayerStackPlaneViewModel : ViewModelBase
 
     public LayerStackPlaneViewModel(
         S98DisplayPlane plane,
-        IReadOnlyList<LayerStackEntryViewModel> children,
+        IReadOnlyList<ViewModelBase> children,
         bool isExpanded)
     {
         Plane = plane;
         Children = children;
         _isExpanded = isExpanded;
+    }
+}
+
+/// <summary>
+/// One dynamic-feature-source child row in the Layer Stack panel
+/// (PR-D2.1) — its source id, display name, optional description,
+/// and a two-way bound <see cref="IsActive"/> checkbox routed
+/// through <see cref="IDynamicFeatureSourceRegistry.SetVisible"/>.
+/// </summary>
+/// <remarks>
+/// A sibling of <see cref="LayerStackEntryViewModel"/>: both inherit
+/// <see cref="ViewModelBase"/> so the plane VM can hold a mixed
+/// collection. XAML picks the appropriate template by runtime type
+/// via <c>ItemsControl.DataTemplates</c>.
+/// </remarks>
+internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
+{
+    private readonly IDynamicFeatureSourceRegistry _registry;
+
+    public string SourceId { get; }
+    public string DisplayName { get; }
+    public string? Description { get; }
+    public bool HasDescription => !string.IsNullOrEmpty(Description);
+
+    /// <summary>
+    /// Whether the source's overlay layer is currently visible.
+    /// Routes through
+    /// <see cref="IDynamicFeatureSourceRegistry.SetVisible"/>; the
+    /// registry's resulting <c>SourcesChanged</c> event triggers a
+    /// VM rebuild so the new state surfaces immediately.
+    /// </summary>
+    public bool IsActive
+    {
+        get => _registry.GetVisible(SourceId);
+        set
+        {
+            if (_registry.GetVisible(SourceId) == value) return;
+            _registry.SetVisible(SourceId, value);
+            OnPropertyChanged();
+        }
+    }
+
+    public LayerStackDynamicEntryViewModel(
+        IDynamicFeatureSourceRegistry registry,
+        DynamicSourceRegistrationInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(info);
+        _registry = registry;
+        SourceId = info.Id;
+        DisplayName = info.DisplayName;
+        Description = info.Description;
     }
 }
 

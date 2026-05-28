@@ -63,6 +63,7 @@ internal static class Strings
     public static string LayerStack_ShowEmptyPlanes => Get(nameof(LayerStack_ShowEmptyPlanes));
     public static string LayerStack_EmptyPlane_Placeholder => Get(nameof(LayerStack_EmptyPlane_Placeholder));
     public static string LayerStack_ActiveTooltip => Get(nameof(LayerStack_ActiveTooltip));
+    public static string LayerStack_DynamicEntry_VisibilityTooltip => Get(nameof(LayerStack_DynamicEntry_VisibilityTooltip));
     public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
@@ -390,4 +391,8 @@ internal static class Strings
     public static string LoadFailureToast_NotSupportedBody => Get(nameof(LoadFailureToast_NotSupportedBody));
     public static string LoadFailureToast_SchemaBody => Get(nameof(LoadFailureToast_SchemaBody));
     public static string LoadFailureToast_CopyDetails => Get(nameof(LoadFailureToast_CopyDetails));
+
+    // Own-ship overlay (PR-D2)
+    public static string OwnShip_DisplayName => Get(nameof(OwnShip_DisplayName));
+    public static string OwnShip_Description => Get(nameof(OwnShip_Description));
 }

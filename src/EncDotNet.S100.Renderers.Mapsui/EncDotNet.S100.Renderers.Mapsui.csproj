@@ -13,6 +13,7 @@
     <PackageReference Include="Mapsui.Tiling" />
     <PackageReference Include="ProjNet" />
     <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
