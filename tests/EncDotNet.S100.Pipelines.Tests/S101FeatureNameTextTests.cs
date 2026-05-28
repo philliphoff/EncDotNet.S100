@@ -66,6 +66,38 @@ public class S101FeatureNameTextTests
             $"found 0 of {namedPoints.Count} named point features.");
     }
 
+    [SkippableFact]
+    public void NamedFeatures_EmitTextInstruction_AtMostOncePerFeature()
+    {
+        // Regression guard: main.lua falls back to PortrayFeatureName when
+        // featurePortrayal.GetFeatureNameCalled was not set. If the adapter
+        // patch forgets to set that flag, every named feature emits its
+        // label twice with different offsets (visible as duplicated, slightly
+        // offset text in the viewer).
+        var (emitted, namedSurfaces, namedPoints) = RunPipelineAndClassify();
+        Skip.If(namedSurfaces.Count == 0 && namedPoints.Count == 0,
+            "Fixture has no named features.");
+
+        var named = namedSurfaces.Concat(namedPoints)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        var perFeatureTextCounts = new Dictionary<uint, int>();
+        foreach (var e in emitted)
+        {
+            if (!uint.TryParse(e.FeatureRef, out var id)) continue;
+            if (!named.TryGetValue(id, out var name)) continue;
+            if (!e.InstructionString.Contains("TextInstruction:" + name, StringComparison.Ordinal)) continue;
+            perFeatureTextCounts[id] = perFeatureTextCounts.GetValueOrDefault(id) + 1;
+        }
+
+        var duplicates = perFeatureTextCounts.Where(kv => kv.Value > 1).ToList();
+        Assert.True(
+            duplicates.Count == 0,
+            $"Expected each named feature to emit its label at most once; " +
+            $"found {duplicates.Count} feature(s) with duplicate labels. " +
+            $"First offender: feature {duplicates.FirstOrDefault().Key} emitted {duplicates.FirstOrDefault().Value} times.");
+    }
+
     private static (IReadOnlyList<EmittedInstruction> Emitted,
                     IReadOnlyDictionary<uint, string> NamedSurfaces,
                     IReadOnlyDictionary<uint, string> NamedPoints) RunPipelineAndClassify()

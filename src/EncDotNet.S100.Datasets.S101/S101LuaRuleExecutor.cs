@@ -119,6 +119,13 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     /// </summary>
     private const string FeatureNamePatch = """
         function GetFeatureName(feature, contextParameters)
+            -- Match upstream featurePortrayal:GetFeatureName side effect so
+            -- main.lua's fallback PortrayFeatureName guard sees this call and
+            -- does not re-emit the name with a different default offset.
+            if feature._featurePortrayal then
+                feature._featurePortrayal.GetFeatureNameCalled = true
+            end
+
             if not feature['!featureName'] or #feature.featureName == 0 then
                 return nil
             end
