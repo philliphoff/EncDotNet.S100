@@ -102,6 +102,64 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
         end
         """;
 
+    /// <summary>
+    /// Lua patch that corrects the upstream <c>GetFeatureName</c> and
+    /// <c>PortrayFeatureName</c> functions in <c>PortrayalModel.lua</c>. The
+    /// upstream implementation requires both <c>name</c> AND <c>nameUsage</c>
+    /// on every <c>featureName</c> entry, but the S-101 Feature Catalogue
+    /// (Edition 1.x) declares <c>nameUsage</c> with multiplicity <c>0..1</c>
+    /// — it is optional. FC-conformant ENCs that omit <c>nameUsage</c> for
+    /// a single default-display name currently get no label rendered at all.
+    /// <para/>
+    /// This patch reimplements the global <c>GetFeatureName</c> (and the
+    /// <c>PortrayFeatureName</c> helper that wraps it) so a missing
+    /// <c>nameUsage</c> is treated as <c>1</c> (Default Name Display),
+    /// matching the FC's optional semantics. When <c>nameUsage</c> is
+    /// present, the original <c>1</c>/<c>2</c> branching is preserved.
+    /// </summary>
+    private const string FeatureNamePatch = """
+        function GetFeatureName(feature, contextParameters)
+            -- Match upstream featurePortrayal:GetFeatureName side effect so
+            -- main.lua's fallback PortrayFeatureName guard sees this call and
+            -- does not re-emit the name with a different default offset.
+            if feature._featurePortrayal then
+                feature._featurePortrayal.GetFeatureNameCalled = true
+            end
+
+            if not feature['!featureName'] or #feature.featureName == 0 then
+                return nil
+            end
+
+            local defaultName
+            for _, featureName in ipairs(feature.featureName) do
+                if featureName.name then
+                    local nameUsage = featureName.nameUsage
+                    local languageMatches = (featureName.language and featureName.language == contextParameters.NationalLanguage)
+
+                    if nameUsage == nil or nameUsage == 1 then
+                        if languageMatches then
+                            return featureName.name
+                        end
+                        defaultName = defaultName or featureName.name
+                    elseif nameUsage == 2 and languageMatches then
+                        return featureName.name
+                    end
+                end
+            end
+
+            return defaultName
+        end
+
+        function PortrayFeatureName(feature, featurePortrayal, contextParameters, textViewingGroup, textPriority, viewingGroup, priority, textStyleInstructions)
+            local name = GetFeatureName(feature, contextParameters)
+            if name then
+                local textStyle = textStyleInstructions or 'FontColor:CHBLK'
+                featurePortrayal:AddInstructions(textStyle)
+                featurePortrayal:AddTextInstruction(EncodeString(name, '%s'), textViewingGroup, textPriority, viewingGroup, priority)
+            end
+        end
+        """;
+
     public S101LuaRuleExecutor(
         ILuaEngine luaEngine,
         S101Dataset dataset,
@@ -246,6 +304,11 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
                 return _orig_contains(value, array)
             end
             """);
+
+        // 3d. Patch GetFeatureName / PortrayFeatureName so feature names
+        //     without an explicit nameUsage sub-attribute still render. See
+        //     the FeatureNamePatch comment for the spec rationale.
+        lua.Execute(FeatureNamePatch);
 
         // 4. Build context parameter array using the Lua-side factory function
         //    PortrayalCreateContextParameter(name, type, default) → ContextParameter table
