@@ -315,6 +315,31 @@ public partial class App : Application
             iconFactory: static () => new FluentIcon { Icon = Icon.Settings, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
 
+        // PR-M4: Pick Report lives in the right dock; auto-opens when a
+        // feature is picked. No switcher UI; chrome bar in MainWindow
+        // owns the close button. Title reuses the existing pane string.
+        services.AddActivityTab<PickReportViewModel, PickReportView>(
+            id: "PickReport",
+            order: 10,
+            title: Strings.Pick_PanelTitle,
+            tooltip: Strings.Pick_PanelTitle,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Cursor, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Right,
+            autoOpenOnContentSignal: true);
+
+        // PR-M4: Timeline lives in the bottom dock; auto-opens when a
+        // time-aware dataset is loaded.
+        services.AddActivityTab<TimelineViewModel, TimelineView>(
+            id: "Timeline",
+            order: 10,
+            title: Strings.TimelinePanel_Title,
+            tooltip: Strings.TimelinePanel_Title,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Clock, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Bottom,
+            autoOpenOnContentSignal: true);
+
         // Main window — receives only the StartupOptions plus the small set
         // of cross-cutting services it still owns directly. Per-dataset
         // orchestration lives in IDatasetLoaderService / IPickService.

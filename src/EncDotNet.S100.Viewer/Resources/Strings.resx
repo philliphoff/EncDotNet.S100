@@ -443,6 +443,9 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Pick_PanelTitle" xml:space="preserve">
     <value>OBJECT INFORMATION</value>
   </data>
+  <data name="PickReport_EmptyState" xml:space="preserve">
+    <value>No feature picked. Use Pick mode and click a feature on the map.</value>
+  </data>
   <data name="Pick_IdLabel" xml:space="preserve">
     <value>ID:</value>
   </data>

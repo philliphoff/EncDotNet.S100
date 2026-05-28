@@ -47,101 +47,216 @@ internal sealed class MainViewModel : ViewModelBase
     /// <summary>All registered activity tabs, sorted by <see cref="IActivityTab.Order"/> ascending.</summary>
     public IReadOnlyList<IActivityTab> Tabs => _tabs;
 
-    /// <summary>Tabs rendered in the top group of the activity bar (<see cref="IActivityTab.Order"/> &lt; 1000).</summary>
-    public IReadOnlyList<IActivityTab> TopTabs { get; }
+    /// <summary>All tabs that live in the left dock (the activity pane), sorted by <see cref="IActivityTab.Order"/>.</summary>
+    public IReadOnlyList<IActivityTab> LeftTabs { get; }
 
-    /// <summary>Tabs pinned to the bottom of the activity bar (<see cref="IActivityTab.Order"/> &gt;= 1000).</summary>
+    /// <summary>All tabs that live in the right dock (currently just Pick Report).</summary>
+    public IReadOnlyList<IActivityTab> RightTabs { get; }
+
+    /// <summary>All tabs that live in the bottom dock (currently just Timeline).</summary>
     public IReadOnlyList<IActivityTab> BottomTabs { get; }
 
-    private IActivityTab? _selectedTab;
+    /// <summary>Left-dock tabs rendered in the top group of the activity bar (<see cref="IActivityTab.Order"/> &lt; 1000).</summary>
+    public IReadOnlyList<IActivityTab> LeftDockTopTabs { get; }
+
+    /// <summary>Left-dock tabs pinned to the bottom of the activity bar (<see cref="IActivityTab.Order"/> &gt;= 1000).</summary>
+    public IReadOnlyList<IActivityTab> LeftDockBottomTabs { get; }
+
+    private IActivityTab? _selectedLeftTab;
     /// <summary>
-    /// The active activity tab, or <c>null</c> when the pane is collapsed.
-    /// Clicking the already-selected tab toggles it off (preserves the
-    /// pre-refactor toggle behaviour).
+    /// The active tab in the left dock. Setting this to the currently
+    /// selected tab toggles <see cref="IsLeftDockOpen"/> off (preserves
+    /// the pre-PR-M4 toggle behaviour). Setting it to a different tab
+    /// always opens the dock.
     /// </summary>
-    public IActivityTab? SelectedTab
+    public IActivityTab? SelectedLeftTab
     {
-        get => _selectedTab;
+        get => _selectedLeftTab;
         set
         {
-            // Toggle: clicking the same tab again hides the pane.
-            if (_selectedTab is { } current && ReferenceEquals(current, value))
+            // Toggle: clicking the already-selected tab while the dock is
+            // open closes it without changing the selection (so re-opening
+            // restores the same tab).
+            if (value is not null
+                && _isLeftDockOpen
+                && _selectedLeftTab is { } current
+                && ReferenceEquals(current, value))
             {
-                value = null;
+                IsLeftDockOpen = false;
+                return;
             }
 
-            if (SetProperty(ref _selectedTab, value))
+            var newValue = value ?? _selectedLeftTab;
+            if (!ReferenceEquals(_selectedLeftTab, newValue))
             {
-                OnPropertyChanged(nameof(SelectedTabId));
-                OnPropertyChanged(nameof(IsPaneVisible));
-                OnPropertyChanged(nameof(PaneTitle));
+                _selectedLeftTab = newValue;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedLeftTabId));
+                OnPropertyChanged(nameof(LeftDockTitle));
 
-                // Persist the last selected tab. Settings (and any future
-                // transient tab) opts out via PersistAsLastSelected = false.
-                if (value is null || value.PersistAsLastSelected)
+                if (newValue is not null && newValue.PersistAsLastSelected)
                 {
-                    _settings.LastSelectedActivity = value?.Id;
+                    _settings.LastSelectedActivity = newValue.Id;
                     _settings.Save();
                 }
+            }
+
+            if (value is not null && !_isLeftDockOpen)
+            {
+                IsLeftDockOpen = true;
             }
         }
     }
 
     /// <summary>
-    /// Id of the active tab, or <c>null</c> when no tab is selected.
-    /// Bound by the activity-bar item template (via
+    /// Id of the active left-dock tab, or <c>null</c> when no left-dock
+    /// tab is registered. Bound by the activity-bar item template (via
     /// <see cref="ActiveTabConverter"/>) and used for persistence.
     /// </summary>
-    public string? SelectedTabId => _selectedTab?.Id;
+    public string? SelectedLeftTabId => _selectedLeftTab?.Id;
 
-    public bool IsPaneVisible => _selectedTab is not null;
+    private IActivityTab? _selectedRightTab;
+    /// <summary>Active tab in the right dock; setting it opens the dock.</summary>
+    public IActivityTab? SelectedRightTab
+    {
+        get => _selectedRightTab;
+        set
+        {
+            if (!ReferenceEquals(_selectedRightTab, value))
+            {
+                _selectedRightTab = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedRightTabId));
+                OnPropertyChanged(nameof(RightDockTitle));
+            }
+            if (value is not null && !_isRightDockOpen) IsRightDockOpen = true;
+        }
+    }
 
-    public string PaneTitle => _selectedTab?.Title ?? string.Empty;
+    /// <summary>Id of the active right-dock tab, or <c>null</c> when none.</summary>
+    public string? SelectedRightTabId => _selectedRightTab?.Id;
+
+    private IActivityTab? _selectedBottomTab;
+    /// <summary>Active tab in the bottom dock; setting it opens the dock.</summary>
+    public IActivityTab? SelectedBottomTab
+    {
+        get => _selectedBottomTab;
+        set
+        {
+            if (!ReferenceEquals(_selectedBottomTab, value))
+            {
+                _selectedBottomTab = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SelectedBottomTabId));
+                OnPropertyChanged(nameof(BottomDockTitle));
+            }
+            if (value is not null && !_isBottomDockOpen) IsBottomDockOpen = true;
+        }
+    }
+
+    /// <summary>Id of the active bottom-dock tab, or <c>null</c> when none.</summary>
+    public string? SelectedBottomTabId => _selectedBottomTab?.Id;
+
+    private bool _isLeftDockOpen;
+    /// <summary>True when the left dock (activity pane) is shown.</summary>
+    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    public bool IsLeftDockOpen
+    {
+        get => _isLeftDockOpen;
+        set => SetProperty(ref _isLeftDockOpen, value);
+    }
+
+    private bool _isRightDockOpen;
+    /// <summary>True when the right dock is shown.</summary>
+    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    public bool IsRightDockOpen
+    {
+        get => _isRightDockOpen;
+        set => SetProperty(ref _isRightDockOpen, value);
+    }
+
+    private bool _isBottomDockOpen;
+    /// <summary>True when the bottom dock is shown.</summary>
+    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    public bool IsBottomDockOpen
+    {
+        get => _isBottomDockOpen;
+        set => SetProperty(ref _isBottomDockOpen, value);
+    }
+
+    /// <summary>Pane header text for the left dock chrome.</summary>
+    public string LeftDockTitle => _selectedLeftTab?.Title ?? string.Empty;
+
+    /// <summary>Pane header text for the right dock chrome.</summary>
+    public string RightDockTitle => _selectedRightTab?.Title ?? string.Empty;
+
+    /// <summary>Pane header text for the bottom dock chrome.</summary>
+    public string BottomDockTitle => _selectedBottomTab?.Title ?? string.Empty;
 
     /// <summary>
     /// Single, parameterised command bound by every activity-bar
     /// <c>ToggleButton</c> — the command parameter is the
     /// <see cref="IActivityTab"/> that owns the button.
     /// </summary>
+    /// <summary>
+    /// Single, parameterised command bound by every activity-bar
+    /// <c>ToggleButton</c> — the command parameter is the
+    /// <see cref="IActivityTab"/> that owns the button. Selecting routes
+    /// to the dock that owns the tab.
+    /// </summary>
     public ICommand SelectTabCommand { get; }
+
+    /// <summary>Closes the dock identified by the command parameter (a <see cref="TabDock"/>).</summary>
+    public ICommand CloseDockCommand { get; }
 
     public ICommand TogglePrimarySideBarCommand { get; }
 
     /// <summary>
-    /// Selects the default tab (<see cref="DefaultTabId"/>), falling back
-    /// to the first registered tab if the default isn't present. Used by
+    /// Selects the default left-dock tab (<see cref="DefaultTabId"/>),
+    /// falling back to the first registered left-dock tab if the default
+    /// isn't present. Opens the left dock as a side-effect. Used by
     /// <see cref="MainWindow"/> when a command (Open Dataset, Open Recent,
     /// Open Exchange Set, drag-drop) needs to force the Datasets pane open.
     /// </summary>
     public void SelectDefaultTab()
     {
-        if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab))
+        if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab)
+            && defaultTab.Dock == TabDock.Left)
         {
-            if (!ReferenceEquals(_selectedTab, defaultTab))
-            {
-                SelectedTab = defaultTab;
-            }
+            SelectedLeftTab = defaultTab;
+            IsLeftDockOpen = true;
             return;
         }
 
-        if (_tabs.Count > 0 && !ReferenceEquals(_selectedTab, _tabs[0]))
+        var firstLeft = LeftTabs.Count > 0 ? LeftTabs[0] : null;
+        if (firstLeft is not null)
         {
-            SelectedTab = _tabs[0];
+            SelectedLeftTab = firstLeft;
+            IsLeftDockOpen = true;
         }
     }
 
     /// <summary>
     /// Selects the tab with the given <see cref="IActivityTab.Id"/>, or
-    /// no-ops if no such tab is registered. Convenience for tests and
-    /// for callers that hold an id (e.g. settings restore) rather than
-    /// the tab instance.
+    /// no-ops if no such tab is registered. Routes to whichever dock
+    /// owns the tab.
     /// </summary>
     public void SelectTab(string id)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         if (_tabsById.TryGetValue(id, out var tab))
         {
-            SelectedTab = tab;
+            RouteSelection(tab);
+        }
+    }
+
+    private void RouteSelection(IActivityTab tab)
+    {
+        switch (tab.Dock)
+        {
+            case TabDock.Left: SelectedLeftTab = tab; break;
+            case TabDock.Right: SelectedRightTab = tab; break;
+            case TabDock.Bottom: SelectedBottomTab = tab; break;
         }
     }
 
@@ -174,26 +289,10 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleStatusBarCommand { get; }
 
-    private bool _isTimelineVisible;
     /// <summary>
-    /// User preference for whether the bottom timeline panel is
-    /// shown. When false, the timeline is hidden regardless of
-    /// whether time-varying datasets are loaded. Persisted to
-    /// <see cref="ViewerSettings"/>.
+    /// Toggles the bottom dock open/closed. Kept for the existing
+    /// View menu binding; in PR-M4 the dock contains the Timeline tab.
     /// </summary>
-    public bool IsTimelineVisible
-    {
-        get => _isTimelineVisible;
-        set
-        {
-            if (SetProperty(ref _isTimelineVisible, value))
-            {
-                _settings.IsTimelineVisible = value;
-                _settings.Save();
-            }
-        }
-    }
-
     public ICommand ToggleTimelineCommand { get; }
 
     private string _mouseLatLonText = LatLonFormatter.Placeholder;
@@ -209,31 +308,10 @@ internal sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _mouseLatLonText, value);
     }
 
-    private bool _isPickPanelEnabled;
     /// <summary>
-    /// User preference for whether the pick panel is allowed to auto-open
-    /// when a feature is picked. Persisted to <see cref="ViewerSettings"/>.
+    /// Toggles the right dock open/closed. Kept for the existing
+    /// View menu binding; in PR-M4 the dock contains the Pick Report tab.
     /// </summary>
-    public bool IsPickPanelEnabled
-    {
-        get => _isPickPanelEnabled;
-        set
-        {
-            if (SetProperty(ref _isPickPanelEnabled, value))
-            {
-                _settings.IsPickPanelVisible = value;
-                _settings.Save();
-                OnPropertyChanged(nameof(IsPickPanelVisible));
-            }
-        }
-    }
-
-    /// <summary>
-    /// True when the pick panel should be displayed: a pick is active and
-    /// the user hasn't disabled the panel via the View menu.
-    /// </summary>
-    public bool IsPickPanelVisible => _isPickPanelEnabled && PickReport.HasPick;
-
     public ICommand TogglePickPanelCommand { get; }
 
     private bool _isPickModeActive;
@@ -643,44 +721,65 @@ internal sealed class MainViewModel : ViewModelBase
         DisplayToolbar = displayToolbar;
         TextToolbar = textToolbar;
         EcdisDisplayPanel = ecdisDisplayPanel;
-        Timeline.CloseRequested += () => IsTimelineVisible = false;
-        PickReport.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(PickReportViewModel.HasPick))
-                OnPropertyChanged(nameof(IsPickPanelVisible));
-        };
+        Timeline.CloseRequested += () => IsBottomDockOpen = false;
 
-        // Activity tab registry — ordered by IActivityTab.Order ascending.
-        // Tabs with Order >= 1000 are pinned to the bottom of the activity
-        // bar (currently only Settings) so the visual layout matches the
-        // pre-refactor DockPanel arrangement.
+        // Activity tab registry — partitioned by Dock, ordered by
+        // IActivityTab.Order ascending. Left-dock tabs further split into
+        // top/bottom groups by the legacy <1000 / >=1000 convention so
+        // Settings stays pinned to the bottom of the activity bar.
         _tabs = (activityTabs ?? Array.Empty<IActivityTab>())
             .OrderBy(t => t.Order)
             .ToArray();
         _tabsById = _tabs.ToDictionary(t => t.Id, StringComparer.Ordinal);
-        TopTabs = _tabs.Where(t => t.Order < 1000).ToArray();
-        BottomTabs = _tabs.Where(t => t.Order >= 1000).ToArray();
+        LeftTabs = _tabs.Where(t => t.Dock == TabDock.Left).ToArray();
+        RightTabs = _tabs.Where(t => t.Dock == TabDock.Right).ToArray();
+        BottomTabs = _tabs.Where(t => t.Dock == TabDock.Bottom).ToArray();
+        LeftDockTopTabs = LeftTabs.Where(t => t.Order < 1000).ToArray();
+        LeftDockBottomTabs = LeftTabs.Where(t => t.Order >= 1000).ToArray();
 
         SelectTabCommand = new RelayCommand<IActivityTab>(tab =>
         {
-            if (tab is not null) SelectedTab = tab;
+            if (tab is not null) RouteSelection(tab);
+        });
+
+        CloseDockCommand = new RelayCommand<object?>(parameter =>
+        {
+            // Accept both TabDock enum values and their string names so
+            // XAML callers can pass either form without a converter.
+            TabDock? dock = parameter switch
+            {
+                TabDock d => d,
+                string s when Enum.TryParse<TabDock>(s, ignoreCase: true, out var parsed) => parsed,
+                _ => null,
+            };
+            switch (dock)
+            {
+                case TabDock.Left: IsLeftDockOpen = false; break;
+                case TabDock.Right: IsRightDockOpen = false; break;
+                case TabDock.Bottom: IsBottomDockOpen = false; break;
+            }
         });
 
         TogglePrimarySideBarCommand = new RelayCommand(() =>
         {
-            if (_selectedTab is not null)
+            if (IsLeftDockOpen)
             {
-                SelectedTab = null;
+                IsLeftDockOpen = false;
                 return;
             }
 
-            // Re-open with the last persisted tab, falling back to the
-            // default tab (Datasets) if the persisted id is no longer
-            // registered.
+            // Re-open with the persisted left-dock tab when available,
+            // otherwise fall back to the default tab (Datasets).
             if (settings.LastSelectedActivity is { } last
-                && _tabsById.TryGetValue(last, out var restored))
+                && _tabsById.TryGetValue(last, out var restored)
+                && restored.Dock == TabDock.Left)
             {
-                SelectedTab = restored;
+                SelectedLeftTab = restored;
+                IsLeftDockOpen = true;
+            }
+            else if (_selectedLeftTab is not null)
+            {
+                IsLeftDockOpen = true;
             }
             else
             {
@@ -692,11 +791,9 @@ internal sealed class MainViewModel : ViewModelBase
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
-        _isTimelineVisible = settings.IsTimelineVisible;
-        ToggleTimelineCommand = new RelayCommand(() => IsTimelineVisible = !IsTimelineVisible);
+        ToggleTimelineCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen);
 
-        _isPickPanelEnabled = settings.IsPickPanelVisible;
-        TogglePickPanelCommand = new RelayCommand(() => IsPickPanelEnabled = !IsPickPanelEnabled);
+        TogglePickPanelCommand = new RelayCommand(() => IsRightDockOpen = !IsRightDockOpen);
 
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
@@ -746,23 +843,73 @@ internal sealed class MainViewModel : ViewModelBase
 
         OpenRecentCommand = new AsyncRelayCommand<string>(OpenRecentAsync);
 
-        // Restore last selected tab. We assign _selectedTab directly so
-        // restoration doesn't re-write settings. If the persisted id is
-        // missing or stale, fall back to the default tab (Datasets), then
-        // defensively to the first registered tab — matching the spec.
+        // Restore last selected left-dock tab. We assign _selectedLeftTab
+        // directly so restoration doesn't re-write settings. If the
+        // persisted id is missing, stale, or points to a non-left dock,
+        // fall back to the default tab (Datasets), then defensively to
+        // the first registered left-dock tab.
         if (settings.LastSelectedActivity is { } lastId
-            && _tabsById.TryGetValue(lastId, out var restoredTab))
+            && _tabsById.TryGetValue(lastId, out var restoredTab)
+            && restoredTab.Dock == TabDock.Left)
         {
-            _selectedTab = restoredTab;
+            _selectedLeftTab = restoredTab;
         }
-        else if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab))
+        else if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab)
+            && defaultTab.Dock == TabDock.Left)
         {
-            _selectedTab = defaultTab;
+            _selectedLeftTab = defaultTab;
         }
-        else if (_tabs.Count > 0)
+        else if (LeftTabs.Count > 0)
         {
-            _selectedTab = _tabs[0];
+            _selectedLeftTab = LeftTabs[0];
         }
+
+        // Left dock defaults to open when there is a tab to display.
+        // Right/Bottom default to closed (in-memory only — PR-M3 will
+        // persist these). Auto-open subscriptions below will reopen
+        // Right/Bottom on content-available signals from their tab VMs.
+        _isLeftDockOpen = _selectedLeftTab is not null;
+
+        WireAutoOpenSubscriptions();
+    }
+
+    private void WireAutoOpenSubscriptions()
+    {
+        foreach (var tab in _tabs)
+        {
+            if (!tab.AutoOpenOnContentSignal) continue;
+            if (tab.ViewModel is not IActivityTabContentSignal signal) continue;
+
+            var captured = tab;
+            signal.ContentBecameAvailable += (_, _) =>
+            {
+                switch (captured.Dock)
+                {
+                    case TabDock.Left:
+                        SelectedLeftTab = captured;
+                        IsLeftDockOpen = true;
+                        break;
+                    case TabDock.Right:
+                        SelectedRightTab = captured;
+                        IsRightDockOpen = true;
+                        break;
+                    case TabDock.Bottom:
+                        SelectedBottomTab = captured;
+                        IsBottomDockOpen = true;
+                        break;
+                }
+            };
+        }
+
+        // Pre-select the single right/bottom tab (when present) so the
+        // chrome title and ContentControl have something to bind to even
+        // before the dock first opens. Picking a default selection does
+        // not open the dock — Open state remains controlled by user
+        // toggles and ContentBecameAvailable.
+        if (_selectedRightTab is null && RightTabs.Count > 0)
+            _selectedRightTab = RightTabs[0];
+        if (_selectedBottomTab is null && BottomTabs.Count > 0)
+            _selectedBottomTab = BottomTabs[0];
     }
 
     private async Task OpenRecentAsync(string? path)

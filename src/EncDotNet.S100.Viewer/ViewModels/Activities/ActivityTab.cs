@@ -21,7 +21,9 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
         string tooltip,
         Func<Control> iconFactory,
         TViewModel viewModel,
-        bool persistAsLastSelected)
+        bool persistAsLastSelected,
+        TabDock dock = TabDock.Left,
+        bool autoOpenOnContentSignal = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(title);
@@ -36,6 +38,8 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
         _iconFactory = iconFactory;
         ViewModel = viewModel;
         PersistAsLastSelected = persistAsLastSelected;
+        Dock = dock;
+        AutoOpenOnContentSignal = autoOpenOnContentSignal;
     }
 
     public string Id { get; }
@@ -45,6 +49,8 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
     public object ViewModel { get; }
     public Type ViewType => typeof(TView);
     public bool PersistAsLastSelected { get; }
+    public TabDock Dock { get; }
+    public bool AutoOpenOnContentSignal { get; }
 
     public Control CreateIcon() => _iconFactory();
 }

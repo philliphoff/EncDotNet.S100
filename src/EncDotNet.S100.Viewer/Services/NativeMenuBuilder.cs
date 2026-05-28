@@ -60,10 +60,10 @@ internal sealed class NativeMenuBuilder
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
-            initiallyChecked: _viewModel.IsPaneVisible,
+            initiallyChecked: _viewModel.IsLeftDockOpen,
             execute: () => _viewModel.TogglePrimarySideBarCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsPaneVisible),
-            checkedSelector: () => _viewModel.IsPaneVisible);
+            propertyName: nameof(MainViewModel.IsLeftDockOpen),
+            checkedSelector: () => _viewModel.IsLeftDockOpen);
 
         var statusBarItem = BuildToggleItem(
             Strings.Menu_StatusBar,
@@ -74,17 +74,17 @@ internal sealed class NativeMenuBuilder
 
         var timelineItem = BuildToggleItem(
             Strings.Menu_Timeline,
-            initiallyChecked: _viewModel.IsTimelineVisible,
+            initiallyChecked: _viewModel.IsBottomDockOpen,
             execute: () => _viewModel.ToggleTimelineCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsTimelineVisible),
-            checkedSelector: () => _viewModel.IsTimelineVisible);
+            propertyName: nameof(MainViewModel.IsBottomDockOpen),
+            checkedSelector: () => _viewModel.IsBottomDockOpen);
 
         var pickPanelItem = BuildToggleItem(
             Strings.Menu_PickReport,
-            initiallyChecked: _viewModel.IsPickPanelEnabled,
+            initiallyChecked: _viewModel.IsRightDockOpen,
             execute: () => _viewModel.TogglePickPanelCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsPickPanelEnabled),
-            checkedSelector: () => _viewModel.IsPickPanelEnabled);
+            propertyName: nameof(MainViewModel.IsRightDockOpen),
+            checkedSelector: () => _viewModel.IsRightDockOpen);
 
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,

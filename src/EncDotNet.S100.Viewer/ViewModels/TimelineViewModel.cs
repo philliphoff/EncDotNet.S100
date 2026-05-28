@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <see cref="GlobalTimeService"/> and forwards user scrubs back to
 /// the service via <see cref="GlobalTimeService.SetCurrentTime"/>.
 /// </summary>
-internal sealed class TimelineViewModel : ViewModelBase
+internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTabContentSignal
 {
     private readonly GlobalTimeService _service;
     private readonly ITimeFormatProvider? _timeFormat;
@@ -69,8 +69,14 @@ internal sealed class TimelineViewModel : ViewModelBase
     /// </summary>
     public ICommand CloseCommand { get; }
 
+    private bool _wasActive;
+
     private void OnRangeChanged()
     {
+        var nowActive = _service.IsActive;
+        var becameActive = nowActive && !_wasActive;
+        _wasActive = nowActive;
+
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(SliderMinimum));
         OnPropertyChanged(nameof(SliderMaximum));
@@ -83,7 +89,18 @@ internal sealed class TimelineViewModel : ViewModelBase
         OnPropertyChanged(nameof(AreStepButtonsVisible));
         ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
         ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
+
+        if (becameActive)
+        {
+            // false→true transition: signal that the Timeline dock should
+            // auto-open (PR-M4). Re-arming happens automatically because
+            // we only fire when crossing the boundary.
+            ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
+        }
     }
+
+    /// <inheritdoc />
+    public event EventHandler? ContentBecameAvailable;
 
     /// <summary>
     /// Steps backward to the previous discrete sample. Only

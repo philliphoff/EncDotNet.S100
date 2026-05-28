@@ -26,6 +26,8 @@ public sealed class ActivityTabViewTemplateTests
         public required object ViewModel { get; init; }
         public Type ViewType => typeof(StubView);
         public bool PersistAsLastSelected => true;
+        public TabDock Dock => TabDock.Left;
+        public bool AutoOpenOnContentSignal => false;
 
         public Control CreateIcon() => new ContentControl();
     }
