@@ -15,11 +15,14 @@ public sealed class DebouncedSettingsSaverTests
     public void RequestSave_FiresAfterDelay()
     {
         var saves = 0;
-        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 50);
+        using var fired = new ManualResetEventSlim();
+        using var saver = new DebouncedSettingsSaver(
+            () => { Interlocked.Increment(ref saves); fired.Set(); },
+            delayMilliseconds: 50);
 
         saver.RequestSave();
-        Thread.Sleep(200);
 
+        Assert.True(fired.Wait(TimeSpan.FromSeconds(5)), "Saver did not fire within 5 s");
         Assert.Equal(1, saves);
     }
 
@@ -27,13 +30,21 @@ public sealed class DebouncedSettingsSaverTests
     public void RequestSave_MultipleCallsCoalesceIntoOneFire()
     {
         var saves = 0;
-        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 100);
+        using var fired = new ManualResetEventSlim();
+        using var saver = new DebouncedSettingsSaver(
+            () => { Interlocked.Increment(ref saves); fired.Set(); },
+            delayMilliseconds: 100);
 
         for (int i = 0; i < 10; i++)
         {
             saver.RequestSave();
             Thread.Sleep(10);
         }
+
+        Assert.True(fired.Wait(TimeSpan.FromSeconds(5)), "Saver did not fire within 5 s");
+        // Give any (incorrectly) scheduled extra fires a chance to land
+        // before asserting coalescence. The debounce window is 100 ms,
+        // so 300 ms is plenty without being painfully slow.
         Thread.Sleep(300);
 
         Assert.Equal(1, saves);
