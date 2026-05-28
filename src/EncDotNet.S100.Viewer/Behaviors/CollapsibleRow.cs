@@ -30,6 +30,21 @@ internal static class CollapsibleRow
             "MaxHeightWhenVisible", typeof(CollapsibleRow),
             defaultValue: double.PositiveInfinity);
 
+    /// <summary>
+    /// PR-M3: 2-way persisted height in pixels. See
+    /// <see cref="CollapsibleColumn.SavedWidthProperty"/> for semantics.
+    /// </summary>
+    public static readonly AttachedProperty<double?> SavedHeightProperty =
+        AvaloniaProperty.RegisterAttached<RowDefinition, double?>(
+            "SavedHeight",
+            typeof(CollapsibleRow),
+            defaultValue: null,
+            defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
+
+    private static readonly AttachedProperty<bool> IsTrackingHeightProperty =
+        AvaloniaProperty.RegisterAttached<RowDefinition, bool>(
+            "IsTrackingHeight", typeof(CollapsibleRow));
+
     private static readonly AttachedProperty<double> RememberedHeightProperty =
         AvaloniaProperty.RegisterAttached<RowDefinition, double>(
             "RememberedHeight", typeof(CollapsibleRow), defaultValue: double.NaN);
@@ -43,9 +58,42 @@ internal static class CollapsibleRow
     public static double GetMaxHeightWhenVisible(RowDefinition row) => row.GetValue(MaxHeightWhenVisibleProperty);
     public static void SetMaxHeightWhenVisible(RowDefinition row, double v) => row.SetValue(MaxHeightWhenVisibleProperty, v);
 
+    public static double? GetSavedHeight(RowDefinition row) => row.GetValue(SavedHeightProperty);
+    public static void SetSavedHeight(RowDefinition row, double? v) => row.SetValue(SavedHeightProperty, v);
+
     static CollapsibleRow()
     {
         IsVisibleProperty.Changed.AddClassHandler<RowDefinition>(OnIsVisibleChanged);
+        SavedHeightProperty.Changed.AddClassHandler<RowDefinition>(OnSavedHeightChanged);
+    }
+
+    private static void OnSavedHeightChanged(RowDefinition row, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (!row.GetValue(IsTrackingHeightProperty))
+        {
+            row.SetValue(IsTrackingHeightProperty, true);
+            row.PropertyChanged += (sender, args) =>
+            {
+                if (args.Property != RowDefinition.HeightProperty) return;
+                if (sender is not RowDefinition r) return;
+                var height = r.Height;
+                if (!height.IsAbsolute || height.Value <= 0) return;
+                var current = r.GetValue(SavedHeightProperty);
+                if (current is null || Math.Abs(current.Value - height.Value) > 0.5)
+                    r.SetValue(SavedHeightProperty, height.Value);
+            };
+        }
+
+        if (e.NewValue is double v && v > 0 && row.GetValue(IsVisibleProperty))
+        {
+            if (!row.Height.IsAbsolute || Math.Abs(row.Height.Value - v) > 0.5)
+                row.Height = new GridLength(v, GridUnitType.Pixel);
+            row.SetValue(RememberedHeightProperty, v);
+        }
+        else if (e.NewValue is double v2 && v2 > 0)
+        {
+            row.SetValue(RememberedHeightProperty, v2);
+        }
     }
 
     private static void OnIsVisibleChanged(RowDefinition row, AvaloniaPropertyChangedEventArgs e)

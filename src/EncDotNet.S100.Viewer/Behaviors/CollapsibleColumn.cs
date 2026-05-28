@@ -55,6 +55,26 @@ internal static class CollapsibleColumn
             typeof(CollapsibleColumn),
             defaultValue: double.PositiveInfinity);
 
+    /// <summary>
+    /// PR-M3: 2-way persisted width in pixels. When bound, the column's
+    /// current width is pushed back as the user drags the splitter, and
+    /// the initial bound value is applied as the column's width on attach
+    /// (overriding the XAML default). <c>null</c> means "no persisted
+    /// value yet" — the XAML default is used and the first user-resize
+    /// captures a value.
+    /// </summary>
+    public static readonly AttachedProperty<double?> SavedWidthProperty =
+        AvaloniaProperty.RegisterAttached<ColumnDefinition, double?>(
+            "SavedWidth",
+            typeof(CollapsibleColumn),
+            defaultValue: null,
+            defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
+
+    private static readonly AttachedProperty<bool> IsTrackingWidthProperty =
+        AvaloniaProperty.RegisterAttached<ColumnDefinition, bool>(
+            "IsTrackingWidth",
+            typeof(CollapsibleColumn));
+
     private static readonly AttachedProperty<double> RememberedWidthProperty =
         AvaloniaProperty.RegisterAttached<ColumnDefinition, double>(
             "RememberedWidth",
@@ -85,9 +105,52 @@ internal static class CollapsibleColumn
     public static void SetMaxWidthWhenVisible(ColumnDefinition column, double value) =>
         column.SetValue(MaxWidthWhenVisibleProperty, value);
 
+    public static double? GetSavedWidth(ColumnDefinition column) =>
+        column.GetValue(SavedWidthProperty);
+
+    public static void SetSavedWidth(ColumnDefinition column, double? value) =>
+        column.SetValue(SavedWidthProperty, value);
+
     static CollapsibleColumn()
     {
         IsVisibleProperty.Changed.AddClassHandler<ColumnDefinition>(OnIsVisibleChanged);
+        SavedWidthProperty.Changed.AddClassHandler<ColumnDefinition>(OnSavedWidthChanged);
+    }
+
+    private static void OnSavedWidthChanged(ColumnDefinition column, AvaloniaPropertyChangedEventArgs e)
+    {
+        // First time SavedWidth is touched on this column, hook a one-time
+        // observer that pushes Width changes back into the bound property.
+        // Restricting the subscription to columns that opt-in (via
+        // SavedWidth binding) keeps the global property handler cheap.
+        if (!column.GetValue(IsTrackingWidthProperty))
+        {
+            column.SetValue(IsTrackingWidthProperty, true);
+            column.PropertyChanged += (sender, args) =>
+            {
+                if (args.Property != ColumnDefinition.WidthProperty) return;
+                if (sender is not ColumnDefinition c) return;
+                var width = c.Width;
+                if (!width.IsAbsolute || width.Value <= 0) return;
+                var current = c.GetValue(SavedWidthProperty);
+                if (current is null || Math.Abs(current.Value - width.Value) > 0.5)
+                    c.SetValue(SavedWidthProperty, width.Value);
+            };
+        }
+
+        // Apply newly-bound saved width when the column is currently visible.
+        if (e.NewValue is double v && v > 0 && column.GetValue(IsVisibleProperty))
+        {
+            if (!column.Width.IsAbsolute || Math.Abs(column.Width.Value - v) > 0.5)
+                column.Width = new GridLength(v, GridUnitType.Pixel);
+            column.SetValue(RememberedWidthProperty, v);
+        }
+        else if (e.NewValue is double v2 && v2 > 0)
+        {
+            // Column is collapsed — remember the width so the next reveal
+            // restores the persisted size instead of the XAML default.
+            column.SetValue(RememberedWidthProperty, v2);
+        }
     }
 
     private static void OnIsVisibleChanged(ColumnDefinition column, AvaloniaPropertyChangedEventArgs e)

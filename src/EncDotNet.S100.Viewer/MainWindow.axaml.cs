@@ -133,6 +133,9 @@ public partial class MainWindow : ShadUI.Window
         {
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            // PR-M3: flush any pending debounced size writes so the last
+            // splitter drag isn't lost on shutdown.
+            _viewModel.OnShutdown();
         };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
         _loader.DatasetLoaded += entry =>

@@ -11,7 +11,6 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
-
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class MainViewModel : ViewModelBase
@@ -128,6 +127,16 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedRightTabId));
                 OnPropertyChanged(nameof(RightDockTitle));
+
+                // PR-M3: persist the selected right-dock tab id so the
+                // user's last choice survives restart. Both user clicks
+                // and auto-open driven changes flow through this setter,
+                // so both write to settings — matching the M2/M4 design.
+                if (_settingsInitialized)
+                {
+                    _settings.LastSelectedRightTab = value?.Id;
+                    _settings.Save();
+                }
             }
             if (value is not null && !_isRightDockOpen) IsRightDockOpen = true;
         }
@@ -149,6 +158,12 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedBottomTabId));
                 OnPropertyChanged(nameof(BottomDockTitle));
+
+                if (_settingsInitialized)
+                {
+                    _settings.LastSelectedBottomTab = value?.Id;
+                    _settings.Save();
+                }
             }
             if (value is not null && !_isBottomDockOpen) IsBottomDockOpen = true;
         }
@@ -158,30 +173,57 @@ internal sealed class MainViewModel : ViewModelBase
     public string? SelectedBottomTabId => _selectedBottomTab?.Id;
 
     private bool _isLeftDockOpen;
-    /// <summary>True when the left dock (activity pane) is shown.</summary>
-    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    /// <summary>
+    /// True when the left dock (activity pane) is shown. Persisted in
+    /// <see cref="ViewerSettings.IsLeftDockOpen"/> (PR-M3).
+    /// </summary>
     public bool IsLeftDockOpen
     {
         get => _isLeftDockOpen;
-        set => SetProperty(ref _isLeftDockOpen, value);
+        set
+        {
+            if (SetProperty(ref _isLeftDockOpen, value) && _settingsInitialized)
+            {
+                _settings.IsLeftDockOpen = value;
+                _settings.Save();
+            }
+        }
     }
 
     private bool _isRightDockOpen;
-    /// <summary>True when the right dock is shown.</summary>
-    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    /// <summary>
+    /// True when the right dock is shown. Persisted in
+    /// <see cref="ViewerSettings.IsRightDockOpen"/> (PR-M3).
+    /// </summary>
     public bool IsRightDockOpen
     {
         get => _isRightDockOpen;
-        set => SetProperty(ref _isRightDockOpen, value);
+        set
+        {
+            if (SetProperty(ref _isRightDockOpen, value) && _settingsInitialized)
+            {
+                _settings.IsRightDockOpen = value;
+                _settings.Save();
+            }
+        }
     }
 
     private bool _isBottomDockOpen;
-    /// <summary>True when the bottom dock is shown.</summary>
-    // TODO PR-M3: persist per-dock IsXDockOpen + SelectedXTabId in ViewerSettings
+    /// <summary>
+    /// True when the bottom dock is shown. Persisted in
+    /// <see cref="ViewerSettings.IsBottomDockOpen"/> (PR-M3).
+    /// </summary>
     public bool IsBottomDockOpen
     {
         get => _isBottomDockOpen;
-        set => SetProperty(ref _isBottomDockOpen, value);
+        set
+        {
+            if (SetProperty(ref _isBottomDockOpen, value) && _settingsInitialized)
+            {
+                _settings.IsBottomDockOpen = value;
+                _settings.Save();
+            }
+        }
     }
 
     /// <summary>Pane header text for the left dock chrome.</summary>
@@ -192,6 +234,108 @@ internal sealed class MainViewModel : ViewModelBase
 
     /// <summary>Pane header text for the bottom dock chrome.</summary>
     public string BottomDockTitle => _selectedBottomTab?.Title ?? string.Empty;
+
+    // ─── PR-M3: persisted panel sizes ─────────────────────────────────
+    // All sizes are absolute pixels except the two inner-split values
+    // which are fractions in [0, 1]. The properties write through a
+    // shared DebouncedSettingsSaver so rapid splitter drags coalesce
+    // into a single disk write 500 ms after the last move. Flush() is
+    // called from MainWindow.Closed (see OnShutdown).
+
+    private double? _leftDockSavedWidth;
+    /// <summary>Persisted absolute pixel width of the left dock (PR-M3).</summary>
+    public double? LeftDockSavedWidth
+    {
+        get => _leftDockSavedWidth;
+        set
+        {
+            if (SetProperty(ref _leftDockSavedWidth, value) && _settingsInitialized)
+            {
+                _settings.Panels.LeftDockWidth = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
+    private double? _rightDockSavedWidth;
+    /// <summary>Persisted absolute pixel width of the right dock (PR-M3).</summary>
+    public double? RightDockSavedWidth
+    {
+        get => _rightDockSavedWidth;
+        set
+        {
+            if (SetProperty(ref _rightDockSavedWidth, value) && _settingsInitialized)
+            {
+                _settings.Panels.RightDockWidth = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
+    private double? _bottomDockSavedHeight;
+    /// <summary>Persisted absolute pixel height of the bottom dock (PR-M3).</summary>
+    public double? BottomDockSavedHeight
+    {
+        get => _bottomDockSavedHeight;
+        set
+        {
+            if (SetProperty(ref _bottomDockSavedHeight, value) && _settingsInitialized)
+            {
+                _settings.Panels.BottomDockHeight = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
+    private double? _datasetsInnerSplit;
+    /// <summary>Persisted fraction <c>[0,1]</c> of the Datasets-tab master/detail splitter (PR-M3).</summary>
+    public double? DatasetsInnerSplit
+    {
+        get => _datasetsInnerSplit;
+        set
+        {
+            if (SetProperty(ref _datasetsInnerSplit, value) && _settingsInitialized)
+            {
+                _settings.Panels.DatasetsInnerSplit = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
+    private double? _catalogInnerSplit;
+    /// <summary>Persisted fraction <c>[0,1]</c> of the Catalog-tab master/detail splitter (PR-M3).</summary>
+    public double? CatalogInnerSplit
+    {
+        get => _catalogInnerSplit;
+        set
+        {
+            if (SetProperty(ref _catalogInnerSplit, value) && _settingsInitialized)
+            {
+                _settings.Panels.CatalogInnerSplit = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
+    private readonly DebouncedSettingsSaver _sizeSaver;
+
+    /// <summary>
+    /// True once the constructor finishes hydrating from settings — used by
+    /// every persisted property setter to suppress the write-back that would
+    /// otherwise happen during initial assignment. Hosts call
+    /// <see cref="OnShutdown"/> on application exit to flush any pending
+    /// debounced size writes.
+    /// </summary>
+    private bool _settingsInitialized;
+
+    /// <summary>
+    /// Called by the host (MainWindow on Closed) so the debounced size
+    /// saver flushes its last pending write before the process exits.
+    /// </summary>
+    public void OnShutdown()
+    {
+        _sizeSaver.Flush();
+    }
 
     /// <summary>
     /// Single, parameterised command bound by every activity-bar
@@ -691,6 +835,14 @@ internal sealed class MainViewModel : ViewModelBase
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
         _mcpServerHost = mcpServerHost;
+
+        // PR-M3: debounced settings writer used by the splitter-size
+        // setters. 500 ms window coalesces rapid drag updates into one
+        // disk write; MainWindow.Closed calls OnShutdown → Flush so the
+        // last drag is never lost.
+        _sizeSaver = new DebouncedSettingsSaver(
+            save: () => { try { _settings.Save(); } catch { /* best-effort */ } },
+            dispatch: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
         if (_mcpServerHost is { } host)
         {
             host.ServerChanged += (_, _) => AttachToMcpServer();
@@ -864,13 +1016,44 @@ internal sealed class MainViewModel : ViewModelBase
             _selectedLeftTab = LeftTabs[0];
         }
 
-        // Left dock defaults to open when there is a tab to display.
-        // Right/Bottom default to closed (in-memory only — PR-M3 will
-        // persist these). Auto-open subscriptions below will reopen
-        // Right/Bottom on content-available signals from their tab VMs.
-        _isLeftDockOpen = _selectedLeftTab is not null;
+        // PR-M3: restore persisted dock visibility before wiring auto-open
+        // subscriptions. Auto-open events still fire on content-becomes-
+        // available signals but no-op when the dock is already open.
+        // Left dock: persisted flag wins, but always close if no tab is
+        // available to show.
+        _isLeftDockOpen = settings.IsLeftDockOpen && _selectedLeftTab is not null;
+        _isRightDockOpen = settings.IsRightDockOpen;
+        _isBottomDockOpen = settings.IsBottomDockOpen;
 
         WireAutoOpenSubscriptions();
+
+        // PR-M3: restore persisted right/bottom tab selections. Done after
+        // WireAutoOpenSubscriptions so the defaults set there are
+        // overridden when a persisted id resolves; falls back to the
+        // first registered tab of that dock when the id is stale.
+        if (settings.LastSelectedRightTab is { } rightId
+            && _tabsById.TryGetValue(rightId, out var rightTab)
+            && rightTab.Dock == TabDock.Right)
+        {
+            _selectedRightTab = rightTab;
+        }
+        if (settings.LastSelectedBottomTab is { } bottomId
+            && _tabsById.TryGetValue(bottomId, out var bottomTab)
+            && bottomTab.Dock == TabDock.Bottom)
+        {
+            _selectedBottomTab = bottomTab;
+        }
+
+        // PR-M3: hydrate persisted panel sizes.
+        _leftDockSavedWidth = settings.Panels.LeftDockWidth;
+        _rightDockSavedWidth = settings.Panels.RightDockWidth;
+        _bottomDockSavedHeight = settings.Panels.BottomDockHeight;
+        _datasetsInnerSplit = settings.Panels.DatasetsInnerSplit;
+        _catalogInnerSplit = settings.Panels.CatalogInnerSplit;
+
+        // Enable persistence write-backs only after hydration is complete.
+        // Setters check this flag to avoid writing during initial assignment.
+        _settingsInitialized = true;
     }
 
     private void WireAutoOpenSubscriptions()

@@ -292,7 +292,8 @@
                                   bh:CollapsibleColumn.IsVisible="{Binding IsLeftDockOpen}"
                                   bh:CollapsibleColumn.ExpandedWidth="320"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="200"
-                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600"
+                                  bh:CollapsibleColumn.SavedWidth="{Binding LeftDockSavedWidth, Mode=TwoWay}" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -300,7 +301,8 @@
                                   bh:CollapsibleColumn.IsVisible="{Binding IsRightDockOpen}"
                                   bh:CollapsibleColumn.ExpandedWidth="360"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="240"
-                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600"
+                                  bh:CollapsibleColumn.SavedWidth="{Binding RightDockSavedWidth, Mode=TwoWay}" />
             </Grid.ColumnDefinitions>
 
             <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.) -->
@@ -340,7 +342,8 @@
                     <RowDefinition Height="120" MinHeight="100"
                                    bh:CollapsibleRow.IsVisible="{Binding IsBottomDockOpen}"
                                    bh:CollapsibleRow.ExpandedHeight="120"
-                                   bh:CollapsibleRow.MinHeightWhenVisible="100" />
+                                   bh:CollapsibleRow.MinHeightWhenVisible="100"
+                                   bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" DragDrop.AllowDrop="True">
                 <mapsui:MapControl x:Name="MapControl" />

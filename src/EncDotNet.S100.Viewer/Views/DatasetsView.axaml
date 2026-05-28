@@ -5,6 +5,7 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              xmlns:conv="using:EncDotNet.S100.Viewer"
+             xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
 
@@ -441,7 +442,8 @@
                           VerticalAlignment="Center"
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext"
-                          bh:HoverDelay.DelayMilliseconds="500" />
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).DatasetsInnerSplit, Mode=TwoWay}" />
 
             <!-- Properties sub-panel. Tabbed: "Dataset" controls
                  the dataset as a whole, "Layers" exposes per-sub-layer
