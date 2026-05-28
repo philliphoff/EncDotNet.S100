@@ -1,0 +1,313 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
+             x:DataType="vm:PickReportViewModel">
+
+    <!--
+        Pick Report (Object Information) panel content. PR-M4: the chrome
+        bar (title + close button) is owned by MainWindow's right-dock
+        host; this UserControl only renders the body. When there is no
+        active pick, an empty-state watermark is shown instead of the
+        identity block / attribute list.
+    -->
+    <Grid>
+        <!-- Empty-state watermark, visible when no feature is picked. -->
+        <Border IsVisible="{Binding !HasPick}"
+                Padding="24">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ic:FluentIcon Icon="Cursor"
+                               IconVariant="Regular"
+                               FontSize="40"
+                               Opacity="0.4"
+                               HorizontalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.PickReport_EmptyState}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           FontSize="12"
+                           Opacity="0.65"
+                           MaxWidth="240" />
+            </StackPanel>
+        </Border>
+
+        <DockPanel IsVisible="{Binding HasPick}">
+        <!--
+            Sticky header: hit list + identity block + references all
+            stay pinned to the top of the panel; only the attribute
+            list scrolls. The UserControl's DataContext is already the
+            PickReportViewModel, so child bindings resolve directly
+            against it without an extra DataContext hop.
+        -->
+        <StackPanel DockPanel.Dock="Top"
+                    Spacing="10"
+                    Margin="12,4,12,8">
+            <!-- Hit list (visible only when more than one feature is at this point) -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8"
+                    IsVisible="{Binding HasMultipleHits}">
+                <StackPanel Spacing="4">
+                    <TextBlock FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7"
+                               Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
+                    <ListBox ItemsSource="{Binding Hits}"
+                             SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             MaxHeight="180">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PickHit">
+                                <TextBlock FontSize="12"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                                    <Run Text="{Binding DisplayLabel}" />
+                                    <Run Text=" — " FontWeight="Light" />
+                                    <Run Text="{Binding FeatureRef}" FontStyle="Italic" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Header block: feature type + identity -->
+            <StackPanel Spacing="2">
+                <TextBlock Text="{Binding FeatureType}"
+                           FontSize="14"
+                           FontWeight="SemiBold" />
+                <TextBlock FontSize="11" Opacity="0.7">
+                    <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
+                    <Run Text="{Binding FeatureRef}" />
+                </TextBlock>
+                <TextBlock FontSize="11" Opacity="0.7"
+                           Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
+                <TextBlock FontSize="11" Opacity="0.7"
+                           Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- References list (xlink:href targets) -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,1,0,0"
+                    Padding="0,8,0,0"
+                    IsVisible="{Binding HasReferences}">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Static loc:Strings.Pick_ReferencesHeader}"
+                               FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                    <ItemsControl ItemsSource="{Binding References}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="pp:FeatureReference">
+                                <Button Margin="0,1"
+                                        Padding="6,2"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Background="Transparent"
+                                        Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).NavigateCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_FollowReference}">
+                                    <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                                        <Run Text="{Binding Role}" />
+                                        <Run Text=" → " FontWeight="Light" />
+                                        <Run Text="{Binding TargetRef}" FontStyle="Italic" />
+                                    </TextBlock>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- Scrolling region: station chart (when present) + attributes -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="12,0,12,12">
+            <StackPanel Spacing="8">
+                <!--
+                    Station time-series chart, shown only when the
+                    selected hit carries a StationTimeSeriesViewModel
+                    (S-104 / S-111 dcf=8 station picks). For S-104
+                    the view model is S104StationTimeSeriesViewModel
+                    and exposes a single HeightSeries; for S-111 it
+                    is S111StationTimeSeriesViewModel with two
+                    stacked charts sharing the inherited TimeAxis.
+                -->
+                <Border IsVisible="{Binding HasStationSeries}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0">
+                    <ContentControl Content="{Binding SelectedStationSeries}">
+                        <ContentControl.DataTemplates>
+                            <DataTemplate DataType="vm:S104StationTimeSeriesViewModel">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Title}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <lvc:CartesianChart MinHeight="220"
+                                                        Series="{Binding HeightSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding HeightAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="vm:S111StationTimeSeriesViewModel">
+                                <Grid RowDefinitions="Auto,Auto,8,Auto,Auto">
+                                    <TextBlock Grid.Row="0"
+                                               Text="{Binding SpeedTitle}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7"
+                                               Margin="0,0,0,4" />
+                                    <lvc:CartesianChart Grid.Row="1"
+                                                        MinHeight="180"
+                                                        Series="{Binding SpeedSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding SpeedAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                    <TextBlock Grid.Row="3"
+                                               Text="{Binding DirectionTitle}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7"
+                                               Margin="0,0,0,4" />
+                                    <lvc:CartesianChart Grid.Row="4"
+                                                        MinHeight="180"
+                                                        Series="{Binding DirectionSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding DirectionAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+                </Border>
+
+                <!--
+                    Attribute list. When a station chart is shown
+                    we collapse it into an Expander to keep the
+                    chart as the primary focus; otherwise the
+                    attributes render inline as before.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding !HasStationSeries}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <TreeView ItemsSource="{Binding Attributes}"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Padding="0">
+                            <TreeView.Styles>
+                                <Style Selector="TreeViewItem">
+                                    <Setter Property="IsExpanded" Value="True" />
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate x:DataType="pp:PickAttribute"
+                                                  ItemsSource="{Binding Children}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding DisplayName}"
+                                                   FontSize="12"
+                                                   Opacity="0.7"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding Code}" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding DisplayText}"
+                                                   FontSize="12"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="220"
+                                                   ToolTip.Tip="{Binding RawValue}" />
+                                    </Grid>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasAttributes}" />
+                    </StackPanel>
+                </Border>
+
+                <Expander IsVisible="{Binding HasStationSeries}"
+                          Header="{x:Static loc:Strings.Pick_Chart_StationAttributes}"
+                          IsExpanded="False"
+                          HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="4">
+                        <TreeView ItemsSource="{Binding Attributes}"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Padding="0">
+                            <TreeView.Styles>
+                                <Style Selector="TreeViewItem">
+                                    <Setter Property="IsExpanded" Value="True" />
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate x:DataType="pp:PickAttribute"
+                                                  ItemsSource="{Binding Children}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding DisplayName}"
+                                                   FontSize="12"
+                                                   Opacity="0.7"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding Code}" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding DisplayText}"
+                                                   FontSize="12"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="220"
+                                                   ToolTip.Tip="{Binding RawValue}" />
+                                    </Grid>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasAttributes}" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+    </Grid>
+</UserControl>

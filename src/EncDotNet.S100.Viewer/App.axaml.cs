@@ -10,8 +10,13 @@ using Avalonia.Threading;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.ViewModels.Activities;
+using EncDotNet.S100.Viewer.Views;
+using FluentIcons.Avalonia.Fluent;
+using FluentIcons.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -254,6 +259,86 @@ public partial class App : Application
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<MainViewModel>();
+
+        // Activity-tab registry. Adding a new tab is a single AddActivityTab
+        // line plus the VM registration above and a View under Views/ — no
+        // edits to MainWindow.axaml. Ids match the legacy ActivityKind enum
+        // names so existing ViewerSettings.LastSelectedActivity values
+        // round-trip unchanged.
+        services.AddActivityTab<FeatureCataloguesViewModel, FeatureCataloguesView>(
+            id: "FeatureCatalogues",
+            order: 10,
+            title: Strings.Pane_FeatureCatalogues,
+            tooltip: Strings.Tooltip_FeatureCatalogues,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
+            id: "PortrayalCatalogues",
+            order: 20,
+            title: Strings.Pane_PortrayalCatalogues,
+            tooltip: Strings.Tooltip_PortrayalCatalogues,
+            iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<DatasetsViewModel, DatasetsView>(
+            id: "Datasets",
+            order: 30,
+            title: Strings.Pane_Datasets,
+            tooltip: Strings.Tooltip_Datasets,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Layer, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<CatalogPanelViewModel, CatalogPanelView>(
+            id: "Catalog",
+            order: 40,
+            title: Strings.Pane_Catalog,
+            tooltip: Strings.Tooltip_Catalog,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<LayerStackViewModel, LayerStackView>(
+            id: "LayerStack",
+            order: 50,
+            title: Strings.Pane_LayerStack,
+            tooltip: Strings.Tooltip_LayerStack,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Stack, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<FeatureSearchViewModel, FeatureSearchView>(
+            id: "Search",
+            order: 60,
+            title: Strings.Pane_Search,
+            tooltip: Strings.Tooltip_Search,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
+            id: "EcdisDisplay",
+            order: 70,
+            title: Strings.Pane_EcdisDisplay,
+            tooltip: Strings.Tooltip_EcdisDisplay,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Eye, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<SettingsViewModel, SettingsView>(
+            id: "Settings",
+            order: 1000,
+            title: Strings.Pane_Settings,
+            tooltip: Strings.Tooltip_Settings,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Settings, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false);
+
+        // PR-M4: Pick Report lives in the right dock; auto-opens when a
+        // feature is picked. No switcher UI; chrome bar in MainWindow
+        // owns the close button. Title reuses the existing pane string.
+        services.AddActivityTab<PickReportViewModel, PickReportView>(
+            id: "PickReport",
+            order: 10,
+            title: Strings.Pick_PanelTitle,
+            tooltip: Strings.Pick_PanelTitle,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Cursor, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Right,
+            autoOpenOnContentSignal: true);
+
+        // PR-M4: Timeline lives in the bottom dock; auto-opens when a
+        // time-aware dataset is loaded.
+        services.AddActivityTab<TimelineViewModel, TimelineView>(
+            id: "Timeline",
+            order: 10,
+            title: Strings.TimelinePanel_Title,
+            tooltip: Strings.TimelinePanel_Title,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Clock, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Bottom,
+            autoOpenOnContentSignal: true);
 
         // Main window — receives only the StartupOptions plus the small set
         // of cross-cutting services it still owns directly. Per-dataset

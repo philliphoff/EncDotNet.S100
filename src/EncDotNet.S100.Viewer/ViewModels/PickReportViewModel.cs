@@ -22,7 +22,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <see cref="HasMultipleHits"/> gates the hit-list UI. Picks with a single
 /// hit behave exactly like before (hit-list hidden).
 /// </remarks>
-internal sealed class PickReportViewModel : ViewModelBase
+internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTabContentSignal
 {
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly IMarinerSettingsProvider? _marinerSettings;
@@ -204,8 +204,21 @@ internal sealed class PickReportViewModel : ViewModelBase
     public bool HasPick
     {
         get => _hasPick;
-        private set => SetProperty(ref _hasPick, value);
+        private set
+        {
+            var wasHasPick = _hasPick;
+            if (SetProperty(ref _hasPick, value) && !wasHasPick && value)
+            {
+                // false→true transition: signal that the Pick Report dock
+                // should auto-open (PR-M4). Subsequent updates while still
+                // HasPick=true do NOT re-raise.
+                ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
+
+    /// <inheritdoc />
+    public event EventHandler? ContentBecameAvailable;
 
     /// <summary>
     /// Ordered list of every feature the most recent pick gesture hit. The

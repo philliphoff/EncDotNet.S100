@@ -37,6 +37,9 @@ internal sealed class MapsuiMapHost : IMapHost
     /// (e.g. measure chrome) which the viewer adds straight to
     /// <c>Map.Layers</c>. Overlay-tier layers sit above the
     /// dataset slice but below any subsequently-added tool overlays.
+    /// Held separately from <see cref="_datasetLayers"/> so
+    /// <see cref="ReorderDatasetLayers"/> never moves or removes
+    /// overlays.
     /// </summary>
     private readonly HashSet<ILayer> _overlayLayers = new();
 

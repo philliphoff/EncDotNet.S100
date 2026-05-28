@@ -4,6 +4,7 @@
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
         xmlns:ic="using:FluentIcons.Avalonia.Fluent"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+        xmlns:activities="using:EncDotNet.S100.Viewer.ViewModels.Activities"
         xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
@@ -28,6 +29,15 @@
     <shadui:Window.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
     </shadui:Window.Resources>
+
+    <shadui:Window.DataTemplates>
+        <!--
+          Single IDataTemplate that materialises any IActivityTab into its
+          UserControl (DataContext = tab.ViewModel). Adding a new tab is a
+          DI-only change in App.axaml.cs — no XAML edits needed here.
+        -->
+        <activities:ActivityTabViewTemplate />
+    </shadui:Window.DataTemplates>
 
     <shadui:Window.KeyBindings>
         <!-- Esc exits the active map tool (pick or measure). -->
@@ -185,146 +195,93 @@
                 Width="48"
                 Padding="0">
             <DockPanel>
-                <!-- Settings pinned at bottom -->
-                <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="0,4">
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsSettingsSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                                      Command="{Binding SelectSettingsCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Settings}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Settings" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-                </StackPanel>
+                <!--
+                  Activity-tab items. The set of tabs is the IActivityTab
+                  registry; the same ItemTemplate is used for both the
+                  pinned-bottom (Settings) and top groups. Adding a tab is
+                  a DI-only change in App.axaml.cs.
+                -->
+                <ItemsControl DockPanel.Dock="Bottom"
+                              Margin="0,4"
+                              ItemsSource="{Binding LeftDockBottomTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid>
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                <!-- Top group: main activities -->
-                <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,4">
-                    <!-- Feature Catalogues -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsFeatureCataloguesSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsFeatureCataloguesSelected, Mode=OneWay}"
-                                      Command="{Binding SelectFeatureCataloguesCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FeatureCatalogues}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="BookOpen" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Portrayal Catalogues -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsPortrayalCataloguesSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsPortrayalCataloguesSelected, Mode=OneWay}"
-                                      Command="{Binding SelectPortrayalCataloguesCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalCatalogues}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="PaintBrush" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Datasets -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsDatasetsSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsDatasetsSelected, Mode=OneWay}"
-                                      Command="{Binding SelectDatasetsCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Datasets}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Dataset Catalog -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsCatalogSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsCatalogSelected, Mode=OneWay}"
-                                      Command="{Binding SelectCatalogCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Catalog}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Library" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Layer Stack -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsLayerStackSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsLayerStackSelected, Mode=OneWay}"
-                                      Command="{Binding SelectLayerStackCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_LayerStack}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Stack" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- Search -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsSearchSelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsSearchSelected, Mode=OneWay}"
-                                      Command="{Binding SelectSearchCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_Search}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Search" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-
-                    <!-- ECDIS Display Controls -->
-                    <Grid>
-                        <Border Width="3" HorizontalAlignment="Left"
-                                Background="{DynamicResource AccentBrush}"
-                                IsVisible="{Binding IsEcdisDisplaySelected}" />
-                        <ToggleButton Classes="ActivityIcon"
-                                      IsChecked="{Binding IsEcdisDisplaySelected, Mode=OneWay}"
-                                      Command="{Binding SelectEcdisDisplayCommand}"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisDisplay}"
-                                      Height="48"
-                                      Padding="0"
-                                      HorizontalContentAlignment="Center"
-                                      VerticalContentAlignment="Center">
-                            <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="22" />
-                        </ToggleButton>
-                    </Grid>
-                </StackPanel>
+                <ItemsControl DockPanel.Dock="Top"
+                              Margin="0,4"
+                              ItemsSource="{Binding LeftDockTopTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid>
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </DockPanel>
         </Border>
 
@@ -332,7 +289,7 @@
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsPaneVisible}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsLeftDockOpen}"
                                   bh:CollapsibleColumn.ExpandedWidth="320"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="200"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
@@ -340,45 +297,28 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsPickPanelVisible}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsRightDockOpen}"
                                   bh:CollapsibleColumn.ExpandedWidth="360"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="240"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600" />
             </Grid.ColumnDefinitions>
 
-            <!-- Activity pane -->
+            <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.) -->
             <Border Grid.Column="0"
                     Background="{DynamicResource BackgroundColor}"
-                    IsVisible="{Binding IsPaneVisible}">
+                    IsVisible="{Binding IsLeftDockOpen}">
                 <DockPanel>
                     <!-- Pane header -->
                     <Border DockPanel.Dock="Top"
                             Padding="12,8">
-                        <TextBlock Text="{Binding PaneTitle}"
+                        <TextBlock Text="{Binding LeftDockTitle}"
                                    FontSize="11"
                                    FontWeight="Normal"
                                    LetterSpacing="1" />
                     </Border>
 
-                    <!-- Pane content: show the appropriate view based on selection -->
-                    <Panel>
-                        <views:FeatureCataloguesView DataContext="{Binding FeatureCatalogues}"
-                                                     IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsFeatureCataloguesSelected}" />
-                        <views:PortrayalCataloguesView DataContext="{Binding PortrayalCatalogues}"
-                                                       IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsPortrayalCataloguesSelected}" />
-                        <views:DatasetsView DataContext="{Binding Datasets}"
-                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsDatasetsSelected}" />
-                        <views:CatalogPanelView DataContext="{Binding CatalogPanel}"
-                                                IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsCatalogSelected}" />
-                        <views:LayerStackView DataContext="{Binding LayerStack}"
-                                              IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsLayerStackSelected}" />
-                        <views:FeatureSearchView DataContext="{Binding Search}"
-                                                 IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSearchSelected}" />
-                        <views:SettingsView DataContext="{Binding Settings}"
-                                            IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsSettingsSelected}" />
-                        <views:EcdisDisplayPanelView DataContext="{Binding EcdisDisplayPanel}"
-                                                     IsVisible="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).IsEcdisDisplaySelected}" />
-                    </Panel>
+                    <!-- Pane content: resolved by ActivityTabViewTemplate from the selected tab. -->
+                    <ContentControl Content="{Binding SelectedLeftTab}" />
                 </DockPanel>
             </Border>
 
@@ -387,7 +327,7 @@
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsPaneVisible}"
+                          IsVisible="{Binding IsLeftDockOpen}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
@@ -398,7 +338,7 @@
                     <RowDefinition Height="*" MinHeight="100" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="120" MinHeight="100"
-                                   bh:CollapsibleRow.IsVisible="{Binding IsTimelineVisible}"
+                                   bh:CollapsibleRow.IsVisible="{Binding IsBottomDockOpen}"
                                    bh:CollapsibleRow.ExpandedHeight="120"
                                    bh:CollapsibleRow.MinHeightWhenVisible="100" />
                 </Grid.RowDefinitions>
@@ -676,336 +616,88 @@
                 </Border>
                 </Grid>
 
-                <!-- Resize grip between map and timeline panel -->
+                <!-- Resize grip between map and bottom dock -->
                 <GridSplitter Grid.Row="1"
                               Classes="PaneSplitter"
                               Height="4"
                               ResizeDirection="Rows"
-                              IsVisible="{Binding IsTimelineVisible}"
+                              IsVisible="{Binding IsBottomDockOpen}"
                               bh:HoverDelay.DelayMilliseconds="500"
                               Name="TimelineSplitter" />
 
-                <!-- Global time slider for time-varying datasets (S-104, S-111, S-411) -->
+                <!--
+                    Bottom dock (PR-M4). Hosts whichever activity tab is
+                    registered with Dock=Bottom (currently Timeline only).
+                    The chrome bar owns the title + close button; the
+                    ContentControl resolves to the tab's View via
+                    ActivityTabViewTemplate.
+                -->
                 <Border Grid.Row="2"
                         x:Name="TimelinePanel"
                         Background="{DynamicResource BackgroundColor}"
-                        IsVisible="{Binding IsTimelineVisible}">
-                    <views:TimelineView DataContext="{Binding Timeline}" />
+                        IsVisible="{Binding IsBottomDockOpen}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                                Padding="12,6,8,6">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding BottomDockTitle}"
+                                           FontSize="11"
+                                           FontWeight="Normal"
+                                           LetterSpacing="1"
+                                           VerticalAlignment="Center" />
+                                <Button Grid.Column="1"
+                                        Classes="Icon"
+                                        Command="{Binding CloseDockCommand}"
+                                        CommandParameter="Bottom"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}">
+                                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                                </Button>
+                            </Grid>
+                        </Border>
+                        <ContentControl Content="{Binding SelectedBottomTab}" />
+                    </DockPanel>
                 </Border>
             </Grid>
             <GridSplitter Grid.Column="3"
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsPickPanelVisible}"
+                          IsVisible="{Binding IsRightDockOpen}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 
-            <!-- Pick Report (Object Information) panel -->
+            <!--
+                Right dock (PR-M4). Hosts whichever activity tab is
+                registered with Dock=Right (currently Pick Report only).
+                The chrome bar owns the title + close button; the
+                ContentControl resolves to the tab's View via
+                ActivityTabViewTemplate. Pick Report stays open with an
+                empty-state watermark when there is no active pick.
+            -->
             <Border Grid.Column="4"
                     Background="{DynamicResource BackgroundColor}"
-                    IsVisible="{Binding IsPickPanelVisible}">
+                    IsVisible="{Binding IsRightDockOpen}">
                 <DockPanel>
                     <Border DockPanel.Dock="Top"
-                            Padding="12,8">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                            Padding="12,6,8,6">
+                        <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0"
-                                       Text="{x:Static loc:Strings.Pick_PanelTitle}"
+                                       Text="{Binding RightDockTitle}"
                                        FontSize="11"
                                        FontWeight="Normal"
                                        LetterSpacing="1"
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
-                                    Command="{Binding PickReport.ClearCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    Width="22" Height="22"
-                                    Padding="0"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center">
+                                    Classes="Icon"
+                                    Command="{Binding CloseDockCommand}"
+                                    CommandParameter="Right"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}">
                                 <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
                             </Button>
                         </Grid>
                     </Border>
-
-                    <!--
-                        Sticky header: hit list + identity block + references all
-                        stay pinned to the top of the panel; only the attribute
-                        list scrolls. Each block carries its own DataContext so
-                        bindings against PickReportViewModel work in both the
-                        sticky region and the scrolling region.
-                    -->
-                    <StackPanel DockPanel.Dock="Top"
-                                Spacing="10"
-                                Margin="12,4,12,8"
-                                DataContext="{Binding PickReport}">
-                        <!-- Hit list (visible only when more than one feature is at this point) -->
-                        <Border BorderBrush="{DynamicResource BorderColor}"
-                                BorderThickness="0,0,0,1"
-                                Padding="0,0,0,8"
-                                IsVisible="{Binding HasMultipleHits}">
-                            <StackPanel Spacing="4">
-                                <TextBlock FontSize="10"
-                                           FontWeight="Normal"
-                                           LetterSpacing="1"
-                                           Opacity="0.7"
-                                           Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
-                                <ListBox ItemsSource="{Binding Hits}"
-                                         SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
-                                         Background="Transparent"
-                                         BorderThickness="0"
-                                         Padding="0"
-                                         MaxHeight="180">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:PickHit">
-                                            <TextBlock FontSize="12"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
-                                                <Run Text="{Binding DisplayLabel}" />
-                                                <Run Text=" — " FontWeight="Light" />
-                                                <Run Text="{Binding FeatureRef}" FontStyle="Italic" />
-                                            </TextBlock>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Header block: feature type + identity -->
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="{Binding FeatureType}"
-                                       FontSize="14"
-                                       FontWeight="SemiBold" />
-                            <TextBlock FontSize="11" Opacity="0.7">
-                                <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
-                                <Run Text="{Binding FeatureRef}" />
-                            </TextBlock>
-                            <TextBlock FontSize="11" Opacity="0.7"
-                                       Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
-                            <TextBlock FontSize="11" Opacity="0.7"
-                                       Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-
-                        <!-- References list (xlink:href targets) -->
-                        <Border BorderBrush="{DynamicResource BorderColor}"
-                                BorderThickness="0,1,0,0"
-                                Padding="0,8,0,0"
-                                IsVisible="{Binding HasReferences}">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="{x:Static loc:Strings.Pick_ReferencesHeader}"
-                                           FontSize="10"
-                                           FontWeight="Normal"
-                                           LetterSpacing="1"
-                                           Opacity="0.7" />
-                                <ItemsControl ItemsSource="{Binding References}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="pp:FeatureReference">
-                                            <Button Margin="0,1"
-                                                    Padding="6,2"
-                                                    HorizontalAlignment="Stretch"
-                                                    HorizontalContentAlignment="Left"
-                                                    Background="Transparent"
-                                                    Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).NavigateCommand}"
-                                                    CommandParameter="{Binding}"
-                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_FollowReference}">
-                                                <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
-                                                    <Run Text="{Binding Role}" />
-                                                    <Run Text=" → " FontWeight="Light" />
-                                                    <Run Text="{Binding TargetRef}" FontStyle="Italic" />
-                                                </TextBlock>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <!-- Scrolling region: station chart (when present) + attributes -->
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                                  VerticalScrollBarVisibility="Auto"
-                                  Padding="12,0,12,12">
-                        <StackPanel Spacing="8"
-                                    DataContext="{Binding PickReport}">
-                            <!--
-                                Station time-series chart, shown only when the
-                                selected hit carries a StationTimeSeriesViewModel
-                                (S-104 / S-111 dcf=8 station picks). For S-104
-                                the view model is S104StationTimeSeriesViewModel
-                                and exposes a single HeightSeries; for S-111 it
-                                is S111StationTimeSeriesViewModel with two
-                                stacked charts sharing the inherited TimeAxis.
-                            -->
-                            <Border IsVisible="{Binding HasStationSeries}"
-                                    BorderBrush="{DynamicResource BorderColor}"
-                                    BorderThickness="0,1,0,0"
-                                    Padding="0,8,0,0">
-                                <ContentControl Content="{Binding SelectedStationSeries}">
-                                    <ContentControl.DataTemplates>
-                                        <DataTemplate DataType="vm:S104StationTimeSeriesViewModel">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="{Binding Title}"
-                                                           FontSize="10"
-                                                           FontWeight="Normal"
-                                                           LetterSpacing="1"
-                                                           Opacity="0.7" />
-                                                <lvc:CartesianChart MinHeight="220"
-                                                                    Series="{Binding HeightSeries}"
-                                                                    XAxes="{Binding TimeAxisArray}"
-                                                                    YAxes="{Binding HeightAxisArray}"
-                                                                    Sections="{Binding Sections}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                        <DataTemplate DataType="vm:S111StationTimeSeriesViewModel">
-                                            <Grid RowDefinitions="Auto,Auto,8,Auto,Auto">
-                                                <TextBlock Grid.Row="0"
-                                                           Text="{Binding SpeedTitle}"
-                                                           FontSize="10"
-                                                           FontWeight="Normal"
-                                                           LetterSpacing="1"
-                                                           Opacity="0.7"
-                                                           Margin="0,0,0,4" />
-                                                <lvc:CartesianChart Grid.Row="1"
-                                                                    MinHeight="180"
-                                                                    Series="{Binding SpeedSeries}"
-                                                                    XAxes="{Binding TimeAxisArray}"
-                                                                    YAxes="{Binding SpeedAxisArray}"
-                                                                    Sections="{Binding Sections}" />
-                                                <TextBlock Grid.Row="3"
-                                                           Text="{Binding DirectionTitle}"
-                                                           FontSize="10"
-                                                           FontWeight="Normal"
-                                                           LetterSpacing="1"
-                                                           Opacity="0.7"
-                                                           Margin="0,0,0,4" />
-                                                <lvc:CartesianChart Grid.Row="4"
-                                                                    MinHeight="180"
-                                                                    Series="{Binding DirectionSeries}"
-                                                                    XAxes="{Binding TimeAxisArray}"
-                                                                    YAxes="{Binding DirectionAxisArray}"
-                                                                    Sections="{Binding Sections}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ContentControl.DataTemplates>
-                                </ContentControl>
-                            </Border>
-
-                            <!--
-                                Attribute list. When a station chart is shown
-                                we collapse it into an Expander to keep the
-                                chart as the primary focus; otherwise the
-                                attributes render inline as before.
-                            -->
-                            <Border BorderBrush="{DynamicResource BorderColor}"
-                                    BorderThickness="0,1,0,0"
-                                    Padding="0,8,0,0"
-                                    IsVisible="{Binding !HasStationSeries}">
-                                <StackPanel Spacing="4">
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
-                                               FontSize="10"
-                                               FontWeight="Normal"
-                                               LetterSpacing="1"
-                                               Opacity="0.7" />
-                                    <TreeView ItemsSource="{Binding Attributes}"
-                                              Background="Transparent"
-                                              BorderThickness="0"
-                                              Padding="0">
-                                        <TreeView.Styles>
-                                            <Style Selector="TreeViewItem">
-                                                <Setter Property="IsExpanded" Value="True" />
-                                            </Style>
-                                        </TreeView.Styles>
-                                        <TreeView.ItemTemplate>
-                                            <TreeDataTemplate x:DataType="pp:PickAttribute"
-                                                              ItemsSource="{Binding Children}">
-                                                <Grid Margin="0,2">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="8" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0"
-                                                               Text="{Binding DisplayName}"
-                                                               FontSize="12"
-                                                               Opacity="0.7"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding Code}" />
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding DisplayText}"
-                                                               FontSize="12"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxWidth="220"
-                                                               ToolTip.Tip="{Binding RawValue}" />
-                                                </Grid>
-                                            </TreeDataTemplate>
-                                        </TreeView.ItemTemplate>
-                                    </TreeView>
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
-                                               FontSize="12"
-                                               FontStyle="Italic"
-                                               Opacity="0.6"
-                                               IsVisible="{Binding !HasAttributes}" />
-                                </StackPanel>
-                            </Border>
-
-                            <Expander IsVisible="{Binding HasStationSeries}"
-                                      Header="{x:Static loc:Strings.Pick_Chart_StationAttributes}"
-                                      IsExpanded="False"
-                                      HorizontalAlignment="Stretch">
-                                <StackPanel Spacing="4">
-                                    <TreeView ItemsSource="{Binding Attributes}"
-                                              Background="Transparent"
-                                              BorderThickness="0"
-                                              Padding="0">
-                                        <TreeView.Styles>
-                                            <Style Selector="TreeViewItem">
-                                                <Setter Property="IsExpanded" Value="True" />
-                                            </Style>
-                                        </TreeView.Styles>
-                                        <TreeView.ItemTemplate>
-                                            <TreeDataTemplate x:DataType="pp:PickAttribute"
-                                                              ItemsSource="{Binding Children}">
-                                                <Grid Margin="0,2">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="8" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0"
-                                                               Text="{Binding DisplayName}"
-                                                               FontSize="12"
-                                                               Opacity="0.7"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip.Tip="{Binding Code}" />
-                                                    <TextBlock Grid.Column="2"
-                                                               Text="{Binding DisplayText}"
-                                                               FontSize="12"
-                                                               TextWrapping="NoWrap"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxWidth="220"
-                                                               ToolTip.Tip="{Binding RawValue}" />
-                                                </Grid>
-                                            </TreeDataTemplate>
-                                        </TreeView.ItemTemplate>
-                                    </TreeView>
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
-                                               FontSize="12"
-                                               FontStyle="Italic"
-                                               Opacity="0.6"
-                                               IsVisible="{Binding !HasAttributes}" />
-                                </StackPanel>
-                            </Expander>
-                        </StackPanel>
-                    </ScrollViewer>
+                    <ContentControl Content="{Binding SelectedRightTab}" />
                 </DockPanel>
             </Border>
         </Grid>
