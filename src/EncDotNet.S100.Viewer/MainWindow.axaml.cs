@@ -138,6 +138,9 @@ public partial class MainWindow : ShadUI.Window
             _validationOverlay = null;
             foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
             _dynamicSourceRegistrations.Clear();
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+                .Current = null;
             _dynamicSourceOverlayHost?.Dispose();
             _dynamicSourceOverlayHost = null;
         };
@@ -215,6 +218,32 @@ public partial class MainWindow : ShadUI.Window
             mapHost,
             App.Services,
             logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost>>());
+
+        // PR-D2.1: seed per-source visibility from persisted settings
+        // *before* the Register loop so each source's MemoryLayer.Enabled
+        // starts in the user's last-known state, then wire write-back so
+        // the Layer Stack panel's visibility toggle persists.
+        var viewerSettings = App.Services.GetRequiredService<ViewerSettings>();
+        foreach (var kv in viewerSettings.DynamicSourceVisibility)
+        {
+            _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
+        }
+        _dynamicSourceOverlayHost.SourcesChanged += () =>
+        {
+            foreach (var info in _dynamicSourceOverlayHost.Sources)
+            {
+                viewerSettings.DynamicSourceVisibility[info.Id] = _dynamicSourceOverlayHost.GetVisible(info.Id);
+            }
+            try { viewerSettings.Save(); } catch { /* best-effort */ }
+        };
+
+        // Attach the registry to the accessor so view-models resolved
+        // before window construction (e.g. LayerStackViewModel as a
+        // singleton) start seeing dynamic sources.
+        App.Services.GetRequiredService<
+            EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+            .Current = _dynamicSourceOverlayHost;
+
         foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
         {
             _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));

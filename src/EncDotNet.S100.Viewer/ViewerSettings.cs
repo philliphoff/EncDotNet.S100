@@ -119,7 +119,24 @@ internal sealed class ViewerSettings
     /// driver is always running; this flag controls whether the
     /// source publishes the glyph to the dynamic-source overlay tier.
     /// </summary>
+    /// <remarks>
+    /// PR-D2.1 supersedes this field with the per-source
+    /// <see cref="DynamicSourceVisibility"/> dictionary. The field is
+    /// kept on the POCO so a downgrade still reads the user's choice;
+    /// <see cref="Load"/> migrates its value into the dictionary on
+    /// first load, and <see cref="Save"/> mirrors the dictionary
+    /// entry back so the legacy field stays in sync for one release.
+    /// </remarks>
     public bool OwnShipVisible { get; set; } = true;
+
+    /// <summary>
+    /// Per-source visibility for dynamic feature sources (PR-D2.1),
+    /// keyed by <c>IDynamicFeatureSource.Id</c>. Drives the Layer
+    /// Stack panel's visibility toggle for the
+    /// <c>DynamicArrows</c> plane.
+    /// </summary>
+    public Dictionary<string, bool> DynamicSourceVisibility { get; set; }
+        = new(StringComparer.Ordinal);
 
     /// <summary>
     /// User preference for whether the bottom timeline panel is shown.
@@ -208,6 +225,15 @@ internal sealed class ViewerSettings
                     settings.PortrayalCataloguePath = null;
                 }
 
+                // PR-D2.1: migrate legacy OwnShipVisible bool into the
+                // per-source DynamicSourceVisibility dictionary so the
+                // own-ship row in the Layer Stack picks up the user's
+                // pre-PR-D2.1 choice on first load.
+                if (!settings.DynamicSourceVisibility.ContainsKey(OwnShipVisibilityKey))
+                {
+                    settings.DynamicSourceVisibility[OwnShipVisibilityKey] = settings.OwnShipVisible;
+                }
+
                 return settings;
             }
         }
@@ -224,7 +250,23 @@ internal sealed class ViewerSettings
         var dir = Path.GetDirectoryName(SettingsFilePath);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
+
+        // PR-D2.1: keep legacy OwnShipVisible in sync with the
+        // per-source visibility dictionary so a downgrade still
+        // picks up the user's current choice.
+        if (DynamicSourceVisibility.TryGetValue(OwnShipVisibilityKey, out var ownShipVisible))
+        {
+            OwnShipVisible = ownShipVisible;
+        }
+
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(SettingsFilePath, json);
     }
+
+    /// <summary>
+    /// Source id of the own-ship dynamic source (matches
+    /// <c>OwnShipSource.FeatureId</c>). Used by the PR-D2.1
+    /// migration / mirror logic.
+    /// </summary>
+    internal const string OwnShipVisibilityKey = "ownship";
 }
