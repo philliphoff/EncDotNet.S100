@@ -232,6 +232,7 @@ public static class S111DatasetReader
                 NumPointsLatitudinal = numLat,
                 NumPointsLongitudinal = numLon,
                 StartSequence = startSequence,
+                GroupPath = instancePath,
                 TimePoint = timePoint,
                 Values = values,
             });
