@@ -100,15 +100,23 @@ public sealed class ClientWebSocketTransport : IAisStreamIoTransport
         {
             if (_socket.State == WebSocketState.Open)
             {
+                // Bound the close handshake — if the peer is wedged
+                // we don't want Dispose to hang the host process.
+                using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 await _socket.CloseAsync(
                     WebSocketCloseStatus.NormalClosure,
                     statusDescription: null,
-                    CancellationToken.None).ConfigureAwait(false);
+                    closeCts.Token).ConfigureAwait(false);
             }
         }
         catch (WebSocketException)
         {
             // Already-broken sockets — drop quietly on dispose.
+        }
+        catch (OperationCanceledException)
+        {
+            // Close-handshake timed out — drop into Dispose() below
+            // which will Abort the underlying socket.
         }
         _socket.Dispose();
         _socket = null;

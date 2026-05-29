@@ -50,6 +50,7 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     private readonly DynamicFeatureTracker<AisPositionReport> _tracker;
     private readonly object _staticLock = new();
     private readonly Dictionary<uint, AisStaticVoyageData> _staticByMmsi = new();
+    private readonly IReadOnlySet<AisShipTypeClass>? _shipTypeAllowList;
     private readonly TimeSpan _retain;
     private bool _disposed;
 
@@ -78,6 +79,11 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
         _retain = retain ?? DefaultRetainWindow;
         _tracker = new DynamicFeatureTracker<AisPositionReport>(Project);
 
+        var resolved = request ?? new AisSubscriptionRequest();
+        _shipTypeAllowList = resolved.ShipTypes is null
+            ? null
+            : new HashSet<AisShipTypeClass>(resolved.ShipTypes);
+
         Metadata = new DynamicSourceMetadata
         {
             DisplayName = messageSource.Metadata.DisplayName,
@@ -85,7 +91,7 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
             RendererKey = "vessel.ais",
         };
 
-        _subscription = messageSource.Subscribe(request ?? new AisSubscriptionRequest());
+        _subscription = messageSource.Subscribe(resolved);
         _subscription.PositionReportReceived += OnPositionReportReceived;
         _subscription.StaticVoyageDataReceived += OnStaticVoyageDataReceived;
         _subscription.TargetLost += OnTargetLost;
@@ -155,6 +161,7 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
     private void OnPositionReportReceived(object? sender, AisPositionReport report)
     {
         if (_disposed) return;
+        if (!IsClassAllowed(report.Mmsi)) return;
         var change = _tracker.Apply(report);
         Changed?.Invoke(this, change);
     }
@@ -164,10 +171,30 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
         if (_disposed) return;
 
         bool refresh;
+        bool evict = false;
         lock (_staticLock)
         {
             _staticByMmsi[data.Mmsi] = data;
             refresh = _tracker.Current.Any(f => f.Id == FeatureIdForMmsi(data.Mmsi));
+            if (_shipTypeAllowList is not null
+                && !_shipTypeAllowList.Contains(data.ShipTypeClass))
+            {
+                evict = refresh;
+                refresh = false;
+            }
+        }
+
+        if (evict)
+        {
+            // Static data revealed this MMSI is in a class the
+            // caller filtered out — remove the already-projected
+            // feature so per-class subscriptions converge.
+            var removal = _tracker.Remove(FeatureIdForMmsi(data.Mmsi));
+            if (removal.Kind == DynamicSourceChangeKind.Removed)
+            {
+                Changed?.Invoke(this, removal);
+            }
+            return;
         }
 
         if (!refresh) return;
@@ -195,6 +222,24 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
         {
             Changed?.Invoke(this, change);
         }
+    }
+
+    /// <summary>
+    /// Whether a position report for <paramref name="mmsi"/> should be
+    /// admitted under the active <see cref="AisSubscriptionRequest.ShipTypes"/>
+    /// allow-list. When no static data is yet cached for the MMSI the
+    /// report is admitted optimistically; if subsequent
+    /// <see cref="AisStaticVoyageData"/> classifies the vessel into a
+    /// disallowed class the feature is evicted in
+    /// <see cref="OnStaticVoyageDataReceived"/>.
+    /// </summary>
+    private bool IsClassAllowed(uint mmsi)
+    {
+        if (_shipTypeAllowList is null) return true;
+        AisStaticVoyageData? cached;
+        lock (_staticLock) _staticByMmsi.TryGetValue(mmsi, out cached);
+        if (cached is null) return true;
+        return _shipTypeAllowList.Contains(cached.ShipTypeClass);
     }
 
     private DynamicFeature Project(AisPositionReport report)

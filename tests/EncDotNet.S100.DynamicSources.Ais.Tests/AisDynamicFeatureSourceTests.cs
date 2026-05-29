@@ -253,6 +253,51 @@ public class AisDynamicFeatureSourceTests
     [Fact]
     public void FeatureIdForMmsi_is_stable()
         => Assert.Equal("ais:123456789", AisDynamicFeatureSource.FeatureIdForMmsi(123456789));
+
+    [Fact]
+    public void ShipTypes_filter_admits_known_class_and_drops_disallowed_class()
+    {
+        var fake = new FakeAisMessageSource();
+        var request = new AisSubscriptionRequest
+        {
+            ShipTypes = new[] { AisShipTypeClass.Tanker },
+        };
+        using var source = new AisDynamicFeatureSource("ais", fake, request).AsSyncDisposable();
+
+        // Pre-classify both vessels via static data.
+        fake.Subscriptions[0].EmitStatic(Static(1, AisShipType.Tanker));
+        fake.Subscriptions[0].EmitStatic(Static(2, AisShipType.Cargo));
+
+        fake.Subscriptions[0].EmitPosition(Pos(1, 10, 10));
+        fake.Subscriptions[0].EmitPosition(Pos(2, 11, 11));
+
+        var feature = Assert.Single(source.Inner.CurrentFeatures);
+        Assert.Equal("ais:1", feature.Id);
+    }
+
+    [Fact]
+    public void ShipTypes_filter_evicts_when_static_data_reveals_disallowed_class()
+    {
+        var fake = new FakeAisMessageSource();
+        var request = new AisSubscriptionRequest
+        {
+            ShipTypes = new[] { AisShipTypeClass.Tanker },
+        };
+        using var source = new AisDynamicFeatureSource("ais", fake, request).AsSyncDisposable();
+        var changes = new List<DynamicFeaturesChanged>();
+        source.Inner.Changed += (_, e) => changes.Add(e);
+
+        // No static yet → admitted optimistically.
+        fake.Subscriptions[0].EmitPosition(Pos(7, 20, 20));
+        Assert.Single(source.Inner.CurrentFeatures);
+
+        // Static reveals Cargo (not in allow-list) → feature evicted.
+        fake.Subscriptions[0].EmitStatic(Static(7, AisShipType.Cargo));
+
+        Assert.Empty(source.Inner.CurrentFeatures);
+        Assert.Equal(DynamicSourceChangeKind.Removed, changes[^1].Kind);
+        Assert.Contains("ais:7", changes[^1].ChangedIds);
+    }
 }
 
 internal static class AsyncDisposableExtensions
