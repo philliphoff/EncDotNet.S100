@@ -1,17 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Datasets.S104.Validation;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -56,6 +59,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S104DatasetData _data;
     private readonly string _fileName;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public SpecRef Spec => new("S-104", default);
 
@@ -614,4 +619,145 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     };
 
     private static string DecodeTrend(byte code) => DecodeTrend((int)code);
+
+    /// <summary>
+    /// Runs the S-104 normative rule pack
+    /// (<see cref="S104DatasetRules.Default"/>) against the parsed
+    /// dataset and returns the cached report. Returns <c>null</c> when
+    /// the loaded HDF5 has no validatable shape (defensive — currently
+    /// unreachable because the constructor produces either a
+    /// <see cref="S104DatasetData.GriddedCoverage"/> or a
+    /// <see cref="S104DatasetData.StationSeries"/>, both of which this
+    /// method handles).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per <c>docs/design/non-gml-validation.md</c> §5.1 and §5.3,
+    /// this override surfaces reader-time projection diagnostics under
+    /// reserved rule ids:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description><c>S104-PROJ-SCHEMA</c> — defensive try/catch for
+    /// <see cref="S100DatasetSchemaException"/>. The realistic failure
+    /// mode is the constructor itself throwing, so this only fires if
+    /// a future reader change moves schema validation later in the
+    /// pipeline.</description></item>
+    /// <item><description><c>S104-PROJ-UNSUPPORTED</c> — surfaced
+    /// proactively when the loaded dataset is a
+    /// <see cref="S104DatasetData.StationSeries"/> (S-104 dcf 8,
+    /// "time series at fixed stations") because the V-2 rule pack
+    /// operates on <see cref="S104Dataset"/> (the gridded view) and
+    /// not on the station-series shape. Also surfaced defensively if
+    /// rule evaluation ever throws an
+    /// <see cref="S100DatasetNotSupportedException"/>.</description></item>
+    /// </list>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset; the
+    /// report is cached after the first call (mirroring the V-1
+    /// S-102 processor and the GML processors' pattern).
+    /// </para>
+    /// </remarks>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = ComputeValidationReport();
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
+
+    private ValidationReport? ComputeValidationReport()
+    {
+        switch (_data)
+        {
+            case S104DatasetData.GriddedCoverage g:
+                try
+                {
+                    return S104DatasetRules.Default.Run(g.Dataset);
+                }
+                catch (S100DatasetSchemaException ex)
+                {
+                    return BuildSchemaSurrogateReport(ex);
+                }
+                catch (S100DatasetNotSupportedException ex)
+                {
+                    return BuildUnsupportedSurrogateReport(ex);
+                }
+
+            case S104DatasetData.StationSeries:
+                return BuildStationSeriesUnsupportedReport();
+
+            default:
+                return null;
+        }
+    }
+
+    private static ValidationReport BuildSchemaSurrogateReport(S100DatasetSchemaException ex)
+    {
+        var details = new List<string> { $"GroupPath='{ex.GroupPath}'" };
+        if (!string.IsNullOrEmpty(ex.AttributeOrDataset))
+            details.Add($"AttributeOrDataset='{ex.AttributeOrDataset}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S104-PROJ-SCHEMA",
+            Severity = ValidationSeverity.Error,
+            Message = $"S104 reader raised S100DatasetSchemaException: {ex.Message} ({string.Join(", ", details)}).",
+            RelatedFeatureId = ex.GroupPath,
+        };
+
+        return new ValidationReport(
+            ImmutableArray.Create(finding),
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
+
+    private static ValidationReport BuildUnsupportedSurrogateReport(S100DatasetNotSupportedException ex)
+    {
+        var details = new List<string>();
+        if (!string.IsNullOrEmpty(ex.Feature))
+            details.Add($"Feature='{ex.Feature}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S104-PROJ-UNSUPPORTED",
+            Severity = ValidationSeverity.Error,
+            Message = $"S104 reader raised S100DatasetNotSupportedException: {ex.Message} ({string.Join(", ", details)}).",
+        };
+
+        return new ValidationReport(
+            ImmutableArray.Create(finding),
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
+
+    private ValidationReport BuildStationSeriesUnsupportedReport()
+    {
+        // The reader produced a StationSeries (dcf 8) variant. The V-2
+        // rule pack targets the gridded S104Dataset view (dcf 2/3) only,
+        // so surface this proactively under S104-PROJ-UNSUPPORTED per
+        // docs/design/non-gml-validation.md §5.3.
+        var finding = new ValidationFinding
+        {
+            RuleId = "S104-PROJ-UNSUPPORTED",
+            Severity = ValidationSeverity.Error,
+            Message =
+                $"S104 dataset '{_fileName}' uses data coding format 8 " +
+                "(time series at fixed stations). The V-2 S-104 rule pack " +
+                "targets the gridded (dcf 2 / dcf 3) S104Dataset shape and " +
+                "does not currently evaluate station-series datasets " +
+                "(S-100 Part 10c §10.2.1; S-104 Edition 2.0.0 §10.2.3 / §10.2.7).",
+            RelatedFeatureId = "/WaterLevel",
+        };
+
+        return new ValidationReport(
+            ImmutableArray.Create(finding),
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
 }

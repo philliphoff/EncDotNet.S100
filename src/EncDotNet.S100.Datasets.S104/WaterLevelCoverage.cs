@@ -27,6 +27,19 @@ public sealed class WaterLevelCoverage
     public string? StartSequence { get; init; }
 
     /// <summary>
+    /// The HDF5 instance-group path this coverage was read from, e.g.
+    /// <c>"/WaterLevel/WaterLevel.01"</c>. Populated by
+    /// <see cref="S104DatasetReader"/>; nullable so synthetic test
+    /// fixtures may omit it. Validation rules surface this on
+    /// per-coverage findings via <c>RelatedFeatureId</c>, and append
+    /// <c>#timePoint</c> on per-time-step findings (per
+    /// <c>docs/design/non-gml-validation.md</c> §4.3). Multiple
+    /// time-step coverages share an instance path; the
+    /// <see cref="TimePoint"/> disambiguates them in finding messages.
+    /// </summary>
+    public string? GroupPath { get; init; }
+
+    /// <summary>
     /// The time point for this coverage, parsed from the HDF5 group's <c>timePoint</c> attribute.
     /// </summary>
     public required DateTime TimePoint { get; init; }

@@ -226,6 +226,7 @@ public static class S104DatasetReader
                 NumPointsLatitudinal = numLat,
                 NumPointsLongitudinal = numLon,
                 StartSequence = startSequence,
+                GroupPath = instancePath,
                 TimePoint = timePoint,
                 Values = values,
             });
