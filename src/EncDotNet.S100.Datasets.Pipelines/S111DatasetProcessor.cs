@@ -221,6 +221,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
         {
             LayerName = $"S-111 Arrows: {_fileName}",
             Palette = catalogue.ActivePalette,
+            BaseSymbolScale = context?.SymbolScale ?? 1.0,
             SymbolProvider = symbolName =>
             {
                 var item = provider.Catalogue.Symbols

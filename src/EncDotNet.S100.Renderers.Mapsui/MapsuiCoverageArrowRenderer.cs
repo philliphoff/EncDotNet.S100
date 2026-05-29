@@ -68,12 +68,12 @@ public sealed class MapsuiCoverageArrowRenderer
     /// Mapsui <see cref="ImageStyle.SymbolScale"/>.  The bundled SCAROW
     /// SVGs declare <c>width="6mm" height="11mm"</c> with viewBox
     /// <c>-3 -5.5 6 11</c>; Mapsui rasterises them at roughly
-    /// 23×42 pixels at 96 dpi when <c>SymbolScale = 1.0</c>.  At the
-    /// default of <c>2.0</c>, a band-1 arrow (<c>bandScale = 0.40</c>)
-    /// renders at roughly 19×34 screen pixels — comfortable for the
-    /// reading distance assumed by S-100 Part 9 §3.3.
+    /// 23×42 pixels at 96 dpi when <c>SymbolScale = 1.0</c>.  Callers
+    /// (typically <c>S111DatasetProcessor</c>) should multiply the
+    /// user-facing <c>RenderContext.SymbolScale</c> into this value so
+    /// the Symbol Scale slider continues to affect arrow size.
     /// </summary>
-    public double BaseSymbolScale { get; set; } = 2.0;
+    public double BaseSymbolScale { get; set; } = 1.0;
 
     /// <summary>
     /// The colour palette used to resolve SVG CSS fill/stroke tokens

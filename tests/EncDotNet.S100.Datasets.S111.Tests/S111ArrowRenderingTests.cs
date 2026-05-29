@@ -262,6 +262,10 @@ public sealed class S111ArrowRenderingTests : IDisposable
         {
             Palette = _catalogue.ActivePalette,
             SymbolProvider = name => _svgsByToken.TryGetValue(name, out var svg) ? svg : null,
+            // Pin to 2.0 so arithmetic in tests is independent of the
+            // default value, which is driven by the user-facing
+            // RenderContext.SymbolScale in production.
+            BaseSymbolScale = 2.0,
         };
 
     private static Viewport BuildViewport() => new()

@@ -57,7 +57,9 @@ Per-band scaling follows the bundled catalogue
 `scaleFloor = 0.40`; bands 4-8 use `scaleFactorIntermediate = 0.20`
 multiplied by `surfaceCurrentSpeed`; band 9 uses `scaleCeiling = 2.60`.
 Those per-band factors multiply the renderer's `BaseSymbolScale` (default
-`2.0`) to produce each feature's `ImageStyle.SymbolScale`.
+`1.0` — which `S111DatasetProcessor` overrides with the user's
+`RenderContext.SymbolScale` so the viewer's Symbol Scale slider tunes
+arrow size) to produce each feature's `ImageStyle.SymbolScale`.
 
 ## Installation
 
