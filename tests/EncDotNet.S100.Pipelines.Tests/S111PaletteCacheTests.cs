@@ -81,11 +81,14 @@ public class S111PaletteCacheTests
         // The defensive ActivePalette.Colors.Count == 0 re-load was the
         // bug we removed. Calling ResolveColorScheme many times after a
         // successful SwitchPalette must not re-open the colour-profile
-        // file.
+        // file — even though S-111 returns a null scheme (the bundled
+        // XSLT defines arrows only), the catalogue still touches the
+        // active palette to honour the asset-cache contract.
         for (int i = 0; i < 5; i++)
         {
-            var scheme = catalogue.ResolveColorScheme(new MarinerSettings());
-            Assert.NotEmpty(scheme.Bands);
+            // S-111 Ed 2.0.0 ResolveColorScheme returns null by design;
+            // see content/S111/pc/Rules/select_arrow.xsl.
+            Assert.Null(catalogue.ResolveColorScheme(new MarinerSettings()));
         }
 
         Assert.Equal(afterSwitch, counting.GetOpenCount(S111ColorProfileRelativePath));

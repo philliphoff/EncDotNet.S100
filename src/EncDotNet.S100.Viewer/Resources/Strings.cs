@@ -115,7 +115,6 @@ internal static class Strings
     public static string Menu_SendDatasetToBack => Get(nameof(Menu_SendDatasetToBack));
     public static string Menu_MoveDatasetUp => Get(nameof(Menu_MoveDatasetUp));
     public static string Menu_MoveDatasetDown => Get(nameof(Menu_MoveDatasetDown));
-    public static string SubLayer_S111_ColorBand => Get(nameof(SubLayer_S111_ColorBand));
     public static string SubLayer_S111_Arrows => Get(nameof(SubLayer_S111_Arrows));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));

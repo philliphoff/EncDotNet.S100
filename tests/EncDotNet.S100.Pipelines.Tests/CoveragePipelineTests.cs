@@ -273,7 +273,7 @@ public class CoveragePipelineTests
 
         public MarinerSettings? LastSettings { get; private set; }
 
-        public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
+        public CoverageColorScheme? ResolveColorScheme(MarinerSettings settings)
         {
             LastSettings = settings;
             return _colorScheme;

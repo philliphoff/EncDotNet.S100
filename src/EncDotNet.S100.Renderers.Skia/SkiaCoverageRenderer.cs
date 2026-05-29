@@ -24,7 +24,12 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         var renderStart = Stopwatch.GetTimestamp();
 
         var sampled = layer.Coverage;
-        var colorScheme = layer.ColorScheme;
+        var colorScheme = layer.ColorScheme
+            ?? throw new InvalidOperationException(
+                "SkiaCoverageRenderer requires a non-null ColorScheme. " +
+                "Catalogues that do not specify a coverage colour fill " +
+                "(e.g. S-111 Edition 2.0.0) must not be passed to this " +
+                "renderer.");
         var fieldData = sampled.GetField(colorScheme.FieldName);
         var fieldSpan = fieldData.Span;
 

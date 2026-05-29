@@ -26,13 +26,40 @@ This library reads S-111 datasets from HDF5 files and provides time-series curre
   hard-coded in C#.
 - **Day / Dusk / Night palettes** — read from
   `ColorProfiles/colorProfile.xml`. `SwitchPalette(PaletteType)` activates
-  the chosen palette; `ResolveColorScheme` and `ResolveSymbolScheme`
-  reflect the change immediately.
-- **NoData fill** — `CoverageColorScheme.NoDataColor` is populated from the
-  active palette using the token-preference chain
-  `NODTA → CHBLK → #00000000` (transparent). The bundled S-111 colour
-  profile does not define `NODTA`, so cells with the HDF5 fill value
-  (`-9999f`) render with the palette's `CHBLK`.
+  the chosen palette; `ResolveSymbolScheme` and `ActivePalette` reflect the
+  change immediately.
+
+### No coverage colour fill
+
+`ResolveColorScheme` returns `null`. The bundled portrayal catalogue
+(`content/S111/pc/Rules/select_arrow.xsl`) defines arrow symbology only —
+there is no `<coverageFill>` instruction on `surfaceCurrentSpeed`. Synthesising
+a continuous heatmap from the speed-band table (as an earlier viewer prototype
+did) actively obscured the underlying S-101 chart, so the colour-band sub-layer
+has been removed. Per-band colour now travels with the arrow SVG itself via its
+`fSCBN{N}` CSS class; `MapsuiCoverageArrowRenderer` resolves that token via the
+active palette.
+
+### Per-feature arrow rendering
+
+`MapsuiCoverageArrowRenderer` emits **one Mapsui `PointFeature` per selected
+grid cell** carrying an `ImageStyle` that wraps the bundled SCAROW SVG via the
+`svg-content://` URI scheme. Mapsui re-rasterises the symbol on every viewport
+change so arrows stay **sharp at every zoom** and at a **stable on-screen
+size** — the convention used by ECDIS-style symbology in S-100 Part 9 §11.
+A previous implementation rasterised every arrow into a single georeferenced
+PNG sized to the dataset extent; that bitmap was downscaled at low zoom
+(arrows shrank to a few pixels and were hard to read) and upscaled at high
+zoom (arrows pixelated). Per-feature symbols avoid both pathologies.
+
+Per-band scaling follows the bundled catalogue
+(`content/S111/pc/Rules/select_arrow.xsl`): bands 1-3 share
+`scaleFloor = 0.40`; bands 4-8 use `scaleFactorIntermediate = 0.20`
+multiplied by `surfaceCurrentSpeed`; band 9 uses `scaleCeiling = 2.60`.
+Those per-band factors multiply the renderer's `BaseSymbolScale` (default
+`1.0` — which `S111DatasetProcessor` overrides with the user's
+`RenderContext.SymbolScale` so the viewer's Symbol Scale slider tunes
+arrow size) to produce each feature's `ImageStyle.SymbolScale`.
 
 ## Installation
 

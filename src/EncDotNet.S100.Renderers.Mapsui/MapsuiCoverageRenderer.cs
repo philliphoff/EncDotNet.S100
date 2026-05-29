@@ -46,7 +46,12 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     {
         var sampled = layer.Coverage;
         var georeferencer = layer.Georeferencer;
-        var colorScheme = layer.ColorScheme;
+        var colorScheme = layer.ColorScheme
+            ?? throw new InvalidOperationException(
+                "MapsuiCoverageRenderer requires a non-null ColorScheme. " +
+                "Processors must skip this renderer when the portrayal " +
+                "catalogue does not define a coverage colour fill " +
+                "(e.g. S-111 Edition 2.0.0 arrow-only catalogue).");
         var fieldData = sampled.GetField(colorScheme.FieldName);
         int srcRows = fieldData.GetLength(0);
         int srcCols = fieldData.GetLength(1);

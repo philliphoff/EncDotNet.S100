@@ -40,7 +40,7 @@ public class CoveragePipeline
             var metadata = source.Metadata;
 
             // Stage 1 — resolve colour and symbol schemes from catalogue
-            CoverageColorScheme colorScheme;
+            CoverageColorScheme? colorScheme;
             CoverageSymbolScheme? symbolScheme;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.resolve"))
             {

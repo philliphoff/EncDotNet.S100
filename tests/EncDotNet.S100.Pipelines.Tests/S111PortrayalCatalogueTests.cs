@@ -69,15 +69,15 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     {
         var catalogue = CreateCatalogue();
         catalogue.SwitchPalette(PaletteType.Day);
-        var dayScheme = catalogue.ResolveColorScheme(new MarinerSettings());
+        var dayColors = ReadBandColors(catalogue);
 
         catalogue.SwitchPalette(PaletteType.Dusk);
-        var duskScheme = catalogue.ResolveColorScheme(new MarinerSettings());
+        var duskColors = ReadBandColors(catalogue);
 
-        Assert.Equal(dayScheme.Bands.Count, duskScheme.Bands.Count);
+        Assert.Equal(dayColors.Count, duskColors.Count);
         Assert.True(
-            dayScheme.Bands.Zip(duskScheme.Bands)
-                .Any(p => !string.Equals(p.First.Color, p.Second.Color, StringComparison.OrdinalIgnoreCase)),
+            dayColors.Zip(duskColors)
+                .Any(p => !string.Equals(p.First, p.Second, StringComparison.OrdinalIgnoreCase)),
             "Dusk palette must differ from Day for at least one band.");
     }
 
@@ -86,37 +86,35 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     {
         var catalogue = CreateCatalogue();
         catalogue.SwitchPalette(PaletteType.Day);
-        var dayScheme = catalogue.ResolveColorScheme(new MarinerSettings());
+        var dayColors = ReadBandColors(catalogue);
 
         catalogue.SwitchPalette(PaletteType.Night);
-        var nightScheme = catalogue.ResolveColorScheme(new MarinerSettings());
+        var nightColors = ReadBandColors(catalogue);
 
-        Assert.Equal(dayScheme.Bands.Count, nightScheme.Bands.Count);
+        Assert.Equal(dayColors.Count, nightColors.Count);
         Assert.True(
-            dayScheme.Bands.Zip(nightScheme.Bands)
-                .Any(p => !string.Equals(p.First.Color, p.Second.Color, StringComparison.OrdinalIgnoreCase)),
+            dayColors.Zip(nightColors)
+                .Any(p => !string.Equals(p.First, p.Second, StringComparison.OrdinalIgnoreCase)),
             "Night palette must differ from Day for at least one band.");
     }
 
     [Fact]
     public void Bands_parsed_from_xslt_match_legacy_hand_coded_table()
     {
+        // S-111 Ed 2.0.0 portrayal (content/S111/pc/Rules/select_arrow.xsl)
+        // emits arrow symbology only; ResolveColorScheme intentionally
+        // returns null. The band table is still exposed via the symbol
+        // scheme so renderers can pick per-band colour tokens.
         var catalogue = CreateCatalogue();
-        var colorScheme = catalogue.ResolveColorScheme(new MarinerSettings());
+        Assert.Null(catalogue.ResolveColorScheme(new MarinerSettings()));
         var symbolScheme = catalogue.ResolveSymbolScheme(new MarinerSettings());
 
-        Assert.Equal(LegacyBands.Length, colorScheme.Bands.Count);
         Assert.Equal(LegacyBands.Length, symbolScheme.Bands.Count);
 
         for (int i = 0; i < LegacyBands.Length; i++)
         {
             var expected = LegacyBands[i];
-            var colorBand = colorScheme.Bands[i];
             var symbolBand = symbolScheme.Bands[i];
-
-            Assert.Equal(expected.Min, colorBand.MinValue);
-            Assert.Equal(expected.Max, colorBand.MaxValue);
-            Assert.Equal(expected.Label, colorBand.Label);
 
             Assert.Equal(expected.Min, symbolBand.MinValue);
             Assert.Equal(expected.Max, symbolBand.MaxValue);
@@ -128,31 +126,39 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void NoData_color_is_populated_from_active_palette()
+    public void ResolveColorScheme_returns_null_per_bundled_xslt()
     {
+        // The bundled S-111 XSLT defines no <coverageFill> on
+        // surfaceCurrentSpeed — only arrow symbology. The catalogue
+        // therefore returns null so pipelines skip the coverage colour
+        // layer (S-111 Ed 2.0.0 §12, content/S111/pc/Rules/select_arrow.xsl).
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPalette(PaletteType.Day);
-
-        var scheme = catalogue.ResolveColorScheme(new MarinerSettings());
-
-        Assert.False(string.IsNullOrEmpty(scheme.NoDataColor));
-        // S-111 ships no NODTA token; the catalogue falls back to CHBLK
-        // which is present in all three bundled palettes.
-        Assert.True(catalogue.ActivePalette.TryResolve("CHBLK", out var chblk));
-        Assert.Equal(chblk, scheme.NoDataColor, StringComparer.OrdinalIgnoreCase);
+        Assert.Null(catalogue.ResolveColorScheme(new MarinerSettings()));
     }
 
     [Fact]
-    public void SwitchPalette_to_Night_then_ResolveColorScheme_reflects_change()
+    public void SwitchPalette_to_Night_then_ActivePalette_reflects_change()
     {
         var catalogue = CreateCatalogue();
         catalogue.SwitchPalette(PaletteType.Day);
-        var dayBand1 = catalogue.ResolveColorScheme(new MarinerSettings()).Bands[0].Color;
+        Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var dayBand1));
 
         catalogue.SwitchPalette(PaletteType.Night);
-        var nightBand1 = catalogue.ResolveColorScheme(new MarinerSettings()).Bands[0].Color;
+        Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var nightBand1));
 
         Assert.NotEqual(dayBand1, nightBand1);
+    }
+
+    private static IReadOnlyList<string> ReadBandColors(S111PortrayalCatalogue catalogue)
+    {
+        var palette = catalogue.ActivePalette;
+        var result = new List<string>(9);
+        for (int i = 1; i <= 9; i++)
+        {
+            Assert.True(palette.TryResolve($"SCBN{i}", out var hex), $"Missing SCBN{i}");
+            result.Add(hex);
+        }
+        return result;
     }
 
     [Fact]

@@ -57,6 +57,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         // 31 rows × 21 columns = 651 cells in the sampled grid
         Assert.Equal(31, layer.Coverage.Metadata.NumRows);
         Assert.Equal(21, layer.Coverage.Metadata.NumColumns);
+        Assert.NotNull(layer.ColorScheme);
         Assert.Equal("depth", layer.ColorScheme.FieldName);
     }
 
@@ -80,6 +81,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
 
         // The test file has real depths 4.44–8m — all in [ShallowContour=2, SafetyContour=30) → DEPMS.
         // Walk the depth field and verify each non-fill cell maps to DEPMS via the resolved scheme.
+        Assert.NotNull(layer.ColorScheme);
         var depths = layer.Coverage.GetField("depth");
         int rows = depths.GetLength(0);
         int cols = depths.GetLength(1);
@@ -159,6 +161,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var layer = await pipeline.ProcessAsync(source, catalogue, mariner);
 
         // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW. All real values 4–8m → DEPVS.
+        Assert.NotNull(layer.ColorScheme);
         var depths = layer.Coverage.GetField("depth");
         int realCells = 0;
         for (int r = 0; r < depths.GetLength(0); r++)

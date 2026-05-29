@@ -40,9 +40,9 @@ public interface IInteroperabilityAuthority
     /// Returns the default S-98 display plane for a given product
     /// specification and optional feature-type or sub-layer kind
     /// hint. The <paramref name="featureTypeOrLayerKind"/> argument
-    /// lets callers distinguish e.g. S-111 colour-band layer
-    /// (<c>"s111.color-band"</c>) from S-111 arrow overlay
-    /// (<c>"s111.arrows"</c>); pass <c>null</c> for products with a
+    /// lets callers distinguish e.g. S-111 arrow overlay
+    /// (<c>"s111.arrows"</c>) from S-111 station glyphs
+    /// (<c>"s111.stations"</c>); pass <c>null</c> for products with a
     /// single layer.
     /// </summary>
     /// <param name="productSpec">

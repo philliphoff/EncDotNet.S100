@@ -118,13 +118,13 @@ public class S111CoverageSourceTests : IDisposable
 
         var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
 
-        Assert.Equal("surfaceCurrentSpeed", scheme.FieldName);
-        Assert.Equal(9, scheme.Bands.Count);
-
-        // Colors should come from the color profile, not the hardcoded defaults
-        Assert.NotNull(scheme.Resolve(0.1f));
-        Assert.NotNull(scheme.Resolve(3.5f));
-        Assert.Null(scheme.Resolve(-9999f));
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow
+        // symbology only — there is no coverageFill on
+        // surfaceCurrentSpeed.  S111PortrayalCatalogue therefore
+        // returns null; the colour wiring lives entirely inside the
+        // SCAROW SVGs and is consumed by MapsuiCoverageArrowRenderer.
+        Assert.Null(scheme);
     }
 
     [SkippableFact]
@@ -146,7 +146,9 @@ public class S111CoverageSourceTests : IDisposable
 
         // Pipeline assembled the styled layer from the source's metadata.
         Assert.Equal(source.Metadata.NoDataValue, layer.NoDataValue);
-        Assert.NotNull(layer.ColorScheme);
+        // S-111 Ed 2.0.0 portrayal catalogue defines arrow symbology
+        // only, so the coverage colour scheme is null by design.
+        Assert.Null(layer.ColorScheme);
         Assert.NotEmpty(layer.Coverage.Values);
 
         // S-111 catalogue defines a symbol scheme for current arrows.
