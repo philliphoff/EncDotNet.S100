@@ -4,7 +4,9 @@ using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S101.Validation;
 using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.Datasets.S57.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -12,6 +14,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -24,6 +27,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </summary>
 public sealed class S57DatasetProcessor : IDatasetProcessor
 {
+    private readonly EncDotNet.S57.S57Document _rawS57Document;
     private readonly S101Dataset _translatedDataset;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly S101PortrayalCatalogue _catalogue;
@@ -34,6 +38,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public SpecRef Spec => new("S-57", default);
 
@@ -85,6 +91,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         {
             s57 = S57Dataset.Open(datasetStream);
         }
+        // Retain the raw S-57 document so the pre-translation
+        // validation pack (S57PreTranslationRules) can run against
+        // fields that do not survive translation — see
+        // docs/design/non-gml-validation.md §9.3.
+        _rawS57Document = s57.Document;
         var translator = new S57ToS101Translator();
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
@@ -244,5 +255,42 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         foreach (var f in features)
             index[f.Id] = f;
         return index;
+    }
+
+    /// <summary>
+    /// Runs the S-57 validation pipeline against this dataset and
+    /// returns the aggregated report. Composes two rule packs:
+    /// <list type="number">
+    /// <item><description>
+    /// <see cref="S57PreTranslationRules.Default"/> against the raw
+    /// <see cref="EncDotNet.S57.S57Document"/> — catches the few
+    /// dataset-identity / coverage-metadata issues that do not
+    /// survive translation.
+    /// </description></item>
+    /// <item><description>
+    /// <see cref="S101DatasetRules.Default"/> against the translated
+    /// <see cref="S101Document"/> via the
+    /// <see cref="S101DatasetView"/> façade — every finding produced
+    /// here is rebadged with the prefix <c>"S101-as-S57/"</c> so
+    /// downstream consumers can distinguish native S-101 findings
+    /// from those inherited via translation
+    /// (<c>docs/design/non-gml-validation.md</c> §9.3, Q-s57-rebadge).
+    /// </description></item>
+    /// </list>
+    /// The result is cached on the processor and returned verbatim
+    /// on subsequent calls.
+    /// </summary>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            EnsureDecoder();
+            var pre = S57PreTranslationRules.Default.Run(_rawS57Document);
+            var view = S101DatasetView.From(_translatedDataset.Document, _decoder);
+            var post = S101DatasetRules.Default.Run(view);
+            _validationReport = ConcatReports.Concat(pre, post, rebadgePrefix: "S101-as-S57/");
+            _validationCached = true;
+        }
+        return _validationReport;
     }
 }
