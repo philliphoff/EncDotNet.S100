@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -9,6 +10,8 @@ using Mapsui.Styles;
 using SkiaSharp;
 
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
+
+[assembly: InternalsVisibleTo("EncDotNet.S100.Datasets.S111.Tests")]
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -179,7 +182,6 @@ public sealed class MapsuiCoverageArrowRenderer
             // Scale so the symbol's viewBox height maps to ~50% of the arrow spacing.
             double arrowSpacingPx = stride * cellSizeY * pxPerMercY;
             double baseScale = arrowSpacingPx * 0.5 / parsed.ViewBoxHeight;
-            baseScale = Math.Max(baseScale, 0.5);
 
             double bandScale = symbolBand.ScaleByValue
                 ? symbolBand.ScaleFactor * value
@@ -268,6 +270,15 @@ public sealed class MapsuiCoverageArrowRenderer
     }
 
     private ParsedSymbol ParseSvgSymbol(string svgContent)
+        => ParseSvgSymbol(svgContent, Palette);
+
+    /// <summary>
+    /// Parses an S-100 Part 9-style SVG symbol into a list of fill/stroke
+    /// draw commands with palette tokens resolved to RGB colours.
+    /// Exposed <c>internal</c> for rendering-correctness tests that pin
+    /// per-band colour wiring (S-111 Ed 2.0.0, content/S111/pc).
+    /// </summary>
+    internal static ParsedSymbol ParseSvgSymbol(string svgContent, ColorPalette? palette)
     {
         var doc = XDocument.Parse(svgContent);
         var svg = doc.Root!;
@@ -316,14 +327,14 @@ public sealed class MapsuiCoverageArrowRenderer
             if (!hasNoFill && fillToken is not null)
             {
                 // Fill path — resolve color token via palette
-                var color = ResolveToken(fillToken);
+                var color = ResolveToken(fillToken, palette);
                 commands.Add(new DrawCommand(skPath, true, color, 0));
             }
 
             if (strokeToken is not null)
             {
                 // Stroke path
-                var color = ResolveToken(strokeToken);
+                var color = ResolveToken(strokeToken, palette);
                 float sw = 0.32f;
                 var swAttr = pathEl.Attribute("stroke-width");
                 if (swAttr is not null &&
@@ -338,9 +349,11 @@ public sealed class MapsuiCoverageArrowRenderer
         return new ParsedSymbol(commands, vbHeight);
     }
 
-    private SKColor ResolveToken(string token)
+    private SKColor ResolveToken(string token) => ResolveToken(token, Palette);
+
+    private static SKColor ResolveToken(string token, ColorPalette? palette)
     {
-        if (Palette is not null && Palette.TryResolve(token, out var hex))
+        if (palette is not null && palette.TryResolve(token, out var hex))
         {
             var rgba = RgbaColor.FromHex(hex);
             return new SKColor(rgba.R, rgba.G, rgba.B, rgba.A);
@@ -353,7 +366,7 @@ public sealed class MapsuiCoverageArrowRenderer
         return SKColors.Black;
     }
 
-    private sealed record DrawCommand(SKPath Path, bool IsFill, SKColor Color, float StrokeWidth);
+    internal sealed record DrawCommand(SKPath Path, bool IsFill, SKColor Color, float StrokeWidth);
 
-    private sealed record ParsedSymbol(IReadOnlyList<DrawCommand> Commands, double ViewBoxHeight);
+    internal sealed record ParsedSymbol(IReadOnlyList<DrawCommand> Commands, double ViewBoxHeight);
 }

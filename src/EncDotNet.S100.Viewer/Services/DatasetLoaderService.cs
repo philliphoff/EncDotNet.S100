@@ -871,7 +871,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     private static string ResolveSubLayerDisplayName(string key) => key switch
     {
-        "s111.color-band" => Strings.SubLayer_S111_ColorBand,
         "s111.arrows" => Strings.SubLayer_S111_Arrows,
         _ => key,
     };

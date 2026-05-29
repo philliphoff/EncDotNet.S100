@@ -37,11 +37,17 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 ///   </item>
 ///   <item>
 ///     <description>
-///     S-104 / S-111: <c>"s104.color-band"</c> / <c>"s111.color-band"</c>
-///     → <see cref="S98DisplayPlane.OnDemandSurface"/>;
-///     <c>"s111.arrows"</c> → <see cref="S98DisplayPlane.DynamicArrows"/>;
-///     <c>"s104.stations"</c> / <c>"s111.stations"</c> →
-///     <see cref="S98DisplayPlane.OtherChartOverlays"/>.
+///     S-104: <c>"s104.color-band"</c> →
+///     <see cref="S98DisplayPlane.OnDemandSurface"/>;
+///     <c>"s104.stations"</c> → <see cref="S98DisplayPlane.OtherChartOverlays"/>.
+///     S-111: <c>"s111.arrows"</c> →
+///     <see cref="S98DisplayPlane.DynamicArrows"/>;
+///     <c>"s111.stations"</c> →
+///     <see cref="S98DisplayPlane.OtherChartOverlays"/>. (S-111
+///     Ed 2.0.0 has no colour-band sub-layer: the bundled
+///     portrayal catalogue at
+///     <c>content/S111/pc/Rules/select_arrow.xsl</c> defines
+///     arrow symbology only.)
 ///     </description>
 ///   </item>
 /// </list>
@@ -76,14 +82,15 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
                 _ => S98DisplayPlane.OnDemandSurface,
             },
 
-            // S-111 Surface Currents. Coverage band on on-demand;
-            // arrow overlay drawn above warnings as a dynamic
-            // overlay; station glyphs as point overlays.
+            // S-111 Surface Currents (Edition 2.0.0). The bundled
+            // portrayal catalogue defines arrows only — no coverage
+            // colour-band sub-layer. Arrows drawn above warnings as a
+            // dynamic overlay; station glyphs as point overlays.
             "S-111" => kind switch
             {
                 "s111.arrows" => S98DisplayPlane.DynamicArrows,
                 "s111.stations" => S98DisplayPlane.OtherChartOverlays,
-                _ => S98DisplayPlane.OnDemandSurface,
+                _ => S98DisplayPlane.DynamicArrows,
             },
 
             // S-124 Navigational Warnings — MSC.530(106)/Rev.1

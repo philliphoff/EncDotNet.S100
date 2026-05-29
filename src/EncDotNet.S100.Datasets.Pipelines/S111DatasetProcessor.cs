@@ -19,6 +19,7 @@ using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
+using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 
@@ -208,14 +209,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             .GetAwaiter().GetResult();
         var styledLayer = (StyledCoverageLayer)layer;
 
-        var colorRenderer = new MapsuiCoverageRenderer(_crsTransformFactory)
-        {
-            LayerName = $"S-111: {_fileName}",
-        };
-        var colorLayer = colorRenderer.Render(styledLayer, viewport);
-        var extent = colorLayer.Extent ?? new MRect(0, 0, 0, 0);
-
-        var layers = new List<ILayer> { colorLayer };
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow
+        // symbology only — no coverageFill on surfaceCurrentSpeed.
+        // S-111 therefore emits a single arrow sub-layer; rendering a
+        // synthetic colour-band heatmap on top of S-101 ENC was
+        // removed because it obscured the base chart.
+        var layers = new List<ILayer>();
 
         var arrowRenderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
         {
@@ -233,9 +233,15 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             },
         };
         var arrowLayer = arrowRenderer.Render(styledLayer, viewport);
+        MRect extent;
         if (arrowLayer is not null)
         {
             layers.Add(arrowLayer);
+            extent = arrowLayer.Extent ?? ComputeMercatorExtent(metadata);
+        }
+        else
+        {
+            extent = ComputeMercatorExtent(metadata);
         }
 
         int crs = _dataset!.HorizontalCRS ?? 4326;
@@ -245,19 +251,11 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             : "";
         var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
 
-        // S-111 splits into colour-band (OnDemandSurface) and an
-        // optional arrow overlay (DynamicArrows). S-98 Annex A
-        // §A-6.9.1; existing portrayal catalogue declares the arrow
-        // sub-layer with intra-product displayPlane="OverRadar".
-        var stackEntries = new List<LayerStackEntry>
-        {
-            new(
-                Layer: colorLayer,
-                Plane: S98DisplayPlane.OnDemandSurface,
-                WithinPlanePriority: 0,
-                SourceDatasetId: _fileName,
-                SourceFeatureType: "s111.color-band"),
-        };
+        // The bundled portrayal catalogue (S-111 Ed 2.0.0,
+        // select_arrow.xsl) declares the arrow sub-layer with
+        // intra-product displayPlane="OverRadar"; S-98 Annex A
+        // §A-6.9.1 maps current arrows to the DynamicArrows plane.
+        var stackEntries = new List<LayerStackEntry>();
         if (arrowLayer is not null)
         {
             stackEntries.Add(new LayerStackEntry(
@@ -275,10 +273,26 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
             Info = info,
             Spec = new SpecRef("S-111", default),
             LayerNames = arrowLayer is not null
-                ? new[] { "s111.color-band", "s111.arrows" }
-                : new[] { "s111.color-band" },
+                ? new[] { "s111.arrows" }
+                : Array.Empty<string>(),
             StackEntries = stackEntries,
         };
+    }
+
+    /// <summary>
+    /// Computes the Mercator extent from the dataset's WGS-84 bounding
+    /// box, padded by half a cell to match
+    /// <see cref="MapsuiCoverageArrowRenderer"/>'s alignment. Used as a
+    /// fallback when the arrow renderer returns no layer (e.g. an
+    /// all-NoData time step).
+    /// </summary>
+    private static MRect ComputeMercatorExtent(CoverageMetadata metadata)
+    {
+        var (minX, minY) = SphericalMercator.FromLonLat(
+            metadata.Extent.WestLongitude, metadata.Extent.SouthLatitude);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(
+            metadata.Extent.EastLongitude, metadata.Extent.NorthLatitude);
+        return new MRect(minX, minY, maxX, maxY);
     }
 
     // ---- dcf8 station series rendering ---------------------------------

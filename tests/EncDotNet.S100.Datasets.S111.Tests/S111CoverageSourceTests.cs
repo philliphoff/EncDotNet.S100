@@ -146,7 +146,9 @@ public class S111CoverageSourceTests : IDisposable
 
         // Pipeline assembled the styled layer from the source's metadata.
         Assert.Equal(source.Metadata.NoDataValue, layer.NoDataValue);
-        Assert.NotNull(layer.ColorScheme);
+        // S-111 Ed 2.0.0 portrayal catalogue defines arrow symbology
+        // only, so the coverage colour scheme is null by design.
+        Assert.Null(layer.ColorScheme);
         Assert.NotEmpty(layer.Coverage.Values);
 
         // S-111 catalogue defines a symbol scheme for current arrows.

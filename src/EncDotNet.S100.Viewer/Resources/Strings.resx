@@ -195,9 +195,6 @@
   <data name="Menu_MoveDatasetDown" xml:space="preserve">
     <value>Move down</value>
   </data>
-  <data name="SubLayer_S111_ColorBand" xml:space="preserve">
-    <value>Color band</value>
-  </data>
   <data name="SubLayer_S111_Arrows" xml:space="preserve">
     <value>Arrows</value>
   </data>

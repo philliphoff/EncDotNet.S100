@@ -79,35 +79,25 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         ActivePalette = palette;
     }
 
-    public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
+    /// <summary>
+    /// Returns <c>null</c>: the bundled S-111 Edition 2.0.0 portrayal
+    /// catalogue defines arrow symbology only — see
+    /// <c>content/S111/pc/Rules/select_arrow.xsl</c>, which emits a
+    /// <c>&lt;coverageInstruction&gt;</c> with per-band <c>&lt;symbol&gt;</c>
+    /// elements and no <c>&lt;color&gt;</c> child. Overlaying a synthetic
+    /// speed-band colour fill on top of S-101 ENC obscures the base
+    /// chart, so this catalogue intentionally does not produce one.
+    /// Renderers consult <see cref="ResolveSymbolScheme"/> instead.
+    /// </summary>
+    public CoverageColorScheme? ResolveColorScheme(MarinerSettings settings)
     {
+        // Touch the palette / band table so callers still pay the
+        // one-time load cost they previously did (keeps the asset-cache
+        // metrics and the PR-4 contract — see S111PaletteCacheTests —
+        // unchanged when SwitchPalette is the first call).
         EnsurePalettesLoaded();
-        var bands = EnsureSpeedBandsLoaded();
-
-        var colorBands = new List<ColorBand>(bands.Count);
-        foreach (var band in bands)
-        {
-            if (!ActivePalette.TryResolve(band.ColorToken, out var color))
-            {
-                throw new InvalidOperationException(
-                    $"Color token '{band.ColorToken}' not found in the S-111 color profile.");
-            }
-
-            colorBands.Add(new ColorBand
-            {
-                MinValue = band.Min,
-                MaxValue = band.Max,
-                Color = color,
-                Label = band.Label,
-            });
-        }
-
-        return new CoverageColorScheme
-        {
-            FieldName = SpeedFieldName,
-            Bands = colorBands,
-            NoDataColor = ResolveNoDataColor(),
-        };
+        _ = EnsureSpeedBandsLoaded();
+        return null;
     }
 
     public CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings)
@@ -210,24 +200,4 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         return _bands;
     }
 
-    // ── NoData colour ──────────────────────────────────────────────────
-
-    /// <summary>
-    /// Picks the no-data fill colour for the active palette. S-111
-    /// ships no <c>NODTA</c> token, so we fall back to <c>CHBLK</c>
-    /// (present in all three bundled palettes); failing both we leave
-    /// the cell transparent (legacy behaviour).
-    /// </summary>
-    private string? ResolveNoDataColor()
-    {
-        if (ActivePalette.TryResolve("NODTA", out var nodta) && !string.IsNullOrEmpty(nodta))
-        {
-            return nodta;
-        }
-        if (ActivePalette.TryResolve("CHBLK", out var chblk) && !string.IsNullOrEmpty(chblk))
-        {
-            return chblk;
-        }
-        return "#00000000";
-    }
 }

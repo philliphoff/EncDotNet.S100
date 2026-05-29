@@ -26,13 +26,19 @@ This library reads S-111 datasets from HDF5 files and provides time-series curre
   hard-coded in C#.
 - **Day / Dusk / Night palettes** — read from
   `ColorProfiles/colorProfile.xml`. `SwitchPalette(PaletteType)` activates
-  the chosen palette; `ResolveColorScheme` and `ResolveSymbolScheme`
-  reflect the change immediately.
-- **NoData fill** — `CoverageColorScheme.NoDataColor` is populated from the
-  active palette using the token-preference chain
-  `NODTA → CHBLK → #00000000` (transparent). The bundled S-111 colour
-  profile does not define `NODTA`, so cells with the HDF5 fill value
-  (`-9999f`) render with the palette's `CHBLK`.
+  the chosen palette; `ResolveSymbolScheme` and `ActivePalette` reflect the
+  change immediately.
+
+### No coverage colour fill
+
+`ResolveColorScheme` returns `null`. The bundled portrayal catalogue
+(`content/S111/pc/Rules/select_arrow.xsl`) defines arrow symbology only —
+there is no `<coverageFill>` instruction on `surfaceCurrentSpeed`. Synthesising
+a continuous heatmap from the speed-band table (as an earlier viewer prototype
+did) actively obscured the underlying S-101 chart, so the colour-band sub-layer
+has been removed. Per-band colour now travels with the arrow SVG itself via its
+`fSCBN{N}` CSS class; `MapsuiCoverageArrowRenderer` resolves that token via the
+active palette.
 
 ## Installation
 
