@@ -982,7 +982,7 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>External agents on this machine can connect to this URI.</value>
   </data>
   <data name="Settings_McpSection" xml:space="preserve">
-    <value>MCP SERVER</value>
+    <value>MCP Server</value>
   </data>
   <data name="Settings_McpEnabled" xml:space="preserve">
     <value>Enable MCP server</value>
@@ -1050,7 +1050,7 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
 
   <!-- Own-vessel dimensions (own-ship symbology PR) -->
   <data name="Settings_OwnVesselSection" xml:space="preserve">
-    <value>OWN VESSEL</value>
+    <value>Own Vessel</value>
     <comment>Heading of the Settings panel section that configures own-ship hull dimensions and the GPS antenna position.</comment>
   </data>
   <data name="Settings_OwnVesselSection_Help" xml:space="preserve">
