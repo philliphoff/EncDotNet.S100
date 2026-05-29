@@ -412,12 +412,24 @@ zoom would be both visually noisy and not meaningfully informative
 (the disc already centres on the antenna). Gating it to outline-mode
 keeps it useful where it matters.
 
-Implementation: two short crossed `LineString` features (one
-horizontal, one vertical) drawn in screen space, each spanning
-`CcrpCrossPx = 6` per arm, gated by the same `MaxVisible` as the
-hull. This addendum replaces an earlier v1 placeholder that used
-a single `SymbolType.Rectangle`, which read as a square dot rather
-than the S-52 `+` glyph.
+Implementation: a single `Point` feature carrying a Mapsui v5
+`ImageStyle` whose `Image.Source` is an inline-SVG URI
+(`"svg-content://" + <svg>…</svg>`) drawing a centred `+` with arms
+of `CcrpCrossPx = 6` px on each side. `SymbolScale = 1.0` keeps it
+pixel-fixed at every zoom; `SymbolRotation = headingDeg` aligns the
+arms with the vessel's longitudinal / lateral axes so the cross
+visually communicates the vessel's reference frame. Gated by the
+same `MaxVisible` as the hull.
+
+This approach reuses the `svg-content://` scheme already proven by
+`MapsuiDisplayListRenderer` for portrayal symbols — no SkiaSharp
+bitmap plumbing, no asset registration, no per-zoom scaling. The
+earlier v1 placeholder used `SymbolType.Rectangle` (read as a square
+dot, not the S-52 `+` glyph); an intermediate iteration used two
+crossed `LineString` features in world coordinates (visually
+correct but the arm length was tied to vessel beam to stay inside
+the hull, deviating from S-52's fixed-pixel intent). The inline-SVG
+form is the third and final iteration.
 
 ---
 

@@ -46,9 +46,9 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 ///   </description></item>
 ///   <item><description>
 ///     <b>CCRP cross</b> — IHO S-52 §8.3.1; small <c>+</c> at the
-///     GPS antenna, two short crossed <see cref="LineString"/>
-///     segments aligned with the vessel's longitudinal and lateral
-///     axes (rotated with heading), gated identically to the hull.
+///     GPS antenna, rendered as a single fixed-pixel inline-SVG
+///     <see cref="ImageStyle"/> that rotates with vessel heading.
+///     Gated identically to the hull.
 ///   </description></item>
 /// </list>
 /// <para>
@@ -68,9 +68,10 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 ///     carries a non-null <see cref="DynamicFeature.VesselGeometry"/>.
 ///   </description></item>
 ///   <item><description>
-///     <b>CCRP cross</b> — two crossed <see cref="LineString"/>
-///     features at the antenna position, gated identically to the
-///     hull (only visible when zoomed in to outline mode).
+///     <b>CCRP cross</b> — a single <see cref="Point"/> with an
+///     inline-SVG <see cref="ImageStyle"/>, gated identically to the
+///     hull (only visible when zoomed in to outline mode). Pixel-fixed
+///     so the cross does not scale with zoom.
 ///   </description></item>
 ///   <item><description>
 ///     <b>Pictogram</b> (coloured disc) gated to show when the
@@ -102,10 +103,9 @@ public sealed class OwnShipRenderer : IDynamicFeatureRenderer
     /// <see cref="OwnShipRenderer"/>).</summary>
     public const double HeadingArrowPx = 10.0;
 
-    /// <summary>Aspirational pixel size for each arm of the CCRP cross
-    /// at the switch resolution. Used as a floor when sizing the cross
-    /// arms in world metres; capped at 10 % of the smaller vessel
-    /// dimension so the cross stays inside the hull as zoom increases.
+    /// <summary>Pixel size of each arm of the CCRP cross (half-span,
+    /// from centre to tip). The cross is rendered as a fixed-pixel
+    /// inline-SVG <c>+</c> glyph that does not scale with zoom.
     /// Per IHO S-52 §8.3.1.</summary>
     public const double CcrpCrossPx = 6.0;
 
@@ -123,6 +123,18 @@ public sealed class OwnShipRenderer : IDynamicFeatureRenderer
     private static readonly MapsuiColor Stroke = new(0x00, 0x7A, 0xCC);
     private static readonly MapsuiColor Fill = new(0x66, 0xB3, 0xE6);
     private static readonly MapsuiColor HullFill = new(0x66, 0xB3, 0xE6, 160);
+
+    // Inline SVG for the CCRP cross — a centred "+" of total span
+    // 2 × CcrpCrossPx pixels. Rendered via Mapsui v5's "svg-content://"
+    // ImageStyle scheme (no asset registration needed). Stroke colour
+    // matches the renderer's primary Stroke (#007ACC); arms are
+    // 1.5 px wide for visual parity with the hull outline.
+    private const string CcrpCrossSvg =
+        """<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="-8 -8 16 16">""" +
+        """<line x1="-6" y1="0" x2="6" y2="0" stroke="#007ACC" stroke-width="1.5"/>""" +
+        """<line x1="0" y1="-6" x2="0" y2="6" stroke="#007ACC" stroke-width="1.5"/>""" +
+        """</svg>""";
+    private static readonly string CcrpCrossImageSource = "svg-content://" + CcrpCrossSvg;
 
     /// <inheritdoc />
     public bool CanRender(DynamicFeature feature)
@@ -257,54 +269,25 @@ public sealed class OwnShipRenderer : IDynamicFeatureRenderer
             yield return hull;
 
             // CCRP cross at antenna position — same gate as the hull.
-            // Per IHO S-52 §8.3.1, a "+" mark at the CCRP. We render
-            // it as two short crossed LineString features aligned with
-            // the vessel's longitudinal (fore-aft) and lateral
-            // (port-starboard) axes — rotated with heading so the
-            // cross visually communicates the vessel's reference frame.
-            //
-            // Arm length: aim for CcrpCrossPx pixels at the switch
-            // resolution, but cap at 10 % of the smaller vessel
-            // dimension so the cross stays inside the hull at any zoom.
-            var armMetres = Math.Min(
-                CcrpCrossPx * rSwitch / 2.0,
-                Math.Min(geom.BeamMetres, geom.LengthMetres) * 0.1);
-
-            // Lateral arm endpoints in vessel-local frame:
-            // (-armMetres, 0) → (+armMetres, 0) — port → starboard
-            // (relative to antenna).
-            var (lpx, lpy) = MercatorOffset.ToMercator(lat, lon,
-                -armMetres * cosT, +armMetres * sinT);
-            var (lsx, lsy) = MercatorOffset.ToMercator(lat, lon,
-                +armMetres * cosT, -armMetres * sinT);
-            var lateral = new GeometryFeature(new LineString(new[]
+            // Per IHO S-52 §8.3.1, a "+" mark at the CCRP / GPS antenna
+            // shown only when the scaled outline is visible. We render
+            // it as a single Point feature carrying an inline-SVG
+            // ImageStyle so the cross is pixel-fixed (does not scale
+            // with zoom) — this matches the S-52 intent (CCRP is a
+            // bridge-symbol indicator, not a vessel-scaled feature)
+            // and reads cleanly at every zoom level. SymbolRotation
+            // aligns the arms with the vessel's longitudinal /
+            // lateral axes so the cross visually communicates the
+            // vessel's reference frame.
+            var cross = new GeometryFeature(new Point(ax, ay));
+            cross.Styles.Add(new ImageStyle
             {
-                new Coordinate(lpx, lpy),
-                new Coordinate(lsx, lsy),
-            }));
-            lateral.Styles.Add(new VectorStyle
-            {
-                Line = new Pen { Color = Stroke, Width = 1.0 },
+                Image = new Image { Source = CcrpCrossImageSource, RasterizeSvg = true },
+                SymbolScale = 1.0,
+                SymbolRotation = headingDeg ?? 0.0,
                 MaxVisible = rSwitch,
             });
-            yield return lateral;
-
-            // Longitudinal arm endpoints (aft → fore relative to antenna).
-            var (fax, fay) = MercatorOffset.ToMercator(lat, lon,
-                -armMetres * sinT, -armMetres * cosT);
-            var (ffx, ffy) = MercatorOffset.ToMercator(lat, lon,
-                +armMetres * sinT, +armMetres * cosT);
-            var longitudinal = new GeometryFeature(new LineString(new[]
-            {
-                new Coordinate(fax, fay),
-                new Coordinate(ffx, ffy),
-            }));
-            longitudinal.Styles.Add(new VectorStyle
-            {
-                Line = new Pen { Color = Stroke, Width = 1.0 },
-                MaxVisible = rSwitch,
-            });
-            yield return longitudinal;
+            yield return cross;
 
             // Pictogram only when zoomed out enough that the hull
             // would be smaller than MinVesselPixels.
