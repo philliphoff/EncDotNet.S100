@@ -1,275 +1,292 @@
 # EncDotNet.S100.Viewer
 
 Cross-platform desktop viewer for IHO S-100 nautical chart data,
-built on Avalonia 11 + Mapsui 5.
+built on Avalonia 11 + Mapsui 5. Runs on macOS (Apple Silicon),
+Windows, and Linux out of the box, with no native HDF5 dependencies
+and no commercial S-52 assets.
 
-## Installation
+This README describes the viewer's **user-visible features**. Internal
+implementation, type names, and per-XAML wiring live in the library
+READMEs linked from [For developers](#for-developers).
 
-Each release attaches per-platform builds at
+## Quickstart
+
+Pre-built per-platform binaries are attached to every release at
 [github.com/philliphoff/EncDotNet.S100/releases](https://github.com/philliphoff/EncDotNet.S100/releases).
+The macOS DMG is Developer-ID signed and Apple-notarized; Windows and
+Linux ship as architecture-tagged `tar.gz` archives. To run from
+source:
 
-- **macOS (Apple Silicon)** — download
-  `EncDotNet.S100.Viewer-<version>.dmg`, open it, and drag
-  **S-100 Viewer** to **Applications**. The DMG, the bundled `.app`,
-  and the embedded executable are all signed with a Developer ID
-  certificate and notarized by Apple, so Gatekeeper will accept them
-  without a manual override. A legacy
-  `Viewer-osx-arm64.tar.gz` is also published during a transition
-  period; expanding it produces the same `.app`.
-- **Windows / Linux** — download `Viewer-<rid>.tar.gz` for your
-  architecture and extract it; run `EncDotNet.S100.Viewer` from the
-  extracted directory.
-
-## Pick / Object Information panel
-
-Toggle **Pick Mode** (cross-hair toolbar button, **View → Appearance →
-Pick Mode**, or `I`) and click a feature to open the **Object
-Information** panel. Each pick report shows:
-
-- A **hit list** of every feature overlapping the click — click a row
-  to switch the attribute view to that feature.
-- The selected feature's class, `gml:id` (or ISO 8211 record id), and
-  source dataset, kept sticky at the top of the scrollable panel.
-- An **Attributes** section with FC-decoded names (e.g. `CATPLE` →
-  "Category of pile") and enum-decoded values. Top-level attributes
-  start expanded; complex/sub-attribute groups can be collapsed.
-- A **References** section listing every `xlink:href` the feature
-  carries (role + target id). Clicking a row resolves the reference
-  through the same processor and re-targets the pick report —
-  particularly useful for S-125 AtoN status bindings and S-421 route
-  topology where the pickable geometry only carries an id pointer.
-
-Coverage products (S-102, S-104, S-111) participate in the same
-pipeline: a click that misses every vector feature falls through to
-the active coverage processor's `GetCoverageInfo(lat, lon)`, which
-samples the underlying grid and returns a synthesised feature
-(depth + uncertainty for S-102, water level + trend for S-104,
-current speed + direction for S-111).
-
-## Feature search
-
-The **Search** field above the Datasets panel scans every loaded
-dataset for features matching a free-text query. Matching is
-case-insensitive across feature type, FC-resolved type name, and
-`gml:id`; results are debounced 250 ms and capped to a configurable
-limit. Selecting a result opens the corresponding feature in the
-pick report.
-
-Each hit carries an **ordinal** — the feature's enumeration index
-within its processor — which is used as the open key. This is a
-deliberate workaround for producer datasets that reuse `gml:id`s
-across distinct features (a real-world S-122 issue): the search
-index correctly distinguishes the duplicates, and routing through
-`IPickService.OpenFeatureAt(processor, ordinal, …)` ensures the
-correct feature is opened.
-
-## Datasets panel — layer controls
-
-Loaded datasets appear in the **Datasets** panel on the left. Each
-entry exposes an inline visibility toggle and **up / down** buttons
-to reorder the paint stack; the basemap stays pinned to the bottom
-and map overlays (e.g. the measure tool) stay pinned to the top.
-
-Selecting an entry reveals a **Properties** sub-panel with two
-tabs:
-
-- **Dataset** — read-only metadata (product spec, current timestamp
-  for time-varying datasets, loader status) plus a whole-dataset
-  opacity slider.
-- **Layers** — for multi-layer products (today S-111 currents,
-  which paints a colour band and an arrow layer) this tab lists
-  each sub-layer with its own visibility toggle and opacity slider.
-  Single-layer products show a short empty-state message instead.
-
-Above the list, a small toolbar offers **Show all**, **Hide all**,
-**Isolate selected**, and **Reset opacity** bulk actions.
-
-All visibility / opacity / order changes drive Mapsui's per-layer
-`Enabled`, `Opacity`, and stack position directly — they apply
-immediately and do not re-run the dataset pipeline.
-
-## ECDIS Display Controls
-
-The viewer exposes S-100 Part 9A display-category filtering,
-per-spec viewing-group overrides, display-plane toggles, and
-quick text-group toggles through several UI surfaces:
-
-### Display toolbar pill
-
-A compact pill button in the map toolbar shows the active
-**display category** (Display Base, Standard, Other Information,
-or All). Clicking the pill opens a flyout with radio buttons to
-switch categories; the change propagates through `EcdisDisplayState`
-and triggers a re-render of all vector datasets.
-
-### Text toolbar pill
-
-A "Text ▾" pill button next to the display pill opens a flyout
-with checkboxes for the three S-101 text viewing-group layers:
-**Important Text**, **Other Text**, and **All Other Chart Text**.
-Unchecking a group hides the corresponding viewing groups. The
-pill is disabled when no S-101 data (or another spec with text
-layers) is loaded.
-
-### ECDIS panel (activity bar)
-
-A dedicated activity-bar entry opens the ECDIS Display Controls
-panel. It lists each loaded **vector** product specification
-(S-101, S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421)
-with a flat checkbox list of viewing groups sourced from the spec's
-portrayal catalogue. Unchecking a viewing group hides its features
-from the rendered output.
-
-#### Display planes
-
-Below the display-category radios, the panel shows checkboxes for
-the two S-100 display planes — **Under Radar** and **Over Radar**
-(S-100 Part 9 §11.6). Unchecking a plane hides all drawing
-instructions assigned to it across all loaded vector datasets.
-Plane visibility is persisted in `settings.json`.
-
-Coverage products (S-102, S-104, S-111) have no viewing-group
-concept and are excluded from the panel.
-
-Per-spec and global "Reset overrides" buttons clear any
-user-hidden viewing groups. Override state is persisted in
-`settings.json` and restored on launch.
-
-#### Viewing-group labels
-
-The labels shown next to each checkbox come from the relevant
-Portrayal Catalogue's `<viewingGroup>/<description>/<name>`
-element. Those IHO-authored strings are wildly inconsistent across
-specs — mixed case, embedded `SY(...)` / `LC(...)` symbol
-references, and (in S-127 and S-421) bare numeric ids — so the
-viewer ships **curated labels** as embedded resources under
-`Resources/EcdisLabels/<spec>.labels.json` (e.g.
-`S101.labels.json`).
-
-The resolution chain for each row is:
-
-1. Curated `label` from the override file, if present.
-2. Raw PC `<name>`, when it is not just a numeric id.
-3. Raw PC `<description>`.
-4. Synthesised `Viewing group <id>`.
-
-The raw PC name and description remain available in each row's
-tooltip (`ToolTip.Tip`), preserving the symbol/feature acronyms
-that power users rely on.
-
-To curate a new spec, add a file `Resources/EcdisLabels/<Sxxx>.labels.json`
-with shape:
-
-```json
-{
-  "specCode": "S-xxx",
-  "groups": {
-    "<id>": { "label": "Human-friendly label" }
-  }
-}
+```sh
+dotnet run --project src/EncDotNet.S100.Viewer
 ```
 
-Missing files, missing entries, and malformed JSON are all
-tolerated — the viewer simply falls back to the raw PC text.
+User settings (recent files, panel layout, ECDIS overrides, vessel
+geometry, …) are persisted per user; the viewer ignores or migrates
+older settings shapes silently rather than refusing to start.
 
-## Time-varying datasets and the global time slider
+## Supported products
 
-Three product specifications carry a time dimension:
+| Standard | Subject | Encoding | Portrayal | Validation pack |
+|---|---|---|---|---|
+| **S-101** | Electronic Navigational Charts | ISO 8211 | Lua (S-100 Part 9A) | ✅ |
+| **S-102** | Bathymetric Surfaces | HDF5 | Coverage | ✅ |
+| **S-104** | Water Level Information | HDF5 | Coverage | ✅ |
+| **S-111** | Surface Currents | HDF5 | Arrow symbology | ✅ |
+| **S-122** | Marine Protected Areas | GML | XSLT | ✅ |
+| **S-124** | Navigational Warnings | GML | XSLT | ✅ |
+| **S-125** | Marine Aids to Navigation | GML | XSLT | ✅ |
+| **S-127** | Marine Resources & Services | GML | XSLT | ✅ |
+| **S-128** | Catalogue of Nautical Products | GML | XSLT | ✅ |
+| **S-129** | Under Keel Clearance Management | GML | XSLT | ✅ |
+| **S-131** | Marine Harbour Infrastructure | GML | Lua | ✅ |
+| **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
+| **S-411** | Sea Ice Information | GML | XSLT | ✅ |
+| **S-421** | Route Plans | GML | XSLT | ✅ |
+| **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 | ✅ (delegated) |
 
-- **S-104** (Water Levels) — many samples per file (one per HDF5
-  `Group_NNN`).
-- **S-111** (Surface Currents) — many samples per file (same
-  `Group_NNN` shape).
-- **S-411** (Sea Ice) — one snapshot per file, identified by the
-  dataset's *issue date* (`<S100:datasetReferenceDate>` in the
-  IHO 1.2.1 sample shape; probed JCOMM/CIS attributes otherwise).
+Any combination of these can be loaded at once and rendered
+time-aligned on a single interactive map.
 
-When at least one such dataset is loaded, the viewer reveals a
-**global time slider** at the bottom of the map area. Scrubbing the
-slider re-renders every participating dataset at the timestep nearest
-to the global clock:
+## Loading data
 
-- S-104 / S-111: nearest absolute sample.
-- S-411: most recent snapshot whose issue date is at-or-before the
-  slider value (the dataset is hidden if the slider is earlier than
-  any of its snapshots).
+The viewer accepts:
 
-The panel is hidden automatically when no time-varying dataset is
-loaded. Per-dataset prev/next time-step controls are no longer
-shown — each dataset entry instead displays the timestamp it is
-currently rendered at.
+- **S-100 Exchange Sets** — point it at a directory containing a
+  `CATALOG.XML` or at a `.zip` exchange-set archive, and it will
+  load every dataset entry the catalogue lists.
+- **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
+  S-111), `.gml` (any of the GML-encoded products), `.000` S-101
+  ENC cell, or `.000` S-57 ENC cell onto the window.
+- **Recent files** — the **File → Recent** submenu replays previous
+  loads in order; entries that no longer exist on disk are skipped.
 
-### Implementation notes
+S-57 base cells are auto-detected by inspecting the ISO 8211 header
+and translated to the in-memory S-101 model so they render through
+the S-101 portrayal pipeline. This is best-effort, not an S-52
+implementation.
 
-- `GlobalTimeService` aggregates timelines across registered
-  `ITimeAwareDataset` adapters and exposes
-  `MinTime`/`MaxTime`/`CurrentTime`/`AllSamples`/`IsActive`.
-- `DatasetLoaderService.ReRenderAtTimeAsync(DateTime, CancellationToken)`
-  is invoked when the slider moves; it applies a 100 ms trailing
-  debounce and cancels in-flight renders.
-- Animation (play/pause/speed) is intentionally out of scope;
-  `GlobalTimeService.SetCurrentTime` is the obvious seam for a
-  future timer-driven driver.
+## The map view
 
-## Own-ship overlay (PR-D2)
+A Mapsui-backed map fills the centre of the window with an
+OpenStreetMap basemap underlay. Standard pan / zoom gestures work
+out of the box (mouse wheel, trackpad, touch). A **scale bar** at the
+bottom of the map updates with the viewport and respects the
+mariner's distance-unit choice (metres / kilometres, feet, nautical
+miles).
 
-A single moving point published through the dynamic-source
-abstraction (PR-D1). The toolbar **Location** toggle controls
-visibility; the setting is persisted via `ViewerSettings.OwnShipVisible`.
+The viewer renders directly in WGS-84 latitude/longitude internally
+and projects to EPSG:3857 (Web Mercator) for display. Coverage
+grids tagged with UTM-band CRSs (typical for S-102) are reprojected
+on the fly via ProjNet.
 
-Architecture:
+## Layer stack
 
-- `IOwnShipPositionProvider` is a thin push interface (`Current` +
-  `Updated`). The PR-D2 reference driver
-  `SyntheticOwnShipPositionProvider` dead-reckons along a fixed
-  course/speed on a 1 Hz timer (Solent — 50.8° N, 1.3° W, course
-  090° T, 5 m/s ≈ 9.7 kn). A future real-GPS / NMEA-replay driver
-  implements the same interface.
-- `OwnShipSource` is the `IDynamicFeatureSource` that converts
-  provider fixes into `DynamicFeature` snapshots (Id `"ownship"`,
-  Kind `"ownship"`, Point geometry) with an optional `DynamicMotion`
-  sidecar. SOG is converted from m/s (provider) to knots
-  (`DynamicMotion.SpeedOverGroundKn`); COG is mirrored to
-  `HeadingDeg` so the default renderer's predictor line draws.
-- Rendering uses the dedicated
-  `EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer`
-  (registered under key `"ownship"`). At low zoom it draws the same
-  coloured disc + six-minute predictor as the default renderer; at
-  high zoom (vessel length ≥ ~6 mm on screen / 22 px) it switches to
-  a true-scale 5-vertex hull outline plus a CCRP cross at the GPS
-  antenna position. The heading vector gains a filled-triangle
-  arrowhead at its tip in both modes. The switch threshold is a
-  per-feature `MinVisible` / `MaxVisible` gate that Mapsui evaluates
-  per frame, so no renderer-signature change is needed. When a
-  feature has no `DynamicVesselGeometry` sidecar (e.g. a future AIS
-  target with unknown dimensions) the renderer falls back to
-  pictogram-only.
-- Vessel dimensions live in `ViewerSettings.OwnShip`
-  (`OwnShipSettings`: `LengthMetres`, `BeamMetres`,
-  `BowOffsetMetres`, `PortOffsetMetres` — the four CCRP offsets per
-  IEC 62388, semantically matching AIS Type 5 `dimA`/`dimB`/`dimC`/
-  `dimD`). The Settings panel's **Own Vessel** section edits these
-  values; edits flow through
-  `SettingsOwnShipVesselGeometryProvider.NotifyChanged()` →
-  `OwnShipSource` re-publishes the current fix with the new geometry
-  sidecar. Defaults: 50 m × 10 m, antenna amidships.
-  See [`docs/design/own-ship-symbology.md`](../../docs/design/own-ship-symbology.md).
-- Layer Stack integration (PR-D2.1) surfaces every registered
-  `IDynamicFeatureSource` as a row in the `DynamicArrows` plane of
-  the Layer Stack panel. Each row exposes the source's display name
-  and a visibility checkbox; toggling the checkbox flips the
-  underlying overlay layer's `Enabled` flag through
-  `IDynamicFeatureSourceRegistry.SetVisible` and persists into
-  `ViewerSettings.DynamicSourceVisibility` (keyed by source Id).
-  Dynamic rows sort below dataset rows in the plane and are kept in
-  registration order. The legacy `ViewerSettings.OwnShipVisible`
-  bool is migrated into the dictionary on first load and mirrored
-  back on save for downgrade compatibility.
+The **Layer Stack** panel collects every visible layer into the
+S-98 display planes (**Under Radar**, **Standard**, **Over Radar**,
+**Dynamic Arrows**), grouped within each plane by S-98 within-plane
+priority. The basemap stays pinned to the bottom; map-overlay tools
+(the measure tool, the validation-finding overlay) stay pinned to
+the top.
 
-**Caveats**
+Each row carries an inline visibility toggle. Rows include:
 
-- The synthetic driver is scaffolding — start position, course, and
-  speed are hard-coded constants, not user-configurable settings.
-- "Centre on own-ship", picking the glyph, and time-axis integration
-  are all out of scope for PR-D2 / PR-D2.1.
+- Dataset rows for every loaded product, named after the dataset
+  with their assigned plane in parentheses.
+- Sub-layer rows when a product paints more than one layer
+  (e.g. S-111 currents, which paints an arrow layer).
+- Dynamic-source rows for each registered live overlay (today:
+  **Own Ship**; planned: AIS targets).
 
+Cross-product stacking is **driven by the S-98 interoperability
+authority**, not by load order — when an S-101 ENC and an S-102
+bathymetric grid both cover the same area, the bathymetric grid is
+plumbed onto a plane that paints beneath the chart, regardless of
+the order they were loaded. See the design note
+[`docs/design/s98-interoperability.md`](../../docs/design/s98-interoperability.md).
+
+## Picking and identifying features
+
+Toggle **Pick Mode** (the cross-hair toolbar button or the
+**Appearance → Pick Mode** menu item) and click any feature to open
+the **Object Information** panel on the right. Each pick report
+shows:
+
+- A **hit list** of every overlapping feature — select a row to
+  switch the attribute view.
+- The selected feature's class, identifier, source dataset, and
+  human-readable type name.
+- A decoded **Attributes** section. Feature-catalogue codes (e.g.
+  `CATPLE`) are shown as friendly names ("Category of pile") and
+  enumerated values are shown with their FC labels. Complex
+  attribute groups can be collapsed.
+- A **References** section listing every `xlink:href` the feature
+  carries. Clicking a row resolves the reference through the same
+  processor and re-targets the pick report — particularly useful
+  for S-125 AtoN status bindings and S-421 route topology.
+- A **Time-series chart** when the picked feature is a fixed-station
+  observation (S-104 / S-111 data-coding-format-8 stations).
+
+A standard one-shot pick gesture (platform-specific click modifier,
+or a press-and-hold of about half a second) works outside Pick Mode
+too. Coverage products (S-102, S-104, S-111) participate fully: a
+click that misses every vector feature falls through to a per-cell
+coverage sample reporting the underlying gridded value (depth +
+uncertainty, water level + trend, current speed + direction).
+
+A **Search** field above the Datasets panel finds any feature
+across every loaded dataset by feature class, FC-resolved name, or
+identifier. Selecting a result jumps the pick report to the
+corresponding feature, even when producer datasets reuse `gml:id`s
+across distinct features.
+
+## Display category and palette
+
+Standard ECDIS-style controls are available from the **View** menu
+and from a pair of compact pill buttons on the map toolbar:
+
+- **Display category** — Display Base, Standard, Other Information,
+  or All. Switching category propagates through the ECDIS display
+  state and re-renders every vector dataset.
+- **Display planes** — Under Radar / Over Radar plane toggles
+  (S-100 Part 9 §11.6).
+- **Text groups** — quick toggles for the three S-101 text
+  viewing-group layers (Important Text / Other Text / All Other
+  Chart Text).
+- **Per-spec viewing groups** — the **ECDIS** activity-bar panel
+  lists each loaded vector product's viewing groups individually so
+  power users can hide or reveal specific symbol families. Labels
+  come from the IHO-authored portrayal catalogues, supplemented by
+  the viewer's curated label overrides where the upstream names
+  are inconsistent (e.g. bare numeric IDs in S-127 and S-421).
+- **Day / Dusk / Night** palettes — switch between the three S-100
+  Part 9 mariner moods; coverage products (S-102, S-104, S-111)
+  switch their palette in lockstep.
+- **Mariner settings** — safety contour, shallow / safety / deep
+  depth contours, four-shades toggle, simplified symbols, radar
+  overlay, national-language preference (S-100 Part 9 §4.2).
+
+Per-spec and global "Reset overrides" buttons clear any
+user-hidden viewing groups. All overrides persist between sessions.
+
+## Time-varying data
+
+S-104 water levels, S-111 surface currents, and S-411 sea ice all
+carry timestamps. When at least one such dataset is loaded the
+viewer reveals a **global timeline** at the bottom of the map. The
+timeline aggregates every time sample across the loaded datasets
+into a single slider; scrubbing the slider re-renders every
+participating dataset at the timestep nearest the global clock
+(nearest-absolute for the time-series HDF5 products, last-known for
+S-411 snapshots). When all loaded datasets share the same set of
+timestamps the slider exposes discrete stops at each one, with
+previous / next buttons; otherwise it shows evenly-spaced guide
+ticks across the aggregate range. The panel hides automatically
+when no time-varying dataset is loaded.
+
+## Validation
+
+Every supported product ships a normative **validation rule pack**
+keyed to the relevant IHO product specification. The **Validation**
+activity-bar panel surfaces the findings for the selected dataset:
+
+- Each row shows the **rule id**, **severity** (Error / Warning /
+  Info), **message**, and **related feature id** (FOID for vector
+  features; HDF5 group path for coverage records).
+- Findings with a `GeoPosition` or `BoundingBox` are clickable —
+  selecting a row zooms the map to the offending feature.
+- Geographic findings are also surfaced as an overlay on the map
+  (with severity-tinted markers) so the user can spot clusters
+  without scrolling the list.
+
+S-57 datasets get two passes — a pre-translation pass against the
+raw S-57 record (DSID / DSPM presence, `M_COVR` coverage), then the
+standard S-101 pack against the translated S-101 document. Findings
+from the second pass are rebadged `S101-as-S57/<rule-id>` so the
+user can tell whether a problem originated in the raw S-57 input or
+in the translated projection.
+
+## Own-ship and dynamic overlays
+
+A live "own ship" overlay sits alongside the static datasets,
+publishing a single moving point through the
+[dynamic-feature-source](../../docs/design/dynamic-feature-source.md)
+abstraction. Today the position is driven by a synthetic
+dead-reckoning provider (Solent, course 090° T, 5 m/s). The
+abstraction is shaped so a future NMEA / AIS adapter can plug in
+without renderer changes.
+
+The own-ship glyph adapts to zoom:
+
+- **Zoomed in** (when the vessel is ≥ ~6 mm on screen) — a
+  true-scale 5-vertex hull outline plus a CCRP cross at the GPS
+  antenna position, with a heading vector and filled-triangle
+  arrowhead.
+- **Zoomed out** — a coloured disc with the same heading vector
+  and arrowhead.
+
+Vessel dimensions and the four CCRP / GPS-antenna offsets
+(length, beam, bow offset, port offset — matching IEC 62388 / AIS
+Type 5 `dimA`/`dimB`/`dimC`/`dimD`) are editable in the **Own
+Vessel** section of the Settings panel. Edits take effect
+immediately. See
+[`docs/design/own-ship-symbology.md`](../../docs/design/own-ship-symbology.md).
+
+Own-ship visibility is controlled by its row in the **Dynamic
+Arrows** plane of the Layer Stack panel and is persisted between
+sessions.
+
+## Optional MCP server
+
+The viewer can optionally host a Model Context Protocol server
+exposing the loaded datasets to AI agents. The server is **off by
+default**, bound to `127.0.0.1`, and has no authentication; the
+toggle lives in the Settings panel. While on, the standard MCP
+tools surface (`list_datasets`, `describe_feature`,
+`sample_coverage`) is joined by a viewer-injected `render_to_image`
+tool that snapshots the current map view.
+
+See [`docs/mcp-server.md`](../../docs/mcp-server.md) for the full
+tool catalogue and an agent walkthrough.
+
+## Settings persistence
+
+User settings are stored as JSON in the platform's per-user
+application-data location. Persisted across sessions:
+
+- Recent files.
+- Panel layout (which activity-bar panels are docked where, and
+  splitter positions).
+- Day / Dusk / Night palette and ECDIS display category.
+- Per-spec viewing-group overrides and display-plane toggles.
+- Mariner depth / distance units and contour values.
+- Own-ship visibility and vessel geometry.
+- MCP server enable / disable.
+
+Older settings shapes are migrated forward silently; missing values
+fall back to documented defaults.
+
+## For developers
+
+This viewer is one consumer of the EncDotNet.S100 library suite.
+The libraries do all the spec-aware work; the viewer is mainly
+glue + Avalonia views. To understand or extend any of it, start
+with the matching library README:
+
+- Pipeline framework and shared types — [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md)
+- Per-spec processors and the S-98 interop authority — [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
+- Per-product readers and validation rule packs — `EncDotNet.S100.Datasets.S*/README.md`
+- Vector + coverage + dynamic-feature renderers — [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)
+- MCP server foundation — [`EncDotNet.S100.Mcp.Tools`](../EncDotNet.S100.Mcp.Tools/README.md) and [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md)
+
+Design notes for cross-cutting features:
+
+- [Dynamic feature sources](../../docs/design/dynamic-feature-source.md)
+- [Own-ship vessel symbology](../../docs/design/own-ship-symbology.md)
+- [S-98 interoperability](../../docs/design/s98-interoperability.md)
+
+Internationalization conventions, the IActivityTab / activity-bar
+contract, the `IDynamicFeatureSource` abstraction, the
+`ICoveragePortrayalCatalogue` / `IVectorPortrayalCatalogue`
+contracts, and the resx string-resource convention are all
+documented in `.github/instructions/viewer.instructions.md`.

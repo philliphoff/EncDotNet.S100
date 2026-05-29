@@ -10,7 +10,7 @@ This library reads S-104 datasets from HDF5 files and provides time-series water
 - **`S104DatasetReader`** — reads an S-104 dataset from an `IHdf5File` (regular grid format).
 - **`S104CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S104PortrayalCatalogue`** — viewer-parity heatmap catalogue with hand-coded Day / Dusk / Night band tables (see *Portrayal* below).
-- **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models.
+- **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models. `WaterLevelCoverage.GroupPath` carries the HDF5 instance path (e.g. `/WaterLevel/WaterLevel.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
 
 ## Portrayal
 

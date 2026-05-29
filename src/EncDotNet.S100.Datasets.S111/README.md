@@ -61,6 +61,36 @@ Those per-band factors multiply the renderer's `BaseSymbolScale` (default
 `RenderContext.SymbolScale` so the viewer's Symbol Scale slider tunes
 arrow size) to produce each feature's `ImageStyle.SymbolScale`.
 
+## Validation
+
+A bundled rule pack
+(`EncDotNet.S100.Datasets.S111.Validation.S111SurfaceCurrentRules.Default`)
+evaluates a typed `S111Dataset` against the S-111 Edition 2.0.0
+checklist and emits a `ValidationReport` of findings. The pack is
+invoked automatically by `S111DatasetProcessor.Validate()` and is
+also runnable directly:
+
+```csharp
+var report = S111SurfaceCurrentRules.Default.Run(dataset);
+foreach (var finding in report.Findings)
+    Console.WriteLine($"{finding.RuleId} {finding.Severity}: {finding.Message}");
+```
+
+| Rule id                  | Severity | Checks                                                                                                                  |
+|--------------------------|----------|-------------------------------------------------------------------------------------------------------------------------|
+| `S111-R-1.1`             | Error    | Each coverage's `Values.Length` equals `NumPointsLatitudinal × NumPointsLongitudinal`.                                  |
+| `S111-R-2.1`             | Warning  | `Coverages` are strictly increasing by `TimePoint` and successive deltas vary by no more than ±10% of the median delta. |
+| `S111-R-3.1`             | Warning  | `SurfaceCurrentDepth`, when set, falls in `[0, 1500]` m below the surface.                                              |
+| `S111-R-3.2`             | Warning  | `TypeOfCurrentData`, when set, is a member of the S-111 enumerated set `{1..6}`.                                        |
+| `S111-R-4.1`             | Warning  | Non-NODATA current speeds lie in the plausible range `[0, 15]` m/s; fill / NaN / ±Infinity skipped.                     |
+| `S111-R-4.2`             | Error    | Non-NODATA current directions lie in the half-open range `[0, 360)` degrees true.                                       |
+| `S111-PROJ-SCHEMA`       | Error    | Defensive surrogate: emitted when the underlying HDF5 dataset fails schema-level parsing inside `Validate()`.           |
+| `S111-PROJ-UNSUPPORTED`  | Error    | Emitted when the loaded dataset uses an unsupported data coding format (e.g. dcf 8 station series).                     |
+
+R-2.1 reuses the time-axis rule template established by S-104 (V-2),
+keeping monotonicity / cadence checks consistent across the two
+time-varying coverage products.
+
 ## Installation
 
 ```sh
