@@ -231,9 +231,29 @@ Architecture:
   sidecar. SOG is converted from m/s (provider) to knots
   (`DynamicMotion.SpeedOverGroundKn`); COG is mirrored to
   `HeadingDeg` so the default renderer's predictor line draws.
-- Rendering uses the default `DefaultDynamicFeatureRenderer` (blue
-  disc + six-minute predictor). A custom `OwnShipRenderer` is
-  deferred until a second dynamic source coexists.
+- Rendering uses the dedicated
+  `EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer`
+  (registered under key `"ownship"`). At low zoom it draws the same
+  coloured disc + six-minute predictor as the default renderer; at
+  high zoom (vessel length ≥ ~6 mm on screen / 22 px) it switches to
+  a true-scale 5-vertex hull outline plus a CCRP cross at the GPS
+  antenna position. The heading vector gains a filled-triangle
+  arrowhead at its tip in both modes. The switch threshold is a
+  per-feature `MinVisible` / `MaxVisible` gate that Mapsui evaluates
+  per frame, so no renderer-signature change is needed. When a
+  feature has no `DynamicVesselGeometry` sidecar (e.g. a future AIS
+  target with unknown dimensions) the renderer falls back to
+  pictogram-only.
+- Vessel dimensions live in `ViewerSettings.OwnShip`
+  (`OwnShipSettings`: `LengthMetres`, `BeamMetres`,
+  `BowOffsetMetres`, `PortOffsetMetres` — the four CCRP offsets per
+  IEC 62388, semantically matching AIS Type 5 `dimA`/`dimB`/`dimC`/
+  `dimD`). The Settings panel's **Own Vessel** section edits these
+  values; edits flow through
+  `SettingsOwnShipVesselGeometryProvider.NotifyChanged()` →
+  `OwnShipSource` re-publishes the current fix with the new geometry
+  sidecar. Defaults: 50 m × 10 m, antenna amidships.
+  See [`docs/design/own-ship-symbology.md`](../../docs/design/own-ship-symbology.md).
 - Layer Stack integration (PR-D2.1) surfaces every registered
   `IDynamicFeatureSource` as a row in the `DynamicArrows` plane of
   the Layer Stack panel. Each row exposes the source's display name

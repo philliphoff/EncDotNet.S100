@@ -462,6 +462,12 @@ internal sealed class SettingsViewModel : ViewModelBase
         _mcpEnabled = settings.McpEnabled;
         _mcpPort = settings.McpPort;
         ResetMcpPortCommand = new RelayCommand(() => McpPort = 0);
+
+        var own = settings.OwnShip ?? new OwnShipSettings();
+        _ownShipLength = own.LengthMetres;
+        _ownShipBeam = own.BeamMetres;
+        _ownShipBowOffset = own.BowOffsetMetres;
+        _ownShipPortOffset = own.PortOffsetMetres;
     }
 
     /// <summary>
@@ -513,6 +519,102 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _settings.McpPort = value;
                 _settings.Save();
                 McpSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Own-vessel dimensions (own-ship symbology PR).
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Raised after any own-vessel dimension changes and the settings
+    /// file has been saved. The viewer wires this to
+    /// <c>SettingsOwnShipVesselGeometryProvider.NotifyChanged</c> so
+    /// the <c>OwnShipSource</c> re-publishes its current fix with
+    /// the new dimensions.
+    /// </summary>
+    public event Action? OwnShipGeometryChanged;
+
+    private void EnsureOwnShipSettings()
+    {
+        _settings.OwnShip ??= new OwnShipSettings();
+    }
+
+    private double _ownShipLength;
+    /// <summary>Vessel length in metres. Clamped to (0, ∞).</summary>
+    public double OwnShipLengthMetres
+    {
+        get => _ownShipLength;
+        set
+        {
+            if (value <= 0) value = 1;
+            if (SetProperty(ref _ownShipLength, value))
+            {
+                EnsureOwnShipSettings();
+                _settings.OwnShip!.LengthMetres = value;
+                if (_ownShipBowOffset > value) OwnShipBowOffsetMetres = value;
+                _settings.Save();
+                OwnShipGeometryChanged?.Invoke();
+            }
+        }
+    }
+
+    private double _ownShipBeam;
+    /// <summary>Vessel beam in metres. Clamped to (0, ∞).</summary>
+    public double OwnShipBeamMetres
+    {
+        get => _ownShipBeam;
+        set
+        {
+            if (value <= 0) value = 1;
+            if (SetProperty(ref _ownShipBeam, value))
+            {
+                EnsureOwnShipSettings();
+                _settings.OwnShip!.BeamMetres = value;
+                if (_ownShipPortOffset > value) OwnShipPortOffsetMetres = value;
+                _settings.Save();
+                OwnShipGeometryChanged?.Invoke();
+            }
+        }
+    }
+
+    private double _ownShipBowOffset;
+    /// <summary>GPS antenna distance aft of bow, in metres.
+    /// Clamped to [0, <see cref="OwnShipLengthMetres"/>].</summary>
+    public double OwnShipBowOffsetMetres
+    {
+        get => _ownShipBowOffset;
+        set
+        {
+            if (value < 0) value = 0;
+            if (value > _ownShipLength) value = _ownShipLength;
+            if (SetProperty(ref _ownShipBowOffset, value))
+            {
+                EnsureOwnShipSettings();
+                _settings.OwnShip!.BowOffsetMetres = value;
+                _settings.Save();
+                OwnShipGeometryChanged?.Invoke();
+            }
+        }
+    }
+
+    private double _ownShipPortOffset;
+    /// <summary>GPS antenna distance starboard of port side, in metres.
+    /// Clamped to [0, <see cref="OwnShipBeamMetres"/>].</summary>
+    public double OwnShipPortOffsetMetres
+    {
+        get => _ownShipPortOffset;
+        set
+        {
+            if (value < 0) value = 0;
+            if (value > _ownShipBeam) value = _ownShipBeam;
+            if (SetProperty(ref _ownShipPortOffset, value))
+            {
+                EnsureOwnShipSettings();
+                _settings.OwnShip!.PortOffsetMetres = value;
+                _settings.Save();
+                OwnShipGeometryChanged?.Invoke();
             }
         }
     }

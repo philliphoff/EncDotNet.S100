@@ -256,6 +256,56 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </StackPanel>
+            <!-- Own vessel dimensions -->
+            <TextBlock Text="{x:Static loc:Strings.Settings_OwnVesselSection}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="0,12,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_OwnVesselSection_Help}"
+                       TextWrapping="Wrap"
+                       Opacity="0.75" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_Length}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipLengthMetres}"
+                               Minimum="1"
+                               Maximum="500"
+                               Increment="1"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_Length_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_Beam}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipBeamMetres}"
+                               Minimum="1"
+                               Maximum="100"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_Beam_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_BowOffset}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipBowOffsetMetres}"
+                               Minimum="0"
+                               Maximum="500"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_BowOffset_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_PortOffset}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipPortOffsetMetres}"
+                               Minimum="0"
+                               Maximum="100"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_PortOffset_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+            </StackPanel>
             <!-- MCP server -->
             <TextBlock Text="{x:Static loc:Strings.Settings_McpSection}"
                        FontSize="12"

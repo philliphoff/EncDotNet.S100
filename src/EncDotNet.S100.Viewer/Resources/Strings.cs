@@ -395,4 +395,16 @@ internal static class Strings
     // Own-ship overlay (PR-D2)
     public static string OwnShip_DisplayName => Get(nameof(OwnShip_DisplayName));
     public static string OwnShip_Description => Get(nameof(OwnShip_Description));
+
+    // Own-vessel dimensions (own-ship symbology PR)
+    public static string Settings_OwnVesselSection => Get(nameof(Settings_OwnVesselSection));
+    public static string Settings_OwnVesselSection_Help => Get(nameof(Settings_OwnVesselSection_Help));
+    public static string Settings_OwnVessel_Length => Get(nameof(Settings_OwnVessel_Length));
+    public static string Settings_OwnVessel_Length_Tooltip => Get(nameof(Settings_OwnVessel_Length_Tooltip));
+    public static string Settings_OwnVessel_Beam => Get(nameof(Settings_OwnVessel_Beam));
+    public static string Settings_OwnVessel_Beam_Tooltip => Get(nameof(Settings_OwnVessel_Beam_Tooltip));
+    public static string Settings_OwnVessel_BowOffset => Get(nameof(Settings_OwnVessel_BowOffset));
+    public static string Settings_OwnVessel_BowOffset_Tooltip => Get(nameof(Settings_OwnVessel_BowOffset_Tooltip));
+    public static string Settings_OwnVessel_PortOffset => Get(nameof(Settings_OwnVessel_PortOffset));
+    public static string Settings_OwnVessel_PortOffset_Tooltip => Get(nameof(Settings_OwnVessel_PortOffset_Tooltip));
 }

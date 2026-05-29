@@ -24,12 +24,15 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 /// singleton feature has no aging surface.
 /// </para>
 /// <para>
-/// <c>RendererKey</c> is <see langword="null"/>: PR-D2 deliberately
-/// uses <see cref="EncDotNet.S100.Renderers.Mapsui.DynamicSources.DefaultDynamicFeatureRenderer"/>,
-/// whose disc + COG/SOG predictor is acceptable as an ECDIS-style
-/// own-ship indicator. A custom <c>OwnShipRenderer</c> is deferred
-/// until a second dynamic source coexists and demands visual
-/// differentiation.
+/// <c>RendererKey</c> is <c>"ownship"</c>, resolving to
+/// <c>EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer</c>
+/// — true-scale hull outline when zoomed in, disc pictogram when
+/// zoomed out, arrowhead on the heading vector. The renderer reads
+/// the per-feature <c>DynamicVesselGeometry</c> sidecar populated
+/// here from <see cref="IOwnShipVesselGeometryProvider"/>; settings
+/// edits propagate through that provider's <c>Changed</c> event,
+/// which the source treats as a re-publish trigger so the new dims
+/// take effect without waiting for the next fix.
 /// </para>
 /// <para>
 /// Speed conversion: the provider supplies SOG in metres per second
@@ -60,24 +63,38 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
     private static readonly IReadOnlyList<DynamicFeature> EmptyFeatures = Array.Empty<DynamicFeature>();
 
     private readonly IOwnShipPositionProvider _provider;
+    private readonly IOwnShipVesselGeometryProvider? _geometryProvider;
     private readonly object _gate = new();
     private IReadOnlyList<DynamicFeature> _current = EmptyFeatures;
+    private OwnShipPosition? _lastFix;
     private bool _isEnabled = true;
     private int _disposed;
 
     public OwnShipSource(IOwnShipPositionProvider provider)
+        : this(provider, geometryProvider: null)
+    {
+    }
+
+    public OwnShipSource(
+        IOwnShipPositionProvider provider,
+        IOwnShipVesselGeometryProvider? geometryProvider)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
+        _geometryProvider = geometryProvider;
 
         Metadata = new DynamicSourceMetadata
         {
             DisplayName = Strings.OwnShip_DisplayName,
             Description = Strings.OwnShip_Description,
-            RendererKey = null,
+            RendererKey = FeatureKind,
         };
 
         _provider.Updated += OnProviderUpdated;
+        if (_geometryProvider is not null)
+        {
+            _geometryProvider.Changed += OnGeometryChanged;
+        }
 
         // If the provider already has a fix at construction time
         // (e.g. a test stub that was seeded synchronously) surface
@@ -162,11 +179,25 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
         ApplyFix(fix, raise: true);
     }
 
+    private void OnGeometryChanged(object? sender, EventArgs e)
+    {
+        // Re-publish the most recent fix so the new vessel-geometry
+        // sidecar reaches the renderer without waiting for the next
+        // position update.
+        OwnShipPosition? fix;
+        lock (_gate)
+        {
+            fix = _lastFix;
+        }
+        if (fix is { } f) ApplyFix(f, raise: true);
+    }
+
     private void ApplyFix(OwnShipPosition fix, bool raise)
     {
         DynamicFeaturesChanged? toRaise = null;
         lock (_gate)
         {
+            _lastFix = fix;
             if (!_isEnabled) return;
 
             var wasEmpty = _current.Count == 0;
@@ -187,7 +218,7 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
         if (toRaise is not null) Changed?.Invoke(this, toRaise);
     }
 
-    private static DynamicFeature Project(OwnShipPosition fix)
+    private DynamicFeature Project(OwnShipPosition fix)
     {
         // Synthetic / GPS-only drivers expose Course Over Ground but
         // not a separate gyro Heading. Default renderer keys the
@@ -213,6 +244,7 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
             GeometryType = GeometryType.Point,
             Coordinates = new[] { (fix.Latitude, fix.Longitude) },
             Motion = motion,
+            VesselGeometry = _geometryProvider?.Current,
             LastUpdated = fix.Timestamp,
         };
     }
@@ -226,5 +258,9 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _provider.Updated -= OnProviderUpdated;
+        if (_geometryProvider is not null)
+        {
+            _geometryProvider.Changed -= OnGeometryChanged;
+        }
     }
 }

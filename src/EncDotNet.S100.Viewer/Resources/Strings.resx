@@ -1047,4 +1047,37 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>The vessel's own position (synthetic for v1).</value>
     <comment>Longer description of the own-ship source for tooltips and settings panels.</comment>
   </data>
+
+  <!-- Own-vessel dimensions (own-ship symbology PR) -->
+  <data name="Settings_OwnVesselSection" xml:space="preserve">
+    <value>OWN VESSEL</value>
+    <comment>Heading of the Settings panel section that configures own-ship hull dimensions and the GPS antenna position.</comment>
+  </data>
+  <data name="Settings_OwnVesselSection_Help" xml:space="preserve">
+    <value>Dimensions used to draw the true-scale hull outline when the chart is zoomed in. Below the pixel-size threshold the disc fallback is shown instead.</value>
+  </data>
+  <data name="Settings_OwnVessel_Length" xml:space="preserve">
+    <value>Length (m)</value>
+  </data>
+  <data name="Settings_OwnVessel_Length_Tooltip" xml:space="preserve">
+    <value>Overall bow-to-stern length of the vessel, in metres. Must be greater than zero.</value>
+  </data>
+  <data name="Settings_OwnVessel_Beam" xml:space="preserve">
+    <value>Beam (m)</value>
+  </data>
+  <data name="Settings_OwnVessel_Beam_Tooltip" xml:space="preserve">
+    <value>Overall port-to-starboard beam of the vessel, in metres. Must be greater than zero.</value>
+  </data>
+  <data name="Settings_OwnVessel_BowOffset" xml:space="preserve">
+    <value>Antenna from bow (m)</value>
+  </data>
+  <data name="Settings_OwnVessel_BowOffset_Tooltip" xml:space="preserve">
+    <value>Distance aft of the bow to the GPS / reference point (IEC 62388 CCRP), in metres. Must be between 0 and the vessel length.</value>
+  </data>
+  <data name="Settings_OwnVessel_PortOffset" xml:space="preserve">
+    <value>Antenna from port side (m)</value>
+  </data>
+  <data name="Settings_OwnVessel_PortOffset_Tooltip" xml:space="preserve">
+    <value>Distance from the port side to the GPS / reference point, in metres. Must be between 0 and the vessel beam.</value>
+  </data>
 </root>
