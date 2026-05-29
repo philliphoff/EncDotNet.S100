@@ -167,6 +167,15 @@ internal sealed class ViewerSettings
         = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// User-configured own-ship vessel dimensions (length, beam,
+    /// CCRP / GPS antenna offsets). <see langword="null"/> in legacy
+    /// settings files; the consuming
+    /// <c>IOwnShipVesselGeometryProvider</c> materialises a default
+    /// instance when absent. Pure additive — no migration needed.
+    /// </summary>
+    public OwnShipSettings? OwnShip { get; set; }
+
+    /// <summary>
     /// User preference for whether the bottom timeline panel is shown.
     /// When true the panel surfaces (in either an empty state or with
     /// a global slider, depending on whether any time-varying dataset

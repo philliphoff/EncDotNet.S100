@@ -79,6 +79,15 @@ public sealed record DynamicFeature
     public DynamicMotion? Motion { get; init; }
 
     /// <summary>
+    /// Optional vessel-geometry sidecar — only meaningful for vessels
+    /// (own-ship, AIS targets) and only when a renderer can use it
+    /// to draw a true-scale hull (zoomed-in own-ship/AIS rendering).
+    /// When <see langword="null"/> the renderer falls back to a
+    /// dimension-less pictogram.
+    /// </summary>
+    public DynamicVesselGeometry? VesselGeometry { get; init; }
+
+    /// <summary>
     /// Caller-defined extra attributes — vessel name, MMSI, call
     /// sign, pressure level, sensor reading, leg label, etc.
     /// Renderers consume this opaquely.

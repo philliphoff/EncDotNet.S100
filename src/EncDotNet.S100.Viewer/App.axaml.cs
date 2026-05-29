@@ -117,6 +117,14 @@ public partial class App : Application
             }
         }, TaskScheduler.Default);
 
+        // Re-publish own-ship fix when vessel dimensions change.
+        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()
+            as EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider;
+        if (ownShipGeom is not null)
+        {
+            settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
@@ -246,9 +254,28 @@ public partial class App : Application
                     SpeedOverGroundMs: 5.0,
                     Timestamp: DateTimeOffset.UtcNow),
                 cadence: TimeSpan.FromSeconds(1)));
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+
+        // Vessel geometry provider — reads user-configured dimensions
+        // from ViewerSettings.OwnShip and pushes them onto every
+        // DynamicFeature so OwnShipRenderer can draw a true-scale hull.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>());
+
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()));
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
+
+        // PR-D? upgraded own-ship symbology: register OwnShipRenderer
+        // under the "ownship" key so DynamicSourceOverlayHost resolves
+        // it for the own-ship source (RendererKey = "ownship").
+        EncDotNet.S100.Renderers.Mapsui.DynamicSources.DynamicFeatureRendererServiceCollectionExtensions
+            .AddDynamicFeatureRenderer<EncDotNet.S100.Renderers.Mapsui.DynamicSources.OwnShipRenderer>(
+                services,
+                rendererKey: EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource.FeatureKind);
 
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow

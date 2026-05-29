@@ -156,7 +156,7 @@ public sealed class OwnShipSourceTests
         using var src = new OwnShipSource(stub);
 
         Assert.False(string.IsNullOrWhiteSpace(src.Metadata.DisplayName));
-        Assert.Null(src.Metadata.RendererKey);
+        Assert.Equal("ownship", src.Metadata.RendererKey);
         Assert.Equal("ownship", src.Id);
     }
 
