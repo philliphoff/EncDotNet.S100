@@ -27,6 +27,17 @@ public sealed class BathymetryCoverage
     public string? StartSequence { get; init; }
 
     /// <summary>
+    /// The HDF5 group path this coverage was read from, e.g.
+    /// <c>"/BathymetryCoverage/BathymetryCoverage.01"</c>. Populated by
+    /// <see cref="S102DatasetReader"/>; nullable so synthetic test
+    /// fixtures may omit it. Validation rules surface this on
+    /// per-coverage findings via <c>RelatedFeatureId</c> so consumers
+    /// can disambiguate findings across tiles in a multi-tile dataset
+    /// (S-102 Edition 3.0.0 §3 tiling).
+    /// </summary>
+    public string? GroupPath { get; init; }
+
+    /// <summary>
     /// Flat array of bathymetry values, ordered row-major.
     /// Index a cell at (row, col) as <c>Values[row * NumPointsLongitudinal + col]</c>.
     /// </summary>
