@@ -28,7 +28,147 @@ can populate it directly from AIS Type 5 messages.
 
 ---
 
-## 1. Q1 — Where do vessel dimensions live?
+## 1. Standards survey
+
+The decisions in §2 onward (Q1–Q7) are grounded in four published
+standards. Each is cited inline below; the design either adopts the
+standard's convention verbatim or notes a deviation with a one-line
+justification. This survey was added retroactively (see Roadmap-
+review addendum on PR #136) — it is the contractual reference for
+Q3 (outline), Q4 (heading vector), and Q5 (CCRP cross).
+
+### 1.1 IHO S-52 Annex A (Presentation Library)
+
+**Edition 4.0 / S-52 Ed 6.1.** Free IHO publication;
+[iho.int Standards & Specifications](https://iho.int/en/standards-and-specifications).
+
+- **§7.4.5 + §13.2.7 — minimum on-screen own-ship dimension:**
+  the scaled own-ship outline is displayed only when its
+  on-screen length is at least **6 mm**. Below that, the simple
+  symbol (double-circle / pictogram) is shown instead.
+  → **Adopted verbatim.** `MinVesselPixels = 22` is 6 mm × 96 dpi
+  ÷ 25.4 = 22.68 px, rounded down. See Q2.
+
+- **§8.3 + symbol library — SY(OWNSHP01) "simple" symbol:**
+  pictogram (double-circle for S-52; we use a single coloured disc
+  as a v1 simplification — the second ring carries no information
+  that the disc colour doesn't already convey at our scale).
+  → **Adopted with minor deviation:** single disc instead of
+  double-circle. Visual fidelity for a future "second AIS target
+  nearby" case can re-introduce the second ring.
+
+- **§8.3 + symbol library — SY(OWNSHP02) "scaled" symbol:**
+  polygon at true vessel dimensions, rotated by heading, origin
+  at the CCRP. The S-52 vertex coordinates are IHO-copyrighted
+  and not reproduced here, but the canonical form is a small
+  vertex-count polygon (≈5 points: stern-port, stern-starboard,
+  starboard-shoulder, bow-tip, port-shoulder) parameterised by
+  Length + Beam with a bow taper.
+  → **Adopted:** our 5-vertex hull with `BowTaperRatio = 0.7`
+  matches this structural form. See Q3. The user's kickoff hint
+  about a "canonical 7-point hull" is not supported by S-52 — the
+  spec is silhouette-shaped, not literal-hull-shaped.
+
+- **§8.3.1 — CCRP cross:** small `+` mark drawn inside the
+  scaled outline at the CCRP / GPS-antenna position, visible only
+  when the scaled outline is shown.
+  → **Adopted:** Q5 specifies a cross. v1 implementation initially
+  used a `SymbolType.Rectangle` placeholder; this addendum replaces
+  it with two crossed `LineString` segments to draw a real `+`.
+
+- **Heading line vs course vector vs speed vector:**
+  S-52 distinguishes three vectors with different styling:
+  - **Heading line** — solid line in the direction the bow
+    is pointing. **No arrowhead, no tick marks.** Represents
+    *orientation*, not motion.
+  - **Course-over-ground (COG) vector** — line in the direction
+    of motion. **Arrowhead at the tip.**
+  - **Speed-over-ground vector** — same direction as COG.
+    **Arrowhead at the tip plus tick marks at minute intervals**
+    (e.g. 1-min ticks along a 6-min predictor).
+
+  Our v1 source synthesises a single line from `CourseOverGroundDeg`
+  (mirrored to `HeadingDeg`); the renderer draws it as
+  **arrowhead-only** — i.e. a COG vector, not a heading line and
+  not a tick-marked speed vector.
+  → **Adopted with documented conflation:** the single line is
+  styled per S-52's COG-vector convention. A true heading line
+  (no arrowhead) and a true tick-marked speed vector are out of
+  scope for v1 (the OP brief explicitly defers HDG-vs-COG
+  splitting). The renderer XML doc and Q4 call this out so a
+  future PR that lands a real gyro-heading source knows which
+  vector to add.
+
+### 1.2 IEC 62388 — Shipborne radar performance
+
+**IEC 62388:2022.** Paywalled IEC standard; the relevant CCRP
+material is summarised in public OpenBridge / OpenECDIS
+references and in IEC's freely-available abstract.
+
+- **Consistent Common Reference Point (CCRP):** a fixed point on
+  the vessel used by all bridge systems (radar, ECDIS, ARPA, AIS)
+  as a unified positional reference. The radar antenna's
+  `bow_offset` (distance aft of bow along the longitudinal axis)
+  and `port_offset` (distance starboard of the port side along the
+  lateral axis) are configured per installation so all derived
+  positions are reported relative to the CCRP.
+  → **Adopted:** `DynamicVesselGeometry.BowOffsetMetres` /
+  `PortOffsetMetres` field names track IEC 62388. The CCRP is
+  conventionally near the conning position; we let the user
+  configure it freely (defaults to amidships).
+
+### 1.3 IEC 61174 — ECDIS performance standard
+
+**IEC 61174:2015 (Ed 4.0).** Paywalled; public summaries via IMO
+MSC.232(82) §4.7 / §4.8 and OpenECDIS.
+
+- **Clause 6.1.3 — own ship display:** the vessel symbol and its
+  heading indication must always be clearly visible on the display
+  during navigation; vessels >50 m must use a scaled outline
+  oriented to true heading; vessels ≤50 m may use the simple
+  symbol.
+  → **Adopted:** the source always publishes a feature when
+  enabled; the renderer always emits at least one visible style
+  (disc or hull). The 50 m rule is honoured by `OwnShipSettings`
+  defaulting to `LengthMetres = 50` — at the boundary; users with
+  larger vessels (>50 m) edit the setting and get the scaled
+  outline gated by §1.1's 6 mm pixel rule. We do not enforce the
+  ≤50 m → simple-only rule because the user's choice of dimensions
+  is itself the answer.
+
+### 1.4 ITU-R M.1371 — AIS technical characteristics
+
+**ITU-R M.1371-5.** Freely available at
+[itu.int](https://www.itu.int/rec/R-REC-M.1371/en).
+
+- **§3.3.8.2.3 / Annex 8, Table 11 — Message 5 "Ship Dimensions /
+  reference for position":** four four-quadrant antenna offsets in
+  metres, named A, B, C, D, all measured from the AIS GNSS antenna.
+  - **A** = distance to bow (longitudinal forward)
+  - **B** = distance to stern (longitudinal aft)
+  - **C** = distance to port side
+  - **D** = distance to starboard side
+
+  Vessel length = A + B; beam = C + D.
+
+  → **Adopted with field-name mapping:** an AIS adapter populates
+  `DynamicVesselGeometry` as:
+
+  | AIS field | `DynamicVesselGeometry` |
+  |-----------|-------------------------|
+  | A         | `BowOffsetMetres`       |
+  | C         | `PortOffsetMetres`      |
+  | A + B     | `LengthMetres`          |
+  | C + D     | `BeamMetres`            |
+
+  This is direct — no transformation, no information loss in
+  either direction. Stern and starboard offsets are recoverable
+  as `LengthMetres − BowOffsetMetres` and `BeamMetres −
+  PortOffsetMetres`.
+
+---
+
+## 2. Q1 — Where do vessel dimensions live?
 
 **Decision: a new `DynamicVesselGeometry` sidecar record on
 `DynamicFeature`** (option (b) of the task brief). The renderer reads
@@ -92,7 +232,7 @@ tolerates partial / out-of-range data.
 
 ---
 
-## 2. Q2 — Pixel-threshold switch between outline and pictogram
+## 3. Q2 — Pixel-threshold switch between outline and pictogram
 
 **Decision: emit both shapes, with mutually-exclusive style-level
 resolution gates** (option (a) of the task brief). No
@@ -101,8 +241,10 @@ resolution gates** (option (a) of the task brief). No
 ### Threshold
 
 ```
-MinVesselPixels = 22   // ≈ 6 mm at 96 dpi — matches ECDIS practice
+MinVesselPixels = 22   // ≈ 6 mm at 96 dpi — S-52 Ed 6.1 §§7.4.5 / 13.2.7
 ```
+
+(6 mm × 96 dpi ÷ 25.4 mm/in = 22.68 px, rounded down. See §1.1.)
 
 Pinned as `OwnShipRenderer.MinVesselPixels`.
 
@@ -141,10 +283,18 @@ re-implementing what's already there.
 
 ---
 
-## 3. Q3 — Outline shape
+## 4. Q3 — Outline shape
 
 **Decision: 5-vertex hull polygon in vessel-local metres**, with a
-bow-taper constant of `0.7`.
+bow-taper constant of `0.7`. Cites S-52 SY(OWNSHP02) — see §1.1.
+
+The S-52 symbol library's `OWNSHP02` vertex coordinates are IHO
+copyright and not reproduced here, but the canonical structural
+form (small-vertex polygon parameterised by length + beam with a
+bow taper, origin at CCRP, rotated by heading) maps directly onto
+our 5-vertex implementation below. The kickoff's "canonical
+7-point hull" hint was not borne out by the standards survey;
+S-52's silhouette is a stylised hull form, not a literal one.
 
 Local frame (x = starboard, y = forward):
 
@@ -172,26 +322,26 @@ Rotation by heading θ (degrees true, clockwise from north) is the
 standard rotation `(x', y') = (x cos θ + y sin θ, -x sin θ + y cos θ)`.
 After rotation each vertex is offset from the GPS antenna position
 by `(–PortOffsetMetres + B/2, –(–BowOffsetMetres + ...))` — see
-§3.1 for the algebra.
+§4.1 for the algebra.
 
-### 3.1 Georeferencing the hull
+### 4.1 Georeferencing the hull
 
 The GPS antenna sits at vessel-local `(−B/2 + PortOffsetMetres,
 +L − BowOffsetMetres)`. The published lat/lon is the antenna
 position. So each hull vertex `v` is translated into world frame as
 `v − antenna_local`, then rotated by heading, then projected through
-the small-angle metres→degrees helper (see §3.3).
+the small-angle metres→degrees helper (see §4.3).
 
 The helper is good to ~1 m for vessel-scale offsets at any
 non-polar latitude; we are not designing for tankers near 89° N.
 
-### 3.2 Heading fallback
+### 4.2 Heading fallback
 
 If `HeadingDeg` is `null`, use `CourseOverGroundDeg`. If both are
 null (zero-speed startup), draw the hull aligned to north — better
 than not drawing it at all.
 
-### 3.3 Local-metres → world helper
+### 4.3 Local-metres → world helper
 
 Extract a `MercatorOffset` static helper in
 `EncDotNet.S100.Renderers.Mapsui.DynamicSources`:
@@ -207,7 +357,7 @@ Implementation: small-angle approximation —
 Adequate for vessel-scale offsets; not used elsewhere as a general
 geodesy primitive.
 
-### 3.4 Colours
+### 4.4 Colours
 
 Single palette for v1 — reuse the existing `DefaultStroke` /
 `DefaultFill` blue. S-52 vessel-shape colours (four-shade per
@@ -216,15 +366,25 @@ active palette in a future PR if it reads poorly under dusk/night.
 
 ---
 
-## 4. Q4 — Arrowhead on heading vector
+## 5. Q4 — Arrowhead on the COG / speed vector
 
 **Decision: filled triangle arrowhead via `SymbolStyle`, fixed pixel
-size**.
+size**. Cites S-52 vector conventions — see §1.1.
 
-The heading vector remains a `LineString` (start at antenna, end at
-the 6-minute-predictor point); the arrowhead is a separate point
-feature at the line's end with a triangular `SymbolStyle` rotated to
-the heading. Sizing constant:
+**Naming clarification (per standards survey):** S-52 distinguishes
+three vectors — a true *heading line* (no arrowhead, no tick), a
+*COG vector* (arrowhead at tip), and a *speed vector* (arrowhead
++ minute-interval tick marks). Our v1 source emits a single line
+sourced from `CourseOverGroundDeg` and mirrored to `HeadingDeg`;
+the renderer styles it per S-52's **COG-vector convention**
+(arrowhead, no ticks). When a future PR introduces a real gyro
+heading source distinct from COG, a separate arrowless heading
+line should be added per S-52 — out of scope here.
+
+The vector remains a `LineString` (start at antenna, end at the
+6-minute-predictor point); the arrowhead is a separate point
+feature at the line's end with a triangular `SymbolStyle` rotated
+to the heading. Sizing constant:
 
 ```
 HeadingArrowPx = 10
@@ -241,24 +401,27 @@ at implementation time.
 
 ---
 
-## 5. Q5 — CCRP cross
+## 6. Q5 — CCRP cross
 
 **Decision: small `+` symbol at the antenna position, emitted only
 when the outline is shown** (same `MinVisible`/`MaxVisible` gate as
-the hull).
+the hull). Cites S-52 §8.3.1 — see §1.1.
 
 The CCRP indicator is informational — drawing it at the disc-only
 zoom would be both visually noisy and not meaningfully informative
 (the disc already centres on the antenna). Gating it to outline-mode
 keeps it useful where it matters.
 
-Implementation: a `SymbolStyle` cross (two short crossed line
-segments rendered via a small `Polygon` or a custom symbol) ~6 px
-across. Constant `CcrpCrossPx = 6`.
+Implementation: two short crossed `LineString` features (one
+horizontal, one vertical) drawn in screen space, each spanning
+`CcrpCrossPx = 6` per arm, gated by the same `MaxVisible` as the
+hull. This addendum replaces an earlier v1 placeholder that used
+a single `SymbolType.Rectangle`, which read as a square dot rather
+than the S-52 `+` glyph.
 
 ---
 
-## 6. Q6 — Settings persistence + UI
+## 7. Q6 — Settings persistence + UI
 
 **Decision: new `OwnShipSettings` sub-object on `ViewerSettings`.**
 
@@ -324,7 +487,7 @@ on MMSI rather than the singleton.
 
 ---
 
-## 7. Q7 — Renderer registration
+## 8. Q7 — Renderer registration
 
 **Decision: `OwnShipRenderer` registered under
 `RendererKey = "ownship"`** via the existing
@@ -345,7 +508,7 @@ shared `"vessel"` key in PR-D3.
 
 ---
 
-## 8. Test surface
+## 9. Test surface
 
 | Test project | Cases |
 |---|---|
@@ -355,7 +518,7 @@ shared `"vessel"` key in PR-D3.
 
 ---
 
-## 9. Open items (not blocking)
+## 10. Open items (not blocking)
 
 - Bow-taper ratio user-settable? **Default: no.** Hardcoded `0.7`.
 - Double-stroke the outline at very small effective widths? **Default:

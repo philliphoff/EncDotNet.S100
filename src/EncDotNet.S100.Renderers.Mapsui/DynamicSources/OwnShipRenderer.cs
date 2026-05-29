@@ -13,19 +13,53 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 /// Own-ship renderer that draws a true-scale hull outline when the
 /// viewport is zoomed in far enough for the vessel to be visually
 /// distinguishable, falls back to a coloured disc when zoomed out,
-/// and decorates the heading vector with an arrowhead in both modes.
-/// Honours the IEC 62388 CCRP offsets carried by
+/// and decorates the course / speed vector with an arrowhead in both
+/// modes. Honours the IEC 62388 CCRP offsets carried by
 /// <see cref="DynamicVesselGeometry"/> on the feature.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Output features:
+/// Standards alignment (see <c>docs/design/own-ship-symbology.md</c>
+/// §1 for citations):
+/// </para>
 /// <list type="bullet">
 ///   <item><description>
-///     Heading vector (<see cref="LineString"/> from antenna to the
-///     6-minute predictor endpoint) plus an arrowhead at the
+///     <b>Hull</b> — IHO S-52 Annex A SY(OWNSHP02) "scaled" symbol;
+///     small-vertex polygon parameterised by length + beam, rotated
+///     by heading, origin at the CCRP. We use 5 vertices with a
+///     0.7 bow-taper.
+///   </description></item>
+///   <item><description>
+///     <b>Pictogram</b> — IHO S-52 SY(OWNSHP01) "simple" symbol;
+///     drawn when the on-screen length would be below 6 mm
+///     (≈ <see cref="MinVesselPixels"/> px @ 96 dpi).
+///   </description></item>
+///   <item><description>
+///     <b>Course / speed vector</b> — single <see cref="LineString"/>
+///     sourced from <see cref="DynamicMotion.CourseOverGroundDeg"/>
+///     (mirrored to <see cref="DynamicMotion.HeadingDeg"/> in the
+///     v1 own-ship source). Styled per S-52's COG-vector convention
+///     (arrowhead at tip, no tick marks). A true heading line
+///     (no arrowhead) and a tick-marked speed vector are out of
+///     scope for v1; a future PR with a real gyro heading source
+///     should add the arrowless heading line per S-52.
+///   </description></item>
+///   <item><description>
+///     <b>CCRP cross</b> — IHO S-52 §8.3.1; small <c>+</c> at the
+///     GPS antenna, two short crossed <see cref="LineString"/>
+///     segments aligned with the vessel's longitudinal and lateral
+///     axes (rotated with heading), gated identically to the hull.
+///   </description></item>
+/// </list>
+/// <para>
+/// Output features (in emission order):
+/// </para>
+/// <list type="number">
+///   <item><description>
+///     Course / speed vector (<see cref="LineString"/> from antenna
+///     to the 6-minute predictor endpoint) plus an arrowhead at the
 ///     endpoint. Emitted when <see cref="DynamicMotion.HeadingDeg"/>
-///     is present and SOG &gt; 0.
+///     is present and SOG &gt; 0. Visible at all zooms.
 ///   </description></item>
 ///   <item><description>
 ///     <b>Hull outline</b> (5-vertex <see cref="Polygon"/>) gated to
@@ -34,8 +68,9 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 ///     carries a non-null <see cref="DynamicFeature.VesselGeometry"/>.
 ///   </description></item>
 ///   <item><description>
-///     <b>CCRP cross</b> at the antenna position, gated identically
-///     to the hull (only visible when zoomed in to outline mode).
+///     <b>CCRP cross</b> — two crossed <see cref="LineString"/>
+///     features at the antenna position, gated identically to the
+///     hull (only visible when zoomed in to outline mode).
 ///   </description></item>
 ///   <item><description>
 ///     <b>Pictogram</b> (coloured disc) gated to show when the
@@ -44,7 +79,6 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 ///     is <see langword="null"/>.
 ///   </description></item>
 /// </list>
-/// </para>
 /// <para>
 /// The outline / pictogram switch is implemented via mutually
 /// exclusive <see cref="VectorStyle.MinVisible"/> /
@@ -57,14 +91,22 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 public sealed class OwnShipRenderer : IDynamicFeatureRenderer
 {
     /// <summary>Pixel size at which the hull outline begins to display
-    /// (≈ 6 mm at 96 dpi — matches ECDIS practice).</summary>
+    /// (≈ 6 mm at 96 dpi — per IHO S-52 Ed 6.1 Presentation Library
+    /// §§7.4.5 / 13.2.7, which specify a 6 mm minimum on-screen
+    /// dimension for the own-ship symbol). 6 mm × 96 dpi ÷ 25.4 mm/in
+    /// = 22.68 px, rounded down.</summary>
     public const double MinVesselPixels = 22.0;
 
-    /// <summary>Pixel size of the heading-arrow symbol.</summary>
+    /// <summary>Pixel size of the arrowhead on the course / speed
+    /// vector (S-52 COG vector convention; see remarks on
+    /// <see cref="OwnShipRenderer"/>).</summary>
     public const double HeadingArrowPx = 10.0;
 
-    /// <summary>Pixel size of the CCRP cross drawn at the GPS antenna
-    /// when the hull is visible.</summary>
+    /// <summary>Aspirational pixel size for each arm of the CCRP cross
+    /// at the switch resolution. Used as a floor when sizing the cross
+    /// arms in world metres; capped at 10 % of the smaller vessel
+    /// dimension so the cross stays inside the hull as zoom increases.
+    /// Per IHO S-52 §8.3.1.</summary>
     public const double CcrpCrossPx = 6.0;
 
     /// <summary>Bow-taper ratio: shoulders sit at this fraction of
@@ -108,7 +150,13 @@ public sealed class OwnShipRenderer : IDynamicFeatureRenderer
 
         var sogKn = feature.Motion?.SpeedOverGroundKn ?? 0.0;
 
-        // 1. Heading vector + arrowhead (no resolution gate — visible at all zooms).
+        // 1. Course / speed vector + arrowhead (no resolution gate —
+        //    visible at all zooms). Per IHO S-52, this single line
+        //    follows the COG-vector convention (arrowhead at tip, no
+        //    ticks). The v1 own-ship source mirrors COG → HDG, so we
+        //    cannot distinguish a true heading line (which would be
+        //    arrowless) from the COG vector — drawn as one combined
+        //    line per the design doc §5.
         if (headingDeg is { } heading && sogKn > 0.0)
         {
             var distanceMetres = Math.Min(
@@ -209,16 +257,54 @@ public sealed class OwnShipRenderer : IDynamicFeatureRenderer
             yield return hull;
 
             // CCRP cross at antenna position — same gate as the hull.
-            var cross = new GeometryFeature(new Point(ax, ay));
-            cross.Styles.Add(new SymbolStyle
+            // Per IHO S-52 §8.3.1, a "+" mark at the CCRP. We render
+            // it as two short crossed LineString features aligned with
+            // the vessel's longitudinal (fore-aft) and lateral
+            // (port-starboard) axes — rotated with heading so the
+            // cross visually communicates the vessel's reference frame.
+            //
+            // Arm length: aim for CcrpCrossPx pixels at the switch
+            // resolution, but cap at 10 % of the smaller vessel
+            // dimension so the cross stays inside the hull at any zoom.
+            var armMetres = Math.Min(
+                CcrpCrossPx * rSwitch / 2.0,
+                Math.Min(geom.BeamMetres, geom.LengthMetres) * 0.1);
+
+            // Lateral arm endpoints in vessel-local frame:
+            // (-armMetres, 0) → (+armMetres, 0) — port → starboard
+            // (relative to antenna).
+            var (lpx, lpy) = MercatorOffset.ToMercator(lat, lon,
+                -armMetres * cosT, +armMetres * sinT);
+            var (lsx, lsy) = MercatorOffset.ToMercator(lat, lon,
+                +armMetres * cosT, -armMetres * sinT);
+            var lateral = new GeometryFeature(new LineString(new[]
             {
-                SymbolType = SymbolType.Rectangle,
-                SymbolScale = CcrpCrossPx / 32.0,
-                Fill = new Brush { Color = Stroke },
-                Outline = new Pen { Color = Stroke, Width = 1.0 },
+                new Coordinate(lpx, lpy),
+                new Coordinate(lsx, lsy),
+            }));
+            lateral.Styles.Add(new VectorStyle
+            {
+                Line = new Pen { Color = Stroke, Width = 1.0 },
                 MaxVisible = rSwitch,
             });
-            yield return cross;
+            yield return lateral;
+
+            // Longitudinal arm endpoints (aft → fore relative to antenna).
+            var (fax, fay) = MercatorOffset.ToMercator(lat, lon,
+                -armMetres * sinT, -armMetres * cosT);
+            var (ffx, ffy) = MercatorOffset.ToMercator(lat, lon,
+                +armMetres * sinT, +armMetres * cosT);
+            var longitudinal = new GeometryFeature(new LineString(new[]
+            {
+                new Coordinate(fax, fay),
+                new Coordinate(ffx, ffy),
+            }));
+            longitudinal.Styles.Add(new VectorStyle
+            {
+                Line = new Pen { Color = Stroke, Width = 1.0 },
+                MaxVisible = rSwitch,
+            });
+            yield return longitudinal;
 
             // Pictogram only when zoomed out enough that the hull
             // would be smaller than MinVesselPixels.

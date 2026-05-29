@@ -83,13 +83,14 @@ public class OwnShipRendererTests
         var features = new OwnShipRenderer()
             .Render(MakeFeature(geometry: DefaultGeom())).ToArray();
 
-        // line + arrow + hull + ccrp cross + disc = 5
-        Assert.Equal(5, features.Length);
+        // line + arrow + hull + ccrp lateral + ccrp longitudinal + disc = 6
+        Assert.Equal(6, features.Length);
         Assert.IsType<LineString>(((GeometryFeature)features[0]).Geometry);
-        Assert.IsType<Point>(((GeometryFeature)features[1]).Geometry);     // arrow
-        Assert.IsType<Polygon>(((GeometryFeature)features[2]).Geometry);   // hull
-        Assert.IsType<Point>(((GeometryFeature)features[3]).Geometry);     // ccrp cross
-        Assert.IsType<Point>(((GeometryFeature)features[4]).Geometry);     // disc
+        Assert.IsType<Point>(((GeometryFeature)features[1]).Geometry);      // arrow
+        Assert.IsType<Polygon>(((GeometryFeature)features[2]).Geometry);    // hull
+        Assert.IsType<LineString>(((GeometryFeature)features[3]).Geometry); // ccrp lateral arm
+        Assert.IsType<LineString>(((GeometryFeature)features[4]).Geometry); // ccrp longitudinal arm
+        Assert.IsType<Point>(((GeometryFeature)features[5]).Geometry);      // disc
     }
 
     [Fact]
@@ -100,15 +101,17 @@ public class OwnShipRendererTests
             .Render(MakeFeature(lat: lat, geometry: DefaultGeom())).ToArray();
 
         var hullStyle = (VectorStyle)((GeometryFeature)features[2]).Styles.First();
-        var crossStyle = (SymbolStyle)((GeometryFeature)features[3]).Styles.First();
-        var discStyle = (SymbolStyle)((GeometryFeature)features[4]).Styles.First();
+        var crossLateralStyle = (VectorStyle)((GeometryFeature)features[3]).Styles.First();
+        var crossLongitudinalStyle = (VectorStyle)((GeometryFeature)features[4]).Styles.First();
+        var discStyle = (SymbolStyle)((GeometryFeature)features[5]).Styles.First();
 
         var expectedSwitch =
             DefaultGeom().LengthMetres * Math.Cos(lat * Math.PI / 180.0)
             / OwnShipRenderer.MinVesselPixels;
 
         Assert.Equal(expectedSwitch, hullStyle.MaxVisible, 6);
-        Assert.Equal(expectedSwitch, crossStyle.MaxVisible, 6);
+        Assert.Equal(expectedSwitch, crossLateralStyle.MaxVisible, 6);
+        Assert.Equal(expectedSwitch, crossLongitudinalStyle.MaxVisible, 6);
         Assert.Equal(expectedSwitch, discStyle.MinVisible, 6);
     }
 
@@ -144,9 +147,11 @@ public class OwnShipRendererTests
             LastUpdated = DateTimeOffset.UtcNow,
         };
         var features = new OwnShipRenderer().Render(feat).ToArray();
-        Assert.Equal(3, features.Length); // hull, ccrp, disc — no line/arrow
+        // hull + ccrp lateral + ccrp longitudinal + disc = 4, no line/arrow.
+        Assert.Equal(4, features.Length);
         Assert.IsType<Polygon>(((GeometryFeature)features[0]).Geometry);
-        Assert.IsType<Point>(((GeometryFeature)features[1]).Geometry);
-        Assert.IsType<Point>(((GeometryFeature)features[2]).Geometry);
+        Assert.IsType<LineString>(((GeometryFeature)features[1]).Geometry);
+        Assert.IsType<LineString>(((GeometryFeature)features[2]).Geometry);
+        Assert.IsType<Point>(((GeometryFeature)features[3]).Geometry);
     }
 }
