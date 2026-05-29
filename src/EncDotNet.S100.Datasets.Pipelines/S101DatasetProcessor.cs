@@ -5,6 +5,7 @@ using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S101.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -12,6 +13,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -29,6 +31,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public SpecRef Spec => new("S-101", default);
 
@@ -310,6 +314,44 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             _decoder = _featureCatalogueManager.GetDecoder("S-101");
             _decoderLoaded = true;
         }
+    }
+
+    /// <summary>
+    /// Runs the V-4 S-101 validation rule pack
+    /// (<see cref="S101DatasetRules.Default"/>) against the parsed
+    /// document, returning the resulting <see cref="ValidationReport"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Implements the processor integration shape defined by
+    /// <c>docs/design/non-gml-validation.md</c> §9.3: the document is
+    /// projected through the spec-vocabulary
+    /// <see cref="S101DatasetView"/> façade (design §3.1, option (b))
+    /// using the bundled <see cref="FeatureCatalogueDecoder"/> for
+    /// FC-conformance rules, then handed to the cached default rule
+    /// set. The report is cached on first call; subsequent calls
+    /// return the same instance (design §9.4).
+    /// </para>
+    /// <para>
+    /// When no S-101 Feature Catalogue is available the façade is
+    /// built without a decoder; rules requiring catalogue lookup
+    /// (<c>S101-R-1.2</c>, <c>S101-R-4.1</c>) degrade to no-ops per
+    /// design §8.1. Reader-level parse failures occur in the
+    /// constructor and never reach this method; the
+    /// <c>S101-PROJ-PARSE</c> rule is a documented placeholder for
+    /// future reader diagnostics (design §5.2 Stance A).
+    /// </para>
+    /// </remarks>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            EnsureDecoder();
+            var view = S101DatasetView.From(_dataset.Document, _decoder);
+            _validationReport = S101DatasetRules.Default.Run(view);
+            _validationCached = true;
+        }
+        return _validationReport;
     }
 
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
