@@ -68,4 +68,7 @@
     <Project Path="tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj" />
     <Project Path="tools/EncDotNet.S100.PerfReport/EncDotNet.S100.PerfReport.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/EncDotNet.S100.Samples.Ais/EncDotNet.S100.Samples.Ais.csproj" />
+  </Folder>
 </Solution>
