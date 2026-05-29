@@ -425,7 +425,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                             // Process SVG through palette color resolver and
                             // wrap with the svg-content:// URI scheme that
                             // Mapsui's ImageStyle expects.
-                            var processed = SvgProcessor.Process(rawSvg, _catalogue.ActivePalette);
+                            var processed = SvgProcessor.Process(rawSvg, _catalogue!.ActivePalette);
                             svgSource = "svg-content://" + processed;
                         }
                         svgCache[symbolRef] = svgSource ?? "";

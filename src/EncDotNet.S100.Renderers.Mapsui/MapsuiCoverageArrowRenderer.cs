@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Xml.Linq;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
@@ -7,7 +6,6 @@ using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
 using Mapsui.Styles;
-using SkiaSharp;
 
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
@@ -16,18 +14,40 @@ using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// Renders oriented symbols (e.g. current arrows) from a <see cref="StyledCoverageLayer"/>
-/// as a georeferenced raster that scales with map zoom. Symbol geometry is parsed from
-/// the portrayal catalogue SVGs at runtime using <see cref="SKPath.ParseSvgPathData"/>,
-/// so the renderer is not coupled to any specific symbol shape.
+/// Renders oriented symbols (e.g. S-111 current arrows) from a
+/// <see cref="StyledCoverageLayer"/> as one vector <see cref="PointFeature"/>
+/// per selected grid cell.  Each feature carries a Mapsui
+/// <see cref="ImageStyle"/> that wraps the bundled SVG symbol via the
+/// <c>"svg-content://"</c> URI scheme so Mapsui re-rasterises the symbol
+/// at the active screen DPI on every viewport change.
 /// </summary>
+/// <remarks>
+/// <para>
+/// The previous implementation rasterised every arrow into a single
+/// georeferenced PNG (<see cref="RasterFeature"/>) sized to the dataset
+/// extent.  At low map zoom that bitmap was downscaled (arrows shrank
+/// to a few screen pixels and were hard to read); at high zoom it was
+/// upscaled (arrows pixelated).  Per-feature symbols keep arrows at a
+/// stable on-screen size and sharp at every zoom — the convention used
+/// by ECDIS-style symbology in S-100 Part 9 §11.
+/// </para>
+/// <para>
+/// Per-band scaling follows the bundled portrayal catalogue
+/// (S-111 Ed 2.0.0, <c>content/S111/pc/Rules/select_arrow.xsl</c>):
+/// bands 1-3 share <c>scaleFloor = 0.40</c>, bands 4-8 use
+/// <c>scaleFactorIntermediate = 0.20</c> multiplied by
+/// <c>surfaceCurrentSpeed</c>, and band 9 uses
+/// <c>scaleCeiling = 2.60</c>.  These per-band factors multiply
+/// <see cref="BaseSymbolScale"/> to produce the Mapsui
+/// <see cref="ImageStyle.SymbolScale"/>.
+/// </para>
+/// </remarks>
 public sealed class MapsuiCoverageArrowRenderer
 {
-    private const int MaxDim = 4096;
-    private static readonly XNamespace SvgNs = "http://www.w3.org/2000/svg";
-
     private readonly ICrsTransformFactory _transformFactory;
-    private readonly Dictionary<string, ParsedSymbol?> _symbolCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string?> _resolvedSvgCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private ColorPalette? _cachedFor;
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "Coverage Arrows";
@@ -38,24 +58,32 @@ public sealed class MapsuiCoverageArrowRenderer
     /// <summary>
     /// Target maximum number of arrows along the longest grid axis.
     /// The renderer computes a stride so that no more than roughly
-    /// <c>MaxArrowsPerAxis²</c> arrows are produced.
+    /// <c>MaxArrowsPerAxis²</c> arrows are emitted.
     /// Set to 0 to disable subsampling.
     /// </summary>
     public int MaxArrowsPerAxis { get; set; } = 80;
 
     /// <summary>
-    /// Minimum number of pixels allocated per arrow in the output raster
-    /// (along the shorter arrow axis). Controls the output bitmap resolution.
+    /// Multiplier applied to each band's scale factor to produce the
+    /// Mapsui <see cref="ImageStyle.SymbolScale"/>.  The bundled SCAROW
+    /// SVGs declare <c>width="6mm" height="11mm"</c> with viewBox
+    /// <c>-3 -5.5 6 11</c>; Mapsui rasterises them at roughly
+    /// 23×42 pixels at 96 dpi when <c>SymbolScale = 1.0</c>.  At the
+    /// default of <c>2.0</c>, a band-1 arrow (<c>bandScale = 0.40</c>)
+    /// renders at roughly 19×34 screen pixels — comfortable for the
+    /// reading distance assumed by S-100 Part 9 §3.3.
     /// </summary>
-    public int MinArrowPixels { get; set; } = 60;
+    public double BaseSymbolScale { get; set; } = 2.0;
 
     /// <summary>
-    /// The color palette used to resolve SVG CSS fill/stroke tokens.
+    /// The colour palette used to resolve SVG CSS fill/stroke tokens
+    /// (e.g. <c>fSCBN1</c> → palette token <c>SCBN1</c>).
     /// </summary>
     public ColorPalette? Palette { get; set; }
 
     /// <summary>
-    /// Returns raw SVG content for a symbol reference name (e.g. "SCAROW01").
+    /// Returns raw SVG content for a symbol reference name
+    /// (e.g. <c>"SCAROW01"</c>).
     /// </summary>
     public required Func<string, string?> SymbolProvider { get; set; }
 
@@ -65,12 +93,14 @@ public sealed class MapsuiCoverageArrowRenderer
     }
 
     /// <summary>
-    /// Renders the symbol scheme from a styled coverage layer into a georeferenced
-    /// raster layer with rotated symbol polygons. Returns <c>null</c> if the layer
-    /// has no symbol scheme.
+    /// Renders the layer's symbol scheme as one rotated, palette-coloured
+    /// <see cref="PointFeature"/> per selected grid cell.  Returns
+    /// <c>null</c> when the layer has no symbol scheme.
     /// </summary>
     public ILayer? Render(StyledCoverageLayer layer, PipelineViewport viewport)
     {
+        _ = viewport; // Per-feature rendering is zoom-agnostic by design.
+
         var symbolScheme = layer.SymbolScheme;
         if (symbolScheme is null)
             return null;
@@ -85,10 +115,10 @@ public sealed class MapsuiCoverageArrowRenderer
         float noDataValue = layer.NoDataValue;
         bool noDataIsNaN = float.IsNaN(noDataValue);
 
-        // Build CRS transform: native grid CRS → WGS84
         var nativeToWgs84 = _transformFactory.Create(georeferencer.CRS, "EPSG:4326");
 
-        // Compute stride to keep arrow count manageable on large grids.
+        // Subsample so dense grids do not emit hundreds of thousands of
+        // features at zoom-out; matches the spacing the old bitmap path used.
         int stride = 1;
         if (MaxArrowsPerAxis > 0)
         {
@@ -96,68 +126,7 @@ public sealed class MapsuiCoverageArrowRenderer
             stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
         }
 
-        // Project grid corners to Mercator to determine extent.
-        double mercMinX = double.MaxValue, mercMinY = double.MaxValue;
-        double mercMaxX = double.MinValue, mercMaxY = double.MinValue;
-
-        void ExpandExtent(int r, int c)
-        {
-            var (nX, nY) = georeferencer.ToNative(r, c);
-            double lon, lat;
-            if (nativeToWgs84.IsIdentity) { lon = nX; lat = nY; }
-            else { (lon, lat) = nativeToWgs84.Transform(nX, nY); }
-            var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-            if (mx < mercMinX) mercMinX = mx;
-            if (my < mercMinY) mercMinY = my;
-            if (mx > mercMaxX) mercMaxX = mx;
-            if (my > mercMaxY) mercMaxY = my;
-        }
-
-        ExpandExtent(0, 0);
-        ExpandExtent(0, srcCols - 1);
-        ExpandExtent(srcRows - 1, 0);
-        ExpandExtent(srcRows - 1, srcCols - 1);
-
-        double cellSizeX = (mercMaxX - mercMinX) / Math.Max(srcCols - 1, 1);
-        double cellSizeY = (mercMaxY - mercMinY) / Math.Max(srcRows - 1, 1);
-
-        // Pad extent by half a cell (match color renderer alignment)
-        mercMinX -= cellSizeX / 2;
-        mercMinY -= cellSizeY / 2;
-        mercMaxX += cellSizeX / 2;
-        mercMaxY += cellSizeY / 2;
-
-        double mercWidth = mercMaxX - mercMinX;
-        double mercHeight = mercMaxY - mercMinY;
-
-        // Compute output bitmap dimensions: ensure each arrow gets MinArrowPixels,
-        // while preserving the geographic aspect ratio.
-        int arrowsX = (srcCols + stride - 1) / stride;
-        int arrowsY = (srcRows + stride - 1) / stride;
-        double aspect = mercWidth / mercHeight;
-
-        int outCols, outRows;
-        if (aspect >= 1.0)
-        {
-            outCols = Math.Min(MaxDim, arrowsX * MinArrowPixels);
-            outRows = Math.Max(1, (int)(outCols / aspect));
-        }
-        else
-        {
-            outRows = Math.Min(MaxDim, arrowsY * MinArrowPixels);
-            outCols = Math.Max(1, (int)(outRows * aspect));
-        }
-
-        double pxPerMercX = outCols / mercWidth;
-        double pxPerMercY = outRows / mercHeight;
-
-        // Draw symbols onto a transparent bitmap
-        using var bmp = new SKBitmap(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using var canvas = new SKCanvas(bmp);
-        canvas.Clear(SKColors.Transparent);
-
-        using var fillPaint = new SKPaint { Style = SKPaintStyle.Fill, IsAntialias = true };
-        using var strokePaint = new SKPaint { Style = SKPaintStyle.Stroke, IsAntialias = true };
+        var features = new List<IFeature>();
 
         for (int r = 0; r < srcRows; r += stride)
         for (int c = 0; c < srcCols; c += stride)
@@ -170,203 +139,81 @@ public sealed class MapsuiCoverageArrowRenderer
             bool dirNoData = noDataIsNaN ? float.IsNaN(direction) : direction == noDataValue;
             if (dirNoData) continue;
 
-            // Resolve symbol band
-            var symbolBand = symbolScheme.Resolve(value);
-            if (symbolBand is null) continue;
+            var band = symbolScheme.Resolve(value);
+            if (band is null) continue;
 
-            // Load and cache the parsed SVG symbol
-            var parsed = GetParsedSymbol(symbolBand.SymbolRef);
-            if (parsed is null) continue;
+            var svgSource = GetResolvedSvg(band.SymbolRef);
+            if (svgSource is null) continue;
 
-            // Arrow size in pixels: proportional to stride × cell spacing.
-            // Scale so the symbol's viewBox height maps to ~50% of the arrow spacing.
-            double arrowSpacingPx = stride * cellSizeY * pxPerMercY;
-            double baseScale = arrowSpacingPx * 0.5 / parsed.ViewBoxHeight;
-
-            double bandScale = symbolBand.ScaleByValue
-                ? symbolBand.ScaleFactor * value
-                : symbolBand.ScaleFactor;
-            float totalScale = (float)(baseScale * bandScale);
-
-            // Project to pixel coordinates
+            // Project grid cell centre to Mercator for the PointFeature.
             var (nativeX, nativeY) = georeferencer.ToNative(r, c);
             double lon, lat;
             if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
             else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
             var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
-            float px = (float)((mx - mercMinX) * pxPerMercX);
-            float py = (float)(outRows - 1 - (my - mercMinY) * pxPerMercY);
+            double bandScale = band.ScaleByValue
+                ? band.ScaleFactor * value
+                : band.ScaleFactor;
 
-            canvas.Save();
-            canvas.Translate(px, py);
-            canvas.RotateDegrees(direction);
-            canvas.Scale(totalScale);
-
-            // Draw each drawing command from the parsed SVG
-            foreach (var cmd in parsed.Commands)
+            var feature = new PointFeature(mx, my);
+            feature.Styles.Add(new ImageStyle
             {
-                if (cmd.IsFill)
-                {
-                    fillPaint.Color = cmd.Color;
-                    canvas.DrawPath(cmd.Path, fillPaint);
-                }
-                else
-                {
-                    strokePaint.Color = cmd.Color;
-                    strokePaint.StrokeWidth = cmd.StrokeWidth;
-                    strokePaint.StrokeJoin = SKStrokeJoin.Round;
-                    strokePaint.StrokeCap = SKStrokeCap.Round;
-                    canvas.DrawPath(cmd.Path, strokePaint);
-                }
-            }
-
-            canvas.Restore();
+                Image = new Image { Source = svgSource, RasterizeSvg = true },
+                SymbolScale = BaseSymbolScale * bandScale,
+                // SymbolRotation in Mapsui is degrees clockwise from
+                // map-up; surfaceCurrentDirection is degrees true (0=N,
+                // 90=E), which is the same convention.
+                SymbolRotation = direction,
+                Opacity = (float)Opacity,
+            });
+            features.Add(feature);
         }
-
-        // Encode to PNG and wrap as a georeferenced raster layer
-        using var image = SKImage.FromBitmap(bmp);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        var pngBytes = data.ToArray();
-
-        var mercatorExtent = new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
-        var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
-        {
-            Styles = { new RasterStyle() },
-        };
 
         return new MemoryLayer
         {
             Name = LayerName,
-            Features = new List<RasterFeature> { rasterFeature },
+            Features = features,
             Style = null,
             Opacity = Opacity,
         };
     }
 
     /// <summary>
-    /// Parses an S-100 SVG symbol into drawing commands (fill/stroke paths with colors).
-    /// Resolves CSS classes (e.g. <c>fSCBN1</c>, <c>sCHBLK</c>) via the <see cref="Palette"/>.
+    /// Returns the palette-resolved, externally-CSS-free SVG source for
+    /// <paramref name="symbolRef"/>, wrapped in the
+    /// <c>"svg-content://"</c> URI scheme expected by Mapsui's SVG
+    /// rasteriser.  Results are cached per palette; the cache is
+    /// invalidated when <see cref="Palette"/> changes by reference.
     /// </summary>
-    private ParsedSymbol? GetParsedSymbol(string symbolRef)
+    internal string? GetResolvedSvg(string symbolRef)
     {
-        if (_symbolCache.TryGetValue(symbolRef, out var cached))
+        if (!ReferenceEquals(_cachedFor, Palette))
+        {
+            _resolvedSvgCache.Clear();
+            _cachedFor = Palette;
+        }
+
+        if (_resolvedSvgCache.TryGetValue(symbolRef, out var cached))
             return cached;
 
-        ParsedSymbol? result = null;
+        string? result = null;
         try
         {
-            var svgContent = SymbolProvider(symbolRef);
-            if (svgContent is not null)
-                result = ParseSvgSymbol(svgContent);
+            var raw = SymbolProvider(symbolRef);
+            if (raw is not null)
+            {
+                var processed = SvgProcessor.Process(raw, Palette);
+                result = "svg-content://" + processed;
+            }
         }
         catch
         {
-            // Symbol not found or malformed
+            // Symbol not found or malformed — cache the miss so we do
+            // not repeatedly retry the same broken symbol.
         }
 
-        _symbolCache[symbolRef] = result;
+        _resolvedSvgCache[symbolRef] = result;
         return result;
     }
-
-    private ParsedSymbol ParseSvgSymbol(string svgContent)
-        => ParseSvgSymbol(svgContent, Palette);
-
-    /// <summary>
-    /// Parses an S-100 Part 9-style SVG symbol into a list of fill/stroke
-    /// draw commands with palette tokens resolved to RGB colours.
-    /// Exposed <c>internal</c> for rendering-correctness tests that pin
-    /// per-band colour wiring (S-111 Ed 2.0.0, content/S111/pc).
-    /// </summary>
-    internal static ParsedSymbol ParseSvgSymbol(string svgContent, ColorPalette? palette)
-    {
-        var doc = XDocument.Parse(svgContent);
-        var svg = doc.Root!;
-
-        // Parse viewBox for coordinate system: "minX minY width height"
-        double vbHeight = 10.0; // default
-        var viewBoxAttr = svg.Attribute("viewBox");
-        if (viewBoxAttr is not null)
-        {
-            var parts = viewBoxAttr.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 4 && double.TryParse(parts[3], System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var h))
-                vbHeight = h;
-        }
-
-        var commands = new List<DrawCommand>();
-
-        foreach (var pathEl in svg.Elements(SvgNs + "path"))
-        {
-            var dAttr = pathEl.Attribute("d");
-            if (dAttr is null) continue;
-
-            var classAttr = pathEl.Attribute("class")?.Value ?? "";
-            var classes = classAttr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            // Skip layout elements
-            if (classes.Contains("layout")) continue;
-
-            var skPath = SKPath.ParseSvgPathData(dAttr.Value);
-            if (skPath is null) continue;
-
-            // Determine if this is a fill or stroke path by inspecting CSS classes
-            bool hasNoFill = classes.Contains("f0");
-            string? fillToken = null;
-            string? strokeToken = null;
-
-            foreach (var cls in classes)
-            {
-                if (cls == "f0" || cls == "sl") continue;
-                if (cls.Length > 1 && cls[0] == 'f' && char.IsUpper(cls[1]))
-                    fillToken = cls[1..];
-                else if (cls.Length > 1 && cls[0] == 's' && char.IsUpper(cls[1]))
-                    strokeToken = cls[1..];
-            }
-
-            if (!hasNoFill && fillToken is not null)
-            {
-                // Fill path — resolve color token via palette
-                var color = ResolveToken(fillToken, palette);
-                commands.Add(new DrawCommand(skPath, true, color, 0));
-            }
-
-            if (strokeToken is not null)
-            {
-                // Stroke path
-                var color = ResolveToken(strokeToken, palette);
-                float sw = 0.32f;
-                var swAttr = pathEl.Attribute("stroke-width");
-                if (swAttr is not null &&
-                    float.TryParse(swAttr.Value, System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out var parsed))
-                    sw = parsed;
-
-                commands.Add(new DrawCommand(skPath, false, color, sw));
-            }
-        }
-
-        return new ParsedSymbol(commands, vbHeight);
-    }
-
-    private SKColor ResolveToken(string token) => ResolveToken(token, Palette);
-
-    private static SKColor ResolveToken(string token, ColorPalette? palette)
-    {
-        if (palette is not null && palette.TryResolve(token, out var hex))
-        {
-            var rgba = RgbaColor.FromHex(hex);
-            return new SKColor(rgba.R, rgba.G, rgba.B, rgba.A);
-        }
-
-        // Common fallback: CHBLK = black
-        if (token.Equals("CHBLK", StringComparison.OrdinalIgnoreCase))
-            return SKColors.Black;
-
-        return SKColors.Black;
-    }
-
-    internal sealed record DrawCommand(SKPath Path, bool IsFill, SKColor Color, float StrokeWidth);
-
-    internal sealed record ParsedSymbol(IReadOnlyList<DrawCommand> Commands, double ViewBoxHeight);
 }

@@ -118,13 +118,13 @@ public class S111CoverageSourceTests : IDisposable
 
         var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
 
-        Assert.Equal("surfaceCurrentSpeed", scheme.FieldName);
-        Assert.Equal(9, scheme.Bands.Count);
-
-        // Colors should come from the color profile, not the hardcoded defaults
-        Assert.NotNull(scheme.Resolve(0.1f));
-        Assert.NotNull(scheme.Resolve(3.5f));
-        Assert.Null(scheme.Resolve(-9999f));
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow
+        // symbology only — there is no coverageFill on
+        // surfaceCurrentSpeed.  S111PortrayalCatalogue therefore
+        // returns null; the colour wiring lives entirely inside the
+        // SCAROW SVGs and is consumed by MapsuiCoverageArrowRenderer.
+        Assert.Null(scheme);
     }
 
     [SkippableFact]

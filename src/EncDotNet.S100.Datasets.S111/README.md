@@ -40,6 +40,25 @@ has been removed. Per-band colour now travels with the arrow SVG itself via its
 `fSCBN{N}` CSS class; `MapsuiCoverageArrowRenderer` resolves that token via the
 active palette.
 
+### Per-feature arrow rendering
+
+`MapsuiCoverageArrowRenderer` emits **one Mapsui `PointFeature` per selected
+grid cell** carrying an `ImageStyle` that wraps the bundled SCAROW SVG via the
+`svg-content://` URI scheme. Mapsui re-rasterises the symbol on every viewport
+change so arrows stay **sharp at every zoom** and at a **stable on-screen
+size** — the convention used by ECDIS-style symbology in S-100 Part 9 §11.
+A previous implementation rasterised every arrow into a single georeferenced
+PNG sized to the dataset extent; that bitmap was downscaled at low zoom
+(arrows shrank to a few pixels and were hard to read) and upscaled at high
+zoom (arrows pixelated). Per-feature symbols avoid both pathologies.
+
+Per-band scaling follows the bundled catalogue
+(`content/S111/pc/Rules/select_arrow.xsl`): bands 1-3 share
+`scaleFloor = 0.40`; bands 4-8 use `scaleFactorIntermediate = 0.20`
+multiplied by `surfaceCurrentSpeed`; band 9 uses `scaleCeiling = 2.60`.
+Those per-band factors multiply the renderer's `BaseSymbolScale` (default
+`2.0`) to produce each feature's `ImageStyle.SymbolScale`.
+
 ## Installation
 
 ```sh
