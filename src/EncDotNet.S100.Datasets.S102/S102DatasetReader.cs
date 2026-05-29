@@ -109,6 +109,7 @@ public static class S102DatasetReader
             NumPointsLatitudinal = numLat,
             NumPointsLongitudinal = numLon,
             StartSequence = startSequence,
+            GroupPath = instancePath,
             Values = allValues.ToArray(),
         };
     }

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S102.Validation;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
@@ -12,6 +14,7 @@ using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Validation;
 using Mapsui;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -25,6 +28,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
     private readonly string _fileName;
     private readonly PortrayalPipeline _pipeline;
     private readonly MapsuiCoverageRenderer _renderer;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
 
     public SpecRef Spec => new("S-102", default);
 
@@ -220,4 +225,67 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
         => value == noData
             ? "NoData"
             : value.ToString("0.##########", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Runs the S-102 normative rule pack
+    /// (<see cref="S102DatasetRules.Default"/>) against the parsed
+    /// dataset and returns the cached report.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per <c>docs/design/non-gml-validation.md</c> §5.1, this override
+    /// defensively wraps the rule-pack call in a try/catch for
+    /// <see cref="S100DatasetSchemaException"/>. The realistic failure
+    /// mode is the reader throwing inside the constructor (in which
+    /// case the processor never exists and this method is never
+    /// reached); the wrapper is therefore forward-compatible only,
+    /// surfacing a single <c>S102-PROJ-SCHEMA</c> finding carrying
+    /// the exception's <c>GroupPath</c>, <c>AttributeOrDataset</c>,
+    /// and <c>SpecReference</c> per design §5.3.
+    /// </para>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset; the
+    /// report is cached after the first call (mirroring the GML
+    /// processors' pattern, see <c>S124DatasetProcessor</c>).
+    /// </para>
+    /// </remarks>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            try
+            {
+                _validationReport = S102DatasetRules.Default.Run(_dataset);
+            }
+            catch (S100DatasetSchemaException ex)
+            {
+                _validationReport = BuildSchemaSurrogateReport(ex);
+            }
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
+
+    private static ValidationReport BuildSchemaSurrogateReport(S100DatasetSchemaException ex)
+    {
+        var details = new List<string>();
+        details.Add($"GroupPath='{ex.GroupPath}'");
+        if (!string.IsNullOrEmpty(ex.AttributeOrDataset))
+            details.Add($"AttributeOrDataset='{ex.AttributeOrDataset}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S102-PROJ-SCHEMA",
+            Severity = ValidationSeverity.Error,
+            Message = $"S102 reader raised S100DatasetSchemaException: {ex.Message} ({string.Join(", ", details)}).",
+            RelatedFeatureId = ex.GroupPath,
+        };
+
+        return new ValidationReport(
+            ImmutableArray.Create(finding),
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
 }
