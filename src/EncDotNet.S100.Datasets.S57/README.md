@@ -48,6 +48,34 @@ Key types:
 - **Complex-attribute synthesis is minimal.** Sector lights and similar features that require S-101 nested complex attributes may not portray correctly.
 - **`information` is emitted directly on the feature** (per the "generally" path in the conversion guidance) rather than via a separate `NauticalInformation` information type with an `Additional Information` association.
 
+## Validation
+
+`S57DatasetProcessor.Validate()` runs validation in two phases:
+
+1. **Pre-translation** — `S57PreTranslationRules.Default` checks the
+   raw `EncDotNet.S57.S57Document` for things that don't survive
+   translation (DSID / DSPM presence and a positive compilation scale;
+   the presence of an `M_COVR` meta-feature).
+2. **Post-translation** — the translated S-101 document is fed into
+   `S101DatasetRules.Default` (the same pack that runs against native
+   S-101 datasets) and the resulting findings are **rebadged** with
+   the prefix `S101-as-S57/` so the user can tell whether a problem
+   originated in the raw S-57 input or in the translated S-101
+   projection.
+
+Pre-translation rules shipped by `S57PreTranslationRules.Default`:
+
+| Rule id            | Severity | Checks                                                                              |
+|--------------------|----------|-------------------------------------------------------------------------------------|
+| `S57-R-1.1`        | Error    | DSID record present AND DSPM compilation scale denominator (CSCL) > 0.              |
+| `S57-R-1.2`        | Warning  | At least one `M_COVR` meta-feature is present in the cell.                          |
+| `S57-PROJ-PARSE`   | —        | Placeholder reserving the namespace for future parser-diagnostic findings.          |
+
+The two reports are concatenated by `ConcatReports.Concat(pre, post,
+rebadgePrefix: "S101-as-S57/")` in
+[`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
+and cached on the processor.
+
 ## Usage
 
 ```csharp

@@ -10,7 +10,7 @@ This library reads S-102 datasets from HDF5 files and provides coverage data (de
 - **`S102DatasetReader`** — reads an S-102 dataset from an `IHdf5File`.
 - **`S102CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S102PortrayalCatalogue`** — coverage portrayal catalogue for depth shading.
-- **`BathymetryCoverage`**, **`BathymetryValue`** — bathymetric data models.
+- **`BathymetryCoverage`**, **`BathymetryValue`** — bathymetric data models. `BathymetryCoverage.GroupPath` carries the HDF5 instance path (e.g. `/BathymetryCoverage/BathymetryCoverage.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
 
 ## Portrayal
 
