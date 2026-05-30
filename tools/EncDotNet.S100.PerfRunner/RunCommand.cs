@@ -45,6 +45,16 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         [CommandOption("--tag <KEY=VALUE>")]
         [Description("Extra metadata tags (repeatable).")]
         public string[]? Tags { get; set; }
+
+        [CommandOption("--profile <MODE>")]
+        [Description("Capture an in-process EventPipe trace alongside the .jsonl: 'none' (default), 'cpu', or 'alloc'. Output is <basename>.nettrace; convert with 'dotnet-trace convert <file>.nettrace --format speedscope'.")]
+        [DefaultValue("none")]
+        public string Profile { get; set; } = "none";
+
+        [CommandOption("--profile-sampling-interval-ms <MS>")]
+        [Description("CPU sampling interval in milliseconds (only when --profile=cpu). Default 1; raise to 5–10 for sub-100ms scenarios.")]
+        [DefaultValue(1)]
+        public int ProfileSamplingIntervalMs { get; set; } = 1;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
@@ -76,12 +86,20 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             return 1;
         }
 
+        // Resolve profile mode early so we fail fast on bad input.
+        if (!TryParseProfileMode(settings.Profile, out var profileMode))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --profile value:[/] {settings.Profile} (expected: none, cpu, alloc)");
+            return 1;
+        }
+
         // Set up output.
         Directory.CreateDirectory(settings.OutputDir);
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         var baseName = $"{timestamp}-{scenario.Name}";
         var jsonlPath = Path.Combine(settings.OutputDir, baseName + ".jsonl");
         var mdPath = Path.Combine(settings.OutputDir, baseName + ".md");
+        var nettracePath = Path.Combine(settings.OutputDir, baseName + ".nettrace");
 
         // Wire up OTel with the file exporter.
         Environment.SetEnvironmentVariable(FileExporterExtensions.FileExportEnvVar, jsonlPath);
@@ -100,6 +118,10 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         AnsiConsole.MarkupLine($"[bold]Corpus:[/]   {corpus}");
         AnsiConsole.MarkupLine($"[bold]Output:[/]   {jsonlPath}");
         AnsiConsole.MarkupLine($"[bold]Warmup:[/]   {settings.Warmup}  [bold]Iterations:[/] {settings.Iterations}");
+        if (profileMode != ProfileMode.None)
+        {
+            AnsiConsole.MarkupLine($"[bold]Profile:[/]  {profileMode} → {nettracePath}");
+        }
         AnsiConsole.WriteLine();
 
         var totalSw = Stopwatch.StartNew();
@@ -113,34 +135,66 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
             AnsiConsole.MarkupLine(" [grey]done[/]");
         }
 
-        // Measured iterations — wrapped in a perf.iteration activity so the
-        // JSONL contains a tagged span per sample (consistent with `baseline`).
-        var durations = new List<double>();
-        for (int i = 0; i < settings.Iterations; i++)
+        // Profiling wraps measured iterations only (after warmup) so the
+        // trace contains representative steady-state samples — not JIT
+        // and first-touch overhead. For cold scenarios where Warmup=0
+        // and Iterations=1 the trace covers the entire single iteration,
+        // which is the desired behaviour (cold-path cost IS what we want
+        // to see in that case).
+        EventPipeProfilingSession? profilingSession = profileMode == ProfileMode.None
+            ? null
+            : EventPipeProfilingSession.Start(nettracePath, profileMode, settings.ProfileSamplingIntervalMs);
+        try
         {
-            AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
-            var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i };
-            using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
-            iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
-            iterActivity?.SetTag(PerfActivitySource.RoundTag, 1);
-            iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
+            // Measured iterations — wrapped in a perf.iteration activity so the
+            // JSONL contains a tagged span per sample (consistent with `baseline`).
+            var durations = new List<double>();
+            for (int i = 0; i < settings.Iterations; i++)
+            {
+                AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
+                var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i };
+                using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
+                iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
+                iterActivity?.SetTag(PerfActivitySource.RoundTag, 1);
+                iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
 
-            var sw = Stopwatch.StartNew();
-            await scenario.RunAsync(ctx, CancellationToken.None);
-            sw.Stop();
-            durations.Add(sw.Elapsed.TotalMilliseconds);
-            AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/]");
+                var sw = Stopwatch.StartNew();
+                await scenario.RunAsync(ctx, CancellationToken.None);
+                sw.Stop();
+                durations.Add(sw.Elapsed.TotalMilliseconds);
+                AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/]");
+            }
+
+            totalSw.Stop();
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[bold]Total:[/] {totalSw.Elapsed.TotalSeconds:F1}s");
+
+            // Write a simple markdown summary alongside.
+            WriteSummary(mdPath, scenario, settings, durations);
+
+            AnsiConsole.MarkupLine($"[bold]Summary:[/] {mdPath}");
         }
-
-        totalSw.Stop();
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[bold]Total:[/] {totalSw.Elapsed.TotalSeconds:F1}s");
-
-        // Write a simple markdown summary alongside.
-        WriteSummary(mdPath, scenario, settings, durations);
-
-        AnsiConsole.MarkupLine($"[bold]Summary:[/] {mdPath}");
+        finally
+        {
+            if (profilingSession is not null)
+            {
+                await profilingSession.DisposeAsync();
+                AnsiConsole.MarkupLine($"[bold]Trace:[/]    {nettracePath}");
+                AnsiConsole.MarkupLine("[grey]Convert: dotnet-trace convert " + nettracePath + " --format speedscope[/]");
+            }
+        }
         return 0;
+    }
+
+    internal static bool TryParseProfileMode(string s, out ProfileMode mode)
+    {
+        switch ((s ?? "none").ToLowerInvariant())
+        {
+            case "none": mode = ProfileMode.None; return true;
+            case "cpu": mode = ProfileMode.Cpu; return true;
+            case "alloc": mode = ProfileMode.Alloc; return true;
+            default: mode = ProfileMode.None; return false;
+        }
     }
 
     private static void WriteSummary(

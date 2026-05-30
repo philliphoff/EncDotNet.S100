@@ -14,6 +14,9 @@ app.Configure(config =>
 
     config.AddCommand<GateCommand>("gate")
         .WithDescription("Gate CI on regressions across all scenarios in baseline vs candidate directories.");
+
+    config.AddCommand<ChromeTraceCommand>("chrome-trace")
+        .WithDescription("Convert a .jsonl telemetry file to Chrome Trace JSON (chrome://tracing / Perfetto / Speedscope). Span timeline, not a CPU flamegraph.");
 });
 
 return app.Run(args);

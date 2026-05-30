@@ -36,6 +36,44 @@ dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-warm \
 | `s201-vector` | S-201 GML AtoN information: XSLT-only vector pipeline. |
 | `exchange-set-open` | Open a synthetic exchange set and walk all datasets. |
 
+## Profiling (CPU and allocation traces)
+
+The PerfRunner can capture an in-process EventPipe trace alongside the
+`.jsonl` telemetry, suitable for opening in PerfView, Visual Studio's
+performance profiler, or — after conversion — Speedscope / Perfetto.
+
+```bash
+# CPU sampling profile of the S-131 portrayal pipeline.
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- s131-portray-warm \
+    --warmup 3 --iterations 20 --profile cpu
+
+# Allocation profile (GC / AllocationTick events).
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-cold \
+    --warmup 0 --iterations 1 --profile alloc
+
+# Same flags work on `baseline`. Profiling is mutually exclusive with --append.
+dotnet run --project tools/EncDotNet.S100.PerfRunner -- baseline \
+    --scenarios s131-portray-warm --profile cpu
+```
+
+Output: `<basename>.nettrace` next to the `.jsonl`. Convert to a
+flamegraph viewable in <https://www.speedscope.app>:
+
+```bash
+dotnet tool install -g dotnet-trace
+dotnet-trace convert ./perf-runs/<basename>.nettrace --format speedscope
+```
+
+Notes:
+- Profiling adds measurable overhead (typically 2-10% for `cpu`,
+  20-40% for `alloc`). **Profiled runs are not baselines**: do not
+  gate CI against `--profile` outputs.
+- Profiling wraps **measured iterations only** so the trace is not
+  polluted with JIT and first-touch costs from warmup. For cold
+  scenarios (warmup=0, iterations=1) the trace covers the entire run.
+- For sub-100ms scenarios, raise the sampling interval with
+  `--profile-sampling-interval-ms 5` to reduce overhead.
+
 ## Output
 
 Each run produces two files in the output directory:
