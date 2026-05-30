@@ -87,8 +87,10 @@ OpenStreetMap basemap. Headline features:
 - **Validation panel** with click-to-zoom, severity colouring, and
   an overlay marker layer.
 - **Live overlays** through the dynamic-feature-source abstraction —
-  today an own-ship glyph with true-scale hull + arrowhead + CCRP
-  cross at zoom; an AIS-target adapter is the next consumer.
+  an own-ship glyph with true-scale hull + arrowhead + CCRP cross at
+  zoom, plus an **AIS-target overlay** (PR-D3) backed by the
+  [aisstream.io](https://aisstream.io) WebSocket service and rendered
+  with a per-class palette using the same hull/arrowhead vocabulary.
 - **Optional MCP server** (off by default) exposing the loaded
   datasets to AI agents.
 
@@ -163,7 +165,14 @@ split into focused packages:
 | Package | Description |
 |---|---|
 | **EncDotNet.S100.Renderers.Skia** | Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps. |
-| **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection, plus dynamic-feature-source renderers (own-ship hull + arrowhead, default disc/line/polygon fallback). |
+| **EncDotNet.S100.Renderers.Mapsui** | Rendering of S-100 data into [Mapsui](https://mapsui.com/) map layers with CRS projection, plus dynamic-feature-source renderers (own-ship hull + arrowhead, AIS-target hull + per-class palette, default disc/line/polygon fallback). |
+
+### Dynamic feature sources
+
+| Package | Description |
+|---|---|
+| **EncDotNet.S100.DynamicSources.Ais** | Decoder-agnostic AIS dynamic feature source: per-MMSI cache, ITU-R M.1371-aligned aging, projection to `DynamicFeature` with sentinel-collapsed motion. See [its README](src/EncDotNet.S100.DynamicSources.Ais/README.md). |
+| **EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo** | Production driver implementing `IAisMessageSource` over [aisstream.io](https://aisstream.io)'s WebSocket service. BCL-only (no third-party AIS or WebSocket deps). See [its README](src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md). |
 
 ### MCP server
 

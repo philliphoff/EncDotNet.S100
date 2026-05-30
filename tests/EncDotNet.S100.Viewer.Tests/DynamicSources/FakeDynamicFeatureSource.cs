@@ -18,10 +18,10 @@ internal sealed class FakeDynamicFeatureSource : IDynamicFeatureSource
 
     public string Id { get; }
     public DynamicSourceMetadata Metadata { get; }
-    public IReadOnlyList<DynamicFeature> CurrentFeatures => _features;
+    public IReadOnlyList<DynamicFeature> CurrentFeatures => Volatile.Read(ref _features);
     public event EventHandler<DynamicFeaturesChanged>? Changed;
 
-    public void SetFeatures(IReadOnlyList<DynamicFeature> features) => _features = features;
+    public void SetFeatures(IReadOnlyList<DynamicFeature> features) => Volatile.Write(ref _features, features);
 
     public void RaiseChanged(DynamicFeaturesChanged payload)
         => Changed?.Invoke(this, payload);

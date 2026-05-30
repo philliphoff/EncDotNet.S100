@@ -410,4 +410,14 @@ internal static class Strings
     public static string Settings_OwnVessel_BowOffset_Tooltip => Get(nameof(Settings_OwnVessel_BowOffset_Tooltip));
     public static string Settings_OwnVessel_PortOffset => Get(nameof(Settings_OwnVessel_PortOffset));
     public static string Settings_OwnVessel_PortOffset_Tooltip => Get(nameof(Settings_OwnVessel_PortOffset_Tooltip));
+
+    // AIS overlay (PR-D3)
+    public static string Settings_AisSection => Get(nameof(Settings_AisSection));
+    public static string Settings_AisSection_Help => Get(nameof(Settings_AisSection_Help));
+    public static string Settings_AisEnabled => Get(nameof(Settings_AisEnabled));
+    public static string Settings_AisEnabledTooltip => Get(nameof(Settings_AisEnabledTooltip));
+    public static string Settings_AisApiKey => Get(nameof(Settings_AisApiKey));
+    public static string Settings_AisApiKeyTooltip => Get(nameof(Settings_AisApiKeyTooltip));
+    public static string Settings_AisApiKey_EnvVarHint => Get(nameof(Settings_AisApiKey_EnvVarHint));
+    public static string Settings_AisApiKey_EnvVarPresent => Get(nameof(Settings_AisApiKey_EnvVarPresent));
 }

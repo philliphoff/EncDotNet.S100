@@ -493,6 +493,10 @@ internal sealed class SettingsViewModel : ViewModelBase
         SetPaletteDayCommand = new RelayCommand(() => SelectedPalette = PaletteType.Day);
         SetPaletteDuskCommand = new RelayCommand(() => SelectedPalette = PaletteType.Dusk);
         SetPaletteNightCommand = new RelayCommand(() => SelectedPalette = PaletteType.Night);
+
+        var ais = settings.AisOverlay ?? new AisOverlaySettings();
+        _aisEnabled = ais.Enabled;
+        _aisApiKey = ais.ApiKey;
     }
 
     /// <summary>
@@ -641,6 +645,88 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _settings.Save();
                 OwnShipGeometryChanged?.Invoke();
             }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // AIS overlay (PR-D3). Changes don't take effect until restart;
+    // the source is registered as a singleton at app startup.
+    // ---------------------------------------------------------------
+
+    private void EnsureAisOverlaySettings()
+    {
+        _settings.AisOverlay ??= new AisOverlaySettings();
+    }
+
+    private bool _aisEnabled;
+    /// <summary>
+    /// User opt-in for the AIS overlay. Persisted to
+    /// <see cref="AisOverlaySettings.Enabled"/>. Effective on next
+    /// viewer restart.
+    /// </summary>
+    public bool AisEnabled
+    {
+        get => _aisEnabled;
+        set
+        {
+            if (SetProperty(ref _aisEnabled, value))
+            {
+                EnsureAisOverlaySettings();
+                _settings.AisOverlay!.Enabled = value;
+                _settings.Save();
+            }
+        }
+    }
+
+    private string? _aisApiKey;
+    /// <summary>
+    /// aisstream.io API key persisted in <c>settings.json</c>. The
+    /// env var named in
+    /// <see cref="AisOverlaySettings.ApiKeyEnvironmentVariable"/>
+    /// takes precedence when set; this field is the convenience
+    /// fallback for users who don't want to manage env vars.
+    /// </summary>
+    public string? AisApiKey
+    {
+        get => _aisApiKey;
+        set
+        {
+            // Treat blank/whitespace as null so the env-var fallback
+            // path is taken cleanly when the user clears the field.
+            var normalised = string.IsNullOrWhiteSpace(value) ? null : value;
+            if (SetProperty(ref _aisApiKey, normalised))
+            {
+                EnsureAisOverlaySettings();
+                _settings.AisOverlay!.ApiKey = normalised;
+                _settings.Save();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Name of the env var that, when set, supplies the API key in
+    /// preference to <see cref="AisApiKey"/>. Read-only in the UI;
+    /// surfaced as a hint so users know which variable to set.
+    /// </summary>
+    public string AisApiKeyEnvironmentVariable =>
+        _settings.AisOverlay?.ApiKeyEnvironmentVariable
+        ?? new AisOverlaySettings().ApiKeyEnvironmentVariable;
+
+    /// <summary>
+    /// Localised hint shown beneath the API-key field. Renders the
+    /// "env var is set, will be used" copy when the env var resolves
+    /// at viewmodel-construction time, otherwise the "or set ENV"
+    /// reminder.
+    /// </summary>
+    public string AisApiKeyHint
+    {
+        get
+        {
+            var envVar = AisApiKeyEnvironmentVariable;
+            var envVal = Environment.GetEnvironmentVariable(envVar);
+            return string.IsNullOrWhiteSpace(envVal)
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
         }
     }
 }
