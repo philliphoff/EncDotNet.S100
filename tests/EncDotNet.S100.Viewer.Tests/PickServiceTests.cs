@@ -41,6 +41,9 @@ public class PickServiceTests
     {
         public bool IsDarkTheme { get; private set; }
         public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; return IsDarkTheme; }
+        public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
+        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, theme); }
+        public event System.EventHandler<ChromeTheme>? ThemeChanged;
     }
 
     private sealed class StubLoader : IDatasetLoaderService

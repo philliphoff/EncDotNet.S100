@@ -42,6 +42,9 @@ public class MainViewModelOpenRecentTests : IDisposable
     {
         public bool IsDarkTheme => false;
         public bool ToggleTheme() => false;
+        public ChromeTheme Current => ChromeTheme.Light;
+        public void SetTheme(ChromeTheme theme) { }
+        public event System.EventHandler<ChromeTheme>? ThemeChanged { add { } remove { } }
     }
 
     private sealed class RecordingLoaderService : IDatasetLoaderService

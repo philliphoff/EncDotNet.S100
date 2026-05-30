@@ -117,6 +117,19 @@ public partial class App : Application
             }
         }, TaskScheduler.Default);
 
+        // Apply persisted chrome theme + wire chrome→map coupling. The
+        // chrome theme is the user's primary axis; the map palette
+        // follows (per docs/design/s100-chrome-theme-spike.md §5)
+        // unless the user subsequently overrides SelectedPalette
+        // independently.
+        var themeService = s_services.GetRequiredService<IThemeService>();
+        themeService.SetTheme(settingsVm.SelectedChromeTheme);
+        settingsVm.ChromeThemeChanged += chromeTheme =>
+        {
+            themeService.SetTheme(chromeTheme);
+            settingsVm.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
+        };
+
         // Re-publish own-ship fix when vessel dimensions change.
         var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()
             as EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider;

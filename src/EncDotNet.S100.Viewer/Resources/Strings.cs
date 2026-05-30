@@ -216,6 +216,11 @@ internal static class Strings
     public static string Settings_AccentColor => Get(nameof(Settings_AccentColor));
     public static string Settings_ColorProfile => Get(nameof(Settings_ColorProfile));
     public static string Settings_ColorProfile_Help => Get(nameof(Settings_ColorProfile_Help));
+    public static string Settings_ChromeTheme => Get(nameof(Settings_ChromeTheme));
+    public static string Settings_ChromeTheme_Help => Get(nameof(Settings_ChromeTheme_Help));
+    public static string ChromeTheme_Light => Get(nameof(ChromeTheme_Light));
+    public static string ChromeTheme_Dark => Get(nameof(ChromeTheme_Dark));
+    public static string ChromeTheme_S100Night => Get(nameof(ChromeTheme_S100Night));
     public static string Settings_SymbolScale => Get(nameof(Settings_SymbolScale));
     public static string Settings_SymbolScale_Help => Get(nameof(Settings_SymbolScale_Help));
     public static string Settings_TextScale => Get(nameof(Settings_TextScale));
