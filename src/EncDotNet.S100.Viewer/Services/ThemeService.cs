@@ -10,10 +10,22 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Recognises the bundled stock variants (<see cref="ThemeVariant.Light"/>,
 /// <see cref="ThemeVariant.Dark"/>) plus the custom
 /// <see cref="ChromeThemes.S100Night"/> variant declared in App.axaml.
+///
+/// Subscribes to <see cref="Application.ActualThemeVariantChanged"/> and
+/// re-raises it as <see cref="IThemeService.ThemeChanged"/> so consumers
+/// can observe theme changes regardless of whether the trigger was the
+/// in-app toggle button, the settings selector, or an external source
+/// (system theme follow).
 /// </summary>
 internal sealed class ThemeService : IThemeService
 {
-    public event EventHandler<ChromeTheme>? ThemeChanged;
+    public ThemeService()
+    {
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnApplicationThemeVariantChanged;
+    }
+
+    public event EventHandler? ThemeChanged;
 
     public bool IsDarkTheme => ChromeThemes.IsDark(Current);
 
@@ -29,8 +41,9 @@ internal sealed class ThemeService : IThemeService
         var variant = ChromeThemes.ToVariant(theme);
         if (app.RequestedThemeVariant != variant)
             app.RequestedThemeVariant = variant;
-
-        ThemeChanged?.Invoke(this, theme);
+        // ActualThemeVariantChanged fires from the assignment above and
+        // drives ThemeChanged via OnApplicationThemeVariantChanged — no
+        // explicit raise needed here.
     }
 
     public bool ToggleTheme()
@@ -39,4 +52,7 @@ internal sealed class ThemeService : IThemeService
         SetTheme(next);
         return IsDarkTheme;
     }
+
+    private void OnApplicationThemeVariantChanged(object? sender, EventArgs e)
+        => ThemeChanged?.Invoke(this, EventArgs.Empty);
 }

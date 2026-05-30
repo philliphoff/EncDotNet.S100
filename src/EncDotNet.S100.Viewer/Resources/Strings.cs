@@ -360,6 +360,10 @@ internal static class Strings
     public static string TextGroup_Other => Get(nameof(TextGroup_Other));
     public static string TextGroup_All => Get(nameof(TextGroup_All));
 
+    // Map palette toolbar pill (PR-N1)
+    public static string Toolbar_Palette => Get(nameof(Toolbar_Palette));
+    public static string Tooltip_SwitchPalette => Get(nameof(Tooltip_SwitchPalette));
+
     // Toast notification titles
     public static string Toast_Error => Get(nameof(Toast_Error));
     public static string Toast_Warning => Get(nameof(Toast_Warning));
@@ -411,4 +415,14 @@ internal static class Strings
     public static string Settings_OwnVessel_BowOffset_Tooltip => Get(nameof(Settings_OwnVessel_BowOffset_Tooltip));
     public static string Settings_OwnVessel_PortOffset => Get(nameof(Settings_OwnVessel_PortOffset));
     public static string Settings_OwnVessel_PortOffset_Tooltip => Get(nameof(Settings_OwnVessel_PortOffset_Tooltip));
+
+    // AIS overlay (PR-D3)
+    public static string Settings_AisSection => Get(nameof(Settings_AisSection));
+    public static string Settings_AisSection_Help => Get(nameof(Settings_AisSection_Help));
+    public static string Settings_AisEnabled => Get(nameof(Settings_AisEnabled));
+    public static string Settings_AisEnabledTooltip => Get(nameof(Settings_AisEnabledTooltip));
+    public static string Settings_AisApiKey => Get(nameof(Settings_AisApiKey));
+    public static string Settings_AisApiKeyTooltip => Get(nameof(Settings_AisApiKeyTooltip));
+    public static string Settings_AisApiKey_EnvVarHint => Get(nameof(Settings_AisApiKey_EnvVarHint));
+    public static string Settings_AisApiKey_EnvVarPresent => Get(nameof(Settings_AisApiKey_EnvVarPresent));
 }

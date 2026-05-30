@@ -40,10 +40,10 @@ public class PickServiceTests
     private sealed class StubThemeService : IThemeService
     {
         public bool IsDarkTheme { get; private set; }
-        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; return IsDarkTheme; }
+        public event System.EventHandler? ThemeChanged;
+        public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; ThemeChanged?.Invoke(this, System.EventArgs.Empty); return IsDarkTheme; }
         public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, theme); }
-        public event System.EventHandler<ChromeTheme>? ThemeChanged;
+        public void SetTheme(ChromeTheme theme) { IsDarkTheme = ChromeThemes.IsDark(theme); ThemeChanged?.Invoke(this, System.EventArgs.Empty); }
     }
 
     private sealed class StubLoader : IDatasetLoaderService

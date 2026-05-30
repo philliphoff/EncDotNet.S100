@@ -184,6 +184,16 @@ internal sealed class ViewerSettings
     public OwnShipSettings? OwnShip { get; set; }
 
     /// <summary>
+    /// Optional AIS overlay configuration (PR-D3). When present and
+    /// <see cref="AisOverlaySettings.Enabled"/> is <see langword="true"/>,
+    /// the viewer registers an <c>AisDynamicFeatureSource</c> backed
+    /// by the aisstream.io WebSocket driver. <see langword="null"/>
+    /// — and the matching environment variable being unset — means
+    /// the overlay is silently disabled. Pure additive; no migration.
+    /// </summary>
+    public AisOverlaySettings? AisOverlay { get; set; }
+
+    /// <summary>
     /// User preference for whether the bottom timeline panel is shown.
     /// When true the panel surfaces (in either an empty state or with
     /// a global slider, depending on whether any time-varying dataset

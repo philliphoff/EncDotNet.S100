@@ -18,7 +18,7 @@ public class DynamicSourceOverlayHostRegistryTests
     public void Sources_ReturnsRegisteredInOrder_AndFiresEventOnRegister()
     {
         var host = new FakeMapHost();
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         IDynamicFeatureSourceRegistry registry = sut;
         int events = 0;
         registry.SourcesChanged += () => events++;
@@ -35,7 +35,7 @@ public class DynamicSourceOverlayHostRegistryTests
     public void DisposeRegistration_RemovesFromSources_AndFiresEvent()
     {
         var host = new FakeMapHost();
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         var reg = sut.Register(new FakeDynamicFeatureSource("a", new DynamicSourceMetadata { DisplayName = "A" }));
         IDynamicFeatureSourceRegistry registry = sut;
         int events = 0;
@@ -51,7 +51,7 @@ public class DynamicSourceOverlayHostRegistryTests
     public void SetVisible_TogglesMemoryLayerEnabled_AndFiresEvent()
     {
         var host = new FakeMapHost();
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(new FakeDynamicFeatureSource("a", new DynamicSourceMetadata { DisplayName = "A" }));
         IDynamicFeatureSourceRegistry registry = sut;
         var layer = (MemoryLayer)host.OverlayLayers[0];
@@ -70,7 +70,7 @@ public class DynamicSourceOverlayHostRegistryTests
     public void SetVisible_BeforeRegister_SeedsInitialEnabledState()
     {
         var host = new FakeMapHost();
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         IDynamicFeatureSourceRegistry registry = sut;
 
         registry.SetVisible("a", false);
@@ -85,7 +85,7 @@ public class DynamicSourceOverlayHostRegistryTests
     public void GetVisible_UnknownId_DefaultsToTrue()
     {
         var host = new FakeMapHost();
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
 
         Assert.True(((IDynamicFeatureSourceRegistry)sut).GetVisible("missing"));
     }

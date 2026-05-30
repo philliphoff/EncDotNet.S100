@@ -946,6 +946,14 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>All other chart text</value>
   </data>
 
+  <!-- Map palette toolbar pill (PR-N1) -->
+  <data name="Toolbar_Palette" xml:space="preserve">
+    <value>Palette ▾</value>
+  </data>
+  <data name="Tooltip_SwitchPalette" xml:space="preserve">
+    <value>Switch S-100 map palette (Day / Dusk / Night)</value>
+  </data>
+
   <!-- Toast notification titles -->
   <data name="Toast_Error" xml:space="preserve">
     <value>Error</value>
@@ -1091,5 +1099,31 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="Settings_OwnVessel_PortOffset_Tooltip" xml:space="preserve">
     <value>Distance from the port side to the GPS / reference point, in metres. Must be between 0 and the vessel beam.</value>
+  </data>
+  <data name="Settings_AisSection" xml:space="preserve">
+    <value>AIS Overlay</value>
+  </data>
+  <data name="Settings_AisSection_Help" xml:space="preserve">
+    <value>Live AIS targets streamed from aisstream.io. Requires a free API key from https://aisstream.io. Changes take effect on next viewer restart.</value>
+  </data>
+  <data name="Settings_AisEnabled" xml:space="preserve">
+    <value>Enable AIS overlay</value>
+  </data>
+  <data name="Settings_AisEnabledTooltip" xml:space="preserve">
+    <value>When enabled, register the AIS dynamic-feature source on startup. The source stays inactive until an API key is supplied (env var or below).</value>
+  </data>
+  <data name="Settings_AisApiKey" xml:space="preserve">
+    <value>API key</value>
+  </data>
+  <data name="Settings_AisApiKeyTooltip" xml:space="preserve">
+    <value>Your aisstream.io API key. Stored in plaintext in settings.json — leave blank to read from the environment variable instead. The env-var value (when set) takes precedence over this field.</value>
+  </data>
+  <data name="Settings_AisApiKey_EnvVarHint" xml:space="preserve">
+    <value>Or set the {0} environment variable; the env var takes precedence when set.</value>
+    <comment>{0} = environment variable name (e.g. ENCDOTNET_AIS_STREAM_KEY).</comment>
+  </data>
+  <data name="Settings_AisApiKey_EnvVarPresent" xml:space="preserve">
+    <value>Environment variable {0} is set; it will be used.</value>
+    <comment>{0} = environment variable name.</comment>
   </data>
 </root>

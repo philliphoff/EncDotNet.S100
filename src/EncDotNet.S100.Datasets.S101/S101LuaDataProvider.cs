@@ -44,6 +44,37 @@ public sealed class S101LuaDataProvider
     public IReadOnlyList<(string FeatureRef, string Instructions, string ObservedParams)> EmittedInstructions => _emitted;
 
     /// <summary>
+    /// Resolves a Lua-side feature reference (the stringified record id
+    /// passed to <c>HostPortrayalEmit</c>) to its S-101 feature-type code
+    /// (e.g. <c>DEPCNT</c>, <c>BCNCAR</c>) using the dataset's record
+    /// index and feature-type catalogue.
+    /// </summary>
+    /// <returns>
+    /// The human-readable FC code on success, or <see langword="null"/>
+    /// when <paramref name="featureRef"/> cannot be parsed or the
+    /// record is not present.
+    /// </returns>
+    public string? TryGetFeatureTypeCode(string featureRef)
+    {
+        if (string.IsNullOrEmpty(featureRef)) return null;
+        // Lua marshals doubles as e.g. "12345" or "12345.0"; trim the
+        // fractional part if present.
+        var dot = featureRef.IndexOf('.');
+        var idText = dot >= 0 ? featureRef[..dot] : featureRef;
+        if (!uint.TryParse(idText, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var id))
+        {
+            return null;
+        }
+
+        EnsureFeatureIndex();
+        if (!_featureById!.TryGetValue(id, out var feat)) return null;
+        return _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
+            ? name
+            : feat.FeatureTypeCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
     /// Registers all Host* functions and the Debug table on the given Lua context.
     /// </summary>
     public void RegisterHostFunctions(ILuaContext lua)

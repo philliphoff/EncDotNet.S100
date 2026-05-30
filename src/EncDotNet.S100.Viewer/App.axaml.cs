@@ -290,6 +290,18 @@ public partial class App : Application
                 services,
                 rendererKey: EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource.FeatureKind);
 
+        // PR-D3: AIS overlay. The renderer is always registered (idempotent
+        // and harmless when no AIS source is active). The dynamic source
+        // itself is constructed lazily via Services.DynamicSources.Ais.
+        // AisOverlayServiceCollectionExtensions.AddAisOverlay so it can
+        // be conditioned on settings + the API-key environment variable.
+        EncDotNet.S100.Renderers.Mapsui.DynamicSources.DynamicFeatureRendererServiceCollectionExtensions
+            .AddDynamicFeatureRenderer<EncDotNet.S100.Renderers.Mapsui.DynamicSources.AisVesselRenderer>(
+                services,
+                rendererKey: "vessel.ais");
+        EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
+            .AddAisOverlay(services);
+
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow
         // (it needs IMapHost, which only exists after the MapControl
