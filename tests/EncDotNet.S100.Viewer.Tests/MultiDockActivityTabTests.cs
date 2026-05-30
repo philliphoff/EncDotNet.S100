@@ -63,6 +63,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
     private sealed class StubThemeService : IThemeService
     {
         public bool IsDarkTheme => false;
+        public event System.EventHandler? ThemeChanged { add { } remove { } }
         public bool ToggleTheme() => false;
     }
 
