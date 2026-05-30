@@ -41,4 +41,5 @@ than current-state behaviour (which lives in the per-library READMEs).
 
 - [Dynamic feature sources](design/dynamic-feature-source.md) — push-driven point/track/area features (own-ship, AIS, route preview, sensor overlays) that sit alongside static datasets in the rendering surface.
 - [Own-ship vessel symbology](design/own-ship-symbology.md) — true-scale hull + arrowhead + CCRP cross renderer that consumes the dynamic-feature-source abstraction.
+- [AIS dynamic feature source](design/ais-source.md) — three-layer split (driver → `IAisMessageSource` → `AisDynamicFeatureSource`), aisstream.io WebSocket driver, and per-class AIS target rendering.
 - [S-98 interoperability](design/s98-interoperability.md) — display-plane plumbing and inter-product rules that make multi-product paint stacks deterministic and spec-driven.

@@ -332,6 +332,34 @@
                             VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
+
+            <!-- AIS overlay (PR-D3) -->
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_AisSection}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_AisSection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_AisEnabled}"
+                      IsChecked="{Binding AisEnabled}"
+                      ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_AisApiKey}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding AisApiKey, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PasswordChar="•"
+                         ToolTip.Tip="{x:Static loc:Strings.Settings_AisApiKeyTooltip}"
+                         MinWidth="280"
+                         HorizontalAlignment="Left" />
+                <TextBlock Text="{Binding AisApiKeyHint}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

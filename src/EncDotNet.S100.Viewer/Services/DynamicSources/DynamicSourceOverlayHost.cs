@@ -42,6 +42,17 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     private readonly IServiceProvider _services;
     private readonly Action<Action> _marshal;
     private readonly ILogger<DynamicSourceOverlayHost> _logger;
+    /// <summary>
+    /// Minimum time between full layer rebuilds for a single source.
+    /// PR-D3 made this matter: high-frequency sources (AIS at world
+    /// scale = 10–100+ events/sec, each touching 100s of features)
+    /// would otherwise pin the UI thread. The throttle is leading-
+    /// edge (first event in a quiet window rebuilds immediately) plus
+    /// trailing-edge (subsequent bursts collapse to one rebuild at
+    /// the end of the window) so own-ship's ~1 Hz cadence still
+    /// renders without perceptible delay.
+    /// </summary>
+    private readonly TimeSpan _coalesceWindow;
     private readonly Dictionary<string, Registration> _byId = new(StringComparer.Ordinal);
     // Registration order — preserved separately from _byId so the
     // Layer Stack panel can render sources in the order they were
@@ -77,11 +88,20 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     /// or test-dispatcher-backed implementation.
     /// </param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="coalesceWindow">
+    /// Minimum interval between full rebuilds of a single source's
+    /// layer. <see langword="null"/> uses the default 250 ms (AIS
+    /// at world scale streams 10–100+ events/sec; the default keeps
+    /// the UI responsive while still feeling live for own-ship's
+    /// ~1 Hz cadence). Tests pass <see cref="TimeSpan.Zero"/> to
+    /// disable the throttle and keep rebuilds synchronous.
+    /// </param>
     public DynamicSourceOverlayHost(
         IMapHost mapHost,
         IServiceProvider services,
         Action<Action>? marshal = null,
-        ILogger<DynamicSourceOverlayHost>? logger = null)
+        ILogger<DynamicSourceOverlayHost>? logger = null,
+        TimeSpan? coalesceWindow = null)
     {
         ArgumentNullException.ThrowIfNull(mapHost);
         ArgumentNullException.ThrowIfNull(services);
@@ -89,6 +109,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         _services = services;
         _marshal = marshal ?? DispatcherMarshal;
         _logger = logger ?? NullLogger<DynamicSourceOverlayHost>.Instance;
+        _coalesceWindow = coalesceWindow ?? TimeSpan.FromMilliseconds(250);
     }
 
     /// <summary>
@@ -163,6 +184,20 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
 
     private void Rebuild(Registration registration)
     {
+        // Synchronous rebuild — used for the initial Register() build
+        // and by tests with throttle disabled. Cheap when the source
+        // has few features (own-ship == 1).
+        var features = RenderSnapshot(registration);
+        registration.Layer.Features = features;
+        registration.Layer.DataHasChanged();
+    }
+
+    // Pure-CPU helper; safe to call off the UI thread because the
+    // renderer contract is pure (no Avalonia / Mapsui state mutation
+    // beyond constructing GeometryFeature/Style objects, which are
+    // POCOs until added to a layer).
+    private static List<IFeature> RenderSnapshot(Registration registration)
+    {
         var snapshot = registration.Source.CurrentFeatures;
         var features = new List<IFeature>(snapshot.Count);
         foreach (var feature in snapshot)
@@ -173,8 +208,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
                 features.Add(rendered);
             }
         }
-        registration.Layer.Features = features;
-        registration.Layer.DataHasChanged();
+        return features;
     }
 
     private static void DispatcherMarshal(Action action)
@@ -289,10 +323,100 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         public void OnChanged(object? sender, DynamicFeaturesChanged e)
         {
             if (Volatile.Read(ref _disposed) != 0) return;
-            _host._marshal(() =>
+            _host._marshal(HandleChangeOnUiThread);
+        }
+
+        // UI-thread only; _trailingScheduled, _backgroundInFlight, and
+        // _lastRebuildUtc are not synchronised because all reads/
+        // writes happen here after the _marshal hop.
+        private bool _trailingScheduled;
+        private bool _backgroundInFlight;
+        private DateTime _lastRebuildUtc = DateTime.MinValue;
+
+        private void HandleChangeOnUiThread()
+        {
+            if (Volatile.Read(ref _disposed) != 0) return;
+
+            var window = _host._coalesceWindow;
+            if (window <= TimeSpan.Zero)
             {
-                if (Volatile.Read(ref _disposed) != 0) return;
+                // Synchronous path for tests and the initial seed.
                 _host.Rebuild(this);
+                _lastRebuildUtc = DateTime.UtcNow;
+                return;
+            }
+
+            var elapsed = DateTime.UtcNow - _lastRebuildUtc;
+            if (elapsed >= window && !_backgroundInFlight)
+            {
+                ScheduleBackgroundRebuild();
+                return;
+            }
+
+            // Inside an active window or rebuild already running.
+            // Collapse this event into the trailing rebuild.
+            if (_trailingScheduled) return;
+            _trailingScheduled = true;
+            var delay = elapsed >= window ? TimeSpan.Zero : window - elapsed;
+            _ = Task.Delay(delay).ContinueWith(_ =>
+                _host._marshal(() =>
+                {
+                    _trailingScheduled = false;
+                    if (Volatile.Read(ref _disposed) != 0) return;
+                    if (_backgroundInFlight)
+                    {
+                        // Re-queue once the in-flight rebuild lands —
+                        // its completion will check this flag.
+                        _trailingScheduled = true;
+                        return;
+                    }
+                    ScheduleBackgroundRebuild();
+                }), TaskScheduler.Default);
+        }
+
+        // UI thread → background thread for the heavy render loop →
+        // UI thread to assign the result. Keeps long-running renders
+        // (AIS at world scale: 1000s of features × multiple styles
+        // each) off the UI thread so panning / zoom stay responsive.
+        private void ScheduleBackgroundRebuild()
+        {
+            _backgroundInFlight = true;
+            _lastRebuildUtc = DateTime.UtcNow;
+            _ = Task.Run(() =>
+            {
+                List<IFeature>? features = null;
+                try
+                {
+                    if (Volatile.Read(ref _disposed) == 0)
+                    {
+                        features = RenderSnapshot(this);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _host._logger.LogError(
+                        ex,
+                        "Dynamic source '{SourceId}' renderer threw during rebuild.",
+                        Source.Id);
+                }
+                _host._marshal(() =>
+                {
+                    _backgroundInFlight = false;
+                    if (Volatile.Read(ref _disposed) != 0) return;
+                    if (features is not null)
+                    {
+                        Layer.Features = features;
+                        Layer.DataHasChanged();
+                        _lastRebuildUtc = DateTime.UtcNow;
+                    }
+                    if (_trailingScheduled)
+                    {
+                        // A burst event landed mid-rebuild and was
+                        // deferred above; honour it now.
+                        _trailingScheduled = false;
+                        ScheduleBackgroundRebuild();
+                    }
+                });
             });
         }
 
