@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -16,7 +18,15 @@ internal interface IPickService
     /// pick-report update and a status-text message. Safe to call with
     /// null or with hits that don't carry a feature reference.
     /// </summary>
-    void HandlePick(MapInfo? mapInfo);
+    /// <remarks>
+    /// Also accepts an optional list of dynamic-source hits collected
+    /// in parallel by <see cref="DynamicSources.IDynamicSourcePickService"/>.
+    /// When non-empty the dynamic hits are published into the pick
+    /// report's dynamic section; an empty list is equivalent to no
+    /// dynamic hits. Either list (or both) being non-empty causes the
+    /// panel to open.
+    /// </remarks>
+    void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
 
     /// <summary>
     /// Resolves an xlink-style reference from the currently selected hit

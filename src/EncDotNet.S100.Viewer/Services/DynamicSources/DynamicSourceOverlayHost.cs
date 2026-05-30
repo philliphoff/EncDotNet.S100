@@ -265,6 +265,23 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances()
+    {
+        lock (_lock)
+        {
+            var list = new List<IDynamicFeatureSource>(_ordered.Count);
+            foreach (var r in _ordered)
+            {
+                // Default to visible when no entry exists, matching
+                // GetVisible's contract.
+                if (_visibility.TryGetValue(r.Source.Id, out var v) && !v) continue;
+                list.Add(r.Source);
+            }
+            return list;
+        }
+    }
+
+    /// <inheritdoc />
     public void SetVisible(string sourceId, bool visible)
     {
         ArgumentNullException.ThrowIfNull(sourceId);

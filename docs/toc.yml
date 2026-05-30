@@ -14,5 +14,7 @@
       href: design/own-ship-symbology.md
     - name: AIS dynamic feature source
       href: design/ais-source.md
+    - name: Dynamic source pick
+      href: design/dynamic-source-pick.md
     - name: S-98 interoperability
       href: design/s98-interoperability.md

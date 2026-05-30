@@ -279,7 +279,11 @@ public partial class MainWindow : ShadUI.Window
         // Enable trackpad pan/pinch/rotate gestures, single/double-tap pick,
         // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
         // sync, and the zoom in/out overlay buttons.
-        var interactionController = new MapInteractionController(_viewModel, _pickService, _loader);
+        var interactionController = new MapInteractionController(
+            _viewModel,
+            _pickService,
+            _loader,
+            App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>());
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
 
         // Wire the map-tool controller to the map: tools are registered with
