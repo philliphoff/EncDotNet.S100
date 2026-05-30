@@ -25,6 +25,31 @@ internal sealed class ViewerSettings
     [JsonIgnore]
     public string SettingsFilePath { get; set; } = DefaultSettingsPath;
 
+    /// <summary>
+    /// When <see langword="true"/>, <see cref="Save"/> is a no-op. Set
+    /// for <c>--ephemeral</c> agent runs so nothing is persisted and
+    /// the user's real profile is left untouched.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the MCP server was configured from
+    /// the command line for this run; the host must not persist the
+    /// bound (ephemeral) port back to the settings file. Prevents an
+    /// automation run from mutating the user's persisted MCP port.
+    /// </summary>
+    [JsonIgnore]
+    public bool McpConfiguredFromCommandLine { get; set; }
+
+    /// <summary>
+    /// Optional path the MCP host writes the bound endpoint URI to once
+    /// it is listening (set from <c>--mcp-port-file</c>). Lets an agent
+    /// discover an ephemeral port without scraping the status bar.
+    /// </summary>
+    [JsonIgnore]
+    public string? McpPortFilePath { get; set; }
+
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -294,6 +319,9 @@ internal sealed class ViewerSettings
 
     public void Save()
     {
+        if (IsReadOnly)
+            return;
+
         var dir = Path.GetDirectoryName(SettingsFilePath);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);

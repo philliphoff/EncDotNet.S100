@@ -152,11 +152,18 @@ internal sealed class McpServerHost : IAsyncDisposable
         // persisted port, but ephemeral has no advantage for MCP
         // tooling and the user can clear it via the "Reset to auto"
         // button in Settings.
-        if (next.Port is { } boundPort && boundPort != _settings.McpPort)
+        //
+        // Exception: when MCP was configured from the command line for
+        // this run we never write the port back — an automation run
+        // must not mutate the user's persisted profile.
+        if (!_settings.McpConfiguredFromCommandLine
+            && next.Port is { } boundPort && boundPort != _settings.McpPort)
         {
             _settings.McpPort = boundPort;
             TrySaveSettings();
         }
+
+        PublishEndpoint(next);
 
         ServerChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -195,6 +202,42 @@ internal sealed class McpServerHost : IAsyncDisposable
             // Settings persistence is best-effort; a failure here must
             // not take down the MCP server. The next successful save
             // (e.g. via the Settings UI) will re-persist the port.
+        }
+    }
+
+    /// <summary>
+    /// Makes the bound endpoint discoverable by external agents:
+    /// writes the URI to <see cref="ViewerSettings.McpPortFilePath"/>
+    /// when configured (so an ephemeral port can be read from a file)
+    /// and echoes it to standard output. Both are best-effort.
+    /// </summary>
+    private void PublishEndpoint(S100McpServer server)
+    {
+        if (server.Endpoint is not { } endpoint)
+            return;
+
+        if (_settings.McpPortFilePath is { } path && !string.IsNullOrWhiteSpace(path))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                File.WriteAllText(path, endpoint.ToString());
+            }
+            catch
+            {
+                // Best-effort — failure to publish must not stop the server.
+            }
+        }
+
+        try
+        {
+            Console.Out.WriteLine($"[MCP] listening on {endpoint}");
+        }
+        catch
+        {
+            // Console may be redirected/closed; ignore.
         }
     }
 
