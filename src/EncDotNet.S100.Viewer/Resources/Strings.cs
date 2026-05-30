@@ -355,6 +355,10 @@ internal static class Strings
     public static string TextGroup_Other => Get(nameof(TextGroup_Other));
     public static string TextGroup_All => Get(nameof(TextGroup_All));
 
+    // Map palette toolbar pill (PR-N1)
+    public static string Toolbar_Palette => Get(nameof(Toolbar_Palette));
+    public static string Tooltip_SwitchPalette => Get(nameof(Tooltip_SwitchPalette));
+
     // Toast notification titles
     public static string Toast_Error => Get(nameof(Toast_Error));
     public static string Toast_Warning => Get(nameof(Toast_Warning));

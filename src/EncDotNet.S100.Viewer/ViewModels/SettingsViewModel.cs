@@ -43,9 +43,30 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _settings.ColorProfile = value.ToString();
                 _settings.Save();
                 PaletteChanged?.Invoke(value);
+                OnPropertyChanged(nameof(IsPaletteDay));
+                OnPropertyChanged(nameof(IsPaletteDusk));
+                OnPropertyChanged(nameof(IsPaletteNight));
             }
         }
     }
+
+    /// <summary>True when the active S-100 map palette is Day. Drives the toolbar palette flyout's RadioButton state.</summary>
+    public bool IsPaletteDay => _selectedPalette == PaletteType.Day;
+
+    /// <summary>True when the active S-100 map palette is Dusk.</summary>
+    public bool IsPaletteDusk => _selectedPalette == PaletteType.Dusk;
+
+    /// <summary>True when the active S-100 map palette is Night.</summary>
+    public bool IsPaletteNight => _selectedPalette == PaletteType.Night;
+
+    /// <summary>Sets the S-100 map palette to Day. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteDayCommand { get; }
+
+    /// <summary>Sets the S-100 map palette to Dusk. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteDuskCommand { get; }
+
+    /// <summary>Sets the S-100 map palette to Night. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteNightCommand { get; }
 
     public event Action<PaletteType>? PaletteChanged;
 
@@ -468,6 +489,10 @@ internal sealed class SettingsViewModel : ViewModelBase
         _ownShipBeam = own.BeamMetres;
         _ownShipBowOffset = own.BowOffsetMetres;
         _ownShipPortOffset = own.PortOffsetMetres;
+
+        SetPaletteDayCommand = new RelayCommand(() => SelectedPalette = PaletteType.Day);
+        SetPaletteDuskCommand = new RelayCommand(() => SelectedPalette = PaletteType.Dusk);
+        SetPaletteNightCommand = new RelayCommand(() => SelectedPalette = PaletteType.Night);
 
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;

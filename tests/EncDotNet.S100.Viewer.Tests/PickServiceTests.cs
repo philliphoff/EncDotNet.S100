@@ -40,6 +40,7 @@ public class PickServiceTests
     private sealed class StubThemeService : IThemeService
     {
         public bool IsDarkTheme { get; private set; }
+        public event System.EventHandler? ThemeChanged { add { } remove { } }
         public bool ToggleTheme() { IsDarkTheme = !IsDarkTheme; return IsDarkTheme; }
     }
 
