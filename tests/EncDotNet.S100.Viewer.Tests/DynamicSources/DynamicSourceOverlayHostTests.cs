@@ -30,7 +30,7 @@ public class DynamicSourceOverlayHostTests
         });
         source.SetFeatures(new[] { Point("ownship") });
 
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         var registration = sut.Register(source);
 
         Assert.Single(host.OverlayLayers);
@@ -50,7 +50,7 @@ public class DynamicSourceOverlayHostTests
             DisplayName = "Own Ship",
         });
 
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(source);
         var layer = (MemoryLayer)host.OverlayLayers[0];
         var initial = layer.Features.Count();
@@ -77,7 +77,7 @@ public class DynamicSourceOverlayHostTests
         });
         source.SetFeatures(new[] { Point("a") });
 
-        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, new ServiceCollection().BuildServiceProvider(), SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(source);
 
         Assert.Single(host.OverlayLayers);
@@ -101,7 +101,7 @@ public class DynamicSourceOverlayHostTests
         source.SetFeatures(new[] { Point("a") });
 
         CountingRenderer.RenderCalls = 0;
-        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(source);
 
         Assert.Single(host.OverlayLayers);
@@ -113,7 +113,7 @@ public class DynamicSourceOverlayHostTests
     {
         var host = new FakeMapHost();
         var sp = new ServiceCollection().BuildServiceProvider();
-        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal);
+        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(new FakeDynamicFeatureSource("dup", new DynamicSourceMetadata { DisplayName = "A" }));
 
         Assert.Throws<InvalidOperationException>(() =>
@@ -125,7 +125,7 @@ public class DynamicSourceOverlayHostTests
     {
         var host = new FakeMapHost();
         var sp = new ServiceCollection().BuildServiceProvider();
-        var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal);
+        var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(new FakeDynamicFeatureSource("a", new DynamicSourceMetadata { DisplayName = "A" }));
         sut.Register(new FakeDynamicFeatureSource("b", new DynamicSourceMetadata { DisplayName = "B" }));
 
@@ -143,7 +143,7 @@ public class DynamicSourceOverlayHostTests
         Action<Action> marshal = a => { marshalCalls++; a(); };
 
         var source = new FakeDynamicFeatureSource("a", new DynamicSourceMetadata { DisplayName = "A" });
-        using var sut = new DynamicSourceOverlayHost(host, sp, marshal);
+        using var sut = new DynamicSourceOverlayHost(host, sp, marshal, coalesceWindow: TimeSpan.Zero);
         sut.Register(source);
         var afterRegister = marshalCalls;
 
@@ -153,6 +153,45 @@ public class DynamicSourceOverlayHostTests
     }
 
     private static void SyncMarshal(Action a) => a();
+
+    [Fact]
+    public async Task RebuildCoalesce_collapses_burst_into_at_most_two_rebuilds()
+    {
+        // Leading-edge rebuild + at most one trailing rebuild for any
+        // burst inside one window. AIS at world scale would otherwise
+        // pin the UI thread.
+        var host = new FakeMapHost();
+        var sp = new ServiceCollection().BuildServiceProvider();
+        var source = new FakeDynamicFeatureSource("ais", new DynamicSourceMetadata { DisplayName = "AIS" });
+        source.SetFeatures(new[] { Point("seed") });
+
+        var window = TimeSpan.FromMilliseconds(80);
+        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal, coalesceWindow: window);
+        sut.Register(source);
+        var initialRebuilds = host.OverlayLayers.Count == 0
+            ? 0
+            : ((MemoryLayer)host.OverlayLayers[0]).Features.Count();
+
+        // Fire 50 events back-to-back inside a single window.
+        for (int i = 0; i < 50; i++)
+        {
+            source.SetFeatures(new[] { Point("seed"), Point("v" + i) });
+            source.RaiseChanged(new DynamicFeaturesChanged
+            {
+                Kind = DynamicSourceChangeKind.Updated,
+                ChangedIds = new[] { "v" + i },
+            });
+        }
+
+        // Wait long enough for the trailing rebuild to fire.
+        await Task.Delay(window + window);
+
+        var layer = (MemoryLayer)host.OverlayLayers[0];
+        // Trailing rebuild should reflect the final feature set
+        // (seed + last update). The intermediate 49 events were
+        // collapsed into the same trailing rebuild.
+        Assert.Equal(2, layer.Features.Count());
+    }
 
     private sealed class CountingRenderer : IDynamicFeatureRenderer
     {

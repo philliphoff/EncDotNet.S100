@@ -42,6 +42,17 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     private readonly IServiceProvider _services;
     private readonly Action<Action> _marshal;
     private readonly ILogger<DynamicSourceOverlayHost> _logger;
+    /// <summary>
+    /// Minimum time between full layer rebuilds for a single source.
+    /// PR-D3 made this matter: high-frequency sources (AIS at world
+    /// scale = 10–100+ events/sec, each touching 100s of features)
+    /// would otherwise pin the UI thread. The throttle is leading-
+    /// edge (first event in a quiet window rebuilds immediately) plus
+    /// trailing-edge (subsequent bursts collapse to one rebuild at
+    /// the end of the window) so own-ship's ~1 Hz cadence still
+    /// renders without perceptible delay.
+    /// </summary>
+    private readonly TimeSpan _coalesceWindow;
     private readonly Dictionary<string, Registration> _byId = new(StringComparer.Ordinal);
     // Registration order — preserved separately from _byId so the
     // Layer Stack panel can render sources in the order they were
@@ -77,11 +88,19 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
     /// or test-dispatcher-backed implementation.
     /// </param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="coalesceWindow">
+    /// Minimum interval between full rebuilds of a single source's
+    /// layer. <see langword="null"/> uses the default 100 ms (≈10 fps,
+    /// well above human perception threshold and far below AIS
+    /// burst rates). Tests pass <see cref="TimeSpan.Zero"/> to disable
+    /// the throttle and keep rebuilds synchronous.
+    /// </param>
     public DynamicSourceOverlayHost(
         IMapHost mapHost,
         IServiceProvider services,
         Action<Action>? marshal = null,
-        ILogger<DynamicSourceOverlayHost>? logger = null)
+        ILogger<DynamicSourceOverlayHost>? logger = null,
+        TimeSpan? coalesceWindow = null)
     {
         ArgumentNullException.ThrowIfNull(mapHost);
         ArgumentNullException.ThrowIfNull(services);
@@ -89,6 +108,7 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         _services = services;
         _marshal = marshal ?? DispatcherMarshal;
         _logger = logger ?? NullLogger<DynamicSourceOverlayHost>.Instance;
+        _coalesceWindow = coalesceWindow ?? TimeSpan.FromMilliseconds(100);
     }
 
     /// <summary>
@@ -289,11 +309,52 @@ internal sealed class DynamicSourceOverlayHost : IDisposable, IDynamicFeatureSou
         public void OnChanged(object? sender, DynamicFeaturesChanged e)
         {
             if (Volatile.Read(ref _disposed) != 0) return;
-            _host._marshal(() =>
+            _host._marshal(HandleChangeOnUiThread);
+        }
+
+        // UI-thread only; _trailingScheduled and _lastRebuildUtc are
+        // not synchronised because all reads/writes happen here after
+        // the _marshal hop.
+        private bool _trailingScheduled;
+        private DateTime _lastRebuildUtc = DateTime.MinValue;
+
+        private void HandleChangeOnUiThread()
+        {
+            if (Volatile.Read(ref _disposed) != 0) return;
+
+            var window = _host._coalesceWindow;
+            if (window <= TimeSpan.Zero)
             {
-                if (Volatile.Read(ref _disposed) != 0) return;
-                _host.Rebuild(this);
-            });
+                DoRebuild();
+                return;
+            }
+
+            var elapsed = DateTime.UtcNow - _lastRebuildUtc;
+            if (elapsed >= window)
+            {
+                // Leading edge — quiet window, rebuild now.
+                DoRebuild();
+                return;
+            }
+
+            // Inside an active window. Collapse this event into the
+            // already-pending trailing rebuild, or schedule one.
+            if (_trailingScheduled) return;
+            _trailingScheduled = true;
+            var delay = window - elapsed;
+            _ = Task.Delay(delay).ContinueWith(_ =>
+                _host._marshal(() =>
+                {
+                    _trailingScheduled = false;
+                    if (Volatile.Read(ref _disposed) != 0) return;
+                    DoRebuild();
+                }), TaskScheduler.Default);
+        }
+
+        private void DoRebuild()
+        {
+            _lastRebuildUtc = DateTime.UtcNow;
+            _host.Rebuild(this);
         }
 
         public void Dispose()
