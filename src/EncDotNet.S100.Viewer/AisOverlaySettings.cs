@@ -2,21 +2,31 @@ namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// User-configurable AIS-overlay settings (PR-D3). Persisted under
-/// <c>ViewerSettings.AisOverlay</c>. The API key is **not** stored
-/// in <c>settings.json</c> — it is read at startup from the
-/// environment variable named in
-/// <see cref="ApiKeyEnvironmentVariable"/> (default
-/// <c>ENCDOTNET_AIS_STREAM_KEY</c>) so users can enable the overlay
-/// without committing their key into a shared config file.
+/// <c>ViewerSettings.AisOverlay</c>. The aisstream.io API key may
+/// come from one of two sources, in priority order:
+///
+/// <list type="number">
+///   <item>The environment variable named in
+///   <see cref="ApiKeyEnvironmentVariable"/> (default
+///   <c>ENCDOTNET_AIS_STREAM_KEY</c>) — preferred for users who
+///   don't want their key sitting in <c>settings.json</c>.</item>
+///   <item><see cref="ApiKey"/> — set via the Settings panel for
+///   convenience. Stored in plaintext in the user's
+///   <c>settings.json</c>; treat the file with the usual care for
+///   single-user secrets.</item>
+/// </list>
+///
+/// If neither yields a value the overlay stays inactive even when
+/// <see cref="Enabled"/> is <see langword="true"/>.
 /// </summary>
 internal sealed class AisOverlaySettings
 {
     /// <summary>
-    /// When <see langword="true"/> and the configured API-key
-    /// environment variable is set, the viewer registers the AIS
+    /// When <see langword="true"/> and an API key is available (env
+    /// var or <see cref="ApiKey"/>), the viewer registers the AIS
     /// dynamic feature source on startup. When <see langword="false"/>
-    /// (the default), the overlay stays inactive even if the env var
-    /// is set — the toggle is the user's explicit opt-in.
+    /// (the default) the overlay stays inactive — the toggle is the
+    /// user's explicit opt-in.
     /// </summary>
     public bool Enabled { get; set; } = false;
 
@@ -26,6 +36,15 @@ internal sealed class AisOverlaySettings
     /// <c>ENCDOTNET_AIS_STREAM_KEY</c>.
     /// </summary>
     public string ApiKeyEnvironmentVariable { get; set; } = "ENCDOTNET_AIS_STREAM_KEY";
+
+    /// <summary>
+    /// Optional aisstream.io API key persisted directly in
+    /// <c>settings.json</c>. Used only when the env var named in
+    /// <see cref="ApiKeyEnvironmentVariable"/> is unset or blank.
+    /// Stored in plaintext — for shared environments prefer the
+    /// env-var path. Default <see langword="null"/>.
+    /// </summary>
+    public string? ApiKey { get; set; }
 
     /// <summary>
     /// Optional initial bounding box (minLat, minLon, maxLat, maxLon)

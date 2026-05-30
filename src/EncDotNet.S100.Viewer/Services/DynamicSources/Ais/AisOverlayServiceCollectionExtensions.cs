@@ -47,8 +47,12 @@ internal static class AisOverlayServiceCollectionExtensions
         if (overlaySettings is null || !overlaySettings.Enabled)
             return new DisabledAisFeatureSource();
 
+        // Env var wins over the persisted key so users who care
+        // about not committing secrets to settings.json have a path.
         var apiKey = Environment.GetEnvironmentVariable(
             overlaySettings.ApiKeyEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(apiKey))
+            apiKey = overlaySettings.ApiKey;
         if (string.IsNullOrWhiteSpace(apiKey))
             return new DisabledAisFeatureSource();
 
