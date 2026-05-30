@@ -249,6 +249,108 @@ tool that snapshots the current map view.
 See [`docs/mcp-server.md`](../../docs/mcp-server.md) for the full
 tool catalogue and an agent walkthrough.
 
+## Automation / agent control
+
+The viewer accepts command-line flags that let an automation agent
+launch it with a dataset, drive it to a known state, talk to it over
+MCP, and capture diagnostics — without touching the GUI or the user's
+persisted profile. The bare `viewer <datasets>` invocation continues
+to work unchanged; all flags below are additive.
+
+```sh
+dotnet run --project src/EncDotNet.S100.Viewer -- \
+  --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
+  --bbox 47.5,-122.5,47.7,-122.1 --palette Night \
+  --screenshot /tmp/run/map.png --exit-after-screenshot \
+  --log-file /tmp/run/viewer.log -v \
+  path/to/dataset.h5
+```
+
+**MCP over the CLI.** `--mcp` starts the embedded MCP server for the
+run, overriding the persisted toggle. `--mcp-port <PORT>` chooses a
+port (`0`, the default, picks an ephemeral one); `--mcp-bind <ADDR>`
+sets the bind address (loopback recommended). Any MCP flag implies
+`--mcp`. Because an ephemeral port is not known ahead of time,
+`--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
+the server is listening (the endpoint is also echoed to stdout as
+`[MCP] listening on …`). A CLI-driven MCP run never persists the
+bound port back to the user's `settings.json`.
+
+**Settings isolation.** `--settings <PATH>` points the run at an
+alternate settings file instead of the per-user default.
+`--ephemeral` goes further: it runs against a throwaway settings file
+that is **never written back**, so CLI/MCP-port write-back and
+palette/category overrides cannot pollute the real profile and
+parallel agent runs do not collide.
+
+**Deterministic viewport.** `--center <LAT,LON> --zoom <LEVEL>` or
+`--bbox <SOUTH,WEST,NORTH,EAST>` frame the map after datasets load.
+Supplying an explicit viewport suppresses the automatic
+zoom-to-extent so the framing is reproducible.
+
+**Render state.** `--palette Day|Dusk|Night`,
+`--display-category DisplayBase|Standard|OtherInformation|All`, and
+`--time-step <index|ISO-8601-timestamp>` set the exact condition to
+capture before a screenshot. These override the persisted values for
+the run only.
+
+**Screenshots.** `--screenshot <PATH>` captures the map after the
+render has quiesced (rather than a fixed delay).
+`--exit-after-screenshot` makes it a one-shot capture-then-quit;
+`--full-window` captures the whole window (panels, toolbars, status
+bar) instead of just the map control; `--window-size <WIDTHxHEIGHT>`
+(e.g. `1280x800`) forces a fixed window size so captures are
+reproducible across machines.
+
+**Logging / diagnostics.** `--log-file <PATH>` appends structured
+logs to a file, `-v` / `--verbose` raises the level to Debug, and
+`--crash-log <PATH>` relocates the crash log (default: a
+`viewer-crash.log` file in the system temp directory).
+
+| Flag | Purpose |
+|---|---|
+| `--mcp` | Start the embedded MCP server for this run |
+| `--mcp-port <PORT>` | MCP port (`0` = ephemeral); implies `--mcp` |
+| `--mcp-bind <ADDR>` | MCP bind address; implies `--mcp` |
+| `--mcp-port-file <PATH>` | Write the bound MCP endpoint URI here |
+| `--settings <PATH>` | Use an alternate settings file |
+| `--ephemeral` | Throwaway settings, never persisted |
+| `--center <LAT,LON>` | Center the map (needs `--zoom`) |
+| `--zoom <LEVEL>` | Web-mercator zoom level (with `--center`) |
+| `--bbox <S,W,N,E>` | Zoom to a WGS-84 bounding box |
+| `--palette Day\|Dusk\|Night` | Override the palette |
+| `--display-category <CAT>` | Override the ECDIS display category |
+| `--time-step <idx\|ts>` | Jump to a time step (index or timestamp) |
+| `--screenshot <PATH>` | Capture the map after render quiesces |
+| `--exit-after-screenshot` | Quit after the screenshot (one-shot) |
+| `--full-window` | Capture the whole window, not just the map |
+| `--window-size <WxH>` | Force a fixed window size |
+| `--log-file <PATH>` | Append structured logs to a file |
+| `--crash-log <PATH>` | Relocate the crash log |
+| `-v`, `--verbose` | Debug-level logging |
+
+### End-to-end agent walkthrough
+
+1. Launch with an isolated profile and an ephemeral MCP port,
+   recording where the endpoint lands:
+
+   ```sh
+   dotnet run --project src/EncDotNet.S100.Viewer -- \
+     --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
+     --bbox 47.5,-122.5,47.7,-122.1 \
+     path/to/dataset.h5
+   ```
+
+2. Wait for `/tmp/run/mcp.url` to appear, then read the endpoint URI
+   from it (or parse the `[MCP] listening on …` stdout line).
+3. Connect an MCP client to that endpoint and call `list_datasets`,
+   `describe_feature`, `sample_coverage`, or `render_to_image` to
+   inspect features/properties and snapshot the current view.
+4. For a pure capture loop (no MCP), drop `--mcp*` and add
+   `--screenshot /tmp/run/map.png --exit-after-screenshot`; the
+   process loads the data, frames the requested viewport, captures
+   once the render settles, and exits.
+
 ## Settings persistence
 
 User settings are stored as JSON in the platform's per-user

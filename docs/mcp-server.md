@@ -67,6 +67,35 @@ assume canonical units for these cases.
 Untick the checkbox to stop the server; the indicator disappears and
 the TCP port is released.
 
+### Enable it from the command line (agent automation)
+
+For headless / scripted runs an agent can enable and configure the
+MCP server entirely from the CLI, without opening Settings and without
+touching the user's persisted profile:
+
+```bash
+dotnet run --project src/EncDotNet.S100.Viewer -- \
+  --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
+  path/to/dataset.h5
+```
+
+- `--mcp` starts the server for the run, overriding the persisted
+  toggle. `--mcp-port <PORT>` and `--mcp-bind <ADDR>` configure the
+  listener (any MCP flag implies `--mcp`).
+- `--mcp-port-file <PATH>` writes the bound endpoint URI to a file
+  once the server is listening, so an agent can discover an ephemeral
+  port (`--mcp-port 0`, the default). The endpoint is also printed to
+  stdout as `[MCP] listening on …`.
+- A CLI-driven MCP run **never persists** the bound port back to
+  `settings.json`. Combine with `--ephemeral` (throwaway settings) or
+  `--settings <PATH>` (alternate settings file) to keep the real
+  profile pristine and let parallel runs avoid collisions.
+
+See the **Automation / agent control** section of the
+[viewer README](../src/EncDotNet.S100.Viewer/README.md) for the full
+flag list (viewport, palette, time step, screenshots, logging) and an
+end-to-end walkthrough.
+
 ## Connect from `mcp-inspector`
 
 ```bash

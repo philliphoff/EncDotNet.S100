@@ -30,7 +30,17 @@ internal interface IDatasetLoaderService
     /// startup viewport (<c>--center</c>/<c>--zoom</c> or <c>--bbox</c>)
     /// was supplied so the requested framing is deterministic.
     /// </summary>
-    bool SuppressAutoZoom { get; set; }
+    /// <remarks>
+    /// Provided as a default interface member (no-op) so the many test
+    /// doubles that implement this interface need not all override it;
+    /// the production <c>DatasetLoaderService</c> backs it with real
+    /// state.
+    /// </remarks>
+    bool SuppressAutoZoom
+    {
+        get => false;
+        set { }
+    }
 
     /// <summary>Loads a dataset and adds its rendered layers to the map.</summary>
     Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default);
