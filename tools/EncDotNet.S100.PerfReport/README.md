@@ -18,7 +18,35 @@ dotnet run --project tools/EncDotNet.S100.PerfReport -- diff baseline.jsonl cand
 
 # Write diff to a file
 dotnet run --project tools/EncDotNet.S100.PerfReport -- diff baseline.jsonl candidate.jsonl --out diff.md
+
+# Convert spans to a Chrome Trace JSON (open in chrome://tracing,
+# https://ui.perfetto.dev, or https://www.speedscope.app)
+dotnet run --project tools/EncDotNet.S100.PerfReport -- chrome-trace run.jsonl
+dotnet run --project tools/EncDotNet.S100.PerfReport -- chrome-trace run.jsonl --out timeline.json
 ```
+
+## `chrome-trace`
+
+Converts the spans recorded in a `.jsonl` file into the
+[Chrome Trace Event Format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview).
+The output can be opened directly in:
+
+- `chrome://tracing` (built into Chromium browsers)
+- [Perfetto UI](https://ui.perfetto.dev)
+- [Speedscope](https://www.speedscope.app)
+
+Each distinct trace id becomes a virtual swimlane so concurrent
+scenario / iteration activity is visualised side-by-side rather than
+overlapping. Span tags are attached as event arguments and are
+visible when a span is selected.
+
+> **Span timeline, not a CPU flamegraph.** This visualises the
+> existing `ActivitySource` spans recorded by the product code (pipeline
+> stages, Lua execution, HDF5 reads, renderer frames). It does **not**
+> sample CPU stacks and so cannot show JIT/runtime/library frames
+> between span boundaries. To get a real CPU flamegraph, run PerfRunner
+> with `--profile cpu` and convert the resulting `.nettrace` with
+> `dotnet-trace convert <file>.nettrace --format speedscope`.
 
 ## `summarise` output
 

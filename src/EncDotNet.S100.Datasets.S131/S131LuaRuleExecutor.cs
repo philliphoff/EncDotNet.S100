@@ -171,9 +171,11 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
 
         try
         {
-            var emitted = ExecuteRaw(mariner);
+            var (emitted, dataProvider) = ExecuteRawCore(mariner);
 
             activity?.SetTag("s100.lua.features.count", emitted.Count);
+
+            RecordPerFeatureTypeCardinality(emitted, dataProvider);
 
             var parsed = new List<DrawingInstruction>();
             foreach (var e in emitted)
@@ -198,10 +200,50 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
     }
 
     /// <summary>
+    /// Records the per-feature-type emitted-instruction count
+    /// (<c>s100.lua.feature.instructions.count</c>) tagged with
+    /// <c>s100.feature.type</c> + <c>s100.product</c>. Output volume
+    /// only — does not measure CPU time. See the Telemetry doc comment.
+    /// </summary>
+    private static void RecordPerFeatureTypeCardinality(
+        IReadOnlyList<EmittedInstruction> emitted,
+        S131LuaDataProvider dataProvider)
+    {
+        if (emitted.Count == 0) return;
+
+        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var e in emitted)
+        {
+            var code = dataProvider.TryGetFeatureTypeCode(e.FeatureRef) ?? "(unknown)";
+            counts.TryGetValue(code, out var existing);
+            counts[code] = existing + 1;
+        }
+
+        foreach (var (code, count) in counts)
+        {
+            Telemetry.LuaFeatureInstructionsCount.Record(
+                count,
+                new KeyValuePair<string, object?>(TelemetryTags.Product, "S-131"),
+                new KeyValuePair<string, object?>(TelemetryTags.FeatureType, code));
+        }
+    }
+
+    /// <summary>
     /// Runs the S-131 Lua portrayal pipeline and returns the raw emitted
     /// drawing-instruction strings keyed by feature reference.
     /// </summary>
     public IReadOnlyList<EmittedInstruction> ExecuteRaw(MarinerSettings mariner)
+        => ExecuteRawCore(mariner).Emitted;
+
+    /// <summary>
+    /// Internal core of <see cref="ExecuteRaw"/> that also returns the
+    /// constructed <see cref="S131LuaDataProvider"/> so callers can
+    /// resolve feature-type codes for the emitted instructions without
+    /// re-building the lookup index. Used by <see cref="Execute"/> to
+    /// emit per-feature-type cardinality telemetry.
+    /// </summary>
+    private (IReadOnlyList<EmittedInstruction> Emitted, S131LuaDataProvider DataProvider) ExecuteRawCore(
+        MarinerSettings mariner)
     {
         ArgumentNullException.ThrowIfNull(mariner);
 
@@ -281,7 +323,7 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
             }
         }
 
-        return results;
+        return (results, dataProvider);
     }
 
     private string BuildContextParameterInitScript()

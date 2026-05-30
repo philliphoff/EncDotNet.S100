@@ -33,13 +33,20 @@ jobs:
       # the base runner is built with this PR's runner code linked against
       # the base SHA's library code. The library code under test stays
       # at the base SHA — only the measurement harness is overlaid.
+      #
+      # Directory.Packages.props is overlaid as well because central
+      # package management requires every PackageReference in the
+      # overlaid PerfRunner csproj to have a matching PackageVersion;
+      # if the PR adds a new package (e.g. profiler dependencies) the
+      # base CPM file will not contain it and restore will fail.
       - name: Overlay PR perf tooling onto base tree
         run: |
           git checkout ${{ github.event.pull_request.head.sha }} -- \
             tools/EncDotNet.S100.PerfRunner \
             tools/EncDotNet.S100.PerfReport \
             tools/perf \
-            src/EncDotNet.S100.Diagnostics.Export
+            src/EncDotNet.S100.Diagnostics.Export \
+            Directory.Packages.props
 
       - name: Build base PerfRunner
         run: |

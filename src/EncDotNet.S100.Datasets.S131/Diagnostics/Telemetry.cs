@@ -12,4 +12,23 @@ internal static class Telemetry
 
     public static readonly Meter Meter =
         S100Telemetry.CreateMeter(typeof(Telemetry));
+
+    /// <summary>
+    /// Number of drawing instructions emitted by the Lua executor for a
+    /// single feature type within one portrayal pass. Tagged with
+    /// <c>s100.feature.type</c> (FC code, e.g. <c>Berth</c>,
+    /// <c>MooringBuoy</c>) and <c>s100.product</c>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Cardinality, not timing.</b> This metric reports output
+    /// volume — it cannot prove a feature type consumed proportional CPU
+    /// time. To attribute time per feature type, combine this metric
+    /// with a sampled CPU profile collected via PerfRunner's
+    /// <c>--profile cpu</c> flag.
+    /// </remarks>
+    public static readonly Histogram<long> LuaFeatureInstructionsCount =
+        Meter.CreateHistogram<long>(
+            name: "s100.lua.feature.instructions.count",
+            unit: "{instructions}",
+            description: "Drawing instructions emitted by the Lua executor for a single feature type per pass (cardinality, not timing). Tagged with s100.feature.type and s100.product.");
 }
