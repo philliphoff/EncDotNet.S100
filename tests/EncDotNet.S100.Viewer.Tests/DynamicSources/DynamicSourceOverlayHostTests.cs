@@ -165,12 +165,22 @@ public class DynamicSourceOverlayHostTests
         var source = new FakeDynamicFeatureSource("ais", new DynamicSourceMetadata { DisplayName = "AIS" });
         source.SetFeatures(new[] { Point("seed") });
 
+        var burstRaised = 0;
+        var rebuildApplied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action<Action> marshal = action =>
+        {
+            action();
+            if (Volatile.Read(ref burstRaised) != 0 &&
+                host.OverlayLayers.Count > 0 &&
+                ((MemoryLayer)host.OverlayLayers[0]).Features.Count() == 2)
+            {
+                rebuildApplied.TrySetResult();
+            }
+        };
+
         var window = TimeSpan.FromMilliseconds(80);
-        using var sut = new DynamicSourceOverlayHost(host, sp, SyncMarshal, coalesceWindow: window);
+        using var sut = new DynamicSourceOverlayHost(host, sp, marshal, coalesceWindow: window);
         sut.Register(source);
-        var initialRebuilds = host.OverlayLayers.Count == 0
-            ? 0
-            : ((MemoryLayer)host.OverlayLayers[0]).Features.Count();
 
         // Fire 50 events back-to-back inside a single window.
         for (int i = 0; i < 50; i++)
@@ -182,9 +192,9 @@ public class DynamicSourceOverlayHostTests
                 ChangedIds = new[] { "v" + i },
             });
         }
+        Volatile.Write(ref burstRaised, 1);
 
-        // Wait long enough for the trailing rebuild to fire.
-        await Task.Delay(window + window);
+        await rebuildApplied.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         var layer = (MemoryLayer)host.OverlayLayers[0];
         // Trailing rebuild should reflect the final feature set
