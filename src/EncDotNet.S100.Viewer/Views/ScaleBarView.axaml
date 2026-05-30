@@ -3,8 +3,15 @@
              x:Class="EncDotNet.S100.Viewer.Views.ScaleBarView"
              IsHitTestVisible="False">
 
-    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="0"
-                TextElement.Foreground="#1A1A1A">
+    <StackPanel x:Name="Root" Orientation="Vertical" Spacing="0">
+        <StackPanel.Resources>
+            <SolidColorBrush x:Key="ScaleBarForegroundBrush" Color="{DynamicResource ForegroundColor}" />
+        </StackPanel.Resources>
+        <StackPanel.Styles>
+            <Style Selector="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource ScaleBarForegroundBrush}" />
+            </Style>
+        </StackPanel.Styles>
         <!-- Labels positioned absolutely above the bar -->
         <Canvas x:Name="LabelsCanvas" Height="14" />
 

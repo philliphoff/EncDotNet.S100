@@ -30,6 +30,8 @@ public class ChartThemeTests
             IsDarkTheme = dark;
             ThemeChanged?.Invoke(this, EventArgs.Empty);
         }
+        public ChromeTheme Current => IsDarkTheme ? ChromeTheme.Dark : ChromeTheme.Light;
+        public void SetTheme(ChromeTheme theme) => Set(ChromeThemes.IsDark(theme));
     }
 
     private static StationTimeSeriesSnapshot WaterLevelSnapshot()
