@@ -250,6 +250,23 @@ crosshair. The hit-test radius is 12 device pixels (matches the
 AIS pictogram outer disc). See
 [`docs/design/dynamic-source-pick.md`](../../docs/design/dynamic-source-pick.md).
 
+### AIS zoom-gated subscription
+
+The AIS overlay is **gated by viewport span** at viewer startup:
+the aisstream.io subscription is not opened until the visible
+viewport's lat-span and lon-span have both fallen to or below a
+configurable threshold (default `50°`). On a fresh launch the
+camera looks at the whole world, so the gate is closed and no
+features stream — once the user zooms in the gate trips, the
+subscription opens with the live viewport bounding box, and
+subsequent pans / zooms keep the bbox in sync via debounced
+`UpdateArea` calls. Activation is one-shot: the subscription
+stays alive for the rest of the session even if the user zooms
+back out. Set the threshold (or clear it for the legacy
+"subscribe immediately" behaviour) under **Settings → AIS
+overlay**. See
+[`docs/design/ais-zoom-gated-subscription.md`](../../docs/design/ais-zoom-gated-subscription.md).
+
 ## Optional MCP server
 
 The viewer can optionally host a Model Context Protocol server
