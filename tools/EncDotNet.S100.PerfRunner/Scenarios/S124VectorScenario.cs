@@ -24,7 +24,7 @@ internal sealed class S124VectorScenario : IPerfScenario
             _processor = factory.CreateProcessor(files[0]);
         }
 
-        var result = _processor.RenderAsync().GetAwaiter().GetResult();
+        var result = ProcessorRenderBridge.Render(_processor);
 
         if (result.Layers.Count == 0)
             throw new InvalidOperationException("Expected at least one layer from S-124 render.");

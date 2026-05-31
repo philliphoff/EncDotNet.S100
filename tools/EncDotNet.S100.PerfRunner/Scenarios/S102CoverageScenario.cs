@@ -23,7 +23,7 @@ internal sealed class S102CoverageScenario : IPerfScenario
             _processor = factory.CreateProcessor(h5Path);
         }
 
-        var result = _processor.RenderAsync().GetAwaiter().GetResult();
+        var result = ProcessorRenderBridge.Render(_processor);
 
         if (result.Layers.Count == 0)
             throw new InvalidOperationException("Expected at least one layer from S-102 render.");
