@@ -18,7 +18,7 @@ internal sealed class S101PortrayColdScenario : IPerfScenario
 
         var factory = SharedInfrastructure.CreatePipelineFactory();
         var processor = factory.CreateProcessor(files[0]);
-        processor.Render();
+        processor.RenderAsync().GetAwaiter().GetResult();
 
         return Task.CompletedTask;
     }

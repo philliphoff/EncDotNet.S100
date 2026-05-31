@@ -32,7 +32,7 @@ internal sealed class ExchangeSetOpenScenario : IPerfScenario
                 // Drive the pipeline for each dataset.
                 try
                 {
-                    result.Processor.Render();
+                    result.Processor.RenderAsync().GetAwaiter().GetResult();
                 }
                 catch
                 {

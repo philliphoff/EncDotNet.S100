@@ -27,7 +27,7 @@ internal sealed class S101RenderWarmScenario : IPerfScenario
         // Render() invokes the full pipeline including the Mapsui
         // display-list renderer — the returned layers are in-memory
         // Mapsui MemoryLayers, no UI thread required.
-        var result = _processor.Render();
+        var result = _processor.RenderAsync().GetAwaiter().GetResult();
 
         // Touch the layer list to prevent dead-code elimination.
         if (result.Layers.Count == 0)

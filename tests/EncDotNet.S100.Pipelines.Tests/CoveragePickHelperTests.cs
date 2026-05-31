@@ -114,7 +114,7 @@ public class CoveragePickHelperTests
         public CoverageMetadata Metadata { get; }
         public IReadOnlyList<DateTime> AvailableTimes => Array.Empty<DateTime>();
         public void SelectTime(DateTime time) { }
-        public SampledCoverage Sample(GridRegion region)
+        public SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
         {
             var rs = region.RowStart ?? 0;
             var re = region.RowEnd ?? Metadata.GridMetadata.NumRows;

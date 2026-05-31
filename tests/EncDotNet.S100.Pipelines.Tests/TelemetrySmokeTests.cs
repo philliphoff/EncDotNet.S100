@@ -197,7 +197,7 @@ public sealed class TelemetrySmokeTests
 
         public IReadOnlyList<string> FeatureTypesPresent { get; }
 
-        public XmlReader GetFeatureXml() =>
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default) =>
             XmlReader.Create(new System.IO.StringReader(_featureXml));
     }
 
