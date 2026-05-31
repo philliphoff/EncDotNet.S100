@@ -217,6 +217,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         }
     }
 
+    /// <summary>
+    /// True when the current pick includes at least one dataset-owned
+    /// feature. Drives visibility of the identity / references /
+    /// attributes sections in the panel; dynamic-only picks set this
+    /// to false and only render the dynamic-hits section.
+    /// </summary>
+    public bool HasDatasetPick => Hits.Count > 0;
+
     /// <inheritdoc />
     public event EventHandler? ContentBecameAvailable;
 
@@ -294,31 +302,66 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public event EventHandler<FeatureReference>? NavigateRequested;
 
     /// <summary>
+    /// Dynamic-source hits collected by
+    /// <see cref="Services.DynamicSources.IDynamicSourcePickService"/>.
+    /// Rendered in a sibling section beneath the dataset hit list. The
+    /// section is hidden when empty.
+    /// </summary>
+    public ObservableCollection<DynamicPickHit> DynamicHits { get; } = new();
+
+    /// <summary>True when at least one dynamic-source hit was returned by the most recent pick.</summary>
+    public bool HasDynamicHits => DynamicHits.Count > 0;
+
+    /// <summary>
     /// Replaces the current pick with the supplied list of hits. The first
     /// hit is selected by default. An empty list is equivalent to
     /// <see cref="Clear"/>.
     /// </summary>
     public void SetPicks(IReadOnlyList<PickHit> hits)
+        => SetPicks(hits, Array.Empty<DynamicPickHit>());
+
+    /// <summary>
+    /// Replaces the current pick with the supplied dataset hits AND
+    /// dynamic-source hits. Either list may be empty; both being empty
+    /// is equivalent to <see cref="Clear"/>. When dataset hits are
+    /// non-empty the first hit drives the detail view (existing
+    /// behaviour); when only dynamic hits are present the detail view
+    /// is left empty and only the dynamic section is shown.
+    /// </summary>
+    public void SetPicks(
+        IReadOnlyList<PickHit> hits,
+        IReadOnlyList<DynamicPickHit> dynamicHits)
     {
         ArgumentNullException.ThrowIfNull(hits);
+        ArgumentNullException.ThrowIfNull(dynamicHits);
 
         DisposeHitResources();
         Hits.Clear();
         foreach (var hit in hits)
             Hits.Add(hit);
 
-        if (hits.Count == 0)
+        DynamicHits.Clear();
+        foreach (var dh in dynamicHits)
+            DynamicHits.Add(dh);
+
+        if (hits.Count == 0 && dynamicHits.Count == 0)
         {
             Clear();
             return;
         }
 
-        // Setting SelectedHit propagates the values into the detail fields.
-        // Order matters: HasPick and HasMultipleHits must be observable
-        // before consumers react to SelectedHit changes.
         HasPick = true;
         OnPropertyChanged(nameof(HasMultipleHits));
-        SelectedHit = hits[0];
+        OnPropertyChanged(nameof(HasDynamicHits));
+        OnPropertyChanged(nameof(HasDatasetPick));
+        SelectedHit = hits.Count > 0 ? hits[0] : null;
+        if (hits.Count == 0)
+        {
+            // ApplyHitToDetailFields(null) cleared the detail fields;
+            // re-raise the attribute panels so the view collapses them.
+            OnPropertyChanged(nameof(HasAttributes));
+            OnPropertyChanged(nameof(HasReferences));
+        }
     }
 
     /// <summary>
@@ -357,6 +400,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     {
         DisposeHitResources();
         Hits.Clear();
+        DynamicHits.Clear();
         // SelectedHit setter rejects identical references; clear the backing
         // field directly so we always raise PropertyChanged when something
         // was selected.
@@ -377,6 +421,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(HasReferences));
         OnPropertyChanged(nameof(HasMultipleHits));
+        OnPropertyChanged(nameof(HasDynamicHits));
+        OnPropertyChanged(nameof(HasDatasetPick));
     }
 
     private void ApplyHitToDetailFields(PickHit? hit)

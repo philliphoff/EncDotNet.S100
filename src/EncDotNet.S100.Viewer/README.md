@@ -236,6 +236,20 @@ Own-ship visibility is controlled by its row in the **Dynamic
 Arrows** plane of the Layer Stack panel and is persisted between
 sessions.
 
+### Picking dynamic features
+
+Click (or long-press, on touch) on any dynamic-source target
+— own-ship, an AIS vessel pictogram — to identify it. The
+**Pick Report** panel renders a *Dynamic sources* section above
+the dataset hits showing the source display name, feature kind,
+last-updated relative time, position, course / heading / speed
+when available, and the full attribute snapshot (MMSI, vessel
+name, call sign, etc. for AIS). Dataset and dynamic hits stack in
+one panel so a single click reveals everything under the
+crosshair. The hit-test radius is 12 device pixels (matches the
+AIS pictogram outer disc). See
+[`docs/design/dynamic-source-pick.md`](../../docs/design/dynamic-source-pick.md).
+
 ## Optional MCP server
 
 The viewer can optionally host a Model Context Protocol server

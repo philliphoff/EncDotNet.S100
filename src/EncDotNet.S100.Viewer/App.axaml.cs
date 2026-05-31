@@ -248,6 +248,9 @@ public partial class App : Application
         services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();

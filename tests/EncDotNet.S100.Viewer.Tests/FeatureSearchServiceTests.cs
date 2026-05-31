@@ -173,6 +173,7 @@ public class FeatureSearchServiceTests
         private readonly Action<IDatasetProcessor, int, string> _openAt;
         public RecordingPick(Action<IDatasetProcessor, int, string> openAt) { _openAt = openAt; }
         public void HandlePick(Mapsui.MapInfo? mapInfo) { }
+        public void HandlePick(Mapsui.MapInfo? mapInfo, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) { }
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName)

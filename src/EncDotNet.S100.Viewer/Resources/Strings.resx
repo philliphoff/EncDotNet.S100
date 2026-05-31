@@ -1126,4 +1126,70 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>Environment variable {0} is set; it will be used.</value>
     <comment>{0} = environment variable name.</comment>
   </data>
+
+  <!-- PR-D4: Dynamic-source pick report -->
+  <data name="PickReport_DynamicSection" xml:space="preserve">
+    <value>DYNAMIC FEATURES ({0})</value>
+    <comment>{0} = count of dynamic hits.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedRelative" xml:space="preserve">
+    <value>Updated {0}</value>
+    <comment>{0} = formatted relative time string (e.g. "3s ago").</comment>
+  </data>
+  <data name="PickReport_LastUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0}s ago</value>
+    <comment>{0} = whole seconds since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0}m ago</value>
+    <comment>{0} = whole minutes since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedHoursAgo" xml:space="preserve">
+    <value>{0}h ago</value>
+    <comment>{0} = whole hours since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="PickReport_Position" xml:space="preserve">
+    <value>Position</value>
+  </data>
+  <data name="PickReport_PositionFormat" xml:space="preserve">
+    <value>{0:F4}°, {1:F4}°</value>
+    <comment>{0} = latitude, {1} = longitude. Use invariant culture.</comment>
+  </data>
+  <data name="PickReport_Cog" xml:space="preserve">
+    <value>COG</value>
+  </data>
+  <data name="PickReport_Heading" xml:space="preserve">
+    <value>Heading</value>
+  </data>
+  <data name="PickReport_Sog" xml:space="preserve">
+    <value>SOG</value>
+  </data>
+  <data name="PickReport_DegreesFormat" xml:space="preserve">
+    <value>{0:F1}°</value>
+  </data>
+  <data name="PickReport_KnotsFormat" xml:space="preserve">
+    <value>{0:F1} kn</value>
+  </data>
+  <data name="PickReport_Dimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="PickReport_DimensionsFormat" xml:space="preserve">
+    <value>{0:F0} m × {1:F0} m</value>
+    <comment>{0} = length, {1} = beam, in metres.</comment>
+  </data>
+  <data name="PickReport_Mmsi" xml:space="preserve">
+    <value>MMSI</value>
+  </data>
+  <data name="PickReport_VesselName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="PickReport_CallSign" xml:space="preserve">
+    <value>Call sign</value>
+  </data>
+  <data name="Tooltip_DynamicHit" xml:space="preserve">
+    <value>Dynamic-source feature picked from the live overlay.</value>
+  </data>
 </root>

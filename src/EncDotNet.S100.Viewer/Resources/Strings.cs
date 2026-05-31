@@ -425,4 +425,25 @@ internal static class Strings
     public static string Settings_AisApiKeyTooltip => Get(nameof(Settings_AisApiKeyTooltip));
     public static string Settings_AisApiKey_EnvVarHint => Get(nameof(Settings_AisApiKey_EnvVarHint));
     public static string Settings_AisApiKey_EnvVarPresent => Get(nameof(Settings_AisApiKey_EnvVarPresent));
+
+    // PR-D4: Dynamic-source pick report.
+    public static string PickReport_DynamicSection => Get(nameof(PickReport_DynamicSection));
+    public static string PickReport_LastUpdatedRelative => Get(nameof(PickReport_LastUpdatedRelative));
+    public static string PickReport_LastUpdatedSecondsAgo => Get(nameof(PickReport_LastUpdatedSecondsAgo));
+    public static string PickReport_LastUpdatedMinutesAgo => Get(nameof(PickReport_LastUpdatedMinutesAgo));
+    public static string PickReport_LastUpdatedHoursAgo => Get(nameof(PickReport_LastUpdatedHoursAgo));
+    public static string PickReport_LastUpdatedJustNow => Get(nameof(PickReport_LastUpdatedJustNow));
+    public static string PickReport_Position => Get(nameof(PickReport_Position));
+    public static string PickReport_PositionFormat => Get(nameof(PickReport_PositionFormat));
+    public static string PickReport_Cog => Get(nameof(PickReport_Cog));
+    public static string PickReport_Heading => Get(nameof(PickReport_Heading));
+    public static string PickReport_Sog => Get(nameof(PickReport_Sog));
+    public static string PickReport_DegreesFormat => Get(nameof(PickReport_DegreesFormat));
+    public static string PickReport_KnotsFormat => Get(nameof(PickReport_KnotsFormat));
+    public static string PickReport_Dimensions => Get(nameof(PickReport_Dimensions));
+    public static string PickReport_DimensionsFormat => Get(nameof(PickReport_DimensionsFormat));
+    public static string PickReport_Mmsi => Get(nameof(PickReport_Mmsi));
+    public static string PickReport_VesselName => Get(nameof(PickReport_VesselName));
+    public static string PickReport_CallSign => Get(nameof(PickReport_CallSign));
+    public static string Tooltip_DynamicHit => Get(nameof(Tooltip_DynamicHit));
 }

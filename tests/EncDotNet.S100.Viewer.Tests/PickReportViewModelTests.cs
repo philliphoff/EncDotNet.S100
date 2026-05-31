@@ -411,4 +411,83 @@ public class PickReportViewModelTests
 
         Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
     }
+
+    // PR-D4: dynamic-source pick coverage.
+
+    private static DynamicPickHit DynamicHit(string id = "ais.test", string label = "MV ALPHA") => new()
+    {
+        SourceId = "ais",
+        SourceDisplayName = "AIS",
+        FeatureId = id,
+        Kind = "vessel.ais.cargo",
+        DisplayLabel = label,
+        LastUpdated = DateTimeOffset.UtcNow,
+        Latitude = 47.6,
+        Longitude = -122.3,
+    };
+
+    [Fact]
+    public void SetPicks_WithOnlyDynamicHits_MarksHasPickAndPopulatesDynamicSection()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasDynamicHits);
+        Assert.False(vm.HasDatasetPick);
+        Assert.Single(vm.DynamicHits);
+        Assert.Equal("MV ALPHA", vm.DynamicHits[0].DisplayLabel);
+        Assert.Null(vm.SelectedHit);
+        // Dataset detail fields stay clear when no dataset hit is present.
+        Assert.Null(vm.FeatureType);
+        Assert.Empty(vm.Attributes);
+    }
+
+    [Fact]
+    public void SetPicks_WithBoth_KeepsDatasetSelectionAndDynamicList()
+    {
+        var vm = new PickReportViewModel();
+        var datasetHit = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureRef = "42",
+            Attributes = Array.Empty<PickAttribute>(),
+        };
+
+        vm.SetPicks(new[] { datasetHit }, new[] { DynamicHit() });
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasDatasetPick);
+        Assert.True(vm.HasDynamicHits);
+        Assert.Same(datasetHit, vm.SelectedHit);
+        Assert.Equal("DepthArea", vm.FeatureType);
+        Assert.Single(vm.DynamicHits);
+    }
+
+    [Fact]
+    public void Clear_AlsoClearsDynamicHits()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
+        Assert.True(vm.HasDynamicHits);
+
+        vm.Clear();
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasDynamicHits);
+        Assert.Empty(vm.DynamicHits);
+    }
+
+    [Fact]
+    public void SetPicks_WithBothEmpty_ClearsState()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[] { new PickHit { FeatureType = "X", FeatureRef = "1" } }, Array.Empty<DynamicPickHit>());
+        Assert.True(vm.HasPick);
+
+        vm.SetPicks(Array.Empty<PickHit>(), Array.Empty<DynamicPickHit>());
+
+        Assert.False(vm.HasPick);
+    }
 }
