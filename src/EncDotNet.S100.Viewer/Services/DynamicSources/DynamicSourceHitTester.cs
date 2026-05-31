@@ -85,14 +85,97 @@ internal static class DynamicSourceHitTester
                 var dx = x - mapPoint.X;
                 var dy = y - mapPoint.Y;
                 var distSq = dx * dx + dy * dy;
-                if (distSq > toleranceSquared) continue;
+                var distance = Math.Sqrt(distSq);
 
-                hits.Add(new DynamicHit(source, feature, Math.Sqrt(distSq)));
+                // Try the vessel-hull polygon first when present —
+                // matches the rendered shape so a click anywhere
+                // inside the drawn hull picks the vessel even when
+                // the antenna is far from the click. Distance reports
+                // 0 inside the polygon so closer-to-antenna hits
+                // still order ahead of edge hits.
+                var insideHull = feature.VesselGeometry is { } geom
+                    && IsInsideVesselHull(mapPoint, lat, lon, geom, feature.Motion?.HeadingDeg ?? 0.0);
+
+                if (insideHull)
+                {
+                    hits.Add(new DynamicHit(source, feature, 0.0));
+                    continue;
+                }
+
+                if (distSq <= toleranceSquared)
+                {
+                    hits.Add(new DynamicHit(source, feature, distance));
+                }
             }
         }
 
         hits.Sort(static (a, b) => a.DistanceMapUnits.CompareTo(b.DistanceMapUnits));
         return hits;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="mapPoint"/>
+    /// (Spherical Mercator) lies inside the vessel hull described by
+    /// <paramref name="geometry"/> at antenna position
+    /// (<paramref name="lat"/>, <paramref name="lon"/>) with heading
+    /// <paramref name="headingDeg"/>. Mirrors the 5-vertex hull polygon
+    /// produced by <c>VesselSymbology</c>.
+    /// </summary>
+    private static bool IsInsideVesselHull(
+        MPoint mapPoint, double lat, double lon, DynamicVesselGeometry geometry, double headingDeg)
+    {
+        if (geometry.LengthMetres <= 0 || geometry.BeamMetres <= 0)
+            return false;
+
+        var theta = headingDeg * Math.PI / 180.0;
+        var sinT = Math.Sin(theta);
+        var cosT = Math.Cos(theta);
+
+        var antX = -geometry.BeamMetres / 2.0 + geometry.PortOffsetMetres;
+        var antY = geometry.LengthMetres - geometry.BowOffsetMetres;
+        var halfBeam = geometry.BeamMetres / 2.0;
+        const double bowTaperRatio = 0.7;
+        var taperY = geometry.LengthMetres * bowTaperRatio;
+
+        var local = new (double X, double Y)[]
+        {
+            (         0,  geometry.LengthMetres),
+            (+halfBeam,   taperY),
+            (+halfBeam,             0),
+            (-halfBeam,             0),
+            (-halfBeam,   taperY),
+        };
+
+        var ring = new (double X, double Y)[local.Length];
+        const double metresPerDegLat = 111_320.0;
+        var cosLat = Math.Cos(lat * Math.PI / 180.0);
+        for (var i = 0; i < local.Length; i++)
+        {
+            var lx = local[i].X - antX;
+            var ly = local[i].Y - antY;
+            var east = lx * cosT + ly * sinT;
+            var north = -lx * sinT + ly * cosT;
+            var dLat = north / metresPerDegLat;
+            var dLon = cosLat == 0 ? 0.0 : east / (metresPerDegLat * cosLat);
+            var (mx, my) = SphericalMercator.FromLonLat(lon + dLon, lat + dLat);
+            ring[i] = (mx, my);
+        }
+
+        return PointInPolygon(mapPoint.X, mapPoint.Y, ring);
+    }
+
+    private static bool PointInPolygon(double px, double py, (double X, double Y)[] ring)
+    {
+        var inside = false;
+        for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
+        {
+            var xi = ring[i].X; var yi = ring[i].Y;
+            var xj = ring[j].X; var yj = ring[j].Y;
+            var intersect = ((yi > py) != (yj > py)) &&
+                            (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
 }
 

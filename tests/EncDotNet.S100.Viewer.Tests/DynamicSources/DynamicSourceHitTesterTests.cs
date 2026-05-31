@@ -127,4 +127,65 @@ public class DynamicSourceHitTesterTests
         Assert.Empty(DynamicSourceHitTester.HitTest(click, -1, new[] { source }));
         Assert.Empty(DynamicSourceHitTester.HitTest(click, double.NaN, new[] { source }));
     }
+
+    [Fact]
+    public void HitTest_ReturnsHullHit_WhenClickInsidePolygon_EvenAtTinyResolution()
+    {
+        // 200 m × 30 m vessel, antenna at the bow (BowOffset=0, PortOffset=15).
+        var feature = new DynamicFeature
+        {
+            Id = "ais1",
+            GeometryType = GeometryType.Point,
+            Coordinates = new[] { (SeattleLat, SeattleLon) },
+            VesselGeometry = new DynamicVesselGeometry
+            {
+                LengthMetres = 200,
+                BeamMetres = 30,
+                BowOffsetMetres = 0,
+                PortOffsetMetres = 15,
+            },
+            Motion = new DynamicMotion { HeadingDeg = 0 }, // bow north
+            LastUpdated = DateTimeOffset.UtcNow,
+        };
+        // 100 m south of antenna → mid-hull, well inside polygon, far
+        // outside the 12-px tolerance even at tiny resolution.
+        var midHullLat = SeattleLat - 100.0 / 111_320.0;
+        var click = ToMercator(midHullLat, SeattleLon);
+        var source = new FakeDynamicFeatureSource("ais", new DynamicSourceMetadata { DisplayName = "AIS" });
+        source.SetFeatures(new[] { feature });
+
+        var hits = DynamicSourceHitTester.HitTest(click, resolution: 0.5, new[] { source });
+
+        var hit = Assert.Single(hits);
+        Assert.Equal(0.0, hit.DistanceMapUnits); // inside-polygon distance is 0.
+        Assert.Equal("ais1", hit.Feature.Id);
+    }
+
+    [Fact]
+    public void HitTest_HullMiss_FallsBackToPointTolerance()
+    {
+        var feature = new DynamicFeature
+        {
+            Id = "ais1",
+            GeometryType = GeometryType.Point,
+            Coordinates = new[] { (SeattleLat, SeattleLon) },
+            VesselGeometry = new DynamicVesselGeometry
+            {
+                LengthMetres = 200,
+                BeamMetres = 30,
+                BowOffsetMetres = 0,
+                PortOffsetMetres = 15,
+            },
+            LastUpdated = DateTimeOffset.UtcNow,
+        };
+        // Click 1 km away — well outside hull AND outside any reasonable tolerance.
+        var farLat = SeattleLat + 0.01;
+        var click = ToMercator(farLat, SeattleLon);
+        var source = new FakeDynamicFeatureSource("ais", new DynamicSourceMetadata { DisplayName = "AIS" });
+        source.SetFeatures(new[] { feature });
+
+        var hits = DynamicSourceHitTester.HitTest(click, resolution: 1.0, new[] { source });
+
+        Assert.Empty(hits);
+    }
 }
