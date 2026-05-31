@@ -285,6 +285,14 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
 
+        // Map-viewport notifier (singleton). Inert until MainWindow
+        // calls Bind(navigator) once the MapControl exists. Used by
+        // the AIS overlay's zoom-gated decorator (see
+        // docs/design/ais-zoom-gated-subscription.md).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapViewportNotifier>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
+
         // PR-D? upgraded own-ship symbology: register OwnShipRenderer
         // under the "ownship" key so DynamicSourceOverlayHost resolves
         // it for the own-ship source (RendererKey = "ownship").

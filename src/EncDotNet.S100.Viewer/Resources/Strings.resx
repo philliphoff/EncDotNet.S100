@@ -1126,6 +1126,15 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
     <value>Environment variable {0} is set; it will be used.</value>
     <comment>{0} = environment variable name.</comment>
   </data>
+  <data name="Settings_AisActivationSpan" xml:space="preserve">
+    <value>Activate at viewport span (degrees)</value>
+  </data>
+  <data name="Settings_AisActivationSpanTooltip" xml:space="preserve">
+    <value>The AIS subscription will not start until the visible map's latitude and longitude spans are both at or below this value (in degrees). The default of 50° excludes the global cold-start view but admits any reasonable regional view. Leave blank to disable the gate and subscribe immediately on launch.</value>
+  </data>
+  <data name="Settings_AisActivationSpanHint" xml:space="preserve">
+    <value>Default 50°. Leave blank to subscribe immediately on launch (legacy behaviour). Once activated, the subscription stays active for the rest of the viewer session.</value>
+  </data>
 
   <!-- PR-D4: Dynamic-source pick report -->
   <data name="PickReport_DynamicSection" xml:space="preserve">

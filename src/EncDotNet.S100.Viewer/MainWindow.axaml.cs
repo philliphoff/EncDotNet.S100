@@ -221,6 +221,18 @@ public partial class MainWindow : ShadUI.Window
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
         }
 
+        // Bind the map-viewport notifier as early as possible so the
+        // AIS overlay's zoom-gated decorator (resolved below via
+        // GetServices<IDynamicFeatureSource>) can read the current
+        // viewport synchronously in its constructor. See
+        // docs/design/ais-zoom-gated-subscription.md.
+        if (MapControl.Map?.Navigator is { } notifierNav)
+        {
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.MapViewportNotifier>()
+                .Bind(notifierNav);
+        }
+
         // PR-D2: dynamic-source overlay host. Registered *after* the
         // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
         // the overlay above the OSM tile layer rather than at index 0

@@ -541,6 +541,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;
         _aisApiKey = ais.ApiKey;
+        _aisActivationViewportSpanDegrees = ais.ActivationViewportSpanDegrees;
     }
 
     /// <summary>
@@ -771,6 +772,31 @@ internal sealed class SettingsViewModel : ViewModelBase
             return string.IsNullOrWhiteSpace(envVal)
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar)
                 : string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
+        }
+    }
+
+    private double? _aisActivationViewportSpanDegrees;
+    /// <summary>
+    /// Activation threshold (in degrees of latitude AND longitude)
+    /// for the AIS subscription. While the visible viewport's
+    /// lat-span or lon-span is wider than this, no traffic is fetched
+    /// from aisstream.io. <see langword="null"/> disables the gate
+    /// entirely (subscribe immediately on viewer launch). Values
+    /// <c>&lt;= 0</c> are normalised to <see langword="null"/> so
+    /// users can't accidentally configure a gate that never opens.
+    /// </summary>
+    public double? AisActivationViewportSpanDegrees
+    {
+        get => _aisActivationViewportSpanDegrees;
+        set
+        {
+            var normalised = value is { } v && v > 0 ? value : null;
+            if (SetProperty(ref _aisActivationViewportSpanDegrees, normalised))
+            {
+                EnsureAisOverlaySettings();
+                _settings.AisOverlay!.ActivationViewportSpanDegrees = normalised;
+                _settings.Save();
+            }
         }
     }
 }
