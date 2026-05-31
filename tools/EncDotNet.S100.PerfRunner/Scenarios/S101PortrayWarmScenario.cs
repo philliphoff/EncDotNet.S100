@@ -23,7 +23,7 @@ internal sealed class S101PortrayWarmScenario : IPerfScenario
             _processor = factory.CreateProcessor(files[0]);
         }
 
-        _processor.Render();
+        ProcessorRenderBridge.Render(_processor);
         return Task.CompletedTask;
     }
 }

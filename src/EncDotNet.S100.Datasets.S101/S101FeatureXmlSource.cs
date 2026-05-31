@@ -51,8 +51,9 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
         }
     }
 
-    public XmlReader GetFeatureXml()
+    public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var xmlDoc = BuildFeatureXml();
         return xmlDoc.CreateReader();
     }

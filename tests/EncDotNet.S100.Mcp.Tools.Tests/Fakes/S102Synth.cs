@@ -47,10 +47,10 @@ internal sealed class DisposableS102CoverageSource(S102Dataset dataset) : S102Co
 {
     private bool _disposed;
 
-    public override EncDotNet.S100.Pipelines.Coverage.SampledCoverage Sample(EncDotNet.S100.Pipelines.Coverage.GridRegion region)
+    public override EncDotNet.S100.Pipelines.Coverage.SampledCoverage Sample(EncDotNet.S100.Pipelines.Coverage.GridRegion region, CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return base.Sample(region);
+        return base.Sample(region, cancellationToken);
     }
 
     public void Dispose() => _disposed = true;

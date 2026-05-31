@@ -67,7 +67,7 @@ public class S102CoverageSource : ICoverageSource
     public IReadOnlyList<DateTime> AvailableTimes => [];
     public void SelectTime(DateTime time) { }  // no-op
     
-    public virtual SampledCoverage Sample(GridRegion region)
+    public virtual SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
         var values = _coverage.Values;
         int gridRows = _coverage.NumPointsLatitudinal;
@@ -88,6 +88,9 @@ public class S102CoverageSource : ICoverageSource
 
         for (int r = 0; r < rows; r++)
         {
+            // Per-row (not per-cell) cancellation check keeps the inner copy
+            // loop branch-free while still bounding cancellation latency.
+            cancellationToken.ThrowIfCancellationRequested();
             int dstRowBase = r * cols;
             int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
             for (int c = 0; c < cols; c++)

@@ -183,8 +183,12 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     /// <see cref="DrawingInstructionParser.Parse"/> and
     /// <see cref="S101SafconLabelMerger.Merge"/>.
     /// </summary>
-    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner)
+    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
+        // The MoonSharp interpreter is not interruptible mid-script, so the
+        // token is honoured at the coarse boundary before invocation.
+        cancellationToken.ThrowIfCancellationRequested();
+
         // TODO: Per-Lua-rule timing is deferred to PR P2 — requires a small
         // executor refactor to inject timing hooks around individual rule calls.
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
