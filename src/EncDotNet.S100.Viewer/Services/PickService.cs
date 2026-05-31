@@ -36,12 +36,13 @@ internal sealed class PickService : IPickService
     private readonly IStatusPresenter _status;
     private readonly GlobalTimeService? _globalTime;
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly IThemeService? _themeService;
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
         IStatusPresenter status)
-        : this(loader, pickReport, status, globalTime: null, timeFormat: null)
+        : this(loader, pickReport, status, globalTime: null, timeFormat: null, themeService: null)
     {
     }
 
@@ -50,7 +51,7 @@ internal sealed class PickService : IPickService
         PickReportViewModel pickReport,
         IStatusPresenter status,
         GlobalTimeService? globalTime)
-        : this(loader, pickReport, status, globalTime, timeFormat: null)
+        : this(loader, pickReport, status, globalTime, timeFormat: null, themeService: null)
     {
     }
 
@@ -60,6 +61,17 @@ internal sealed class PickService : IPickService
         IStatusPresenter status,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat)
+        : this(loader, pickReport, status, globalTime, timeFormat, themeService: null)
+    {
+    }
+
+    public PickService(
+        IDatasetLoaderService loader,
+        PickReportViewModel pickReport,
+        IStatusPresenter status,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -69,6 +81,7 @@ internal sealed class PickService : IPickService
         _status = status;
         _globalTime = globalTime;
         _timeFormat = timeFormat;
+        _themeService = themeService;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -254,8 +267,8 @@ internal sealed class PickService : IPickService
         // exposes a single height channel; S-111 exposes speed + direction.
         return processor.Spec.Name switch
         {
-            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
-            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
+            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
+            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
             _ => null,
         };
     }

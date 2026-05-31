@@ -6,6 +6,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -43,11 +44,74 @@ internal sealed class SettingsViewModel : ViewModelBase
                 _settings.ColorProfile = value.ToString();
                 _settings.Save();
                 PaletteChanged?.Invoke(value);
+                OnPropertyChanged(nameof(IsPaletteDay));
+                OnPropertyChanged(nameof(IsPaletteDusk));
+                OnPropertyChanged(nameof(IsPaletteNight));
             }
         }
     }
 
+    /// <summary>True when the active S-100 map palette is Day. Drives the toolbar palette flyout's RadioButton state.</summary>
+    public bool IsPaletteDay => _selectedPalette == PaletteType.Day;
+
+    /// <summary>True when the active S-100 map palette is Dusk.</summary>
+    public bool IsPaletteDusk => _selectedPalette == PaletteType.Dusk;
+
+    /// <summary>True when the active S-100 map palette is Night.</summary>
+    public bool IsPaletteNight => _selectedPalette == PaletteType.Night;
+
+    /// <summary>Sets the S-100 map palette to Day. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteDayCommand { get; }
+
+    /// <summary>Sets the S-100 map palette to Dusk. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteDuskCommand { get; }
+
+    /// <summary>Sets the S-100 map palette to Night. Bound from the toolbar palette flyout.</summary>
+    public ICommand SetPaletteNightCommand { get; }
+
     public event Action<PaletteType>? PaletteChanged;
+
+    public static ChromeTheme[] AvailableChromeThemes { get; } =
+        [ChromeTheme.Light, ChromeTheme.Dark, ChromeTheme.S100Night];
+
+    private ChromeTheme _selectedChromeTheme;
+
+    /// <summary>
+    /// User-selected chrome theme (Light / Dark / S100Night).
+    /// Persisted to <see cref="ViewerSettings.ChromeTheme"/>. The
+    /// setter only updates persisted state and fires
+    /// <see cref="ChromeThemeChanged"/>; the host (App.axaml.cs) is
+    /// responsible for translating the change into an
+    /// <see cref="IThemeService.SetTheme"/> call and for resetting
+    /// <see cref="SelectedPalette"/> to the default for the new
+    /// chrome. Splitting the responsibility keeps SettingsViewModel
+    /// free of an IThemeService dependency so existing tests keep
+    /// constructing it with just a <see cref="ViewerSettings"/>.
+    /// </summary>
+    public ChromeTheme SelectedChromeTheme
+    {
+        get => _selectedChromeTheme;
+        set
+        {
+            if (SetProperty(ref _selectedChromeTheme, value))
+            {
+                _settings.ChromeTheme = value.ToString();
+                _settings.Save();
+                ChromeThemeChanged?.Invoke(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raised after the user picks a new chrome theme. Listeners are
+    /// expected to (a) apply the variant via
+    /// <see cref="IThemeService.SetTheme"/> and (b) write
+    /// <see cref="SelectedPalette"/> back to
+    /// <see cref="ChromeThemes.GetDefaultPaletteFor"/> so the map
+    /// follows. Users can then override the map palette manually for
+    /// inspection.
+    /// </summary>
+    public event Action<ChromeTheme>? ChromeThemeChanged;
 
     private double _symbolScale;
     public double SymbolScale
@@ -432,6 +496,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         _settings = settings;
         _accentColor = Color.TryParse(settings.AccentColor, out var c) ? c : Color.Parse("#007ACC");
         _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
+        _selectedChromeTheme = Enum.TryParse<ChromeTheme>(settings.ChromeTheme, ignoreCase: true, out var ct) ? ct : ChromeTheme.Light;
         _symbolScale = settings.SymbolScale;
         _textScale = settings.TextScale;
         _distanceUnit = Enum.TryParse<DistanceUnit>(settings.DistanceUnit, ignoreCase: true, out var u)
@@ -468,6 +533,10 @@ internal sealed class SettingsViewModel : ViewModelBase
         _ownShipBeam = own.BeamMetres;
         _ownShipBowOffset = own.BowOffsetMetres;
         _ownShipPortOffset = own.PortOffsetMetres;
+
+        SetPaletteDayCommand = new RelayCommand(() => SelectedPalette = PaletteType.Day);
+        SetPaletteDuskCommand = new RelayCommand(() => SelectedPalette = PaletteType.Dusk);
+        SetPaletteNightCommand = new RelayCommand(() => SelectedPalette = PaletteType.Night);
 
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;

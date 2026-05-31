@@ -543,6 +543,21 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Settings_ColorProfile_Help" xml:space="preserve">
     <value>Controls the Day/Dusk/Night color palette used across all datasets.</value>
   </data>
+  <data name="Settings_ChromeTheme" xml:space="preserve">
+    <value>Chrome Theme</value>
+  </data>
+  <data name="Settings_ChromeTheme_Help" xml:space="preserve">
+    <value>Controls the application chrome (panels, title bar, buttons). Picking S-100 Night switches the map palette to Night by default; you can then override the map palette independently.</value>
+  </data>
+  <data name="ChromeTheme_Light" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="ChromeTheme_Dark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="ChromeTheme_S100Night" xml:space="preserve">
+    <value>S-100 Night</value>
+  </data>
   <data name="Settings_SymbolScale" xml:space="preserve">
     <value>Symbol Scale</value>
   </data>
@@ -929,6 +944,14 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="TextGroup_All" xml:space="preserve">
     <value>All other chart text</value>
+  </data>
+
+  <!-- Map palette toolbar pill (PR-N1) -->
+  <data name="Toolbar_Palette" xml:space="preserve">
+    <value>Palette ▾</value>
+  </data>
+  <data name="Tooltip_SwitchPalette" xml:space="preserve">
+    <value>Switch S-100 map palette (Day / Dusk / Night)</value>
   </data>
 
   <!-- Toast notification titles -->

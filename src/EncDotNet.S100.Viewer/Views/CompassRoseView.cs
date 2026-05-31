@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Styling;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -40,8 +41,12 @@ internal sealed class CompassRoseView : Control
     public CompassRoseView()
     {
         ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+        if (Application.Current is { } app)
+            app.ActualThemeVariantChanged += OnAppThemeChanged;
         Cursor = new Cursor(StandardCursorType.Hand);
     }
+
+    private void OnAppThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
 
     public double MapRotation
     {
@@ -251,8 +256,27 @@ internal sealed class CompassRoseView : Control
 
     private Palette ResolvePalette()
     {
-        var isDark = ActualThemeVariant == ThemeVariant.Dark;
+        // Read the active variant from Application directly rather than
+        // from this control's ActualThemeVariant. Custom variants (e.g.
+        // S100Night, which inherits from Dark) are not always
+        // propagated reliably to ActualThemeVariant on individual
+        // controls that sit inside transparent map overlays.
+        var actual = Application.Current?.ActualThemeVariant ?? ActualThemeVariant;
         var north = TryFindAccentBrush() ?? Brushes.SteelBlue;
+
+        // S100Night gets its own near-black palette with red-shifted
+        // ticks / cardinal letter so the compass disappears into the
+        // chrome instead of reading as a bright patch over dark water.
+        if (actual is { } v && Equals(v.Key, ChromeThemes.S100Night.Key))
+        {
+            return new Palette(
+                Background: new SolidColorBrush(Color.FromArgb(120, 10, 0, 0)),
+                Tick: new SolidColorBrush(Color.FromArgb(200, 200, 140, 132)),
+                Foreground: new SolidColorBrush(Color.FromArgb(230, 255, 176, 160)),
+                North: north);
+        }
+
+        var isDark = actual != ThemeVariant.Light && actual != ThemeVariant.Default;
         if (isDark)
         {
             return new Palette(

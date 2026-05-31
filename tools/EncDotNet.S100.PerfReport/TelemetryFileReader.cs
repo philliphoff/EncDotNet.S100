@@ -96,6 +96,8 @@ public sealed class TelemetryFileReader
                         SpanId = root.GetProperty("spanId").GetString() ?? "",
                         ParentSpanId = root.TryGetProperty("parentSpanId", out var p) ? p.GetString() : null,
                         DurationMs = root.TryGetProperty("durationMs", out var d) ? d.GetDouble() : 0,
+                        StartUnixNs = root.TryGetProperty("startUnixNs", out var sNs) && sNs.ValueKind == JsonValueKind.Number ? sNs.GetInt64() : null,
+                        EndUnixNs = root.TryGetProperty("endUnixNs", out var eNs) && eNs.ValueKind == JsonValueKind.Number ? eNs.GetInt64() : null,
                         Tags = ReadTags(root),
                     });
                     break;
@@ -155,6 +157,20 @@ public sealed class SpanRecord
     public string SpanId { get; init; } = "";
     public string? ParentSpanId { get; init; }
     public double DurationMs { get; init; }
+
+    /// <summary>
+    /// Activity start time in Unix nanoseconds, or <c>null</c> when the
+    /// underlying telemetry file did not include this field. Required
+    /// for Chrome-trace export (see <see cref="ChromeTraceCommand"/>).
+    /// </summary>
+    public long? StartUnixNs { get; init; }
+
+    /// <summary>
+    /// Activity end time in Unix nanoseconds, or <c>null</c> when the
+    /// underlying telemetry file did not include this field.
+    /// </summary>
+    public long? EndUnixNs { get; init; }
+
     public Dictionary<string, string> Tags { get; init; } = [];
 }
 

@@ -979,6 +979,11 @@ internal sealed class MainViewModel : ViewModelBase
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
+        // Keep IsDarkTheme in sync when the theme is changed via paths
+        // other than ToggleThemeCommand (e.g. the SettingsView chrome
+        // selector, which routes through IThemeService.SetTheme).
+        _theme.ThemeChanged += (_, _) => IsDarkTheme = _theme.IsDarkTheme;
+
         CancelExchangeSetCommand = new RelayCommand(
             () => _exchangeSetCts?.Cancel(),
             () => IsExchangeSetLoading);

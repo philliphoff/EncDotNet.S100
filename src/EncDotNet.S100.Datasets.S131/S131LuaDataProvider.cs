@@ -54,6 +54,27 @@ public sealed class S131LuaDataProvider
     private readonly List<(string FeatureRef, string Instructions, string ObservedParams)> _emitted = new();
 
     /// <summary>
+    /// Resolves a Lua-side feature reference (the stringified synthetic
+    /// numeric id passed to <c>HostPortrayalEmit</c>) to its S-131
+    /// feature-type code (e.g. <c>Berth</c>, <c>MooringBuoy</c>).
+    /// </summary>
+    /// <returns>
+    /// The FC code on success, or <see langword="null"/> when
+    /// <paramref name="featureRef"/> cannot be parsed or no feature is
+    /// associated with the id.
+    /// </returns>
+    public string? TryGetFeatureTypeCode(string featureRef)
+    {
+        if (string.IsNullOrEmpty(featureRef)) return null;
+        if (!double.TryParse(featureRef, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var id))
+        {
+            return null;
+        }
+        return _featureById.TryGetValue(id, out var feat) ? feat.FeatureType : null;
+    }
+
+    /// <summary>
     /// Initialises a new <see cref="S131LuaDataProvider"/> for the given dataset
     /// and feature catalogue.
     /// </summary>

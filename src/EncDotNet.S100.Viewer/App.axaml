@@ -1,9 +1,53 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:themes="clr-namespace:ShadUI;assembly=ShadUI"
+             xmlns:services="using:EncDotNet.S100.Viewer.Services"
              x:Class="EncDotNet.S100.Viewer.App"
              Name="S-100 Viewer"
              RequestedThemeVariant="Default">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!--
+                  S-100 Night chrome variant. Inherits from ShadUI's
+                  Dark dictionary via ChromeThemes.S100Night's
+                  inheritVariant — any key not overridden here resolves
+                  against Dark. The overrides below target the surfaces
+                  most visible at night (window, title bar, sidebar,
+                  card, dialog, plus their adjacent text / border
+                  colours) and shift them to near-black with a muted
+                  red-shifted foreground that preserves dark-adapted
+                  vision. Status colours (Info/Success/Warning/Error)
+                  are intentionally left to inherit from Dark in this
+                  first cut — a follow-up should retune them for
+                  night use. See docs/design/s100-chrome-theme-spike.md.
+                -->
+                <ResourceDictionary x:Key="{x:Static services:ChromeThemes.S100Night}">
+                    <!-- Window / surface -->
+                    <Color x:Key="WindowBackgroundColor">#000000</Color>
+                    <Color x:Key="TitleBarBackgroundColor">#0A0000</Color>
+                    <Color x:Key="SidebarBackgroundColor">#080000</Color>
+                    <Color x:Key="CardBackgroundColor">#100404</Color>
+                    <Color x:Key="DialogBackgroundColor">#0A0000</Color>
+                    <Color x:Key="TabItemsBackgroundColor">#1A0606</Color>
+                    <Color x:Key="TabItemSelectedColor">#100404</Color>
+                    <Color x:Key="BusyAreaOverlayColor">#19FF6464</Color>
+
+                    <!-- Text -->
+                    <Color x:Key="ForegroundColor">#FFB0A0</Color>
+                    <Color x:Key="ForegroundLeadColor">#C88478</Color>
+                    <Color x:Key="MutedColor">#8A4848</Color>
+
+                    <!-- Borders / outlines -->
+                    <Color x:Key="BorderColor">#280808</Color>
+                    <Color x:Key="BorderColor60">#1F0606</Color>
+                    <Color x:Key="BorderColor30">#4C280808</Color>
+                    <Color x:Key="OutlineColor">#301010</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 
     <Application.Styles>
         <themes:ShadTheme />
