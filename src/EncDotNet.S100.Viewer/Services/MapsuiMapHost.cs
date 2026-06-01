@@ -195,33 +195,67 @@ internal sealed class MapsuiMapHost : IMapHost
             // exactly) but owns its own Navigator. The live map is
             // therefore untouched: setting size / zoom on the clone
             // does not trigger a redraw on screen.
+            //
+            // PERF: the snapshot Map is IDisposable. Prior to this
+            // change it was let go to the GC, which left subscriptions
+            // from its layer-collection / property-changed plumbing
+            // rooting it indefinitely; over the course of many
+            // render_to_image calls the per-call PNG buffer plus
+            // associated native bitmaps could not be reclaimed
+            // (RSS grew ~9× over 150 renders in the perf report's
+            // Track-B measurements). We now detach the live layers
+            // from the snapshot before disposing it so the snapshot's
+            // dispose path only touches its own owned resources, not
+            // the live layers we don't own.
             var snapshot = new Map { CRS = liveMap.CRS, BackColor = liveMap.BackColor };
-            foreach (var layer in liveMap.Layers)
+            try
             {
-                snapshot.Layers.Add(layer);
+                foreach (var layer in liveMap.Layers)
+                {
+                    snapshot.Layers.Add(layer);
+                }
+
+                snapshot.Navigator.SetSize(widthPx, heightPx);
+
+                // Match the world-extent the user currently sees. With
+                // MBoxFit.Fit, aspect-ratio mismatches show slightly more
+                // area rather than cropping — acceptable for diagnostic
+                // snapshots; the requested pixel dimensions are exact.
+                var extent = liveViewport.ToExtent();
+                if (extent is not null && extent.Width > 0 && extent.Height > 0)
+                {
+                    snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+                }
+
+                using var stream = new MapRenderer().RenderToBitmapStream(
+                    snapshot,
+                    pixelDensity: (float)pixelDensity,
+                    renderFormat: RenderFormat.Png,
+                    quality: 100);
+                stream.Position = 0;
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                return ms.ToArray();
             }
-
-            snapshot.Navigator.SetSize(widthPx, heightPx);
-
-            // Match the world-extent the user currently sees. With
-            // MBoxFit.Fit, aspect-ratio mismatches show slightly more
-            // area rather than cropping — acceptable for diagnostic
-            // snapshots; the requested pixel dimensions are exact.
-            var extent = liveViewport.ToExtent();
-            if (extent is not null && extent.Width > 0 && extent.Height > 0)
+            finally
             {
-                snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+                // Detach the live layers from the snapshot before the
+                // snapshot is disposed, so the snapshot's dispose path
+                // (and any teardown subscriptions Mapsui has registered
+                // on layer collection mutations) cannot release / dispose
+                // layer instances the live Map still owns. Best-effort:
+                // we never want a teardown failure to mask a render
+                // failure or otherwise crash the dispatcher.
+                try
+                {
+                    snapshot.Layers.ClearAllGroups();
+                }
+                catch
+                {
+                    // ignore — see comment above
+                }
+                snapshot.Dispose();
             }
-
-            using var stream = new MapRenderer().RenderToBitmapStream(
-                snapshot,
-                pixelDensity: (float)pixelDensity,
-                renderFormat: RenderFormat.Png,
-                quality: 100);
-            stream.Position = 0;
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            return ms.ToArray();
         }).GetTask().ConfigureAwait(false);
     }
 
