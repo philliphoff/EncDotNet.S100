@@ -126,6 +126,26 @@ internal sealed class MapsuiMapHost : IMapHost
         }
     }
 
+    public void SetViewportToExtent(MRect mercatorExtent)
+    {
+        ArgumentNullException.ThrowIfNull(mercatorExtent);
+        if (_mapControl.Map?.Navigator is { } nav)
+        {
+            // duration: 0 for an instantaneous, scripted viewport set —
+            // animations would prevent reproducible measurement runs.
+            nav.ZoomToBox(mercatorExtent, duration: 0);
+        }
+    }
+
+    public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution)
+    {
+        ArgumentNullException.ThrowIfNull(mercatorCenter);
+        if (_mapControl.Map?.Navigator is { } nav)
+        {
+            nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
+        }
+    }
+
     public void AddOverlayLayer(ILayer layer)
     {
         ArgumentNullException.ThrowIfNull(layer);

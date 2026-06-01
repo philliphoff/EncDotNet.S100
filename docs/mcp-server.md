@@ -116,7 +116,23 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `query_features` | Returns features from loaded GML vector datasets whose geometry intersects a spatial query. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
-| `render_to_image` *(viewer only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported in v1. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+
+### Read-only vs mutating tools
+
+Tools fall into two groups:
+
+* **Read-only** — never mutate viewer state. Safe to call from any
+  agent at any time. Examples: `list_datasets`, `find_at`,
+  `query_features`, `sample_coverage`, `render_to_image` (which
+  snapshots from a clone of the live `Map`).
+* **Mutating** — modify the live viewer's state (navigator, palette,
+  time step, loaded datasets, etc.). Use only when you intend to
+  drive the viewer's UI from outside. Examples: `set_viewport`.
+
+Tool descriptions in the registered MCP catalogue identify each tool
+as one or the other; this table is the canonical reference.
 
 ### Image content blocks (`render_to_image`)
 

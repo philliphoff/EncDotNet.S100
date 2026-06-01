@@ -255,7 +255,12 @@ internal sealed class McpServerHost : IAsyncDisposable
     {
         if (_mapHostAccessor is null) return null;
         var renderTool = new RenderToImageTool(_mapHostAccessor);
-        return new[] { RenderToImageMcpAdapter.Create(renderTool) };
+        var setViewportTool = new SetViewportTool(_mapHostAccessor);
+        return new[]
+        {
+            RenderToImageMcpAdapter.Create(renderTool),
+            SetViewportMcpAdapter.Create(setViewportTool),
+        };
     }
 
     private static bool IsPortInUse(Exception ex)
