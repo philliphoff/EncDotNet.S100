@@ -335,11 +335,13 @@ public partial class App : Application
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
+        services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<IMapHostAccessor>(),
-            sp.GetService<ILoggerFactory>()));
+            sp.GetService<ILoggerFactory>(),
+            sp.GetRequiredService<IRenderStateControllerAccessor>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

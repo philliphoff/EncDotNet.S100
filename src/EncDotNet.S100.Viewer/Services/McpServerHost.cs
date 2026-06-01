@@ -28,6 +28,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
     private readonly IMapHostAccessor? _mapHostAccessor;
+    private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -38,13 +39,15 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
         IMapHostAccessor? mapHostAccessor = null,
-        ILoggerFactory? loggers = null)
+        ILoggerFactory? loggers = null,
+        IRenderStateControllerAccessor? renderStateAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
         _settings = settings;
         _mapHostAccessor = mapHostAccessor;
+        _renderStateAccessor = renderStateAccessor;
         _loggers = loggers;
     }
 
@@ -253,14 +256,18 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// </summary>
     private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
     {
-        if (_mapHostAccessor is null) return null;
-        var renderTool = new RenderToImageTool(_mapHostAccessor);
-        var setViewportTool = new SetViewportTool(_mapHostAccessor);
-        return new[]
+        var tools = new System.Collections.Generic.List<McpServerTool>();
+        if (_mapHostAccessor is not null)
         {
-            RenderToImageMcpAdapter.Create(renderTool),
-            SetViewportMcpAdapter.Create(setViewportTool),
-        };
+            tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
+            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
+        }
+        if (_renderStateAccessor is not null)
+        {
+            tools.Add(SetPaletteMcpAdapter.Create(new SetPaletteTool(_renderStateAccessor)));
+            tools.Add(SetDisplayCategoryMcpAdapter.Create(new SetDisplayCategoryTool(_renderStateAccessor)));
+        }
+        return tools.Count == 0 ? null : tools;
     }
 
     private static bool IsPortInUse(Exception ex)
