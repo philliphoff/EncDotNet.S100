@@ -68,6 +68,24 @@ internal interface IMapHost
     void ZoomToExtent(MRect extent);
 
     /// <summary>
+    /// Sets the navigator's viewport to exactly the supplied Mercator
+    /// extent. Unlike <see cref="ZoomToExtent"/> (which adds 10 % padding
+    /// for the load-time auto-fit use case), this method applies no
+    /// padding — it is intended for programmatic / scripted viewport
+    /// overrides where the caller wants the precise box they asked for.
+    /// No-op when the map's navigator is unavailable.
+    /// </summary>
+    void SetViewportToExtent(MRect mercatorExtent);
+
+    /// <summary>
+    /// Sets the navigator to centre on the supplied Mercator point at
+    /// the supplied resolution (metres per pixel). Used by scripted
+    /// viewport overrides that specify a centre + zoom pair instead of
+    /// a bounding box. No-op when the map's navigator is unavailable.
+    /// </summary>
+    void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution);
+
+    /// <summary>
     /// Captures the current map view as a PNG byte array.
     /// </summary>
     /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>

@@ -26,6 +26,8 @@ internal sealed class FakeMapHost : IMapHost
     public void RemoveOverlayLayer(ILayer layer) => OverlayLayers.Remove(layer);
 
     public void ZoomToExtent(MRect extent) { }
+    public void SetViewportToExtent(MRect mercatorExtent) { }
+    public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
     public Task<byte[]?> RenderCurrentViewToPngAsync(
         int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)
