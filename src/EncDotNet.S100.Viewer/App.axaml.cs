@@ -151,10 +151,16 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
-        services.AddS100Observability();
+        // CLI --log-file / --verbose add a file sink and lower the log
+        // floor for agent runs.
+        services.AddS100Observability(
+            logFilePath: StartupOptions?.LogFile,
+            verbose: StartupOptions?.Verbose ?? false);
 
-        // Persisted user settings
-        services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());
+        // Persisted user settings, with any command-line overrides
+        // (settings path / --ephemeral / MCP / palette / display
+        // category) layered on top for this run only.
+        services.AddSingleton<ViewerSettings>(_ => StartupSettingsFactory.Create(StartupOptions));
 
         // Shared application-level state
         services.AddSingleton<PortrayalCatalogueManager>();
@@ -452,9 +458,7 @@ public partial class App : Application
 
     private static void LogCrash(string label, string message)
     {
-        var line = $"[{label}] {message}";
-        Console.Error.WriteLine(line);
-        try { System.IO.File.AppendAllText("/tmp/viewer-crash.log", $"{DateTime.Now:O} {line}\n\n"); }
-        catch { }
+        Console.Error.WriteLine($"[{label}] {message}");
+        CrashLog.Append(label, message);
     }
 }

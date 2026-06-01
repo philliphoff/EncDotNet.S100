@@ -206,6 +206,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public event Action<DatasetEntry>? DatasetRemoved;
 
+    /// <inheritdoc />
+    public bool SuppressAutoZoom { get; set; }
+
     private void SetStatus(string? text) => StatusChanged?.Invoke(text);
 
     public void Initialize(IMapHost host, ViewerCommandSettings? options)
@@ -329,7 +332,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             // user's manual Zoom-to-Extent toolbar action) wins. Without
             // this, the last-completed dataset would race with the bulk
             // load and "win" the viewport.
-            if (!fromExchangeSet)
+            if (!fromExchangeSet && !SuppressAutoZoom)
             {
                 _mapHost!.ZoomToExtent(result.Extent);
             }
