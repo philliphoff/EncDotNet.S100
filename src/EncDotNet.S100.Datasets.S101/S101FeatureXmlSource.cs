@@ -21,6 +21,31 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
 
     private static readonly XNamespace S100Ns = "http://www.iho.int/s100/5.0";
 
+    // Cached XName instances. These are constructed once at class init
+    // and reused across every feature in every dataset for the lifetime
+    // of the AppDomain. Per the perf report (§3 P4 / s101-real-cold +
+    // s101-real-warm), un-cached XName / attribute-name lookups in
+    // MakePointElement and the per-feature element builders showed up
+    // as String.Concat(string, string, string) consuming 50 % / 43 %
+    // of all managed allocations during S-101 portrayal — driven by
+    // the volume of Point geometry built per cell. Caching avoids the
+    // XNamespace.GetName hash lookup *and* keeps these names rooted
+    // by a Gen2 static field so they never participate in GC promotion.
+    private static readonly XName DatasetName = S100Ns + "Dataset";
+    private static readonly XName FeatureName = S100Ns + "Feature";
+    private static readonly XName GeometryName = S100Ns + "Geometry";
+    private static readonly XName PointName = S100Ns + "Point";
+    private static readonly XName CurveName = S100Ns + "Curve";
+    private static readonly XName SurfaceName = S100Ns + "Surface";
+    private static readonly XName RingName = S100Ns + "Ring";
+    private static readonly XName AttributeName = S100Ns + "Attribute";
+
+    private static readonly XName IdAttrName = "id";
+    private static readonly XName TypeAttrName = "type";
+    private static readonly XName CodeAttrName = "code";
+    private static readonly XName LatAttrName = "lat";
+    private static readonly XName LonAttrName = "lon";
+
     private readonly S101Dataset _dataset;
     private IReadOnlyList<string>? _featureTypes;
 
@@ -61,16 +86,16 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
     private XDocument BuildFeatureXml()
     {
         var doc = _dataset.Document;
-        var root = new XElement(S100Ns + "Dataset");
+        var root = new XElement(DatasetName);
 
         foreach (var feat in doc.Features)
         {
             var featureType = doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
                 ? name : feat.FeatureTypeCode.ToString();
 
-            var el = new XElement(S100Ns + "Feature",
-                new XAttribute("id", feat.RecordId),
-                new XAttribute("type", featureType));
+            var el = new XElement(FeatureName,
+                new XAttribute(IdAttrName, feat.RecordId),
+                new XAttribute(TypeAttrName, featureType));
 
             // Geometry
             if (feat.SpatialAssociations.Length > 0)
@@ -92,8 +117,8 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
             {
                 var attrName = doc.AttributeTypeCatalogue.TryGetValue(attr.NumericCode, out var aName)
                     ? aName : attr.NumericCode.ToString();
-                el.Add(new XElement(S100Ns + "Attribute",
-                    new XAttribute("code", attrName),
+                el.Add(new XElement(AttributeName,
+                    new XAttribute(CodeAttrName, attrName),
                     attr.Value));
             }
 
@@ -110,7 +135,7 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
 
-        var geom = new XElement(S100Ns + "Geometry");
+        var geom = new XElement(GeometryName);
         bool hasPoints = false;
 
         foreach (var spa in feat.SpatialAssociations)
@@ -127,8 +152,8 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
 
     private static XElement? BuildCurveGeometry(S101FeatureRecord feat, S101Document doc)
     {
-        var geom = new XElement(S100Ns + "Geometry");
-        var curve = new XElement(S100Ns + "Curve");
+        var geom = new XElement(GeometryName);
+        var curve = new XElement(CurveName);
 
         foreach (var spa in feat.SpatialAssociations)
         {
@@ -142,7 +167,7 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
 
     private static XElement? BuildSurfaceGeometry(S101FeatureRecord feat, S101Document doc)
     {
-        var geom = new XElement(S100Ns + "Geometry");
+        var geom = new XElement(GeometryName);
         bool hasGeometry = false;
 
         foreach (var spa in feat.SpatialAssociations)
@@ -150,9 +175,9 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
             if (spa.RecordName != RcnmSurface) continue;
             if (!doc.Surfaces.TryGetValue(spa.RecordId, out var surface)) continue;
 
-            var surfaceEl = new XElement(S100Ns + "Surface");
-            var exteriorRing = new XElement(S100Ns + "Ring", new XAttribute("type", "exterior"));
-            var interiorRing = new XElement(S100Ns + "Ring", new XAttribute("type", "interior"));
+            var surfaceEl = new XElement(SurfaceName);
+            var exteriorRing = new XElement(RingName, new XAttribute(TypeAttrName, "exterior"));
+            var interiorRing = new XElement(RingName, new XAttribute(TypeAttrName, "interior"));
 
             foreach (var ring in surface.RingAssociations)
             {
@@ -216,8 +241,8 @@ public sealed class S101FeatureXmlSource : IFeatureXmlSource
 
     private static XElement MakePointElement(double lat, double lon)
     {
-        return new XElement(S100Ns + "Point",
-            new XAttribute("lat", lat.ToString(CultureInfo.InvariantCulture)),
-            new XAttribute("lon", lon.ToString(CultureInfo.InvariantCulture)));
+        return new XElement(PointName,
+            new XAttribute(LatAttrName, lat.ToString(CultureInfo.InvariantCulture)),
+            new XAttribute(LonAttrName, lon.ToString(CultureInfo.InvariantCulture)));
     }
 }
