@@ -22,7 +22,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Capture the entire viewer window (panels, toolbars, status bar) instead of just the map control.")]
     public bool FullWindowScreenshot { get; set; }
 
-    [CommandOption("--window-size <WIDTHxHEIGHT>")]
+    [CommandOption("--window-size <SIZE>")]
     [Description("Force the viewer window to a fixed size (e.g. 1280x800) so screenshots are reproducible across machines.")]
     public string? WindowSize { get; set; }
 
@@ -66,7 +66,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
 
     // ── Viewport ─────────────────────────────────────────────────────
 
-    [CommandOption("--center <LAT,LON>")]
+    [CommandOption("--center <LATLON>")]
     [Description("Center the map on this WGS-84 latitude,longitude after loading (e.g. 47.6,-122.3). Requires --zoom; suppresses auto-zoom-to-extent.")]
     public string? Center { get; set; }
 
@@ -74,7 +74,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Web-mercator zoom level (0-24) to apply with --center. Suppresses auto-zoom-to-extent.")]
     public double? Zoom { get; set; }
 
-    [CommandOption("--bbox <SOUTH,WEST,NORTH,EAST>")]
+    [CommandOption("--bbox <BBOX>")]
     [Description("Zoom to this WGS-84 bounding box after loading (e.g. 47.5,-122.5,47.7,-122.1). Suppresses auto-zoom-to-extent.")]
     public string? BoundingBox { get; set; }
 
@@ -88,7 +88,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("ECDIS display category: DisplayBase, Standard, OtherInformation, or All. Overrides the persisted category for this run.")]
     public string? DisplayCategory { get; set; }
 
-    [CommandOption("--time-step <INDEX|TIMESTAMP>")]
+    [CommandOption("--time-step <STEP>")]
     [Description("For time-varying data, jump to this time step after loading — a zero-based index or an ISO-8601 UTC timestamp.")]
     public string? TimeStep { get; set; }
 
