@@ -71,6 +71,16 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
         [CommandOption("--out-subdir <NAME>")]
         [System.ComponentModel.Description("Override the per-run subdirectory name (defaults to the short git SHA of HEAD).")]
         public string? OutputSubdir { get; set; }
+
+        [CommandOption("--profile <MODE>")]
+        [System.ComponentModel.Description("Capture an in-process EventPipe trace per scenario: 'none' (default), 'cpu', or 'alloc'. Mutually exclusive with --append. Output is <scenario>.nettrace next to the .jsonl.")]
+        [System.ComponentModel.DefaultValue("none")]
+        public string Profile { get; set; } = "none";
+
+        [CommandOption("--profile-sampling-interval-ms <MS>")]
+        [System.ComponentModel.Description("CPU sampling interval in milliseconds (only when --profile=cpu). Default 1; raise to 5–10 for sub-100ms scenarios.")]
+        [System.ComponentModel.DefaultValue(1)]
+        public int ProfileSamplingIntervalMs { get; set; } = 1;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
@@ -79,6 +89,24 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
         if (!Directory.Exists(corpus))
         {
             AnsiConsole.MarkupLine($"[red]Corpus directory not found:[/] {corpus}");
+            return 1;
+        }
+
+        if (!RunCommand.TryParseProfileMode(settings.Profile, out var profileMode))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --profile value:[/] {settings.Profile} (expected: none, cpu, alloc)");
+            return 1;
+        }
+
+        // Profiling and append are mutually exclusive: append-mode is for
+        // CI median+MAD orchestration where the .jsonl files are merged
+        // across rounds; profiling artifacts are diagnostic-only and not
+        // appendable (each .nettrace would silently overwrite the prior
+        // one with no way to merge them). Refuse the combination so the
+        // user is forced to pick one or the other.
+        if (profileMode != ProfileMode.None && settings.Append)
+        {
+            AnsiConsole.MarkupLine("[red]--profile and --append are mutually exclusive.[/] Profiling artifacts cannot be merged across rounds.");
             return 1;
         }
 
@@ -124,6 +152,7 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
 
             var jsonlPath = Path.Combine(outDir, scenario.Name + ".jsonl");
             var mdPath = Path.Combine(outDir, scenario.Name + ".md");
+            var nettracePath = Path.Combine(outDir, scenario.Name + ".nettrace");
 
             // Wire up OTel with the file exporter for this scenario.
             // In append mode the file is preserved across calls.
@@ -160,33 +189,51 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
             // so the JSONL contains a tagged span per sample. PerfReport's
             // gate command reads these to compute median + MAD instead of
             // summing all spans.
+            //
+            // When --profile is enabled we wrap only the measured-iteration
+            // loop (warmup is excluded so the trace is not polluted by JIT
+            // and first-touch costs).
             var durations = new List<double>();
-            for (int i = 0; i < settings.Iterations; i++)
+            EventPipeProfilingSession? profilingSession = profileMode == ProfileMode.None
+                ? null
+                : EventPipeProfilingSession.Start(nettracePath, profileMode, settings.ProfileSamplingIntervalMs);
+            try
             {
-                AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
-                var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i, Round = settings.RoundTag };
-                using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
-                iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
-                iterActivity?.SetTag(PerfActivitySource.RoundTag, settings.RoundTag);
-                iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
-                if (!string.IsNullOrWhiteSpace(settings.Side))
-                    iterActivity?.SetTag(PerfActivitySource.SideTag, settings.Side);
+                for (int i = 0; i < settings.Iterations; i++)
+                {
+                    AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
+                    var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i, Round = settings.RoundTag };
+                    using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
+                    iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
+                    iterActivity?.SetTag(PerfActivitySource.RoundTag, settings.RoundTag);
+                    iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
+                    if (!string.IsNullOrWhiteSpace(settings.Side))
+                        iterActivity?.SetTag(PerfActivitySource.SideTag, settings.Side);
 
-                var sw = Stopwatch.StartNew();
-                try
-                {
-                    await scenario.RunAsync(ctx, CancellationToken.None);
-                    sw.Stop();
-                    iterActivity?.SetStatus(ActivityStatusCode.Ok);
-                    durations.Add(sw.Elapsed.TotalMilliseconds);
-                    AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/]");
+                    var sw = Stopwatch.StartNew();
+                    try
+                    {
+                        await scenario.RunAsync(ctx, CancellationToken.None);
+                        sw.Stop();
+                        iterActivity?.SetStatus(ActivityStatusCode.Ok);
+                        durations.Add(sw.Elapsed.TotalMilliseconds);
+                        AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/]");
+                    }
+                    catch (Exception ex)
+                    {
+                        sw.Stop();
+                        iterActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                        AnsiConsole.MarkupLine($" [red]error: {Markup.Escape(ex.Message)}[/]");
+                        break;
+                    }
                 }
-                catch (Exception ex)
+            }
+            finally
+            {
+                if (profilingSession is not null)
                 {
-                    sw.Stop();
-                    iterActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    AnsiConsole.MarkupLine($" [red]error: {Markup.Escape(ex.Message)}[/]");
-                    break;
+                    await profilingSession.DisposeAsync();
+                    AnsiConsole.MarkupLine($"  [grey]trace: {nettracePath}[/]");
                 }
             }
 

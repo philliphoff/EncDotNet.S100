@@ -183,8 +183,12 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     /// <see cref="DrawingInstructionParser.Parse"/> and
     /// <see cref="S101SafconLabelMerger.Merge"/>.
     /// </summary>
-    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner)
+    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
+        // The MoonSharp interpreter is not interruptible mid-script, so the
+        // token is honoured at the coarse boundary before invocation.
+        cancellationToken.ThrowIfCancellationRequested();
+
         // TODO: Per-Lua-rule timing is deferred to PR P2 — requires a small
         // executor refactor to inject timing hooks around individual rule calls.
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
@@ -193,10 +197,12 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
 
         try
         {
-            var emitted = ExecuteRaw(mariner);
+            var (emitted, dataProvider) = ExecuteRawCore(mariner);
 
             Telemetry.LuaFeaturesCount.Add(emitted.Count);
             activity?.SetTag("s100.lua.features.count", emitted.Count);
+
+            RecordPerFeatureTypeCardinality(emitted, dataProvider);
 
             // Build a geometry provider to supply feature anchor points for
             // augmented line geometry tessellation (sector lights, all-around
@@ -231,6 +237,35 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     }
 
     /// <summary>
+    /// Records the per-feature-type emitted-instruction count
+    /// (<c>s100.lua.feature.instructions.count</c>) tagged with
+    /// <c>s100.feature.type</c> + <c>s100.product</c>. Output volume
+    /// only — does not measure CPU time. See the Telemetry doc comment.
+    /// </summary>
+    private static void RecordPerFeatureTypeCardinality(
+        IReadOnlyList<EmittedInstruction> emitted,
+        S101LuaDataProvider dataProvider)
+    {
+        if (emitted.Count == 0) return;
+
+        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var e in emitted)
+        {
+            var code = dataProvider.TryGetFeatureTypeCode(e.FeatureRef) ?? "(unknown)";
+            counts.TryGetValue(code, out var existing);
+            counts[code] = existing + 1;
+        }
+
+        foreach (var (code, count) in counts)
+        {
+            Telemetry.LuaFeatureInstructionsCount.Record(
+                count,
+                new KeyValuePair<string, object?>(TelemetryTags.Product, "S-101"),
+                new KeyValuePair<string, object?>(TelemetryTags.FeatureType, code));
+        }
+    }
+
+    /// <summary>
     /// Returns the first (anchor) coordinate of the feature identified by
     /// <paramref name="featureRef"/>, or <see langword="null"/> if the feature
     /// has no point geometry.
@@ -251,6 +286,17 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
     /// <see cref="Execute(MarinerSettings)"/>, which returns typed instructions.
     /// </summary>
     public IReadOnlyList<EmittedInstruction> ExecuteRaw(MarinerSettings mariner)
+        => ExecuteRawCore(mariner).Emitted;
+
+    /// <summary>
+    /// Internal core of <see cref="ExecuteRaw"/> that also returns the
+    /// constructed <see cref="S101LuaDataProvider"/> so callers can
+    /// resolve feature-type codes for the emitted instructions without
+    /// re-building the lookup index. Used by <see cref="Execute"/> to
+    /// emit per-feature-type cardinality telemetry.
+    /// </summary>
+    private (IReadOnlyList<EmittedInstruction> Emitted, S101LuaDataProvider DataProvider) ExecuteRawCore(
+        MarinerSettings mariner)
     {
         ArgumentNullException.ThrowIfNull(mariner);
         var dataset = _dataset;
@@ -357,7 +403,7 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
             }
         }
 
-        return results;
+        return (results, dataProvider);
     }
 
     /// <summary>

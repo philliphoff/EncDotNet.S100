@@ -41,7 +41,10 @@ public class MainViewModelOpenRecentTests : IDisposable
     private sealed class StubThemeService : IThemeService
     {
         public bool IsDarkTheme => false;
+        public event System.EventHandler? ThemeChanged { add { } remove { } }
         public bool ToggleTheme() => false;
+        public ChromeTheme Current => ChromeTheme.Light;
+        public void SetTheme(ChromeTheme theme) { }
     }
 
     private sealed class RecordingLoaderService : IDatasetLoaderService

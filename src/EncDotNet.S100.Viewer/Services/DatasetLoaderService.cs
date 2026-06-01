@@ -323,8 +323,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 initialTime = adapter.SnapTo(globalNow);
 
             var initialContext = CreateRenderContext(processor, initialTime);
-            var result = await Task.Run(() => processor.Render(initialContext), token);
+            var result = await Task.Run(() => processor.RenderAsync(initialContext, token), token).ConfigureAwait(true);
 
+            token.ThrowIfCancellationRequested();
             ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
             // Exchange-set entries opt out of the per-dataset auto-zoom so
             // the union-extent zoom from `IExchangeSetService` (or the
@@ -472,8 +473,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             try
             {
                 var context = CreateRenderContext(proc, snapped);
-                var result = await Task.Run(() => proc.Render(context), token).ConfigureAwait(true);
+                var result = await Task.Run(() => proc.RenderAsync(context, token), token).ConfigureAwait(true);
 
+                token.ThrowIfCancellationRequested();
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
@@ -501,7 +503,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             {
                 var context = CreateRenderContext(proc, entry.CurrentTime);
 
-                var result = await Task.Run(() => proc.Render(context));
+                var result = await Task.Run(() => proc.RenderAsync(context, CancellationToken.None));
 
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;

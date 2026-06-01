@@ -114,8 +114,10 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     }
 
     /// <inheritdoc/>
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-131")
@@ -137,9 +139,9 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         var executor = new S131LuaRuleExecutor(_luaEngine, _dataset, _catalogue, fc);
         var featureSource = new EmptyFeatureXmlSource();
         var pipeline = new PortrayalPipeline(executor);
-        var portrayalLayer = pipeline.ProcessAsync(
-                featureSource, _catalogue, mariner: mariner)
-            .GetAwaiter().GetResult();
+        var portrayalLayer = await pipeline.ProcessAsync(
+                featureSource, _catalogue, mariner: mariner, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
 
         // Render to Mapsui layer
@@ -334,8 +336,9 @@ internal sealed class EmptyFeatureXmlSource : IFeatureXmlSource
     public IReadOnlyList<string> FeatureTypesPresent => [];
 
     /// <inheritdoc/>
-    public XmlReader GetFeatureXml()
+    public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // Return a minimal well-formed XML document so XDocument.Load succeeds.
         return XmlReader.Create(new StringReader("<Features/>"));
     }

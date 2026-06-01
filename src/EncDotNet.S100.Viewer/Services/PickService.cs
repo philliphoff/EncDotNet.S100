@@ -36,12 +36,13 @@ internal sealed class PickService : IPickService
     private readonly IStatusPresenter _status;
     private readonly GlobalTimeService? _globalTime;
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly IThemeService? _themeService;
 
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
         IStatusPresenter status)
-        : this(loader, pickReport, status, globalTime: null, timeFormat: null)
+        : this(loader, pickReport, status, globalTime: null, timeFormat: null, themeService: null)
     {
     }
 
@@ -50,7 +51,7 @@ internal sealed class PickService : IPickService
         PickReportViewModel pickReport,
         IStatusPresenter status,
         GlobalTimeService? globalTime)
-        : this(loader, pickReport, status, globalTime, timeFormat: null)
+        : this(loader, pickReport, status, globalTime, timeFormat: null, themeService: null)
     {
     }
 
@@ -60,6 +61,17 @@ internal sealed class PickService : IPickService
         IStatusPresenter status,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat)
+        : this(loader, pickReport, status, globalTime, timeFormat, themeService: null)
+    {
+    }
+
+    public PickService(
+        IDatasetLoaderService loader,
+        PickReportViewModel pickReport,
+        IStatusPresenter status,
+        GlobalTimeService? globalTime,
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -69,6 +81,7 @@ internal sealed class PickService : IPickService
         _status = status;
         _globalTime = globalTime;
         _timeFormat = timeFormat;
+        _themeService = themeService;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -85,18 +98,32 @@ internal sealed class PickService : IPickService
         };
     }
 
-    public void HandlePick(MapInfo? mapInfo)
+    public void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null)
     {
         using var __cmd = ViewerObservability.BeginCommand("pick");
 
+        var dynamic = dynamicHits ?? Array.Empty<DynamicPickHit>();
+
         if (mapInfo is null)
         {
+            // Even with no MapInfo a pick may still carry dynamic hits
+            // (e.g. a future code path that pre-computes them); honour
+            // them if present, otherwise clear.
+            if (dynamic.Count > 0)
+            {
+                _pickReport.SetPicks(Array.Empty<PickHit>(), dynamic);
+                _status.StatusText = string.Format(
+                    Strings.Status_FeatureSummary,
+                    dynamic[0].DisplayLabel,
+                    dynamic[0].FeatureId);
+                return;
+            }
             _pickReport.Clear();
             return;
         }
 
         var hits = ResolveHits(mapInfo);
-        if (hits.Count == 0)
+        if (hits.Count == 0 && dynamic.Count == 0)
         {
             // No vector hit. Try a coverage fallback before clearing —
             // S-102/S-104/S-111 processors expose
@@ -119,18 +146,35 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        _pickReport.SetPicks(hits);
+        _pickReport.SetPicks(hits, dynamic);
 
-        // Status text follows the first (selected) hit, with a "+N more"
-        // suffix when additional features were resolved.
-        var first = hits[0];
-        var primary = string.Format(
-            Strings.Status_FeatureSummary,
-            first.FeatureTypeName ?? first.FeatureType,
-            first.FeatureRef);
-        _status.StatusText = hits.Count > 1
-            ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, hits.Count - 1)
-            : primary;
+        // Status text follows the first hit. Dataset hits take
+        // precedence (their labels carry more dataset context); fall
+        // back to the first dynamic hit when no dataset hits are
+        // present.
+        if (hits.Count > 0)
+        {
+            var first = hits[0];
+            var primary = string.Format(
+                Strings.Status_FeatureSummary,
+                first.FeatureTypeName ?? first.FeatureType,
+                first.FeatureRef);
+            var more = hits.Count - 1 + dynamic.Count;
+            _status.StatusText = more > 0
+                ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, more)
+                : primary;
+        }
+        else
+        {
+            var first = dynamic[0];
+            var primary = string.Format(
+                Strings.Status_FeatureSummary,
+                first.DisplayLabel,
+                first.FeatureId);
+            _status.StatusText = dynamic.Count > 1
+                ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, dynamic.Count - 1)
+                : primary;
+        }
     }
 
     private List<PickHit> ResolveHits(MapInfo mapInfo)
@@ -223,8 +267,8 @@ internal sealed class PickService : IPickService
         // exposes a single height channel; S-111 exposes speed + direction.
         return processor.Spec.Name switch
         {
-            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
-            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat),
+            "S-104" => new S104StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
+            "S-111" => new S111StationTimeSeriesViewModel(snapshot, _globalTime, _timeFormat, _themeService),
             _ => null,
         };
     }

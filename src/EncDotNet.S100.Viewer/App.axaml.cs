@@ -117,6 +117,19 @@ public partial class App : Application
             }
         }, TaskScheduler.Default);
 
+        // Apply persisted chrome theme + wire chrome→map coupling. The
+        // chrome theme is the user's primary axis; the map palette
+        // follows (per docs/design/s100-chrome-theme-spike.md §5)
+        // unless the user subsequently overrides SelectedPalette
+        // independently.
+        var themeService = s_services.GetRequiredService<IThemeService>();
+        themeService.SetTheme(settingsVm.SelectedChromeTheme);
+        settingsVm.ChromeThemeChanged += chromeTheme =>
+        {
+            themeService.SetTheme(chromeTheme);
+            settingsVm.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
+        };
+
         // Re-publish own-ship fix when vessel dimensions change.
         var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()
             as EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider;
@@ -241,6 +254,9 @@ public partial class App : Application
         services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
@@ -274,6 +290,14 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()));
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
+
+        // Map-viewport notifier (singleton). Inert until MainWindow
+        // calls Bind(navigator) once the MapControl exists. Used by
+        // the AIS overlay's zoom-gated decorator (see
+        // docs/design/ais-zoom-gated-subscription.md).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapViewportNotifier>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
 
         // PR-D? upgraded own-ship symbology: register OwnShipRenderer
         // under the "ownship" key so DynamicSourceOverlayHost resolves

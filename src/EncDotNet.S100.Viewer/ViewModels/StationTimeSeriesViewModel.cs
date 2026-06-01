@@ -35,33 +35,51 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 {
     private readonly GlobalTimeService? _globalTime;
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly IThemeService? _themeService;
     private readonly RectangularSection _nowSection;
+    private readonly SolidColorPaint _nowMarkerPaint;
+    private readonly SolidColorPaint _timeAxisLabelsPaint;
+    private readonly SolidColorPaint _timeAxisNamePaint;
+    private readonly SolidColorPaint _timeAxisSeparatorsPaint;
     private bool _disposed;
 
     /// <summary>
     /// Constructs a view model bound to <paramref name="snapshot"/>. The
     /// <paramref name="globalTime"/> service may be <c>null</c> in unit
     /// tests; when supplied, <see cref="GlobalTimeService.CurrentTimeChanged"/>
-    /// is observed for the lifetime of this view model.
+    /// is observed for the lifetime of this view model. Likewise
+    /// <paramref name="themeService"/> may be <c>null</c>; when supplied,
+    /// <see cref="IThemeService.ThemeChanged"/> drives in-place updates of
+    /// the chart's <see cref="SolidColorPaint"/> colours so the chart
+    /// follows the chrome <see cref="Avalonia.Styling.ThemeVariant"/>.
     /// </summary>
     protected StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null)
+        ITimeFormatProvider? timeFormat = null,
+        IThemeService? themeService = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Snapshot = snapshot;
         _globalTime = globalTime;
         _timeFormat = timeFormat;
+        _themeService = themeService;
 
+        CurrentChartTheme = ChartTheme.Resolve(themeService?.IsDarkTheme ?? false);
+
+        _nowMarkerPaint = new SolidColorPaint(CurrentChartTheme.NowMarker, 1.5f);
         _nowSection = new RectangularSection
         {
             Xi = double.NaN,
             Xj = double.NaN,
             Fill = null,
-            Stroke = new SolidColorPaint(new SKColor(0xE6, 0x49, 0x4B), 1.5f),
+            Stroke = _nowMarkerPaint,
         };
         Sections = new[] { _nowSection };
+
+        _timeAxisLabelsPaint = new SolidColorPaint(CurrentChartTheme.AxisLabel);
+        _timeAxisNamePaint = new SolidColorPaint(CurrentChartTheme.AxisName);
+        _timeAxisSeparatorsPaint = new SolidColorPaint(CurrentChartTheme.Separator);
 
         TimeAxis = new Axis
         {
@@ -70,6 +88,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
             LabelsRotation = 0,
             UnitWidth = TimeSpan.FromMinutes(1).Ticks,
             MinStep = TimeSpan.FromMinutes(1).Ticks,
+            LabelsPaint = _timeAxisLabelsPaint,
+            NamePaint = _timeAxisNamePaint,
+            SeparatorsPaint = _timeAxisSeparatorsPaint,
         };
         TimeAxisArray = new ICartesianAxis[] { TimeAxis };
 
@@ -82,6 +103,9 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
 
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
+
+        if (_themeService is not null)
+            _themeService.ThemeChanged += OnThemeChanged;
     }
 
     /// <summary>The raw snapshot that backs this view model.</summary>
@@ -138,6 +162,46 @@ internal abstract class StationTimeSeriesViewModel : ViewModelBase, IDisposable
             _globalTime.CurrentTimeChanged -= OnGlobalTimeChanged;
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
+        if (_themeService is not null)
+            _themeService.ThemeChanged -= OnThemeChanged;
+    }
+
+    /// <summary>
+    /// Current chart palette derived from the chrome
+    /// <see cref="Avalonia.Styling.ThemeVariant"/>. Refreshed in place
+    /// when <see cref="IThemeService.ThemeChanged"/> fires; subclasses
+    /// read this from <see cref="OnChartThemeChanged"/> to update their
+    /// per-product paints.
+    /// </summary>
+    /// <remarks>
+    /// This responds to <b>chrome theme</b> (Light vs Dark), not the
+    /// S-100 map palette (Day / Dusk / Night). The map palette is owned
+    /// by <see cref="SettingsViewModel.SelectedPalette"/> and is not
+    /// consumed by these charts.
+    /// </remarks>
+    protected internal ChartTheme CurrentChartTheme { get; private set; }
+
+    /// <summary>
+    /// Override to update product-specific <see cref="SolidColorPaint"/>
+    /// instances when <see cref="CurrentChartTheme"/> changes. Mutating
+    /// existing paints in place (via <see cref="SolidColorPaint.Color"/>)
+    /// avoids the cost of rebuilding series; LiveCharts2 redraws on the
+    /// next paint cycle. Base implementation updates the shared time
+    /// axis paints and the "now" marker stroke.
+    /// </summary>
+    /// <param name="theme">The new chart palette.</param>
+    protected virtual void OnChartThemeChanged(ChartTheme theme)
+    {
+        _nowMarkerPaint.Color = theme.NowMarker;
+        _timeAxisLabelsPaint.Color = theme.AxisLabel;
+        _timeAxisNamePaint.Color = theme.AxisName;
+        _timeAxisSeparatorsPaint.Color = theme.Separator;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        CurrentChartTheme = ChartTheme.Resolve(_themeService?.IsDarkTheme ?? false);
+        OnChartThemeChanged(CurrentChartTheme);
     }
 
     /// <summary>

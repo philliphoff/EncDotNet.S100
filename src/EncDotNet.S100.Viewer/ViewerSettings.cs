@@ -66,6 +66,14 @@ internal sealed class ViewerSettings
     public string ColorProfile { get; set; } = "Day";
 
     /// <summary>
+    /// Persisted chrome theme name — one of "Light", "Dark",
+    /// "S100Night". Independent of <see cref="ColorProfile"/> (which
+    /// drives map portrayal colours). Default "Light" so first-launch
+    /// users get a familiar Avalonia chrome.
+    /// </summary>
+    public string ChromeTheme { get; set; } = "Light";
+
+    /// <summary>
     /// Id of the last-selected left-dock activity tab, or <c>null</c> if
     /// none was open. Name kept for back-compat with pre-PR-M3 settings
     /// files; the corresponding right- and bottom-dock fields are
