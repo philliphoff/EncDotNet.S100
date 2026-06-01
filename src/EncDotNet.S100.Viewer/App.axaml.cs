@@ -341,7 +341,8 @@ public partial class App : Application
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<IMapHostAccessor>(),
             sp.GetService<ILoggerFactory>(),
-            sp.GetRequiredService<IRenderStateControllerAccessor>()));
+            sp.GetRequiredService<IRenderStateControllerAccessor>(),
+            sp.GetRequiredService<GlobalTimeService>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

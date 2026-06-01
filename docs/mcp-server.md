@@ -120,6 +120,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported in v1. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
+| `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
 
 ### Read-only vs mutating tools
 
@@ -132,7 +133,7 @@ Tools fall into two groups:
 * **Mutating** — modify the live viewer's state (navigator, palette,
   time step, loaded datasets, etc.). Use only when you intend to
   drive the viewer's UI from outside. Examples: `set_viewport`,
-  `set_palette`, `set_display_category`.
+  `set_palette`, `set_display_category`, `set_time_step`.
 
 Tool descriptions in the registered MCP catalogue identify each tool
 as one or the other; this table is the canonical reference.
