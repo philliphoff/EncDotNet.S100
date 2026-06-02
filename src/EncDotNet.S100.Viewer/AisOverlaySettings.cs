@@ -56,6 +56,32 @@ internal sealed class AisOverlaySettings
     /// initial subscribe before the user has panned the map.
     /// </summary>
     public AisOverlayBoundingBox? InitialArea { get; set; }
+
+    /// <summary>
+    /// Maximum viewport span — in degrees of latitude AND longitude —
+    /// at which the AIS subscription is allowed to start. While the
+    /// visible viewport's lat-span or lon-span is wider than this, the
+    /// overlay stays inactive and no traffic is fetched from
+    /// aisstream.io. Once both spans drop to or below this threshold
+    /// the subscription is created with the live viewport bbox and
+    /// stays active for the rest of the viewer session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Default <c>50.0</c> — wide enough to admit any realistic
+    /// regional view (e.g. North Sea ~10° × 6°, Mediterranean
+    /// ~40° × 14°) while excluding the cold-start global view
+    /// (typically 360° × 170° on a fresh viewer).
+    /// </para>
+    /// <para>
+    /// <see langword="null"/> disables the gate entirely — the
+    /// subscription starts immediately on viewer launch, matching
+    /// pre-PR behaviour. Values <c>&lt;= 0</c> are normalised to
+    /// <see langword="null"/> by the settings view-model so users
+    /// cannot configure a gate that never opens.
+    /// </para>
+    /// </remarks>
+    public double? ActivationViewportSpanDegrees { get; set; } = 50.0;
 }
 
 /// <summary>

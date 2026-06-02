@@ -21,5 +21,11 @@ public interface ILuaRuleExecutor
     /// ready for the renderer.
     /// </summary>
     /// <param name="mariner">Mariner-configurable display preferences (S-100 Part 9 §4.2).</param>
-    IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner);
+    /// <param name="cancellationToken">
+    /// Signals that the render has been cancelled. The Lua interpreter step
+    /// itself is not interruptible mid-script, so implementations honour the
+    /// token at coarse boundaries (e.g. before invoking <c>PortrayalMain()</c>
+    /// and while parsing emit strings); the method remains synchronous.
+    /// </param>
+    IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default);
 }

@@ -153,10 +153,16 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
-        services.AddS100Observability();
+        // CLI --log-file / --verbose add a file sink and lower the log
+        // floor for agent runs.
+        services.AddS100Observability(
+            logFilePath: StartupOptions?.LogFile,
+            verbose: StartupOptions?.Verbose ?? false);
 
-        // Persisted user settings
-        services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());
+        // Persisted user settings, with any command-line overrides
+        // (settings path / --ephemeral / MCP / palette / display
+        // category) layered on top for this run only.
+        services.AddSingleton<ViewerSettings>(_ => StartupSettingsFactory.Create(StartupOptions));
 
         // Shared application-level state
         services.AddSingleton<PortrayalCatalogueManager>();
@@ -287,6 +293,14 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
 
+        // Map-viewport notifier (singleton). Inert until MainWindow
+        // calls Bind(navigator) once the MapControl exists. Used by
+        // the AIS overlay's zoom-gated decorator (see
+        // docs/design/ais-zoom-gated-subscription.md).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapViewportNotifier>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
+
         // PR-D? upgraded own-ship symbology: register OwnShipRenderer
         // under the "ownship" key so DynamicSourceOverlayHost resolves
         // it for the own-ship source (RendererKey = "ownship").
@@ -323,11 +337,14 @@ public partial class App : Application
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
+        services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<IMapHostAccessor>(),
-            sp.GetService<ILoggerFactory>()));
+            sp.GetService<ILoggerFactory>(),
+            sp.GetRequiredService<IRenderStateControllerAccessor>(),
+            sp.GetRequiredService<GlobalTimeService>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
@@ -446,9 +463,7 @@ public partial class App : Application
 
     private static void LogCrash(string label, string message)
     {
-        var line = $"[{label}] {message}";
-        Console.Error.WriteLine(line);
-        try { System.IO.File.AppendAllText("/tmp/viewer-crash.log", $"{DateTime.Now:O} {line}\n\n"); }
-        catch { }
+        Console.Error.WriteLine($"[{label}] {message}");
+        CrashLog.Append(label, message);
     }
 }

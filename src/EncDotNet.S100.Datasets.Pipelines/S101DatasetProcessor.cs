@@ -86,8 +86,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")
@@ -111,9 +113,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
         var featureSource = new S101FeatureXmlSource(_dataset);
         var pipeline = new PortrayalPipeline(executor);
-        var portrayalLayer = pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner)
-            .GetAwaiter().GetResult();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+        Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
         Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between

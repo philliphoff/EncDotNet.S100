@@ -29,7 +29,8 @@ public class VectorPipeline
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
         Viewport? viewport = null,
-        MarinerSettings? mariner = null)
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.process");
         activity?.SetTag(TelemetryTags.PipelineStage, "portray");
@@ -44,12 +45,14 @@ public class VectorPipeline
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Stage 1 — load FeatureXML into a navigable document
             XDocument featureDoc;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.feature_xml"))
             {
                 var stageStart = Stopwatch.GetTimestamp();
-                using (var reader = source.GetFeatureXml())
+                using (var reader = source.GetFeatureXml(cancellationToken))
                 {
                     featureDoc = XDocument.Load(reader);
                 }
@@ -60,6 +63,7 @@ public class VectorPipeline
             IReadOnlyList<PortrayalRule> applicableRules;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.rule_select"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var stageStart = Stopwatch.GetTimestamp();
                 var featureTypes = source.FeatureTypesPresent;
                 PipelineMetrics.FeaturesIn.Record(featureTypes.Count, stageTag);
@@ -74,7 +78,7 @@ public class VectorPipeline
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.xslt"))
             {
                 var stageStart = Stopwatch.GetTimestamp();
-                drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
+                drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport, cancellationToken);
                 RecordStageDuration(stageStart, "xslt");
             }
 
@@ -83,6 +87,7 @@ public class VectorPipeline
             List<DrawingInstruction> instructions;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.assemble"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var stageStart = Stopwatch.GetTimestamp();
                 instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
                 RecordStageDuration(stageStart, "assemble");
@@ -99,7 +104,7 @@ public class VectorPipeline
                 using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
                 {
                     var stageStart = Stopwatch.GetTimestamp();
-                    instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+                    instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings(), cancellationToken));
                     RecordStageDuration(stageStart, "lua");
                     PipelineMetrics.StageInstructionsCount.Record(
                         instructions.Count,
@@ -111,6 +116,7 @@ public class VectorPipeline
             IReadOnlyList<DrawingInstruction> sorted;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.viewing_groups"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var stageStart = Stopwatch.GetTimestamp();
                 var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
                 var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
@@ -184,13 +190,19 @@ public class VectorPipeline
         XDocument featureDoc,
         IReadOnlyList<PortrayalRule> rules,
         IVectorPortrayalCatalogue catalogue,
-        Viewport? viewport)
+        Viewport? viewport,
+        CancellationToken cancellationToken)
     {
         var drawingInstructions = new XDocument(
             new XElement("DrawingInstructions"));
 
         foreach (var rule in rules.Where(r => r.Type == PortrayalRuleType.Xslt))
         {
+            // Cancellation is honoured between rules. A single
+            // XslCompiledTransform.Transform call is not interruptible, so a
+            // very large/slow individual rule cannot be abandoned mid-flight.
+            cancellationToken.ThrowIfCancellationRequested();
+
             var args = new XsltArgumentList();
 
             // Pass colour palette tokens as XSLT parameters

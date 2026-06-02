@@ -33,6 +33,8 @@ public class ValidationOverlayTests
         public void RemoveLayer(ILayer layer) { }
         public void ReorderDatasetLayers(IReadOnlyList<ILayer> orderedDatasetLayers) { }
         public void ZoomToExtent(MRect extent) => ZoomCalls.Add(extent);
+        public void SetViewportToExtent(MRect mercatorExtent) { }
+        public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
         public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)

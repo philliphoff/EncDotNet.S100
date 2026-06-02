@@ -22,6 +22,8 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public void RaiseRemoved(DatasetEntry entry) => DatasetRemoved?.Invoke(entry);
 
     public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
+
+    public bool SuppressAutoZoom { get; set; }
     public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task ReRenderAllAsync() => Task.CompletedTask;
