@@ -132,6 +132,33 @@ tolerance ≈ 1 screen pixel at the current zoom. Polylines with
 thousands of vertices typically reduce 10–100× without visible quality
 loss.
 
+**Status:** v1 implemented for issue
+[#164](https://github.com/philliphoff/EncDotNet.S100/issues/164).
+Lives on `InstrumentedMemoryLayer.GetFeatures`, keyed by half-octave
+zoom bucket, gated behind the viewer's
+**Simplify line geometry (experimental)** setting (default off).
+See the renderer
+[README → Resolution-aware geometry simplification](../../src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification)
+for the implementation, options, telemetry, and known limits.
+
+**v1 scope (lines only).** v1 simplifies `LineString` /
+`MultiLineString` only; polygons, points, and other types pass
+through unchanged. Per-ring Douglas-Peucker can produce invalid or
+self-intersecting polygons, so polygon support is deferred until a
+follow-up wires in `TopologyPreservingSimplifier` + `IsValid`
+validation.
+
+**Defaults.** PixelTolerance = 0.5 (a half pixel — chosen so thicker
+strokes such as depth contours and fairway boundaries don't show
+visible kinks); MinVertexCount = 64 bypass threshold;
+MaxCachedCoordinates = 5_000_000 (≈ 80 MB). Eviction triggers on
+zoom-band transition, then by coordinate budget.
+
+**Future work.** Polygon simplification, async / off-thread miss
+path (the synchronous miss path can briefly stall the first paint
+after a zoom-band transition), and `(layer × bucket)`-aware
+pre-warming on dataset load.
+
 Projected impact based on the measured cost model:
 - 1k-10k bucket → 100-999 bucket: ~5× cheaper draws (saves ~18 s of
   paint over the measurement window).
@@ -188,3 +215,12 @@ Files added on this branch:
 - `src/EncDotNet.S100.Viewer/Diagnostics/GpuAccelerationProbe.cs`
 - `src/EncDotNet.S100.Renderers.Mapsui/InstrumentedMemoryLayer.cs`
 - `src/EncDotNet.S100.Renderers.Mapsui/S100RasterizingTileLayer.cs`
+
+Files added by issue
+[#164](https://github.com/philliphoff/EncDotNet.S100/issues/164)
+implementing optimization (1):
+- `src/EncDotNet.S100.Renderers.Mapsui/Simplification/IFeatureSimplifier.cs`
+- `src/EncDotNet.S100.Renderers.Mapsui/Simplification/DouglasPeuckerLineSimplifier.cs`
+- `src/EncDotNet.S100.Renderers.Mapsui/Simplification/SimplificationOptions.cs`
+- `src/EncDotNet.S100.Renderers.Mapsui/Simplification/SimplificationCache.cs`
+- `src/EncDotNet.S100.Renderers.Mapsui/Simplification/Simplification.cs`

@@ -266,6 +266,8 @@ internal static class Strings
     public static string Tooltip_IgnoreScaleMinimum => Get(nameof(Tooltip_IgnoreScaleMinimum));
     public static string Settings_EnableVectorRasterization => Get(nameof(Settings_EnableVectorRasterization));
     public static string Tooltip_EnableVectorRasterization => Get(nameof(Tooltip_EnableVectorRasterization));
+    public static string Settings_EnableGeometrySimplification => Get(nameof(Settings_EnableGeometrySimplification));
+    public static string Tooltip_EnableGeometrySimplification => Get(nameof(Tooltip_EnableGeometrySimplification));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));

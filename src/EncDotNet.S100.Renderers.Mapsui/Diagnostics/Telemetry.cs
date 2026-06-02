@@ -104,6 +104,73 @@ internal static class Telemetry
             description: "Pattern-tile cache misses during area-fill resolution (tile rasterisation triggered). Tagged with s100.product when the renderer is configured by a dataset processor.");
 
     /// <summary>
+    /// Hits in the resolution-aware geometry simplification cache
+    /// (<see cref="Simplification.SimplificationCache"/>). Recorded
+    /// per visible feature per rendered frame; the hit-rate
+    /// (hits / (hits + misses)) measures steady-state cache
+    /// effectiveness. Issue #164 acceptance criterion targets ≥ 95%
+    /// on steady-state pan. Tagged with <c>s100.product</c>.
+    /// </summary>
+    public static readonly Counter<long> SimplifyCacheHit =
+        Meter.CreateCounter<long>(
+            name: "s100.simplify.cache.hit.count",
+            unit: "{hits}",
+            description: "Hits in the resolution-aware geometry simplification cache. Tagged with s100.product.");
+
+    /// <inheritdoc cref="SimplifyCacheHit"/>
+    public static readonly Counter<long> SimplifyCacheMiss =
+        Meter.CreateCounter<long>(
+            name: "s100.simplify.cache.miss.count",
+            unit: "{misses}",
+            description: "Misses in the resolution-aware geometry simplification cache (Douglas-Peucker invocation triggered). Tagged with s100.product.");
+
+    /// <summary>
+    /// Wall-clock time spent inside a single
+    /// <c>IFeatureSimplifier.Simplify</c> call (Douglas-Peucker over
+    /// one feature's geometry). Recorded only on cache misses.
+    /// Useful for diagnosing render-thread jank: the issue #164
+    /// design accepts a synchronous miss path on the assumption that
+    /// per-feature simplification is bounded; this histogram lets us
+    /// validate that.
+    /// </summary>
+    public static readonly Histogram<double> SimplifyDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.simplify.duration",
+            unit: "ms",
+            description: "Per-feature Douglas-Peucker simplification duration on a cache miss. Tagged with s100.product.");
+
+    /// <summary>
+    /// Coordinate count of the original geometry going into
+    /// simplification. Combined with <see cref="SimplifyCoordsOut"/>
+    /// gives the achieved reduction ratio per feature.
+    /// </summary>
+    public static readonly Histogram<long> SimplifyCoordsIn =
+        Meter.CreateHistogram<long>(
+            name: "s100.simplify.coords.in",
+            unit: "{coordinates}",
+            description: "Coordinate count entering simplification (cache miss). Tagged with s100.product.");
+
+    /// <inheritdoc cref="SimplifyCoordsIn"/>
+    public static readonly Histogram<long> SimplifyCoordsOut =
+        Meter.CreateHistogram<long>(
+            name: "s100.simplify.coords.out",
+            unit: "{coordinates}",
+            description: "Coordinate count leaving simplification (cache miss). Tagged with s100.product.");
+
+    /// <summary>
+    /// Running total of simplified coordinates retained in the
+    /// simplification cache, summed across all buckets. Bounded by
+    /// <c>SimplificationOptions.MaxCachedCoordinates</c>; this is
+    /// the signal to watch for cache-pressure tuning. Increments on
+    /// cache adds, decrements on bucket / budget eviction.
+    /// </summary>
+    public static readonly UpDownCounter<long> SimplifyCacheCoordsTracked =
+        Meter.CreateUpDownCounter<long>(
+            name: "s100.simplify.cache.coords.tracked",
+            unit: "{coordinates}",
+            description: "Total simplified coordinates currently retained in the simplification cache. Tagged with s100.product.");
+
+    /// <summary>
     /// Wall-clock duration of a single Mapsui <c>GetFeatures(rect,resolution)</c>
     /// call on an <see cref="InstrumentedMemoryLayer"/>. Mapsui invokes this
     /// once per visible layer per rendered frame, so the histogram reflects

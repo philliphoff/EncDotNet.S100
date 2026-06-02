@@ -100,6 +100,89 @@ with per-vertex cost ~1 µs. See
 [`docs/design/mapsui-performance.md`](../../docs/design/mapsui-performance.md)
 for the full investigation and optimization plan.
 
+## Resolution-aware geometry simplification
+
+Issue [#164](https://github.com/philliphoff/EncDotNet.S100/issues/164)
+adds an opt-in resolution-aware Douglas-Peucker simplification path
+that reduces the vertex count Skia tessellates per frame. Polylines
+in the 1k–10k bucket on real S-101 datasets typically simplify by
+5–10× at typical pan zooms with no visible quality regression at the
+default 0.5-pixel tolerance.
+
+### Pipeline placement
+
+Simplification lives on `InstrumentedMemoryLayer.GetFeatures`,
+because that is the only seam in the pipeline that has access to the
+current zoom (`resolution`, m/px in EPSG:3857). When a layer has
+simplification enabled, every visible feature is routed through a
+per-layer `SimplificationCache`:
+
+- Cache key: `(original-feature reference, half-octave bucket)`.
+- Bucket: `round(log2(resolution) × 2)`. Tolerance for a bucket is
+  `pixelTolerance × 2^(bucket / 2)` metres.
+- Algorithm: NTS' `DouglasPeuckerSimplifier`, lines and multi-lines
+  only in v1. Polygons, points, and other types pass through
+  unchanged. (Polygon support is deferred until topology
+  preservation + validation is wired in.)
+- Eviction: on bucket transition, drop entries from buckets outside
+  `[active − 1, active + 1]`. If the cache's tracked coordinate
+  count still exceeds `MaxCachedCoordinates` (default 5 M ≈ 80 MB),
+  the bucket farthest from the active one is dropped next, until
+  under budget.
+- Simplified clones share style instances by reference and copy all
+  fields (including `S100.FeatureRef`); they also carry an
+  `S100.OriginalFeature` back-reference. Use
+  `Simplification.GetOriginal(feature)` to recover the unsimplified
+  feature for picking / info-on-click.
+
+### Wiring
+
+```csharp
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Mapsui.Simplification;
+
+if (layer is InstrumentedMemoryLayer iml)
+{
+    iml.EnableSimplification(
+        DouglasPeuckerLineSimplifier.Instance,
+        SimplificationOptions.Default);
+}
+```
+
+In the desktop viewer this is driven by the
+**Simplify line geometry (experimental)** setting, applied in
+`DatasetLoaderService` before the optional rasterization wrap.
+
+### Telemetry
+
+| Instrument | Unit | Tags | Purpose |
+|---|---|---|---|
+| `s100.simplify.cache.hit.count` | count | `s100.product` | Simplified clone served from cache |
+| `s100.simplify.cache.miss.count` | count | `s100.product` | DP invocation triggered |
+| `s100.simplify.duration` | ms | `s100.product` | Per-feature DP cost (miss only) |
+| `s100.simplify.coords.in` | count | `s100.product` | Original-geometry vertex count (miss) |
+| `s100.simplify.coords.out` | count | `s100.product` | Simplified-geometry vertex count (miss) |
+| `s100.simplify.cache.coords.tracked` | count | `s100.product` | Live coords in cache across all buckets |
+
+The acceptance bar from issue #164 is steady-state hit rate ≥ 95%
+and ≥ 50% reduction in `s100.map.paint.duration` mean on the
+multi-S-101 workload from the perf review.
+
+### Known limits
+
+- v1 simplifies only line geometry; polygons (e.g. depth areas) and
+  points are unaffected. The perf review shows lines dominate the
+  paint cost in real datasets, so this still hits the projected
+  budget.
+- The miss path runs synchronously on the render thread. After a
+  zoom-band transition, the first paint at the new bucket may stall
+  briefly while the visible set is simplified; subsequent frames hit
+  the cache. An async / pre-warm path is documented as future work
+  in `docs/design/mapsui-performance.md`.
+- The cache is sized by coordinate count, not entry count, so a
+  handful of very dense polylines and many small features have
+  comparable budget cost.
+
 ## Installation
 
 ```sh

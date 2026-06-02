@@ -164,6 +164,17 @@ internal sealed class ViewerSettings
     /// </summary>
     public bool? EnableVectorRasterization { get; set; }
 
+    /// <summary>
+    /// When true, S-100 vector layers run incoming line geometries
+    /// through a resolution-aware Douglas-Peucker simplifier (issue
+    /// #164) before passing them to Mapsui's vector style renderer.
+    /// Each <c>(feature, zoom-bucket)</c> pair is cached, so steady
+    /// pans/zooms re-use the simplified geometry. Polygons and short
+    /// lines pass through unchanged. Defaults to false (full
+    /// geometry — preserves the historical pixel-perfect output).
+    /// </summary>
+    public bool? EnableGeometrySimplification { get; set; }
+
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
 
