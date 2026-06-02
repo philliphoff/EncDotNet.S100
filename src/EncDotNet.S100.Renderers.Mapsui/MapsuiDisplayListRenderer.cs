@@ -12,6 +12,7 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Simplify;
 using MapsuiColor = Mapsui.Styles.Color;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -1029,6 +1030,16 @@ public sealed class MapsuiDisplayListRenderer
     /// <remarks>
     /// Entries must be sorted by ascending priority before calling.
     /// Returns (tilePng, clippedGeometry) pairs in ascending priority order.
+    /// <para>
+    /// Pattern geometries are generalized with <see cref="TopologyPreservingSimplifier"/>
+    /// at <see cref="PatternClipSimplifyToleranceMetres"/> before the NetTopologySuite
+    /// overlay operations. S-101 quality/coverage areas (e.g. M_QUAL) can follow the
+    /// coastline with tens of thousands of vertices, the bulk of which are sub-pixel at
+    /// chart display scales. Because the clipped boundary only bounds a tiled raster
+    /// pattern fill, this generalization is visually negligible yet reduces the
+    /// <c>Difference</c>/<c>Union</c> cost on pathological geometries by an order of
+    /// magnitude. Topology-preserving simplification keeps the inputs valid for overlay.
+    /// </para>
     /// </remarks>
     private static List<(byte[] TilePng, Geometry Geometry)> ClipPatternsByPriority(
         List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries,
@@ -1047,7 +1058,7 @@ public sealed class MapsuiDisplayListRenderer
                 Geometry nonPatterned = nonPatternedColorFills.Count == 1
                     ? nonPatternedColorFills[0]
                     : new MultiPolygon(nonPatternedColorFills.ToArray());
-                excludeAreas = nonPatterned.Union();
+                excludeAreas = SimplifyForClip(nonPatterned.Union());
             }
             catch (TopologyException)
             {
@@ -1055,13 +1066,15 @@ public sealed class MapsuiDisplayListRenderer
             }
         }
 
-        // Build merged geometry for each entry
+        // Build merged, generalized geometry for each entry. Simplifying once up
+        // front means the (potentially huge) geometry is cheap to use both as a
+        // Difference subject and when accumulated into the higher-priority union.
         var merged = entries.Select(e =>
         {
             Geometry g = e.Polygons.Count == 1
                 ? e.Polygons[0]
                 : new MultiPolygon(e.Polygons.ToArray());
-            return (e.TilePng, e.Priority, Geometry: g);
+            return (e.TilePng, e.Priority, Geometry: SimplifyForClip(g));
         }).ToList();
 
         // Walk from highest priority down, accumulating a union of
@@ -1076,8 +1089,11 @@ public sealed class MapsuiDisplayListRenderer
             // Start with the original geometry, then subtract exclusion areas
             var clipped = geometry;
 
-            // Subtract higher-priority pattern areas
-            if (higherPriorityAreas is not null)
+            // Subtract higher-priority pattern areas (only when they actually
+            // overlap this entry's extent — an envelope test avoids a costly
+            // overlay when the areas are disjoint).
+            if (higherPriorityAreas is not null &&
+                higherPriorityAreas.EnvelopeInternal.Intersects(geometry.EnvelopeInternal))
             {
                 try
                 {
@@ -1096,7 +1112,8 @@ public sealed class MapsuiDisplayListRenderer
             }
 
             // Subtract non-patterned color fill areas (e.g. land)
-            if (excludeAreas is not null)
+            if (excludeAreas is not null &&
+                excludeAreas.EnvelopeInternal.Intersects(clipped.EnvelopeInternal))
             {
                 try
                 {
@@ -1114,7 +1131,8 @@ public sealed class MapsuiDisplayListRenderer
 
             result[i] = (tile, clipped);
 
-            // Add this entry's original (unclipped) area to the higher-priority union
+            // Add this entry's (generalized) area to the higher-priority union
+            // for use by the next, lower-priority entries.
             try
             {
                 higherPriorityAreas = higherPriorityAreas?.Union(geometry) ?? geometry;
@@ -1131,5 +1149,47 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return [.. result];
+    }
+
+    /// <summary>
+    /// Tolerance, in EPSG:3857 (Web Mercator) metres, used to generalize pattern
+    /// and exclusion geometries before clipping. Web Mercator inflates distances by
+    /// 1/cos(latitude), so this projected tolerance is conservative (smaller in
+    /// ground metres) away from the equator. The clipped boundary only bounds a
+    /// tiled raster pattern fill, so this generalization is not visually significant.
+    /// </summary>
+    private const double PatternClipSimplifyToleranceMetres = 1.0;
+
+    /// <summary>
+    /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving
+    /// topological validity so the result is safe for subsequent NetTopologySuite
+    /// overlay operations. Returns the original geometry if simplification fails or
+    /// degenerates to empty.
+    /// </summary>
+    private static Geometry SimplifyForClip(Geometry geometry)
+    {
+        if (geometry.NumPoints <= 8)
+            return geometry;
+
+        try
+        {
+            var simplified = TopologyPreservingSimplifier.Simplify(
+                geometry, PatternClipSimplifyToleranceMetres);
+
+            if (simplified is null || simplified.IsEmpty)
+                return geometry;
+
+            if (!simplified.IsValid)
+            {
+                var fixedGeometry = simplified.Buffer(0);
+                return fixedGeometry.IsEmpty ? geometry : fixedGeometry;
+            }
+
+            return simplified;
+        }
+        catch (TopologyException)
+        {
+            return geometry;
+        }
     }
 }

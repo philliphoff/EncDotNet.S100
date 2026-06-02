@@ -66,6 +66,30 @@ The contract is uniform across coverage and vector products:
   `GroupPath`, attribute name, and spec reference. Vector processors
   reserve `Sxxx-PROJ-PARSE` for the same purpose.
 
+### Render caching (S-101)
+
+`S101DatasetProcessor` caches the Part 9A Lua drawing-instruction list
+between renders. That list is a pure function of the
+`MarinerSettings` and the effective ECDIS display state (display
+category plus hidden S-101 viewing groups / display planes) — it does
+**not** depend on the palette or the symbol / text scale, which are
+applied later by the Mapsui renderer. So a Day/Dusk/Night palette
+switch (the dominant re-render trigger) reuses the cached instructions
+and skips the multi-second Lua pipeline. The cache key is built by the
+internal `BuildPortrayalCacheKey`; `PortrayalCacheHits` /
+`PortrayalCacheMisses` counters (internal, exposed via
+`InternalsVisibleTo`) let tests assert the hit/miss behaviour.
+
+Because the cache key must be a faithful summary of everything that
+feeds the pipeline, `EcdisDisplayExtensions.ApplyTo` clears any prior
+viewing-group user overrides before applying the current hidden set, so
+the catalogue's effective visibility is a pure function of the settings
+value rather than of call history. `RenderAsync` is serialized by a
+`SemaphoreSlim` gate: the processor holds one long-lived catalogue
+whose palette / viewing-group / display-plane state is mutated per
+render and read throughout, and the viewer fires re-renders
+re-entrantly.
+
 ### `S57DatasetProcessor` — pre-translation + delegation
 
 `S57DatasetProcessor` is the only processor that produces a composite

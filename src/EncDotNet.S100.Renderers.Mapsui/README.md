@@ -183,6 +183,33 @@ multi-S-101 workload from the perf review.
   handful of very dense polylines and many small features have
   comparable budget cost.
 
+### Pattern-fill clip generalization
+
+Independently of the resolution-aware line simplification above,
+`MapsuiDisplayListRenderer` generalizes the polygon geometry used when
+clipping tiled **pattern** fills against each other (display priority)
+and against non-patterned solid fills such as land. S-101
+quality/coverage areas (e.g. `M_QUAL`) can follow the coastline with
+tens of thousands of vertices, the bulk of which are sub-pixel at chart
+display scales. The NetTopologySuite `Difference`/`Union` overlay
+operations these geometries feed are super-linear in vertex count, so a
+single pathological area could dominate the whole frame (observed:
+~10 s of an ~11 s frame on one 64k-vertex pattern zone in a real 2.35 MB
+cell).
+
+Before the overlay, each merged pattern geometry and the land exclusion
+mask are passed through NTS `TopologyPreservingSimplifier` at a fixed
+1 m (EPSG:3857) tolerance (`PatternClipSimplifyToleranceMetres`).
+Topology-preserving simplification keeps the inputs valid for overlay;
+the result is buffer(0)-repaired if it still validates as invalid, and
+falls back to the original geometry on any failure. Because the clipped
+boundary only bounds a tiled raster pattern fill, the generalization is
+visually negligible (the S-101 visual-regression snapshot is unchanged).
+An envelope-intersection test also short-circuits `Difference` when the
+clip mask is disjoint from the entry. Together these cut the pattern
+clip from ~11 s to well under 1 s on the affected cell, shaving ~6 s off
+**every** S-101 frame (not just re-renders).
+
 ## Installation
 
 ```sh
