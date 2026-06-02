@@ -260,6 +260,9 @@
             <CheckBox Content="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"
                       IsChecked="{Binding IgnoreScaleMinimum}"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_EnableVectorRasterization}"
+                      IsChecked="{Binding EnableVectorRasterization}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EnableVectorRasterization}" />
 
             <!-- National Language -->
             <StackPanel Spacing="6">

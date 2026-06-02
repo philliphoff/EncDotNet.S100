@@ -86,9 +86,7 @@ public class S421RendererIntegrationTests
         var instructions = Part9DisplayListReader.Read(displayList);
         var geometryProvider = new GmlFeatureGeometryProvider<S421Feature>(dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
-        Assert.IsType<MemoryLayer>(layer);
-
-        var memLayer = (MemoryLayer)layer;
+        var memLayer = Assert.IsAssignableFrom<MemoryLayer>(layer);
         var features = memLayer.Features.ToList();
         Assert.Equal(2, features.Count); // both waypoints
 
