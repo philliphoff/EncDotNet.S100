@@ -33,6 +33,37 @@ bundled catalogue. Current patches:
 
 If upstream fixes a defect, the corresponding patch is dropped.
 
+## Legacy feature-name compatibility
+
+The bundled Portrayal Catalogue is **S-101 Edition 2.0.0**, whose Lua
+rule modules use the 2.0.0 (word-reversed) feature class names —
+`LateralBuoy.lua` defining `function LateralBuoy`, dispatched by
+`main.lua` via `require(feature.Code)` then `_G[feature.Code](...)`.
+Datasets authored against an earlier edition of the S-101 Feature
+Catalogue report the **pre-2.0.0** names (`BuoyLateral`,
+`BeaconCardinal`, `MooringWarpingFacility`, …). Those names match no
+2.0.0 rule module, so the dispatcher's `require` fails and the feature
+falls back to **DEFAULT** (`QUESMRK1`) symbology.
+
+`S101LegacyFeatureNames.Normalize` maps the legacy class names to their
+2.0.0 equivalents so the correct rule runs. Because simple attribute
+names are stable across these editions, only the feature **class** name
+needs remapping. The shim is applied **only** at the portrayal boundary
+(`S101LuaDataProvider.HostFeatureGetCode`); feature names are left
+as-authored everywhere else (document reader, vector source,
+validation, info panels).
+
+`MooringWarpingFacility` was structurally removed in 2.0.0, so it is
+mapped conditionally on `categoryOfMooringWarpingFacility`
+(dolphin → `Dolphin`, bollard → `Bollard`, post/pile → `Pile`,
+mooring buoy → `MooringBuoy`); categories without a clean 2.0.0
+equivalent are left unchanged and stay on DEFAULT. These conditional
+targets are approximations — only the class name is aliased, not the
+attributes the 2.0.0 rule reads — so symbology may be generic, and a
+target rule that rejects the feature's geometric primitive simply
+errors inside the dispatcher's `pcall` and falls back to DEFAULT
+(no regression versus today).
+
 ## Validation
 
 A bundled rule pack
