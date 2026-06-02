@@ -748,6 +748,49 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
 
+        // Experimental: wrap S-100 vector (MemoryLayer) outputs in a
+        // rasterising tile cache so each visible region is rendered
+        // once and re-used during subsequent pan/zoom frames.
+        // Coverage / image layers (S-102/S-104/S-111) are already
+        // raster, so we leave them alone. Wrapping happens AFTER the
+        // processor's AnnotateFeatures step (which type-checks the
+        // raw MemoryLayer), so feature tagging is preserved.
+        if (_settingsVm.EnableVectorRasterization && layers.Count > 0)
+        {
+            var wrapMap = new Dictionary<ILayer, ILayer>(ReferenceEqualityComparer.Instance);
+            var wrapped = new List<ILayer>(layers.Count);
+            foreach (var layer in layers)
+            {
+                if (layer is MemoryLayer memoryLayer)
+                {
+                    var wrapper = new S100RasterizingTileLayer(memoryLayer)
+                    {
+                        Name = memoryLayer.Name,
+                    };
+                    wrapped.Add(wrapper);
+                    wrapMap[memoryLayer] = wrapper;
+                }
+                else
+                {
+                    wrapped.Add(layer);
+                }
+            }
+            if (wrapMap.Count > 0)
+            {
+                layers = wrapped;
+                if (stackEntries is not null && stackEntries.Count > 0)
+                {
+                    var remapped = new List<LayerStackEntry>(stackEntries.Count);
+                    foreach (var se in stackEntries)
+                    {
+                        var l = wrapMap.TryGetValue(se.Layer, out var w) ? w : se.Layer;
+                        remapped.Add(se with { Layer = l });
+                    }
+                    stackEntries = remapped;
+                }
+            }
+        }
+
         RemoveEntryLayers(entry);
         _entryLayers[entry] = layers;
         _entryLayerKeys[entry] = layerKeys;

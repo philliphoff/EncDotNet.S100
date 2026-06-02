@@ -439,6 +439,19 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
     }
 
+    private bool _enableVectorRasterization;
+    /// <summary>
+    /// Experimental: when true, S-100 vector layers are wrapped in a
+    /// rasterising tile cache for higher pan/zoom frame rate at the
+    /// cost of vector crispness during gestures. Toggling triggers a
+    /// full re-render via <c>MarinerChanged</c>.
+    /// </summary>
+    public bool EnableVectorRasterization
+    {
+        get => _enableVectorRasterization;
+        set { if (SetProperty(ref _enableVectorRasterization, value)) { _settings.EnableVectorRasterization = value; RaiseMarinerChanged(); } }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -522,6 +535,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
+        _enableVectorRasterization = settings.EnableVectorRasterization ?? false;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;

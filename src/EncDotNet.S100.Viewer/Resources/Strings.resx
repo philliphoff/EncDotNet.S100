@@ -685,6 +685,12 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_IgnoreScaleMinimum" xml:space="preserve">
     <value>Always portray features regardless of cell scale-minimum attribute (S-101 PC IgnoreScaleMinimum).</value>
   </data>
+  <data name="Settings_EnableVectorRasterization" xml:space="preserve">
+    <value>Rasterize vector layers (experimental)</value>
+  </data>
+  <data name="Tooltip_EnableVectorRasterization" xml:space="preserve">
+    <value>Cache S-100 vector layers as raster tiles for higher pan/zoom frame rate. Trades vector crispness during gestures for performance on large datasets.</value>
+  </data>
   <data name="Settings_NationalLanguage" xml:space="preserve">
     <value>National Language</value>
   </data>

@@ -130,6 +130,15 @@ internal sealed class ViewerSettings
     public bool? RadarOverlay { get; set; }
     public bool? IgnoreScaleMinimum { get; set; }
 
+    /// <summary>
+    /// Experimental: when true, S-100 vector layers are wrapped in a
+    /// Mapsui <c>RasterizingTileLayer</c> so each visible region is
+    /// rasterised once into a tile cache and re-used during pan/zoom.
+    /// Trades vector crispness during gestures for higher frame rate
+    /// on large datasets. Defaults to false (un-cached vector path).
+    /// </summary>
+    public bool? EnableVectorRasterization { get; set; }
+
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
 

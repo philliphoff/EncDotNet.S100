@@ -59,6 +59,8 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
+
         // The viewer uses a plain ServiceCollection (no generic IHost),
         // so the IHostedService registered by AddOpenTelemetry() never
         // runs — meaning the TracerProvider / MeterProvider would

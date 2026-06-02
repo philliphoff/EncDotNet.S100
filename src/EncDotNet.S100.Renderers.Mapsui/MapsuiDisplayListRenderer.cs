@@ -274,7 +274,7 @@ public sealed class MapsuiDisplayListRenderer
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        return new MemoryLayer
+        return new InstrumentedMemoryLayer(Product)
         {
             Name = LayerName,
             Features = mapFeatures,
