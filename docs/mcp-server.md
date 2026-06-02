@@ -67,6 +67,35 @@ assume canonical units for these cases.
 Untick the checkbox to stop the server; the indicator disappears and
 the TCP port is released.
 
+### Enable it from the command line (agent automation)
+
+For headless / scripted runs an agent can enable and configure the
+MCP server entirely from the CLI, without opening Settings and without
+touching the user's persisted profile:
+
+```bash
+dotnet run --project src/EncDotNet.S100.Viewer -- \
+  --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
+  path/to/dataset.h5
+```
+
+- `--mcp` starts the server for the run, overriding the persisted
+  toggle. `--mcp-port <PORT>` and `--mcp-bind <ADDR>` configure the
+  listener (any MCP flag implies `--mcp`).
+- `--mcp-port-file <PATH>` writes the bound endpoint URI to a file
+  once the server is listening, so an agent can discover an ephemeral
+  port (`--mcp-port 0`, the default). The endpoint is also printed to
+  stdout as `[MCP] listening on …`.
+- A CLI-driven MCP run **never persists** the bound port back to
+  `settings.json`. Combine with `--ephemeral` (throwaway settings) or
+  `--settings <PATH>` (alternate settings file) to keep the real
+  profile pristine and let parallel runs avoid collisions.
+
+See the **Automation / agent control** section of the
+[viewer README](../src/EncDotNet.S100.Viewer/README.md) for the full
+flag list (viewport, palette, time step, screenshots, logging) and an
+end-to-end walkthrough.
+
 ## Connect from `mcp-inspector`
 
 ```bash
@@ -87,7 +116,27 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `query_features` | Returns features from loaded GML vector datasets whose geometry intersects a spatial query. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
-| `render_to_image` *(viewer only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported in v1. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+| `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
+| `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
+| `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
+
+### Read-only vs mutating tools
+
+Tools fall into two groups:
+
+* **Read-only** — never mutate viewer state. Safe to call from any
+  agent at any time. Examples: `list_datasets`, `find_at`,
+  `query_features`, `sample_coverage`, `render_to_image` (which
+  snapshots from a clone of the live `Map`).
+* **Mutating** — modify the live viewer's state (navigator, palette,
+  time step, loaded datasets, etc.). Use only when you intend to
+  drive the viewer's UI from outside. Examples: `set_viewport`,
+  `set_palette`, `set_display_category`, `set_time_step`.
+
+Tool descriptions in the registered MCP catalogue identify each tool
+as one or the other; this table is the canonical reference.
 
 ### Image content blocks (`render_to_image`)
 

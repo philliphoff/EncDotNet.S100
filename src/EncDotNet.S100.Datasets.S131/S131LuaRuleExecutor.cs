@@ -163,8 +163,12 @@ public sealed class S131LuaRuleExecutor : ILuaRuleExecutor
     /// Runs the S-131 Lua portrayal stage and returns typed drawing instructions
     /// ready for the renderer.
     /// </summary>
-    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner)
+    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
+        // The MoonSharp interpreter is not interruptible mid-script, so the
+        // token is honoured at the coarse boundary before invocation.
+        cancellationToken.ThrowIfCancellationRequested();
+
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
         activity?.SetTag(TelemetryTags.Product, "S-131");
         var start = Stopwatch.GetTimestamp();

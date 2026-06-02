@@ -42,6 +42,9 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
+    private bool _exitAfterScreenshot;
+    private bool _fullWindowScreenshot;
+    private ViewerCommandSettings? _startupOptions;
 
     public MainWindow() : this(null) { }
 
@@ -122,6 +125,13 @@ public partial class MainWindow : ShadUI.Window
         // loader subscribes to its own settings dependencies internally.
         var mapHost = new MapsuiMapHost(MapControl);
         App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
+        // Render-state controller bridges MCP / scripted callers to the
+        // viewer's palette and ECDIS display category without exposing
+        // SettingsViewModel / EcdisDisplayState directly.
+        App.Services.GetRequiredService<IRenderStateControllerAccessor>().Current =
+            new ViewerRenderStateController(
+                App.Services.GetRequiredService<ViewModels.SettingsViewModel>(),
+                App.Services.GetRequiredService<EcdisDisplayState>());
         _loader.Initialize(mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
@@ -148,17 +158,6 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost = null;
         };
         _loader.StatusChanged += text => _viewModel.StatusText = text;
-        _loader.DatasetLoaded += entry =>
-        {
-            if (_screenshotPath is not null)
-            {
-                _ = Dispatcher.UIThread.InvokeAsync(async () =>
-                {
-                    await Task.Delay(2000);
-                    CaptureScreenshot(_screenshotPath);
-                });
-            }
-        };
 
         DataContext = _viewModel;
 
@@ -219,6 +218,18 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map is { } mapForBackColor)
         {
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
+
+        // Bind the map-viewport notifier as early as possible so the
+        // AIS overlay's zoom-gated decorator (resolved below via
+        // GetServices<IDynamicFeatureSource>) can read the current
+        // viewport synchronously in its constructor. See
+        // docs/design/ais-zoom-gated-subscription.md.
+        if (MapControl.Map?.Navigator is { } notifierNav)
+        {
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.MapViewportNotifier>()
+                .Bind(notifierNav);
         }
 
         // PR-D2: dynamic-source overlay host. Registered *after* the
@@ -300,7 +311,27 @@ public partial class MainWindow : ShadUI.Window
         AddHandler(DragDrop.DropEvent, OnDrop);
 
         // Apply CLI options
+        _startupOptions = options;
         _screenshotPath = options?.ScreenshotPath;
+        _exitAfterScreenshot = options?.ExitAfterScreenshot ?? false;
+        _fullWindowScreenshot = options?.FullWindowScreenshot ?? false;
+
+        // A fixed window size makes screenshots reproducible across
+        // machines. Applied before the window is shown.
+        if (options?.ParsedWindowSize is { } size)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            CanResize = true;
+            Width = size.Width;
+            Height = size.Height;
+        }
+
+        // When an explicit startup viewport is requested, suppress the
+        // per-dataset auto-zoom so the requested framing wins.
+        if (options?.HasExplicitViewport == true)
+        {
+            _loader.SuppressAutoZoom = true;
+        }
 
         // Add CLI portrayal catalogues to the view model (transient — not persisted)
         if (options?.PortrayalCatalogues is { } pcArgs)
@@ -326,11 +357,37 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
-        // Load CLI dataset files
+        // Run startup automation once the window is shown: load CLI
+        // datasets, drive the map to the requested state, and capture a
+        // screenshot — in a deterministic order so an agent gets a
+        // stable result.
         var datasetPaths = options?.Datasets?.Where(File.Exists).ToArray() ?? [];
-        if (datasetPaths.Length > 0)
+        var needsAutomation = datasetPaths.Length > 0
+            || _screenshotPath is not null
+            || options?.HasExplicitViewport == true
+            || options?.TimeStep is not null;
+        if (needsAutomation)
         {
-            Opened += async (_, _) =>
+            Opened += async (_, _) => await RunStartupAutomationAsync(datasetPaths);
+        }
+    }
+
+    /// <summary>
+    /// Deterministic startup sequence for headless/agent runs: load any
+    /// CLI datasets, wait for rendering to quiesce, drive the map to the
+    /// requested time step and viewport, then capture a screenshot and
+    /// optionally exit. Replaces the old fixed-delay screenshot path so
+    /// the capture reflects a settled render rather than a guess.
+    /// </summary>
+    private async Task RunStartupAutomationAsync(string[] datasetPaths)
+    {
+        var lastEventTicks = new long[1];
+        Action<DatasetEntry> handler =
+            _ => Interlocked.Exchange(ref lastEventTicks[0], Environment.TickCount64);
+        _loader.DatasetLoaded += handler;
+        try
+        {
+            if (datasetPaths.Length > 0)
             {
                 _viewModel.SelectDefaultTab();
                 foreach (var datasetPath in datasetPaths)
@@ -339,8 +396,155 @@ public partial class MainWindow : ShadUI.Window
                     var entry = _viewModel.Datasets.Add(datasetPath, spec);
                     await _loader.LoadAsync(entry);
                 }
-            };
+
+                await WaitForRenderQuiesceAsync(lastEventTicks, expectWork: true);
+            }
+
+            // Drive the global clock; the loader re-renders in response,
+            // so wait for that pass to settle before framing/capturing.
+            if (ApplyStartupTimeStep())
+            {
+                await WaitForRenderQuiesceAsync(lastEventTicks, expectWork: false);
+            }
         }
+        finally
+        {
+            _loader.DatasetLoaded -= handler;
+        }
+
+        ApplyStartupViewport();
+
+        if (_screenshotPath is not null)
+        {
+            // Let the final frame paint on the render thread before we
+            // snapshot. Short and fixed — the heavy waiting already
+            // happened above on the load/render-quiesce signals.
+            await Task.Delay(400);
+            CaptureScreenshot(_screenshotPath);
+
+            if (_exitAfterScreenshot)
+            {
+                if (Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.Shutdown();
+                }
+                else
+                {
+                    Close();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Polls until dataset-load / re-render events stop arriving for a
+    /// short quiet window, or a hard timeout elapses. Mirrors the
+    /// debounce used by the exchange-set zoom path so a single render
+    /// quiesce signal drives both framing and capture.
+    /// </summary>
+    private static async Task WaitForRenderQuiesceAsync(long[] lastEventTicks, bool expectWork)
+    {
+        const int QuietWindowMs = 600;
+        const int PollMs = 100;
+        const int MaxWaitMs = 30_000;
+
+        var startedAt = Environment.TickCount64;
+        while (true)
+        {
+            await Task.Delay(PollMs);
+
+            var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
+            var now = Environment.TickCount64;
+
+            if (lastEvent == 0)
+            {
+                // No events yet. When we expected work, keep waiting up
+                // to the cap; otherwise (e.g. a time-step that produced
+                // no re-render) return promptly.
+                if (!expectWork || now - startedAt >= MaxWaitMs) return;
+                continue;
+            }
+
+            if (now - lastEvent >= QuietWindowMs) return;
+            if (now - startedAt >= MaxWaitMs) return;
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--center</c>/<c>--zoom</c> or <c>--bbox</c> startup
+    /// viewport, if supplied. No-op otherwise. WGS-84 inputs are
+    /// projected to the map's web-mercator CRS.
+    /// </summary>
+    private void ApplyStartupViewport()
+    {
+        if (_startupOptions is not { } options) return;
+        if (MapControl.Map?.Navigator is not { } nav) return;
+
+        if (options.ParsedBoundingBox is { } bbox)
+        {
+            var (minX, minY) = SphericalMercator.FromLonLat(bbox.West, bbox.South);
+            var (maxX, maxY) = SphericalMercator.FromLonLat(bbox.East, bbox.North);
+            var extent = new MRect(minX, minY, maxX, maxY);
+            if (extent.Width > 0 && extent.Height > 0)
+            {
+                nav.ZoomToBox(extent, duration: 0);
+            }
+            return;
+        }
+
+        if (options.ParsedCenter is { } center && options.Zoom is { } zoom)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(center.Longitude, center.Latitude);
+            // Standard web-mercator resolution (metres/pixel) at a given
+            // 256-pixel-tile zoom level: 156543.03392804097 / 2^zoom.
+            var resolution = 156543.03392804097 / Math.Pow(2, zoom);
+            nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--time-step</c> startup option (a zero-based index
+    /// into the aggregated time samples, or an ISO-8601 UTC timestamp).
+    /// Returns <see langword="true"/> when a time step was applied (and
+    /// thus a re-render was triggered).
+    /// </summary>
+    private bool ApplyStartupTimeStep()
+    {
+        if (_startupOptions?.TimeStep is not { } raw || string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var globalTime = App.Services.GetService<GlobalTimeService>();
+        if (globalTime is null || !globalTime.IsActive)
+            return false;
+
+        var samples = globalTime.AllSamples;
+        if (samples.Count == 0)
+            return false;
+
+        DateTime target;
+        if (int.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var index))
+        {
+            index = Math.Clamp(index, 0, samples.Count - 1);
+            target = samples[index];
+        }
+        else if (DateTime.TryParse(raw.Trim(),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal
+                | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            // Snap to the nearest available sample.
+            target = samples.OrderBy(s => Math.Abs((s - parsed).Ticks)).First();
+        }
+        else
+        {
+            return false;
+        }
+
+        globalTime.SetCurrentTime(target);
+        return true;
     }
 
     private void ApplyAccentColor(Color color)
@@ -350,7 +554,10 @@ public partial class MainWindow : ShadUI.Window
 
     private void CaptureScreenshot(string outputPath)
     {
-        _screenshotService.Capture(MapControl, outputPath);
+        // Full-window capture snapshots the whole window (panels,
+        // toolbars, status bar); the default captures just the map.
+        Control target = _fullWindowScreenshot ? this : MapControl;
+        _screenshotService.Capture(target, outputPath);
     }
 
     /// <summary>

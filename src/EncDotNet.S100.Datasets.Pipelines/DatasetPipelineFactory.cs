@@ -415,7 +415,13 @@ public sealed class DatasetPipelineFactory
     /// <summary>
     /// Convenience method: creates a processor and renders with default context.
     /// </summary>
-    public DatasetResult Process(string path) => CreateProcessor(path).Render();
+    /// <remarks>
+    /// This synchronous facade blocks on the async render path; it is intended
+    /// for batch / CLI callers that have no synchronization context. UI callers
+    /// should await <see cref="IDatasetProcessor.RenderAsync"/> directly.
+    /// </remarks>
+    public DatasetResult Process(string path) =>
+        CreateProcessor(path).RenderAsync().GetAwaiter().GetResult();
 
     /// <summary>
     /// Creates a processor for a dataset stored inside <paramref name="source"/>

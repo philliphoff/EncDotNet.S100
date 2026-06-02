@@ -244,7 +244,7 @@ public class S101PipelineTests
 
         public IReadOnlyList<string> FeatureTypesPresent { get; }
 
-        public XmlReader GetFeatureXml() =>
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default) =>
             XmlReader.Create(new StringReader(_featureXml));
     }
 

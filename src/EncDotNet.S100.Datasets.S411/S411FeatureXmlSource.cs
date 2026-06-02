@@ -41,5 +41,9 @@ public sealed class S411FeatureXmlSource : IFeatureXmlSource
     }
 
     /// <inheritdoc/>
-    public System.Xml.XmlReader GetFeatureXml() => _dataset.SourceDocument.CreateReader();
+    public System.Xml.XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _dataset.SourceDocument.CreateReader();
+    }
 }

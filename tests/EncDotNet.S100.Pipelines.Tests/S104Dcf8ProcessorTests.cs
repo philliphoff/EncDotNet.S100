@@ -72,7 +72,7 @@ public class S104Dcf8ProcessorTests
             using var processor = (System.IDisposable?)null; // placeholder so analyzers don't complain about disposable processors
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
-            var result = p.Render();
+            var result = p.RenderAsync().GetAwaiter().GetResult();
 
             Assert.Single(result.Layers);
             var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
@@ -105,7 +105,7 @@ public class S104Dcf8ProcessorTests
             // Render at the second time-step; GetFeatureInfo should report
             // the value at the same step (height = 1.5, trend = 2 for Alpha).
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = p.Render(new S104RenderContext { TimeStep = secondStep });
+            _ = p.RenderAsync(new S104RenderContext { TimeStep = secondStep }).GetAwaiter().GetResult();
 
             var info = p.GetFeatureInfo("station:Alpha");
 
@@ -135,7 +135,7 @@ public class S104Dcf8ProcessorTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = p.Render();
+            _ = p.RenderAsync().GetAwaiter().GetResult();
 
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station-ref"));

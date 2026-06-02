@@ -24,6 +24,24 @@ internal interface IDatasetLoaderService
     /// </summary>
     void Initialize(IMapHost host, ViewerCommandSettings? options);
 
+    /// <summary>
+    /// When <see langword="true"/>, per-dataset loads skip their
+    /// automatic zoom-to-extent. Set by the window when an explicit
+    /// startup viewport (<c>--center</c>/<c>--zoom</c> or <c>--bbox</c>)
+    /// was supplied so the requested framing is deterministic.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member (no-op) so the many test
+    /// doubles that implement this interface need not all override it;
+    /// the production <c>DatasetLoaderService</c> backs it with real
+    /// state.
+    /// </remarks>
+    bool SuppressAutoZoom
+    {
+        get => false;
+        set { }
+    }
+
     /// <summary>Loads a dataset and adds its rendered layers to the map.</summary>
     Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default);
 

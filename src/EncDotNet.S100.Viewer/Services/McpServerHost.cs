@@ -28,6 +28,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog _catalog;
     private readonly ViewerSettings _settings;
     private readonly IMapHostAccessor? _mapHostAccessor;
+    private readonly IRenderStateControllerAccessor? _renderStateAccessor;
+    private readonly GlobalTimeService? _globalTime;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -38,13 +40,17 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Mcp.Tools.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
         IMapHostAccessor? mapHostAccessor = null,
-        ILoggerFactory? loggers = null)
+        ILoggerFactory? loggers = null,
+        IRenderStateControllerAccessor? renderStateAccessor = null,
+        GlobalTimeService? globalTime = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
         _settings = settings;
         _mapHostAccessor = mapHostAccessor;
+        _renderStateAccessor = renderStateAccessor;
+        _globalTime = globalTime;
         _loggers = loggers;
     }
 
@@ -152,11 +158,18 @@ internal sealed class McpServerHost : IAsyncDisposable
         // persisted port, but ephemeral has no advantage for MCP
         // tooling and the user can clear it via the "Reset to auto"
         // button in Settings.
-        if (next.Port is { } boundPort && boundPort != _settings.McpPort)
+        //
+        // Exception: when MCP was configured from the command line for
+        // this run we never write the port back — an automation run
+        // must not mutate the user's persisted profile.
+        if (!_settings.McpConfiguredFromCommandLine
+            && next.Port is { } boundPort && boundPort != _settings.McpPort)
         {
             _settings.McpPort = boundPort;
             TrySaveSettings();
         }
+
+        PublishEndpoint(next);
 
         ServerChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -199,6 +212,42 @@ internal sealed class McpServerHost : IAsyncDisposable
     }
 
     /// <summary>
+    /// Makes the bound endpoint discoverable by external agents:
+    /// writes the URI to <see cref="ViewerSettings.McpPortFilePath"/>
+    /// when configured (so an ephemeral port can be read from a file)
+    /// and echoes it to standard output. Both are best-effort.
+    /// </summary>
+    private void PublishEndpoint(S100McpServer server)
+    {
+        if (server.Endpoint is not { } endpoint)
+            return;
+
+        if (_settings.McpPortFilePath is { } path && !string.IsNullOrWhiteSpace(path))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                File.WriteAllText(path, endpoint.ToString());
+            }
+            catch
+            {
+                // Best-effort — failure to publish must not stop the server.
+            }
+        }
+
+        try
+        {
+            Console.Out.WriteLine($"[MCP] listening on {endpoint}");
+        }
+        catch
+        {
+            // Console may be redirected/closed; ignore.
+        }
+    }
+
+    /// <summary>
     /// Detects the various ways Kestrel surfaces an "address in use"
     /// error. Kestrel typically wraps the underlying
     /// <see cref="SocketException"/> (errno <c>EADDRINUSE</c> = 48 on
@@ -210,9 +259,22 @@ internal sealed class McpServerHost : IAsyncDisposable
     /// </summary>
     private System.Collections.Generic.IReadOnlyList<McpServerTool>? BuildAdditionalTools()
     {
-        if (_mapHostAccessor is null) return null;
-        var renderTool = new RenderToImageTool(_mapHostAccessor);
-        return new[] { RenderToImageMcpAdapter.Create(renderTool) };
+        var tools = new System.Collections.Generic.List<McpServerTool>();
+        if (_mapHostAccessor is not null)
+        {
+            tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
+            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
+        }
+        if (_renderStateAccessor is not null)
+        {
+            tools.Add(SetPaletteMcpAdapter.Create(new SetPaletteTool(_renderStateAccessor)));
+            tools.Add(SetDisplayCategoryMcpAdapter.Create(new SetDisplayCategoryTool(_renderStateAccessor)));
+        }
+        if (_globalTime is not null)
+        {
+            tools.Add(SetTimeStepMcpAdapter.Create(new SetTimeStepTool(_globalTime)));
+        }
+        return tools.Count == 0 ? null : tools;
     }
 
     private static bool IsPortInUse(Exception ex)
