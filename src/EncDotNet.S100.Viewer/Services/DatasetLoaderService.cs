@@ -12,6 +12,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Mapsui.Simplification;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -752,6 +753,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         IReadOnlyList<LayerStackEntry>? stackEntries)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
+
+        // Issue #164: opt-in resolution-aware geometry simplification.
+        // Applied to the inner MemoryLayer BEFORE the rasterization
+        // wrap below so that, when both flags are on, rasterized tiles
+        // are produced from already-simplified geometry. The cache
+        // lives on the layer; clearing on toggle is automatic via
+        // RaiseMarinerChanged → full reload.
+        if (_settingsVm.EnableGeometrySimplification && layers.Count > 0)
+        {
+            foreach (var layer in layers)
+            {
+                if (layer is InstrumentedMemoryLayer iml)
+                {
+                    iml.EnableSimplification(
+                        DouglasPeuckerLineSimplifier.Instance,
+                        SimplificationOptions.Default);
+                }
+            }
+        }
 
         // Experimental: wrap S-100 vector (MemoryLayer) outputs in a
         // rasterising tile cache so each visible region is rendered

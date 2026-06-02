@@ -691,6 +691,12 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_EnableVectorRasterization" xml:space="preserve">
     <value>Cache S-100 vector layers as raster tiles for higher pan/zoom frame rate. Trades vector crispness during gestures for performance on large datasets.</value>
   </data>
+  <data name="Settings_EnableGeometrySimplification" xml:space="preserve">
+    <value>Simplify line geometry (experimental)</value>
+  </data>
+  <data name="Tooltip_EnableGeometrySimplification" xml:space="preserve">
+    <value>Apply resolution-aware Douglas-Peucker simplification to S-100 line features at render time, with a per-zoom cache (issue #164). Speeds up paint on dense ENC line data; polygons and short lines are unaffected.</value>
+  </data>
   <data name="Settings_NationalLanguage" xml:space="preserve">
     <value>National Language</value>
   </data>

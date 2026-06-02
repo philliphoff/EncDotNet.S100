@@ -263,6 +263,9 @@
             <CheckBox Content="{x:Static loc:Strings.Settings_EnableVectorRasterization}"
                       IsChecked="{Binding EnableVectorRasterization}"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_EnableVectorRasterization}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_EnableGeometrySimplification}"
+                      IsChecked="{Binding EnableGeometrySimplification}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EnableGeometrySimplification}" />
 
             <!-- National Language -->
             <StackPanel Spacing="6">

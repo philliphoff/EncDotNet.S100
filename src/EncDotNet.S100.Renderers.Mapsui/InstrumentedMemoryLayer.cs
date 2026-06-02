@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using EncDotNet.S100.Renderers.Mapsui.Simplification;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
@@ -44,6 +45,7 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
     private readonly KeyValuePair<string, object?>[] _tags;
     private readonly string? _product;
     private long _lastExitTimestamp;
+    private SimplificationCache? _simplificationCache;
 
     /// <summary>
     /// Creates a new instrumented layer.  <paramref name="product"/> is
@@ -57,6 +59,53 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
             ? System.Array.Empty<KeyValuePair<string, object?>>()
             : new[] { new KeyValuePair<string, object?>("s100.product", product) };
     }
+
+    /// <summary>
+    /// Enables resolution-aware geometry simplification on this
+    /// layer.  When configured, <see cref="GetFeatures"/> routes each
+    /// visible feature through a per-layer
+    /// <see cref="SimplificationCache"/> keyed by
+    /// <c>(feature, zoom-bucket)</c>; the renderer sees a simplified
+    /// clone whose <see cref="IFeature"/> carries an
+    /// <c>S100.OriginalFeature</c> back-reference for picking. Pass
+    /// <see langword="null"/> options or call
+    /// <see cref="DisableSimplification"/> to revert to the identity
+    /// passthrough.
+    /// </summary>
+    /// <remarks>
+    /// Introduced for issue #164. The viewer's
+    /// <c>EnableGeometrySimplification</c> setting calls this in
+    /// <c>DatasetLoaderService</c> after the dataset processor
+    /// returns its layers.
+    /// </remarks>
+    public void EnableSimplification(
+        IFeatureSimplifier simplifier,
+        SimplificationOptions options)
+    {
+        System.ArgumentNullException.ThrowIfNull(simplifier);
+        System.ArgumentNullException.ThrowIfNull(options);
+        var existing = _simplificationCache;
+        _simplificationCache = new SimplificationCache(simplifier, options, _product);
+        existing?.Clear();
+    }
+
+    /// <summary>
+    /// Disables simplification on this layer and clears any cached
+    /// entries.
+    /// </summary>
+    public void DisableSimplification()
+    {
+        var existing = _simplificationCache;
+        _simplificationCache = null;
+        existing?.Clear();
+    }
+
+    /// <summary>
+    /// Exposes the configured simplification cache (or
+    /// <see langword="null"/> when simplification is disabled). Used
+    /// by tests; not normally needed by callers.
+    /// </summary>
+    internal SimplificationCache? SimplificationCache => _simplificationCache;
 
     /// <inheritdoc />
     /// <remarks>
@@ -96,11 +145,12 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
 
         var visible = new List<IFeature>();
         long total = 0;
+        var cache = _simplificationCache;
         foreach (var feature in Features)
         {
             total++;
             if (feature is not null && feature.Extent?.Intersects(biggerRect) == true)
-                visible.Add(feature);
+                visible.Add(cache is null ? feature : cache.GetOrSimplify(feature, resolution));
         }
 
         var elapsedMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;

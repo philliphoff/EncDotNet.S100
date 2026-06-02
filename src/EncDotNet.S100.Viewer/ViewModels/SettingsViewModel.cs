@@ -452,6 +452,18 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _enableVectorRasterization, value)) { _settings.EnableVectorRasterization = value; RaiseMarinerChanged(); } }
     }
 
+    private bool _enableGeometrySimplification;
+    /// <summary>
+    /// When true, vector layers run their line geometries through a
+    /// resolution-aware Douglas-Peucker simplifier (issue #164).
+    /// Toggling triggers a full re-render via <c>MarinerChanged</c>.
+    /// </summary>
+    public bool EnableGeometrySimplification
+    {
+        get => _enableGeometrySimplification;
+        set { if (SetProperty(ref _enableGeometrySimplification, value)) { _settings.EnableGeometrySimplification = value; RaiseMarinerChanged(); } }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -536,6 +548,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
         _enableVectorRasterization = settings.EnableVectorRasterization ?? false;
+        _enableGeometrySimplification = settings.EnableGeometrySimplification ?? false;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;
