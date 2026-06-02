@@ -161,8 +161,18 @@ public sealed class S101LuaDataProvider
     private string HostFeatureGetCode(double featureId)
     {
         var feat = GetFeature((uint)featureId);
-        return _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
+        var raw = _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
             ? name : feat.FeatureTypeCode.ToString();
+
+        // Normalize legacy (pre-2.0.0) S-101 feature class names to their
+        // Edition 2.0.0 equivalents so the bundled 2.0.0 Portrayal Catalogue's
+        // Lua rule modules can be dispatched (S-100 Part 9A). Applied only here,
+        // at the portrayal boundary; names are left as-authored elsewhere.
+        return S101LegacyFeatureNames.Normalize(
+            raw,
+            attributeCode => GetSimpleAttributeValues(feat.Attributes, attributeCode)
+                .OfType<string>()
+                .FirstOrDefault());
     }
 
     private List<object> HostFeatureGetSimpleAttribute(double featureId, string attributePath, string attributeCode)
