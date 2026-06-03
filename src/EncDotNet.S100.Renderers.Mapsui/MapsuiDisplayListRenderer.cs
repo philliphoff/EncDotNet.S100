@@ -1161,14 +1161,30 @@ public sealed class MapsuiDisplayListRenderer
     private const double PatternClipSimplifyToleranceMetres = 1.0;
 
     /// <summary>
+    /// Minimum vertex count at which <see cref="SimplifyForClip"/> generalizes a
+    /// geometry before the clip overlay. Below this, the NetTopologySuite
+    /// <c>Difference</c>/<c>Union</c> cost is already small (profiling: a
+    /// ~2,600-vertex pattern area clips in ~50&#160;ms) and the simplifier's own
+    /// fixed setup cost would be net overhead. The cost the optimization targets is
+    /// super-linear and only becomes significant for very dense areas (profiling: a
+    /// ~64,000-vertex M_QUAL coverage area took ~7.7&#160;s), so gating on vertex
+    /// count applies the generalization only where it provides a clear net win and
+    /// leaves the common case (small/moderate areas) byte-identical to no
+    /// generalization at all.
+    /// </summary>
+    private const int MinPointsToSimplifyForClip = 2000;
+
+    /// <summary>
     /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving
     /// topological validity so the result is safe for subsequent NetTopologySuite
-    /// overlay operations. Returns the original geometry if simplification fails or
-    /// degenerates to empty.
+    /// overlay operations. Geometries below <see cref="MinPointsToSimplifyForClip"/>
+    /// vertices are returned unchanged (the overlay is already inexpensive at that
+    /// size). Returns the original geometry if simplification fails or degenerates
+    /// to empty.
     /// </summary>
     private static Geometry SimplifyForClip(Geometry geometry)
     {
-        if (geometry.NumPoints <= 8)
+        if (geometry.NumPoints < MinPointsToSimplifyForClip)
             return geometry;
 
         try
