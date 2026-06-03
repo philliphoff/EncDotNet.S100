@@ -223,6 +223,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         TagMapsuiFeaturesWithFeatureType(areaLayer);
         TagMapsuiFeaturesWithFeatureType(lineLayer);
 
+        // Out-of-scale-band declutter: when the viewport is zoomed out past
+        // the cell's intended display scale band (S-101 DataCoverage /
+        // minimumDisplayScale, FC §3.1.1), the point/line/text display
+        // collapses into an unreadable mass of overlapping symbology. Cap
+        // those detail features' maximum visible resolution so they drop out
+        // when zoomed too far out, while leaving the area fills uncapped so
+        // the cell's land / depth-area silhouette stays visible as a
+        // coverage footprint. Honour the mariner's IgnoreScaleMinimum
+        // override (S-101 PC context parameter) so "show everything
+        // regardless of scale" disables the cap, consistent with SCAMIN.
+        if (!mariner.IgnoreScaleMinimum)
+        {
+            _featureIndex ??= BuildFeatureIndex();
+            var bandMaxResolution = ResolveOutOfBandMaxResolution(_featureIndex.Values);
+            if (bandMaxResolution is double cap && lineLayer is MemoryLayer lineMemoryLayer)
+                ApplyOutOfScaleBandCap(lineMemoryLayer.Features, cap);
+        }
+
         // Union the two layer extents (each is in EPSG:3857). Mapsui
         // returns a zero-extent rect when a layer has no features, so
         // skip such layers in the union.
@@ -325,6 +343,77 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             sb.Append(plane).Append(',');
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Resolves the cell's out-of-scale-band cutoff as a Mapsui maximum
+    /// visible resolution (m/px in EPSG:3857) from the
+    /// <c>DataCoverage</c> feature's <c>minimumDisplayScale</c> attribute
+    /// (S-101 FC §3.1.1 — the smallest scale, i.e. largest denominator, at
+    /// which the cell is intended to be displayed). Detail features become
+    /// invisible once the viewport resolution exceeds this value (i.e. the
+    /// chart is zoomed out beyond its compilation scale band).
+    /// </summary>
+    /// <param name="features">The dataset's vector features.</param>
+    /// <returns>
+    /// The cutoff resolution (<c>minimumDisplayScale × DenomToResolutionMetres</c>),
+    /// or <see langword="null"/> when no <c>DataCoverage</c> feature carries a
+    /// usable <c>minimumDisplayScale</c>. When several <c>DataCoverage</c>
+    /// features declare different bands, the most permissive (largest
+    /// denominator) is used so detail stays visible wherever any coverage
+    /// region still permits it.
+    /// </returns>
+    internal static double? ResolveOutOfBandMaxResolution(
+        IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        int? minDisplayScale = null;
+        foreach (var feature in features)
+        {
+            if (!string.Equals(feature.FeatureType, "DataCoverage", StringComparison.Ordinal))
+                continue;
+            if (!feature.Attributes.TryGetValue("minimumDisplayScale", out var raw) || raw is null)
+                continue;
+            if (!int.TryParse(raw.ToString(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var denom) || denom <= 0)
+                continue;
+
+            minDisplayScale = minDisplayScale is null ? denom : Math.Max(minDisplayScale.Value, denom);
+        }
+
+        return minDisplayScale is null
+            ? null
+            : minDisplayScale.Value * MapsuiDisplayListRenderer.DenomToResolutionMetres;
+    }
+
+    /// <summary>
+    /// Clamps the maximum visible resolution (zoomed-out limit) of every
+    /// style on <paramref name="features"/> to <paramref name="maxResolution"/>,
+    /// suppressing point/line/text detail when the viewport is zoomed out
+    /// past the cell's intended scale band. The clamp only ever
+    /// <em>reduces</em> visibility: a tighter SCAMIN-derived limit already
+    /// applied by the renderer is preserved, and any style with a
+    /// non-positive (sentinel) limit is left untouched.
+    /// </summary>
+    /// <param name="features">The Mapsui features to cap (point/line/text).</param>
+    /// <param name="maxResolution">The band cutoff resolution (m/px).</param>
+    internal static void ApplyOutOfScaleBandCap(IEnumerable<IFeature> features, double maxResolution)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        foreach (var mapFeature in features)
+        {
+            foreach (var style in mapFeature.Styles)
+            {
+                if (style is null) continue;
+                // Only tighten: default MaxVisible (double.MaxValue) and any
+                // looser SCAMIN limit collapse to the band cap; a tighter
+                // SCAMIN limit wins; non-positive sentinels are preserved.
+                if (style.MaxVisible > 0)
+                    style.MaxVisible = Math.Min(style.MaxVisible, maxResolution);
+            }
+        }
     }
 
     /// <summary>
