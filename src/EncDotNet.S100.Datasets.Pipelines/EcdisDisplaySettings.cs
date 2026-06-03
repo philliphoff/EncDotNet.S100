@@ -127,9 +127,13 @@ public static class EcdisDisplayExtensions
     /// Applies the supplied settings to <paramref name="catalogue"/>:
     /// resolves the ECDIS category to the spec's display-mode id and
     /// activates it; then writes per-spec hidden-VG ids as user-off
-    /// overrides. Idempotent — calling on a fresh catalogue always
-    /// produces the same effective visibility for a given settings
-    /// value.
+    /// overrides. Idempotent and path-independent — any prior user
+    /// overrides are cleared first, so the effective visibility is a
+    /// pure function of <paramref name="settings"/> even when
+    /// <paramref name="catalogue"/> is reused across renders (the
+    /// per-spec processors hold a single long-lived catalogue). This
+    /// also ensures a viewing group hidden by an earlier render is
+    /// restored when a later render no longer hides it.
     /// </summary>
     public static void ApplyTo(this EcdisDisplaySettings settings, IVectorPortrayalCatalogue catalogue)
     {
@@ -140,6 +144,10 @@ public static class EcdisDisplayExtensions
             catalogue.Spec.Name, settings.Category, catalogue.DisplayModes.DeclaredModeIds);
         catalogue.DisplayModes.SetActive(modeId);
 
+        // Reset any overrides left by a previous render so the resulting
+        // visibility depends only on the supplied settings, not on call
+        // history. ApplyTo is the sole writer of user overrides.
+        catalogue.ViewingGroups.ClearUserOverrides();
         if (settings.HiddenViewingGroups.TryGetValue(catalogue.Spec.Name, out var hidden))
         {
             foreach (var vg in hidden)

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
@@ -33,6 +34,42 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
     private bool _validationCached;
+
+    // Serializes RenderAsync. The processor holds a single long-lived
+    // S-101 portrayal catalogue whose palette / display-mode / viewing-
+    // group / display-plane state is mutated at the top of every render
+    // and then read throughout the pipeline and renderer. The viewer
+    // fires re-renders re-entrantly (fire-and-forget) on settings
+    // changes, so renders must not overlap on that shared state or on
+    // the portrayal-instruction cache below.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+
+    // Recommendation #1: single-entry cache of the Lua drawing-instruction
+    // list, keyed by the inputs that actually change it (see
+    // BuildPortrayalCacheKey). Guarded by _renderGate.
+    private string? _cachedPortrayalKey;
+    private IReadOnlyList<DrawingInstruction>? _cachedPortrayalInstructions;
+
+    /// <summary>
+    /// Number of renders served from the portrayal-instruction cache
+    /// (the ~2.4 s Lua pipeline was skipped). Exposed for tests.
+    /// </summary>
+    internal int PortrayalCacheHits { get; private set; }
+
+    /// <summary>
+    /// Number of renders that ran the full portrayal pipeline (cache
+    /// miss). Exposed for tests.
+    /// </summary>
+    internal int PortrayalCacheMisses { get; private set; }
+
+    // Canonical "no filter" ECDIS state used when a render supplies no
+    // EcdisDisplay. Category.All maps to a null display mode (every
+    // viewing group visible) with no hidden VGs or planes, matching the
+    // fresh-catalogue default — so normalizing null to this changes no
+    // behaviour but keeps catalogue state a deterministic function of
+    // the cache key.
+    private static readonly EcdisDisplaySettings UnfilteredEcdisDisplay =
+        new() { Category = EcdisDisplayCategory.All };
 
     public SpecRef Spec => new("S-101", default);
 
@@ -90,6 +127,21 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Serialize against re-entrant renders that share the long-lived
+        // catalogue state and the portrayal-instruction cache.
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RenderCoreAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    private async Task<DatasetResult> RenderCoreAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")
@@ -103,21 +155,47 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
         s101Cat.SwitchPalette(paletteType);
-        context?.EcdisDisplay?.ApplyTo(s101Cat);
+
+        // Normalize null ECDIS display to the canonical unfiltered state
+        // and always apply it, so the catalogue's display-mode / viewing-
+        // group / display-plane state is a deterministic function of the
+        // settings value — a precondition for keying the cache on it.
+        var ecdisSettings = context?.EcdisDisplay ?? UnfilteredEcdisDisplay;
+        ecdisSettings.ApplyTo(s101Cat);
         var palette = s101Cat.ActivePalette;
         Console.WriteLine($"[S101] Loaded {paletteType} palette with {palette.Colors.Count} colors");
 
-        // Drive the unified VectorPipeline with the S-101 Lua rule executor
-        // (Part 9A). XSLT rules in the S-101 catalogue (if any) are also
-        // honoured by the pipeline.
-        var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
-        var featureSource = new S101FeatureXmlSource(_dataset);
-        var pipeline = new PortrayalPipeline(executor);
-        var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        var prepared = ((IVectorLayer)portrayalLayer).Instructions;
-        Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
-        Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
+        // Recommendation #1: the Lua drawing-instruction list depends only
+        // on (mariner, ECDIS display state) — NOT on palette or symbol /
+        // text scale, which are applied later in the renderer. Reuse the
+        // cached list when neither changed (e.g. a Day/Dusk/Night palette
+        // switch, the dominant re-render trigger), skipping the Lua
+        // pipeline. Guarded by _renderGate (held for this whole render).
+        var cacheKey = BuildPortrayalCacheKey(mariner, ecdisSettings);
+        IReadOnlyList<DrawingInstruction> prepared;
+        if (_cachedPortrayalInstructions is not null
+            && string.Equals(_cachedPortrayalKey, cacheKey, StringComparison.Ordinal))
+        {
+            prepared = _cachedPortrayalInstructions;
+            PortrayalCacheHits++;
+            Console.WriteLine($"[S101] Reusing {prepared.Count} cached drawing instructions (portrayal cache hit)");
+        }
+        else
+        {
+            // Drive the unified VectorPipeline with the S-101 Lua rule
+            // executor (Part 9A). XSLT rules in the S-101 catalogue (if
+            // any) are also honoured by the pipeline.
+            var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
+            var featureSource = new S101FeatureXmlSource(_dataset);
+            var pipeline = new PortrayalPipeline(executor);
+            var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            _cachedPortrayalKey = cacheKey;
+            _cachedPortrayalInstructions = prepared;
+            PortrayalCacheMisses++;
+            Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
+        }
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
         // S-101 area fills and S-101 line work / points / text. We split
@@ -190,6 +268,63 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
                     SourceFeatureType: "linework"),
             },
         };
+    }
+
+    /// <summary>
+    /// Builds the cache key for the portrayal-instruction list. The key
+    /// captures exactly the inputs that change the emitted instructions:
+    /// every <see cref="MarinerSettings"/> field (S-101 PC context
+    /// parameters fed to the Part 9A Lua rules, incl. NationalLanguage)
+    /// plus the effective ECDIS display state applied to the catalogue
+    /// (display category and the S-101 hidden viewing groups / hidden
+    /// display planes that drive VectorPipeline stage-6 filtering).
+    /// </summary>
+    /// <remarks>
+    /// The key deliberately excludes palette and symbol/text scale: the
+    /// Lua rules emit colour tokens and nominal sizes that the renderer
+    /// resolves afterwards, so those never alter the instruction list.
+    /// Two ECDIS categories that resolve to the same display mode merely
+    /// over-invalidate (an extra cache miss), never under-invalidate.
+    /// </remarks>
+    internal static string BuildPortrayalCacheKey(MarinerSettings mariner, EcdisDisplaySettings ecdis)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
+        ArgumentNullException.ThrowIfNull(ecdis);
+
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new StringBuilder();
+        sb.Append("m:");
+        sb.Append(mariner.SafetyContour.ToString(c)).Append('|');
+        sb.Append(mariner.SafetyDepth.ToString(c)).Append('|');
+        sb.Append(mariner.ShallowContour.ToString(c)).Append('|');
+        sb.Append(mariner.DeepContour.ToString(c)).Append('|');
+        sb.Append((int)mariner.DepthUnit).Append('|');
+        sb.Append(mariner.FourShades ? '1' : '0');
+        sb.Append(mariner.ShallowWaterDangers ? '1' : '0');
+        sb.Append(mariner.PlainBoundaries ? '1' : '0');
+        sb.Append(mariner.SimplifiedSymbols ? '1' : '0');
+        sb.Append(mariner.FullLightLines ? '1' : '0');
+        sb.Append(mariner.RadarOverlay ? '1' : '0');
+        sb.Append(mariner.IgnoreScaleMinimum ? '1' : '0');
+        sb.Append('|').Append(mariner.NationalLanguage);
+
+        sb.Append(";e:").Append((int)ecdis.Category);
+
+        // Hidden S-101 viewing groups (sorted for order-independence).
+        // "S-101" is this processor's catalogue Spec.Name, matching the
+        // key EcdisDisplayExtensions.ApplyTo reads.
+        sb.Append(";vg:");
+        if (ecdis.HiddenViewingGroups.TryGetValue("S-101", out var hiddenVg))
+        {
+            foreach (var id in hiddenVg.OrderBy(static x => x))
+                sb.Append(id).Append(',');
+        }
+
+        sb.Append(";dp:");
+        foreach (var plane in ecdis.HiddenDisplayPlanes.Select(static p => (int)p).OrderBy(static x => x))
+            sb.Append(plane).Append(',');
+
+        return sb.ToString();
     }
 
     /// <summary>
