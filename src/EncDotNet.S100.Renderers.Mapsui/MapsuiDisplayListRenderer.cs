@@ -314,7 +314,7 @@ public sealed class MapsuiDisplayListRenderer
     /// at 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface,
     /// so resolution ≈ scaleDenominator × 0.00028.
     /// </summary>
-    private const double DenomToResolutionMetres = 0.00028;
+    public const double DenomToResolutionMetres = 0.00028;
 
     /// <summary>
     /// Maps the S-100 Part 9 §11.1 <see cref="DrawingInstruction.ScaleMinimum"/> /
