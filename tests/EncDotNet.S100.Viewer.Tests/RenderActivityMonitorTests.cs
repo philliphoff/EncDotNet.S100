@@ -146,17 +146,34 @@ public class RenderActivityMonitorTests
     [Fact]
     public async Task WaitForIdleAsync_observes_paint_during_wait()
     {
-        var m = new RenderActivityMonitor();
-        var waitTask = m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(60), TimeSpan.FromSeconds(5));
+        // A paint that lands while the call is waiting must be counted in
+        // PaintsObserved, and the monitor must still settle afterwards.
+        //
+        // Driving the paint off a wall-clock delay races the quiet timer
+        // (under load the delayed paint can slip past the quiet window, so
+        // the monitor settles first and observes zero paints). Instead,
+        // inject the paint synchronously the first time the wait loop polls
+        // BusyProbe: that poll happens on the first iteration, before any
+        // idle can be declared, so the paint is deterministically observed
+        // exactly once while the probe stays "not busy".
+        RenderActivityMonitor m = null!;
+        var painted = false;
+        m = new RenderActivityMonitor
+        {
+            BusyProbe = () =>
+            {
+                if (!painted)
+                {
+                    painted = true;
+                    m.NotifyPaint(5.0, Styles(("VectorStyle", 1, 2.0)));
+                }
+                return false;
+            },
+        };
 
-        // Let the wait start, then report a paint. The 60ms quiet window
-        // means the paint lands well within the wait, so it is observed
-        // and the monitor still settles afterwards.
-        await Task.Delay(10);
-        m.NotifyPaint(5.0, Styles(("VectorStyle", 1, 2.0)));
+        var result = await m.WaitForIdleAsync(
+            TimeSpan.FromMilliseconds(40), TimeSpan.FromSeconds(5));
 
-        var result = await waitTask;
         Assert.True(result.WentIdle);
         Assert.Equal(1, result.PaintsObserved);
     }
