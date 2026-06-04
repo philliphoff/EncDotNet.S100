@@ -31,6 +31,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly GlobalTimeService? _globalTime;
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
+    private readonly IDatasetLoadGateway? _loadGateway;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -44,7 +45,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         ILoggerFactory? loggers = null,
         IRenderStateControllerAccessor? renderStateAccessor = null,
         GlobalTimeService? globalTime = null,
-        IRenderActivityMonitor? renderActivityMonitor = null)
+        IRenderActivityMonitor? renderActivityMonitor = null,
+        IDatasetLoadGateway? loadGateway = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -54,6 +56,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _renderStateAccessor = renderStateAccessor;
         _globalTime = globalTime;
         _renderActivityMonitor = renderActivityMonitor;
+        _loadGateway = loadGateway;
         _loggers = loggers;
     }
 
@@ -281,6 +284,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));
             tools.Add(GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivityMonitor)));
+        }
+        if (_loadGateway is not null)
+        {
+            tools.Add(OpenDatasetMcpAdapter.Create(new OpenDatasetTool(_catalog, _loadGateway)));
+            tools.Add(CloseDatasetMcpAdapter.Create(new CloseDatasetTool(_catalog, _loadGateway)));
         }
         return tools.Count == 0 ? null : tools;
     }

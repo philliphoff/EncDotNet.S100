@@ -105,6 +105,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private IMapHost? _mapHost;
 
+    /// <inheritdoc />
+    public bool IsInitialized => _mapHost is not null;
+
     // Coalesce slider scrubs into a single render pass after the user has
     // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
     // debounce + render so we never queue dozens of stale renders behind

@@ -23,11 +23,26 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
 
     public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
 
+    /// <summary>Backs <see cref="IsInitialized"/>; settable by tests.</summary>
+    public bool IsInitializedValue { get; set; } = true;
+    public bool IsInitialized => IsInitializedValue;
+
+    /// <summary>Optional override so tests can make <see cref="LoadAsync"/> throw or stall.</summary>
+    public Func<DatasetEntry, CancellationToken, Task>? LoadHook { get; set; }
+
+    /// <summary>Entries passed to <see cref="RemoveEntry"/>, in call order.</summary>
+    public List<DatasetEntry> RemovedEntries { get; } = new();
+
     public bool SuppressAutoZoom { get; set; }
-    public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
+        => LoadHook?.Invoke(entry, cancellationToken) ?? Task.CompletedTask;
     public Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task ReRenderAllAsync() => Task.CompletedTask;
-    public void RemoveEntry(DatasetEntry entry) => DatasetRemoved?.Invoke(entry);
+    public void RemoveEntry(DatasetEntry entry)
+    {
+        RemovedEntries.Add(entry);
+        DatasetRemoved?.Invoke(entry);
+    }
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries) { }
 
     public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; } =

@@ -305,18 +305,24 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Six viewer-only tools
+bound port back to the user's `settings.json`. Nine viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
 centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
-OtherInformation / All), `await_render_idle` (read-only — blocks
+OtherInformation / All), `set_time_step` (mutating — drives the
+global time clock to a sample by index or timestamp),
+`await_render_idle` (read-only — blocks
 until the live map settles so a following `render_to_image` is
-deterministic instead of racing the render pass), and
+deterministic instead of racing the render pass),
 `get_render_stats` (read-only — reports the cost of the last
 on-screen paint: frame duration, interval, and per-style draw-call
-breakdown, for measuring rendering performance). See
+breakdown, for measuring rendering performance), `open_dataset`
+(mutating — loads a file or exchange set through the viewer's own
+open code path and reports the resulting catalog id(s), bbox, and
+load duration), and `close_dataset` (mutating — unloads a dataset by
+catalog id, tolerating unknown ids gracefully). See
 `docs/mcp-server.md` for the full catalogue and the read-only /
 mutating split.
 

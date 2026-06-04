@@ -25,6 +25,22 @@ internal interface IDatasetLoaderService
     void Initialize(IMapHost host, ViewerCommandSettings? options);
 
     /// <summary>
+    /// <see langword="true"/> once <see cref="Initialize"/> has wired the
+    /// loader to a map host, after which <see cref="LoadAsync"/> /
+    /// <see cref="RemoveEntry"/> are safe to call. Consumers that may run
+    /// before the window has constructed the map host (e.g. the MCP
+    /// open/close dataset tools) gate on this to return a clean
+    /// "map not ready" error instead of throwing.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member (returns <see langword="true"/>)
+    /// so the many test doubles that implement this interface need not all
+    /// override it; the production <c>DatasetLoaderService</c> backs it with
+    /// real state.
+    /// </remarks>
+    bool IsInitialized => true;
+
+    /// <summary>
     /// When <see langword="true"/>, per-dataset loads skip their
     /// automatic zoom-to-extent. Set by the window when an explicit
     /// startup viewport (<c>--center</c>/<c>--zoom</c> or <c>--bbox</c>)
