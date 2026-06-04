@@ -15,8 +15,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <c>_cachedPortrayalInstructions</c> cache, which is keyed the same way.
 /// </para>
 /// <para>
-/// A future disk-backed (WKB sidecar) implementation can retain multiple cells
-/// and survive process restarts behind the same <see cref="IPatternClipCache"/>
+/// The disk-backed <see cref="DiskPatternClipCache"/> retains multiple cells
+/// and survives process restarts behind the same <see cref="IPatternClipCache"/>
 /// contract; this implementation deliberately keeps the in-process footprint to
 /// a single cell.
 /// </para>

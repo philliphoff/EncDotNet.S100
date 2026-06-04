@@ -30,13 +30,25 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly string _fileName;
     private readonly MapsuiRenderAssetCache _renderAssetCache = new();
 
-    // Single-slot cache of the pattern-fill priority clip geometry, keyed by
-    // the same portrayal cache key (mariner + ECDIS display state) as
-    // _cachedPortrayalInstructions. The clip result is palette-independent, so
-    // this lets a Day/Dusk/Night palette switch reuse the previously computed
-    // clip instead of re-paying the multi-second NetTopologySuite overlay.
-    // Per-processor (per-dataset) lifetime. Guarded by _renderGate.
-    private readonly InMemoryPatternClipCache _patternClipCache = new();
+    // Cache of the pattern-fill priority clip geometry. The clip result is
+    // palette-independent, so caching lets a Day/Dusk/Night palette switch
+    // reuse the previously computed clip instead of re-paying the multi-second
+    // NetTopologySuite overlay.
+    //
+    // Defaults to a per-processor single-slot in-memory cache (step 1), which
+    // only helps re-renders of this already-open dataset. When the host injects
+    // a shared DiskPatternClipCache (step 2) it is used instead, persisting the
+    // clip to disk so the cold first open of a previously-seen cell is fast even
+    // after a restart. The disk cache is process-global, so the clip key is
+    // fully qualified with _patternClipScope (see BuildDatasetScopeKey) to avoid
+    // cross-cell collisions. Guarded by _renderGate.
+    private readonly IPatternClipCache _patternClipCache;
+
+    // Deterministic per-dataset scope prepended to the portrayal cache key when
+    // forming the disk clip-cache key. Encodes dataset content + clip params +
+    // CRS + FormatVersion so the disk key is globally unique and self-
+    // invalidating. Constant for the lifetime of this processor.
+    private readonly string _patternClipScope;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -72,8 +84,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
     /// <summary>
     /// Number of area renders whose pattern-fill priority clip was served from
-    /// the in-memory <see cref="InMemoryPatternClipCache"/> (the multi-second
-    /// NetTopologySuite overlay was skipped — e.g. on a palette switch).
+    /// the pattern-clip cache (the multi-second NetTopologySuite overlay was
+    /// skipped — e.g. on a palette switch, or a warm disk-cache cold open).
     /// Exposed for tests.
     /// </summary>
     internal long PatternClipCacheHits => _patternClipCache.Hits;
@@ -93,8 +105,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string path,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPatternClipCache? sharedPatternClipCache = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedPatternClipCache)
     {
     }
 
@@ -108,13 +121,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPatternClipCache? sharedPatternClipCache = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
-            featureCatalogueManager)
+            featureCatalogueManager,
+            sharedPatternClipCache)
     {
     }
 
@@ -123,20 +138,98 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPatternClipCache? sharedPatternClipCache)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
+
+        // Buffer the raw dataset bytes once so we can (a) parse the document and
+        // (b) compute a content hash for the disk clip-cache scope key. S-101
+        // cells are small enough (a few MB) that buffering is cheap, and the
+        // content hash makes the persisted clip auto-invalidate when the cell's
+        // bytes change.
+        byte[] datasetBytes;
         using (datasetStream)
         {
-            _dataset = S101Dataset.Open(datasetStream);
+            datasetBytes = ReadAllBytes(datasetStream);
         }
+        _dataset = S101Dataset.Open(new MemoryStream(datasetBytes, writable: false));
+
+        // When a shared disk cache is injected use it (persistent, cross-cell,
+        // process-global); otherwise fall back to a per-processor in-memory slot.
+        _patternClipCache = sharedPatternClipCache ?? new InMemoryPatternClipCache();
+        _patternClipScope = BuildDatasetScopeKey(datasetBytes, _dataset);
+
         _featureCatalogueManager = featureCatalogueManager;
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+    }
+
+    /// <summary>
+    /// Reads <paramref name="stream"/> to its end into a byte array. Used to
+    /// snapshot the dataset bytes for parsing and content hashing.
+    /// </summary>
+    private static byte[] ReadAllBytes(Stream stream)
+    {
+        if (stream is MemoryStream existing)
+            return existing.ToArray();
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Builds the deterministic per-dataset scope that, prefixed to the
+    /// portrayal cache key, fully qualifies the disk pattern-clip cache key so
+    /// it is globally unique and self-invalidating.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The pattern-fill priority clip geometry is a pure function of the dataset
+    /// geometry and the clip parameters (it is palette-independent — the palette
+    /// only recolours tiles applied after clipping). The scope therefore
+    /// encodes:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>the SHA-256 of the raw dataset bytes (content identity);</item>
+    /// <item>the S-101 product-specification edition and dataset name from the
+    /// DSID record (belt-and-suspenders alongside the content hash);</item>
+    /// <item>the clip parameters that affect the output geometry —
+    /// <see cref="MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres"/>
+    /// and <see cref="MapsuiDisplayListRenderer.MinPointsToSimplifyForClip"/>;</item>
+    /// <item>the rendering CRS (EPSG:3857, the renderer's fixed projection);</item>
+    /// <item>the <see cref="DiskPatternClipCache.FormatVersion"/> stamp.</item>
+    /// </list>
+    /// <para>
+    /// Any change to dataset content, clip parameters, the CRS, or the cache /
+    /// serialization format yields a different scope and therefore a cache miss
+    /// (recompute), so persisted geometry can never be reused incorrectly.
+    /// </para>
+    /// </remarks>
+    internal static string BuildDatasetScopeKey(byte[] datasetBytes, S101Dataset dataset)
+    {
+        ArgumentNullException.ThrowIfNull(datasetBytes);
+        ArgumentNullException.ThrowIfNull(dataset);
+
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        var contentHash = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(datasetBytes));
+
+        var id = dataset.Document.Identification;
+        var sb = new StringBuilder();
+        sb.Append("ds:").Append(contentHash);
+        sb.Append("|name:").Append(id.DatasetName);
+        sb.Append("|ed:").Append(id.ProductSpecificationEdition);
+        sb.Append("|tol:").Append(MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres.ToString("R", c));
+        sb.Append("|gate:").Append(MapsuiDisplayListRenderer.MinPointsToSimplifyForClip.ToString(c));
+        sb.Append("|crs:EPSG:3857");
+        sb.Append("|fmt:").Append(DiskPatternClipCache.FormatVersion.ToString(c));
+        return sb.ToString();
     }
 
     public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
@@ -227,7 +320,12 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
         var geometryProvider = new S101FeatureGeometryProvider(_dataset);
 
-        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: cacheKey)
+        // Fully qualify the clip-cache key with the per-dataset scope so a
+        // process-global disk cache cannot collide across cells. The in-memory
+        // fallback is unaffected (its scope is constant within this processor).
+        var patternClipKey = $"{_patternClipScope}|{cacheKey}";
+
+        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: patternClipKey)
             .Render(areaInstructions, geometryProvider);
         var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines", patternClipCacheKey: null)
             .Render(otherInstructions, geometryProvider);

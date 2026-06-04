@@ -30,11 +30,11 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// switch reuse the previously computed geometry verbatim.
 /// </para>
 /// <para>
-/// The abstraction is intentionally minimal so that the current in-memory
-/// implementation (<see cref="InMemoryPatternClipCache"/>) and a future
-/// disk-backed (WKB sidecar) implementation — which could also eliminate the
-/// cold first-load cost of previously-seen cells — both fit behind the same
-/// contract.
+/// The abstraction is intentionally minimal so that the single-slot in-memory
+/// implementation (<see cref="InMemoryPatternClipCache"/>) and the disk-backed
+/// (WKB sidecar) implementation (<see cref="DiskPatternClipCache"/>) — which
+/// also eliminates the cold first-load cost of previously-seen cells — both fit
+/// behind the same contract.
 /// </para>
 /// </remarks>
 public interface IPatternClipCache

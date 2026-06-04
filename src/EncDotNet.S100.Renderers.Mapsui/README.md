@@ -244,10 +244,44 @@ with the same key is a cache hit that skips the overlay entirely
 (measured on the dense trial cell: a cold Day render ~6 s, the subsequent
 Night palette switch ~0.2 s). When either is unset the clip is computed
 inline, preserving behaviour for S-57/S-131/GML products and the line
-renderer (which has no pattern fills). The interface is deliberately
-minimal so a future disk-backed (WKB sidecar) implementation — which could
-also eliminate the cold first-load cost of previously-seen cells — can drop
-in behind the same contract.
+renderer (which has no pattern fills).
+
+Two implementations ship behind this contract:
+
+- **`InMemoryPatternClipCache`** — a single-slot, per-processor cache that
+  bounds memory to one cell. It only eliminates re-clip cost for re-renders
+  of the *same already-open* dataset (palette/display switches) and is lost
+  on close/restart.
+- **`DiskPatternClipCache`** — a process-wide, disk-backed cache
+  (`ctor(string cacheDirectory, long maxBytes)`). It persists each clip
+  result as a WKB sidecar (filename = `SHA256(key)` hex + `.clip`) so the
+  **cold first open of a previously-seen cell** skips the overlay, even
+  after a restart. Writes are atomic (temp file + move) and a total-bytes
+  LRU cap evicts least-recently-accessed entries; any IO/deserialization
+  error or `FormatVersion` mismatch is treated as a miss (recompute) and
+  never throws to the caller. Because the disk cache is process-global, the
+  key must be **fully qualified** by the caller — the S-101 processor
+  composes `{datasetScope}|{portrayalKey}`, where `datasetScope` encodes the
+  dataset content hash, clip parameters
+  (`PatternClipSimplifyToleranceMetres`, `MinPointsToSimplifyForClip`), CRS,
+  and the `DiskPatternClipCache.FormatVersion` stamp, so persisted geometry
+  auto-invalidates when content, parameters, or the serialization format
+  change.
+
+```csharp
+// Per-processor in-memory (step 1):
+private readonly InMemoryPatternClipCache _patternClipCache = new();
+
+// Or one shared disk cache for the whole process (step 2):
+var sharedClipCache = new DiskPatternClipCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+
+var renderer = new MapsuiDisplayListRenderer
+{
+    // … palette, providers, asset cache …
+    PatternClipCache = sharedClipCache,
+    PatternClipCacheKey = $"{datasetScope}|{portrayalCacheKey}",
+};
+```
 
 ## Installation
 
