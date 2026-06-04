@@ -210,6 +210,45 @@ clip mask is disjoint from the entry. Together these cut the pattern
 clip from ~11 s to well under 1 s on the affected cell, shaving ~6 s off
 **every** S-101 frame (not just re-renders).
 
+### Caching the pattern-fill clip across palette switches
+
+Even after generalization, the priority clip is the dominant warm cost on
+the densest cells (profiling on a ~64,000-vertex `M_QUAL` coverage area:
+the clip is on the order of seconds, dominated by a single `Buffer(0)`
+validity repair). The clip runs once per **layer build**
+(`Render`) — not per frame — and re-fires on dataset load, palette
+(Day/Dusk/Night) switch, and ECDIS display-setting changes. Crucially the
+clipped boundary geometry is **palette-independent**: the renderer groups
+pattern entries by the palette-independent area-fill reference, so only the
+tile *colours* change per palette (applied after clipping).
+
+`IPatternClipCache` lets a caller reuse the clip result across re-renders
+whose clip inputs are unchanged — most importantly a palette switch.
+Assign an `InMemoryPatternClipCache` (a single-slot cache that bounds
+memory to one cell) and a key that fully identifies the clip inputs:
+
+```csharp
+private readonly InMemoryPatternClipCache _patternClipCache = new();
+
+var renderer = new MapsuiDisplayListRenderer
+{
+    // … palette, providers, asset cache …
+    PatternClipCache = _patternClipCache,
+    PatternClipCacheKey = portrayalCacheKey, // mariner + ECDIS display state
+};
+```
+
+When both `PatternClipCache` and `PatternClipCacheKey` are set, the
+renderer obtains the clipped geometry via `GetOrCompute`; a palette switch
+with the same key is a cache hit that skips the overlay entirely
+(measured on the dense trial cell: a cold Day render ~6 s, the subsequent
+Night palette switch ~0.2 s). When either is unset the clip is computed
+inline, preserving behaviour for S-57/S-131/GML products and the line
+renderer (which has no pattern fills). The interface is deliberately
+minimal so a future disk-backed (WKB sidecar) implementation — which could
+also eliminate the cold first-load cost of previously-seen cells — can drop
+in behind the same contract.
+
 ## Installation
 
 ```sh

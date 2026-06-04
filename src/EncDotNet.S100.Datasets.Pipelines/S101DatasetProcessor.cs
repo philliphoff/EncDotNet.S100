@@ -29,6 +29,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
     private readonly MapsuiRenderAssetCache _renderAssetCache = new();
+
+    // Single-slot cache of the pattern-fill priority clip geometry, keyed by
+    // the same portrayal cache key (mariner + ECDIS display state) as
+    // _cachedPortrayalInstructions. The clip result is palette-independent, so
+    // this lets a Day/Dusk/Night palette switch reuse the previously computed
+    // clip instead of re-paying the multi-second NetTopologySuite overlay.
+    // Per-processor (per-dataset) lifetime. Guarded by _renderGate.
+    private readonly InMemoryPatternClipCache _patternClipCache = new();
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -61,6 +69,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     /// miss). Exposed for tests.
     /// </summary>
     internal int PortrayalCacheMisses { get; private set; }
+
+    /// <summary>
+    /// Number of area renders whose pattern-fill priority clip was served from
+    /// the in-memory <see cref="InMemoryPatternClipCache"/> (the multi-second
+    /// NetTopologySuite overlay was skipped — e.g. on a palette switch).
+    /// Exposed for tests.
+    /// </summary>
+    internal long PatternClipCacheHits => _patternClipCache.Hits;
 
     // Canonical "no filter" ECDIS state used when a render supplies no
     // EcdisDisplay. Category.All maps to a null display mode (every
@@ -211,9 +227,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
 
         var geometryProvider = new S101FeatureGeometryProvider(_dataset);
 
-        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas")
+        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: cacheKey)
             .Render(areaInstructions, geometryProvider);
-        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines")
+        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines", patternClipCacheKey: null)
             .Render(otherInstructions, geometryProvider);
 
         // PR-L2 R-101-102-B: tag every Mapsui IFeature with its S-101
@@ -467,7 +483,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         S101PortrayalCatalogue catalogue,
         ColorPalette palette,
         RenderContext? context,
-        string suffix)
+        string suffix,
+        string? patternClipCacheKey)
     {
         return new MapsuiDisplayListRenderer
         {
@@ -475,6 +492,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
             Product = "S-101",
             Palette = palette,
             AssetCache = _renderAssetCache,
+            // Only the area renderer carries pattern fills, so wire the clip
+            // cache there; the line renderer has no pattern fills to clip.
+            PatternClipCache = patternClipCacheKey is not null ? _patternClipCache : null,
+            PatternClipCacheKey = patternClipCacheKey,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = symbolName =>
