@@ -113,6 +113,25 @@ public sealed class MapsuiDisplayListRenderer
     private readonly MapsuiRenderAssetCache _localAssetCache = new();
 
     /// <summary>
+    /// Optional cache for the pattern-fill priority clip result. When set
+    /// together with <see cref="PatternClipCacheKey"/>, the renderer obtains
+    /// the clipped pattern geometry via
+    /// <see cref="IPatternClipCache.GetOrCompute"/> so re-renders that do not
+    /// change the clip inputs (most importantly Day/Dusk/Night palette
+    /// switches) skip the expensive NetTopologySuite overlay. When unset, the
+    /// clip is computed inline on every render, preserving legacy behaviour for
+    /// products without pattern fills and for ad-hoc / one-shot callers.
+    /// </summary>
+    public IPatternClipCache? PatternClipCache { get; init; }
+
+    /// <summary>
+    /// Key that fully identifies this render's pattern-clip inputs (for S-101,
+    /// the mariner + ECDIS display-state portrayal cache key). Used with
+    /// <see cref="PatternClipCache"/>; ignored when either is <see langword="null"/>.
+    /// </summary>
+    public string? PatternClipCacheKey { get; init; }
+
+    /// <summary>
     /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
     /// the pivot-to-bounds-centre offset recovered from the raw SVG before
     /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
@@ -180,7 +199,7 @@ public sealed class MapsuiDisplayListRenderer
         //    Merged patterns are inserted after all color fills to ensure no
         //    solid fill can cover a previously-drawn pattern.
         var mapFeatures = new List<IFeature>();
-        var patternEntries = new List<(byte[] TilePng, int Priority, List<Polygon> Polygons)>();
+        var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
         // Track which features produce pattern fills, so we can identify
@@ -211,22 +230,32 @@ public sealed class MapsuiDisplayListRenderer
             // Defer pattern fills for merging
             if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
             {
-                var tilePng = GetPatternTilePng(patternRef);
-                if (tilePng is not null)
+                // Inclusion gate: only collect the entry when the pattern
+                // resolves to a tile under the current palette (patterns with
+                // no resolvable asset are dropped, exactly as before). The
+                // resolved tile is discarded here; grouping/merging keys on the
+                // palette-independent pattern reference so the clip result is
+                // palette-independent and cacheable. The tile is re-resolved
+                // under the active palette after clipping.
+                if (GetPatternTilePng(patternRef) is not null)
                 {
                     var polygon = CreatePolygonFromGeometry(geom);
                     if (polygon is not null)
                     {
-                        // Find existing entry with the same tile and priority, or create a new one
+                        // Find existing entry with the same pattern reference and priority, or create a new one.
+                        // OrdinalIgnoreCase matches MapsuiRenderAssetCache's tile-resolution
+                        // comparer, so this grouping is exactly equivalent to the previous
+                        // ReferenceEquals(TilePng) grouping (same fillName -> same byte[] ref).
                         var existing = patternEntries.Find(e =>
-                            ReferenceEquals(e.TilePng, tilePng) && e.Priority == areaPattern.DrawingPriority);
-                        if (existing.TilePng is not null)
+                            string.Equals(e.PatternRef, patternRef, StringComparison.OrdinalIgnoreCase)
+                            && e.Priority == areaPattern.DrawingPriority);
+                        if (existing.PatternRef is not null)
                         {
                             existing.Polygons.Add(polygon);
                         }
                         else
                         {
-                            patternEntries.Add((tilePng, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
+                            patternEntries.Add((patternRef, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
                         }
                     }
                 }
@@ -260,13 +289,24 @@ public sealed class MapsuiDisplayListRenderer
         // Also clips all patterns against non-patterned color fill areas
         // (e.g. land) so patterns don't bleed over land.
         patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-        var clippedPatterns = ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
+        var clippedPatterns = PatternClipCache is not null && PatternClipCacheKey is not null
+            ? PatternClipCache.GetOrCompute(
+                PatternClipCacheKey,
+                () => ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons))
+            : ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
 
         // Insert merged pattern fill features after all color fills but before
         // lines/points/text. This ensures no solid fill can occlude a pattern.
+        // The tile is re-resolved here under the active palette (the clip
+        // geometry is palette-independent and may have come from the cache,
+        // which is shared across palettes).
         int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
-        foreach (var (tilePng, geometry) in clippedPatterns)
+        foreach (var (patternRef, _, geometry) in clippedPatterns)
         {
+            var tilePng = GetPatternTilePng(patternRef);
+            if (tilePng is null)
+                continue;
+
             var feature = new GeometryFeature(geometry);
             feature.Styles.Add(new AnchoredPatternFillStyle { TilePng = tilePng });
             mapFeatures.Insert(insertAt, feature);
@@ -1053,8 +1093,8 @@ public sealed class MapsuiDisplayListRenderer
     /// topology-preserving simplification, so no pre-overlay geometry repair is needed.
     /// </para>
     /// </remarks>
-    private static List<(byte[] TilePng, Geometry Geometry)> ClipPatternsByPriority(
-        List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries,
+    private static List<(string PatternRef, int Priority, Geometry Geometry)> ClipPatternsByPriority(
+        List<(string PatternRef, int Priority, List<Polygon> Polygons)> entries,
         List<Polygon> nonPatternedColorFills)
     {
         if (entries.Count == 0)
@@ -1086,17 +1126,17 @@ public sealed class MapsuiDisplayListRenderer
             Geometry g = e.Polygons.Count == 1
                 ? e.Polygons[0]
                 : new MultiPolygon(e.Polygons.ToArray());
-            return (e.TilePng, e.Priority, Geometry: SimplifyForClip(g));
+            return (e.PatternRef, e.Priority, Geometry: SimplifyForClip(g));
         }).ToList();
 
         // Walk from highest priority down, accumulating a union of
         // higher-priority areas that will clip lower-priority patterns.
         Geometry? higherPriorityAreas = null;
-        var result = new (byte[] TilePng, Geometry Geometry)[merged.Count];
+        var result = new (string PatternRef, int Priority, Geometry Geometry)[merged.Count];
 
         for (int i = merged.Count - 1; i >= 0; i--)
         {
-            var (tile, _, geometry) = merged[i];
+            var (patternRef, priority, geometry) = merged[i];
 
             // Start with the original geometry, then subtract exclusion areas
             var clipped = geometry;
@@ -1143,7 +1183,7 @@ public sealed class MapsuiDisplayListRenderer
                 }
             }
 
-            result[i] = (tile, clipped);
+            result[i] = (patternRef, priority, clipped);
 
             // Add this entry's (generalized) area to the higher-priority union
             // for use by the next, lower-priority entries.
