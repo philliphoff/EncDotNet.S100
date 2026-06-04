@@ -1,165 +1,34 @@
-using System.Diagnostics;
-using System.Globalization;
-using EncDotNet.S100.Datasets.S101.Diagnostics;
-using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Datasets.S101;
 
 /// <summary>
-/// Executes the S-101 Lua portrayal stage as defined in S-100 Part 9A.
-/// Creates a single Lua context, registers the Host API, loads the main.lua
-/// entry point (which requires the S-100 scripting framework), initialises
-/// context parameters, calls <c>PortrayalMain()</c>, parses the emitted
-/// instruction strings via <see cref="DrawingInstructionParser"/>, and applies
-/// S-101-specific post-processing (e.g. SAFCON contour-label merging) before
-/// returning typed drawing instructions to the unified vector pipeline.
+/// Executes the S-101 Lua portrayal stage (S-100 Part 9A) by composing the
+/// product-agnostic <see cref="LuaRuleExecutor"/> with the S-101-specific
+/// seams: an <see cref="S101LuaDataProvider"/> host bridge, the S-101 context
+/// parameter bindings (mapping <see cref="MarinerSettings"/> onto the declared
+/// catalogue parameters), a feature-anchor provider for augmented line
+/// tessellation, and the SAFCON contour-label post-parse transform.
 /// </summary>
-public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
+/// <remarks>
+/// This is a thin wrapper that preserves the historic S-101 construction
+/// signature (<c>luaEngine, dataset, catalogue, featureCatalogue</c>) while
+/// delegating the full Lua pass to the shared Core executor. S-57 reuses this
+/// executor after translating to an <see cref="S101Dataset"/>.
+/// </remarks>
+public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
 {
-    private readonly ILuaEngine _luaEngine;
-    private readonly S101Dataset _dataset;
-    private readonly S101PortrayalCatalogue _catalogue;
-    private readonly FeatureCatalogue _featureCatalogue;
+    private readonly LuaRuleExecutor _inner;
 
-    /// <summary>
-    /// Lua shim that wraps HostFeatureGetSpatialAssociations to convert
-    /// the raw host data (List of {SpatialID, SpatialType, Orientation})
-    /// into proper SpatialAssociation objects via CreateSpatialAssociation().
-    /// </summary>
-    private const string SpatialAssociationShim = """
-        local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
-        HostFeatureGetSpatialAssociations = function(featureID)
-            local raw = _rawHostGetSpatial(featureID)
-            if raw == nil then return nil end
-            local result = {}
-            for i, sa in ipairs(raw) do
-                result[i] = CreateSpatialAssociation(sa.SpatialType, sa.SpatialID, sa.Orientation)
-            end
-            if #result == 0 then return nil end
-            result.Type = 'array:SpatialAssociation'
-            return result
-        end
-        """;
-
-    /// <summary>
-    /// Lua shim that implements HostGetSpatial by calling the C# HostGetSpatialData
-    /// to get raw data, then constructing proper Spatial Lua objects via the
-    /// Create* functions from PortrayalAPI.lua.
-    /// </summary>
-    private const string HostGetSpatialShim = """
-        local _rawHostGetSpatialData = HostGetSpatialData
-        function HostGetSpatial(spatialID)
-            local data = _rawHostGetSpatialData(spatialID)
-            if data == nil then return nil end
-
-            if data.RecordType == 'Point' then
-                return CreatePoint(data.X, data.Y)
-            elseif data.RecordType == 'MultiPoint' then
-                local points = {}
-                for _, pt in ipairs(data.Points) do
-                    points[#points + 1] = CreatePoint(pt.X, pt.Y, pt.Z)
-                end
-                points.Type = 'array:Spatial'
-                return CreateMultiPoint(points)
-            elseif data.RecordType == 'Curve' then
-                local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
-                local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')
-                local controlPoints = {}
-                if data.ControlPoints then
-                    for _, cp in ipairs(data.ControlPoints) do
-                        controlPoints[#controlPoints + 1] = CreatePoint(cp.X, cp.Y)
-                    end
-                end
-                local segment = CreateCurveSegment(controlPoints)
-                return CreateCurve(startSA, endSA, { segment })
-            elseif data.RecordType == 'CompositeCurve' then
-                local curveAssocs = {}
-                for _, ca in ipairs(data.CurveAssociations) do
-                    curveAssocs[#curveAssocs + 1] = CreateSpatialAssociation(ca.SpatialType, ca.SpatialID, ca.Orientation)
-                end
-                curveAssocs.Type = 'array:SpatialAssociation'
-                return CreateCompositeCurve(curveAssocs)
-            elseif data.RecordType == 'Surface' then
-                local exteriorRing = nil
-                if data.ExteriorRing then
-                    exteriorRing = CreateSpatialAssociation(data.ExteriorRing.SpatialType, data.ExteriorRing.SpatialID, data.ExteriorRing.Orientation)
-                end
-                local interiorRings = {}
-                if data.InteriorRings then
-                    for _, ir in ipairs(data.InteriorRings) do
-                        interiorRings[#interiorRings + 1] = CreateSpatialAssociation(ir.SpatialType, ir.SpatialID, ir.Orientation)
-                    end
-                end
-                interiorRings.Type = 'array:SpatialAssociation'
-                return CreateSurface(exteriorRing, interiorRings)
-            end
-            return nil
-        end
-        """;
-
-    /// <summary>
-    /// Lua patch that corrects the upstream <c>GetFeatureName</c> and
-    /// <c>PortrayFeatureName</c> functions in <c>PortrayalModel.lua</c>. The
-    /// upstream implementation requires both <c>name</c> AND <c>nameUsage</c>
-    /// on every <c>featureName</c> entry, but the S-101 Feature Catalogue
-    /// (Edition 1.x) declares <c>nameUsage</c> with multiplicity <c>0..1</c>
-    /// — it is optional. FC-conformant ENCs that omit <c>nameUsage</c> for
-    /// a single default-display name currently get no label rendered at all.
-    /// <para/>
-    /// This patch reimplements the global <c>GetFeatureName</c> (and the
-    /// <c>PortrayFeatureName</c> helper that wraps it) so a missing
-    /// <c>nameUsage</c> is treated as <c>1</c> (Default Name Display),
-    /// matching the FC's optional semantics. When <c>nameUsage</c> is
-    /// present, the original <c>1</c>/<c>2</c> branching is preserved.
-    /// </summary>
-    private const string FeatureNamePatch = """
-        function GetFeatureName(feature, contextParameters)
-            -- Match upstream featurePortrayal:GetFeatureName side effect so
-            -- main.lua's fallback PortrayFeatureName guard sees this call and
-            -- does not re-emit the name with a different default offset.
-            if feature._featurePortrayal then
-                feature._featurePortrayal.GetFeatureNameCalled = true
-            end
-
-            if not feature['!featureName'] or #feature.featureName == 0 then
-                return nil
-            end
-
-            local defaultName
-            for _, featureName in ipairs(feature.featureName) do
-                if featureName.name then
-                    local nameUsage = featureName.nameUsage
-                    local languageMatches = (featureName.language and featureName.language == contextParameters.NationalLanguage)
-
-                    if nameUsage == nil or nameUsage == 1 then
-                        if languageMatches then
-                            return featureName.name
-                        end
-                        defaultName = defaultName or featureName.name
-                    elseif nameUsage == 2 and languageMatches then
-                        return featureName.name
-                    end
-                end
-            end
-
-            return defaultName
-        end
-
-        function PortrayFeatureName(feature, featurePortrayal, contextParameters, textViewingGroup, textPriority, viewingGroup, priority, textStyleInstructions)
-            local name = GetFeatureName(feature, contextParameters)
-            if name then
-                local textStyle = textStyleInstructions or 'FontColor:CHBLK'
-                featurePortrayal:AddInstructions(textStyle)
-                featurePortrayal:AddTextInstruction(EncodeString(name, '%s'), textViewingGroup, textPriority, viewingGroup, priority)
-            end
-        end
-        """;
-
+    /// <summary>Initialises the S-101 Lua rule executor.</summary>
+    /// <param name="luaEngine">The sandboxed Lua engine (S-100 Part 9A).</param>
+    /// <param name="dataset">The S-101 dataset to portray.</param>
+    /// <param name="catalogue">The S-101 portrayal catalogue (Lua rule source).</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue (ISO 19110).</param>
     public S101LuaRuleExecutor(
         ILuaEngine luaEngine,
         S101Dataset dataset,
@@ -171,327 +40,104 @@ public sealed class S101LuaRuleExecutor : ILuaRuleExecutor
         ArgumentNullException.ThrowIfNull(catalogue);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
 
-        _luaEngine = luaEngine;
+        _inner = new LuaRuleExecutor(
+            luaEngine,
+            catalogue,
+            new S101LuaDataProviderFactory(dataset, featureCatalogue),
+            "S-101",
+            S101ContextParameterBindings.Build(),
+            new S101FeatureAnchorProvider(dataset),
+            [new S101SafconTransform()]);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<DrawingInstruction> Execute(
+        MarinerSettings mariner, CancellationToken cancellationToken = default)
+        => _inner.Execute(mariner, cancellationToken);
+
+    /// <inheritdoc/>
+    public IReadOnlyList<EmittedInstruction> ExecuteRaw(
+        MarinerSettings mariner, CancellationToken cancellationToken = default)
+        => _inner.ExecuteRaw(mariner, cancellationToken);
+}
+
+/// <summary>
+/// Creates render-scoped <see cref="S101LuaDataProvider"/> instances for the
+/// generic <see cref="LuaRuleExecutor"/>.
+/// </summary>
+internal sealed class S101LuaDataProviderFactory : ILuaDataProviderFactory
+{
+    private readonly S101Dataset _dataset;
+    private readonly FeatureCatalogue _featureCatalogue;
+
+    public S101LuaDataProviderFactory(S101Dataset dataset, FeatureCatalogue featureCatalogue)
+    {
         _dataset = dataset;
-        _catalogue = catalogue;
         _featureCatalogue = featureCatalogue;
     }
 
-    /// <summary>
-    /// Runs the S-101 Lua portrayal stage and returns typed drawing instructions
-    /// ready for the renderer. Equivalent to <see cref="ExecuteRaw"/> followed by
-    /// <see cref="DrawingInstructionParser.Parse"/> and
-    /// <see cref="S101SafconLabelMerger.Merge"/>.
-    /// </summary>
-    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default)
+    public ILuaDataProvider Create(MarinerSettings mariner)
+        => new S101LuaDataProvider(_dataset, _featureCatalogue);
+}
+
+/// <summary>
+/// Supplies the primary point anchor of an S-101 feature for augmented line
+/// tessellation during drawing-instruction parsing (sector lights, all-around
+/// lights). Wraps <see cref="S101FeatureGeometryProvider"/>.
+/// </summary>
+internal sealed class S101FeatureAnchorProvider : IFeatureAnchorProvider
+{
+    private readonly S101FeatureGeometryProvider _geometryProvider;
+
+    public S101FeatureAnchorProvider(S101Dataset dataset)
     {
-        // The MoonSharp interpreter is not interruptible mid-script, so the
-        // token is honoured at the coarse boundary before invocation.
-        cancellationToken.ThrowIfCancellationRequested();
-
-        // TODO: Per-Lua-rule timing is deferred to PR P2 — requires a small
-        // executor refactor to inject timing hooks around individual rule calls.
-        using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
-        activity?.SetTag(TelemetryTags.Product, "S-101");
-        var start = Stopwatch.GetTimestamp();
-
-        try
-        {
-            var (emitted, dataProvider) = ExecuteRawCore(mariner);
-
-            Telemetry.LuaFeaturesCount.Add(emitted.Count);
-            activity?.SetTag("s100.lua.features.count", emitted.Count);
-
-            RecordPerFeatureTypeCardinality(emitted, dataProvider);
-
-            // Build a geometry provider to supply feature anchor points for
-            // augmented line geometry tessellation (sector lights, all-around
-            // lights).  AugmentedRay/ArcByRadius need the feature's point
-            // position as the origin for geodesic computation.
-            var geometryProvider = new S101FeatureGeometryProvider(_dataset);
-
-            var parsed = new List<DrawingInstruction>();
-            foreach (var e in emitted)
-            {
-                var anchor = GetFeatureAnchor(geometryProvider, e.FeatureRef);
-                parsed.AddRange(DrawingInstructionParser.Parse(
-                    e.FeatureRef, e.InstructionString, anchor));
-            }
-            var result = S101SafconLabelMerger.Merge(parsed);
-
-            Telemetry.LuaInstructionsEmittedCount.Record(result.Count);
-            activity?.SetTag("s100.lua.instructions.emitted.count", result.Count);
-
-            return result;
-        }
-        catch
-        {
-            activity?.SetStatus(ActivityStatusCode.Error);
-            throw;
-        }
-        finally
-        {
-            Telemetry.LuaExecuteDuration.Record(
-                (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
-        }
+        _geometryProvider = new S101FeatureGeometryProvider(dataset);
     }
 
-    /// <summary>
-    /// Records the per-feature-type emitted-instruction count
-    /// (<c>s100.lua.feature.instructions.count</c>) tagged with
-    /// <c>s100.feature.type</c> + <c>s100.product</c>. Output volume
-    /// only — does not measure CPU time. See the Telemetry doc comment.
-    /// </summary>
-    private static void RecordPerFeatureTypeCardinality(
-        IReadOnlyList<EmittedInstruction> emitted,
-        S101LuaDataProvider dataProvider)
+    public (double Latitude, double Longitude)? GetAnchor(string featureRef)
     {
-        if (emitted.Count == 0) return;
-
-        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var e in emitted)
-        {
-            var code = dataProvider.TryGetFeatureTypeCode(e.FeatureRef) ?? "(unknown)";
-            counts.TryGetValue(code, out var existing);
-            counts[code] = existing + 1;
-        }
-
-        foreach (var (code, count) in counts)
-        {
-            Telemetry.LuaFeatureInstructionsCount.Record(
-                count,
-                new KeyValuePair<string, object?>(TelemetryTags.Product, "S-101"),
-                new KeyValuePair<string, object?>(TelemetryTags.FeatureType, code));
-        }
-    }
-
-    /// <summary>
-    /// Returns the first (anchor) coordinate of the feature identified by
-    /// <paramref name="featureRef"/>, or <see langword="null"/> if the feature
-    /// has no point geometry.
-    /// </summary>
-    private static (double Latitude, double Longitude)? GetFeatureAnchor(
-        IFeatureGeometryProvider geometryProvider, string featureRef)
-    {
-        var geom = geometryProvider.GetGeometry(featureRef);
+        var geom = _geometryProvider.GetGeometry(featureRef);
         if (geom is null || geom.Coordinates.Count == 0)
             return null;
         return geom.Coordinates[0];
     }
-
-    /// <summary>
-    /// Runs the S-101 Lua portrayal pipeline for the bound dataset and returns
-    /// the raw emitted drawing-instruction strings keyed by feature reference.
-    /// Intended for diagnostics; production callers should prefer
-    /// <see cref="Execute(MarinerSettings)"/>, which returns typed instructions.
-    /// </summary>
-    public IReadOnlyList<EmittedInstruction> ExecuteRaw(MarinerSettings mariner)
-        => ExecuteRawCore(mariner).Emitted;
-
-    /// <summary>
-    /// Internal core of <see cref="ExecuteRaw"/> that also returns the
-    /// constructed <see cref="S101LuaDataProvider"/> so callers can
-    /// resolve feature-type codes for the emitted instructions without
-    /// re-building the lookup index. Used by <see cref="Execute"/> to
-    /// emit per-feature-type cardinality telemetry.
-    /// </summary>
-    private (IReadOnlyList<EmittedInstruction> Emitted, S101LuaDataProvider DataProvider) ExecuteRawCore(
-        MarinerSettings mariner)
-    {
-        ArgumentNullException.ThrowIfNull(mariner);
-        var dataset = _dataset;
-
-        var dataProvider = new S101LuaDataProvider(dataset, _featureCatalogue);
-
-        using var lua = _luaEngine.CreateContext();
-
-        // 1. Configure require() to resolve modules from the Rules/ subdirectory
-        //    via the catalogue's shared source cache. The catalogue caches the
-        //    raw source string across renders, so repeated require() calls for
-        //    the same dataset re-use the same in-memory string and never re-
-        //    open the underlying asset stream.
-        lua.SetModuleLoader(moduleName =>
-        {
-            // MoonSharp may pass the bare name (e.g. "S100Scripting") or with
-            // a .lua extension (e.g. "S100Scripting.lua") depending on ModulePaths.
-            var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)
-                ? moduleName
-                : $"{moduleName}.lua";
-
-            return _catalogue.GetLuaSource(fileName);
-        });
-
-        // 2. Register all Host* functions on the Lua context
-        dataProvider.RegisterHostFunctions(lua);
-
-        // 3. Load and execute main.lua (which will require S100Scripting, PortrayalModel, etc.)
-        string mainSource = _catalogue.GetLuaSource("main.lua")
-            ?? throw new InvalidOperationException(
-                "S-101 portrayal catalogue is missing required rule file 'main.lua'.");
-        lua.Execute(mainSource);
-
-        // 3a. Wrap HostFeatureGetSpatialAssociations so the raw data from the host
-        //     is converted into proper SpatialAssociation objects via CreateSpatialAssociation().
-        //     CreateSpatialAssociation (from PortrayalAPI.lua) handles string→SpatialType
-        //     lookup, sets metatables, etc.
-        lua.Execute(SpatialAssociationShim);
-
-        // 3b. Implement HostGetSpatial by wrapping HostGetSpatialData (C#) and
-        //     constructing proper Spatial Lua objects via Create* functions.
-        lua.Execute(HostGetSpatialShim);
-
-        // 3c. Patch 'contains' to handle nil/void gracefully. MoonSharp may
-        //     return DynValue.Void (rather than nil) from __index when an
-        //     attribute is missing, causing type() to error.
-        lua.Execute("""
-            local _orig_contains = contains
-            function contains(value, array)
-                if value == nil then return false end
-                return _orig_contains(value, array)
-            end
-            """);
-
-        // 3d. Patch GetFeatureName / PortrayFeatureName so feature names
-        //     without an explicit nameUsage sub-attribute still render. See
-        //     the FeatureNamePatch comment for the spec rationale.
-        lua.Execute(FeatureNamePatch);
-
-        // 4. Build context parameter array using the Lua-side factory function
-        //    PortrayalCreateContextParameter(name, type, default) → ContextParameter table
-        //    Then pass the array to PortrayalInitializeContextParameters()
-        var cpSource = BuildContextParameterInitScript();
-        lua.Execute(cpSource);
-
-        // 5. Set context parameter overrides from MarinerSettings
-        SetContextParameters(lua, mariner);
-
-        // 6. Call PortrayalMain(featureIDs) — iterates features, calls per-feature
-        //    rule functions, emits drawing instructions via HostPortrayalEmit.
-        try
-        {
-            lua.Call("PortrayalMain");
-        }
-        catch (Exception ex)
-        {
-            // Extract Lua source location if available (MoonSharp)
-            var decorated = ex.GetType().GetProperty("DecoratedMessage")?.GetValue(ex) as string;
-            var detail = decorated ?? ex.Message;
-            throw new InvalidOperationException(
-                $"S-101 Lua portrayal failed: {detail}", ex);
-        }
-
-        // 7. Collect results.
-        //    The S-101 Lua PortrayalModel.lua AddFeature() stores items in the same
-        //    table using both sequential array append (self[#self+1]) and feature-ID
-        //    indexing (self[feature.ID]). Because feature IDs are numeric and overlap
-        //    with array positions, ipairs() can visit some items twice, causing
-        //    HostPortrayalEmit to be called with identical instructions for the same
-        //    feature. Deduplicate by (FeatureRef, InstructionString) to eliminate
-        //    these spurious repeats.
-        var seen = new HashSet<(string, string)>();
-        var results = new List<EmittedInstruction>();
-        foreach (var e in dataProvider.EmittedInstructions)
-        {
-            if (seen.Add((e.FeatureRef, e.Instructions)))
-            {
-                results.Add(new EmittedInstruction
-                {
-                    FeatureRef = e.FeatureRef,
-                    InstructionString = e.Instructions,
-                    ObservedParameters = e.ObservedParams,
-                });
-            }
-        }
-
-        return (results, dataProvider);
-    }
-
-    /// <summary>
-    /// Builds a Lua script that creates context parameters via
-    /// <c>PortrayalCreateContextParameter(name, type, default)</c> and passes them
-    /// to <c>PortrayalInitializeContextParameters()</c>.
-    /// </summary>
-    private string BuildContextParameterInitScript()
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("local _cp = {}");
-
-        foreach (var cp in _catalogue.Provider.Catalogue.ContextParameters)
-        {
-            // Escape the default value for Lua string literal
-            var escapedId = EscapeLuaString(cp.Id);
-            var escapedType = EscapeLuaString(cp.Type);
-            var escapedDefault = EscapeLuaString(cp.Default);
-            sb.AppendLine(
-                $"_cp[#_cp + 1] = PortrayalCreateContextParameter('{escapedId}', '{escapedType}', '{escapedDefault}')");
-        }
-
-        sb.AppendLine("PortrayalInitializeContextParameters(_cp)");
-        return sb.ToString();
-    }
-
-    private void SetContextParameters(ILuaContext lua, MarinerSettings mariner)
-    {
-        // Known S-101 context parameters mapped from MarinerSettings.
-        // PortrayalSetContextParameter expects both arguments as strings.
-        // The Lua side parses booleans from the lower-case literals
-        // "true"/"false" (per the bundled S-101 PC parameter declarations).
-        var parameters = new Dictionary<string, string>
-        {
-            ["SafetyContour"] = mariner.SafetyContour.ToString(CultureInfo.InvariantCulture),
-            ["SafetyDepth"] = mariner.SafetyDepth.ToString(CultureInfo.InvariantCulture),
-            ["ShallowContour"] = mariner.ShallowContour.ToString(CultureInfo.InvariantCulture),
-            ["DeepContour"] = mariner.DeepContour.ToString(CultureInfo.InvariantCulture),
-            ["FourShades"] = mariner.FourShades ? "true" : "false",
-            ["ShallowWaterDangers"] = mariner.ShallowWaterDangers ? "true" : "false",
-            ["PlainBoundaries"] = mariner.PlainBoundaries ? "true" : "false",
-            ["SimplifiedSymbols"] = mariner.SimplifiedSymbols ? "true" : "false",
-            ["FullLightLines"] = mariner.FullLightLines ? "true" : "false",
-            ["RadarOverlay"] = mariner.RadarOverlay ? "true" : "false",
-            ["IgnoreScaleMinimum"] = mariner.IgnoreScaleMinimum ? "true" : "false",
-        };
-
-        // NationalLanguage is only sent when the user has explicitly chosen
-        // one — empty means "use the catalogue's declared default" (eng).
-        if (!string.IsNullOrWhiteSpace(mariner.NationalLanguage))
-        {
-            parameters["NationalLanguage"] = mariner.NationalLanguage;
-        }
-
-        foreach (var (name, value) in parameters)
-        {
-            try
-            {
-                lua.Call("PortrayalSetContextParameter", name, value);
-            }
-            catch
-            {
-                // Skip parameters not recognized by this catalogue version.
-            }
-        }
-    }
-
-    private static string EscapeLuaString(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return "";
-        return s.Replace("\\", "\\\\").Replace("'", "\\'");
-    }
 }
 
 /// <summary>
-/// A single emitted drawing instruction from the Lua portrayal pipeline.
+/// Post-parse transform that merges adjacent SAFCON (safety contour) labels
+/// per S-101 portrayal conventions. Wraps <see cref="S101SafconLabelMerger"/>.
 /// </summary>
-public sealed class EmittedInstruction
+internal sealed class S101SafconTransform : IDrawingInstructionTransform
 {
-    /// <summary>Feature reference string (typically the feature record ID).</summary>
-    public required string FeatureRef { get; init; }
+    public IReadOnlyList<DrawingInstruction> Transform(IReadOnlyList<DrawingInstruction> instructions)
+        => S101SafconLabelMerger.Merge(instructions);
+}
 
-    /// <summary>
-    /// Semicolon-separated key:value drawing instruction string, e.g.
-    /// "ViewingGroup:36050;DrawingPriority:6;DisplayPlane:UnderRadar;PointInstruction:BOYLAT01".
-    /// </summary>
-    public required string InstructionString { get; init; }
-
-    /// <summary>Observed context parameter names used during rule evaluation.</summary>
-    public required string ObservedParameters { get; init; }
+/// <summary>
+/// Builds the S-101 mapping from <see cref="MarinerSettings"/> to the context
+/// parameters declared by the S-101 portrayal catalogue (S-100 Part 9A). Each
+/// binding is applied by the generic executor only when the catalogue declares
+/// the corresponding parameter.
+/// </summary>
+internal static class S101ContextParameterBindings
+{
+    public static IReadOnlyList<LuaContextParameterBinding> Build() =>
+    [
+        new("SafetyContour", m => m.SafetyContour, LuaValueSerializers.Number),
+        new("SafetyDepth", m => m.SafetyDepth, LuaValueSerializers.Number),
+        new("ShallowContour", m => m.ShallowContour, LuaValueSerializers.Number),
+        new("DeepContour", m => m.DeepContour, LuaValueSerializers.Number),
+        new("FourShades", m => m.FourShades, LuaValueSerializers.Bool),
+        new("ShallowWaterDangers", m => m.ShallowWaterDangers, LuaValueSerializers.Bool),
+        new("PlainBoundaries", m => m.PlainBoundaries, LuaValueSerializers.Bool),
+        new("SimplifiedSymbols", m => m.SimplifiedSymbols, LuaValueSerializers.Bool),
+        new("FullLightLines", m => m.FullLightLines, LuaValueSerializers.Bool),
+        new("RadarOverlay", m => m.RadarOverlay, LuaValueSerializers.Bool),
+        new("IgnoreScaleMinimum", m => m.IgnoreScaleMinimum, LuaValueSerializers.Bool),
+        // NationalLanguage is only sent when explicitly chosen — a blank value
+        // leaves the catalogue's declared default (eng) in place.
+        new("NationalLanguage",
+            m => string.IsNullOrWhiteSpace(m.NationalLanguage) ? null : m.NationalLanguage,
+            LuaValueSerializers.Str),
+    ];
 }

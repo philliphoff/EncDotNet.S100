@@ -292,15 +292,16 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
     // ── Lua ────────────────────────────────────────────────
 
     /// <summary>
-    /// GML portrayal catalogues use XSLT only. Always throws
-    /// <see cref="KeyNotFoundException"/>.
+    /// GML portrayal catalogues use XSLT only and ship no Lua rules, so this
+    /// always returns <see langword="null"/> (honouring the module loader's
+    /// "missing module → null" contract).
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Always.</exception>
-    public Script GetLuaScript(string scriptName)
-    {
-        throw new KeyNotFoundException(
-            $"Lua script '{scriptName}' not found in the portrayal catalogue.");
-    }
+    public string? GetLuaSource(string fileName) => null;
+
+    /// <summary>
+    /// GML portrayal catalogues declare no Lua context parameters.
+    /// </summary>
+    public IReadOnlyList<Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
     // ── Symbols ────────────────────────────────────────────────────────
 

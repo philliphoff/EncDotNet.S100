@@ -3,7 +3,7 @@ using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
-namespace EncDotNet.S100.Datasets.S101;
+namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
 /// Parses the semicolon-separated key:value drawing instruction strings

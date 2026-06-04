@@ -2,6 +2,7 @@ using System.Xml;
 using System.Xml.Xsl;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Core;
@@ -227,24 +228,16 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Lua ────────────────────────────────────────────────────────────
 
-    /// <inheritdoc/>
-    public Script GetLuaScript(string scriptName)
-    {
-        if (_cache.LuaScripts.TryGetValue(scriptName, out var cached))
-        {
-            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
-            return cached;
-        }
+    /// <summary>
+    /// The context parameters declared by the S-131 portrayal catalogue
+    /// (S-100 Part 9A), projected onto the Core
+    /// <see cref="LuaContextParameter"/> type for the generic Lua executor.
+    /// </summary>
+    public IReadOnlyList<LuaContextParameter> ContextParameters =>
+        _contextParameters ??= [.. _provider.Catalogue.ContextParameters
+            .Select(cp => new LuaContextParameter(cp.Id, cp.Type, cp.Default))];
 
-        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordMiss(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.LuaScript);
-        var ruleFile = FindRuleFile(scriptName);
-        using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
-        using var reader = new StreamReader(stream);
-        var source = reader.ReadToEnd();
-        var script = new Script { Name = ruleFile.Id, Source = source };
-        _cache.LuaScripts[scriptName] = script;
-        return script;
-    }
+    private IReadOnlyList<LuaContextParameter>? _contextParameters;
 
     /// <summary>
     /// Returns the raw Lua source for the given bare filename inside the

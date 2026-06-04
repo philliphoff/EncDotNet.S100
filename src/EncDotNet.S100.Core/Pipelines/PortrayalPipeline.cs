@@ -20,7 +20,7 @@ public sealed class PortrayalPipeline
     private readonly VectorPipeline _vectorPipeline;
     private readonly CoveragePipeline _coveragePipeline;
 
-    public PortrayalPipeline(ILuaRuleExecutor? luaExecutor = null)
+    public PortrayalPipeline(IVectorRuleExecutor? luaExecutor = null)
     {
         _vectorPipeline = new VectorPipeline(luaExecutor);
         _coveragePipeline = new CoveragePipeline();

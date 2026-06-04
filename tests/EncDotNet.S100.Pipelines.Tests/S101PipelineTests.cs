@@ -277,7 +277,9 @@ public class S101PipelineTests
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
 
-        public Script GetLuaScript(string scriptName) => throw new NotImplementedException();
+        public string? GetLuaSource(string fileName) => null;
+
+        public IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
         public SvgSymbol GetSymbol(string symbolName) =>
             new() { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" };

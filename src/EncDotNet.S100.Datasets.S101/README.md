@@ -8,18 +8,18 @@ This library reads S-101 datasets encoded in ISO 8211 format and executes the S-
 
 - **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records.
 - **`S101Document`**, **`S101DocumentReader`** — low-level ISO 8211 record parsing.
-- **`S101LuaRuleExecutor`** — `ILuaRuleExecutor` implementation that orchestrates the Lua portrayal pipeline (loads `main.lua`, calls `PortrayalMain()`, parses and post-processes the emitted instructions).
+- **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.
 - **`S101PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT/Lua rules, symbols, line styles, area fills, and color palettes.
 - **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline.
-- **`DrawingInstructionParser`** — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy from `EncDotNet.S100.Core`. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
+- **`DrawingInstructionParser`** (in `EncDotNet.S100.Core`) — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
 
 ## Bundled-adapter Lua patches
 
 `content/S101/pc/` stays **byte-identical** to the upstream IHO S-101
 portrayal catalogue. When upstream Lua has a defect that breaks
-real-world cells, `S101LuaRuleExecutor` ships a small adapter patch
-that monkey-patches the offending global rather than editing the
-bundled catalogue. Current patches:
+real-world cells, the `S101LuaDataProvider` ships a small adapter patch
+(via its ordered `PostLoadScripts`) that monkey-patches the offending
+global rather than editing the bundled catalogue. Current patches:
 
 - **`contains`** — restores a missing global the upstream catalogue
   relies on without defining.
