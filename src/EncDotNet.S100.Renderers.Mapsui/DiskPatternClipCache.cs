@@ -155,7 +155,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     private string GetEntryPath(string key)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        return Path.Combine(_cacheDirectory, Convert.ToHexStringLower(hash) + FileExtension);
+        return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
     }
 
     /// <summary>

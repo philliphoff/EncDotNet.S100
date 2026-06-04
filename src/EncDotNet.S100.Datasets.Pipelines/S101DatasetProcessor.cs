@@ -217,8 +217,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         ArgumentNullException.ThrowIfNull(dataset);
 
         var c = System.Globalization.CultureInfo.InvariantCulture;
-        var contentHash = Convert.ToHexStringLower(
-            System.Security.Cryptography.SHA256.HashData(datasetBytes));
+        var contentHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(datasetBytes)).ToLowerInvariant();
 
         var id = dataset.Document.Identification;
         var sb = new StringBuilder();
