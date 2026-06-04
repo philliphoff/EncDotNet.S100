@@ -142,6 +142,38 @@ internal static class MapPaintInstrumentation
     }
 
     /// <summary>
+    /// Builds an immutable, by-style aggregated snapshot of the paint
+    /// that just completed, ordered by descending duration. Returns a
+    /// fresh array of copied values so callers can retain it safely
+    /// while the next paint mutates / resets the in-place accumulators.
+    /// </summary>
+    /// <remarks>
+    /// Valid to call after <see cref="EndPaintAndEmit"/> and before the
+    /// next <see cref="BeginPaint"/> (accumulators are reset on the next
+    /// paint's start marker, not here). Runs on the render thread; the
+    /// caller should only invoke it when a sink is attached so idle /
+    /// stats-free runs pay no allocation.
+    /// </remarks>
+    public static IReadOnlyList<EncDotNet.S100.Viewer.Services.RenderStyleStat> CollectStyleSnapshot()
+    {
+        var byStyle = new Dictionary<string, (long Calls, double DurationMs)>();
+        foreach (var (key, stats) in s_perPaint)
+        {
+            if (stats.Calls == 0) continue;
+            byStyle.TryGetValue(key.Style, out var acc);
+            byStyle[key.Style] = (acc.Calls + stats.Calls, acc.DurationMs + stats.DurationMs);
+        }
+
+        var result = new List<EncDotNet.S100.Viewer.Services.RenderStyleStat>(byStyle.Count);
+        foreach (var (style, acc) in byStyle)
+        {
+            result.Add(new EncDotNet.S100.Viewer.Services.RenderStyleStat(style, acc.Calls, acc.DurationMs));
+        }
+        result.Sort(static (a, b) => b.DurationMs.CompareTo(a.DurationMs));
+        return result;
+    }
+
+    /// <summary>
     /// Bucket vertex count into a small, ordered set of labels so OTel
     /// histogram cardinality stays bounded. Buckets are powers of 10.
     /// </summary>

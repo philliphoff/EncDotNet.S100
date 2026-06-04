@@ -64,6 +64,17 @@ internal sealed class InstrumentedMapControl : MapControl
                 Telemetry.MapPaintInterval.Record(intervalMs);
             }
         }
+
+        // Feed the render-activity monitor so off-thread MCP callers can
+        // wait for idle and read the last paint's cost. Only collect the
+        // per-style snapshot when a sink is actually attached, so runs
+        // without an MCP consumer pay no per-paint allocation.
+        var sink = RenderActivityHub.Sink;
+        if (sink is not null)
+        {
+            var styles = MapPaintInstrumentation.CollectStyleSnapshot();
+            sink.NotifyPaint(durationMs, styles);
+        }
     }
     private sealed class PaintMarker
     {

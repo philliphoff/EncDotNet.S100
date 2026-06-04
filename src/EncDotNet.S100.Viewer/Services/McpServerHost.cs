@@ -30,6 +30,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IMapHostAccessor? _mapHostAccessor;
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly GlobalTimeService? _globalTime;
+    private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -42,7 +43,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IMapHostAccessor? mapHostAccessor = null,
         ILoggerFactory? loggers = null,
         IRenderStateControllerAccessor? renderStateAccessor = null,
-        GlobalTimeService? globalTime = null)
+        GlobalTimeService? globalTime = null,
+        IRenderActivityMonitor? renderActivityMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -51,6 +53,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _mapHostAccessor = mapHostAccessor;
         _renderStateAccessor = renderStateAccessor;
         _globalTime = globalTime;
+        _renderActivityMonitor = renderActivityMonitor;
         _loggers = loggers;
     }
 
@@ -273,6 +276,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_globalTime is not null)
         {
             tools.Add(SetTimeStepMcpAdapter.Create(new SetTimeStepTool(_globalTime)));
+        }
+        if (_renderActivityMonitor is not null)
+        {
+            tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));
+            tools.Add(GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivityMonitor)));
         }
         return tools.Count == 0 ? null : tools;
     }
