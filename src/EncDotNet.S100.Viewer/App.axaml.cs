@@ -338,13 +338,17 @@ public partial class App : Application
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
         services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
+        services.AddSingleton<IRenderActivityMonitor>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<IMapHostAccessor>(),
             sp.GetService<ILoggerFactory>(),
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
-            sp.GetRequiredService<GlobalTimeService>()));
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<IRenderActivityMonitor>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

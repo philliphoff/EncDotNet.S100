@@ -39,6 +39,9 @@ public partial class MainWindow : ShadUI.Window
     private readonly MainViewModel _viewModel;
     private readonly DatasetCatalogAggregator _catalogAggregator;
     private ValidationOverlayService? _validationOverlay;
+    private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
+    private Map? _renderActivityMap;
+    private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
@@ -146,6 +149,20 @@ public partial class MainWindow : ShadUI.Window
         {
             _validationOverlay?.Dispose();
             _validationOverlay = null;
+            // Detach render-activity wiring so the static hub does not
+            // outlive the window and a torn-down map is not probed.
+            EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = null;
+            if (_renderActivityMonitor is not null)
+            {
+                _renderActivityMonitor.BusyProbe = null;
+                if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
+                {
+                    _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;
+                }
+                _renderActivityMonitor = null;
+                _renderActivityMap = null;
+                _renderActivityRefreshHandler = null;
+            }
             // PR-M3: flush any pending debounced size writes so the last
             // splitter drag isn't lost on shutdown.
             _viewModel.OnShutdown();
@@ -218,6 +235,36 @@ public partial class MainWindow : ShadUI.Window
         if (MapControl.Map is { } mapForBackColor)
         {
             mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
+
+        // Wire the render-activity monitor that backs the MCP
+        // 'await_render_idle' / 'get_render_stats' tools. The
+        // InstrumentedMapControl feeds paint stats through the static
+        // RenderActivityHub.Sink; here we additionally feed Mapsui's
+        // graphics-refresh signal as activity and expose a layer-busy
+        // probe so idle is not reported while an async fetch is pending.
+        if (MapControl.Map is { } activityMap)
+        {
+            var monitor = App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
+            _renderActivityMonitor = monitor;
+            _renderActivityMap = activityMap;
+            EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = monitor;
+
+            monitor.BusyProbe = () =>
+            {
+                // Snapshot the layer collection defensively: it may be
+                // mutated on the UI thread while this runs on a threadpool
+                // thread driving an MCP request.
+                foreach (var layer in activityMap.Layers.ToArray())
+                {
+                    if (layer.Busy) return true;
+                }
+                return false;
+            };
+
+            _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
+            activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
         }
 
         // Bind the map-viewport notifier as early as possible so the

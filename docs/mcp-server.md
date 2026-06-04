@@ -121,6 +121,8 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
 | `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
+| `await_render_idle` *(viewer only, read-only)* | Blocks until the live map settles — no completed paint, graphics-refresh request, or busy layer for a continuous quiet period — or until a timeout elapses (`quietPeriodMs` default 250, clamped `[0, 10000]`; `timeoutMs` default 5000, clamped `[50, 120000]`). Call it between `set_viewport` and `render_to_image` so the screenshot reflects a settled view instead of racing the render pass. Always waits at least the quiet period and measures the on-screen `InstrumentedMapControl` paint loop, not the offscreen `render_to_image` clone. Returns `wentIdle`, `timedOut`, `waitedMs`, and `paintsObserved`. |
+| `get_render_stats` *(viewer only, read-only)* | Reports the cost of the most recently completed on-screen map paint: wall-clock `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a per-style breakdown (`style`, `calls`, `durationMs`, ordered by descending duration). Use it to measure rendering performance across pan / zoom, palette, or time-step changes. Describes the live map paint, not the offscreen `render_to_image` clone; returns `hasData = false` when no paint has occurred yet. Pair with `await_render_idle` so the reported paint reflects a settled view. |
 
 ### Read-only vs mutating tools
 
@@ -129,7 +131,9 @@ Tools fall into two groups:
 * **Read-only** — never mutate viewer state. Safe to call from any
   agent at any time. Examples: `list_datasets`, `find_at`,
   `query_features`, `sample_coverage`, `render_to_image` (which
-  snapshots from a clone of the live `Map`).
+  snapshots from a clone of the live `Map`), `await_render_idle`, and
+  `get_render_stats` (which observe the live render loop without
+  changing it).
 * **Mutating** — modify the live viewer's state (navigator, palette,
   time step, loaded datasets, etc.). Use only when you intend to
   drive the viewer's UI from outside. Examples: `set_viewport`,
