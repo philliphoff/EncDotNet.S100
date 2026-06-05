@@ -147,6 +147,54 @@ public sealed class SkiaDisplayListRendererTests
     }
 
     [Fact]
+    public void Render_ResolvedSymbol_DrawsAtNaturalPixelSize_NotMmRescaled()
+    {
+        // Svg.Skia rasterises a symbol's millimetre dimensions to pixels at
+        // 96 DPI, so a 3.98 mm × 5.35 mm symbol has a 15 × 20 px CullRect. The
+        // backend must draw it at that natural pixel size (× Scale), matching
+        // the Mapsui ImageStyle convention. A regression where the renderer
+        // re-applied an mm→px factor oversized every symbol by ~3.78×
+        // (15 px → ~57 px); this guards against that.
+        const string svg =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3.98mm\" " +
+            "height=\"5.35mm\" viewBox=\"-1.92 -2.55 3.98 5.35\">" +
+            "<rect x=\"-1.92\" y=\"-2.55\" width=\"3.98\" height=\"5.35\" fill=\"red\"/></svg>";
+
+        var scene = new VectorScene([
+            new PointPaintOp
+            {
+                FeatureReference = "sym",
+                World = Project(0.005, 0.005),
+                Symbol = new ResolvedSymbol(svg, Scale: 1.0, PivotRelativeX: 0.0, PivotRelativeY: 0.0),
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+
+        // Measure the painted (non-white) bounding box.
+        int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+        for (int y = 0; y < bitmap.Height; y++)
+        for (int x = 0; x < bitmap.Width; x++)
+        {
+            var p = bitmap.GetPixel(x, y);
+            if (p.Red != 255 || p.Green != 255 || p.Blue != 255)
+            {
+                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x);
+                minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+            }
+        }
+        Assert.True(maxX >= 0, "Symbol rendered nothing.");
+
+        int paintedWidth = maxX - minX + 1;
+        int paintedHeight = maxY - minY + 1;
+
+        // Natural size is ~15 × 20 px. Allow a small antialiasing margin, but
+        // stay well below the ~57 × 76 px the mm-rescale bug would produce.
+        Assert.InRange(paintedWidth, 13, 22);
+        Assert.InRange(paintedHeight, 18, 28);
+    }
+
+    [Fact]
     public void Render_SolidArea_FillsInteriorWithFillColour()
     {
         var fill = new RgbaColor(10, 80, 200, 255);

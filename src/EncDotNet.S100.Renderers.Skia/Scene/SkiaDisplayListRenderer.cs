@@ -163,10 +163,14 @@ public sealed class SkiaDisplayListRenderer
             if (picture is not null)
             {
                 var bounds = picture.CullRect;
-                // S-100 SVG user units are millimetres rasterised by Svg.Skia at
-                // 96 DPI (≈3.78 px/mm); fold that into the symbol scale so the on
-                // screen size matches the Mapsui ImageStyle convention.
-                float scale = (float)(symbol.Scale * 96.0 / 25.4);
+                // Svg.Skia already rasterises the SVG's millimetre dimensions to
+                // pixels at 96 DPI, so CullRect is in display pixels (e.g. a
+                // 3.98 mm symbol → 15 px). The symbol is therefore drawn at its
+                // natural pixel size times the global symbol scale — matching the
+                // Mapsui ImageStyle convention (SymbolScale applied to the same
+                // CullRect). Applying a further mm→px factor here would oversize
+                // every symbol by ~3.78×.
+                float scale = (float)symbol.Scale;
                 float w = bounds.Width * scale;
                 float h = bounds.Height * scale;
 
