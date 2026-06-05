@@ -12,10 +12,12 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -213,6 +215,160 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
                     WithinPlanePriority: 0,
                     SourceDatasetId: _fileName),
             },
+        };
+    }
+
+    /// <summary>
+    /// Renders this dataset to a standalone <see cref="SKBitmap"/> through the
+    /// headless, backend-agnostic Skia vector core
+    /// (<see cref="VectorSceneBuilder"/> → <see cref="SkiaDisplayListRenderer"/>),
+    /// bypassing Mapsui entirely. This is the vector analogue of the direct-Skia
+    /// coverage renderer and the basis for a headless tile-serving API.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, symbol/text scale, ECDIS display settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <remarks>
+    /// Pattern area-fills are not yet represented in the shared IR, so areas with
+    /// an area-fill reference are omitted here; all point, line, solid-colour
+    /// area, and text portrayal is rendered. Use <see cref="RenderAsync"/> (the
+    /// Mapsui path) for full pattern-fill fidelity. The viewport is auto-fitted
+    /// to the dataset extent and padded to the output aspect ratio.
+    /// </remarks>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var catalogue = _catalogue;
+        context?.EcdisDisplay?.ApplyTo(catalogue);
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
+        var featureSource = CreateFeatureXmlSource();
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+
+        var palette = catalogue.ActivePalette;
+        var builder = new VectorSceneBuilder
+        {
+            ResolveColor = ColorResolver.Create(palette),
+            SymbolResolver = name =>
+            {
+                try { return VectorSceneBuilder.ResolveSymbolAsset(catalogue.GetSymbol(name).SvgContent, palette); }
+                catch { return null; }
+            },
+            LineStyleProvider = name =>
+            {
+                try { return catalogue.GetLineStyle(name); }
+                catch { return null; }
+            },
+            SymbolScale = context?.SymbolScale ?? 1.0,
+            TextScale = context?.TextScale ?? 1.0,
+        };
+
+        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
+        var scene = builder.Build(instructions, geometryProvider);
+
+        var viewport = BuildFittedViewport(widthPixels, heightPixels);
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+        };
+        return renderer.Render(scene, viewport);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="Viewport"/> fitted to the dataset's geographic extent,
+    /// padded so its EPSG:3857 aspect ratio matches the requested pixel rectangle
+    /// (so the headless renderer's independent X/Y scaling does not distort).
+    /// </summary>
+    private EncDotNet.S100.Pipelines.Viewport BuildFittedViewport(int widthPixels, int heightPixels)
+    {
+        double minLon = double.MaxValue, minLat = double.MaxValue;
+        double maxLon = double.MinValue, maxLat = double.MinValue;
+        bool any = false;
+
+        void Expand(double lat, double lon)
+        {
+            any = true;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+        }
+
+        foreach (var feature in Features)
+        {
+            foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
+            foreach (var curve in feature.Curves)
+                foreach (var (lat, lon) in curve) Expand(lat, lon);
+            foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
+        }
+
+        if (!any)
+        {
+            minLon = -0.001; maxLon = 0.001;
+            minLat = -0.001; maxLat = 0.001;
+        }
+
+        var latPad = Math.Max(MinExtentPadding, (maxLat - minLat) * 0.1);
+        var lonPad = Math.Max(MinExtentPadding, (maxLon - minLon) * 0.1);
+        minLat -= latPad; maxLat += latPad;
+        minLon -= lonPad; maxLon += lonPad;
+
+        // Match the output aspect ratio in projected (EPSG:3857) space, then
+        // convert the expanded corners back to lon/lat for the Viewport.
+        var (x1, y1) = SphericalMercator.FromLonLat(minLon, minLat);
+        var (x2, y2) = SphericalMercator.FromLonLat(maxLon, maxLat);
+        double spanX = x2 - x1, spanY = y2 - y1;
+        double viewAspect = (double)widthPixels / heightPixels;
+
+        if (spanX > 0 && spanY > 0)
+        {
+            double dataAspect = spanX / spanY;
+            if (dataAspect > viewAspect)
+            {
+                double targetSpanY = spanX / viewAspect;
+                double grow = (targetSpanY - spanY) / 2.0;
+                y1 -= grow; y2 += grow;
+            }
+            else
+            {
+                double targetSpanX = spanY * viewAspect;
+                double grow = (targetSpanX - spanX) / 2.0;
+                x1 -= grow; x2 += grow;
+            }
+        }
+
+        var (fitMinLon, fitMinLat) = SphericalMercator.ToLonLat(x1, y1);
+        var (fitMaxLon, fitMaxLat) = SphericalMercator.ToLonLat(x2, y2);
+
+        // Approximate scale denominator for scale-visibility culling: ground
+        // metres per pixel ÷ the S-100 standard 0.00028 m/px screen pitch.
+        double midLatRad = (fitMinLat + fitMaxLat) * 0.5 * Math.PI / 180.0;
+        double groundMetresPerPixel = (x2 - x1) / widthPixels * Math.Cos(midLatRad);
+        double denom = groundMetresPerPixel / ScaleVisibility.DenomToResolutionMetres;
+
+        return new EncDotNet.S100.Pipelines.Viewport
+        {
+            MinLongitude = fitMinLon,
+            MaxLongitude = fitMaxLon,
+            MinLatitude = fitMinLat,
+            MaxLatitude = fitMaxLat,
+            WidthPixels = widthPixels,
+            HeightPixels = heightPixels,
+            ScaleDenominator = denom > 0 ? denom : 1.0,
         };
     }
 
