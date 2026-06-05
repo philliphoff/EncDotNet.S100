@@ -39,6 +39,29 @@ var renderer = new MapsuiDisplayListRenderer
 
 The cache segments entries per palette (`Day` / `Dusk` / `Night`) so flipping back and forth keeps every palette warm. When `AssetCache` is unset, the renderer falls back to a per-instance cache, which preserves legacy behaviour for ad-hoc / one-shot callers.
 
+### Caching the coverage projection layout across re-renders
+
+`MapsuiCoverageRenderer` reprojects every grid node from the coverage's
+native CRS to Web Mercator and derives a node→pixel mapping. That work
+depends only on the grid geometry (native CRS, dimensions, and the
+affine origin/spacing), so it is **independent of the colour palette,
+ECDIS display mode, and the per-cell values**. The renderer caches the
+resulting `int[]` node→pixel index array (along with the output raster
+dimensions and Mercator extent) keyed on those geometry parameters, and
+reuses it whenever the next render presents the same geometry — e.g. a
+palette switch or a coverage time-step change. Only the value
+classification + pixel fill + PNG encode re-run; the projection pass is
+skipped.
+
+To benefit, keep the renderer instance alive across renders rather than
+constructing a fresh one each time (`S102DatasetProcessor` and
+`S104DatasetProcessor` hold the renderer in a field). The cache is a
+single-slot, value-keyed entry published atomically, so it stays
+correct if a renderer is ever reused for a different geometry (the key
+mismatch forces a rebuild). It caches only the compact index array, not
+the per-node Mercator coordinates, to bound memory (~4 MB per
+megapixel grid).
+
 ## Dynamic feature sources
 
 `EncDotNet.S100.Renderers.Mapsui.DynamicSources` hosts the Mapsui-bound side of the dynamic-feature-source abstraction defined in `EncDotNet.S100.Core` (see [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md)). Renderers turn `DynamicFeature` snapshots into Mapsui `IFeature` + `IStyle` instances that the viewer's `DynamicSourceOverlayHost` attaches to a `MemoryLayer` on the overlay tier of `IMapHost`.

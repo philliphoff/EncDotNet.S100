@@ -59,6 +59,13 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S104DatasetData _data;
     private readonly string _fileName;
+
+    /// <summary>
+    /// Long-lived coverage renderer reused across renders so its palette-/
+    /// value-independent projection layout cache survives palette switches
+    /// and time-step changes.
+    /// </summary>
+    private MapsuiCoverageRenderer? _colorRenderer;
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -176,7 +183,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
-        var colorRenderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        var colorRenderer = _colorRenderer ??= new MapsuiCoverageRenderer(_crsTransformFactory)
         {
             LayerName = $"S-104: {_fileName}",
         };

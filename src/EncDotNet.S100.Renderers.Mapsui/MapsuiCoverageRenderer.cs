@@ -7,6 +7,7 @@ using Mapsui.Projections;
 using Mapsui.Styles;
 using SkiaSharp;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
@@ -23,6 +24,23 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     private const int MaxDim = 4096;
 
     private readonly ICrsTransformFactory _transformFactory;
+
+    /// <summary>
+    /// Cached palette- and value-independent projection layout. The grid-node
+    /// reprojection (native CRS → Web Mercator) and the resulting node→pixel
+    /// mapping depend only on the grid geometry, so they can be reused across
+    /// renders that change only the colour palette, ECDIS display mode, or
+    /// coverage time-step. Published atomically via <see cref="Volatile"/>.
+    /// </summary>
+    private LayoutCacheEntry? _layoutCache;
+
+    /// <summary>Number of times the projection layout was reused from cache.</summary>
+    internal long LayoutCacheHits { get; private set; }
+
+    /// <summary>Number of times the projection layout was (re)built.</summary>
+    internal long LayoutCacheMisses { get; private set; }
+
+    private readonly object _cacheLock = new();
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-102 Coverage";
@@ -80,6 +98,118 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             noDataIsFilled = noDataPacked != 0;
         }
 
+        // Resolve the palette- and value-independent projection layout. The
+        // node→pixel mapping is reused when the grid geometry is unchanged
+        // (e.g. across palette switches or coverage time-step changes),
+        // skipping the per-node CRS transform + Mercator projection pass.
+        var layout = GetOrBuildLayout(georeferencer, srcRows, srcCols);
+
+        int outCols = layout.OutCols;
+        int outRows = layout.OutRows;
+        int[] nodeToPixel = layout.NodeToPixel;
+
+        // Render: for each grid node, place its color at the precomputed
+        // Mercator pixel. Fill a uint[] (RGBA8888) buffer directly to avoid
+        // the per-pixel managed→native round-trip that SKBitmap.SetPixel
+        // performs.
+        int pixelCount = outCols * outRows;
+        var pixels = new uint[pixelCount];
+
+        // Pre-resolve band colors to packed RGBA8888 (matches SKColorType.Rgba8888).
+        var bandPacked = new uint[bands.Length];
+        for (int i = 0; i < bands.Length; i++)
+            bandPacked[i] = PackRgba(bands[i].Color);
+
+        for (int r = 0; r < srcRows; r++)
+        for (int c = 0; c < srcCols; c++)
+        {
+            float value = fieldData[r, c];
+            bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
+
+            uint packed;
+            if (isNoData)
+            {
+                if (!noDataIsFilled) continue;
+                packed = noDataPacked;
+            }
+            else
+            {
+                packed = 0;
+                for (int b = 0; b < bands.Length; b++)
+                {
+                    if (value >= bands[b].Min && value < bands[b].Max)
+                    {
+                        packed = bandPacked[b];
+                        break;
+                    }
+                }
+                if (packed == 0) continue;
+            }
+
+            int target = nodeToPixel[r * srcCols + c];
+            if (target >= 0)
+                pixels[target] = packed;
+        }
+
+        using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
+        // Bulk-copy the pixel buffer into the bitmap's native backing store.
+        var pixelSpan = MemoryMarshal.AsBytes(pixels.AsSpan());
+        pixelSpan.CopyTo(new Span<byte>((void*)bmp.GetPixels(), pixelCount * 4));
+
+        // Encode to PNG
+        using var image = SKImage.FromBitmap(bmp);
+        using var data0 = image.Encode(SKEncodedImageFormat.Png, 100);
+        byte[] pngBytes = data0.ToArray();
+
+        var mercatorExtent = new MRect(layout.MercMinX, layout.MercMinY, layout.MercMaxX, layout.MercMaxY);
+
+        // Build the Mapsui layer
+        var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
+        {
+            Styles = { new RasterStyle() },
+        };
+
+        return new MemoryLayer
+        {
+            Name = LayerName,
+            Features = new List<RasterFeature> { rasterFeature },
+            Style = null,
+            Opacity = Opacity,
+        };
+    }
+
+    /// <summary>
+    /// Returns the cached projection layout when the grid geometry matches the
+    /// last render, otherwise (re)builds it. The cache key is value-based: it
+    /// compares the native CRS, grid dimensions, and the affine georeferencing
+    /// parameters (origin and spacing), all of which fully determine the
+    /// node→pixel mapping.
+    /// </summary>
+    private LayoutCacheEntry GetOrBuildLayout(GridGeoreferencer georeferencer, int srcRows, int srcCols)
+    {
+        var meta = georeferencer.Metadata;
+        var cached = Volatile.Read(ref _layoutCache);
+        if (cached is not null && cached.Matches(georeferencer.CRS, srcRows, srcCols, meta))
+        {
+            lock (_cacheLock) { LayoutCacheHits++; }
+            return cached;
+        }
+
+        var built = BuildLayout(georeferencer, srcRows, srcCols, meta);
+
+        // Build immutable entry locally, then publish atomically.
+        Volatile.Write(ref _layoutCache, built);
+        lock (_cacheLock) { LayoutCacheMisses++; }
+        return built;
+    }
+
+    /// <summary>
+    /// Projects every grid node to Web Mercator and computes the output raster
+    /// dimensions and the per-node destination pixel index. This is the
+    /// palette- and value-independent portion of a render.
+    /// </summary>
+    private LayoutCacheEntry BuildLayout(GridGeoreferencer georeferencer, int srcRows, int srcCols, GridMetadata meta)
+    {
         // Build CRS transform: native grid CRS → WGS84
         var nativeToWgs84 = _transformFactory.Create(georeferencer.CRS, "EPSG:4326");
 
@@ -137,77 +267,81 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             cellSizeY = (mercMaxY - mercMinY) / outRows;
         }
 
-        // Render: for each grid node, place its color at the correct Mercator pixel.
-        // Fill a uint[] (RGBA8888) buffer directly to avoid the per-pixel
-        // managed→native round-trip that SKBitmap.SetPixel performs. On a
-        // 2000×2000 grid this saves ~4M P/Invoke crossings per render.
-        int pixelCount = outCols * outRows;
-        var pixels = new uint[pixelCount];
-
-        // Pre-resolve band colors to packed RGBA8888 (matches SKColorType.Rgba8888).
-        var bandPacked = new uint[bands.Length];
-        for (int i = 0; i < bands.Length; i++)
-            bandPacked[i] = PackRgba(bands[i].Color);
-
+        // Compute the destination pixel for each grid node using the final
+        // (post-MaxDim) cell sizes. Out-of-bounds nodes map to -1.
+        var nodeToPixel = new int[srcRows * srcCols];
         for (int r = 0; r < srcRows; r++)
         for (int c = 0; c < srcCols; c++)
         {
-            float value = fieldData[r, c];
-            bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
-
-            uint packed;
-            if (isNoData)
-            {
-                if (!noDataIsFilled) continue;
-                packed = noDataPacked;
-            }
-            else
-            {
-                packed = 0;
-                for (int b = 0; b < bands.Length; b++)
-                {
-                    if (value >= bands[b].Min && value < bands[b].Max)
-                    {
-                        packed = bandPacked[b];
-                        break;
-                    }
-                }
-                if (packed == 0) continue;
-            }
-
             var (mx, my) = nodePositions[r, c];
             int px = (int)((mx - mercMinX) / cellSizeX);
             int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
-
-            if (px >= 0 && px < outCols && py >= 0 && py < outRows)
-                pixels[py * outCols + px] = packed;
+            nodeToPixel[r * srcCols + c] =
+                (px >= 0 && px < outCols && py >= 0 && py < outRows)
+                    ? py * outCols + px
+                    : -1;
         }
 
-        using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
-        // Bulk-copy the pixel buffer into the bitmap's native backing store.
-        var pixelSpan = MemoryMarshal.AsBytes(pixels.AsSpan());
-        pixelSpan.CopyTo(new Span<byte>((void*)bmp.GetPixels(), pixelCount * 4));
+        return new LayoutCacheEntry(
+            georeferencer.CRS, srcRows, srcCols,
+            meta.OriginLongitude, meta.OriginLatitude,
+            meta.SpacingLongitudinal, meta.SpacingLatitudinal,
+            outCols, outRows, nodeToPixel,
+            mercMinX, mercMinY, mercMaxX, mercMaxY);
+    }
 
-        // Encode to PNG
-        using var image = SKImage.FromBitmap(bmp);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        var pngBytes = data.ToArray();
-
-        var mercatorExtent = new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
-
-        // Build the Mapsui layer
-        var rasterFeature = new RasterFeature(new MRaster(pngBytes, mercatorExtent))
+    /// <summary>
+    /// Immutable, palette-independent projection layout for one grid geometry.
+    /// </summary>
+    private sealed class LayoutCacheEntry
+    {
+        public LayoutCacheEntry(
+            string crs, int srcRows, int srcCols,
+            double originLon, double originLat,
+            double spacingLon, double spacingLat,
+            int outCols, int outRows, int[] nodeToPixel,
+            double mercMinX, double mercMinY, double mercMaxX, double mercMaxY)
         {
-            Styles = { new RasterStyle() },
-        };
+            _crs = crs;
+            _srcRows = srcRows;
+            _srcCols = srcCols;
+            _originLon = originLon;
+            _originLat = originLat;
+            _spacingLon = spacingLon;
+            _spacingLat = spacingLat;
+            OutCols = outCols;
+            OutRows = outRows;
+            NodeToPixel = nodeToPixel;
+            MercMinX = mercMinX;
+            MercMinY = mercMinY;
+            MercMaxX = mercMaxX;
+            MercMaxY = mercMaxY;
+        }
 
-        return new MemoryLayer
-        {
-            Name = LayerName,
-            Features = new List<RasterFeature> { rasterFeature },
-            Style = null,
-            Opacity = Opacity,
-        };
+        private readonly string _crs;
+        private readonly int _srcRows;
+        private readonly int _srcCols;
+        private readonly double _originLon;
+        private readonly double _originLat;
+        private readonly double _spacingLon;
+        private readonly double _spacingLat;
+
+        public int OutCols { get; }
+        public int OutRows { get; }
+        public int[] NodeToPixel { get; }
+        public double MercMinX { get; }
+        public double MercMinY { get; }
+        public double MercMaxX { get; }
+        public double MercMaxY { get; }
+
+        public bool Matches(string crs, int srcRows, int srcCols, GridMetadata meta) =>
+            _srcRows == srcRows &&
+            _srcCols == srcCols &&
+            _crs == crs &&
+            _originLon == meta.OriginLongitude &&
+            _originLat == meta.OriginLatitude &&
+            _spacingLon == meta.SpacingLongitudinal &&
+            _spacingLat == meta.SpacingLatitudinal;
     }
 
     /// <summary>
