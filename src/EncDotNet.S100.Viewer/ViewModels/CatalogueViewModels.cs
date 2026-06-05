@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -6,6 +7,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -31,7 +33,7 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
         Entries.Clear();
         foreach (var (spec, path) in _settings.FeatureCataloguePaths.OrderBy(kv => kv.Key))
         {
-            Entries.Add(new CatalogueEntry(spec, path, version: ReadFeatureCatalogueVersion(path)));
+            Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
         }
     }
 
@@ -47,32 +49,55 @@ internal sealed class FeatureCataloguesViewModel : ViewModelBase
     /// </summary>
     public void AddTransient(string spec, string path)
     {
-        Entries.Add(new CatalogueEntry(spec, path, version: ReadFeatureCatalogueVersion(path)));
+        Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
     }
 
     /// <summary>
     /// Adds a built-in catalogue entry that cannot be removed by the user.
     /// Skipped if a user-provided entry already exists for the spec.
     /// </summary>
-    public void AddBuiltIn(string spec, string displayPath, string? version = null)
+    public void AddBuiltIn(string spec, string displayPath, string? version = null, string? versionDate = null)
     {
         if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
         {
-            Entries.Add(new CatalogueEntry(spec, displayPath, isBuiltIn: true, version: version));
+            // Built-in specs are always covered by the curated title map, so the
+            // parsed-name fallback never fires here.
+            var title = ComposeTitle(spec, Strings.SpecDisplayName(spec));
+            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version, versionDate: versionDate));
         }
     }
 
-    private static string? ReadFeatureCatalogueVersion(string path)
+    private static CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
+    {
+        var (name, version, date) = ReadFeatureCatalogueInfo(path);
+        // Curated name first; fall back to the catalogue's own declared name
+        // (for custom specs outside the bundled set).
+        var name2 = Strings.SpecDisplayName(spec) ?? (string.IsNullOrWhiteSpace(name) ? null : name);
+        return new CatalogueEntry(spec, ComposeTitle(spec, name2), path, isBuiltIn: isBuiltIn, version: version, versionDate: date);
+    }
+
+    /// <summary>
+    /// Composes the primary list line: the spec code followed by the
+    /// product name (e.g. "S-101 Electronic Navigational Chart"), or just
+    /// the spec code when no name is available.
+    /// </summary>
+    internal static string ComposeTitle(string spec, string? name) =>
+        string.IsNullOrWhiteSpace(name) ? spec : $"{spec} {name}";
+
+    private static (string? Name, string? Version, string? VersionDate) ReadFeatureCatalogueInfo(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
             var catalogue = FeatureCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber;
+            return (
+                string.IsNullOrEmpty(catalogue.Name) ? null : catalogue.Name,
+                string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber,
+                string.IsNullOrEmpty(catalogue.VersionDate) ? null : catalogue.VersionDate);
         }
         catch
         {
-            return null;
+            return (null, null, null);
         }
     }
 
@@ -109,7 +134,7 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
         Entries.Clear();
         foreach (var (spec, path) in _settings.CataloguePaths.OrderBy(kv => kv.Key))
         {
-            Entries.Add(new CatalogueEntry(spec, path, version: ReadPortrayalCatalogueVersion(path)));
+            Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
         }
     }
 
@@ -127,7 +152,7 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
     public void AddTransient(string spec, string path)
     {
         _catalogueManager.SetPath(spec, path);
-        Entries.Add(new CatalogueEntry(spec, path, version: ReadPortrayalCatalogueVersion(path)));
+        Entries.Add(CreateEntry(spec, path, isBuiltIn: false));
     }
 
     /// <summary>
@@ -138,8 +163,17 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
     {
         if (!Entries.Any(e => e.ProductSpec.Equals(spec, StringComparison.OrdinalIgnoreCase)))
         {
-            Entries.Add(new CatalogueEntry(spec, displayPath, isBuiltIn: true, version: version));
+            var title = FeatureCataloguesViewModel.ComposeTitle(spec, Strings.SpecDisplayName(spec));
+            Entries.Add(new CatalogueEntry(spec, title, displayPath, isBuiltIn: true, version: version));
         }
+    }
+
+    private static CatalogueEntry CreateEntry(string spec, string path, bool isBuiltIn)
+    {
+        // Portrayal catalogues carry no human-readable name, so the curated map
+        // is the only name source; the title degrades to the spec code alone.
+        var title = FeatureCataloguesViewModel.ComposeTitle(spec, Strings.SpecDisplayName(spec));
+        return new CatalogueEntry(spec, title, path, isBuiltIn: isBuiltIn, version: ReadPortrayalCatalogueVersion(path));
     }
 
     private static string? ReadPortrayalCatalogueVersion(string folderPath)
@@ -171,16 +205,67 @@ internal sealed class PortrayalCataloguesViewModel : ViewModelBase
 internal sealed class CatalogueEntry
 {
     public string ProductSpec { get; }
+
+    /// <summary>
+    /// Human-readable product title shown as the primary line in the list
+    /// (e.g. "Electronic Navigational Chart"). Resolved from the curated
+    /// spec-name map, the catalogue's declared name, or the spec code.
+    /// </summary>
+    public string DisplayTitle { get; }
+
     public string Path { get; }
     public bool IsBuiltIn { get; }
     public string? Version { get; }
-    public string DisplayName => $"{ProductSpec} — {System.IO.Path.GetFileName(Path.TrimEnd(System.IO.Path.DirectorySeparatorChar))}";
+    public string? VersionDate { get; }
 
-    public CatalogueEntry(string productSpec, string path, bool isBuiltIn = false, string? version = null)
+    /// <summary>
+    /// Secondary identity line: version number, version date, and a
+    /// "built-in" marker for bundled catalogues. The spec code is omitted
+    /// here because it already leads <see cref="DisplayTitle"/>.
+    /// </summary>
+    public string Subtitle
+    {
+        get
+        {
+            var parts = new List<string>(3);
+            if (!string.IsNullOrEmpty(Version))
+            {
+                parts.Add($"v{Version}");
+            }
+            if (!string.IsNullOrEmpty(VersionDate))
+            {
+                parts.Add(VersionDate!);
+            }
+            if (IsBuiltIn)
+            {
+                parts.Add(Strings.Catalogue_BuiltInLabel);
+            }
+            return string.Join(" · ", parts);
+        }
+    }
+
+    /// <summary>True when <see cref="Subtitle"/> has content to display.</summary>
+    public bool HasSubtitle => Subtitle.Length > 0;
+
+    /// <summary>
+    /// True when the file-system path should be shown. Built-in catalogues
+    /// carry no meaningful path (their provenance is shown in the subtitle).
+    /// </summary>
+    public bool ShowPath => !IsBuiltIn && !string.IsNullOrEmpty(Path);
+
+    public CatalogueEntry(
+        string productSpec,
+        string displayTitle,
+        string path,
+        bool isBuiltIn = false,
+        string? version = null,
+        string? versionDate = null)
     {
         ProductSpec = productSpec;
+        DisplayTitle = displayTitle;
         Path = path;
         IsBuiltIn = isBuiltIn;
         Version = version;
+        VersionDate = versionDate;
     }
 }
