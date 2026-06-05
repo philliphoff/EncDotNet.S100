@@ -90,6 +90,32 @@ whose palette / viewing-group / display-plane state is mutated per
 render and read throughout, and the viewer fires re-renders
 re-entrantly.
 
+That single-slot cache only helps re-renders of an *already-open*
+processor. A **cross-load** cache (`IPortrayalInstructionCache`, from
+`EncDotNet.S100.Core`'s `Pipelines.Vector.Caching`) closes the gap so a
+*fresh* processor re-opening a previously-portrayed cell — even after a
+restart, when the host injects a `DiskPortrayalInstructionCache` — skips
+the multi-second Lua run entirely. On a single-slot miss the pipeline
+run is wrapped in `GetOrCompute(key, factory)`, keyed by
+`"{portrayalContentHash}|{BuildPortrayalCacheKey(...)}"`. The
+`GetPortrayalContentHash()` prefix (memoized) is a SHA-256 over the
+dataset content, the **resolved** feature- and portrayal-catalogue
+content (FC bytes via `FeatureCatalogueManager.GetContentHash`, the PC
+version, its context parameters and structural rule / viewing-group /
+display-mode / display-plane metadata, and the SHA-256 of every declared
+rule file's Lua source), and the module version ids of the pipeline /
+executor / Lua-engine assemblies — so any change to the dataset, an FC /
+PC override, the bundled rules, or the engine yields a miss and a
+recompute (it hashes *actual content*, never declared version strings
+alone). The same hash also strengthens the pattern-clip cache key.
+`SharedInstructionCacheHits` (internal) lets tests assert cross-load
+reuse. When no shared cache is injected the processor falls back to a
+bounded in-memory instruction cache, so tools and tests exercise the
+same path. This assumes S-101 portrayal is Lua-only (true for the
+bundled catalogue), which keeps the instruction list independent of
+palette and scale; an XSLT S-101 catalogue would require adding the
+palette to the key (bump the processor's `PortrayalContentFormatVersion`).
+
 ### `S57DatasetProcessor` — pre-translation + delegation
 
 `S57DatasetProcessor` is the only processor that produces a composite

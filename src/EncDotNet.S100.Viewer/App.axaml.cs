@@ -201,6 +201,21 @@ public partial class App : Application
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
         });
+        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
+        {
+            // One process-wide disk cache shared by every S-101 processor so a
+            // fresh open of a previously-portrayed cell skips the multi-second
+            // MoonSharp Part 9A Lua run, even across restarts. The cache key is
+            // the portrayal-content hash (dataset bytes + FC/PC content +
+            // pipeline / VM assemblies) so persisted entries auto-invalidate
+            // when anything affecting the instruction list changes.
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EncDotNet.S100",
+                "PortrayalInstructionCache");
+            const long maxBytes = 256L * 1024 * 1024;
+            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
+        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
@@ -208,7 +223,8 @@ public partial class App : Application
                 new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>()));
+                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();

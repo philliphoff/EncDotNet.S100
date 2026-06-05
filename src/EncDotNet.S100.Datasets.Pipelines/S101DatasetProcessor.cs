@@ -11,6 +11,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
@@ -70,6 +71,29 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     private string? _cachedPortrayalKey;
     private IReadOnlyList<DrawingInstruction>? _cachedPortrayalInstructions;
 
+    // Cross-load cache of the post-pipeline drawing-instruction list. The
+    // single-slot _cachedPortrayalInstructions above only helps re-renders of
+    // this already-open processor; this shared cache (an InMemory LRU by
+    // default, or a process-global DiskPortrayalInstructionCache when the host
+    // injects one) lets a *fresh* processor for a previously-portrayed cell skip
+    // the multi-second MoonSharp Part 9A Lua run entirely. The key is fully
+    // qualified with the portrayal-content hash (see GetPortrayalContentHash) so
+    // a change to the dataset bytes, the feature / portrayal catalogue content
+    // (including CLI / settings overrides and bundled Lua rules), or the
+    // pipeline / VM assemblies yields a miss and a recompute. Guarded by
+    // _renderGate.
+    private readonly IPortrayalInstructionCache _instructionCache;
+
+    // Memoized portrayal-content hash forming the cross-load instruction-cache
+    // key prefix (and strengthening the pattern-clip key). Computed once on
+    // first render and reused; constant for the lifetime of this processor.
+    private string? _portrayalContentHash;
+
+    // Bump when the portrayal-content hash composition changes (e.g. a new
+    // input is folded in) so previously persisted instruction-cache entries are
+    // treated as stale rather than reused under a now-incompatible key.
+    private const int PortrayalContentFormatVersion = 1;
+
     /// <summary>
     /// Number of renders served from the portrayal-instruction cache
     /// (the ~2.4 s Lua pipeline was skipped). Exposed for tests.
@@ -90,6 +114,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
     /// </summary>
     internal long PatternClipCacheHits => _patternClipCache.Hits;
 
+    /// <summary>
+    /// Number of renders whose post-pipeline instruction list was served from
+    /// the shared cross-load instruction cache (the MoonSharp Part 9A Lua run
+    /// was skipped — e.g. a fresh processor re-opening a previously-portrayed
+    /// cell). Exposed for tests.
+    /// </summary>
+    internal long SharedInstructionCacheHits => _instructionCache.Hits;
+
     // Canonical "no filter" ECDIS state used when a render supplies no
     // EcdisDisplay. Category.All maps to a null display mode (every
     // viewing group visible) with no hidden VGs or planes, matching the
@@ -106,8 +138,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedPatternClipCache)
+        IPatternClipCache? sharedPatternClipCache = null,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedPatternClipCache, sharedInstructionCache)
     {
     }
 
@@ -122,14 +155,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache = null)
+        IPatternClipCache? sharedPatternClipCache = null,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
             featureCatalogueManager,
-            sharedPatternClipCache)
+            sharedPatternClipCache,
+            sharedInstructionCache)
     {
     }
 
@@ -139,7 +174,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache)
+        IPatternClipCache? sharedPatternClipCache,
+        IPortrayalInstructionCache? sharedInstructionCache)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
@@ -163,6 +199,12 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         // process-global); otherwise fall back to a per-processor in-memory slot.
         _patternClipCache = sharedPatternClipCache ?? new InMemoryPatternClipCache();
         _patternClipScope = BuildDatasetScopeKey(datasetBytes, _dataset);
+
+        // When a shared instruction cache is injected use it (persistent,
+        // cross-cell, process-global); otherwise fall back to a bounded
+        // per-processor in-memory LRU so the cross-load behaviour is exercised
+        // even without a host-supplied disk cache.
+        _instructionCache = sharedInstructionCache ?? new InMemoryPortrayalInstructionCache();
 
         _featureCatalogueManager = featureCatalogueManager;
 
@@ -232,6 +274,134 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Computes (once, then memoizes) the strong content hash that prefixes the
+    /// cross-load instruction-cache key and strengthens the pattern-clip key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The hash must change whenever <em>anything</em> that can alter the
+    /// post-pipeline drawing-instruction list changes, so a persisted entry is
+    /// never reused incorrectly. Per the cache design review it hashes
+    /// <em>actual resolved content</em> rather than declared version strings
+    /// (which an override can change without bumping). It folds in:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>the per-dataset scope (<see cref="_patternClipScope"/>): SHA-256 of
+    /// the dataset bytes plus name / edition / CRS;</item>
+    /// <item>the Feature Catalogue content hash
+    /// (<see cref="FeatureCatalogueManager.GetContentHash(string)"/>) — captures
+    /// CLI / settings FC overrides;</item>
+    /// <item>the Portrayal Catalogue version, its context-parameter declarations,
+    /// the structural rule / viewing-group / display-mode / display-plane
+    /// metadata that drives rule selection order and ECDIS display filtering,
+    /// and the SHA-256 of every declared rule file's Lua source (captures bundled
+    /// rules and any catalogue override resolved through the provider);</item>
+    /// <item>the module version ids of the pipeline / executor / Lua-engine
+    /// assemblies — captures behavioural changes in the portrayal pipeline,
+    /// the S-101 rule executor, or the MoonSharp VM;</item>
+    /// <item>the serializer and content format-version stamps.</item>
+    /// </list>
+    /// <para>
+    /// This assumes the S-101 portrayal rules are Lua-only (true for the bundled
+    /// catalogue): the instruction list is then independent of palette and
+    /// symbol / text scale, which the renderer applies afterwards. An XSLT rule
+    /// would make the list palette-dependent; such a catalogue would change the
+    /// rule metadata folded into this hash, but if an XSLT S-101 catalogue is
+    /// ever introduced the palette must also be added to the key (bump
+    /// <see cref="PortrayalContentFormatVersion"/>).
+    /// </para>
+    /// <para>
+    /// Computed under <see cref="_renderGate"/> on first render and cached. The
+    /// per-file Lua sources are memoized by the shared portrayal provider, so a
+    /// second processor for the same spec recomputes the hash cheaply.
+    /// </para>
+    /// </remarks>
+    private string GetPortrayalContentHash()
+    {
+        if (_portrayalContentHash is not null)
+            return _portrayalContentHash;
+
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new StringBuilder();
+        sb.Append("pcf:").Append(PortrayalContentFormatVersion.ToString(c));
+        sb.Append("|dlfmt:").Append(DrawingInstructionSerializer.FormatVersion.ToString(c));
+        sb.Append("|scope:").Append(_patternClipScope);
+        sb.Append("|fc:").Append(_featureCatalogueManager.GetContentHash("S-101") ?? "none");
+        sb.Append("|pcver:").Append(_catalogue.Edition);
+
+        foreach (var cp in _provider.Catalogue.ContextParameters.OrderBy(static p => p.Id, StringComparer.Ordinal))
+        {
+            sb.Append("|cp:").Append(cp.Id)
+              .Append('=').Append(cp.Type)
+              .Append(':').Append(cp.Default)
+              .Append(':').Append(cp.Enable ?? string.Empty);
+        }
+
+        // Structural catalogue metadata that drives rule selection / order and
+        // the viewing-group / display-mode / display-plane filtering applied by
+        // EcdisDisplaySettings.ApplyTo and VectorPipeline stage 6. Hashed in
+        // declared order so a reorder or membership change (even without a
+        // version bump or Lua-source change — e.g. a catalogue override) yields
+        // a different key. The Lua source bytes themselves are hashed separately
+        // below.
+        foreach (var rf in _provider.Catalogue.RuleFiles)
+        {
+            sb.Append("|rfm:").Append(rf.Id)
+              .Append('=').Append(rf.FileName)
+              .Append(':').Append(rf.FileType)
+              .Append(':').Append(rf.FileFormat)
+              .Append(':').Append(rf.RuleType);
+        }
+        foreach (var vg in _provider.Catalogue.ViewingGroups)
+            sb.Append("|vg:").Append(vg.Id);
+        foreach (var vgl in _provider.Catalogue.ViewingGroupLayers)
+            sb.Append("|vgl:").Append(vgl.Id).Append('=').Append(string.Join(',', vgl.ViewingGroupIds));
+        foreach (var dm in _provider.Catalogue.DisplayModes)
+            sb.Append("|dm:").Append(dm.Id).Append('=').Append(string.Join(',', dm.ViewingGroupLayerIds));
+        foreach (var dp in _provider.Catalogue.DisplayPlanes)
+            sb.Append("|dpl:").Append(dp.Id).Append('=').Append(dp.Order?.ToString(c) ?? string.Empty);
+        sb.Append("|fmvg:").Append(string.Join(',', _provider.Catalogue.FoundationModeViewingGroupIds));
+
+        foreach (var rf in _provider.Catalogue.RuleFiles.OrderBy(static r => r.FileName, StringComparer.Ordinal))
+        {
+            sb.Append("|rf:").Append(rf.FileName).Append('=');
+            var lua = _catalogue.GetLuaSource(rf.FileName);
+            sb.Append(lua is null
+                ? "none"
+                : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(lua))));
+        }
+
+        sb.Append("|asm:");
+        AppendModuleVersion(sb, typeof(PortrayalPipeline).Assembly);          // Core (pipeline)
+        AppendModuleVersion(sb, typeof(S101LuaRuleExecutor).Assembly);        // Datasets.S101 (executor)
+        AppendModuleVersion(sb, typeof(S101DatasetProcessor).Assembly);       // Datasets.Pipelines (this)
+        AppendModuleVersion(sb, _luaEngine.GetType().Assembly);               // Lua engine (MoonSharp)
+
+        _portrayalContentHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))
+            .ToLowerInvariant();
+        return _portrayalContentHash;
+    }
+
+    /// <summary>
+    /// Appends a deterministic per-assembly content stamp. Uses the module
+    /// version id (a build-input hash under deterministic builds, so it changes
+    /// when the assembly's compiled content changes), falling back to the
+    /// assembly's full name when the MVID is unavailable.
+    /// </summary>
+    private static void AppendModuleVersion(StringBuilder sb, System.Reflection.Assembly assembly)
+    {
+        try
+        {
+            sb.Append(assembly.ManifestModule.ModuleVersionId.ToString("N")).Append(',');
+        }
+        catch
+        {
+            sb.Append(assembly.FullName ?? "unknown").Append(',');
+        }
+    }
+
     public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -291,15 +461,29 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         }
         else
         {
-            // Drive the unified VectorPipeline with the S-101 Lua rule
-            // executor (Part 9A). XSLT rules in the S-101 catalogue (if
-            // any) are also honoured by the pipeline.
-            var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
-            var featureSource = new S101FeatureXmlSource(_dataset);
-            var pipeline = new PortrayalPipeline(executor);
-            var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            // Cross-load cache: a fresh processor for a previously-portrayed
+            // cell can reuse the persisted post-pipeline instruction list and
+            // skip the multi-second MoonSharp Part 9A Lua run. The key folds the
+            // portrayal-content hash (dataset + FC/PC content + assemblies) into
+            // the per-render cacheKey so it self-invalidates on any change.
+            var instructionKey = $"{GetPortrayalContentHash()}|{cacheKey}";
+            prepared = _instructionCache.GetOrCompute(instructionKey, () =>
+            {
+                // Drive the unified VectorPipeline with the S-101 Lua rule
+                // executor (Part 9A). XSLT rules in the S-101 catalogue (if
+                // any) are also honoured by the pipeline. Run synchronously
+                // inside the (synchronous) cache factory: the render gate
+                // already serializes this work and no UI sync context is
+                // captured on this path (the pipeline uses ConfigureAwait(false)
+                // throughout).
+                var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
+                var featureSource = new S101FeatureXmlSource(_dataset);
+                var pipeline = new PortrayalPipeline(executor);
+                var portrayalLayer = pipeline
+                    .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+                    .GetAwaiter().GetResult();
+                return ((IVectorLayer)portrayalLayer).Instructions;
+            });
             _cachedPortrayalKey = cacheKey;
             _cachedPortrayalInstructions = prepared;
             PortrayalCacheMisses++;
@@ -321,9 +505,12 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         var geometryProvider = new S101FeatureGeometryProvider(_dataset);
 
         // Fully qualify the clip-cache key with the per-dataset scope so a
-        // process-global disk cache cannot collide across cells. The in-memory
-        // fallback is unaffected (its scope is constant within this processor).
-        var patternClipKey = $"{_patternClipScope}|{cacheKey}";
+        // process-global disk cache cannot collide across cells. The portrayal-
+        // content hash is folded in so a rule / catalogue change (which changes
+        // the instructions and therefore the clip geometry) invalidates the
+        // persisted clip. The in-memory fallback is unaffected (its scope is
+        // constant within this processor).
+        var patternClipKey = $"{_patternClipScope}|{GetPortrayalContentHash()}|{cacheKey}";
 
         var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: patternClipKey)
             .Render(areaInstructions, geometryProvider);
