@@ -17,6 +17,7 @@ internal static class CloseDatasetMcpAdapter
     {
         WriteIndented = false,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
     };
 
     private const string Description =
