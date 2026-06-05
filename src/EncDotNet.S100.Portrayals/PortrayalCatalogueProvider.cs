@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using EncDotNet.S100.Core;
 
 namespace EncDotNet.S100.Portrayals;
@@ -24,17 +26,28 @@ namespace EncDotNet.S100.Portrayals;
 public sealed class PortrayalCatalogueProvider : IDisposable
 {
     private readonly IAssetSource _source;
+    private readonly string _cataloguePath;
 
     /// <summary>
     /// Initializes a new instance of <see cref="PortrayalCatalogueProvider"/> with the given source and catalogue.
     /// </summary>
     /// <param name="source">The asset source used to fetch referenced assets.</param>
     /// <param name="catalogue">The parsed portrayal catalogue.</param>
-    public PortrayalCatalogueProvider(IAssetSource source, PortrayalCatalogue catalogue)
+    /// <param name="cataloguePath">
+    /// The relative path of the catalogue XML within <paramref name="source"/>,
+    /// retained so the raw catalogue bytes can be re-read for content hashing.
+    /// Defaults to the S-100 conventional <c>portrayal_catalogue.xml</c>.
+    /// </param>
+    public PortrayalCatalogueProvider(
+        IAssetSource source,
+        PortrayalCatalogue catalogue,
+        string cataloguePath = "portrayal_catalogue.xml")
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentException.ThrowIfNullOrEmpty(cataloguePath);
         _source = source;
+        _cataloguePath = cataloguePath;
         Catalogue = catalogue;
     }
 
@@ -106,7 +119,7 @@ public sealed class PortrayalCatalogueProvider : IDisposable
 
         await using var stream = await source.OpenAsync(cataloguePath, cancellationToken);
         var catalogue = PortrayalCatalogueReader.Read(stream);
-        return new PortrayalCatalogueProvider(source, catalogue);
+        return new PortrayalCatalogueProvider(source, catalogue, cataloguePath);
     }
 
     /// <summary>
@@ -147,6 +160,118 @@ public sealed class PortrayalCatalogueProvider : IDisposable
 
     /// <inheritdoc />
     public void Dispose() => _source.Dispose();
+
+    /// <summary>
+    /// Opens the raw catalogue XML stream (the bytes parsed into
+    /// <see cref="Catalogue"/>) so callers can hash the catalogue's own content.
+    /// The caller owns disposal of the returned stream.
+    /// </summary>
+    internal Task<Stream> OpenCatalogueXmlAsync(CancellationToken cancellationToken = default) =>
+        _source.OpenAsync(_cataloguePath, cancellationToken);
+
+    /// <summary>
+    /// Computes a stable, lowercase hex SHA-256 <em>content hash</em> over the
+    /// raw catalogue XML plus every file the catalogue references (rule files
+    /// and all asset collections: symbols, line styles, area fills, colour
+    /// profiles, pixmaps, and stylesheets). Backs
+    /// <c>PortrayalCatalogueManager.GetCatalogueHashAsync</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Assets are fetched through this provider's own <c>Fetch*</c> methods, so
+    /// the hashed bytes are exactly those the loaders consume; no path
+    /// resolution is duplicated. Each entry contributes a deterministic frame
+    /// <c>label\u0000status\u0000length\u0000sha256</c>; entries are de-duplicated
+    /// by label and emitted in ordinal order so the result is independent of
+    /// enumeration order. A file that cannot be opened contributes a
+    /// <c>missing</c> sentinel rather than aborting the hash, so an absent (and
+    /// later restored) asset still changes the hash.
+    /// </para>
+    /// <para>
+    /// The set of hashed files is exactly what the parsed catalogue declares.
+    /// This relies on the invariant that every loadable rule module is declared
+    /// as a <see cref="RuleFile"/> (true for the bundled S-101 / S-131
+    /// catalogues, which list every Lua module). The S-101 alert catalogue is
+    /// not exposed by the parsed model and is intentionally excluded: it does
+    /// not participate in drawing-instruction generation.
+    /// </para>
+    /// </remarks>
+    internal async Task<string> ComputeContentHashAsync(CancellationToken cancellationToken = default)
+    {
+        var entries = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        // The catalogue's own XML. Subsumes the structural metadata
+        // (viewing groups, display modes, context-parameter defaults, etc.).
+        await AddEntryAsync(entries, "catalogue", OpenCatalogueXmlAsync(cancellationToken), cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var rule in Catalogue.RuleFiles)
+            await AddEntryAsync(entries, $"Rules/{rule.FileName}", FetchAssetAsync(rule, cancellationToken), cancellationToken)
+                .ConfigureAwait(false);
+
+        await AddItemsAsync(entries, Catalogue.Symbols, "Symbols", cancellationToken).ConfigureAwait(false);
+        await AddItemsAsync(entries, Catalogue.LineStyles, "LineStyles", cancellationToken).ConfigureAwait(false);
+        await AddItemsAsync(entries, Catalogue.AreaFills, "AreaFills", cancellationToken).ConfigureAwait(false);
+        await AddItemsAsync(entries, Catalogue.ColorProfiles, "ColorProfiles", cancellationToken).ConfigureAwait(false);
+        await AddItemsAsync(entries, Catalogue.Pixmaps, "Pixmaps", cancellationToken).ConfigureAwait(false);
+        await AddItemsAsync(entries, Catalogue.StyleSheets, "StyleSheets", cancellationToken).ConfigureAwait(false);
+
+        var sb = new StringBuilder();
+        foreach (var (label, frame) in entries)
+            sb.Append(label).Append('\u0000').Append(frame).Append('\n');
+
+        var outer = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
+        return Convert.ToHexString(outer).ToLowerInvariant();
+    }
+
+    private async Task AddItemsAsync(
+        SortedDictionary<string, string> entries,
+        IReadOnlyList<CatalogItem> items,
+        string subdirectory,
+        CancellationToken cancellationToken)
+    {
+        foreach (var item in items)
+            await AddEntryAsync(
+                entries,
+                $"{subdirectory}/{item.FileName}",
+                FetchAssetAsync(item, subdirectory, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Hashes the bytes from <paramref name="streamTask"/> and records a
+    /// deterministic frame under <paramref name="label"/>. Duplicate labels are
+    /// ignored (first wins): a file referenced by several catalogue items
+    /// contributes once. A fetch/read failure records a <c>missing</c> sentinel.
+    /// </summary>
+    private static async Task AddEntryAsync(
+        SortedDictionary<string, string> entries,
+        string label,
+        Task<Stream> streamTask,
+        CancellationToken cancellationToken)
+    {
+        if (entries.ContainsKey(label))
+            return;
+
+        string frame;
+        try
+        {
+            await using var stream = await streamTask.ConfigureAwait(false);
+            using var sha = SHA256.Create();
+            var hash = await sha.ComputeHashAsync(stream, cancellationToken).ConfigureAwait(false);
+            frame = $"ok\u0000{Convert.ToHexString(hash).ToLowerInvariant()}";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            frame = "missing\u0000";
+        }
+
+        entries[label] = frame;
+    }
 
     /// <summary>
     /// If <paramref name="fileName"/> is a bare filename (no path separators),

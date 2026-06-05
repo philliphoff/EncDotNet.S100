@@ -98,13 +98,14 @@ restart, when the host injects a `DiskPortrayalInstructionCache` — skips
 the multi-second Lua run entirely. On a single-slot miss the pipeline
 run is wrapped in `GetOrCompute(key, factory)`, keyed by
 `"{portrayalContentHash}|{BuildPortrayalCacheKey(...)}"`. The
-`GetPortrayalContentHash()` prefix (memoized) is a SHA-256 over the
+`GetPortrayalContentHashAsync()` prefix (memoized) is a SHA-256 over the
 dataset content, the **resolved** feature- and portrayal-catalogue
-content (FC bytes via `FeatureCatalogueManager.GetContentHash`, the PC
-version, its context parameters and structural rule / viewing-group /
-display-mode / display-plane metadata, and the SHA-256 of every declared
-rule file's Lua source), and the module version ids of the pipeline /
-executor / Lua-engine assemblies — so any change to the dataset, an FC /
+content (both via `ICatalogueProvider<T>.GetCatalogueHashAsync` — the FC
+hash is the SHA-256 of the resolved FC XML; the PC hash is an aggregate
+SHA-256 of the PC XML plus the bytes of every referenced asset it
+declares, including every rule file's Lua source, symbols and palettes),
+and the module version ids of the pipeline / executor / Lua-engine /
+portrayals / features assemblies — so any change to the dataset, an FC /
 PC override, the bundled rules, or the engine yields a miss and a
 recompute (it hashes *actual content*, never declared version strings
 alone). The same hash also strengthens the pattern-clip cache key.
