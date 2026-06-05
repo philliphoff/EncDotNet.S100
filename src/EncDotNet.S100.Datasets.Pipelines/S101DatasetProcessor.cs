@@ -14,10 +14,12 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -412,6 +414,90 @@ public sealed class S101DatasetProcessor : IDatasetProcessor
         try
         {
             return await RenderCoreAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Renders this S-101 cell to a standalone <see cref="SKBitmap"/> through the
+    /// headless, backend-agnostic Skia vector core
+    /// (<see cref="VectorSceneBuilder"/> → <see cref="SkiaDisplayListRenderer"/>),
+    /// bypassing Mapsui entirely. This is the vector analogue of the direct-Skia
+    /// coverage renderer and the basis for a headless tile-serving API.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, symbol/text scale, ECDIS display, mariner settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <remarks>
+    /// Pattern area-fills are not yet represented in the shared IR, so areas with
+    /// an area-fill reference (e.g. shallow-water diamonds, quality-of-bathymetry
+    /// overlays) are omitted here; the dominant solid depth-area colour fills,
+    /// lines, soundings/symbols, and text are rendered. Use <see cref="RenderAsync"/>
+    /// (the Mapsui path) for full pattern-fill fidelity. Unlike that path, this
+    /// produces a single bitmap (no S-102 interleave split) and draw order follows
+    /// the shared core's S-100 Part 9 ordering.
+    /// </remarks>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        // Hold the render gate across portrayal prep AND symbol/line-style asset
+        // resolution: the providers close over the mutable catalogue palette /
+        // ECDIS state, so a concurrent render must not mutate it mid-build.
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var mariner = context?.Mariner ?? MarinerSettings.Default;
+            var fc = _featureCatalogueManager.GetCatalogue("S-101")
+                ?? throw new InvalidOperationException(
+                    "S-101 feature catalogue is required to render the dataset but none was provided.");
+
+            var s101Cat = _catalogue;
+            s101Cat.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
+            var palette = s101Cat.ActivePalette;
+
+            var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
+            var featureSource = new S101FeatureXmlSource(_dataset);
+            var pipeline = new PortrayalPipeline(executor);
+            var portrayalLayer = await pipeline
+                .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+
+            var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+
+            return HeadlessVectorRenderer.Render(
+                prepared,
+                geometryProvider,
+                palette,
+                symbolProvider: name =>
+                {
+                    try { return s101Cat.GetSymbol(name).SvgContent; }
+                    catch { return null; }
+                },
+                lineStyleProvider: name =>
+                {
+                    try { return s101Cat.GetLineStyle(name); }
+                    catch { return null; }
+                },
+                symbolScale: context?.SymbolScale ?? 1.0,
+                textScale: context?.TextScale ?? 1.0,
+                widthPixels: widthPixels,
+                heightPixels: heightPixels,
+                background: background ?? new RgbaColor(255, 255, 255, 255));
         }
         finally
         {

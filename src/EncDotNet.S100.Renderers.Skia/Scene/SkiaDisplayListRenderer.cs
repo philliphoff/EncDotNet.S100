@@ -30,6 +30,17 @@ public sealed class SkiaDisplayListRenderer
     public RgbaColor Background { get; set; } = RgbaColor.Transparent;
 
     /// <summary>
+    /// Whether to apply S-100 Part 9 §11.1 scale-visibility culling using the
+    /// viewport's <see cref="Viewport.ScaleDenominator"/>. Defaults to
+    /// <see langword="true"/> (an explicit viewport carries a meaningful scale).
+    /// Auto-fit / "render the whole dataset" callers set this to
+    /// <see langword="false"/>, because the denominator synthesised from a
+    /// fitted extent is not the dataset's compilation scale and would otherwise
+    /// wrongly cull scale-ranged detail.
+    /// </summary>
+    public bool HonorScaleVisibility { get; set; } = true;
+
+    /// <summary>
     /// Renders the scene at the requested viewport, returning a new bitmap of
     /// <see cref="Viewport.WidthPixels"/> × <see cref="Viewport.HeightPixels"/>.
     /// The caller owns the returned bitmap.
@@ -49,7 +60,7 @@ public sealed class SkiaDisplayListRenderer
 
         foreach (var op in scene.Ops)
         {
-            if (!ScaleVisibility.IsVisibleAtScale(op, denom))
+            if (HonorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(op, denom))
                 continue;
 
             switch (op)
