@@ -10,6 +10,7 @@ using Mapsui.Styles;
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
 
 [assembly: InternalsVisibleTo("EncDotNet.S100.Datasets.S111.Tests")]
+[assembly: InternalsVisibleTo("EncDotNet.S100.Pipelines.Tests")]
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
