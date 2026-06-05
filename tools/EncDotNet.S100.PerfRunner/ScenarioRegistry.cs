@@ -18,6 +18,10 @@ public static class ScenarioRegistry
         Register(() => new Scenarios.S124VectorScenario());
         Register(() => new Scenarios.S201VectorScenario());
         Register(() => new Scenarios.ExchangeSetOpenScenario());
+        Register(() => new Scenarios.S101RealColdScenario());
+        Register(() => new Scenarios.S101RealWarmScenario());
+        Register(() => new Scenarios.S102RealWarmScenario());
+        Register(() => new Scenarios.S111RealWarmScenario());
     }
 
     /// <summary>Registers a scenario factory keyed by its <see cref="IPerfScenario.Name"/>.</summary>

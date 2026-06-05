@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
@@ -52,6 +53,23 @@ internal interface IDynamicFeatureSourceRegistry
     /// <see cref="SourcesChanged"/> only on a real transition.
     /// </summary>
     void SetVisible(string sourceId, bool visible);
+
+    /// <summary>
+    /// Snapshot of currently registered, currently visible source
+    /// instances. Used by <see cref="DynamicSourcePickService"/> to
+    /// hit-test a click against the live feature snapshot. The order
+    /// matches <see cref="Sources"/> (registration order).
+    /// </summary>
+    /// <remarks>
+    /// Returns source instances rather than the
+    /// <see cref="DynamicSourceRegistrationInfo"/> projection so the
+    /// pick path can read <see cref="IDynamicFeatureSource.CurrentFeatures"/>
+    /// and <see cref="IDynamicFeatureSource.Metadata"/> without an
+    /// extra round-trip. Hidden sources (visibility = false) are
+    /// excluded so a click on a "hidden" target never appears in the
+    /// pick report.
+    /// </remarks>
+    IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances();
 
     /// <summary>
     /// Raised when <see cref="Sources"/> changes (register / dispose)

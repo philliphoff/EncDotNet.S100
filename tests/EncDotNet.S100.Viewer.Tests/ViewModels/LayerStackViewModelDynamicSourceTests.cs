@@ -126,6 +126,9 @@ public class LayerStackViewModelDynamicSourceTests
             SourcesChanged?.Invoke();
         }
 
+        public IReadOnlyList<EncDotNet.S100.DynamicSources.IDynamicFeatureSource> GetVisibleSourceInstances() =>
+            Array.Empty<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>();
+
         public void Add(DynamicSourceRegistrationInfo info)
         {
             _list.Add(info);

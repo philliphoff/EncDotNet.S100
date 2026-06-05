@@ -8,18 +8,18 @@ This library reads S-101 datasets encoded in ISO 8211 format and executes the S-
 
 - **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records.
 - **`S101Document`**, **`S101DocumentReader`** — low-level ISO 8211 record parsing.
-- **`S101LuaRuleExecutor`** — `ILuaRuleExecutor` implementation that orchestrates the Lua portrayal pipeline (loads `main.lua`, calls `PortrayalMain()`, parses and post-processes the emitted instructions).
+- **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.
 - **`S101PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT/Lua rules, symbols, line styles, area fills, and color palettes.
 - **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline.
-- **`DrawingInstructionParser`** — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy from `EncDotNet.S100.Core`. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
+- **`DrawingInstructionParser`** (in `EncDotNet.S100.Core`) — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
 
 ## Bundled-adapter Lua patches
 
 `content/S101/pc/` stays **byte-identical** to the upstream IHO S-101
 portrayal catalogue. When upstream Lua has a defect that breaks
-real-world cells, `S101LuaRuleExecutor` ships a small adapter patch
-that monkey-patches the offending global rather than editing the
-bundled catalogue. Current patches:
+real-world cells, the `S101LuaDataProvider` ships a small adapter patch
+(via its ordered `PostLoadScripts`) that monkey-patches the offending
+global rather than editing the bundled catalogue. Current patches:
 
 - **`contains`** — restores a missing global the upstream catalogue
   relies on without defining.
@@ -32,6 +32,37 @@ bundled catalogue. Current patches:
   (BuiltUpArea, SeaAreaNamedWaterArea, churches, …) emit correctly.
 
 If upstream fixes a defect, the corresponding patch is dropped.
+
+## Legacy feature-name compatibility
+
+The bundled Portrayal Catalogue is **S-101 Edition 2.0.0**, whose Lua
+rule modules use the 2.0.0 (word-reversed) feature class names —
+`LateralBuoy.lua` defining `function LateralBuoy`, dispatched by
+`main.lua` via `require(feature.Code)` then `_G[feature.Code](...)`.
+Datasets authored against an earlier edition of the S-101 Feature
+Catalogue report the **pre-2.0.0** names (`BuoyLateral`,
+`BeaconCardinal`, `MooringWarpingFacility`, …). Those names match no
+2.0.0 rule module, so the dispatcher's `require` fails and the feature
+falls back to **DEFAULT** (`QUESMRK1`) symbology.
+
+`S101LegacyFeatureNames.Normalize` maps the legacy class names to their
+2.0.0 equivalents so the correct rule runs. Because simple attribute
+names are stable across these editions, only the feature **class** name
+needs remapping. The shim is applied **only** at the portrayal boundary
+(`S101LuaDataProvider.HostFeatureGetCode`); feature names are left
+as-authored everywhere else (document reader, vector source,
+validation, info panels).
+
+`MooringWarpingFacility` was structurally removed in 2.0.0, so it is
+mapped conditionally on `categoryOfMooringWarpingFacility`
+(dolphin → `Dolphin`, bollard → `Bollard`, post/pile → `Pile`,
+mooring buoy → `MooringBuoy`); categories without a clean 2.0.0
+equivalent are left unchanged and stay on DEFAULT. These conditional
+targets are approximations — only the class name is aliased, not the
+attributes the 2.0.0 rule reads — so symbology may be generic, and a
+target rule that rejects the feature's geometric primitive simply
+errors inside the dispatcher's `pcall` and falls back to DEFAULT
+(no regression versus today).
 
 ## Validation
 

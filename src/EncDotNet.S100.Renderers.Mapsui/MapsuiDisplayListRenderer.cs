@@ -12,6 +12,9 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Operation.Overlay;
+using NetTopologySuite.Operation.OverlayNG;
+using NetTopologySuite.Simplify;
 using MapsuiColor = Mapsui.Styles.Color;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -110,6 +113,25 @@ public sealed class MapsuiDisplayListRenderer
     private readonly MapsuiRenderAssetCache _localAssetCache = new();
 
     /// <summary>
+    /// Optional cache for the pattern-fill priority clip result. When set
+    /// together with <see cref="PatternClipCacheKey"/>, the renderer obtains
+    /// the clipped pattern geometry via
+    /// <see cref="IPatternClipCache.GetOrCompute"/> so re-renders that do not
+    /// change the clip inputs (most importantly Day/Dusk/Night palette
+    /// switches) skip the expensive NetTopologySuite overlay. When unset, the
+    /// clip is computed inline on every render, preserving legacy behaviour for
+    /// products without pattern fills and for ad-hoc / one-shot callers.
+    /// </summary>
+    public IPatternClipCache? PatternClipCache { get; init; }
+
+    /// <summary>
+    /// Key that fully identifies this render's pattern-clip inputs (for S-101,
+    /// the mariner + ECDIS display-state portrayal cache key). Used with
+    /// <see cref="PatternClipCache"/>; ignored when either is <see langword="null"/>.
+    /// </summary>
+    public string? PatternClipCacheKey { get; init; }
+
+    /// <summary>
     /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
     /// the pivot-to-bounds-centre offset recovered from the raw SVG before
     /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
@@ -177,7 +199,7 @@ public sealed class MapsuiDisplayListRenderer
         //    Merged patterns are inserted after all color fills to ensure no
         //    solid fill can cover a previously-drawn pattern.
         var mapFeatures = new List<IFeature>();
-        var patternEntries = new List<(byte[] TilePng, int Priority, List<Polygon> Polygons)>();
+        var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
         // Track which features produce pattern fills, so we can identify
@@ -208,22 +230,32 @@ public sealed class MapsuiDisplayListRenderer
             // Defer pattern fills for merging
             if (instruction is AreaInstruction { AreaFillReference: { } patternRef } areaPattern && geom is not null)
             {
-                var tilePng = GetPatternTilePng(patternRef);
-                if (tilePng is not null)
+                // Inclusion gate: only collect the entry when the pattern
+                // resolves to a tile under the current palette (patterns with
+                // no resolvable asset are dropped, exactly as before). The
+                // resolved tile is discarded here; grouping/merging keys on the
+                // palette-independent pattern reference so the clip result is
+                // palette-independent and cacheable. The tile is re-resolved
+                // under the active palette after clipping.
+                if (GetPatternTilePng(patternRef) is not null)
                 {
                     var polygon = CreatePolygonFromGeometry(geom);
                     if (polygon is not null)
                     {
-                        // Find existing entry with the same tile and priority, or create a new one
+                        // Find existing entry with the same pattern reference and priority, or create a new one.
+                        // OrdinalIgnoreCase matches MapsuiRenderAssetCache's tile-resolution
+                        // comparer, so this grouping is exactly equivalent to the previous
+                        // ReferenceEquals(TilePng) grouping (same fillName -> same byte[] ref).
                         var existing = patternEntries.Find(e =>
-                            ReferenceEquals(e.TilePng, tilePng) && e.Priority == areaPattern.DrawingPriority);
-                        if (existing.TilePng is not null)
+                            string.Equals(e.PatternRef, patternRef, StringComparison.OrdinalIgnoreCase)
+                            && e.Priority == areaPattern.DrawingPriority);
+                        if (existing.PatternRef is not null)
                         {
                             existing.Polygons.Add(polygon);
                         }
                         else
                         {
-                            patternEntries.Add((tilePng, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
+                            patternEntries.Add((patternRef, areaPattern.DrawingPriority, new List<Polygon> { polygon }));
                         }
                     }
                 }
@@ -257,13 +289,24 @@ public sealed class MapsuiDisplayListRenderer
         // Also clips all patterns against non-patterned color fill areas
         // (e.g. land) so patterns don't bleed over land.
         patternEntries.Sort((a, b) => a.Priority.CompareTo(b.Priority));
-        var clippedPatterns = ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
+        var clippedPatterns = PatternClipCache is not null && PatternClipCacheKey is not null
+            ? PatternClipCache.GetOrCompute(
+                PatternClipCacheKey,
+                () => ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons))
+            : ClipPatternsByPriority(patternEntries, nonPatternedColorFillPolygons);
 
         // Insert merged pattern fill features after all color fills but before
         // lines/points/text. This ensures no solid fill can occlude a pattern.
+        // The tile is re-resolved here under the active palette (the clip
+        // geometry is palette-independent and may have come from the cache,
+        // which is shared across palettes).
         int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
-        foreach (var (tilePng, geometry) in clippedPatterns)
+        foreach (var (patternRef, _, geometry) in clippedPatterns)
         {
+            var tilePng = GetPatternTilePng(patternRef);
+            if (tilePng is null)
+                continue;
+
             var feature = new GeometryFeature(geometry);
             feature.Styles.Add(new AnchoredPatternFillStyle { TilePng = tilePng });
             mapFeatures.Insert(insertAt, feature);
@@ -274,7 +317,7 @@ public sealed class MapsuiDisplayListRenderer
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        return new MemoryLayer
+        return new InstrumentedMemoryLayer(Product)
         {
             Name = LayerName,
             Features = mapFeatures,
@@ -311,7 +354,7 @@ public sealed class MapsuiDisplayListRenderer
     /// at 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface,
     /// so resolution ≈ scaleDenominator × 0.00028.
     /// </summary>
-    private const double DenomToResolutionMetres = 0.00028;
+    public const double DenomToResolutionMetres = 0.00028;
 
     /// <summary>
     /// Maps the S-100 Part 9 §11.1 <see cref="DrawingInstruction.ScaleMinimum"/> /
@@ -1029,9 +1072,29 @@ public sealed class MapsuiDisplayListRenderer
     /// <remarks>
     /// Entries must be sorted by ascending priority before calling.
     /// Returns (tilePng, clippedGeometry) pairs in ascending priority order.
+    /// <para>
+    /// Pattern geometries are generalized with <see cref="TopologyPreservingSimplifier"/>
+    /// at <see cref="PatternClipSimplifyToleranceMetres"/> before the NetTopologySuite
+    /// overlay operations. S-101 quality/coverage areas (e.g. M_QUAL) can follow the
+    /// coastline with tens of thousands of vertices, the bulk of which are sub-pixel at
+    /// chart display scales. Because the clipped boundary only bounds a tiled raster
+    /// pattern fill, this generalization is visually negligible yet reduces the
+    /// <c>Difference</c>/<c>Union</c> cost on pathological geometries by an order of
+    /// magnitude. Topology-preserving simplification keeps the inputs valid for overlay.
+    /// </para>
+    /// <para>
+    /// The <c>Difference</c>/<c>Union</c> overlays are evaluated with
+    /// NetTopologySuite's <see cref="OverlayNGRobust"/> (OverlayNG) rather than the
+    /// library default legacy overlay. OverlayNG is markedly faster on dense inputs
+    /// and avoids the legacy robustness-snapping retry path (profiling on a ~64,000
+    /// vertex M_QUAL coverage area: the clip frame dropped from ~3.5&#160;s to
+    /// ~1.5&#160;s, with overlay <c>Difference</c> falling from ~2.45&#160;s to
+    /// ~0.45&#160;s). OverlayNG is also robust to the (occasionally invalid) output of
+    /// topology-preserving simplification, so no pre-overlay geometry repair is needed.
+    /// </para>
     /// </remarks>
-    private static List<(byte[] TilePng, Geometry Geometry)> ClipPatternsByPriority(
-        List<(byte[] TilePng, int Priority, List<Polygon> Polygons)> entries,
+    private static List<(string PatternRef, int Priority, Geometry Geometry)> ClipPatternsByPriority(
+        List<(string PatternRef, int Priority, List<Polygon> Polygons)> entries,
         List<Polygon> nonPatternedColorFills)
     {
         if (entries.Count == 0)
@@ -1047,7 +1110,7 @@ public sealed class MapsuiDisplayListRenderer
                 Geometry nonPatterned = nonPatternedColorFills.Count == 1
                     ? nonPatternedColorFills[0]
                     : new MultiPolygon(nonPatternedColorFills.ToArray());
-                excludeAreas = nonPatterned.Union();
+                excludeAreas = SimplifyForClip(OverlayNGRobust.Union(nonPatterned));
             }
             catch (TopologyException)
             {
@@ -1055,33 +1118,39 @@ public sealed class MapsuiDisplayListRenderer
             }
         }
 
-        // Build merged geometry for each entry
+        // Build merged, generalized geometry for each entry. Simplifying once up
+        // front means the (potentially huge) geometry is cheap to use both as a
+        // Difference subject and when accumulated into the higher-priority union.
         var merged = entries.Select(e =>
         {
             Geometry g = e.Polygons.Count == 1
                 ? e.Polygons[0]
                 : new MultiPolygon(e.Polygons.ToArray());
-            return (e.TilePng, e.Priority, Geometry: g);
+            return (e.PatternRef, e.Priority, Geometry: SimplifyForClip(g));
         }).ToList();
 
         // Walk from highest priority down, accumulating a union of
         // higher-priority areas that will clip lower-priority patterns.
         Geometry? higherPriorityAreas = null;
-        var result = new (byte[] TilePng, Geometry Geometry)[merged.Count];
+        var result = new (string PatternRef, int Priority, Geometry Geometry)[merged.Count];
 
         for (int i = merged.Count - 1; i >= 0; i--)
         {
-            var (tile, _, geometry) = merged[i];
+            var (patternRef, priority, geometry) = merged[i];
 
             // Start with the original geometry, then subtract exclusion areas
             var clipped = geometry;
 
-            // Subtract higher-priority pattern areas
-            if (higherPriorityAreas is not null)
+            // Subtract higher-priority pattern areas (only when they actually
+            // overlap this entry's extent — an envelope test avoids a costly
+            // overlay when the areas are disjoint).
+            if (higherPriorityAreas is not null &&
+                higherPriorityAreas.EnvelopeInternal.Intersects(geometry.EnvelopeInternal))
             {
                 try
                 {
-                    clipped = clipped.Difference(higherPriorityAreas);
+                    clipped = OverlayNGRobust.Overlay(
+                        clipped, higherPriorityAreas, SpatialFunction.Difference);
                 }
                 catch (TopologyException)
                 {
@@ -1096,11 +1165,13 @@ public sealed class MapsuiDisplayListRenderer
             }
 
             // Subtract non-patterned color fill areas (e.g. land)
-            if (excludeAreas is not null)
+            if (excludeAreas is not null &&
+                excludeAreas.EnvelopeInternal.Intersects(clipped.EnvelopeInternal))
             {
                 try
                 {
-                    clipped = clipped.Difference(excludeAreas);
+                    clipped = OverlayNGRobust.Overlay(
+                        clipped, excludeAreas, SpatialFunction.Difference);
                 }
                 catch (TopologyException)
                 {
@@ -1112,12 +1183,15 @@ public sealed class MapsuiDisplayListRenderer
                 }
             }
 
-            result[i] = (tile, clipped);
+            result[i] = (patternRef, priority, clipped);
 
-            // Add this entry's original (unclipped) area to the higher-priority union
+            // Add this entry's (generalized) area to the higher-priority union
+            // for use by the next, lower-priority entries.
             try
             {
-                higherPriorityAreas = higherPriorityAreas?.Union(geometry) ?? geometry;
+                higherPriorityAreas = higherPriorityAreas is null
+                    ? geometry
+                    : OverlayNGRobust.Overlay(higherPriorityAreas, geometry, SpatialFunction.Union);
             }
             catch (TopologyException)
             {
@@ -1131,5 +1205,63 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return [.. result];
+    }
+
+    /// <summary>
+    /// Tolerance, in EPSG:3857 (Web Mercator) metres, used to generalize pattern
+    /// and exclusion geometries before clipping. Web Mercator inflates distances by
+    /// 1/cos(latitude), so this projected tolerance is conservative (smaller in
+    /// ground metres) away from the equator. The clipped boundary only bounds a
+    /// tiled raster pattern fill, so this generalization is not visually significant.
+    /// </summary>
+    public const double PatternClipSimplifyToleranceMetres = 1.0;
+
+    /// <summary>
+    /// Minimum vertex count at which <see cref="SimplifyForClip"/> generalizes a
+    /// geometry before the clip overlay. Below this, the NetTopologySuite
+    /// <c>Difference</c>/<c>Union</c> cost is already small (profiling: a
+    /// ~2,600-vertex pattern area clips in ~50&#160;ms) and the simplifier's own
+    /// fixed setup cost would be net overhead. The cost the optimization targets is
+    /// super-linear and only becomes significant for very dense areas (profiling: a
+    /// ~64,000-vertex M_QUAL coverage area took ~7.7&#160;s), so gating on vertex
+    /// count applies the generalization only where it provides a clear net win and
+    /// leaves the common case (small/moderate areas) byte-identical to no
+    /// generalization at all.
+    /// </summary>
+    public const int MinPointsToSimplifyForClip = 2000;
+
+    /// <summary>
+    /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving
+    /// topological validity so the result is safe for subsequent NetTopologySuite
+    /// overlay operations. Geometries below <see cref="MinPointsToSimplifyForClip"/>
+    /// vertices are returned unchanged (the overlay is already inexpensive at that
+    /// size). Returns the original geometry if simplification fails or degenerates
+    /// to empty.
+    /// </summary>
+    private static Geometry SimplifyForClip(Geometry geometry)
+    {
+        if (geometry.NumPoints < MinPointsToSimplifyForClip)
+            return geometry;
+
+        try
+        {
+            var simplified = TopologyPreservingSimplifier.Simplify(
+                geometry, PatternClipSimplifyToleranceMetres);
+
+            if (simplified is null || simplified.IsEmpty)
+                return geometry;
+
+            if (!simplified.IsValid)
+            {
+                var fixedGeometry = simplified.Buffer(0);
+                return fixedGeometry.IsEmpty ? geometry : fixedGeometry;
+            }
+
+            return simplified;
+        }
+        catch (TopologyException)
+        {
+            return geometry;
+        }
     }
 }

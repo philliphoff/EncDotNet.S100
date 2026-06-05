@@ -20,7 +20,7 @@ public sealed class PortrayalPipeline
     private readonly VectorPipeline _vectorPipeline;
     private readonly CoveragePipeline _coveragePipeline;
 
-    public PortrayalPipeline(ILuaRuleExecutor? luaExecutor = null)
+    public PortrayalPipeline(IVectorRuleExecutor? luaExecutor = null)
     {
         _vectorPipeline = new VectorPipeline(luaExecutor);
         _coveragePipeline = new CoveragePipeline();
@@ -35,11 +35,12 @@ public sealed class PortrayalPipeline
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
         Viewport? viewport = null,
-        MarinerSettings? mariner = null)
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalogue);
-        return await _vectorPipeline.ProcessAsync(source, catalogue, viewport, mariner)
+        return await _vectorPipeline.ProcessAsync(source, catalogue, viewport, mariner, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -51,11 +52,12 @@ public sealed class PortrayalPipeline
     public async Task<IPortrayalLayer> ProcessAsync(
         ICoverageSource source,
         ICoveragePortrayalCatalogue catalogue,
-        MarinerSettings? mariner = null)
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalogue);
-        return await _coveragePipeline.ProcessAsync(source, catalogue, mariner)
+        return await _coveragePipeline.ProcessAsync(source, catalogue, mariner, cancellationToken)
             .ConfigureAwait(false);
     }
 }

@@ -34,7 +34,7 @@ namespace EncDotNet.S100.VisualRegression;
 /// <list type="number">
 ///   <item>The harness picks the right <see cref="IDatasetProcessor"/> via
 ///         <see cref="DatasetPipelineFactory"/> (same code path as the viewer).</item>
-///   <item>It invokes <see cref="IDatasetProcessor.Render"/> with a spec-specific
+///   <item>It invokes <see cref="IDatasetProcessor.RenderAsync"/> with a spec-specific
 ///         <see cref="RenderContext"/> derived from <see cref="HarnessOptions"/>.</item>
 ///   <item>The resulting Mapsui <see cref="ILayer"/>s are dropped into a
 ///         <see cref="Map"/>, the viewport is zoomed to the dataset extent, and
@@ -100,7 +100,7 @@ public sealed class RenderHarness : IDisposable
 
         var processor = _factory.CreateProcessor(path);
         var context = BuildContext(processor, options);
-        var result = processor.Render(context);
+        var result = processor.RenderAsync(context).GetAwaiter().GetResult();
 
         return Rasterize(result, options);
     }
@@ -118,7 +118,7 @@ public sealed class RenderHarness : IDisposable
 
         var processor = _factory.CreateProcessor(path);
         var context = BuildContext(processor, options);
-        var result = processor.Render(context);
+        var result = processor.RenderAsync(context).GetAwaiter().GetResult();
 
         return (Rasterize(result, options), result);
     }

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Viewer;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources;
@@ -128,5 +129,85 @@ public class AisOverlayFactoryTests
             },
             loggerFactory: null);
         Assert.IsType<DisabledAisFeatureSource>(src);
+    }
+
+    [Fact]
+    public async Task Returns_deferred_wrapper_when_activation_span_set_and_notifier_provided()
+    {
+        var notifier = new FactoryFakeViewportNotifier();
+        var src = AisOverlayServiceCollectionExtensions.BuildSource(
+            new AisOverlaySettings
+            {
+                Enabled = true,
+                ApiKey = "settings-key",
+                ActivationViewportSpanDegrees = 25.0,
+            },
+            loggerFactory: null,
+            viewportNotifier: notifier);
+        try
+        {
+            Assert.IsType<DeferredAisFeatureSource>(src);
+        }
+        finally
+        {
+            if (src is IAsyncDisposable d) await d.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Returns_real_source_when_activation_span_null()
+    {
+        var notifier = new FactoryFakeViewportNotifier();
+        var src = AisOverlayServiceCollectionExtensions.BuildSource(
+            new AisOverlaySettings
+            {
+                Enabled = true,
+                ApiKey = "settings-key",
+                ActivationViewportSpanDegrees = null,
+            },
+            loggerFactory: null,
+            viewportNotifier: notifier);
+        try
+        {
+            Assert.IsNotType<DeferredAisFeatureSource>(src);
+            Assert.IsNotType<DisabledAisFeatureSource>(src);
+        }
+        finally
+        {
+            if (src is IAsyncDisposable d) await d.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Returns_real_source_when_notifier_unavailable_even_with_span_set()
+    {
+        var src = AisOverlayServiceCollectionExtensions.BuildSource(
+            new AisOverlaySettings
+            {
+                Enabled = true,
+                ApiKey = "settings-key",
+                ActivationViewportSpanDegrees = 25.0,
+            },
+            loggerFactory: null,
+            viewportNotifier: null);
+        try
+        {
+            Assert.IsNotType<DeferredAisFeatureSource>(src);
+            Assert.IsNotType<DisabledAisFeatureSource>(src);
+        }
+        finally
+        {
+            if (src is IAsyncDisposable d) await d.DisposeAsync();
+        }
+    }
+
+    private sealed class FactoryFakeViewportNotifier : IMapViewportNotifier
+    {
+        public MapViewportSnapshot? Current => null;
+        public event EventHandler<MapViewportSnapshot>? ViewportChanged
+        {
+            add { }
+            remove { }
+        }
     }
 }

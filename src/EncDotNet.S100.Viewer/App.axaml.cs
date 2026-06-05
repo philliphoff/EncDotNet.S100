@@ -59,6 +59,8 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
+
         // The viewer uses a plain ServiceCollection (no generic IHost),
         // so the IHostedService registered by AddOpenTelemetry() never
         // runs — meaning the TracerProvider / MeterProvider would
@@ -151,10 +153,16 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
-        services.AddS100Observability();
+        // CLI --log-file / --verbose add a file sink and lower the log
+        // floor for agent runs.
+        services.AddS100Observability(
+            logFilePath: StartupOptions?.LogFile,
+            verbose: StartupOptions?.Verbose ?? false);
 
-        // Persisted user settings
-        services.AddSingleton<ViewerSettings>(_ => ViewerSettings.Load());
+        // Persisted user settings, with any command-line overrides
+        // (settings path / --ephemeral / MCP / palette / display
+        // category) layered on top for this run only.
+        services.AddSingleton<ViewerSettings>(_ => StartupSettingsFactory.Create(StartupOptions));
 
         // Shared application-level state
         services.AddSingleton<PortrayalCatalogueManager>();
@@ -179,13 +187,44 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
                 new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
+        {
+            // One process-wide disk cache shared by every S-101 processor so the
+            // cold first open of a previously-seen cell skips the multi-second
+            // NetTopologySuite pattern-fill clip, even across restarts. The clip
+            // geometry is palette-independent and the cache key is content-hash +
+            // FormatVersion stamped, so persisted entries auto-invalidate.
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EncDotNet.S100",
+                "PatternClipCache");
+            const long maxBytes = 256L * 1024 * 1024;
+            return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
+        });
+        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
+        {
+            // One process-wide disk cache shared by every S-101 processor so a
+            // fresh open of a previously-portrayed cell skips the multi-second
+            // MoonSharp Part 9A Lua run, even across restarts. The cache key is
+            // the portrayal-content hash (dataset bytes + FC/PC content +
+            // pipeline / VM assemblies) so persisted entries auto-invalidate
+            // when anything affecting the instruction list changes.
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EncDotNet.S100",
+                "PortrayalInstructionCache");
+            const long maxBytes = 256L * 1024 * 1024;
+            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
+        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
                 new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
                 new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>()));
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
+                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();
@@ -248,6 +287,9 @@ public partial class App : Application
         services.AddSingleton<IToastService, ToastService>();
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
         services.AddSingleton<IFeatureSearchService, FeatureSearchService>();
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
@@ -281,6 +323,14 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()));
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
+
+        // Map-viewport notifier (singleton). Inert until MainWindow
+        // calls Bind(navigator) once the MapControl exists. Used by
+        // the AIS overlay's zoom-gated decorator (see
+        // docs/design/ais-zoom-gated-subscription.md).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.MapViewportNotifier>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MapViewportNotifier>());
 
         // PR-D? upgraded own-ship symbology: register OwnShipRenderer
         // under the "ownship" key so DynamicSourceOverlayHost resolves
@@ -318,11 +368,27 @@ public partial class App : Application
         // for read-only MCP queries; the host owns server lifecycle.
         services.AddSingleton<ViewerDatasetCatalog>();
         services.AddSingleton<IMapHostAccessor, MapHostAccessor>();
+        services.AddSingleton<IRenderStateControllerAccessor, RenderStateControllerAccessor>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
+        services.AddSingleton<IRenderActivityMonitor>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
+        // Gateway over the existing GUI load/unload code path, used by the
+        // mutating open_dataset / close_dataset MCP tools so they reuse the
+        // same Add + LoadAsync / Remove + RemoveEntry flow as the file-open
+        // command rather than a parallel loader.
+        services.AddSingleton<IDatasetLoadGateway>(sp => new DatasetLoadGateway(
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<IExchangeSetService>()));
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
             sp.GetRequiredService<IMapHostAccessor>(),
-            sp.GetService<ILoggerFactory>()));
+            sp.GetService<ILoggerFactory>(),
+            sp.GetRequiredService<IRenderStateControllerAccessor>(),
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<IRenderActivityMonitor>(),
+            sp.GetRequiredService<IDatasetLoadGateway>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
@@ -441,9 +507,7 @@ public partial class App : Application
 
     private static void LogCrash(string label, string message)
     {
-        var line = $"[{label}] {message}";
-        Console.Error.WriteLine(line);
-        try { System.IO.File.AppendAllText("/tmp/viewer-crash.log", $"{DateTime.Now:O} {line}\n\n"); }
-        catch { }
+        Console.Error.WriteLine($"[{label}] {message}");
+        CrashLog.Append(label, message);
     }
 }

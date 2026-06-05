@@ -75,7 +75,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = new PortrayalCatalogueManager();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = p.Render();
+            var result = p.RenderAsync().GetAwaiter().GetResult();
 
             Assert.Single(result.Layers);
             var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
@@ -108,7 +108,7 @@ public class S111Dcf8ProcessorTests
 
             // Render at the second time-step; expected S1 speed = 0.6, dir = 50.
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = p.Render(new S111RenderContext { TimeStep = secondStep });
+            _ = p.RenderAsync(new S111RenderContext { TimeStep = secondStep }).GetAwaiter().GetResult();
 
             var info = p.GetFeatureInfo("station:S1");
 
@@ -139,7 +139,7 @@ public class S111Dcf8ProcessorTests
         {
             using var catalogues = new PortrayalCatalogueManager();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
-            _ = p.Render();
+            _ = p.RenderAsync().GetAwaiter().GetResult();
 
             Assert.Null(p.GetFeatureInfo("station:Nope"));
             Assert.Null(p.GetFeatureInfo("plain-ref"));

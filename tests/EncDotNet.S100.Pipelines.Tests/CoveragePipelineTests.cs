@@ -141,6 +141,27 @@ public class CoveragePipelineTests
         Assert.Equal(noData, layer.NoDataValue);
     }
 
+    [Fact]
+    public async Task ProcessAsync_PreCancelledToken_ThrowsWithoutSampling()
+    {
+        var source = new FakeCoverageSource(
+            noDataValue: float.NaN,
+            fields: new Dictionary<string, float[,]>
+            {
+                ["depth"] = new float[,] { { 5f } }
+            });
+        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var pipeline = new CoveragePipeline();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => pipeline.ProcessAsync(source, catalogue, cancellationToken: cts.Token));
+
+        Assert.False(source.WasSampled);
+    }
+
     #region Fakes
 
     private sealed class FakeCoverageSource : ICoverageSource
@@ -156,6 +177,8 @@ public class CoveragePipelineTests
         private readonly string _productSpec;
         private readonly string _horizontalCRS;
         private readonly string _verticalDatum;
+
+        public bool WasSampled { get; private set; }
 
         public FakeCoverageSource(
             float noDataValue,
@@ -230,8 +253,9 @@ public class CoveragePipelineTests
         public IReadOnlyList<DateTime> AvailableTimes => [];
         public void SelectTime(DateTime time) { }
 
-        public SampledCoverage Sample(GridRegion region)
+        public SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
         {
+            WasSampled = true;
             var (rows, cols) = GridSize;
             return new SampledCoverage
             {

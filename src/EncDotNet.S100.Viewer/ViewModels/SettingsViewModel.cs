@@ -439,6 +439,31 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
     }
 
+    private bool _enableVectorRasterization;
+    /// <summary>
+    /// Experimental: when true, S-100 vector layers are wrapped in a
+    /// rasterising tile cache for higher pan/zoom frame rate at the
+    /// cost of vector crispness during gestures. Toggling triggers a
+    /// full re-render via <c>MarinerChanged</c>.
+    /// </summary>
+    public bool EnableVectorRasterization
+    {
+        get => _enableVectorRasterization;
+        set { if (SetProperty(ref _enableVectorRasterization, value)) { _settings.EnableVectorRasterization = value; RaiseMarinerChanged(); } }
+    }
+
+    private bool _enableGeometrySimplification;
+    /// <summary>
+    /// When true, vector layers run their line geometries through a
+    /// resolution-aware Douglas-Peucker simplifier (issue #164).
+    /// Toggling triggers a full re-render via <c>MarinerChanged</c>.
+    /// </summary>
+    public bool EnableGeometrySimplification
+    {
+        get => _enableGeometrySimplification;
+        set { if (SetProperty(ref _enableGeometrySimplification, value)) { _settings.EnableGeometrySimplification = value; RaiseMarinerChanged(); } }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -522,6 +547,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
+        _enableVectorRasterization = settings.EnableVectorRasterization ?? false;
+        _enableGeometrySimplification = settings.EnableGeometrySimplification ?? false;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;
@@ -541,6 +568,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;
         _aisApiKey = ais.ApiKey;
+        _aisActivationViewportSpanDegrees = ais.ActivationViewportSpanDegrees;
     }
 
     /// <summary>
@@ -771,6 +799,31 @@ internal sealed class SettingsViewModel : ViewModelBase
             return string.IsNullOrWhiteSpace(envVal)
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarHint, envVar)
                 : string.Format(CultureInfo.CurrentCulture, Strings.Settings_AisApiKey_EnvVarPresent, envVar);
+        }
+    }
+
+    private double? _aisActivationViewportSpanDegrees;
+    /// <summary>
+    /// Activation threshold (in degrees of latitude AND longitude)
+    /// for the AIS subscription. While the visible viewport's
+    /// lat-span or lon-span is wider than this, no traffic is fetched
+    /// from aisstream.io. <see langword="null"/> disables the gate
+    /// entirely (subscribe immediately on viewer launch). Values
+    /// <c>&lt;= 0</c> are normalised to <see langword="null"/> so
+    /// users can't accidentally configure a gate that never opens.
+    /// </summary>
+    public double? AisActivationViewportSpanDegrees
+    {
+        get => _aisActivationViewportSpanDegrees;
+        set
+        {
+            var normalised = value is { } v && v > 0 ? value : null;
+            if (SetProperty(ref _aisActivationViewportSpanDegrees, normalised))
+            {
+                EnsureAisOverlaySettings();
+                _settings.AisOverlay!.ActivationViewportSpanDegrees = normalised;
+                _settings.Save();
+            }
         }
     }
 }

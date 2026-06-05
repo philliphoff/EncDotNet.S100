@@ -75,8 +75,8 @@ S-131 GML → S131DatasetReader → S131Dataset
 | `S131Feature` | Feature with geometry, attributes, complex attributes, xlink refs |
 | `S131InformationType` | Information type with attributes and xlink refs |
 | `S131DatasetReader` | GML parser; namespace-driven feature recognition |
-| `S131LuaDataProvider` | GML-to-Lua Host API bridge |
-| `S131LuaRuleExecutor` | Lua portrayal executor (Part 9A) |
+| `S131LuaDataProvider` | GML-to-Lua Host API bridge; owns the GML-specific spatial shim and emits `EmittedInstruction`s |
+| `S131LuaRuleExecutor` | Thin `ILuaVectorRuleExecutor` wrapping the Core `LuaRuleExecutor` (Part 9A); supplies the S-131 provider factory and the `TwoShades` context-parameter binding |
 | `S131PortrayalCatalogue` | Portrayal catalogue (symbols, palettes, rules) |
 | `DataModel.S131HarbourInfrastructureDataset` | **Typed projection** of `S131Dataset` (see below) |
 

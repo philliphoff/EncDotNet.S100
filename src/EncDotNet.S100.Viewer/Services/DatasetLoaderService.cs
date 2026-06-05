@@ -12,6 +12,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Mapsui.Simplification;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -103,6 +104,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayersView;
 
     private IMapHost? _mapHost;
+
+    /// <inheritdoc />
+    public bool IsInitialized => _mapHost is not null;
 
     // Coalesce slider scrubs into a single render pass after the user has
     // paused for ~100 ms. Each new SetCurrentTime cancels the in-flight
@@ -205,6 +209,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     public event Action<string?>? StatusChanged;
 
     public event Action<DatasetEntry>? DatasetRemoved;
+
+    /// <inheritdoc />
+    public bool SuppressAutoZoom { get; set; }
 
     private void SetStatus(string? text) => StatusChanged?.Invoke(text);
 
@@ -320,15 +327,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 initialTime = adapter.SnapTo(globalNow);
 
             var initialContext = CreateRenderContext(processor, initialTime);
-            var result = await Task.Run(() => processor.Render(initialContext), token);
+            var result = await Task.Run(() => processor.RenderAsync(initialContext, token), token).ConfigureAwait(true);
 
+            token.ThrowIfCancellationRequested();
             ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
             // Exchange-set entries opt out of the per-dataset auto-zoom so
             // the union-extent zoom from `IExchangeSetService` (or the
             // user's manual Zoom-to-Extent toolbar action) wins. Without
             // this, the last-completed dataset would race with the bulk
             // load and "win" the viewport.
-            if (!fromExchangeSet)
+            if (!fromExchangeSet && !SuppressAutoZoom)
             {
                 _mapHost!.ZoomToExtent(result.Extent);
             }
@@ -469,8 +477,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             try
             {
                 var context = CreateRenderContext(proc, snapped);
-                var result = await Task.Run(() => proc.Render(context), token).ConfigureAwait(true);
+                var result = await Task.Run(() => proc.RenderAsync(context, token), token).ConfigureAwait(true);
 
+                token.ThrowIfCancellationRequested();
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;
                 entry.CurrentTime = snapped;
@@ -498,7 +507,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             {
                 var context = CreateRenderContext(proc, entry.CurrentTime);
 
-                var result = await Task.Run(() => proc.Render(context));
+                var result = await Task.Run(() => proc.RenderAsync(context, CancellationToken.None));
 
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;
@@ -747,6 +756,68 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         IReadOnlyList<LayerStackEntry>? stackEntries)
     {
         bool isFirstLoad = !_entryOrder.Contains(entry);
+
+        // Issue #164: opt-in resolution-aware geometry simplification.
+        // Applied to the inner MemoryLayer BEFORE the rasterization
+        // wrap below so that, when both flags are on, rasterized tiles
+        // are produced from already-simplified geometry. The cache
+        // lives on the layer; clearing on toggle is automatic via
+        // RaiseMarinerChanged → full reload.
+        if (_settingsVm.EnableGeometrySimplification && layers.Count > 0)
+        {
+            foreach (var layer in layers)
+            {
+                if (layer is InstrumentedMemoryLayer iml)
+                {
+                    iml.EnableSimplification(
+                        DouglasPeuckerLineSimplifier.Instance,
+                        SimplificationOptions.Default);
+                }
+            }
+        }
+
+        // Experimental: wrap S-100 vector (MemoryLayer) outputs in a
+        // rasterising tile cache so each visible region is rendered
+        // once and re-used during subsequent pan/zoom frames.
+        // Coverage / image layers (S-102/S-104/S-111) are already
+        // raster, so we leave them alone. Wrapping happens AFTER the
+        // processor's AnnotateFeatures step (which type-checks the
+        // raw MemoryLayer), so feature tagging is preserved.
+        if (_settingsVm.EnableVectorRasterization && layers.Count > 0)
+        {
+            var wrapMap = new Dictionary<ILayer, ILayer>(ReferenceEqualityComparer.Instance);
+            var wrapped = new List<ILayer>(layers.Count);
+            foreach (var layer in layers)
+            {
+                if (layer is MemoryLayer memoryLayer)
+                {
+                    var wrapper = new S100RasterizingTileLayer(memoryLayer)
+                    {
+                        Name = memoryLayer.Name,
+                    };
+                    wrapped.Add(wrapper);
+                    wrapMap[memoryLayer] = wrapper;
+                }
+                else
+                {
+                    wrapped.Add(layer);
+                }
+            }
+            if (wrapMap.Count > 0)
+            {
+                layers = wrapped;
+                if (stackEntries is not null && stackEntries.Count > 0)
+                {
+                    var remapped = new List<LayerStackEntry>(stackEntries.Count);
+                    foreach (var se in stackEntries)
+                    {
+                        var l = wrapMap.TryGetValue(se.Layer, out var w) ? w : se.Layer;
+                        remapped.Add(se with { Layer = l });
+                    }
+                    stackEntries = remapped;
+                }
+            }
+        }
 
         RemoveEntryLayers(entry);
         _entryLayers[entry] = layers;

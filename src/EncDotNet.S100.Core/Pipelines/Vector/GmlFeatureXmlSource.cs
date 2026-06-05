@@ -60,7 +60,11 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
     }
 
     /// <inheritdoc/>
-    public XmlReader GetFeatureXml() => BuildFeatureXml().CreateReader();
+    public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return BuildFeatureXml().CreateReader();
+    }
 
     private XDocument BuildFeatureXml()
     {

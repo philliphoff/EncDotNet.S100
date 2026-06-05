@@ -13,6 +13,7 @@ internal sealed class StubFeatureSearchService : IFeatureSearchService
 internal sealed class StubPickService : IPickService
 {
     public void HandlePick(MapInfo? mapInfo) { }
+    public void HandlePick(MapInfo? mapInfo, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) { }
 
     public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
 

@@ -566,6 +566,39 @@ public class VectorPipelineTests
 
     #endregion
 
+    #region Cancellation
+
+    [Fact]
+    public async Task ProcessAsync_PreCancelledToken_ThrowsWithoutTouchingSource()
+    {
+        var source = new ThrowingFeatureXmlSource();
+        var catalogue = new FakeVectorPortrayalCatalogue([]);
+        var pipeline = new VectorPipeline();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => pipeline.ProcessAsync(source, catalogue, cancellationToken: cts.Token));
+
+        Assert.False(source.WasQueried);
+    }
+
+    private sealed class ThrowingFeatureXmlSource : IFeatureXmlSource
+    {
+        public bool WasQueried { get; private set; }
+
+        public IReadOnlyList<string> FeatureTypesPresent { get; } = [];
+
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
+        {
+            WasQueried = true;
+            return XmlReader.Create(new StringReader("<Dataset/>"));
+        }
+    }
+
+    #endregion
+
     #region Fakes
 
     private sealed class FakeFeatureXmlSource : IFeatureXmlSource
@@ -580,7 +613,7 @@ public class VectorPipelineTests
 
         public IReadOnlyList<string> FeatureTypesPresent { get; }
 
-        public XmlReader GetFeatureXml() =>
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default) =>
             XmlReader.Create(new StringReader(_featureXml));
     }
 
@@ -613,7 +646,9 @@ public class VectorPipelineTests
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
 
-        public Script GetLuaScript(string scriptName) => throw new NotImplementedException();
+        public string? GetLuaSource(string fileName) => null;
+
+        public IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
         public SvgSymbol GetSymbol(string symbolName) =>
             new() { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" };

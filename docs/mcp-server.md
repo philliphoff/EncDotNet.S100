@@ -67,6 +67,35 @@ assume canonical units for these cases.
 Untick the checkbox to stop the server; the indicator disappears and
 the TCP port is released.
 
+### Enable it from the command line (agent automation)
+
+For headless / scripted runs an agent can enable and configure the
+MCP server entirely from the CLI, without opening Settings and without
+touching the user's persisted profile:
+
+```bash
+dotnet run --project src/EncDotNet.S100.Viewer -- \
+  --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
+  path/to/dataset.h5
+```
+
+- `--mcp` starts the server for the run, overriding the persisted
+  toggle. `--mcp-port <PORT>` and `--mcp-bind <ADDR>` configure the
+  listener (any MCP flag implies `--mcp`).
+- `--mcp-port-file <PATH>` writes the bound endpoint URI to a file
+  once the server is listening, so an agent can discover an ephemeral
+  port (`--mcp-port 0`, the default). The endpoint is also printed to
+  stdout as `[MCP] listening on …`.
+- A CLI-driven MCP run **never persists** the bound port back to
+  `settings.json`. Combine with `--ephemeral` (throwaway settings) or
+  `--settings <PATH>` (alternate settings file) to keep the real
+  profile pristine and let parallel runs avoid collisions.
+
+See the **Automation / agent control** section of the
+[viewer README](../src/EncDotNet.S100.Viewer/README.md) for the full
+flag list (viewport, palette, time step, screenshots, logging) and an
+end-to-end walkthrough.
+
 ## Connect from `mcp-inspector`
 
 ```bash
@@ -87,7 +116,35 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `query_features` | Returns features from loaded GML vector datasets whose geometry intersects a spatial query. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
-| `render_to_image` *(viewer only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported in v1. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+| `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
+| `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
+| `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
+| `await_render_idle` *(viewer only, read-only)* | Blocks until the live map settles — no completed paint, graphics-refresh request, or busy layer for a continuous quiet period — or until a timeout elapses (`quietPeriodMs` default 250, clamped `[0, 10000]`; `timeoutMs` default 5000, clamped `[50, 120000]`). Call it between `set_viewport` and `render_to_image` so the screenshot reflects a settled view instead of racing the render pass. Always waits at least the quiet period and measures the on-screen `InstrumentedMapControl` paint loop, not the offscreen `render_to_image` clone. Returns `wentIdle`, `timedOut`, `waitedMs`, and `paintsObserved`. |
+| `get_render_stats` *(viewer only, read-only)* | Reports the cost of the most recently completed on-screen map paint: wall-clock `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a per-style breakdown (`style`, `calls`, `durationMs`, ordered by descending duration). Use it to measure rendering performance across pan / zoom, palette, or time-step changes. Describes the live map paint, not the offscreen `render_to_image` clone; returns `hasData = false` when no paint has occurred yet. Pair with `await_render_idle` so the reported paint reflects a settled view. |
+| `open_dataset` *(viewer only, **mutating**)* | Loads a dataset into the live viewer using its existing open code path, so agents can measure the load hot path. `path` is a single file (S-101 `.000`, HDF5 `.h5`, GML, etc.) OR an exchange set (a folder containing `CATALOG.XML`, or a `.zip` of one); the kind is auto-detected. `spec` optionally forces a product-spec hint (e.g. `S-102`) for single-file loads. Returns the resulting catalog id(s), `spec`, bounding box (`southLatitude`/`westLongitude`/`northLatitude`/`eastLongitude`), `count`, `loadDurationMs`, and `timedOut` (exchange-set quiescence). |
+| `close_dataset` *(viewer only, **mutating**)* | Unloads a currently-loaded dataset from the live viewer by its catalog `id` (as returned by `list_datasets` / `open_dataset`), using the viewer's existing close code path so agents can measure the unload hot path. An unknown / already-removed id resolves gracefully as a non-error result with `removed = false`. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
+
+### Read-only vs mutating tools
+
+Tools fall into two groups:
+
+* **Read-only** — never mutate viewer state. Safe to call from any
+  agent at any time. Examples: `list_datasets`, `find_at`,
+  `query_features`, `sample_coverage`, `render_to_image` (which
+  snapshots from a clone of the live `Map`), `await_render_idle`, and
+  `get_render_stats` (which observe the live render loop without
+  changing it).
+* **Mutating** — modify the live viewer's state (navigator, palette,
+  time step, loaded datasets, etc.). Use only when you intend to
+  drive the viewer's UI from outside. Examples: `set_viewport`,
+  `set_palette`, `set_display_category`, `set_time_step`,
+  `open_dataset`, and `close_dataset` (which load / unload datasets
+  through the viewer's own open / close code path).
+
+Tool descriptions in the registered MCP catalogue identify each tool
+as one or the other; this table is the canonical reference.
 
 ### Image content blocks (`render_to_image`)
 

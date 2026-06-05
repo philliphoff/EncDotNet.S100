@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Datasets.S131;
@@ -32,7 +33,7 @@ namespace EncDotNet.S100.Datasets.S131;
 /// own geometry so the Lua shims can construct proper Spatial objects.
 /// </para>
 /// </remarks>
-public sealed class S131LuaDataProvider
+public sealed class S131LuaDataProvider : ILuaDataProvider
 {
     // Synthetic spatial IDs are formed as "{featureNumericId}:geom".
     // Spatial "types" mirror S-101 RCNM values for the Lua shims.
@@ -51,21 +52,30 @@ public sealed class S131LuaDataProvider
     private Dictionary<string, SimpleAttribute>? _simpleAttrByCode;
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
 
-    private readonly List<(string FeatureRef, string Instructions, string ObservedParams)> _emitted = new();
+    private readonly List<EmittedInstruction> _emitted = new();
 
     /// <summary>
-    /// Resolves a Lua-side feature reference (the stringified synthetic
-    /// numeric id passed to <c>HostPortrayalEmit</c>) to its S-131
-    /// feature-type code (e.g. <c>Berth</c>, <c>MooringBuoy</c>).
+    /// Resolves a Lua-side feature reference to its S-131 feature-type code
+    /// (e.g. <c>Berth</c>, <c>MooringBuoy</c>). Accepts either the synthetic
+    /// numeric id used inside the Lua engine or the GML <c>gml:id</c> string
+    /// that <c>HostPortrayalEmit</c> substitutes into the emitted instructions.
     /// </summary>
     /// <returns>
     /// The FC code on success, or <see langword="null"/> when
-    /// <paramref name="featureRef"/> cannot be parsed or no feature is
-    /// associated with the id.
+    /// <paramref name="featureRef"/> cannot be resolved.
     /// </returns>
     public string? TryGetFeatureTypeCode(string featureRef)
     {
         if (string.IsNullOrEmpty(featureRef)) return null;
+
+        // Emitted instructions carry the GML id (HostPortrayalEmit rewrites the
+        // numeric id to gml:id); map it back to the numeric id first.
+        if (_gmlIdToNumericId.TryGetValue(featureRef, out var mappedId)
+            && _featureById.TryGetValue(mappedId, out var byGml))
+        {
+            return byGml.FeatureType;
+        }
+
         if (!double.TryParse(featureRef, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var id))
         {
@@ -105,8 +115,128 @@ public sealed class S131LuaDataProvider
         }
     }
 
-    /// <summary>Drawing instructions emitted during portrayal execution.</summary>
-    public IReadOnlyList<(string FeatureRef, string Instructions, string ObservedParams)> EmittedInstructions => _emitted;
+    /// <inheritdoc/>
+    public IReadOnlyList<EmittedInstruction> EmittedInstructions => _emitted;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> PostLoadScripts =>
+    [
+        SpatialAssociationShim,
+        HostGetSpatialShim,
+        ContainsGuard,
+    ];
+
+    /// <summary>
+    /// Lua shim that wraps HostFeatureGetSpatialAssociations to convert
+    /// the raw host data into proper SpatialAssociation objects via
+    /// CreateSpatialAssociation() (from PortrayalAPI.lua).
+    /// </summary>
+    private const string SpatialAssociationShim = """
+        local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
+        HostFeatureGetSpatialAssociations = function(featureID)
+            local raw = _rawHostGetSpatial(featureID)
+            if raw == nil then return nil end
+            local result = {}
+            for i, sa in ipairs(raw) do
+                result[i] = CreateSpatialAssociation(sa.SpatialType, sa.SpatialID, sa.Orientation)
+            end
+            if #result == 0 then return nil end
+            result.Type = 'array:SpatialAssociation'
+            return result
+        end
+        """;
+
+    /// <summary>
+    /// Lua shim that implements HostGetSpatial by calling the C# HostGetSpatialData
+    /// to get raw data, then constructing proper Spatial Lua objects.
+    /// </summary>
+    /// <remarks>
+    /// For S-131 GML features with inline geometry, the spatial data is
+    /// synthesized by <see cref="HostGetSpatialData"/>. Synthetic start/end
+    /// point IDs (<c>synth:start:*</c>, <c>synth:end:*</c>) are resolved inline
+    /// since they don't exist as separate spatial records.
+    /// </remarks>
+    private const string HostGetSpatialShim = """
+        local _rawHostGetSpatialData = HostGetSpatialData
+        
+        -- Cache for synthetic start/end points from curve data
+        local _syntheticPoints = {}
+        
+        function HostGetSpatial(spatialID)
+            -- Check synthetic point cache first (for curve start/end points)
+            if _syntheticPoints[spatialID] then
+                local sp = _syntheticPoints[spatialID]
+                return CreatePoint(sp.X, sp.Y)
+            end
+        
+            local data = _rawHostGetSpatialData(spatialID)
+            if data == nil then return nil end
+
+            if data.RecordType == 'Point' then
+                return CreatePoint(data.X, data.Y)
+            elseif data.RecordType == 'MultiPoint' then
+                local points = {}
+                for _, pt in ipairs(data.Points) do
+                    points[#points + 1] = CreatePoint(pt.X, pt.Y, pt.Z)
+                end
+                points.Type = 'array:Spatial'
+                return CreateMultiPoint(points)
+            elseif data.RecordType == 'Curve' then
+                -- Cache start/end point data for HostGetSpatial lookups
+                if data.StartPointID and data._startX then
+                    _syntheticPoints[data.StartPointID] = { X = data._startX, Y = data._startY }
+                end
+                if data.EndPointID and data._endX then
+                    _syntheticPoints[data.EndPointID] = { X = data._endX, Y = data._endY }
+                end
+                local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
+                local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')
+                local controlPoints = {}
+                if data.ControlPoints then
+                    for _, cp in ipairs(data.ControlPoints) do
+                        controlPoints[#controlPoints + 1] = CreatePoint(cp.X, cp.Y)
+                    end
+                end
+                local segment = CreateCurveSegment(controlPoints)
+                return CreateCurve(startSA, endSA, { segment })
+            elseif data.RecordType == 'CompositeCurve' then
+                local curveAssocs = {}
+                if data.CurveAssociations then
+                    for _, ca in ipairs(data.CurveAssociations) do
+                        curveAssocs[#curveAssocs + 1] = CreateSpatialAssociation(ca.SpatialType, ca.SpatialID, ca.Orientation)
+                    end
+                end
+                curveAssocs.Type = 'array:SpatialAssociation'
+                return CreateCompositeCurve(curveAssocs)
+            elseif data.RecordType == 'Surface' then
+                local exteriorRing = nil
+                if data.ExteriorRing then
+                    exteriorRing = CreateSpatialAssociation(data.ExteriorRing.SpatialType, data.ExteriorRing.SpatialID, data.ExteriorRing.Orientation)
+                end
+                local interiorRings = {}
+                if data.InteriorRings then
+                    for _, ir in ipairs(data.InteriorRings) do
+                        interiorRings[#interiorRings + 1] = CreateSpatialAssociation(ir.SpatialType, ir.SpatialID, ir.Orientation)
+                    end
+                end
+                interiorRings.Type = 'array:SpatialAssociation'
+                return CreateSurface(exteriorRing, interiorRings)
+            end
+            return nil
+        end
+        """;
+
+    /// <summary>
+    /// Patches <c>contains</c> for nil/void safety (a MoonSharp quirk where
+    /// missing attributes surface as <c>DynValue.Void</c> rather than nil).
+    /// </summary>
+    private const string ContainsGuard = """
+        local _orig_contains = contains
+        function contains(value, array)
+            if value == nil then return false end
+            return _orig_contains(value, array)
+        end
+        """;
 
     /// <summary>
     /// Registers all Host* functions and the Debug table on the given Lua context.
@@ -548,7 +678,12 @@ public sealed class S131LuaDataProvider
             featureRef = feat.Id;
         }
 
-        _emitted.Add((featureRef, drawingInstructions, observedParams));
+        _emitted.Add(new EmittedInstruction
+        {
+            FeatureRef = featureRef,
+            InstructionString = drawingInstructions,
+            ObservedParameters = observedParams,
+        });
         return true;
     }
 

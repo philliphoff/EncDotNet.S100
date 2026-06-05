@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Validation;
 
@@ -7,7 +9,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
 /// Processes a dataset file and renders it into Mapsui layers.
-/// Constructed once per file; <see cref="Render"/> may be called
+/// Constructed once per file; <see cref="RenderAsync"/> may be called
 /// multiple times with different spec-specific contexts.
 /// </summary>
 public interface IDatasetProcessor
@@ -22,7 +24,25 @@ public interface IDatasetProcessor
     /// </summary>
     SpecRef Spec { get; }
 
-    DatasetResult Render(RenderContext? context = null);
+    /// <summary>
+    /// Renders the dataset into portrayal layers. The render path is
+    /// CPU-bound on already-parsed, in-memory data; the returned task
+    /// typically completes synchronously. The supplied
+    /// <paramref name="cancellationToken"/> is honoured cooperatively at
+    /// pipeline-stage and per-row boundaries so a render in flight can be
+    /// abandoned (e.g. when the viewer's selected time step changes).
+    /// </summary>
+    /// <param name="context">
+    /// Optional spec-specific render context (palette, opacity, selected
+    /// time step, viewport). When <c>null</c> the processor renders with
+    /// its defaults.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Token observed cooperatively during rendering; cancellation surfaces
+    /// as an <see cref="OperationCanceledException"/>.
+    /// </param>
+    /// <returns>The rendered dataset result.</returns>
+    Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns information about a feature identified by its reference string

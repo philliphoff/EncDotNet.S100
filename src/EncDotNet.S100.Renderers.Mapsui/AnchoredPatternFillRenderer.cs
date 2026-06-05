@@ -41,6 +41,22 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
             return false;
         }
 
+        var drawStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            return DrawCore(canvas, viewport, layer, gf, patternStyle);
+        }
+        finally
+        {
+            var elapsedMs = System.Diagnostics.Stopwatch
+                .GetElapsedTime(drawStartTimestamp).TotalMilliseconds;
+            Diagnostics.Telemetry.PatternFillDrawDuration.Record(elapsedMs);
+        }
+    }
+
+    private bool DrawCore(SKCanvas canvas, Viewport viewport, ILayer layer,
+                          GeometryFeature gf, AnchoredPatternFillStyle patternStyle)
+    {
         IEnumerable<Polygon> polygons = gf.Geometry switch
         {
             Polygon p => [p],
@@ -48,7 +64,7 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
             _ => []
         };
 
-        float opacity = (float)(layer.Opacity * style.Opacity);
+        float opacity = (float)(layer.Opacity * patternStyle.Opacity);
         var clipRect = viewport.ToSkiaRect();
 
         // Build a combined path from all polygons so the pattern is drawn

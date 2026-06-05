@@ -38,6 +38,8 @@ public class RenderToImageToolTests
         public void RemoveOverlayLayer(ILayer layer) { }
         public void ReorderDatasetLayers(System.Collections.Generic.IReadOnlyList<ILayer> orderedDatasetLayers) { }
         public void ZoomToExtent(MRect extent) { }
+        public void SetViewportToExtent(MRect mercatorExtent) { }
+        public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
         public Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, CancellationToken ct = default)
         {

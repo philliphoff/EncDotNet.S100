@@ -78,7 +78,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = p.Render();
+            _ = p.RenderAsync().GetAwaiter().GetResult();
             var info = p.GetFeatureInfo("station:ST01");
 
             Assert.NotNull(info);
@@ -100,7 +100,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S111DatasetProcessor(path, new PortrayalCatalogueManager(), IdentityFactory.Instance);
-            _ = p.Render();
+            _ = p.RenderAsync().GetAwaiter().GetResult();
             var info = p.GetFeatureInfo("station:S1");
 
             Assert.NotNull(info);
@@ -123,7 +123,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = p.Render();
+            _ = p.RenderAsync().GetAwaiter().GetResult();
             // unknown ref returns null FeatureInfo entirely
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station"));

@@ -688,6 +688,18 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_IgnoreScaleMinimum" xml:space="preserve">
     <value>Always portray features regardless of cell scale-minimum attribute (S-101 PC IgnoreScaleMinimum).</value>
   </data>
+  <data name="Settings_EnableVectorRasterization" xml:space="preserve">
+    <value>Rasterize vector layers (experimental)</value>
+  </data>
+  <data name="Tooltip_EnableVectorRasterization" xml:space="preserve">
+    <value>Cache S-100 vector layers as raster tiles for higher pan/zoom frame rate. Trades vector crispness during gestures for performance on large datasets.</value>
+  </data>
+  <data name="Settings_EnableGeometrySimplification" xml:space="preserve">
+    <value>Simplify line geometry (experimental)</value>
+  </data>
+  <data name="Tooltip_EnableGeometrySimplification" xml:space="preserve">
+    <value>Apply resolution-aware Douglas-Peucker simplification to S-100 line features at render time, with a per-zoom cache (issue #164). Speeds up paint on dense ENC line data; polygons and short lines are unaffected.</value>
+  </data>
   <data name="Settings_NationalLanguage" xml:space="preserve">
     <value>National Language</value>
   </data>
@@ -1128,5 +1140,80 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Settings_AisApiKey_EnvVarPresent" xml:space="preserve">
     <value>Environment variable {0} is set; it will be used.</value>
     <comment>{0} = environment variable name.</comment>
+  </data>
+  <data name="Settings_AisActivationSpan" xml:space="preserve">
+    <value>Activate at viewport span (degrees)</value>
+  </data>
+  <data name="Settings_AisActivationSpanTooltip" xml:space="preserve">
+    <value>The AIS subscription will not start until the visible map's latitude and longitude spans are both at or below this value (in degrees). The default of 50° excludes the global cold-start view but admits any reasonable regional view. Leave blank to disable the gate and subscribe immediately on launch.</value>
+  </data>
+  <data name="Settings_AisActivationSpanHint" xml:space="preserve">
+    <value>Default 50°. Leave blank to subscribe immediately on launch (legacy behaviour). Once activated, the subscription stays active for the rest of the viewer session.</value>
+  </data>
+
+  <!-- PR-D4: Dynamic-source pick report -->
+  <data name="PickReport_DynamicSection" xml:space="preserve">
+    <value>DYNAMIC FEATURES ({0})</value>
+    <comment>{0} = count of dynamic hits.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedRelative" xml:space="preserve">
+    <value>Updated {0}</value>
+    <comment>{0} = formatted relative time string (e.g. "3s ago").</comment>
+  </data>
+  <data name="PickReport_LastUpdatedSecondsAgo" xml:space="preserve">
+    <value>{0}s ago</value>
+    <comment>{0} = whole seconds since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedMinutesAgo" xml:space="preserve">
+    <value>{0}m ago</value>
+    <comment>{0} = whole minutes since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedHoursAgo" xml:space="preserve">
+    <value>{0}h ago</value>
+    <comment>{0} = whole hours since the feature was updated.</comment>
+  </data>
+  <data name="PickReport_LastUpdatedJustNow" xml:space="preserve">
+    <value>just now</value>
+  </data>
+  <data name="PickReport_Position" xml:space="preserve">
+    <value>Position</value>
+  </data>
+  <data name="PickReport_PositionFormat" xml:space="preserve">
+    <value>{0:F4}°, {1:F4}°</value>
+    <comment>{0} = latitude, {1} = longitude. Use invariant culture.</comment>
+  </data>
+  <data name="PickReport_Cog" xml:space="preserve">
+    <value>COG</value>
+  </data>
+  <data name="PickReport_Heading" xml:space="preserve">
+    <value>Heading</value>
+  </data>
+  <data name="PickReport_Sog" xml:space="preserve">
+    <value>SOG</value>
+  </data>
+  <data name="PickReport_DegreesFormat" xml:space="preserve">
+    <value>{0:F1}°</value>
+  </data>
+  <data name="PickReport_KnotsFormat" xml:space="preserve">
+    <value>{0:F1} kn</value>
+  </data>
+  <data name="PickReport_Dimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="PickReport_DimensionsFormat" xml:space="preserve">
+    <value>{0:F0} m × {1:F0} m</value>
+    <comment>{0} = length, {1} = beam, in metres.</comment>
+  </data>
+  <data name="PickReport_Mmsi" xml:space="preserve">
+    <value>MMSI</value>
+  </data>
+  <data name="PickReport_VesselName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="PickReport_CallSign" xml:space="preserve">
+    <value>Call sign</value>
+  </data>
+  <data name="Tooltip_DynamicHit" xml:space="preserve">
+    <value>Dynamic-source feature picked from the live overlay.</value>
   </data>
 </root>

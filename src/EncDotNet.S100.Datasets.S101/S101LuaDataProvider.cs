@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Datasets.S101;
@@ -10,7 +11,7 @@ namespace EncDotNet.S100.Datasets.S101;
 /// and <see cref="FeatureCatalogue"/> to an <see cref="ILuaContext"/>. This is the C#
 /// side of the S-100 Part 9A Lua Portrayal Model host interface.
 /// </summary>
-public sealed class S101LuaDataProvider
+public sealed class S101LuaDataProvider : ILuaDataProvider
 {
     private const byte RcnmPoint = 110;
     private const byte RcnmMultiPoint = 115;
@@ -30,7 +31,7 @@ public sealed class S101LuaDataProvider
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
 
     // Collected drawing instruction output
-    private readonly List<(string FeatureRef, string Instructions, string ObservedParams)> _emitted = new();
+    private readonly List<EmittedInstruction> _emitted = new();
 
     public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue)
     {
@@ -40,8 +41,164 @@ public sealed class S101LuaDataProvider
         _fc = featureCatalogue;
     }
 
-    /// <summary>Drawing instructions emitted during portrayal execution.</summary>
-    public IReadOnlyList<(string FeatureRef, string Instructions, string ObservedParams)> EmittedInstructions => _emitted;
+    /// <inheritdoc/>
+    public IReadOnlyList<EmittedInstruction> EmittedInstructions => _emitted;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> PostLoadScripts =>
+    [
+        SpatialAssociationShim,
+        HostGetSpatialShim,
+        ContainsGuard,
+        FeatureNamePatch,
+    ];
+
+    /// <summary>
+    /// Lua shim that wraps HostFeatureGetSpatialAssociations to convert
+    /// the raw host data (List of {SpatialID, SpatialType, Orientation})
+    /// into proper SpatialAssociation objects via CreateSpatialAssociation().
+    /// </summary>
+    private const string SpatialAssociationShim = """
+        local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
+        HostFeatureGetSpatialAssociations = function(featureID)
+            local raw = _rawHostGetSpatial(featureID)
+            if raw == nil then return nil end
+            local result = {}
+            for i, sa in ipairs(raw) do
+                result[i] = CreateSpatialAssociation(sa.SpatialType, sa.SpatialID, sa.Orientation)
+            end
+            if #result == 0 then return nil end
+            result.Type = 'array:SpatialAssociation'
+            return result
+        end
+        """;
+
+    /// <summary>
+    /// Lua shim that implements HostGetSpatial by calling the C# HostGetSpatialData
+    /// to get raw data, then constructing proper Spatial Lua objects via the
+    /// Create* functions from PortrayalAPI.lua.
+    /// </summary>
+    private const string HostGetSpatialShim = """
+        local _rawHostGetSpatialData = HostGetSpatialData
+        function HostGetSpatial(spatialID)
+            local data = _rawHostGetSpatialData(spatialID)
+            if data == nil then return nil end
+
+            if data.RecordType == 'Point' then
+                return CreatePoint(data.X, data.Y)
+            elseif data.RecordType == 'MultiPoint' then
+                local points = {}
+                for _, pt in ipairs(data.Points) do
+                    points[#points + 1] = CreatePoint(pt.X, pt.Y, pt.Z)
+                end
+                points.Type = 'array:Spatial'
+                return CreateMultiPoint(points)
+            elseif data.RecordType == 'Curve' then
+                local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
+                local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')
+                local controlPoints = {}
+                if data.ControlPoints then
+                    for _, cp in ipairs(data.ControlPoints) do
+                        controlPoints[#controlPoints + 1] = CreatePoint(cp.X, cp.Y)
+                    end
+                end
+                local segment = CreateCurveSegment(controlPoints)
+                return CreateCurve(startSA, endSA, { segment })
+            elseif data.RecordType == 'CompositeCurve' then
+                local curveAssocs = {}
+                for _, ca in ipairs(data.CurveAssociations) do
+                    curveAssocs[#curveAssocs + 1] = CreateSpatialAssociation(ca.SpatialType, ca.SpatialID, ca.Orientation)
+                end
+                curveAssocs.Type = 'array:SpatialAssociation'
+                return CreateCompositeCurve(curveAssocs)
+            elseif data.RecordType == 'Surface' then
+                local exteriorRing = nil
+                if data.ExteriorRing then
+                    exteriorRing = CreateSpatialAssociation(data.ExteriorRing.SpatialType, data.ExteriorRing.SpatialID, data.ExteriorRing.Orientation)
+                end
+                local interiorRings = {}
+                if data.InteriorRings then
+                    for _, ir in ipairs(data.InteriorRings) do
+                        interiorRings[#interiorRings + 1] = CreateSpatialAssociation(ir.SpatialType, ir.SpatialID, ir.Orientation)
+                    end
+                end
+                interiorRings.Type = 'array:SpatialAssociation'
+                return CreateSurface(exteriorRing, interiorRings)
+            end
+            return nil
+        end
+        """;
+
+    /// <summary>
+    /// Patches <c>contains</c> to handle nil/void gracefully. MoonSharp may
+    /// return <c>DynValue.Void</c> (rather than nil) from <c>__index</c> when an
+    /// attribute is missing, causing <c>type()</c> to error.
+    /// </summary>
+    private const string ContainsGuard = """
+        local _orig_contains = contains
+        function contains(value, array)
+            if value == nil then return false end
+            return _orig_contains(value, array)
+        end
+        """;
+
+    /// <summary>
+    /// Lua patch that corrects the upstream <c>GetFeatureName</c> and
+    /// <c>PortrayFeatureName</c> functions in <c>PortrayalModel.lua</c>. The
+    /// upstream implementation requires both <c>name</c> AND <c>nameUsage</c>
+    /// on every <c>featureName</c> entry, but the S-101 Feature Catalogue
+    /// (Edition 1.x) declares <c>nameUsage</c> with multiplicity <c>0..1</c>
+    /// — it is optional. FC-conformant ENCs that omit <c>nameUsage</c> for
+    /// a single default-display name currently get no label rendered at all.
+    /// <para/>
+    /// This patch reimplements the global <c>GetFeatureName</c> (and the
+    /// <c>PortrayFeatureName</c> helper that wraps it) so a missing
+    /// <c>nameUsage</c> is treated as <c>1</c> (Default Name Display),
+    /// matching the FC's optional semantics. When <c>nameUsage</c> is
+    /// present, the original <c>1</c>/<c>2</c> branching is preserved.
+    /// </summary>
+    private const string FeatureNamePatch = """
+        function GetFeatureName(feature, contextParameters)
+            -- Match upstream featurePortrayal:GetFeatureName side effect so
+            -- main.lua's fallback PortrayFeatureName guard sees this call and
+            -- does not re-emit the name with a different default offset.
+            if feature._featurePortrayal then
+                feature._featurePortrayal.GetFeatureNameCalled = true
+            end
+
+            if not feature['!featureName'] or #feature.featureName == 0 then
+                return nil
+            end
+
+            local defaultName
+            for _, featureName in ipairs(feature.featureName) do
+                if featureName.name then
+                    local nameUsage = featureName.nameUsage
+                    local languageMatches = (featureName.language and featureName.language == contextParameters.NationalLanguage)
+
+                    if nameUsage == nil or nameUsage == 1 then
+                        if languageMatches then
+                            return featureName.name
+                        end
+                        defaultName = defaultName or featureName.name
+                    elseif nameUsage == 2 and languageMatches then
+                        return featureName.name
+                    end
+                end
+            end
+
+            return defaultName
+        end
+
+        function PortrayFeatureName(feature, featurePortrayal, contextParameters, textViewingGroup, textPriority, viewingGroup, priority, textStyleInstructions)
+            local name = GetFeatureName(feature, contextParameters)
+            if name then
+                local textStyle = textStyleInstructions or 'FontColor:CHBLK'
+                featurePortrayal:AddInstructions(textStyle)
+                featurePortrayal:AddTextInstruction(EncodeString(name, '%s'), textViewingGroup, textPriority, viewingGroup, priority)
+            end
+        end
+        """;
 
     /// <summary>
     /// Resolves a Lua-side feature reference (the stringified record id
@@ -161,8 +318,18 @@ public sealed class S101LuaDataProvider
     private string HostFeatureGetCode(double featureId)
     {
         var feat = GetFeature((uint)featureId);
-        return _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
+        var raw = _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
             ? name : feat.FeatureTypeCode.ToString();
+
+        // Normalize legacy (pre-2.0.0) S-101 feature class names to their
+        // Edition 2.0.0 equivalents so the bundled 2.0.0 Portrayal Catalogue's
+        // Lua rule modules can be dispatched (S-100 Part 9A). Applied only here,
+        // at the portrayal boundary; names are left as-authored elsewhere.
+        return S101LegacyFeatureNames.Normalize(
+            raw,
+            attributeCode => GetSimpleAttributeValues(feat.Attributes, attributeCode)
+                .OfType<string>()
+                .FirstOrDefault());
     }
 
     private List<object> HostFeatureGetSimpleAttribute(double featureId, string attributePath, string attributeCode)
@@ -367,7 +534,12 @@ public sealed class S101LuaDataProvider
 
     private bool HostPortrayalEmit(string featureRef, string drawingInstructions, string observedParams)
     {
-        _emitted.Add((featureRef, drawingInstructions, observedParams));
+        _emitted.Add(new EmittedInstruction
+        {
+            FeatureRef = featureRef,
+            InstructionString = drawingInstructions,
+            ObservedParameters = observedParams,
+        });
         return true;
     }
 

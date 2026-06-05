@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.DynamicSources;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources;
 
@@ -57,6 +58,9 @@ internal sealed class DynamicFeatureSourceRegistryAccessor : IDynamicFeatureSour
         _current?.Sources ?? Array.Empty<DynamicSourceRegistrationInfo>();
 
     public bool GetVisible(string sourceId) => _current?.GetVisible(sourceId) ?? true;
+
+    public IReadOnlyList<IDynamicFeatureSource> GetVisibleSourceInstances() =>
+        _current?.GetVisibleSourceInstances() ?? Array.Empty<IDynamicFeatureSource>();
 
     public void SetVisible(string sourceId, bool visible) =>
         _current?.SetVisible(sourceId, visible);

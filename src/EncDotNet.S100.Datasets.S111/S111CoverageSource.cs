@@ -97,7 +97,7 @@ public class S111CoverageSource : ICoverageSource
         _selectedTimeIndex = closest;
     }
 
-    public SampledCoverage Sample(GridRegion region)
+    public SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default)
     {
         var coverage = _dataset.Coverages[_selectedTimeIndex];
         var values = coverage.Values;
@@ -116,6 +116,7 @@ public class S111CoverageSource : ICoverageSource
 
         for (int r = 0; r < rows; r++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int dstRowBase = r * cols;
             int srcRowBase = (rowStart + r * region.RowStride) * gridCols + colStart;
             for (int c = 0; c < cols; c++)

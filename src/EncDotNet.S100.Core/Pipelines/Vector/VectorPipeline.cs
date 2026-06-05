@@ -1,26 +1,37 @@
 using System.Diagnostics;
-using System.Xml.Linq;
-using System.Xml.Xsl;
 using EncDotNet.S100.Diagnostics;
+using EncDotNet.S100.Pipelines.Vector.Xslt;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
-/// Six-stage vector portrayal pipeline (S-100 Part 9):
+/// Vector portrayal pipeline (S-100 Part 9). The pipeline composes one or
+/// more <see cref="IVectorRuleExecutor"/> engines, concatenates their typed
+/// drawing instructions, and applies the shared post-processing stage:
 /// <list type="number">
-///   <item>FeatureXML acquisition from <see cref="IFeatureXmlSource"/></item>
-///   <item>Rule selection — match dataset feature types to catalogue rules</item>
-///   <item>XSLT transformation — run applicable XSLT rules against the FeatureXML</item>
-///   <item>Lua execution — delegate to <see cref="ILuaRuleExecutor"/> (Part 9A)</item>
-///   <item>Drawing instruction assembly — parse XSLT output into typed objects and append Lua output</item>
-///   <item>Viewing group filtering, display plane filtering, and priority sorting</item>
+///   <item>XSLT rule execution — a built-in <see cref="XsltRuleExecutor"/>
+///     (Part 9 §9.4) handles FeatureXML acquisition, rule selection,
+///     transformation, and display-list assembly.</item>
+///   <item>Lua rule execution — an optional injected
+///     <see cref="IVectorRuleExecutor"/> (Part 9A).</item>
+///   <item>Viewing-group filtering, display-plane filtering, and priority
+///     sorting of the merged instruction list.</item>
 /// </list>
 /// </summary>
+/// <remarks>
+/// The two engines are honest siblings under <see cref="IVectorRuleExecutor"/>:
+/// the XSLT executor is built in (it is the default vector engine), while the
+/// Lua executor is supplied per product. Executor output is merged in
+/// construction order — XSLT instructions first, then Lua — and then re-sorted
+/// by <c>(Plane, DrawingPriority, TypeSortOrder)</c>. The sort is stable, so
+/// that construction order is the tie-breaker for instructions that share an
+/// identical sort key.
+/// </remarks>
 public class VectorPipeline
 {
-    private readonly ILuaRuleExecutor? _luaExecutor;
+    private readonly IVectorRuleExecutor? _luaExecutor;
 
-    public VectorPipeline(ILuaRuleExecutor? luaExecutor = null)
+    public VectorPipeline(IVectorRuleExecutor? luaExecutor = null)
     {
         _luaExecutor = luaExecutor;
     }
@@ -29,7 +40,8 @@ public class VectorPipeline
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
         Viewport? viewport = null,
-        MarinerSettings? mariner = null)
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.process");
         activity?.SetTag(TelemetryTags.PipelineStage, "portray");
@@ -44,62 +56,27 @@ public class VectorPipeline
 
         try
         {
-            // Stage 1 — load FeatureXML into a navigable document
-            XDocument featureDoc;
-            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.feature_xml"))
-            {
-                var stageStart = Stopwatch.GetTimestamp();
-                using (var reader = source.GetFeatureXml())
-                {
-                    featureDoc = XDocument.Load(reader);
-                }
-                RecordStageDuration(stageStart, "feature_xml");
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            var marinerSettings = mariner ?? new MarinerSettings();
 
-            // Stage 2 — select applicable rules
-            IReadOnlyList<PortrayalRule> applicableRules;
-            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.rule_select"))
-            {
-                var stageStart = Stopwatch.GetTimestamp();
-                var featureTypes = source.FeatureTypesPresent;
-                PipelineMetrics.FeaturesIn.Record(featureTypes.Count, stageTag);
-                activity?.SetTag("s100.pipeline.feature_types.count", featureTypes.Count);
-                applicableRules = SelectRules(featureTypes, catalogue);
-                activity?.SetTag("s100.pipeline.rules.count", applicableRules.Count);
-                RecordStageDuration(stageStart, "rule_select");
-            }
+            // XSLT rule execution (S-100 Part 9 §9.4). The built-in executor
+            // owns FeatureXML acquisition, rule selection, transformation, and
+            // display-list assembly; its internal telemetry spans cover those
+            // sub-stages. It is render-bound, so it is constructed per call.
+            var xsltExecutor = new XsltRuleExecutor(source, catalogue, viewport);
+            var instructions = xsltExecutor.Execute(marinerSettings, cancellationToken).ToList();
+            activity?.SetTag("s100.pipeline.feature_types.count", xsltExecutor.LastFeatureTypeCount);
+            activity?.SetTag("s100.pipeline.rules.count", xsltExecutor.LastRuleCount);
 
-            // Stage 3 — XSLT transformation
-            XDocument drawingInstructionsDoc;
-            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.xslt"))
-            {
-                var stageStart = Stopwatch.GetTimestamp();
-                drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, catalogue, viewport);
-                RecordStageDuration(stageStart, "xslt");
-            }
-
-            // Stage 5 — assemble typed drawing instructions from the XSLT output
-            // using the canonical S-100 Part 9 lower-camel-case display-list reader.
-            List<DrawingInstruction> instructions;
-            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.assemble"))
-            {
-                var stageStart = Stopwatch.GetTimestamp();
-                instructions = Part9DisplayListReader.Read(drawingInstructionsDoc).ToList();
-                RecordStageDuration(stageStart, "assemble");
-                PipelineMetrics.StageInstructionsCount.Record(
-                    instructions.Count,
-                    new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "assemble"));
-            }
-
-            // Stage 4 — Lua execution (S-100 Part 9A). The executor produces typed
-            // drawing instructions directly; append them to the XSLT-stage output
-            // before viewing-group filtering and priority sorting.
+            // Lua rule execution (S-100 Part 9A). The optional injected executor
+            // produces typed drawing instructions directly; append them to the
+            // XSLT output before viewing-group filtering and priority sorting.
             if (_luaExecutor is not null)
             {
                 using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
                 {
                     var stageStart = Stopwatch.GetTimestamp();
-                    instructions.AddRange(_luaExecutor.Execute(mariner ?? new MarinerSettings()));
+                    instructions.AddRange(_luaExecutor.Execute(marinerSettings, cancellationToken));
                     RecordStageDuration(stageStart, "lua");
                     PipelineMetrics.StageInstructionsCount.Record(
                         instructions.Count,
@@ -107,10 +84,11 @@ public class VectorPipeline
                 }
             }
 
-            // Stage 6 — viewing group filter + display plane filter + priority sort
+            // Post-processing — viewing group filter + display plane filter + priority sort
             IReadOnlyList<DrawingInstruction> sorted;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.viewing_groups"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var stageStart = Stopwatch.GetTimestamp();
                 var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
                 var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
@@ -164,99 +142,7 @@ public class VectorPipeline
             new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, stageName));
     }
 
-    // ── Stage 2: Rule selection ─────────────────────────────────────────
-
-    private static IReadOnlyList<PortrayalRule> SelectRules(
-        IReadOnlyList<string> featureTypesPresent,
-        IVectorPortrayalCatalogue catalogue)
-    {
-        var featureTypeSet = new HashSet<string>(featureTypesPresent, StringComparer.OrdinalIgnoreCase);
-
-        return catalogue.Rules
-            .Where(r => r.AlwaysApply || r.AppliesTo.Any(t => featureTypeSet.Contains(t)))
-            .OrderBy(r => r.ExecutionOrder)
-            .ToList();
-    }
-
-    // ── Stage 3: XSLT transformation ───────────────────────────────────
-
-    private static XDocument RunXsltRules(
-        XDocument featureDoc,
-        IReadOnlyList<PortrayalRule> rules,
-        IVectorPortrayalCatalogue catalogue,
-        Viewport? viewport)
-    {
-        var drawingInstructions = new XDocument(
-            new XElement("DrawingInstructions"));
-
-        foreach (var rule in rules.Where(r => r.Type == PortrayalRuleType.Xslt))
-        {
-            var args = new XsltArgumentList();
-
-            // Pass colour palette tokens as XSLT parameters
-            foreach (var (token, color) in catalogue.ActivePalette.Colors)
-            {
-                // Some product specs (e.g. S-122) include colour tokens whose
-                // names are not valid XML NCNames (e.g. "00011"). XSLT
-                // parameter names must be NCNames, so skip any that aren't —
-                // the XSLT cannot reference them by name in any case.
-                if (!IsValidNCName(token))
-                {
-                    continue;
-                }
-
-                args.AddParam(token, string.Empty, color);
-            }
-
-            // Pass display scale if a viewport is available
-            if (viewport is not null)
-            {
-                args.AddParam("displayScale", string.Empty, viewport.ScaleDenominator);
-            }
-
-            var transform = catalogue.GetCompiledRule(rule.Name);
-            var resultFragment = new XDocument();
-
-            var transformStart = Stopwatch.GetTimestamp();
-            using (var transformActivity = Telemetry.ActivitySource.StartActivity("s100.xslt.transform"))
-            {
-                transformActivity?.SetTag(TelemetryTags.XsltRule, rule.Name);
-
-                using (var inputReader = featureDoc.CreateReader())
-                using (var writer = resultFragment.CreateWriter())
-                {
-                    transform.Transform(inputReader, args, writer);
-                }
-            }
-            PipelineMetrics.XsltTransformDuration.Record(
-                (Stopwatch.GetTimestamp() - transformStart) * 1000.0 / Stopwatch.Frequency,
-                new KeyValuePair<string, object?>(TelemetryTags.XsltRule, rule.Name));
-
-            // Accumulate results — each rule emits instruction elements
-            if (resultFragment.Root is not null)
-            {
-                drawingInstructions.Root!.Add(resultFragment.Root.Elements());
-            }
-        }
-
-        return drawingInstructions;
-    }
-
-    private static bool IsValidNCName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        try
-        {
-            System.Xml.XmlConvert.VerifyNCName(name);
-            return true;
-        }
-        catch (System.Xml.XmlException)
-        {
-            return false;
-        }
-    }
-
-    // ── Stage 6: Display plane filtering ──────────────────────────────
+    // ── Post-processing: Display plane filtering ──────────────────────
 
     /// <summary>
     /// Removes instructions whose <see cref="DrawingInstruction.Plane"/>
@@ -273,7 +159,7 @@ public class VectorPipeline
             .ToList();
     }
 
-    // ── Stage 6: Viewing group filtering and sort ──────────────────────
+    // ── Post-processing: Viewing group filtering and sort ──────────────
 
     private static IReadOnlyList<DrawingInstruction> ApplyViewingGroups(
         IReadOnlyList<DrawingInstruction> instructions,

@@ -8,6 +8,7 @@
         xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
         xmlns:views="using:EncDotNet.S100.Viewer.Views"
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+        xmlns:diag="using:EncDotNet.S100.Viewer.Diagnostics"
         xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
         xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -346,7 +347,8 @@
                                    bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" DragDrop.AllowDrop="True">
-                <mapsui:MapControl x:Name="MapControl" />
+                <diag:InstrumentedMapControl x:Name="MapControl" />
+                <diag:GpuAccelerationProbe />
                 <views:ScaleBarView x:Name="ScaleBar"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Top"

@@ -18,10 +18,12 @@ public class CoveragePipeline
     public Task<StyledCoverageLayer> ProcessAsync(
         ICoverageSource source,
         ICoveragePortrayalCatalogue catalogue,
-        MarinerSettings? mariner = null)
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(catalogue);
+        cancellationToken.ThrowIfCancellationRequested();
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.process");
         activity?.SetTag(TelemetryTags.PipelineStage, "portray");
@@ -55,7 +57,7 @@ public class CoveragePipeline
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.read"))
             {
                 var stageStart = Stopwatch.GetTimestamp();
-                sampled = source.Sample(GridRegion.Full);
+                sampled = source.Sample(GridRegion.Full, cancellationToken);
                 RecordCoverageStageDuration(stageStart, "read");
             }
 
@@ -112,7 +114,16 @@ public interface ICoverageSource
     void SelectTime(DateTime time);
     
     // The actual data access
-    SampledCoverage Sample(GridRegion region);
+    /// <summary>
+    /// Copies the requested grid region into a <see cref="SampledCoverage"/>.
+    /// The underlying grid is already resident in memory (the HDF5 read
+    /// happens at construction time), so this is a CPU-bound copy rather than
+    /// an I/O operation; <paramref name="cancellationToken"/> lets a large
+    /// copy be abandoned cooperatively. The method remains synchronous.
+    /// </summary>
+    /// <param name="region">The grid subset and stride to sample.</param>
+    /// <param name="cancellationToken">Signals that the render has been cancelled.</param>
+    SampledCoverage Sample(GridRegion region, CancellationToken cancellationToken = default);
 }
 
 public class CoverageMetadata

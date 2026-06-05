@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
@@ -43,6 +44,7 @@ internal sealed class MapInteractionController
     private readonly MainViewModel _viewModel;
     private readonly IPickService _pickService;
     private readonly IDatasetLoaderService _loader;
+    private readonly IDynamicSourcePickService? _dynamicPickService;
 
     private MapControl? _mapControl;
 
@@ -82,6 +84,15 @@ internal sealed class MapInteractionController
         MainViewModel viewModel,
         IPickService pickService,
         IDatasetLoaderService loader)
+        : this(viewModel, pickService, loader, dynamicPickService: null)
+    {
+    }
+
+    public MapInteractionController(
+        MainViewModel viewModel,
+        IPickService pickService,
+        IDatasetLoaderService loader,
+        IDynamicSourcePickService? dynamicPickService)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         ArgumentNullException.ThrowIfNull(pickService);
@@ -90,6 +101,7 @@ internal sealed class MapInteractionController
         _viewModel = viewModel;
         _pickService = pickService;
         _loader = loader;
+        _dynamicPickService = dynamicPickService;
     }
 
     /// <summary>
@@ -510,14 +522,31 @@ internal sealed class MapInteractionController
         var mapInfo = _mapControl.GetMapInfo(new ScreenPosition(origin.X, origin.Y), datasetLayers);
         _longPressOrigin = null;
         _longPressFired = true;
-        _pickService.HandlePick(mapInfo);
+        _pickService.HandlePick(mapInfo, CollectDynamicHits(mapInfo));
     }
 
     private void PerformPickAt(BaseEventArgs e)
     {
         var datasetLayers = GetDatasetLayers();
         var mapInfo = e.GetMapInfo?.Invoke(datasetLayers);
-        _pickService.HandlePick(mapInfo);
+        _pickService.HandlePick(mapInfo, CollectDynamicHits(mapInfo));
+    }
+
+    /// <summary>
+    /// Asks the dynamic-source pick service to hit-test the supplied
+    /// <see cref="MapInfo"/>'s world position. Returns an empty list
+    /// when the service is unavailable (legacy ctor / test stubs) or
+    /// when the <see cref="MapInfo"/> lacks a world position.
+    /// </summary>
+    private IReadOnlyList<ViewModels.DynamicPickHit> CollectDynamicHits(MapInfo? mapInfo)
+    {
+        if (_dynamicPickService is null || mapInfo?.WorldPosition is not { } world)
+        {
+            return Array.Empty<ViewModels.DynamicPickHit>();
+        }
+
+        var resolution = _mapControl?.Map?.Navigator?.Viewport.Resolution ?? double.NaN;
+        return _dynamicPickService.Pick(world, resolution);
     }
 
     private List<ILayer> GetDatasetLayers()

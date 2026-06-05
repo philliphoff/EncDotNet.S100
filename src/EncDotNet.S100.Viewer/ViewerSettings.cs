@@ -25,6 +25,31 @@ internal sealed class ViewerSettings
     [JsonIgnore]
     public string SettingsFilePath { get; set; } = DefaultSettingsPath;
 
+    /// <summary>
+    /// When <see langword="true"/>, <see cref="Save"/> is a no-op. Set
+    /// for <c>--ephemeral</c> agent runs so nothing is persisted and
+    /// the user's real profile is left untouched.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the MCP server was configured from
+    /// the command line for this run; the host must not persist the
+    /// bound (ephemeral) port back to the settings file. Prevents an
+    /// automation run from mutating the user's persisted MCP port.
+    /// </summary>
+    [JsonIgnore]
+    public bool McpConfiguredFromCommandLine { get; set; }
+
+    /// <summary>
+    /// Optional path the MCP host writes the bound endpoint URI to once
+    /// it is listening (set from <c>--mcp-port-file</c>). Lets an agent
+    /// discover an ephemeral port without scraping the status bar.
+    /// </summary>
+    [JsonIgnore]
+    public string? McpPortFilePath { get; set; }
+
     /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
     public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -129,6 +154,26 @@ internal sealed class ViewerSettings
     public bool? FullLightLines { get; set; }
     public bool? RadarOverlay { get; set; }
     public bool? IgnoreScaleMinimum { get; set; }
+
+    /// <summary>
+    /// Experimental: when true, S-100 vector layers are wrapped in a
+    /// Mapsui <c>RasterizingTileLayer</c> so each visible region is
+    /// rasterised once into a tile cache and re-used during pan/zoom.
+    /// Trades vector crispness during gestures for higher frame rate
+    /// on large datasets. Defaults to false (un-cached vector path).
+    /// </summary>
+    public bool? EnableVectorRasterization { get; set; }
+
+    /// <summary>
+    /// When true, S-100 vector layers run incoming line geometries
+    /// through a resolution-aware Douglas-Peucker simplifier (issue
+    /// #164) before passing them to Mapsui's vector style renderer.
+    /// Each <c>(feature, zoom-bucket)</c> pair is cached, so steady
+    /// pans/zooms re-use the simplified geometry. Polygons and short
+    /// lines pass through unchanged. Defaults to false (full
+    /// geometry — preserves the historical pixel-perfect output).
+    /// </summary>
+    public bool? EnableGeometrySimplification { get; set; }
 
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
@@ -302,6 +347,9 @@ internal sealed class ViewerSettings
 
     public void Save()
     {
+        if (IsReadOnly)
+            return;
+
         var dir = Path.GetDirectoryName(SettingsFilePath);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);

@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
@@ -70,6 +71,8 @@ public sealed class DatasetPipelineFactory
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly Interoperability.IInteroperabilityAuthorityProvider _authorityProvider;
+    private readonly IPatternClipCache? _sharedPatternClipCache;
+    private readonly IPortrayalInstructionCache? _sharedInstructionCache;
 
     /// <summary>
     /// Creates a new factory. The supplied
@@ -81,12 +84,35 @@ public sealed class DatasetPipelineFactory
     /// cross-dataset paint-order authority through the host's DI
     /// container rather than a static singleton.
     /// </summary>
+    /// <param name="catalogueManager">Portrayal catalogue manager shared by every processor.</param>
+    /// <param name="luaEngine">Lua engine for Part 9A portrayal.</param>
+    /// <param name="crsTransformFactory">CRS transform factory for coverage products.</param>
+    /// <param name="featureCatalogueManager">Feature catalogue manager (shared FC parse cache).</param>
+    /// <param name="authorityProvider">Cross-dataset paint-order authority provider.</param>
+    /// <param name="sharedPatternClipCache">
+    /// Optional process-wide pattern-clip cache (e.g. a
+    /// <see cref="DiskPatternClipCache"/>) shared by every S-101 processor this
+    /// factory produces, so the cold first open of a previously-seen cell skips
+    /// the multi-second NetTopologySuite clip. When <see langword="null"/> each
+    /// S-101 processor falls back to its own in-memory single-slot cache — the
+    /// behaviour used by tools and tests.
+    /// </param>
+    /// <param name="sharedInstructionCache">
+    /// Optional process-wide portrayal-instruction cache (e.g. a
+    /// <see cref="DiskPortrayalInstructionCache"/>) shared by every S-101
+    /// processor this factory produces, so a fresh open of a previously-
+    /// portrayed cell skips the multi-second MoonSharp Part 9A Lua run. When
+    /// <see langword="null"/> each S-101 processor falls back to a bounded
+    /// per-processor in-memory cache — the behaviour used by tools and tests.
+    /// </param>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
         FeatureCatalogueManager featureCatalogueManager,
-        Interoperability.IInteroperabilityAuthorityProvider authorityProvider)
+        Interoperability.IInteroperabilityAuthorityProvider authorityProvider,
+        IPatternClipCache? sharedPatternClipCache = null,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
@@ -99,6 +125,8 @@ public sealed class DatasetPipelineFactory
         _crsTransformFactory = crsTransformFactory;
         _featureCatalogueManager = featureCatalogueManager;
         _authorityProvider = authorityProvider;
+        _sharedPatternClipCache = sharedPatternClipCache;
+        _sharedInstructionCache = sharedInstructionCache;
     }
 
     /// <summary>
@@ -394,7 +422,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
+            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
@@ -415,7 +443,13 @@ public sealed class DatasetPipelineFactory
     /// <summary>
     /// Convenience method: creates a processor and renders with default context.
     /// </summary>
-    public DatasetResult Process(string path) => CreateProcessor(path).Render();
+    /// <remarks>
+    /// This synchronous facade blocks on the async render path; it is intended
+    /// for batch / CLI callers that have no synchronization context. UI callers
+    /// should await <see cref="IDatasetProcessor.RenderAsync"/> directly.
+    /// </remarks>
+    public DatasetResult Process(string path) =>
+        CreateProcessor(path).RenderAsync().GetAwaiter().GetResult();
 
     /// <summary>
     /// Creates a processor for a dataset stored inside <paramref name="source"/>
@@ -447,7 +481,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
+            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),

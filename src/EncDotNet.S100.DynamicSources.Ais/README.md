@@ -45,4 +45,7 @@ The source advertises `RendererKey = "vessel.ais"`. Register a matching
 
 - `docs/design/ais-source.md` — full design notes.
 - `docs/design/dynamic-feature-source.md` — base abstractions.
+- `docs/design/ais-zoom-gated-subscription.md` — viewer-side gate
+  that defers the first subscription until the visible viewport
+  has shrunk below a configurable span.
 - `EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo` — production driver.

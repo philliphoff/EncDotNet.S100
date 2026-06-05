@@ -197,7 +197,7 @@ public sealed class TelemetrySmokeTests
 
         public IReadOnlyList<string> FeatureTypesPresent { get; }
 
-        public XmlReader GetFeatureXml() =>
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default) =>
             XmlReader.Create(new System.IO.StringReader(_featureXml));
     }
 
@@ -230,7 +230,9 @@ public sealed class TelemetrySmokeTests
         public XslCompiledTransform GetCompiledRule(string ruleName) =>
             _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
 
-        public Script GetLuaScript(string scriptName) => throw new NotImplementedException();
+        public string? GetLuaSource(string fileName) => null;
+
+        public IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
         public SvgSymbol GetSymbol(string symbolName) =>
             new() { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" };

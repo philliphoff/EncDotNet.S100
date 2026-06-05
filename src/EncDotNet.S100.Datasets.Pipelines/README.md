@@ -66,6 +66,56 @@ The contract is uniform across coverage and vector products:
   `GroupPath`, attribute name, and spec reference. Vector processors
   reserve `Sxxx-PROJ-PARSE` for the same purpose.
 
+### Render caching (S-101)
+
+`S101DatasetProcessor` caches the Part 9A Lua drawing-instruction list
+between renders. That list is a pure function of the
+`MarinerSettings` and the effective ECDIS display state (display
+category plus hidden S-101 viewing groups / display planes) — it does
+**not** depend on the palette or the symbol / text scale, which are
+applied later by the Mapsui renderer. So a Day/Dusk/Night palette
+switch (the dominant re-render trigger) reuses the cached instructions
+and skips the multi-second Lua pipeline. The cache key is built by the
+internal `BuildPortrayalCacheKey`; `PortrayalCacheHits` /
+`PortrayalCacheMisses` counters (internal, exposed via
+`InternalsVisibleTo`) let tests assert the hit/miss behaviour.
+
+Because the cache key must be a faithful summary of everything that
+feeds the pipeline, `EcdisDisplayExtensions.ApplyTo` clears any prior
+viewing-group user overrides before applying the current hidden set, so
+the catalogue's effective visibility is a pure function of the settings
+value rather than of call history. `RenderAsync` is serialized by a
+`SemaphoreSlim` gate: the processor holds one long-lived catalogue
+whose palette / viewing-group / display-plane state is mutated per
+render and read throughout, and the viewer fires re-renders
+re-entrantly.
+
+That single-slot cache only helps re-renders of an *already-open*
+processor. A **cross-load** cache (`IPortrayalInstructionCache`, from
+`EncDotNet.S100.Core`'s `Pipelines.Vector.Caching`) closes the gap so a
+*fresh* processor re-opening a previously-portrayed cell — even after a
+restart, when the host injects a `DiskPortrayalInstructionCache` — skips
+the multi-second Lua run entirely. On a single-slot miss the pipeline
+run is wrapped in `GetOrCompute(key, factory)`, keyed by
+`"{portrayalContentHash}|{BuildPortrayalCacheKey(...)}"`. The
+`GetPortrayalContentHash()` prefix (memoized) is a SHA-256 over the
+dataset content, the **resolved** feature- and portrayal-catalogue
+content (FC bytes via `FeatureCatalogueManager.GetContentHash`, the PC
+version, its context parameters and structural rule / viewing-group /
+display-mode / display-plane metadata, and the SHA-256 of every declared
+rule file's Lua source), and the module version ids of the pipeline /
+executor / Lua-engine assemblies — so any change to the dataset, an FC /
+PC override, the bundled rules, or the engine yields a miss and a
+recompute (it hashes *actual content*, never declared version strings
+alone). The same hash also strengthens the pattern-clip cache key.
+`SharedInstructionCacheHits` (internal) lets tests assert cross-load
+reuse. When no shared cache is injected the processor falls back to a
+bounded in-memory instruction cache, so tools and tests exercise the
+same path. This assumes S-101 portrayal is Lua-only (true for the
+bundled catalogue), which keeps the instruction list independent of
+palette and scale; an XSLT S-101 catalogue would require adding the
+palette to the key (bump the processor's `PortrayalContentFormatVersion`).
+
 ### `S57DatasetProcessor` — pre-translation + delegation
 
 `S57DatasetProcessor` is the only processor that produces a composite

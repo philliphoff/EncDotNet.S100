@@ -2,6 +2,7 @@ using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -28,7 +29,8 @@ internal static class AisOverlayServiceCollectionExtensions
         {
             var settings = sp.GetRequiredService<ViewerSettings>();
             var loggerFactory = sp.GetService<ILoggerFactory>();
-            return BuildSource(settings.AisOverlay, loggerFactory);
+            var notifier = sp.GetService<IMapViewportNotifier>();
+            return BuildSource(settings.AisOverlay, loggerFactory, notifier);
         });
 
         return services;
@@ -36,13 +38,17 @@ internal static class AisOverlayServiceCollectionExtensions
 
     /// <summary>
     /// Internal factory exposed for tests: builds either a real
-    /// <c>AisDynamicFeatureSource</c> or the
+    /// <c>AisDynamicFeatureSource</c>, a
+    /// <see cref="DeferredAisFeatureSource"/> wrapping one (when
+    /// <see cref="AisOverlaySettings.ActivationViewportSpanDegrees"/>
+    /// is non-null and a viewport notifier is available), or the
     /// <see cref="DisabledAisFeatureSource"/> sentinel based on
     /// <paramref name="overlaySettings"/> and the environment.
     /// </summary>
     internal static IDynamicFeatureSource BuildSource(
         AisOverlaySettings? overlaySettings,
-        ILoggerFactory? loggerFactory)
+        ILoggerFactory? loggerFactory,
+        IMapViewportNotifier? viewportNotifier = null)
     {
         if (overlaySettings is null || !overlaySettings.Enabled)
             return new DisabledAisFeatureSource();
@@ -56,19 +62,33 @@ internal static class AisOverlayServiceCollectionExtensions
         if (string.IsNullOrWhiteSpace(apiKey))
             return new DisabledAisFeatureSource();
 
-        var driver = new AisStreamIoMessageSource(
-            new AisStreamIoOptions { ApiKey = apiKey },
-            loggerFactory);
+        var seedBox = ToBoundingBox(overlaySettings.InitialArea);
 
-        var request = new AisSubscriptionRequest
-        {
-            Area = ToBoundingBox(overlaySettings.InitialArea),
-        };
-
-        return new AisDynamicFeatureSource(
+        AisDynamicFeatureSource BuildReal(BoundingBox? area) => new(
             id: "ais",
-            messageSource: driver,
-            request: request);
+            messageSource: new AisStreamIoMessageSource(
+                new AisStreamIoOptions { ApiKey = apiKey },
+                loggerFactory),
+            request: new AisSubscriptionRequest { Area = area });
+
+        // Zoom-gated activation: when the user has configured a span
+        // threshold AND we have a viewport notifier wired, defer
+        // construction of the real source until the visible viewport
+        // shrinks below the threshold. See
+        // docs/design/ais-zoom-gated-subscription.md.
+        if (overlaySettings.ActivationViewportSpanDegrees is { } spanDegrees
+            && spanDegrees > 0
+            && viewportNotifier is not null)
+        {
+            return new DeferredAisFeatureSource(
+                id: "ais",
+                activationSpanDegrees: spanDegrees,
+                factory: bbox => BuildReal(bbox),
+                notifier: viewportNotifier,
+                logger: loggerFactory?.CreateLogger<DeferredAisFeatureSource>());
+        }
+
+        return BuildReal(seedBox);
     }
 
     private static BoundingBox? ToBoundingBox(AisOverlayBoundingBox? box)

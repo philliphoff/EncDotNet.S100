@@ -59,6 +59,13 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly S104DatasetData _data;
     private readonly string _fileName;
+
+    /// <summary>
+    /// Long-lived coverage renderer reused across renders so its palette-/
+    /// value-independent projection layout cache survives palette switches
+    /// and time-step changes.
+    /// </summary>
+    private MapsuiCoverageRenderer? _colorRenderer;
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -129,16 +136,18 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
         }
     }
 
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (_stationSeries is not null)
         {
             return RenderStationSeries(_stationSeries, context);
         }
-        return RenderGridded(context);
+        return await RenderGriddedAsync(context, cancellationToken).ConfigureAwait(false);
     }
 
-    private DatasetResult RenderGridded(RenderContext? context)
+    private async Task<DatasetResult> RenderGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var source = _source!;
         var catalogue = _catalogue!;
@@ -170,11 +179,11 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
         };
 
         var pipeline = new PortrayalPipeline();
-        var layer = pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default)
-            .GetAwaiter().GetResult();
+        var layer = await pipeline.ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
-        var colorRenderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+        var colorRenderer = _colorRenderer ??= new MapsuiCoverageRenderer(_crsTransformFactory)
         {
             LayerName = $"S-104: {_fileName}",
         };

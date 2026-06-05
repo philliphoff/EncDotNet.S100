@@ -19,5 +19,11 @@ public interface IFeatureXmlSource
     /// Returns an <see cref="XmlReader"/> positioned at the start of the
     /// S-100 FeatureXML document. The caller owns the reader and will dispose it.
     /// </summary>
-    XmlReader GetFeatureXml();
+    /// <param name="cancellationToken">
+    /// Signals that the render has been cancelled. Implementations project
+    /// FeatureXML from already-in-memory dataset state, so the work is
+    /// CPU-bound rather than I/O-bound; the token lets a long projection be
+    /// abandoned cooperatively (the method remains synchronous).
+    /// </param>
+    XmlReader GetFeatureXml(CancellationToken cancellationToken = default);
 }

@@ -104,8 +104,10 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
     }
 
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var mariner = MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")
@@ -122,8 +124,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
         var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
         var featureSource = new S101FeatureXmlSource(_translatedDataset);
         var pipeline = new PortrayalPipeline(executor);
-        var portrayalLayer = pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner)
-            .GetAwaiter().GetResult();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
         Console.WriteLine($"[S57] Pipeline produced {prepared.Count} drawing instructions");
 

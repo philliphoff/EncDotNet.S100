@@ -115,8 +115,10 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
         // fields can be cleaned up here without further plumbing.
     }
 
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
         var metadata = _source.Metadata;
 
@@ -132,8 +134,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
         };
 
         var pipeline = _pipeline;
-        var layer = pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default)
-            .GetAwaiter().GetResult();
+        var layer = await pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
         var renderer = _renderer;

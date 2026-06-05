@@ -45,6 +45,10 @@ internal static class ViewerObservability
     }
 
     public static IServiceCollection AddS100Observability(this IServiceCollection services)
+        => services.AddS100Observability(logFilePath: null, verbose: false);
+
+    public static IServiceCollection AddS100Observability(
+        this IServiceCollection services, string? logFilePath, bool verbose)
     {
         var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? ServiceName;
         var serviceVersion = typeof(ViewerObservability).Assembly
@@ -60,6 +64,22 @@ internal static class ViewerObservability
 
         services.AddLogging(builder =>
         {
+            // --verbose drops the floor to Debug so agent runs capture
+            // the full picture; otherwise leave the default (Information).
+            if (verbose)
+            {
+                builder.SetMinimumLevel(LogLevel.Debug);
+            }
+
+            // --log-file appends structured viewer logs to a file in
+            // addition to the standard diagnostics output, so an agent
+            // can collect logs from a known location per run.
+            if (!string.IsNullOrWhiteSpace(logFilePath))
+            {
+                builder.AddProvider(new FileLoggerProvider(
+                    logFilePath!, verbose ? LogLevel.Debug : LogLevel.Information));
+            }
+
             builder.AddOpenTelemetry(options =>
             {
                 options.SetResourceBuilder(

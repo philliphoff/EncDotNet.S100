@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -131,8 +133,10 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
     protected string FileName => _fileName;
 
     /// <inheritdoc/>
-    public DatasetResult Render(RenderContext? context = null)
+    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var preResult = CheckPreRender(context);
         if (preResult is not null) return preResult;
 
@@ -142,7 +146,8 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
 
         var featureSource = CreateFeatureXmlSource();
         var pipeline = new PortrayalPipeline();
-        var portrayalLayer = pipeline.ProcessAsync(featureSource, catalogue).GetAwaiter().GetResult();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
 
         Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
