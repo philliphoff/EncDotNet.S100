@@ -143,6 +143,33 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
 
     private FeatureCatalogue? ParseCatalogue(SpecRef spec)
     {
+        var stream = OpenRawCatalogue(spec);
+        if (stream is null) return null;
+
+        try
+        {
+            using (stream)
+            {
+                return FeatureCatalogueReader.Read(stream);
+            }
+        }
+        catch
+        {
+            // Parse failures must not break dataset loading; pick output
+            // degrades to raw codes and portrayal falls back gracefully.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Opens the raw Feature Catalogue XML stream for <paramref name="spec"/>
+    /// using the same precedence as parsing: the resolver wins, falling back to
+    /// the bundled <see cref="IAssetSource"/> registered via
+    /// <see cref="SetSource(SpecRef, IAssetSource)"/>. Returns <c>null</c> when
+    /// no catalogue is available. The caller owns disposal of the stream.
+    /// </summary>
+    private Stream? OpenRawCatalogue(SpecRef spec)
+    {
         Stream? stream;
         try { stream = _resolver(spec); }
         catch { stream = null; }
@@ -164,19 +191,58 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
             }
         }
 
+        return stream;
+    }
+
+    private readonly ConcurrentDictionary<SpecRef, Lazy<string?>> _contentHashes = new();
+
+    /// <summary>
+    /// Returns a stable lowercase hex SHA-256 hash of the raw Feature Catalogue
+    /// XML bytes for the given spec name, or <c>null</c> when no catalogue is
+    /// available. The hash reflects the <em>actual resolved content</em> —
+    /// including any CLI / settings override the resolver applies — so it is a
+    /// safe cache-invalidation input where a declared catalogue version string
+    /// would miss an override that changes the file without bumping its version.
+    /// The hash is computed at most once per spec and memoized.
+    /// </summary>
+    /// <param name="productSpec">The product specification identifier (e.g. "S-101").</param>
+    /// <returns>The content hash, or <c>null</c> when no catalogue resolves.</returns>
+    public string? GetContentHash(string productSpec)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+        if (!SpecName.TryNormalize(productSpec, out var name)) return null;
+        return GetContentHash(new SpecRef(name, default));
+    }
+
+    /// <summary>
+    /// Returns a stable lowercase hex SHA-256 hash of the raw Feature Catalogue
+    /// XML bytes for <paramref name="spec"/>. See
+    /// <see cref="GetContentHash(string)"/>.
+    /// </summary>
+    public string? GetContentHash(SpecRef spec)
+    {
+        if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
+
+        var lazy = _contentHashes.GetOrAdd(spec, key => new Lazy<string?>(() => ComputeContentHash(key)));
+        return lazy.Value;
+    }
+
+    private string? ComputeContentHash(SpecRef spec)
+    {
+        var stream = OpenRawCatalogue(spec);
         if (stream is null) return null;
 
         try
         {
             using (stream)
             {
-                return FeatureCatalogueReader.Read(stream);
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var hash = sha.ComputeHash(stream);
+                return Convert.ToHexString(hash).ToLowerInvariant();
             }
         }
         catch
         {
-            // Parse failures must not break dataset loading; pick output
-            // degrades to raw codes and portrayal falls back gracefully.
             return null;
         }
     }
@@ -213,6 +279,7 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
         // the next access.
         _catalogues.TryRemove(spec, out _);
         _decoders.TryRemove(spec, out _);
+        _contentHashes.TryRemove(spec, out _);
 
         // Atomically swap the source and dispose any prior entry.
         var previous = _sources.AddOrUpdate(

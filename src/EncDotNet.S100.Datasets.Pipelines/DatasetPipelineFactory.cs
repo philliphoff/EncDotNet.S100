@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
@@ -71,6 +72,7 @@ public sealed class DatasetPipelineFactory
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly Interoperability.IInteroperabilityAuthorityProvider _authorityProvider;
     private readonly IPatternClipCache? _sharedPatternClipCache;
+    private readonly IPortrayalInstructionCache? _sharedInstructionCache;
 
     /// <summary>
     /// Creates a new factory. The supplied
@@ -95,13 +97,22 @@ public sealed class DatasetPipelineFactory
     /// S-101 processor falls back to its own in-memory single-slot cache — the
     /// behaviour used by tools and tests.
     /// </param>
+    /// <param name="sharedInstructionCache">
+    /// Optional process-wide portrayal-instruction cache (e.g. a
+    /// <see cref="DiskPortrayalInstructionCache"/>) shared by every S-101
+    /// processor this factory produces, so a fresh open of a previously-
+    /// portrayed cell skips the multi-second MoonSharp Part 9A Lua run. When
+    /// <see langword="null"/> each S-101 processor falls back to a bounded
+    /// per-processor in-memory cache — the behaviour used by tools and tests.
+    /// </param>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
         FeatureCatalogueManager featureCatalogueManager,
         Interoperability.IInteroperabilityAuthorityProvider authorityProvider,
-        IPatternClipCache? sharedPatternClipCache = null)
+        IPatternClipCache? sharedPatternClipCache = null,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
@@ -115,6 +126,7 @@ public sealed class DatasetPipelineFactory
         _featureCatalogueManager = featureCatalogueManager;
         _authorityProvider = authorityProvider;
         _sharedPatternClipCache = sharedPatternClipCache;
+        _sharedInstructionCache = sharedInstructionCache;
     }
 
     /// <summary>
@@ -410,7 +422,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache),
+            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
@@ -469,7 +481,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache),
+            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),
