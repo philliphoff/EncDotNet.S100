@@ -28,6 +28,17 @@ internal static class Strings
     private static string Get(string name) =>
         ResourceManager.GetString(name, Culture) ?? name;
 
+    /// <summary>
+    /// Returns the curated human-readable product title for a spec code
+    /// (e.g. <c>"S-101"</c> → "Electronic Navigational Chart"), or
+    /// <c>null</c> when the spec is not in the curated map. Lookup keys drop
+    /// the hyphen from the spec code (<c>"S-101"</c> → <c>SpecName_S101</c>).
+    /// </summary>
+    public static string? SpecDisplayName(string spec) =>
+        string.IsNullOrEmpty(spec)
+            ? null
+            : ResourceManager.GetString("SpecName_" + spec.Replace("-", string.Empty), Culture);
+
     // Window
     public static string Window_Title => Get(nameof(Window_Title));
 

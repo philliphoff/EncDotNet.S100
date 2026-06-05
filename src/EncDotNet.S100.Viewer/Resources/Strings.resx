@@ -401,6 +401,52 @@
     <value>(built-in)</value>
   </data>
 
+  <!-- Curated product-specification titles (spec code -> human-readable name).
+       Shared by the Feature- and Portrayal-catalogue panels. Keys drop the
+       hyphen from the spec code (e.g. "S-101" -> SpecName_S101). -->
+  <data name="SpecName_S101" xml:space="preserve">
+    <value>Electronic Navigational Chart</value>
+  </data>
+  <data name="SpecName_S102" xml:space="preserve">
+    <value>Bathymetric Surface</value>
+  </data>
+  <data name="SpecName_S104" xml:space="preserve">
+    <value>Water Level Information for Surface Navigation</value>
+  </data>
+  <data name="SpecName_S111" xml:space="preserve">
+    <value>Surface Currents</value>
+  </data>
+  <data name="SpecName_S122" xml:space="preserve">
+    <value>Marine Protected Areas</value>
+  </data>
+  <data name="SpecName_S124" xml:space="preserve">
+    <value>Navigational Warnings</value>
+  </data>
+  <data name="SpecName_S125" xml:space="preserve">
+    <value>Marine Aids to Navigation</value>
+  </data>
+  <data name="SpecName_S127" xml:space="preserve">
+    <value>Marine Resources and Services</value>
+  </data>
+  <data name="SpecName_S128" xml:space="preserve">
+    <value>Catalogue of Nautical Products</value>
+  </data>
+  <data name="SpecName_S129" xml:space="preserve">
+    <value>Under Keel Clearance Management</value>
+  </data>
+  <data name="SpecName_S131" xml:space="preserve">
+    <value>Marine Harbour Infrastructure</value>
+  </data>
+  <data name="SpecName_S201" xml:space="preserve">
+    <value>Aids to Navigation Information</value>
+  </data>
+  <data name="SpecName_S411" xml:space="preserve">
+    <value>Sea Ice Information</value>
+  </data>
+  <data name="SpecName_S421" xml:space="preserve">
+    <value>Route Plan</value>
+  </data>
+
   <!-- Catalog (S-128) panel -->
   <data name="Catalog_EmptyMessage" xml:space="preserve">
     <value>No catalogues found.
