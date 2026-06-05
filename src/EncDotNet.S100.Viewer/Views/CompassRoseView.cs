@@ -276,6 +276,18 @@ internal sealed class CompassRoseView : Control
                 North: north);
         }
 
+        // S100Dusk: warm-dim cream background with dim amber ticks /
+        // cardinal letter so the compass blends into the warm-tinted
+        // chrome rather than reading as a stark white patch.
+        if (actual is { } vd && Equals(vd.Key, ChromeThemes.S100Dusk.Key))
+        {
+            return new Palette(
+                Background: new SolidColorBrush(Color.FromArgb(140, 245, 237, 224)),
+                Tick: new SolidColorBrush(Color.FromArgb(190, 130, 96, 50)),
+                Foreground: new SolidColorBrush(Color.FromArgb(230, 90, 64, 30)),
+                North: north);
+        }
+
         var isDark = actual != ThemeVariant.Light && actual != ThemeVariant.Default;
         if (isDark)
         {

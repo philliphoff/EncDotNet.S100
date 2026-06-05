@@ -27,4 +27,13 @@ public enum ChromeTheme
     /// for any resource key it does not explicitly override.
     /// </summary>
     S100Night,
+
+    /// <summary>
+    /// S-100-tuned warm-dim chrome with amber-friendly accents,
+    /// intended for twilight / dusk bridge operation. Inherits from
+    /// Light for any resource key it does not explicitly override
+    /// (dusk is treated as a warm-dim *light* palette in chrome,
+    /// distinct from the map palette also called Dusk).
+    /// </summary>
+    S100Dusk,
 }

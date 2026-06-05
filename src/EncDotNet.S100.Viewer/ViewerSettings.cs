@@ -42,8 +42,8 @@ internal sealed class ViewerSettings
 
     /// <summary>
     /// Persisted chrome theme name — one of "Light", "Dark",
-    /// "S100Night". Independent of <see cref="ColorProfile"/> (which
-    /// drives map portrayal colours). Default "Light" so first-launch
+    /// "S100Night", "S100Dusk". Independent of <see cref="ColorProfile"/>
+    /// (which drives map portrayal colours). Default "Light" so first-launch
     /// users get a familiar Avalonia chrome.
     /// </summary>
     public string ChromeTheme { get; set; } = "Light";

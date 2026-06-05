@@ -72,7 +72,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     public event Action<PaletteType>? PaletteChanged;
 
     public static ChromeTheme[] AvailableChromeThemes { get; } =
-        [ChromeTheme.Light, ChromeTheme.Dark, ChromeTheme.S100Night];
+        [ChromeTheme.Light, ChromeTheme.Dark, ChromeTheme.S100Night, ChromeTheme.S100Dusk];
 
     private ChromeTheme _selectedChromeTheme;
 

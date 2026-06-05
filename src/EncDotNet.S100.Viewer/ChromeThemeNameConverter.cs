@@ -21,6 +21,7 @@ internal sealed class ChromeThemeNameConverter : IValueConverter
                 ChromeTheme.Light => Strings.ChromeTheme_Light,
                 ChromeTheme.Dark => Strings.ChromeTheme_Dark,
                 ChromeTheme.S100Night => Strings.ChromeTheme_S100Night,
+                ChromeTheme.S100Dusk => Strings.ChromeTheme_S100Dusk,
                 _ => theme.ToString(),
             }
             : value?.ToString();
