@@ -11,6 +11,17 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - **`MapsuiDisplayListRenderer`** — product-agnostic vector renderer that consumes a list of `DrawingInstruction`s plus an `IFeatureGeometryProvider` and produces a `MemoryLayer` of styled point/line/area/text features. Used by every S-100 vector product (S-101, S-124, S-129, S-421); no per-spec subclass is required.
 - **`ProjNetCrsTransformFactory`** — `ICrsTransformFactory` implementation using [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) for coordinate transformations between UTM, WGS84, and Web Mercator.
 
+`MapsuiDisplayListRenderer` lowers the display list through the **shared,
+backend-agnostic vector rendering core** in
+`EncDotNet.S100.Renderers.Skia.Scene` (`VectorSceneBuilder` → `VectorScene` of
+`PaintOp`s). All S-100 Part 9 portrayal-correctness logic — draw ordering,
+colour/symbol/line-style resolution, mm→px conversion, text-anchor selection,
+and the `lat/lon → EPSG:3857` projection half — lives in that core and is shared
+with the headless `SkiaDisplayListRenderer`; this renderer only constructs
+Mapsui `IFeature`/style objects from the resolved IR. Pattern fills are the one
+exception: they are not yet part of the IR and keep their dedicated pattern
+collection / priority-clip / insert phase here.
+
 `MapsuiDisplayListRenderer` honours the relevant S-100 Part 9 conventions:
 
 - Pen widths and text/symbol offsets specified in millimetres on the nominal display surface are converted to screen pixels using the standard `1 px = 0.32 mm` ratio (S-100 Part 9 §3.10.4).
