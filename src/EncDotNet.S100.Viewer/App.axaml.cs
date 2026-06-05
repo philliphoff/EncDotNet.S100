@@ -187,13 +187,28 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
                 new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
+        {
+            // One process-wide disk cache shared by every S-101 processor so the
+            // cold first open of a previously-seen cell skips the multi-second
+            // NetTopologySuite pattern-fill clip, even across restarts. The clip
+            // geometry is palette-independent and the cache key is content-hash +
+            // FormatVersion stamped, so persisted entries auto-invalidate.
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "EncDotNet.S100",
+                "PatternClipCache");
+            const long maxBytes = 256L * 1024 * 1024;
+            return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
+        });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
                 new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
                 new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>()));
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
+                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();

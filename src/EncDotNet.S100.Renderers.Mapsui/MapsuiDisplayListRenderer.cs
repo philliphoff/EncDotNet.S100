@@ -1214,7 +1214,7 @@ public sealed class MapsuiDisplayListRenderer
     /// ground metres) away from the equator. The clipped boundary only bounds a
     /// tiled raster pattern fill, so this generalization is not visually significant.
     /// </summary>
-    private const double PatternClipSimplifyToleranceMetres = 1.0;
+    public const double PatternClipSimplifyToleranceMetres = 1.0;
 
     /// <summary>
     /// Minimum vertex count at which <see cref="SimplifyForClip"/> generalizes a
@@ -1228,7 +1228,7 @@ public sealed class MapsuiDisplayListRenderer
     /// leaves the common case (small/moderate areas) byte-identical to no
     /// generalization at all.
     /// </summary>
-    private const int MinPointsToSimplifyForClip = 2000;
+    public const int MinPointsToSimplifyForClip = 2000;
 
     /// <summary>
     /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving
