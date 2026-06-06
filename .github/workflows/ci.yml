@@ -146,6 +146,20 @@ jobs:
           --runtime ${{ matrix.rid }}
           ${{ matrix.rid == 'osx-arm64' && '-p:PublishSingleFile=false' || '' }}
 
+      - name: Publish s100 CLI
+        # Publish the `s100` command-line tool self-contained into a `cli/`
+        # subfolder of the viewer's publish output. This single location flows
+        # into every platform archive and, for macOS, into the .app bundle's
+        # Contents/MacOS/cli/ where the recursive signing loop below signs it.
+        # Must run after "Publish Viewer" because dotnet publish cleans its
+        # own output directory; the cli/ subfolder is unaffected by that.
+        run: >
+          dotnet publish tools/EncDotNet.S100.Cli/EncDotNet.S100.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
+
       - name: Create macOS .app bundle
         if: matrix.rid == 'osx-arm64'
         run: |
@@ -199,6 +213,11 @@ jobs:
             --entitlements "$ENTITLEMENTS" \
             --sign "$APPLE_SIGNING_IDENTITY" \
             "$APP"
+          # Verify the seal recursively. This fails the build before
+          # notarization if any nested Mach-O (e.g. the bundled s100 CLI
+          # or its native dylibs) was left unsigned.
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$APP/Contents/MacOS/cli/s100"
 
       - name: Notarize macOS .app bundle
         if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
