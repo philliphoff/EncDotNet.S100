@@ -259,117 +259,27 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             .ConfigureAwait(false);
         var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
 
-        var palette = catalogue.ActivePalette;
-        var builder = new VectorSceneBuilder
-        {
-            ResolveColor = ColorResolver.Create(palette),
-            SymbolResolver = name =>
+        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
+
+        return HeadlessVectorRenderer.Render(
+            instructions,
+            geometryProvider,
+            catalogue.ActivePalette,
+            symbolProvider: name =>
             {
-                try { return VectorSceneBuilder.ResolveSymbolAsset(catalogue.GetSymbol(name).SvgContent, palette); }
+                try { return catalogue.GetSymbol(name).SvgContent; }
                 catch { return null; }
             },
-            LineStyleProvider = name =>
+            lineStyleProvider: name =>
             {
                 try { return catalogue.GetLineStyle(name); }
                 catch { return null; }
             },
-            SymbolScale = context?.SymbolScale ?? 1.0,
-            TextScale = context?.TextScale ?? 1.0,
-        };
-
-        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
-        var scene = builder.Build(instructions, geometryProvider);
-
-        var viewport = BuildFittedViewport(widthPixels, heightPixels);
-        var renderer = new SkiaDisplayListRenderer
-        {
-            Background = background ?? new RgbaColor(255, 255, 255, 255),
-        };
-        return renderer.Render(scene, viewport);
-    }
-
-    /// <summary>
-    /// Builds a <see cref="Viewport"/> fitted to the dataset's geographic extent,
-    /// padded so its EPSG:3857 aspect ratio matches the requested pixel rectangle
-    /// (so the headless renderer's independent X/Y scaling does not distort).
-    /// </summary>
-    private EncDotNet.S100.Pipelines.Viewport BuildFittedViewport(int widthPixels, int heightPixels)
-    {
-        double minLon = double.MaxValue, minLat = double.MaxValue;
-        double maxLon = double.MinValue, maxLat = double.MinValue;
-        bool any = false;
-
-        void Expand(double lat, double lon)
-        {
-            any = true;
-            if (lat < minLat) minLat = lat;
-            if (lat > maxLat) maxLat = lat;
-            if (lon < minLon) minLon = lon;
-            if (lon > maxLon) maxLon = lon;
-        }
-
-        foreach (var feature in Features)
-        {
-            foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
-            foreach (var curve in feature.Curves)
-                foreach (var (lat, lon) in curve) Expand(lat, lon);
-            foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
-        }
-
-        if (!any)
-        {
-            minLon = -0.001; maxLon = 0.001;
-            minLat = -0.001; maxLat = 0.001;
-        }
-
-        var latPad = Math.Max(MinExtentPadding, (maxLat - minLat) * 0.1);
-        var lonPad = Math.Max(MinExtentPadding, (maxLon - minLon) * 0.1);
-        minLat -= latPad; maxLat += latPad;
-        minLon -= lonPad; maxLon += lonPad;
-
-        // Match the output aspect ratio in projected (EPSG:3857) space, then
-        // convert the expanded corners back to lon/lat for the Viewport.
-        var (x1, y1) = SphericalMercator.FromLonLat(minLon, minLat);
-        var (x2, y2) = SphericalMercator.FromLonLat(maxLon, maxLat);
-        double spanX = x2 - x1, spanY = y2 - y1;
-        double viewAspect = (double)widthPixels / heightPixels;
-
-        if (spanX > 0 && spanY > 0)
-        {
-            double dataAspect = spanX / spanY;
-            if (dataAspect > viewAspect)
-            {
-                double targetSpanY = spanX / viewAspect;
-                double grow = (targetSpanY - spanY) / 2.0;
-                y1 -= grow; y2 += grow;
-            }
-            else
-            {
-                double targetSpanX = spanY * viewAspect;
-                double grow = (targetSpanX - spanX) / 2.0;
-                x1 -= grow; x2 += grow;
-            }
-        }
-
-        var (fitMinLon, fitMinLat) = SphericalMercator.ToLonLat(x1, y1);
-        var (fitMaxLon, fitMaxLat) = SphericalMercator.ToLonLat(x2, y2);
-
-        // Approximate scale denominator for scale-visibility culling: ground
-        // metres per pixel ÷ the S-100 standard 0.00028 m/px screen pitch.
-        double midLatRad = (fitMinLat + fitMaxLat) * 0.5 * Math.PI / 180.0;
-        double groundMetresPerPixel = (x2 - x1) / widthPixels * Math.Cos(midLatRad);
-        double denom = groundMetresPerPixel / ScaleVisibility.DenomToResolutionMetres;
-
-        return new EncDotNet.S100.Pipelines.Viewport
-        {
-            MinLongitude = fitMinLon,
-            MaxLongitude = fitMaxLon,
-            MinLatitude = fitMinLat,
-            MaxLatitude = fitMaxLat,
-            WidthPixels = widthPixels,
-            HeightPixels = heightPixels,
-            ScaleDenominator = denom > 0 ? denom : 1.0,
-        };
+            symbolScale: context?.SymbolScale ?? 1.0,
+            textScale: context?.TextScale ?? 1.0,
+            widthPixels: widthPixels,
+            heightPixels: heightPixels,
+            background: background ?? new RgbaColor(255, 255, 255, 255));
     }
 
     /// <inheritdoc/>

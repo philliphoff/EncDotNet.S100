@@ -1,0 +1,194 @@
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Portrayals;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Renderers.Skia.Scene;
+
+/// <summary>
+/// Source-agnostic entry point for headless vector rendering: lowers any
+/// S-100 Part 9 display list (point/line/solid-area/text) through the shared
+/// <see cref="VectorSceneBuilder"/> and rasterises it with
+/// <see cref="SkiaDisplayListRenderer"/>, auto-fitting the viewport to the
+/// resolved scene's EPSG:3857 extent. Works for any vector product (S-101
+/// ISO 8211, S-12x / S-201 / S-421 GML, …) because it depends only on the
+/// encoding-agnostic <see cref="DrawingInstruction"/> /
+/// <see cref="IFeatureGeometryProvider"/> contract — not on Mapsui.
+/// </summary>
+/// <remarks>
+/// Pattern area-fills are not yet represented in the IR and are therefore
+/// omitted (see <see cref="VectorSceneBuilder"/>). Draw order follows the
+/// shared core's S-100 Part 9 ordering (areas → lines → points → text within a
+/// plane), which is the same ordering each Mapsui layer applies — but a single
+/// headless bitmap does not reproduce the S-101 processor's two-layer
+/// area/non-area split (that split exists only to interleave S-102).
+/// </remarks>
+public static class HeadlessVectorRenderer
+{
+    /// <summary>
+    /// Renders a display list to a standalone bitmap, auto-fitting the viewport
+    /// to the scene extent. Scale-visibility culling is disabled (the fitted
+    /// scale is not a meaningful compilation scale); all resolved ops are drawn.
+    /// </summary>
+    /// <param name="instructions">The Part 9 display list to render.</param>
+    /// <param name="geometryProvider">Resolves feature geometry referenced by the instructions.</param>
+    /// <param name="palette">Active colour palette for token resolution.</param>
+    /// <param name="symbolProvider">Resolves a symbol name to raw SVG content (pre-processing), or null.</param>
+    /// <param name="lineStyleProvider">Resolves a line-style name to its catalogue definition, or null.</param>
+    /// <param name="symbolScale">Global symbol scale factor.</param>
+    /// <param name="textScale">Global text scale factor.</param>
+    /// <param name="widthPixels">Output bitmap width.</param>
+    /// <param name="heightPixels">Output bitmap height.</param>
+    /// <param name="background">Background fill colour.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public static SKBitmap Render(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        ColorPalette palette,
+        Func<string, string?>? symbolProvider,
+        Func<string, LineStyle?>? lineStyleProvider,
+        double symbolScale,
+        double textScale,
+        int widthPixels,
+        int heightPixels,
+        RgbaColor background)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        var builder = new VectorSceneBuilder
+        {
+            ResolveColor = ColorResolver.Create(palette),
+            SymbolResolver = symbolProvider is null
+                ? null
+                : name => VectorSceneBuilder.ResolveSymbolAsset(symbolProvider(name), palette),
+            LineStyleProvider = lineStyleProvider,
+            SymbolScale = symbolScale,
+            TextScale = textScale,
+        };
+
+        var scene = builder.Build(instructions, geometryProvider);
+        var viewport = FitViewport(scene, widthPixels, heightPixels);
+
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = background,
+            HonorScaleVisibility = false,
+        };
+        return renderer.Render(scene, viewport);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="Viewport"/> fitted to a resolved scene's EPSG:3857
+    /// extent, padded so the projected aspect ratio matches the requested pixel
+    /// rectangle (the renderer scales X and Y independently, so matching the
+    /// aspect avoids distortion). The geographic bounds are recovered from the
+    /// projected extent via <see cref="WebMercator.ToLonLat"/>.
+    /// </summary>
+    public static Viewport FitViewport(VectorScene scene, int widthPixels, int heightPixels)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        if (!TryGetWorldBounds(scene, out double minX, out double minY, out double maxX, out double maxY))
+        {
+            // No geometry — fall back to a small extent around the origin.
+            minX = -1000; minY = -1000; maxX = 1000; maxY = 1000;
+        }
+
+        double spanX = maxX - minX;
+        double spanY = maxY - minY;
+
+        // Pad 10% (and guard zero-span degenerate extents).
+        double padX = spanX > 0 ? spanX * 0.1 : 1000;
+        double padY = spanY > 0 ? spanY * 0.1 : 1000;
+        minX -= padX; maxX += padX;
+        minY -= padY; maxY += padY;
+        spanX = maxX - minX;
+        spanY = maxY - minY;
+
+        // Expand the smaller dimension so the extent's aspect matches the output.
+        double viewAspect = (double)widthPixels / heightPixels;
+        double dataAspect = spanX / spanY;
+        if (dataAspect > viewAspect)
+        {
+            double targetSpanY = spanX / viewAspect;
+            double grow = (targetSpanY - spanY) / 2.0;
+            minY -= grow; maxY += grow;
+        }
+        else
+        {
+            double targetSpanX = spanY * viewAspect;
+            double grow = (targetSpanX - spanX) / 2.0;
+            minX -= grow; maxX += grow;
+        }
+
+        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY);
+
+        // Approximate scale denominator (used only if a caller re-enables
+        // culling): mercator metres-per-pixel, corrected to ground metres by
+        // cos(midLat), divided by the S-100 standard 0.00028 m/px screen pitch.
+        double midLatRad = (minLat + maxLat) * 0.5 * Math.PI / 180.0;
+        double groundMetresPerPixel = (maxX - minX) / widthPixels * Math.Cos(midLatRad);
+        double denom = groundMetresPerPixel / ScaleVisibility.DenomToResolutionMetres;
+
+        return new Viewport
+        {
+            MinLongitude = minLon,
+            MaxLongitude = maxLon,
+            MinLatitude = minLat,
+            MaxLatitude = maxLat,
+            WidthPixels = widthPixels,
+            HeightPixels = heightPixels,
+            ScaleDenominator = denom > 0 ? denom : 1.0,
+        };
+    }
+
+    /// <summary>
+    /// Computes the EPSG:3857 bounding box spanning every resolved paint op's
+    /// world geometry. Returns <see langword="false"/> when the scene has no
+    /// geometry to bound.
+    /// </summary>
+    private static bool TryGetWorldBounds(
+        VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
+    {
+        double loX = double.MaxValue, loY = double.MaxValue;
+        double hiX = double.MinValue, hiY = double.MinValue;
+        bool any = false;
+
+        void Expand(double x, double y)
+        {
+            any = true;
+            if (x < loX) loX = x;
+            if (x > hiX) hiX = x;
+            if (y < loY) loY = y;
+            if (y > hiY) hiY = y;
+        }
+
+        foreach (var op in scene.Ops)
+        {
+            switch (op)
+            {
+                case PointPaintOp p:
+                    Expand(p.World.X, p.World.Y);
+                    break;
+                case TextPaintOp t:
+                    Expand(t.World.X, t.World.Y);
+                    break;
+                case LinePaintOp l:
+                    foreach (var (x, y) in l.World) Expand(x, y);
+                    break;
+                case AreaPaintOp a:
+                    foreach (var (x, y) in a.WorldShell) Expand(x, y);
+                    foreach (var hole in a.WorldHoles)
+                        foreach (var (x, y) in hole) Expand(x, y);
+                    break;
+            }
+        }
+
+        minX = loX; minY = loY; maxX = hiX; maxY = hiY;
+        return any;
+    }
+}
