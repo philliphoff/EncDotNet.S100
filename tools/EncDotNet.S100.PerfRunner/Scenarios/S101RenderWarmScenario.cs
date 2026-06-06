@@ -2,12 +2,13 @@ namespace EncDotNet.S100.PerfRunner.Scenarios;
 
 /// <summary>
 /// Warm S-101 render: pipeline + Mapsui display-list render to
-/// in-memory layer (no UI thread). Captures render-stage cost.
+/// in-memory layer (no UI thread). Captures library-side warm cost,
+/// not the live Avalonia + Skia GPU raster path.
 /// </summary>
 internal sealed class S101RenderWarmScenario : IPerfScenario
 {
     public string Name => "s101-render-warm";
-    public string Description => "S-101 warm pipeline + Mapsui display-list render (headless).";
+    public string Description => "S-101 warm pipeline + headless Mapsui layer build (no Avalonia/Skia GPU pass).";
 
     private Datasets.Pipelines.IDatasetProcessor? _processor;
 
