@@ -801,12 +801,6 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_RenderingAtTime" xml:space="preserve">
     <value>Rendering at {0:u}...</value>
   </data>
-  <data name="Status_SwitchingPalette" xml:space="preserve">
-    <value>Switching to {0} palette...</value>
-  </data>
-  <data name="Status_PaletteApplied" xml:space="preserve">
-    <value>{0} palette applied.</value>
-  </data>
   <data name="Status_FeatureNoDetails" xml:space="preserve">
     <value>Feature {0} (no details available)</value>
   </data>
@@ -1045,6 +1039,9 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="Toast_ExchangeSetLoading" xml:space="preserve">
     <value>Loading Exchange Set</value>
+  </data>
+  <data name="Toast_SettingsApplied" xml:space="preserve">
+    <value>Settings applied.</value>
   </data>
 
   <!-- MCP server -->
