@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Pipelines.Coverage;
 /// </summary>
 public class CoveragePipeline
 {
-    public Task<StyledCoverageLayer> ProcessAsync(
+    public async Task<StyledCoverageLayer> ProcessAsync(
         ICoverageSource source,
         ICoveragePortrayalCatalogue catalogue,
         MarinerSettings? mariner = null,
@@ -40,6 +40,18 @@ public class CoveragePipeline
         {
             var settings = mariner ?? MarinerSettings.Default;
             var metadata = source.Metadata;
+
+            // Pre-warm the catalogue so the synchronous Resolve*Scheme
+            // calls below can read entirely from cached state. We only
+            // trigger a switch when the catalogue is still at its empty
+            // Default palette (catalogue uninitialised); when the dataset
+            // processor has already invoked SwitchPaletteAsync the active
+            // palette is already populated and we leave it untouched.
+            if (catalogue.ActivePalette.Colors.Count == 0)
+            {
+                await catalogue.SwitchPaletteAsync(PaletteType.Day, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             // Stage 1 — resolve colour and symbol schemes from catalogue
             CoverageColorScheme? colorScheme;
@@ -76,7 +88,7 @@ public class CoveragePipeline
                 SymbolScheme = symbolScheme,
             };
 
-            return Task.FromResult(layer);
+            return layer;
         }
         catch
         {

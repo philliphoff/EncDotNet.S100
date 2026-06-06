@@ -42,11 +42,15 @@ public static class Specification
     }
 
     /// <summary>
-    /// Tries to open the bundled Feature Catalogue XML for the given product specification.
-    /// Returns null if no bundled catalogue is available.
+    /// Synchronous sibling of <see cref="TryOpenFeatureCatalogueAsync"/>.
     /// </summary>
-    /// <param name="productSpec">The product specification identifier (e.g. "S-101", "S-102", "S-104", "S-111").</param>
-    /// <returns>A stream containing the Feature Catalogue XML, or null if not found.</returns>
+    /// <remarks>
+    /// SYNC BRIDGE: bundled FC streams come from <c>EmbeddedAssetSource</c>,
+    /// which is backed by an in-process resource read and therefore has
+    /// no real async work. This sync facade lets the many sync callers
+    /// (validator constructors, viewer init paths, listed-value indexes)
+    /// open the catalogue without each chasing async-up-the-stack.
+    /// </remarks>
     public static Stream? TryOpenFeatureCatalogue(string productSpec)
     {
         ArgumentException.ThrowIfNullOrEmpty(productSpec);
@@ -55,6 +59,28 @@ public static class Specification
         {
             var source = CreateAssetSource(productSpec, "fc");
             return source.OpenAsync("FeatureCatalogue.xml").GetAwaiter().GetResult();
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Tries to open the bundled Feature Catalogue XML for the given product specification.
+    /// Returns null if no bundled catalogue is available.
+    /// </summary>
+    /// <param name="productSpec">The product specification identifier (e.g. "S-101", "S-102", "S-104", "S-111").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A stream containing the Feature Catalogue XML, or null if not found.</returns>
+    public static async Task<Stream?> TryOpenFeatureCatalogueAsync(string productSpec, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(productSpec);
+
+        try
+        {
+            var source = CreateAssetSource(productSpec, "fc");
+            return await source.OpenAsync("FeatureCatalogue.xml", cancellationToken).ConfigureAwait(false);
         }
         catch (FileNotFoundException)
         {

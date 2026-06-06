@@ -164,6 +164,7 @@ public class S111CoverageSourceTests : IDisposable
         var source = FileSystemAssetSource.Create(portrayalPath);
         using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
         var catalogue = new S111PortrayalCatalogue(provider);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 
         var scheme = catalogue.ResolveSymbolScheme(MarinerSettings.Default);
 

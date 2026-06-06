@@ -196,6 +196,9 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
             () =>
             {
                 var source = FileSystemAssetSource.Create(path);
+                // SYNC BRIDGE: GetProvider is the sync cache-miss path
+                // invoked from many sync init / detection sites. The
+                // underlying provider open is one-shot per spec slot.
                 var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
                 provider.AttachAssetCache(GetOrCreateAssetCache(spec));
                 return provider;

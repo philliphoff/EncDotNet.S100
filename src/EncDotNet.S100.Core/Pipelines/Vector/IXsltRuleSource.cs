@@ -8,15 +8,24 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// one of its loaded rules has <see cref="PortrayalRuleType.Xslt"/>.
 /// </summary>
 /// <remarks>
+/// <para>
+/// The single member is asynchronous because uncached lookups perform I/O
+/// against the underlying <see cref="IAssetSource"/> (the XSLT XML must be
+/// read and compiled). Implementations are expected to memoize compiled
+/// transforms, so subsequent accesses for the same rule complete
+/// synchronously through the <see cref="ValueTask{TResult}"/> fast path.
+/// </para>
+/// <para>
 /// Implementations should throw <see cref="KeyNotFoundException"/> from
-/// <see cref="GetCompiledRule"/> when the named rule is not present in
+/// <see cref="GetCompiledRuleAsync"/> when the named rule is not present in
 /// the loaded catalogue, just as <see cref="IPortrayalAssetSource"/>
 /// methods do for missing symbols, line styles, or area fills. The
 /// "this product never has XSLT" assertion belongs in the rule list,
 /// not in the type system.
+/// </para>
 /// </remarks>
 public interface IXsltRuleSource
 {
     /// <summary>Returns the compiled XSLT transform for the named rule.</summary>
-    XslCompiledTransform GetCompiledRule(string ruleName);
+    ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default);
 }

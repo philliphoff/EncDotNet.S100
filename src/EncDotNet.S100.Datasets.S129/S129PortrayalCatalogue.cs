@@ -14,16 +14,19 @@ public sealed class S129PortrayalCatalogue : GmlPortrayalCatalogueBase
     public S129PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
     public override SpecRef Spec => new("S-129", default);
 
-    protected override XmlResolver CreateXmlResolver() => new S129XmlResolver(Provider);
+    protected override XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
+        new S129XmlResolver(Provider, registeredBytes);
 
     private sealed class S129XmlResolver : AssetSourceXmlResolver
     {
-        public S129XmlResolver(PortrayalCatalogueProvider provider) : base(provider) { }
+        public S129XmlResolver(PortrayalCatalogueProvider provider, IReadOnlyDictionary<string, byte[]> registeredBytes)
+            : base(provider, registeredBytes) { }
 
         protected override object? ResolveUnregistered(Uri absoluteUri, string fileName)
         {
-            // S-129 XSLT rules reference templates in sub-directories.
-            // Try to resolve by extracting path segments.
+            // SYNC BRIDGE: see GmlPortrayalCatalogueBase.FetchRuleFallbackXmlResolver
+            // — XmlResolver.GetEntity is sync .NET API contract during XSLT
+            // compile; the unregistered sub-paths cannot be enumerated upfront.
             var segments = absoluteUri.LocalPath.Replace('\\', '/').Split('/');
             for (int i = 0; i < segments.Length; i++)
             {

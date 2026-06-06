@@ -218,7 +218,7 @@ public sealed class TelemetrySmokeTests
         public SpecRef Spec => new("S-101", default);
         public string Edition => "1.2.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
-        public void SwitchPalette(PaletteType type) { }
+        public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         public IReadOnlyList<PortrayalRule> Rules { get; }
         public ViewingGroupController ViewingGroups { get; }
@@ -227,21 +227,25 @@ public sealed class TelemetrySmokeTests
 
         public DisplayPlaneController DisplayPlanes { get; } = new();
 
-        public XslCompiledTransform GetCompiledRule(string ruleName) =>
-            _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
+        public ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default) =>
+            new(_xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName));
 
-        public string? GetLuaSource(string fileName) => null;
+        public ValueTask<IReadOnlyList<string>> GetLuaSourceNamesAsync(CancellationToken cancellationToken = default) =>
+            new(Array.Empty<string>());
+
+        public ValueTask<string?> GetLuaSourceAsync(string fileName, CancellationToken cancellationToken = default) =>
+            new((string?)null);
 
         public IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Lua.LuaContextParameter> ContextParameters => [];
 
-        public SvgSymbol GetSymbol(string symbolName) =>
-            new() { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" };
+        public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default) =>
+            new(new SvgSymbol { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" });
 
-        public LineStyle GetLineStyle(string name) =>
-            new() { Name = name, Width = 1.0f, Color = "#000000" };
+        public ValueTask<LineStyle> GetLineStyleAsync(string name, CancellationToken cancellationToken = default) =>
+            new(new LineStyle { Name = name, Width = 1.0f, Color = "#000000" });
 
-        public AreaFill GetAreaFill(string name) =>
-            new() { Name = name, Color = "#C8C8C8" };
+        public ValueTask<AreaFill> GetAreaFillAsync(string name, CancellationToken cancellationToken = default) =>
+            new(new AreaFill { Name = name, Color = "#C8C8C8" });
     }
 
     #endregion

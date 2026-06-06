@@ -47,13 +47,18 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
         _source.Dispose();
     }
 
-    private S111PortrayalCatalogue CreateCatalogue() => new(_provider);
+    private S111PortrayalCatalogue CreateCatalogue()
+    {
+        var c = new S111PortrayalCatalogue(_provider);
+        c.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        return c;
+    }
 
     [Fact]
     public void Day_palette_loads_all_nine_speed_band_tokens()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 
         for (int i = 1; i <= 9; i++)
         {
@@ -68,10 +73,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public void Dusk_palette_loads_and_differs_from_Day_for_at_least_one_band()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         var dayColors = ReadBandColors(catalogue);
 
-        catalogue.SwitchPalette(PaletteType.Dusk);
+        catalogue.SwitchPaletteAsync(PaletteType.Dusk).AsTask().GetAwaiter().GetResult();
         var duskColors = ReadBandColors(catalogue);
 
         Assert.Equal(dayColors.Count, duskColors.Count);
@@ -85,10 +90,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public void Night_palette_loads_and_differs_from_Day_for_at_least_one_band()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         var dayColors = ReadBandColors(catalogue);
 
-        catalogue.SwitchPalette(PaletteType.Night);
+        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
         var nightColors = ReadBandColors(catalogue);
 
         Assert.Equal(dayColors.Count, nightColors.Count);
@@ -140,10 +145,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public void SwitchPalette_to_Night_then_ActivePalette_reflects_change()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var dayBand1));
 
-        catalogue.SwitchPalette(PaletteType.Night);
+        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
         Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var nightBand1));
 
         Assert.NotEqual(dayBand1, nightBand1);

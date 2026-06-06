@@ -63,6 +63,16 @@ public interface IPortrayalInstructionCache
         Func<IReadOnlyList<DrawingInstruction>> factory);
 
     /// <summary>
+    /// Async counterpart to <see cref="GetOrCompute"/>. Used by callers that
+    /// drive the portrayal pipeline asynchronously (the standard render path)
+    /// so the factory can <c>await</c> instead of blocking.
+    /// </summary>
+    ValueTask<IReadOnlyList<DrawingInstruction>> GetOrComputeAsync(
+        string key,
+        Func<CancellationToken, ValueTask<IReadOnlyList<DrawingInstruction>>> factory,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Number of <see cref="GetOrCompute"/> calls served from the cache (the
     /// portrayal run was skipped). Exposed for diagnostics and tests.
     /// </summary>

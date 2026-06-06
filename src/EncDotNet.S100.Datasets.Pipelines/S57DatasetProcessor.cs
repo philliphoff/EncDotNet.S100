@@ -136,7 +136,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
 
         var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
-        s101Cat.SwitchPalette(paletteType);
+        await s101Cat.SwitchPaletteAsync(paletteType, cancellationToken).ConfigureAwait(false);
         var palette = s101Cat.ActivePalette;
 
         var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
@@ -147,6 +147,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
         Console.WriteLine($"[S57] Pipeline produced {prepared.Count} drawing instructions");
 
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
+
         var vectorRenderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"S-57: {_fileName}",
@@ -155,21 +157,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = symbolName =>
-            {
-                try { return s101Cat.GetSymbol(symbolName).SvgContent; }
-                catch { return null; }
-            },
-            AreaFillProvider = fillName =>
-            {
-                try { return s101Cat.GetAreaFill(fillName); }
-                catch { return null; }
-            },
-            LineStyleProvider = name =>
-            {
-                try { return s101Cat.GetLineStyle(name); }
-                catch { return null; }
-            },
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
         };
         var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
         var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
@@ -355,7 +345,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
                     "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
 
             var s101Cat = _catalogue;
-            s101Cat.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            await s101Cat.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
             var palette = s101Cat.ActivePalette;
 
             var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
@@ -368,30 +358,20 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
 
             var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
 
+            var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
+
             return HeadlessVectorRenderer.Render(
                 prepared,
                 geometryProvider,
                 palette,
-                symbolProvider: name =>
-                {
-                    try { return s101Cat.GetSymbol(name).SvgContent; }
-                    catch { return null; }
-                },
-                lineStyleProvider: name =>
-                {
-                    try { return s101Cat.GetLineStyle(name); }
-                    catch { return null; }
-                },
+                symbolProvider: name => prewarm.ResolveSymbolSvg(name),
+                lineStyleProvider: name => prewarm.ResolveLineStyle(name),
                 symbolScale: context?.SymbolScale ?? 1.0,
                 textScale: context?.TextScale ?? 1.0,
                 widthPixels: widthPixels,
                 heightPixels: heightPixels,
                 background: background ?? new RgbaColor(255, 255, 255, 255),
-                areaFillProvider: name =>
-                {
-                    try { return s101Cat.GetAreaFill(name); }
-                    catch { return null; }
-                },
+                areaFillProvider: name => prewarm.ResolveAreaFill(name),
                 hiddenCategories: context?.HiddenInstructionCategories
                     ?? DrawingInstructionCategory.None);
         }

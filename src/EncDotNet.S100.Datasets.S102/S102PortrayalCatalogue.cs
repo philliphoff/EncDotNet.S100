@@ -77,9 +77,9 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
-    public void SwitchPalette(PaletteType type)
+    public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
-        EnsurePalettesLoaded();
+        await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
 
         if (_cache.Palettes.TryGetValue(type, out var palette))
         {
@@ -98,7 +98,10 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
     public CoverageColorScheme ResolveColorScheme(MarinerSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        EnsurePalettesLoaded();
+        // Pre-warm contract: the dataset processor is responsible for
+        // calling SwitchPaletteAsync (which awaits EnsurePalettesLoadedAsync
+        // and the bundled Lua source) before invoking ResolveColorScheme.
+        // This method now reads only from the in-memory cache.
 
         var (fourShades, safetyContour, shallowContour, deepContour) = ClampParameters(settings);
 
@@ -133,7 +136,10 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             feature = { Code = 'BathymetryCoverage' }
             """);
 
-        string luaSource = GetLuaSource();
+        string luaSource = _cachedLuaSource
+            ?? throw new InvalidOperationException(
+                "S-102 portrayal catalogue Lua source has not been pre-warmed; " +
+                "call SwitchPaletteAsync before ResolveColorScheme.");
         lua.Execute(luaSource);
 
         // Invoke BathymetryCoverage(feature, featurePortrayal, contextParameters)
@@ -160,8 +166,33 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// (<c>&lt;palette name="Day|Dusk|Night"&gt;</c>) so a single
     /// manifest entry yields all three palettes.
     /// </summary>
-    private void EnsurePalettesLoaded()
+    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
     {
+        // Pre-warm the bundled BathymetryCoverage.lua source alongside
+        // the palettes so the synchronous ResolveColorScheme path can
+        // execute without async I/O. NOTE: pairing palette + Lua warm
+        // here keeps the catalogue's "ready for sync coverage colour
+        // resolution" contract a single async call (SwitchPaletteAsync).
+        if (_cachedLuaSource is null)
+        {
+            var ruleFile = _provider.Catalogue.RuleFiles
+                .FirstOrDefault(r => r.FileName.Contains("BathymetryCoverage", StringComparison.OrdinalIgnoreCase));
+            if (ruleFile is not null)
+            {
+                try
+                {
+                    using var stream = await _provider.FetchAssetAsync(ruleFile, cancellationToken).ConfigureAwait(false);
+                    using var reader = new StreamReader(stream);
+                    _cachedLuaSource = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Leave _cachedLuaSource null — ResolveColorScheme will throw
+                    // a clear InvalidOperationException when invoked.
+                }
+            }
+        }
+
         if (_cache.PalettesLoaded)
         {
             if (ActivePalette.Colors.Count == 0 &&
@@ -175,6 +206,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
 
         foreach (var item in _provider.Catalogue.ColorProfiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var manifestName = item.Description.Name;
             if (string.IsNullOrEmpty(manifestName))
             {
@@ -193,7 +225,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             {
                 try
                 {
-                    using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                    using var stream = await _provider.FetchAssetAsync(item, "ColorProfiles", cancellationToken).ConfigureAwait(false);
                     var palette = ColorProfileReader.Read(stream, manifestName);
                     _cache.Palettes[paletteType.Value] = palette;
                 }
@@ -212,7 +244,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                     if (_cache.Palettes.ContainsKey(type)) continue;
                     try
                     {
-                        using var stream = _provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                        using var stream = await _provider.FetchAssetAsync(item, "ColorProfiles", cancellationToken).ConfigureAwait(false);
                         var palette = ColorProfileReader.Read(stream, name);
                         if (palette.Colors.Count > 0)
                         {
@@ -273,28 +305,9 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
     }
 
     // ── Lua source ─────────────────────────────────────────────────────
-
-    private string GetLuaSource()
-    {
-        if (_cachedLuaSource is not null)
-        {
-            return _cachedLuaSource;
-        }
-
-        var ruleFile = _provider.Catalogue.RuleFiles
-            .FirstOrDefault(r => r.FileName.Contains("BathymetryCoverage", StringComparison.OrdinalIgnoreCase));
-
-        if (ruleFile is null)
-        {
-            throw new InvalidOperationException(
-                "The S-102 portrayal catalogue does not contain a BathymetryCoverage rule file.");
-        }
-
-        using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
-        using var reader = new StreamReader(stream);
-        _cachedLuaSource = reader.ReadToEnd();
-        return _cachedLuaSource;
-    }
+    // Pre-warmed via EnsurePalettesLoadedAsync; ResolveColorScheme
+    // reads _cachedLuaSource directly. The historical synchronous
+    // GetLuaSource() helper has been removed.
 
     // ── Drawing-instruction parser ─────────────────────────────────────
 

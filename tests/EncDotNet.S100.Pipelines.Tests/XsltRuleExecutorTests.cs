@@ -46,7 +46,7 @@ public class XsltRuleExecutorTests
 
         // The mariner argument is ignored by the XSLT engine; pass an explicit
         // non-default value to confirm it has no effect.
-        var instructions = executor.Execute(new MarinerSettings { FourShades = true });
+        var instructions = executor.ExecuteAsync(new MarinerSettings { FourShades = true }).GetAwaiter().GetResult();
 
         var inst = Assert.IsType<PointInstruction>(Assert.Single(instructions));
         Assert.Equal("1", inst.FeatureReference);
@@ -73,7 +73,7 @@ public class XsltRuleExecutorTests
             xsltRules: new() { ["BuoyRule"] = xslt });
 
         var executor = new XsltRuleExecutor(source, catalogue);
-        executor.Execute(MarinerSettings.Default);
+        executor.ExecuteAsync(MarinerSettings.Default).GetAwaiter().GetResult();
 
         Assert.Equal(2, executor.LastFeatureTypeCount);
 
@@ -93,7 +93,7 @@ public class XsltRuleExecutorTests
         cts.Cancel();
 
         Assert.ThrowsAny<OperationCanceledException>(
-            () => executor.Execute(MarinerSettings.Default, cts.Token));
+            () => executor.ExecuteAsync(MarinerSettings.Default, cts.Token).GetAwaiter().GetResult());
     }
 
     private static XslCompiledTransform CompileXslt(string xslt)
@@ -121,26 +121,29 @@ public class XsltRuleExecutorTests
         public SpecRef Spec => new("S-101", default);
         public string Edition => "1.2.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
-        public void SwitchPalette(PaletteType type) { }
+        public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         public IReadOnlyList<PortrayalRule> Rules { get; } = rules;
         public ViewingGroupController ViewingGroups { get; } = new();
         public DisplayModeController DisplayModes { get; } = new();
         public DisplayPlaneController DisplayPlanes { get; } = new();
 
-        public XslCompiledTransform GetCompiledRule(string ruleName) =>
-            _xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName);
+        public ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default) =>
+            new(_xsltRules.TryGetValue(ruleName, out var t) ? t : throw new KeyNotFoundException(ruleName));
 
-        public string? GetLuaSource(string fileName) => null;
+        public ValueTask<IReadOnlyList<string>> GetLuaSourceNamesAsync(CancellationToken cancellationToken = default) =>
+            new(Array.Empty<string>());
+        public ValueTask<string?> GetLuaSourceAsync(string fileName, CancellationToken cancellationToken = default) =>
+            new((string?)null);
         public IReadOnlyList<LuaContextParameter> ContextParameters => [];
 
-        public SvgSymbol GetSymbol(string symbolName) =>
-            new() { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" };
+        public ValueTask<SvgSymbol> GetSymbolAsync(string symbolName, CancellationToken cancellationToken = default) =>
+            new(new SvgSymbol { Name = symbolName, SvgContent = $"<svg id=\"{symbolName}\"/>" });
 
-        public LineStyle GetLineStyle(string name) =>
-            new() { Name = name, Width = 1.0f, Color = "#000000" };
+        public ValueTask<LineStyle> GetLineStyleAsync(string name, CancellationToken cancellationToken = default) =>
+            new(new LineStyle { Name = name, Width = 1.0f, Color = "#000000" });
 
-        public AreaFill GetAreaFill(string name) =>
-            new() { Name = name, Color = "#C8C8C8" };
+        public ValueTask<AreaFill> GetAreaFillAsync(string name, CancellationToken cancellationToken = default) =>
+            new(new AreaFill { Name = name, Color = "#C8C8C8" });
     }
 }

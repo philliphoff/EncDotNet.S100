@@ -128,7 +128,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
 
         // Set up palette
         var paletteType = context?.Palette ?? PaletteType.Day;
-        _catalogue.SwitchPalette(paletteType);
+        await _catalogue.SwitchPaletteAsync(paletteType, cancellationToken).ConfigureAwait(false);
         context?.EcdisDisplay?.ApplyTo(_catalogue);
         var palette = _catalogue.ActivePalette;
 
@@ -144,6 +144,8 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
             .ConfigureAwait(false);
         var prepared = ((IVectorLayer)portrayalLayer).Instructions;
 
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(_catalogue, prepared, cancellationToken).ConfigureAwait(false);
+
         // Render to Mapsui layer
         var vectorRenderer = new MapsuiDisplayListRenderer
         {
@@ -153,21 +155,9 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = symbolName =>
-            {
-                try { return _catalogue.GetSymbol(symbolName).SvgContent; }
-                catch { return null; }
-            },
-            AreaFillProvider = fillName =>
-            {
-                try { return _catalogue.GetAreaFill(fillName); }
-                catch { return null; }
-            },
-            LineStyleProvider = name =>
-            {
-                try { return _catalogue.GetLineStyle(name); }
-                catch { return null; }
-            },
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
         };
 
         var geometryProvider = new GmlFeatureGeometryProvider<S131Feature>(_dataset.Features);

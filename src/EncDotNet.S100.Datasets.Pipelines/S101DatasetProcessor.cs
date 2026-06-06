@@ -436,7 +436,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                     "S-101 feature catalogue is required to render the dataset but none was provided.");
 
             var s101Cat = _catalogue;
-            s101Cat.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            await s101Cat.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
             var palette = s101Cat.ActivePalette;
 
@@ -450,30 +450,20 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
             var geometryProvider = new S101FeatureGeometryProvider(_dataset);
 
+            var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
+
             return HeadlessVectorRenderer.Render(
                 prepared,
                 geometryProvider,
                 palette,
-                symbolProvider: name =>
-                {
-                    try { return s101Cat.GetSymbol(name).SvgContent; }
-                    catch { return null; }
-                },
-                lineStyleProvider: name =>
-                {
-                    try { return s101Cat.GetLineStyle(name); }
-                    catch { return null; }
-                },
+                symbolProvider: name => prewarm.ResolveSymbolSvg(name),
+                lineStyleProvider: name => prewarm.ResolveLineStyle(name),
                 symbolScale: context?.SymbolScale ?? 1.0,
                 textScale: context?.TextScale ?? 1.0,
                 widthPixels: widthPixels,
                 heightPixels: heightPixels,
                 background: background ?? new RgbaColor(255, 255, 255, 255),
-                areaFillProvider: name =>
-                {
-                    try { return s101Cat.GetAreaFill(name); }
-                    catch { return null; }
-                },
+                areaFillProvider: name => prewarm.ResolveAreaFill(name),
                 hiddenCategories: context?.HiddenInstructionCategories
                     ?? DrawingInstructionCategory.None);
         }
@@ -497,7 +487,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         // pipeline runs so XSLT rules (if any) see the active colour profile.
         var s101Cat = _catalogue;
         var paletteType = context?.Palette ?? PaletteType.Day;
-        s101Cat.SwitchPalette(paletteType);
+        await s101Cat.SwitchPaletteAsync(paletteType, cancellationToken).ConfigureAwait(false);
 
         // Normalize null ECDIS display to the canonical unfiltered state
         // and always apply it, so the catalogue's display-mode / viewing-
@@ -531,23 +521,19 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             // portrayal-content hash (dataset + FC/PC content + assemblies) into
             // the per-render cacheKey so it self-invalidates on any change.
             var instructionKey = $"{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{cacheKey}";
-            prepared = _instructionCache.GetOrCompute(instructionKey, () =>
+            prepared = await _instructionCache.GetOrComputeAsync(instructionKey, async ct =>
             {
                 // Drive the unified VectorPipeline with the S-101 Lua rule
                 // executor (Part 9A). XSLT rules in the S-101 catalogue (if
-                // any) are also honoured by the pipeline. Run synchronously
-                // inside the (synchronous) cache factory: the render gate
-                // already serializes this work and no UI sync context is
-                // captured on this path (the pipeline uses ConfigureAwait(false)
-                // throughout).
+                // any) are also honoured by the pipeline.
                 var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
                 var featureSource = new S101FeatureXmlSource(_dataset);
                 var pipeline = new PortrayalPipeline(executor);
-                var portrayalLayer = pipeline
-                    .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-                    .GetAwaiter().GetResult();
+                var portrayalLayer = await pipeline
+                    .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)
+                    .ConfigureAwait(false);
                 return ((IVectorLayer)portrayalLayer).Instructions;
-            });
+            }, cancellationToken).ConfigureAwait(false);
             _cachedPortrayalKey = cacheKey;
             _cachedPortrayalInstructions = prepared;
             PortrayalCacheMisses++;
@@ -576,9 +562,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         // constant within this processor).
         var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{cacheKey}";
 
-        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: patternClipKey)
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
+
+        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: patternClipKey, prewarm: prewarm)
             .Render(areaInstructions, geometryProvider);
-        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines", patternClipCacheKey: null)
+        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines", patternClipCacheKey: null, prewarm: prewarm)
             .Render(otherInstructions, geometryProvider);
 
         // PR-L2 R-101-102-B: tag every Mapsui IFeature with its S-101
@@ -833,7 +821,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         ColorPalette palette,
         RenderContext? context,
         string suffix,
-        string? patternClipCacheKey)
+        string? patternClipCacheKey,
+        CataloguePreWarm.PreWarmResult prewarm)
     {
         return new MapsuiDisplayListRenderer
         {
@@ -847,34 +836,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             PatternClipCacheKey = patternClipCacheKey,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = symbolName =>
-            {
-                try
-                {
-                    var svg = catalogue.GetSymbol(symbolName);
-                    return svg.SvgContent;
-                }
-                catch
-                {
-                    return null;
-                }
-            },
-            AreaFillProvider = fillName =>
-            {
-                try
-                {
-                    return catalogue.GetAreaFill(fillName);
-                }
-                catch
-                {
-                    return null;
-                }
-            },
-            LineStyleProvider = name =>
-            {
-                try { return catalogue.GetLineStyle(name); }
-                catch { return null; }
-            },
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
         };
     }
 

@@ -65,8 +65,8 @@ public class SpecLevelAssetCacheTests
         // Lua source: the most representative asset, also exercises the
         // PR-2 cache that we just lifted.
         var openMainLuaBefore = counting.GetOpenCount("Rules/main.lua");
-        var srcA = catalogueA.GetLuaSource("main.lua");
-        var srcB = catalogueB.GetLuaSource("main.lua");
+        var srcA = catalogueA.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var srcB = catalogueB.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
         Assert.NotNull(srcA);
         Assert.Same(srcA, srcB);
         Assert.Equal(openMainLuaBefore + 1, counting.GetOpenCount("Rules/main.lua"));
@@ -78,8 +78,8 @@ public class SpecLevelAssetCacheTests
         {
             var xsltAssetPath = $"Rules/{xsltRule.FileName}";
             var openXsltBefore = counting.GetOpenCount(xsltAssetPath);
-            var transformA = catalogueA.GetCompiledRule(xsltRule.Id);
-            var transformB = catalogueB.GetCompiledRule(xsltRule.Id);
+            var transformA = catalogueA.GetCompiledRuleAsync(xsltRule.Id).AsTask().GetAwaiter().GetResult();
+            var transformB = catalogueB.GetCompiledRuleAsync(xsltRule.Id).AsTask().GetAwaiter().GetResult();
             Assert.Same(transformA, transformB);
             Assert.Equal(openXsltBefore + 1, counting.GetOpenCount(xsltAssetPath));
         }
@@ -90,8 +90,8 @@ public class SpecLevelAssetCacheTests
         {
             var assetPath = $"Symbols/{symbol.FileName}";
             var openBefore = counting.GetOpenCount(assetPath);
-            var svgA = catalogueA.GetSymbol(symbol.Id);
-            var svgB = catalogueB.GetSymbol(symbol.Id);
+            var svgA = catalogueA.GetSymbolAsync(symbol.Id).AsTask().GetAwaiter().GetResult();
+            var svgB = catalogueB.GetSymbolAsync(symbol.Id).AsTask().GetAwaiter().GetResult();
             Assert.Same(svgA, svgB);
             Assert.Equal(openBefore + 1, counting.GetOpenCount(assetPath));
         }
@@ -102,8 +102,8 @@ public class SpecLevelAssetCacheTests
         {
             var assetPath = $"LineStyles/{lineStyle.FileName}";
             var openBefore = counting.GetOpenCount(assetPath);
-            var lsA = catalogueA.GetLineStyle(lineStyle.Id);
-            var lsB = catalogueB.GetLineStyle(lineStyle.Id);
+            var lsA = catalogueA.GetLineStyleAsync(lineStyle.Id).AsTask().GetAwaiter().GetResult();
+            var lsB = catalogueB.GetLineStyleAsync(lineStyle.Id).AsTask().GetAwaiter().GetResult();
             Assert.Same(lsA, lsB);
             Assert.Equal(openBefore + 1, counting.GetOpenCount(assetPath));
         }
@@ -114,8 +114,8 @@ public class SpecLevelAssetCacheTests
         {
             var assetPath = $"AreaFills/{areaFill.FileName}";
             var openBefore = counting.GetOpenCount(assetPath);
-            var afA = catalogueA.GetAreaFill(areaFill.Id);
-            var afB = catalogueB.GetAreaFill(areaFill.Id);
+            var afA = catalogueA.GetAreaFillAsync(areaFill.Id).AsTask().GetAwaiter().GetResult();
+            var afB = catalogueB.GetAreaFillAsync(areaFill.Id).AsTask().GetAwaiter().GetResult();
             Assert.Same(afA, afB);
             Assert.Equal(openBefore + 1, counting.GetOpenCount(assetPath));
         }
@@ -136,9 +136,9 @@ public class SpecLevelAssetCacheTests
         const string missing = "definitely-not-a-real-rule.lua";
         var openCountBefore = counting.GetOpenCount($"Rules/{missing}");
 
-        Assert.Null(catalogueA.GetLuaSource(missing));
-        Assert.Null(catalogueB.GetLuaSource(missing));
-        Assert.Null(catalogueA.GetLuaSource(missing));
+        Assert.Null(catalogueA.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult());
+        Assert.Null(catalogueB.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult());
+        Assert.Null(catalogueA.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult());
 
         var attempts = counting.GetOpenCount($"Rules/{missing}") - openCountBefore;
         // At most one underlying open across both catalogues: PR-2's
@@ -169,8 +169,8 @@ public class SpecLevelAssetCacheTests
         var xsltAssetPath = $"Rules/{xsltRule!.FileName}";
         var openBefore = counting.GetOpenCount(xsltAssetPath);
 
-        var transformA = catalogueA.GetCompiledRule(xsltRule.Id);
-        var transformB = catalogueB.GetCompiledRule(xsltRule.Id);
+        var transformA = catalogueA.GetCompiledRuleAsync(xsltRule.Id).AsTask().GetAwaiter().GetResult();
+        var transformB = catalogueB.GetCompiledRuleAsync(xsltRule.Id).AsTask().GetAwaiter().GetResult();
         Assert.Same(transformA, transformB);
 
         // Exactly one underlying open of the XSLT rule across both
@@ -184,8 +184,8 @@ public class SpecLevelAssetCacheTests
         {
             var assetPath = $"Symbols/{symbol.FileName}";
             var symOpenBefore = counting.GetOpenCount(assetPath);
-            var svgA = catalogueA.GetSymbol(symbol.Id);
-            var svgB = catalogueB.GetSymbol(symbol.Id);
+            var svgA = catalogueA.GetSymbolAsync(symbol.Id).AsTask().GetAwaiter().GetResult();
+            var svgB = catalogueB.GetSymbolAsync(symbol.Id).AsTask().GetAwaiter().GetResult();
             Assert.Same(svgA, svgB);
             Assert.Equal(symOpenBefore + 1, counting.GetOpenCount(assetPath));
         }
@@ -213,8 +213,8 @@ public class SpecLevelAssetCacheTests
         var s101OpenBefore = s101Counting.GetOpenCount("Rules/main.lua");
         var s131OpenBefore = s131Counting.GetOpenCount("Rules/main.lua");
 
-        var s101Src = s101Catalogue.GetLuaSource("main.lua");
-        var s131Src = s131Catalogue.GetLuaSource("main.lua");
+        var s101Src = s101Catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var s131Src = s131Catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
 
         Assert.NotNull(s101Src);
         Assert.NotNull(s131Src);

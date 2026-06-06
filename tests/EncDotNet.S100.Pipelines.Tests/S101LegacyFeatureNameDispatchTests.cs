@@ -107,10 +107,10 @@ public class S101LegacyFeatureNameDispatchTests
         var pcProvider = PortrayalCatalogueProvider.OpenAsync(pcSource).GetAwaiter().GetResult();
         var luaEngine = new MoonSharpLuaEngine();
         var catalogue = new S101PortrayalCatalogue(pcProvider, luaEngine);
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 
         var executor = new S101LuaRuleExecutor(luaEngine, dataset, catalogue, fc);
-        return executor.ExecuteRaw(MarinerSettings.Default);
+        return executor.ExecuteRawAsync(MarinerSettings.Default).GetAwaiter().GetResult();
     }
 
     /// <summary>

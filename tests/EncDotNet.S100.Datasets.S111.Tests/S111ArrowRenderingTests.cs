@@ -37,7 +37,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
         _source = FileSystemAssetSource.Create(PortrayalPath);
         _provider = PortrayalCatalogueProvider.OpenAsync(_source).GetAwaiter().GetResult();
         _catalogue = new S111PortrayalCatalogue(_provider);
-        _catalogue.SwitchPalette(PaletteType.Day);
+        _catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 
         // Pre-load the bundled arrow SVGs synchronously in the ctor so
         // individual tests avoid xUnit1031 .GetResult() warnings.
@@ -156,11 +156,11 @@ public sealed class S111ArrowRenderingTests : IDisposable
     {
         var renderer = CreateRenderer();
 
-        _catalogue.SwitchPalette(PaletteType.Day);
+        _catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         renderer.Palette = _catalogue.ActivePalette;
         var daySvg = renderer.GetResolvedSvg("SCAROW01");
 
-        _catalogue.SwitchPalette(PaletteType.Night);
+        _catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
         renderer.Palette = _catalogue.ActivePalette;
         var nightSvg = renderer.GetResolvedSvg("SCAROW01");
 

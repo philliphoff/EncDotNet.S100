@@ -171,7 +171,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
         if (_stationSeries is not null)
         {
-            return RenderStationSeries(_stationSeries, context);
+            return await RenderStationSeriesAsync(_stationSeries, context, cancellationToken).ConfigureAwait(false);
         }
         return await RenderGriddedAsync(context, cancellationToken).ConfigureAwait(false);
     }
@@ -181,7 +181,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         var source = _source!;
         var catalogue = _catalogue!;
         var provider = _provider!;
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         DateTime selectedTime;
         if (context is S111RenderContext { TimeStep: { } timeStep })
@@ -221,21 +221,18 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         // removed because it obscured the base chart.
         var layers = new List<ILayer>();
 
+        // NOTE: pre-warm every catalogue symbol so the synchronous Mapsui
+        // arrow renderer's SymbolProvider lambda reads from a memory dict.
+        // The symbol set is small (one entry per S-111 speed band).
+        var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+
         var arrowRenderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
         {
             LayerName = $"S-111 Arrows: {_fileName}",
             Palette = catalogue.ActivePalette,
             BaseSymbolScale = context?.SymbolScale ?? 1.0,
             SymbolProvider = symbolName =>
-            {
-                var item = provider.Catalogue.Symbols
-                    .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
-                if (item is null) return null;
-
-                using var stream = provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            },
+                symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
         };
         var arrowLayer = arrowRenderer.Render(styledLayer, viewport);
         MRect extent;
@@ -323,7 +320,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         var source = _source;
         var catalogue = _catalogue;
         var provider = _provider;
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         if (context is S111RenderContext { TimeStep: { } timeStep })
             source.SelectTime(timeStep);
@@ -334,20 +331,14 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
             .ConfigureAwait(false);
 
+        var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+
         var arrowRenderer = new SkiaCoverageArrowRenderer
         {
             Palette = catalogue.ActivePalette,
             BaseSymbolScale = context?.SymbolScale ?? 1.0,
             SymbolProvider = symbolName =>
-            {
-                var item = provider.Catalogue.Symbols
-                    .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
-                if (item is null) return null;
-
-                using var stream = provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
-                using var reader = new StreamReader(stream);
-                return reader.ReadToEnd();
-            },
+                symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
         };
 
         var nativeToWgs84 = _crsTransformFactory.Create(
@@ -397,7 +388,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// table; otherwise (DCF 8) a hardcoded palette is used.
     /// Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
     /// </summary>
-    private DatasetResult RenderStationSeries(S111StationSeriesDataset ds, RenderContext? context)
+    private async Task<DatasetResult> RenderStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
     {
         DateTime selectedTime;
         if (context is S111RenderContext { TimeStep: { } timeStep })
@@ -415,13 +406,15 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         CoverageColorScheme? colorScheme = null;
         CoverageSymbolScheme? symbolScheme = null;
         Dictionary<string, string>? svgCache = null;
+        Dictionary<string, string>? prewarmedSvgs = null;
         if (_catalogue is not null && _provider is not null)
         {
-            _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
             var mariner = context?.Mariner ?? MarinerSettings.Default;
             colorScheme = _catalogue.ResolveColorScheme(mariner);
             symbolScheme = _catalogue.ResolveSymbolScheme(mariner);
             svgCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            prewarmedSvgs = await PreWarmProviderSymbolsAsync(_provider, cancellationToken).ConfigureAwait(false);
         }
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
@@ -507,13 +500,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 {
                     if (!svgCache.TryGetValue(symbolRef, out svgSource))
                     {
-                        var item = _provider.Catalogue.Symbols
-                            .FirstOrDefault(s => s.Id.Equals(symbolRef, StringComparison.OrdinalIgnoreCase));
-                        if (item is not null)
+                        if (prewarmedSvgs is not null && prewarmedSvgs.TryGetValue(symbolRef, out var rawSvg))
                         {
-                            using var stream = _provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
-                            using var reader = new StreamReader(stream);
-                            var rawSvg = reader.ReadToEnd();
                             // Process SVG through palette color resolver and
                             // wrap with the svg-content:// URI scheme that
                             // Mapsui's ImageStyle expects.
@@ -1096,5 +1084,33 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             ImmutableArray.Create(finding),
             RulesEvaluated: 1,
             RulesWithFindings: 1);
+    }
+
+    /// <summary>
+    /// Pre-warms every symbol declared by the given portrayal catalogue
+    /// provider into a name → SVG-content dict so the synchronous arrow
+    /// renderer's <c>SymbolProvider</c> lambda can resolve symbols without
+    /// async I/O. Bounded to the catalogue's symbol manifest, which is small.
+    /// </summary>
+    private static async Task<Dictionary<string, string>> PreWarmProviderSymbolsAsync(
+        PortrayalCatalogueProvider provider, CancellationToken cancellationToken)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in provider.Catalogue.Symbols)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var stream = await provider.FetchAssetAsync(item, "Symbols", cancellationToken).ConfigureAwait(false);
+                using var reader = new StreamReader(stream);
+                dict[item.Id] = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Skip symbols that fail to load; the renderer treats missing
+                // entries the same as before — no symbol rendered for that name.
+            }
+        }
+        return dict;
     }
 }

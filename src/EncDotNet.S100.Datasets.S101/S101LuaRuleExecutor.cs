@@ -51,14 +51,14 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<DrawingInstruction> Execute(
+    public Task<IReadOnlyList<DrawingInstruction>> ExecuteAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)
-        => _inner.Execute(mariner, cancellationToken);
+        => _inner.ExecuteAsync(mariner, cancellationToken);
 
     /// <inheritdoc/>
-    public IReadOnlyList<EmittedInstruction> ExecuteRaw(
+    public Task<IReadOnlyList<EmittedInstruction>> ExecuteRawAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)
-        => _inner.ExecuteRaw(mariner, cancellationToken);
+        => _inner.ExecuteRawAsync(mariner, cancellationToken);
 }
 
 /// <summary>

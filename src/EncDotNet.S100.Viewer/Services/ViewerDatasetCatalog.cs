@@ -222,6 +222,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     }
 
     /// <summary>
+    /// <summary>
     /// Opens the dataset bytes for <paramref name="entry"/> — either from
     /// disk (plain entry) or from its <see cref="DatasetEntry.Source"/>
     /// asset source (exchange-set entry). The returned stream must be
@@ -231,11 +232,11 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     {
         if (entry.IsFromExchangeSet)
         {
-            // IAssetSource.OpenAsync is effectively synchronous for the
-            // FileSystem / Zip backings used by the viewer (see
-            // ZipAssetSource.OpenAsync), so blocking here is benign and
-            // keeps TryProject synchronous like the rest of the catalog
-            // event chain.
+            // SYNC BRIDGE: IAssetSource.OpenAsync for FileSystem / Zip
+            // backings is effectively synchronous (no real I/O latency),
+            // and TryProject is called from the synchronous DatasetLoaded
+            // event chain. Async-up-the-stack would require flipping the
+            // event signature, which is not justified for a one-shot open.
             return entry.Source!.OpenAsync(entry.RelativePath!).GetAwaiter().GetResult();
         }
         return File.OpenRead(entry.FilePath);

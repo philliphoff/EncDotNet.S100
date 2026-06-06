@@ -93,6 +93,9 @@ internal static class CatalogueSpecDetection
         try
         {
             using var source = Specifications.Specification.CreatePortrayalCatalogueSource(spec);
+            // SYNC BRIDGE: bundled PC bytes come from EmbeddedAssetSource
+            // (an in-process resource read) and this helper is called from
+            // the viewer's sync MainWindow init path before app load.
             using var stream = source.OpenAsync("portrayal_catalogue.xml").GetAwaiter().GetResult();
             var catalogue = PortrayalCatalogueReader.Read(stream);
             return string.IsNullOrEmpty(catalogue.Version) ? null : catalogue.Version;

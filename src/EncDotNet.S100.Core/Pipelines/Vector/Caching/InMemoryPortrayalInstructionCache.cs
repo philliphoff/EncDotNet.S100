@@ -82,6 +82,41 @@ public sealed class InMemoryPortrayalInstructionCache : IPortrayalInstructionCac
         // work (rare); the last store wins and the result is identical.
         var produced = factory();
 
+        Store(key, produced);
+
+        return produced;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<DrawingInstruction>> GetOrComputeAsync(
+        string key,
+        Func<CancellationToken, ValueTask<IReadOnlyList<DrawingInstruction>>> factory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        lock (_gate)
+        {
+            if (_entries.TryGetValue(key, out var existing))
+            {
+                _hits++;
+                Touch(existing.Node);
+                return existing.Value;
+            }
+
+            _misses++;
+        }
+
+        var produced = await factory(cancellationToken).ConfigureAwait(false);
+
+        Store(key, produced);
+
+        return produced;
+    }
+
+    private void Store(string key, IReadOnlyList<DrawingInstruction> produced)
+    {
         lock (_gate)
         {
             if (!_entries.ContainsKey(key))
@@ -92,8 +127,6 @@ public sealed class InMemoryPortrayalInstructionCache : IPortrayalInstructionCac
                 EvictIfNeeded();
             }
         }
-
-        return produced;
     }
 
     private void Touch(LinkedListNode<string> node)

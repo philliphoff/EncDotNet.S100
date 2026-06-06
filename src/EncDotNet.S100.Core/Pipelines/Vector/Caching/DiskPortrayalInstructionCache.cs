@@ -106,11 +106,41 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
             _misses++;
         }
 
-        // Run the portrayal pipeline OUTSIDE the lock so a single multi-second
-        // miss does not stall hits or unrelated computes on other processors
-        // sharing this cache. Concurrent misses on the same key merely duplicate
-        // work (rare); the last writer wins and the result is identical.
         var produced = factory();
+
+        lock (_gate)
+        {
+            TryWrite(path, produced);
+        }
+
+        return produced;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<DrawingInstruction>> GetOrComputeAsync(
+        string key,
+        Func<CancellationToken, ValueTask<IReadOnlyList<DrawingInstruction>>> factory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(factory);
+
+        var path = GetEntryPath(key);
+
+        lock (_gate)
+        {
+            var cached = TryRead(path);
+            if (cached is not null)
+            {
+                _hits++;
+                TouchAccessTime(path);
+                return cached;
+            }
+
+            _misses++;
+        }
+
+        var produced = await factory(cancellationToken).ConfigureAwait(false);
 
         lock (_gate)
         {

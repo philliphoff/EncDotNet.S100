@@ -124,10 +124,10 @@ public class S101PatternFillDiagnosticTests
         {
             try
             {
-                var areaFill = catalogue.GetAreaFill(fillName);
+                var areaFill = catalogue.GetAreaFillAsync(fillName).AsTask().GetAwaiter().GetResult();
                 if (areaFill.PatternSymbol is null) continue;
 
-                var svgContent = catalogue.GetSymbol(areaFill.PatternSymbol).SvgContent;
+                var svgContent = catalogue.GetSymbolAsync(areaFill.PatternSymbol).AsTask().GetAwaiter().GetResult().SvgContent;
                 var processed = SvgProcessor.Process(svgContent, palette);
 
                 // Dump SVG and area fill details
@@ -375,10 +375,10 @@ public class S101PatternFillDiagnosticTests
             {
                 try
                 {
-                    var areaFill = catalogue.GetAreaFill(symbolRef);
+                    var areaFill = catalogue.GetAreaFillAsync(symbolRef).AsTask().GetAwaiter().GetResult();
                     if (areaFill.PatternSymbol is not null)
                     {
-                        var svgContent = catalogue.GetSymbol(areaFill.PatternSymbol).SvgContent;
+                        var svgContent = catalogue.GetSymbolAsync(areaFill.PatternSymbol).AsTask().GetAwaiter().GetResult().SvgContent;
                         var processed = SvgProcessor.Process(svgContent, palette);
                         var png = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
                         if (png is not null)
@@ -446,12 +446,12 @@ public class S101PatternFillDiagnosticTests
         var provider = PortrayalCatalogueProvider.OpenAsync(pcSource).GetAwaiter().GetResult();
         var luaEngine = new MoonSharpLuaEngine();
         var catalogue = new S101PortrayalCatalogue(provider, luaEngine);
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         var palette = catalogue.ActivePalette;
 
         // Run Lua portrayal
         var portrayal = new S101LuaRuleExecutor(luaEngine, dataset, catalogue, fc);
-        var emitted = portrayal.ExecuteRaw(MarinerSettings.Default);
+        var emitted = portrayal.ExecuteRawAsync(MarinerSettings.Default).GetAwaiter().GetResult();
 
         // Dump raw emit strings for key features
         var rawLines = new List<string> { "=== Raw Lua Emit Strings ===" };

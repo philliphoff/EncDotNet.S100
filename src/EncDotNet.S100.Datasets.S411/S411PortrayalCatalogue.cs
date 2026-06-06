@@ -21,17 +21,18 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 
     public override SpecRef Spec => new("S-411", default);
 
-    protected override System.Xml.XmlResolver CreateXmlResolver() =>
-        new FetchRuleFallbackXmlResolver(Provider);
+    protected override System.Xml.XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
+        new FetchRuleFallbackXmlResolver(Provider, registeredBytes);
 
     /// <summary>
     /// S-411 1.2.1 PC ships no day/dusk/night colour profiles with
     /// multi-palette fallback; only load explicitly named palettes.
     /// </summary>
-    protected override void LoadPalettes(Dictionary<PaletteType, ColorPalette> palettes)
+    protected override async Task LoadPalettesAsync(Dictionary<PaletteType, ColorPalette> palettes, CancellationToken cancellationToken)
     {
         foreach (var item in Provider.Catalogue.ColorProfiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var paletteName = item.Description.Name;
             if (string.IsNullOrEmpty(paletteName))
                 paletteName = Path.GetFileNameWithoutExtension(item.FileName);
@@ -48,7 +49,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
 
             try
             {
-                using var stream = Provider.FetchAssetAsync(item, "ColorProfiles").GetAwaiter().GetResult();
+                using var stream = await Provider.FetchAssetAsync(item, "ColorProfiles", cancellationToken).ConfigureAwait(false);
                 var palette = ColorProfileReader.Read(stream, paletteName);
                 palettes[paletteType.Value] = palette;
             }
@@ -59,7 +60,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
     /// <summary>
     /// Only the master <c>mainRule</c> top-level template is included; the
     /// per-class top-level templates are still loadable on demand via
-    /// <see cref="GetCompiledRule"/>.
+    /// <see cref="GetCompiledRuleAsync"/>.
     /// </summary>
     protected override IReadOnlyList<PortrayalRule> BuildRules()
     {
@@ -84,7 +85,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
     /// which produces the display-list dialect expected by this codebase's
     /// <c>Part9DisplayListReader</c>. All other rules delegate to base.
     /// </summary>
-    public override XslCompiledTransform GetCompiledRule(string ruleName)
+    public override ValueTask<XslCompiledTransform> GetCompiledRuleAsync(string ruleName, CancellationToken cancellationToken = default)
     {
         if (!_adapterLoaded && ruleName.Equals(DefaultTopLevelRuleId, StringComparison.OrdinalIgnoreCase))
         {
@@ -92,7 +93,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
             _adapterLoaded = true;
         }
 
-        return base.GetCompiledRule(ruleName);
+        return base.GetCompiledRuleAsync(ruleName, cancellationToken);
     }
 
     private static XslCompiledTransform LoadAdapterRule()
