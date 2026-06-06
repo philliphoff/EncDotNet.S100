@@ -232,11 +232,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     /// <remarks>
-    /// Pattern area-fills are not yet represented in the shared IR, so areas with
-    /// an area-fill reference are omitted here; all point, line, solid-colour
-    /// area, and text portrayal is rendered. Use <see cref="RenderAsync"/> (the
-    /// Mapsui path) for full pattern-fill fidelity. The viewport is auto-fitted
-    /// to the dataset extent and padded to the output aspect ratio.
+    /// Tiled-symbol pattern area-fills are rasterised through
+    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
+    /// the polygon, anchored to a global world-space origin so adjacent
+    /// polygons sharing a pattern align seamlessly. Unlike the Mapsui path,
+    /// the headless renderer does not perform NetTopologySuite
+    /// priority-clipping of overlapping patterns or land-occlusion, so
+    /// patterns may visibly bleed across opaque overlay fills. The viewport
+    /// is auto-fitted to the dataset extent and padded to the output aspect
+    /// ratio.
     /// </remarks>
     public async Task<SKBitmap> RenderHeadlessAsync(
         int widthPixels,
@@ -289,6 +293,11 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             widthPixels: widthPixels,
             heightPixels: heightPixels,
             background: bg,
+            areaFillProvider: name =>
+            {
+                try { return catalogue.GetAreaFill(name); }
+                catch { return null; }
+            },
             hiddenCategories: context?.HiddenInstructionCategories
                 ?? DrawingInstructionCategory.None);
     }

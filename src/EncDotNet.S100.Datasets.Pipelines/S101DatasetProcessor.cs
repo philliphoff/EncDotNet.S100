@@ -401,13 +401,18 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     /// <remarks>
-    /// Pattern area-fills are not yet represented in the shared IR, so areas with
-    /// an area-fill reference (e.g. shallow-water diamonds, quality-of-bathymetry
-    /// overlays) are omitted here; the dominant solid depth-area colour fills,
-    /// lines, soundings/symbols, and text are rendered. Use <see cref="RenderAsync"/>
-    /// (the Mapsui path) for full pattern-fill fidelity. Unlike that path, this
-    /// produces a single bitmap (no S-102 interleave split) and draw order follows
-    /// the shared core's S-100 Part 9 ordering.
+    /// Tiled-symbol pattern area-fills (e.g. shallow-water diamonds,
+    /// quality-of-bathymetry overlays) are rasterised through
+    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
+    /// the polygon, anchored to a global world-space origin so adjacent
+    /// polygons sharing a pattern align seamlessly. Unlike the Mapsui path,
+    /// the headless renderer does not perform NetTopologySuite
+    /// priority-clipping of overlapping patterns or land-occlusion, so
+    /// patterns may visibly bleed across opaque overlay fills. Use
+    /// <see cref="RenderAsync"/> (the Mapsui path) for full pattern-fill
+    /// fidelity. Unlike that path, this produces a single bitmap (no S-102
+    /// interleave split) and draw order follows the shared core's S-100
+    /// Part 9 ordering.
     /// </remarks>
     public async Task<SKBitmap> RenderHeadlessAsync(
         int widthPixels,
@@ -464,6 +469,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 widthPixels: widthPixels,
                 heightPixels: heightPixels,
                 background: background ?? new RgbaColor(255, 255, 255, 255),
+                areaFillProvider: name =>
+                {
+                    try { return s101Cat.GetAreaFill(name); }
+                    catch { return null; }
+                },
                 hiddenCategories: context?.HiddenInstructionCategories
                     ?? DrawingInstructionCategory.None);
         }

@@ -28,11 +28,12 @@ public readonly record struct SymbolAsset(
 /// the S-100 portrayal-correctness logic lives in exactly one place.
 /// </summary>
 /// <remarks>
-/// <b>Scope (vertical slice).</b> Pattern fills (<c>AreaInstruction</c> with an
-/// <c>AreaFillReference</c>) are deliberately skipped — they remain the
-/// responsibility of the Mapsui renderer's pattern collection / priority-clip /
-/// insert phase. Only point, line, solid-colour area, and text instructions are
-/// lowered here.
+/// <b>Scope.</b> Both solid-colour and tiled-symbol pattern area fills are
+/// lowered into the IR. Pattern fills are emitted as
+/// <see cref="PatternAreaPaintOp"/> only when a <see cref="PatternResolver"/>
+/// is supplied (the headless Skia path); the Mapsui renderer leaves the
+/// resolver unset and continues to drive its own pattern collection /
+/// priority-clip / insert phase, so its output is unchanged.
 /// </remarks>
 public sealed class VectorSceneBuilder
 {
@@ -54,6 +55,17 @@ public sealed class VectorSceneBuilder
 
     /// <summary>Resolves a line-style name to its catalogue definition. Optional.</summary>
     public Func<string, LineStyle?>? LineStyleProvider { get; init; }
+
+    /// <summary>
+    /// Resolves an area-fill name to a pre-rasterised tiled pattern (PNG
+    /// bytes). When set, <c>AreaInstruction</c>s with an
+    /// <c>AreaFillReference</c> are lowered to a
+    /// <see cref="PatternAreaPaintOp"/>; when unset (the Mapsui default),
+    /// pattern instructions are skipped so the Mapsui renderer's existing
+    /// pattern phase remains authoritative. Returning <see langword="null"/>
+    /// for a given name silently drops just that instruction.
+    /// </summary>
+    public Func<string, byte[]?>? PatternResolver { get; init; }
 
     /// <summary>Global scale factor applied to all point symbols (default 1.0).</summary>
     public double SymbolScale { get; init; } = 1.0;
@@ -98,11 +110,15 @@ public sealed class VectorSceneBuilder
             .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
             .ThenBy(i => i switch
             {
+                // Pattern areas draw after solid areas but before lines/points/text,
+                // mirroring the Mapsui renderer's "insert pattern fills after the
+                // last solid colour fill" ordering.
+                AreaInstruction { AreaFillReference: not null } => 1,
                 AreaInstruction => 0,
-                LineInstruction => 1,
-                PointInstruction => 2,
-                TextInstruction => 3,
-                _ => 4,
+                LineInstruction => 2,
+                PointInstruction => 3,
+                TextInstruction => 4,
+                _ => 5,
             })
             .ThenBy(i => i.DrawingPriority)
             .ToList();
@@ -119,8 +135,11 @@ public sealed class VectorSceneBuilder
 
             PaintOp? op = instruction switch
             {
-                // Pattern fills are handled by the Mapsui pattern phase, not here.
-                AreaInstruction { AreaFillReference: not null } => null,
+                // Pattern fills are lowered only when a resolver is supplied (the
+                // headless path); otherwise they are deferred to the Mapsui
+                // pattern phase, which collects/clips them outside this IR.
+                AreaInstruction { AreaFillReference: { } patternRef } areaPattern when geom is not null
+                    => BuildPatternArea(areaPattern, patternRef, geom),
                 AreaInstruction area when geom is not null => BuildArea(area, geom),
                 LineInstruction line => BuildLine(line, geom),
                 PointInstruction point when geom is not null => BuildPoint(point, geom),
@@ -133,6 +152,38 @@ public sealed class VectorSceneBuilder
         }
 
         return new VectorScene(ops);
+    }
+
+    private PatternAreaPaintOp? BuildPatternArea(
+        AreaInstruction instruction, string patternRef, FeatureGeometry geometry)
+    {
+        if (PatternResolver is null)
+            return null;
+
+        if (geometry.Coordinates.Count < 3)
+            return null;
+
+        var tile = PatternResolver(patternRef);
+        if (tile is null || tile.Length == 0)
+            return null;
+
+        var holes = new List<IReadOnlyList<(double, double)>>(geometry.InteriorRings.Count);
+        foreach (var ring in geometry.InteriorRings)
+        {
+            if (ring.Count >= 3)
+                holes.Add(Project(ring));
+        }
+
+        return new PatternAreaPaintOp
+        {
+            FeatureReference = instruction.FeatureReference,
+            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMaximum = instruction.ScaleMaximum,
+            PatternReference = patternRef,
+            WorldShell = Project(geometry.Coordinates),
+            WorldHoles = holes,
+            TilePng = tile,
+        };
     }
 
     private AreaPaintOp? BuildArea(AreaInstruction instruction, FeatureGeometry geometry)

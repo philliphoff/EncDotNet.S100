@@ -1,14 +1,15 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Skia;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia.Scene;
 
 /// <summary>
 /// Source-agnostic entry point for headless vector rendering: lowers any
-/// S-100 Part 9 display list (point/line/solid-area/text) through the shared
-/// <see cref="VectorSceneBuilder"/> and rasterises it with
+/// S-100 Part 9 display list (point/line/solid-area/pattern-area/text) through
+/// the shared <see cref="VectorSceneBuilder"/> and rasterises it with
 /// <see cref="SkiaDisplayListRenderer"/>, auto-fitting the viewport to the
 /// resolved scene's EPSG:3857 extent. Works for any vector product (S-101
 /// ISO 8211, S-12x / S-201 / S-421 GML, …) because it depends only on the
@@ -16,12 +17,16 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// <see cref="IFeatureGeometryProvider"/> contract — not on Mapsui.
 /// </summary>
 /// <remarks>
-/// Pattern area-fills are not yet represented in the IR and are therefore
-/// omitted (see <see cref="VectorSceneBuilder"/>). Draw order follows the
-/// shared core's S-100 Part 9 ordering (areas → lines → points → text within a
-/// plane), which is the same ordering each Mapsui layer applies — but a single
-/// headless bitmap does not reproduce the S-101 processor's two-layer
-/// area/non-area split (that split exists only to interleave S-102).
+/// Tiled pattern area-fills are supported when an <c>areaFillProvider</c> is
+/// supplied (see <see cref="Render"/>); the renderer rasterises each
+/// referenced pattern tile via <see cref="SkiaSvgRasterizer.RasterizePatternTile"/>
+/// and tiles it across the polygon. Draw order follows the shared core's
+/// S-100 Part 9 ordering (solid areas → pattern areas → lines → points →
+/// text within a plane) — the same ordering each Mapsui layer applies —
+/// but a single headless bitmap does not reproduce the S-101 processor's
+/// two-layer area/non-area split (that split exists only to interleave
+/// S-102), nor the Mapsui pattern phase's NetTopologySuite priority-clipping
+/// against higher-priority patterns and opaque solid fills.
 /// </remarks>
 public static class HeadlessVectorRenderer
 {
@@ -40,6 +45,13 @@ public static class HeadlessVectorRenderer
     /// <param name="widthPixels">Output bitmap width.</param>
     /// <param name="heightPixels">Output bitmap height.</param>
     /// <param name="background">Background fill colour.</param>
+    /// <param name="areaFillProvider">
+    /// Optional resolver for area-fill catalogue entries by name. When supplied
+    /// together with <paramref name="symbolProvider"/>, area instructions with
+    /// an <c>AreaFillReference</c> are rasterised into tiled pattern fills via
+    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/>. When omitted,
+    /// pattern areas are skipped (matching legacy behaviour).
+    /// </param>
     /// <param name="hiddenCategories">
     /// Bitmask of instruction categories to suppress from the output (S-100
     /// Part 9 instruction types — areas, lines, points, text). Defaults to
@@ -61,6 +73,7 @@ public static class HeadlessVectorRenderer
         int widthPixels,
         int heightPixels,
         RgbaColor background,
+        Func<string, AreaFill?>? areaFillProvider = null,
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
     {
         ArgumentNullException.ThrowIfNull(instructions);
@@ -78,6 +91,7 @@ public static class HeadlessVectorRenderer
                 ? null
                 : name => VectorSceneBuilder.ResolveSymbolAsset(symbolProvider(name), palette),
             LineStyleProvider = lineStyleProvider,
+            PatternResolver = BuildPatternResolver(symbolProvider, areaFillProvider, palette),
             SymbolScale = symbolScale,
             TextScale = textScale,
         };
@@ -91,6 +105,53 @@ public static class HeadlessVectorRenderer
             HonorScaleVisibility = false,
         };
         return renderer.Render(scene, viewport);
+    }
+
+    /// <summary>
+    /// Builds a tile resolver that rasterises pattern fills via
+    /// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/>. Tiles are cached
+    /// per render invocation so multiple polygons sharing the same pattern do
+    /// not re-rasterise it. Returns <see langword="null"/> when either of the
+    /// upstream providers is unavailable (patterns then remain skipped).
+    /// </summary>
+    private static Func<string, byte[]?>? BuildPatternResolver(
+        Func<string, string?>? symbolProvider,
+        Func<string, AreaFill?>? areaFillProvider,
+        ColorPalette palette)
+    {
+        if (symbolProvider is null || areaFillProvider is null)
+            return null;
+
+        var cache = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        return fillName =>
+        {
+            if (cache.TryGetValue(fillName, out var cached))
+                return cached;
+
+            byte[]? tile = null;
+            try
+            {
+                var areaFill = areaFillProvider(fillName);
+                if (areaFill?.PatternSymbol is { } symbolName)
+                {
+                    var svgContent = symbolProvider(symbolName);
+                    if (!string.IsNullOrEmpty(svgContent))
+                    {
+                        var processed = SvgProcessor.Process(svgContent, palette);
+                        tile = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                    }
+                }
+            }
+            catch
+            {
+                // Bad area fill / symbol — drop the pattern silently, matching
+                // the Mapsui ProducePatternTile behaviour.
+                tile = null;
+            }
+
+            cache[fillName] = tile;
+            return tile;
+        };
     }
 
     /// <summary>

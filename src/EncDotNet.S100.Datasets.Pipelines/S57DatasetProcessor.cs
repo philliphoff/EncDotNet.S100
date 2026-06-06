@@ -386,7 +386,14 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
                 textScale: context?.TextScale ?? 1.0,
                 widthPixels: widthPixels,
                 heightPixels: heightPixels,
-                background: background ?? new RgbaColor(255, 255, 255, 255));
+                background: background ?? new RgbaColor(255, 255, 255, 255),
+                areaFillProvider: name =>
+                {
+                    try { return s101Cat.GetAreaFill(name); }
+                    catch { return null; }
+                },
+                hiddenCategories: context?.HiddenInstructionCategories
+                    ?? DrawingInstructionCategory.None);
         }
         finally
         {

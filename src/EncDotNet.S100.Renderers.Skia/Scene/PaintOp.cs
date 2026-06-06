@@ -144,10 +144,11 @@ public sealed class LinePaintOp : PaintOp
 
 /// <summary>A resolved solid-colour area fill (with optional outline).</summary>
 /// <remarks>
-/// Pattern fills are intentionally <b>not</b> represented here in the current
-/// vertical slice; they continue to be handled by the Mapsui renderer's
-/// dedicated pattern collection / priority-clip / insert phase. See the split
-/// vector-renderer plan for the deferral rationale.
+/// Tiled-symbol pattern fills are represented separately as
+/// <see cref="PatternAreaPaintOp"/>. The Mapsui renderer still drives its own
+/// pattern collection / priority-clip / insert phase (so it ignores
+/// <see cref="PatternAreaPaintOp"/> in the IR) — only the headless Skia
+/// backend lowers patterns through this IR today.
 /// </remarks>
 public sealed class AreaPaintOp : PaintOp
 {
@@ -165,6 +166,44 @@ public sealed class AreaPaintOp : PaintOp
 
     /// <summary>Outline width in display pixels.</summary>
     public double OutlineWidthPx { get; init; }
+}
+
+/// <summary>
+/// A resolved tiled-symbol pattern area fill (S-100 Part 9 §11.3 area fills with
+/// a referenced <c>AreaFill</c>). The op carries the pre-rasterised pattern
+/// tile as PNG bytes and the pattern reference so backends can cache the
+/// decoded image across ops sharing the same pattern.
+/// </summary>
+/// <remarks>
+/// <para>The tile bytes are encoded as PNG — a renderer-neutral raster format
+/// chosen to mirror the Mapsui pattern phase's existing
+/// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> output. A future
+/// non-Skia backend can decode the same bytes.</para>
+/// <para>The headless Skia backend draws the tile via a repeat-tiled
+/// <c>SKShader</c> anchored at world (0,0) projected to screen space, matching
+/// the Mapsui <c>AnchoredPatternFillStyle</c> contract so the pattern is
+/// seamless across overlapping polygons that share a global tile grid.</para>
+/// <para><b>Known limitation.</b> Unlike the Mapsui pattern phase, the
+/// headless lowering does not perform NetTopologySuite priority-clipping:
+/// lower-priority pattern ops are simply drawn before higher-priority ones and
+/// are not clipped by non-patterned solid colour fills (e.g. land). Patterns
+/// may therefore visibly bleed across opaque overlay areas in headless
+/// renders. Acceptance per issue #192 is "as closely as practical"; tighter
+/// clipping is a separate refinement.</para>
+/// </remarks>
+public sealed class PatternAreaPaintOp : PaintOp
+{
+    /// <summary>The portrayal-catalogue area-fill name (e.g. <c>DIAMOND1</c>).</summary>
+    public required string PatternReference { get; init; }
+
+    /// <summary>Exterior ring in EPSG:3857 metres (closed or auto-closed by the backend).</summary>
+    public required IReadOnlyList<(double X, double Y)> WorldShell { get; init; }
+
+    /// <summary>Interior (hole) rings in EPSG:3857 metres.</summary>
+    public IReadOnlyList<IReadOnlyList<(double X, double Y)>> WorldHoles { get; init; } = [];
+
+    /// <summary>The pre-rasterised pattern tile as PNG bytes.</summary>
+    public required byte[] TilePng { get; init; }
 }
 
 /// <summary>A resolved text label. The anchor is already selected (Part 9 §11.4/§11.5).</summary>

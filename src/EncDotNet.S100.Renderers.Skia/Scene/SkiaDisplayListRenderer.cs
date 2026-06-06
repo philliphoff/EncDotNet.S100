@@ -20,9 +20,9 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// rectangle linearly to pixels. Geometry is transformed world→screen, but
 /// stroke widths, symbol sizes, and text sizes are realised in display pixels
 /// per the IR unit contract (see <see cref="PaintOp"/>).</para>
-/// <para><b>Scope.</b> This vertical slice renders point, line, solid-area, and
-/// text ops. Pattern fills are not yet represented in the IR. Antimeridian
-/// crossing and Web-Mercator pole limits are out of scope.</para>
+/// <para><b>Scope.</b> This renders point, line, solid-area, tiled pattern-area,
+/// and text ops. Antimeridian crossing and Web-Mercator pole limits are out
+/// of scope.</para>
 /// </remarks>
 public sealed class SkiaDisplayListRenderer
 {
@@ -58,30 +58,51 @@ public sealed class SkiaDisplayListRenderer
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
 
-        foreach (var op in scene.Ops)
-        {
-            if (HonorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(op, denom))
-                continue;
+        // Per-render cache of decoded pattern tiles, keyed by pattern
+        // reference. Real S-101 cells can have many polygons sharing a single
+        // pattern (e.g. quality-of-bathymetry overlays) so decoding the PNG
+        // once and reusing the SKImage across ops is a meaningful saving.
+        Dictionary<string, SKImage?>? patternImages = null;
 
-            switch (op)
+        try
+        {
+            foreach (var op in scene.Ops)
             {
-                case AreaPaintOp area:
-                    DrawArea(canvas, area, transform);
-                    break;
-                case LinePaintOp line:
-                    DrawLine(canvas, line, transform);
-                    break;
-                case PointPaintOp point:
-                    DrawPoint(canvas, point, transform);
-                    break;
-                case TextPaintOp text:
-                    DrawText(canvas, text, transform);
-                    break;
+                if (HonorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(op, denom))
+                    continue;
+
+                switch (op)
+                {
+                    case AreaPaintOp area:
+                        DrawArea(canvas, area, transform);
+                        break;
+                    case PatternAreaPaintOp pattern:
+                        patternImages ??= new Dictionary<string, SKImage?>(StringComparer.Ordinal);
+                        DrawPatternArea(canvas, pattern, transform, patternImages);
+                        break;
+                    case LinePaintOp line:
+                        DrawLine(canvas, line, transform);
+                        break;
+                    case PointPaintOp point:
+                        DrawPoint(canvas, point, transform);
+                        break;
+                    case TextPaintOp text:
+                        DrawText(canvas, text, transform);
+                        break;
+                }
+            }
+
+            canvas.Flush();
+            return bitmap;
+        }
+        finally
+        {
+            if (patternImages is not null)
+            {
+                foreach (var img in patternImages.Values)
+                    img?.Dispose();
             }
         }
-
-        canvas.Flush();
-        return bitmap;
     }
 
     private static void DrawArea(SKCanvas canvas, AreaPaintOp op, WorldToScreen t)
@@ -110,6 +131,53 @@ public sealed class SkiaDisplayListRenderer
             };
             canvas.DrawPath(path, outline);
         }
+    }
+
+    /// <summary>
+    /// Fills the polygon with the op's tiled pattern. The repeat anchor is the
+    /// world (0, 0) point projected to screen space, matching the Mapsui
+    /// <c>AnchoredPatternFillStyle</c> contract so the pattern grid is global
+    /// (overlapping polygons sharing a pattern align seamlessly across their
+    /// boundary, avoiding moiré).
+    /// </summary>
+    private static void DrawPatternArea(
+        SKCanvas canvas,
+        PatternAreaPaintOp op,
+        WorldToScreen t,
+        Dictionary<string, SKImage?> imageCache)
+    {
+        if (op.WorldShell.Count < 3)
+            return;
+
+        if (!imageCache.TryGetValue(op.PatternReference, out var tileImage))
+        {
+            tileImage = SKImage.FromEncodedData(op.TilePng);
+            imageCache[op.PatternReference] = tileImage;
+        }
+        if (tileImage is null)
+            return;
+
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        AddRing(path, op.WorldShell, t);
+        foreach (var hole in op.WorldHoles)
+            AddRing(path, hole, t);
+
+        var (anchorX, anchorY) = t.Project((0, 0));
+        var anchorMatrix = SKMatrix.CreateTranslation(anchorX, anchorY);
+        using var shader = tileImage.ToShader(
+            SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, anchorMatrix);
+
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Shader = shader,
+        };
+
+        canvas.Save();
+        canvas.ClipPath(path, antialias: true);
+        canvas.DrawRect(path.Bounds, paint);
+        canvas.Restore();
     }
 
     private static void DrawLine(SKCanvas canvas, LinePaintOp op, WorldToScreen t)
