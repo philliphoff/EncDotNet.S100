@@ -1,5 +1,6 @@
 using EncDotNet.S100.Cli.Commands;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -48,5 +49,33 @@ public sealed class OptionParsingTests
     public void TryParseHexColor_rejects_invalid(string input)
     {
         Assert.False(RenderCommand.TryParseHexColor(input, out _));
+    }
+
+    [Theory]
+    [InlineData("text", DrawingInstructionCategory.Text)]
+    [InlineData("Labels", DrawingInstructionCategory.Text)]
+    [InlineData("points", DrawingInstructionCategory.Points)]
+    [InlineData("symbols", DrawingInstructionCategory.Points)]
+    [InlineData("lines", DrawingInstructionCategory.Lines)]
+    [InlineData("areas", DrawingInstructionCategory.Areas)]
+    [InlineData("fills", DrawingInstructionCategory.Areas)]
+    [InlineData("text,points", DrawingInstructionCategory.Text | DrawingInstructionCategory.Points)]
+    [InlineData(" text , areas ", DrawingInstructionCategory.Text | DrawingInstructionCategory.Areas)]
+    [InlineData("text,text", DrawingInstructionCategory.Text)]
+    public void TryParseHideCategories_accepts_known_tokens(string input, DrawingInstructionCategory expected)
+    {
+        Assert.True(RenderCommand.TryParseHideCategories(input, out var categories, out _));
+        Assert.Equal(expected, categories);
+    }
+
+    [Theory]
+    [InlineData("bogus", "bogus")]
+    [InlineData("text,bogus", "bogus")]
+    [InlineData("nope,text", "nope")]
+    public void TryParseHideCategories_rejects_unknown_tokens(string input, string expectedBadToken)
+    {
+        Assert.False(RenderCommand.TryParseHideCategories(input, out var categories, out var badToken));
+        Assert.Equal(DrawingInstructionCategory.None, categories);
+        Assert.Equal(expectedBadToken, badToken);
     }
 }

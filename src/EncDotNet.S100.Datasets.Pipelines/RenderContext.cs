@@ -1,5 +1,6 @@
 using System;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -35,6 +36,27 @@ public abstract record RenderContext
     /// future use.
     /// </summary>
     public MarinerSettings? Mariner { get; init; }
+
+    /// <summary>
+    /// Bitmask of <see cref="DrawingInstruction"/> categories to suppress from
+    /// the rendered output (S-100 Part 9 instruction types — areas, lines,
+    /// points, text). Hiding text is the canonical use case: at preview
+    /// scales, label-dense products such as S-411 sea-ice draw the full
+    /// "egg-code" labels which obscure the underlying fills, and a flag-driven
+    /// suppression delivers a BSIS-style "clean fill" preview without
+    /// re-running the portrayal pipeline. Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (render everything).
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the headless render path
+    /// (<c>HeadlessVectorRenderer.Render</c>); the Mapsui path is not yet
+    /// affected. The filter is applied after the portrayal pipeline produces
+    /// the display list, so suppressing one category never re-flows the
+    /// remaining instructions (areas → lines → points → text ordering and
+    /// scale visibility are preserved).
+    /// </remarks>
+    public DrawingInstructionCategory HiddenInstructionCategories { get; init; }
+        = DrawingInstructionCategory.None;
 }
 
 public sealed record S101RenderContext : RenderContext;

@@ -473,7 +473,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 {
                     try { return s101Cat.GetAreaFill(name); }
                     catch { return null; }
-                });
+                },
+                hiddenCategories: context?.HiddenInstructionCategories
+                    ?? DrawingInstructionCategory.None);
         }
         finally
         {

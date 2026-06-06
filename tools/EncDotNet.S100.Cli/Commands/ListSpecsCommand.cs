@@ -14,9 +14,12 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
     /// Specs whose processors expose the headless Skia render path. Coverage
     /// specs (S-102/104/111) support gridded datasets only; fixed-station
     /// (data coding format 3 / 8) datasets are rejected at render time.
+    /// S-57 datasets are translated in-memory to S-101 and rendered through
+    /// the S-101 portrayal pipeline.
     /// </summary>
     private static readonly HashSet<string> HeadlessSpecs = new(StringComparer.Ordinal)
     {
+        "S-57",
         "S-101", "S-102", "S-104", "S-111",
         "S-122", "S-124", "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-411", "S-421",
     };
@@ -31,6 +34,14 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
         table.AddColumn("Spec");
         table.AddColumn("Portrayal");
         table.AddColumn("Headless render");
+
+        // S-57 is not in Specification.AvailableSpecs (it has no bundled
+        // FC/PC of its own — it borrows S-101's catalogues at render time)
+        // but the CLI does support it, so report it explicitly.
+        table.AddRow(
+            "S-57",
+            "[grey]via S-101[/]",
+            HeadlessSpecs.Contains("S-57") ? "[green]yes[/]" : "[yellow]no[/]");
 
         foreach (var spec in Specification.AvailableSpecs)
         {

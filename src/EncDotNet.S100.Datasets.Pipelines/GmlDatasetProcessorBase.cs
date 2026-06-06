@@ -297,7 +297,9 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             {
                 try { return catalogue.GetAreaFill(name); }
                 catch { return null; }
-            });
+            },
+            hiddenCategories: context?.HiddenInstructionCategories
+                ?? DrawingInstructionCategory.None);
     }
 
     /// <inheritdoc/>

@@ -40,11 +40,15 @@ and writes a PNG to `<output>`.
 | `--text-scale` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time-step index for time-series datasets (S-104 / S-111). |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
+| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
+| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
 s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
+s100 render seaice.gml seaice.png --no-text                # clean fill preview
+s100 render chart.gml chart.png --hide text,points         # hide text + symbols
 ```
 
 ### `s100 info <dataset>`
@@ -62,7 +66,7 @@ headless render path.
 
 | Family | Specs | Path |
 |---|---|---|
-| Vector (ISO 8211) | S-101 | `HeadlessVectorRenderer` |
+| Vector (ISO 8211) | S-101, S-57 (translated to S-101) | `HeadlessVectorRenderer` |
 | Vector (GML) | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | `HeadlessVectorRenderer` |
 | Coverage (HDF5) | S-102, S-104 (gridded), S-111 (gridded) | `CoverageHeadlessRenderer` |
 
@@ -76,7 +80,8 @@ headless render path.
   using data coding format 3 or 8 (time series at fixed stations) emit point
   glyphs through the Mapsui path only; the CLI reports a clear "not supported"
   error.
-- **S-57 is not supported** (no headless path).
+- **S-57 renders through the S-101 pipeline.** Datasets are translated to
+  `S101Document` in-memory and rasterised with S-101 symbology (not S-52).
 - **Mapsui is linked but not used to render.** The CLI transitively references
   `EncDotNet.S100.Renderers.Mapsui` for the spec-detection factory and the
   `ProjNetCrsTransformFactory`, but no Mapsui rendering runs on the headless

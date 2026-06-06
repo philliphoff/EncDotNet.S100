@@ -13,10 +13,12 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -25,8 +27,11 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="S101Document"/> and reusing the S-101 portrayal pipeline.
 /// Symbology is S-101 (not S-52); coverage is breadth-first.
 /// </summary>
-public sealed class S57DatasetProcessor : IDatasetProcessor
+public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer
 {
+    // Serialises render calls so the catalogue's mutable palette / ECDIS
+    // state is not mutated mid-build by a concurrent render.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private readonly EncDotNet.S57.S57Document _rawS57Document;
     private readonly S101Dataset _translatedDataset;
     private readonly PortrayalCatalogueProvider _provider;
@@ -108,6 +113,19 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RenderCoreAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    private async Task<DatasetResult> RenderCoreAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
         var mariner = MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-101")
@@ -294,5 +312,92 @@ public sealed class S57DatasetProcessor : IDatasetProcessor
             _validationCached = true;
         }
         return _validationReport;
+    }
+
+    /// <summary>
+    /// Renders this S-57 cell to a standalone <see cref="SKBitmap"/> through
+    /// the headless, backend-agnostic Skia vector core, bypassing Mapsui. The
+    /// S-57 dataset is translated to S-101 in-memory (the same pipeline as
+    /// <see cref="RenderAsync"/>) and the resulting drawing instructions are
+    /// rasterised by <see cref="HeadlessVectorRenderer"/>.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, symbol/text scale).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <remarks>
+    /// Same caveats apply as for the S-101 headless path: pattern area-fills
+    /// are not yet represented in the shared IR, so areas with an area-fill
+    /// reference are omitted; the dominant solid depth-area colour fills,
+    /// lines, soundings/symbols, and text are rendered.
+    /// </remarks>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        // Hold the render gate across portrayal prep AND symbol/line-style asset
+        // resolution: the providers close over the mutable catalogue palette
+        // state, so a concurrent render must not mutate it mid-build.
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var mariner = MarinerSettings.Default;
+            var fc = _featureCatalogueManager.GetCatalogue("S-101")
+                ?? throw new InvalidOperationException(
+                    "S-101 feature catalogue is required to render S-57 datasets but none was provided.");
+
+            var s101Cat = _catalogue;
+            s101Cat.SwitchPalette(context?.Palette ?? PaletteType.Day);
+            var palette = s101Cat.ActivePalette;
+
+            var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
+            var featureSource = new S101FeatureXmlSource(_translatedDataset);
+            var pipeline = new PortrayalPipeline(executor);
+            var portrayalLayer = await pipeline
+                .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+
+            var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
+
+            return HeadlessVectorRenderer.Render(
+                prepared,
+                geometryProvider,
+                palette,
+                symbolProvider: name =>
+                {
+                    try { return s101Cat.GetSymbol(name).SvgContent; }
+                    catch { return null; }
+                },
+                lineStyleProvider: name =>
+                {
+                    try { return s101Cat.GetLineStyle(name); }
+                    catch { return null; }
+                },
+                symbolScale: context?.SymbolScale ?? 1.0,
+                textScale: context?.TextScale ?? 1.0,
+                widthPixels: widthPixels,
+                heightPixels: heightPixels,
+                background: background ?? new RgbaColor(255, 255, 255, 255),
+                areaFillProvider: name =>
+                {
+                    try { return s101Cat.GetAreaFill(name); }
+                    catch { return null; }
+                },
+                hiddenCategories: context?.HiddenInstructionCategories
+                    ?? DrawingInstructionCategory.None);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 }
