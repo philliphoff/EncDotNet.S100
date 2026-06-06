@@ -1,3 +1,4 @@
+using EncDotNet.S100.VisualRegression;
 using SkiaSharp;
 using VerifyTests;
 
@@ -47,6 +48,36 @@ internal static class TestHelpers
         {
             var bytes = EncodePng(bitmap);
             return Verifier.Verify(bytes, "png");
+        }
+        finally
+        {
+            bitmap.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verify an <see cref="SKBitmap"/> as a PNG snapshot with a custom maximum
+    /// allowed fraction of differing pixels. Use for tests whose baseline is
+    /// known to drift slightly across platforms/GPUs (e.g. font hinting or
+    /// anti-aliasing differences on win-arm64). The bitmap is disposed by this
+    /// method.
+    /// </summary>
+    /// <param name="bitmap">The rendered bitmap to verify.</param>
+    /// <param name="maxDifferentPixelFraction">
+    /// Maximum allowed fraction of pixels (0–1) that may exceed the per-channel
+    /// delta before the comparison fails.
+    /// </param>
+    public static SettingsTask VerifyBitmap(SKBitmap bitmap, double maxDifferentPixelFraction)
+    {
+        try
+        {
+            var bytes = EncodePng(bitmap);
+            var comparer = new PerceptualImageComparer
+            {
+                MaxDifferentPixelFraction = maxDifferentPixelFraction,
+            };
+            return Verifier.Verify(bytes, "png")
+                .UsePerceptualImageComparer(comparer);
         }
         finally
         {
