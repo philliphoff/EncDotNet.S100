@@ -57,6 +57,7 @@
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Tests/EncDotNet.S100.DynamicSources.Ais.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Core.Tests/EncDotNet.S100.Core.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Features.Tests/EncDotNet.S100.Features.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
@@ -66,6 +67,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/EncDotNet.S100.PerfRunner/EncDotNet.S100.PerfRunner.csproj" />
+    <Project Path="tools/EncDotNet.S100.Cli/EncDotNet.S100.Cli.csproj" />
     <Project Path="tools/EncDotNet.S100.PerfReport/EncDotNet.S100.PerfReport.csproj" />
   </Folder>
   <Folder Name="/samples/">

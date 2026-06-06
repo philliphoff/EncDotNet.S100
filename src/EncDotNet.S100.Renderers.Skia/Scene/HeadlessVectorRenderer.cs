@@ -81,6 +81,29 @@ public static class HeadlessVectorRenderer
     }
 
     /// <summary>
+    /// Produces a blank bitmap of the requested size filled with
+    /// <paramref name="background"/>. Used when a pre-render gate (e.g. an
+    /// S-411 time-window suppression) means the dataset contributes no
+    /// portrayal for the current context.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width.</param>
+    /// <param name="heightPixels">Output bitmap height.</param>
+    /// <param name="background">Background fill colour.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public static SKBitmap RenderBlank(int widthPixels, int heightPixels, RgbaColor background)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        var bitmap = new SKBitmap(
+            widthPixels, heightPixels, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(background.ToSkia());
+        canvas.Flush();
+        return bitmap;
+    }
+
+    /// <summary>
     /// Builds a <see cref="Viewport"/> fitted to a resolved scene's EPSG:3857
     /// extent, padded so the projected aspect ratio matches the requested pixel
     /// rectangle (the renderer scales X and Y independently, so matching the
