@@ -302,8 +302,6 @@ internal static class Strings
     public static string Status_Error => Get(nameof(Status_Error));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
     public static string Status_RenderingAtTime => Get(nameof(Status_RenderingAtTime));
-    public static string Status_SwitchingPalette => Get(nameof(Status_SwitchingPalette));
-    public static string Status_PaletteApplied => Get(nameof(Status_PaletteApplied));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
@@ -391,6 +389,7 @@ internal static class Strings
     public static string Toast_DatasetCancelled => Get(nameof(Toast_DatasetCancelled));
     public static string Toast_Cancel => Get(nameof(Toast_Cancel));
     public static string Toast_ExchangeSetLoading => Get(nameof(Toast_ExchangeSetLoading));
+    public static string Toast_SettingsApplied => Get(nameof(Toast_SettingsApplied));
 
     // MCP server
     public static string Status_McpRunning => Get(nameof(Status_McpRunning));
