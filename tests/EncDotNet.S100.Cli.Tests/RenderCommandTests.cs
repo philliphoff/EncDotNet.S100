@@ -71,4 +71,35 @@ public sealed class RenderCommandTests
         int exit = CliApp.Build().Run(["list-specs"]);
         Assert.Equal(0, exit);
     }
+
+    [Fact]
+    public void Render_writes_a_valid_png_for_an_s57_cell()
+    {
+        var dataset = FixturePath("US5MA1BO.000");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-s57-{Guid.NewGuid():N}.png");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--width", "320", "--height", "240"]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+
+            var bytes = File.ReadAllBytes(output);
+            Assert.True(bytes.Length > PngSignature.Length);
+            Assert.Equal(PngSignature, bytes[..PngSignature.Length]);
+
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+            Assert.Equal(320, bitmap!.Width);
+            Assert.Equal(240, bitmap.Height);
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
 }

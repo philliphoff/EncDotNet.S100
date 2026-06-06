@@ -62,7 +62,7 @@ headless render path.
 
 | Family | Specs | Path |
 |---|---|---|
-| Vector (ISO 8211) | S-101 | `HeadlessVectorRenderer` |
+| Vector (ISO 8211) | S-101, S-57 (translated to S-101) | `HeadlessVectorRenderer` |
 | Vector (GML) | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | `HeadlessVectorRenderer` |
 | Coverage (HDF5) | S-102, S-104 (gridded), S-111 (gridded) | `CoverageHeadlessRenderer` |
 
@@ -76,7 +76,8 @@ headless render path.
   using data coding format 3 or 8 (time series at fixed stations) emit point
   glyphs through the Mapsui path only; the CLI reports a clear "not supported"
   error.
-- **S-57 is not supported** (no headless path).
+- **S-57 renders through the S-101 pipeline.** Datasets are translated to
+  `S101Document` in-memory and rasterised with S-101 symbology (not S-52).
 - **Mapsui is linked but not used to render.** The CLI transitively references
   `EncDotNet.S100.Renderers.Mapsui` for the spec-detection factory and the
   `ProjNetCrsTransformFactory`, but no Mapsui rendering runs on the headless
