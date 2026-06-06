@@ -30,6 +30,11 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
     // area fill / palette / Lua source decode cost.
     private readonly ConcurrentDictionary<SpecRef, IPortrayalAssetCache> _assetCaches = new();
 
+    // Memoized per-spec content hash (PC XML + every referenced asset),
+    // mirroring FeatureCatalogueManager's FC hash. Shared by every consumer
+    // that keys a cache on portrayal content; invalidated on SetPath/SetSource.
+    private readonly ConcurrentDictionary<SpecRef, Lazy<Task<string?>>> _catalogueHashes = new();
+
     private static SpecRef ToSpec(string productSpec)
     {
         ArgumentException.ThrowIfNullOrEmpty(productSpec);
@@ -65,6 +70,7 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
             old.Value.Dispose();
         }
         _assetCaches.TryRemove(spec, out _);
+        _catalogueHashes.TryRemove(spec, out _);
     }
 
     /// <summary>
@@ -130,6 +136,7 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
             old.Value.Dispose();
         }
         _assetCaches.TryRemove(spec, out _);
+        _catalogueHashes.TryRemove(spec, out _);
 
         _paths.TryRemove(spec, out _);
 
@@ -230,6 +237,61 @@ public sealed class PortrayalCatalogueManager : IDisposable, ICatalogueProvider<
 
         _providers.Clear();
         _assetCaches.Clear();
+    }
+
+    /// <summary>
+    /// Returns a stable lowercase hex SHA-256 content hash of the portrayal
+    /// catalogue for <paramref name="spec"/> — the PC XML plus every file it
+    /// references — or <c>null</c> when no catalogue is available. Implements
+    /// <see cref="ICatalogueProvider{TCatalogue}.GetCatalogueHashAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// Computed at most once per spec and memoized; the memoized computation is
+    /// decoupled from <paramref name="cancellationToken"/> so one caller's
+    /// cancellation cannot poison the shared result. A transient failure
+    /// (returning <c>null</c>) is not memoized, so a later call retries. The
+    /// memo is invalidated by <see cref="SetPath(SpecRef, string)"/> and
+    /// <see cref="SetSource(SpecRef, IAssetSource)"/>; an in-place edit to the
+    /// catalogue files under a still-registered path is not observed until one
+    /// of those is called again.
+    /// </remarks>
+    public async ValueTask<string?> GetCatalogueHashAsync(
+        SpecRef spec, CancellationToken cancellationToken = default)
+    {
+        if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var lazy = _catalogueHashes.GetOrAdd(
+            spec, key => new Lazy<Task<string?>>(() => ComputeCatalogueHashAsync(key)));
+        var result = await lazy.Value.ConfigureAwait(false);
+
+        if (result is null)
+            _catalogueHashes.TryRemove(spec, out _);
+
+        return result;
+    }
+
+    private async Task<string?> ComputeCatalogueHashAsync(SpecRef spec)
+    {
+        PortrayalCatalogueProvider provider;
+        try
+        {
+            if (!HasCatalogue(spec)) return null;
+            provider = GetProvider(spec);
+        }
+        catch (InvalidOperationException) { return null; }
+        catch (DirectoryNotFoundException) { return null; }
+
+        try
+        {
+            // CancellationToken.None: the memoized hash is shared across renders,
+            // so it must not be bound to any one render's cancellation token.
+            return await provider.ComputeContentHashAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />

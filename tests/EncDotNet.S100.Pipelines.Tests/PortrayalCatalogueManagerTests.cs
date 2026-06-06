@@ -263,4 +263,115 @@ public class PortrayalCatalogueManagerTests
             try { Directory.Delete(tmp, recursive: true); } catch { }
         }
     }
+
+    // A portrayal catalogue declaring a single rule file, used to exercise the
+    // content-hash aggregation (catalogue XML + referenced assets).
+    private const string PcXmlWithRule = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <pc:portrayalCatalog xmlns:pc="http://www.iho.int/S100PortrayalCatalog/5.2" productId="S-101" version="2.0.0">
+          <pc:rules>
+            <pc:ruleFile id="r1">
+              <pc:fileName>main.lua</pc:fileName>
+              <pc:fileType>Lua</pc:fileType>
+              <pc:fileFormat>LUA</pc:fileFormat>
+              <pc:ruleType>1</pc:ruleType>
+            </pc:ruleFile>
+          </pc:rules>
+        </pc:portrayalCatalog>
+        """;
+
+    /// <summary>
+    /// A path-addressable asset source backed by an in-memory map. Records the
+    /// number of opens per relative path so memoization can be proven; unknown
+    /// paths throw so the hash's "missing" sentinel path can be exercised.
+    /// </summary>
+    private sealed class MapSource : IAssetSource
+    {
+        private readonly Dictionary<string, byte[]> _files;
+        public readonly Dictionary<string, int> OpenCounts = new(StringComparer.Ordinal);
+
+        public MapSource(Dictionary<string, string> files)
+        {
+            _files = files.ToDictionary(kv => kv.Key, kv => Encoding.UTF8.GetBytes(kv.Value), StringComparer.Ordinal);
+        }
+
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
+        {
+            var key = relativePath.Replace('\\', '/');
+            OpenCounts[key] = OpenCounts.TryGetValue(key, out var n) ? n + 1 : 1;
+            if (!_files.TryGetValue(key, out var bytes))
+                throw new FileNotFoundException(relativePath);
+            return Task.FromResult<Stream>(new MemoryStream(bytes, writable: false));
+        }
+
+        public void Dispose() { }
+    }
+
+    private static MapSource SourceWithRule(string ruleBody) => new(new Dictionary<string, string>
+    {
+        ["portrayal_catalogue.xml"] = PcXmlWithRule,
+        ["Rules/main.lua"] = ruleBody,
+    });
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_SameContent_IsStableAndMemoised()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        var src = SourceWithRule("return {}");
+        mgr.SetSource("S-101", src);
+
+        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var openAfterFirst = src.OpenCounts.GetValueOrDefault("Rules/main.lua");
+        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(h1);
+        Assert.Equal(h1, h2);
+        // Memoised: the second request does not re-open the rule asset.
+        Assert.Equal(1, openAfterFirst);
+        Assert.Equal(1, src.OpenCounts.GetValueOrDefault("Rules/main.lua"));
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_ChangesWhenReferencedAssetChanges()
+    {
+        using var a = new PortrayalCatalogueManager();
+        using var b = new PortrayalCatalogueManager();
+        using var c = new PortrayalCatalogueManager();
+        a.SetSource("S-101", SourceWithRule("return { version = 1 }"));
+        b.SetSource("S-101", SourceWithRule("return { version = 1 }"));
+        c.SetSource("S-101", SourceWithRule("return { version = 2 }"));
+
+        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var hc = await c.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(ha);
+        // Identical catalogue + asset bytes hash identically.
+        Assert.Equal(ha, hb);
+        // A change in a referenced rule asset changes the catalogue hash.
+        Assert.NotEqual(ha, hc);
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_UnregisteredSpec_ReturnsNull()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_SetSource_InvalidatesMemoisedHash()
+    {
+        using var mgr = new PortrayalCatalogueManager();
+        mgr.SetSource("S-101", SourceWithRule("return { version = 1 }"));
+        var first = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        // Re-registering a different source must invalidate the memoised hash.
+        mgr.SetSource("S-101", SourceWithRule("return { version = 2 }"));
+        var second = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual(first, second);
+    }
 }

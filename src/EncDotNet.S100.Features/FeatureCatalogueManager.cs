@@ -194,50 +194,79 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
         return stream;
     }
 
-    private readonly ConcurrentDictionary<SpecRef, Lazy<string?>> _contentHashes = new();
+    /// <summary>
+    /// Asynchronous counterpart to <see cref="OpenRawCatalogue"/> used by the
+    /// content-hash path. The resolver remains synchronous (it returns an
+    /// already-open stream), but the bundled <see cref="IAssetSource"/> fallback
+    /// is awaited rather than blocked on.
+    /// </summary>
+    private async Task<Stream?> OpenRawCatalogueAsync(SpecRef spec)
+    {
+        Stream? stream;
+        try { stream = _resolver(spec); }
+        catch { stream = null; }
+
+        if (stream is null && _sources.TryGetValue(spec, out var source))
+        {
+            try
+            {
+                stream = await source.OpenAsync(FeatureCatalogueAssetName).ConfigureAwait(false);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return stream;
+    }
+
+    private readonly ConcurrentDictionary<SpecRef, Lazy<Task<string?>>> _contentHashes = new();
 
     /// <summary>
     /// Returns a stable lowercase hex SHA-256 hash of the raw Feature Catalogue
-    /// XML bytes for the given spec name, or <c>null</c> when no catalogue is
-    /// available. The hash reflects the <em>actual resolved content</em> —
+    /// XML bytes for <paramref name="spec"/>, or <c>null</c> when no catalogue
+    /// is available. The hash reflects the <em>actual resolved content</em> —
     /// including any CLI / settings override the resolver applies — so it is a
     /// safe cache-invalidation input where a declared catalogue version string
     /// would miss an override that changes the file without bumping its version.
-    /// The hash is computed at most once per spec and memoized.
     /// </summary>
-    /// <param name="productSpec">The product specification identifier (e.g. "S-101").</param>
-    /// <returns>The content hash, or <c>null</c> when no catalogue resolves.</returns>
-    public string? GetContentHash(string productSpec)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(productSpec);
-        if (!SpecName.TryNormalize(productSpec, out var name)) return null;
-        return GetContentHash(new SpecRef(name, default));
-    }
-
-    /// <summary>
-    /// Returns a stable lowercase hex SHA-256 hash of the raw Feature Catalogue
-    /// XML bytes for <paramref name="spec"/>. See
-    /// <see cref="GetContentHash(string)"/>.
-    /// </summary>
-    public string? GetContentHash(SpecRef spec)
+    /// <remarks>
+    /// Implements <see cref="ICatalogueProvider{TCatalogue}.GetCatalogueHashAsync"/>.
+    /// The hash is computed at most once per spec and memoized; a transient
+    /// failure (returning <c>null</c>) is not memoized, so a later call retries.
+    /// The memoized computation is decoupled from <paramref name="cancellationToken"/>
+    /// so one caller's cancellation cannot poison the shared result.
+    /// </remarks>
+    public async ValueTask<string?> GetCatalogueHashAsync(
+        SpecRef spec, CancellationToken cancellationToken = default)
     {
         if (spec.Name is null) throw new ArgumentException("SpecRef must have a name.", nameof(spec));
 
-        var lazy = _contentHashes.GetOrAdd(spec, key => new Lazy<string?>(() => ComputeContentHash(key)));
-        return lazy.Value;
+        cancellationToken.ThrowIfCancellationRequested();
+        var lazy = _contentHashes.GetOrAdd(
+            spec, key => new Lazy<Task<string?>>(() => ComputeContentHashAsync(key)));
+        var result = await lazy.Value.ConfigureAwait(false);
+
+        // Don't permanently memoize a failed (null) computation: a transient
+        // IO error should not poison the hash for the manager's lifetime.
+        if (result is null)
+            _contentHashes.TryRemove(spec, out _);
+
+        return result;
     }
 
-    private string? ComputeContentHash(SpecRef spec)
+    private async Task<string?> ComputeContentHashAsync(SpecRef spec)
     {
-        var stream = OpenRawCatalogue(spec);
-        if (stream is null) return null;
-
         try
         {
-            using (stream)
+            var stream = await OpenRawCatalogueAsync(spec).ConfigureAwait(false);
+            if (stream is null) return null;
+
+            await using (stream.ConfigureAwait(false))
             {
                 using var sha = System.Security.Cryptography.SHA256.Create();
-                var hash = sha.ComputeHash(stream);
+                var hash = await sha.ComputeHashAsync(stream).ConfigureAwait(false);
                 return Convert.ToHexString(hash).ToLowerInvariant();
             }
         }

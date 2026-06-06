@@ -250,4 +250,69 @@ public class FeatureCatalogueManagerTests
         Assert.Equal(1, s101.DisposeCount);
         Assert.Equal(1, s102.DisposeCount);
     }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_SameContent_IsStableAndMemoized()
+    {
+        int callCount = 0;
+        var mgr = new FeatureCatalogueManager((SpecRef _) =>
+        {
+            callCount++;
+            return Open(MinimalFcXml);
+        });
+
+        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(h1);
+        Assert.Equal(h1, h2);
+        // The hash is computed once per spec: a second request is served from
+        // the memoized slot, so the resolver is not invoked again.
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_DifferentContent_ProducesDifferentHash()
+    {
+        var a = new FeatureCatalogueManager(spec => spec == "S-101" ? Open(MinimalFcXml) : null);
+        var b = new FeatureCatalogueManager(spec =>
+            spec == "S-101" ? Open(MinimalFcXml.Replace("Test Catalogue", "Other Catalogue")) : null);
+
+        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(ha);
+        Assert.NotNull(hb);
+        Assert.NotEqual(ha, hb);
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_AbsentCatalogue_ReturnsNull()
+    {
+        var mgr = new FeatureCatalogueManager((SpecRef _) => null);
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+    }
+
+    [Fact]
+    public async Task GetCatalogueHashAsync_TransientFailure_IsNotPermanentlyMemoized()
+    {
+        int callCount = 0;
+        Stream? next = null;
+        var mgr = new FeatureCatalogueManager((SpecRef _) =>
+        {
+            callCount++;
+            return next;
+        });
+
+        // First attempt: no catalogue available yet → null, and the null result
+        // must NOT be cached (a transient IO error should not poison the slot).
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+
+        // Once content becomes available the hash is recomputed.
+        next = Open(MinimalFcXml);
+        var h = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+
+        Assert.NotNull(h);
+        Assert.Equal(2, callCount);
+    }
 }
