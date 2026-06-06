@@ -26,8 +26,22 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          # The git tag is the source of truth for the released version. On a
+          # tag build (refs/tags/v*) derive the version from the tag name; on
+          # branch/PR builds fall back to the dev placeholder in props.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(grep -oE '<Version>[^<]+' src/Directory.Build.props | sed 's/<Version>//')"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
         run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
@@ -50,18 +64,20 @@ jobs:
           if-no-files-found: ignore
 
       - name: Pack NuGet packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          dotnet pack src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Datasets.S111/EncDotNet.S100.Datasets.S111.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj --no-build --configuration Release --output nupkgs
-          dotnet pack src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj --no-build --configuration Release --output nupkgs
+          dotnet pack src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Datasets.S111/EncDotNet.S100.Datasets.S111.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+          dotnet pack src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4
@@ -139,11 +155,26 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          # The git tag is the source of truth for the released version. On a
+          # tag build (refs/tags/v*) derive the version from the tag name; on
+          # branch/PR builds fall back to the dev placeholder in props.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(grep -oE '<Version>[^<]+' src/Directory.Build.props | sed 's/<Version>//')"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Publish Viewer
         run: >
           dotnet publish src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
+          -p:Version=${{ steps.version.outputs.version }}
           ${{ matrix.rid == 'osx-arm64' && '-p:PublishSingleFile=false' || '' }}
 
       - name: Publish s100 CLI
@@ -158,6 +189,7 @@ jobs:
           --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
+          -p:Version=${{ steps.version.outputs.version }}
           --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
 
       - name: Create macOS .app bundle
@@ -263,21 +295,10 @@ jobs:
           echo "::warning::Stapling failed after 5 attempts. The app is still notarized; Gatekeeper will verify online."
           exit 1
 
-      - name: Read viewer version
-        if: matrix.rid == 'osx-arm64'
-        id: viewer_version
-        run: |
-          VERSION=$(grep -oE '<Version>[^<]+' src/Directory.Build.props | sed 's/<Version>//')
-          if [ -z "$VERSION" ]; then
-            echo "::error::Could not read <Version> from src/Directory.Build.props"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Build macOS DMG
         if: matrix.rid == 'osx-arm64'
         env:
-          VERSION: ${{ steps.viewer_version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           # Build a styled DMG with the branding background image, icon
           # positions and Applications drop link. We delegate to

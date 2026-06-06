@@ -15,20 +15,46 @@ on:
 permissions:
   contents: write
 
+# Serialize releases so two concurrent runs can't race to compute the same
+# next version (the loser would otherwise fail on tag push).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
 
     steps:
+      # Always release from main HEAD regardless of the ref the workflow was
+      # dispatched against. Full history + tags are needed to determine the
+      # latest released version. RELEASE_TOKEN (a PAT) is required so the tag
+      # push triggers the tag-driven CI build/publish workflow.
       - uses: actions/checkout@v5
         with:
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Ensure tags are present
+        run: git fetch --tags --force origin
 
       - name: Read current version
         id: current
         run: |
-          VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/Directory.Build.props)
+          # The git tag is the source of truth for the released version. Take
+          # the highest final SemVer release tag (vMAJOR.MINOR.PATCH); ignore
+          # prerelease/experimental tags. Seed from 0.0.0 if none exist yet.
+          CURRENT_TAG=$(
+            git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname |
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+            head -n1
+          )
+          if [ -z "$CURRENT_TAG" ]; then
+            VERSION="0.0.0"
+          else
+            VERSION="${CURRENT_TAG#v}"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Compute next version
@@ -42,15 +68,17 @@ jobs:
           esac
           echo "version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
 
-      - name: Update version in Directory.Build.props
+      - name: Create and push tag
         run: |
-          sed -i "s|<Version>${{ steps.current.outputs.version }}</Version>|<Version>${{ steps.next.outputs.version }}</Version>|" src/Directory.Build.props
-
-      - name: Commit and tag
-        run: |
+          NEXT="v${{ steps.next.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/${NEXT}" >/dev/null; then
+            echo "::error::Tag ${NEXT} already exists."
+            exit 1
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/Directory.Build.props
-          git commit -m "Release v${{ steps.next.outputs.version }}"
-          git tag "v${{ steps.next.outputs.version }}"
-          git push origin main --tags
+          # Tag-only release: no commit to main is required. The tag is the
+          # single source of truth for the version; CI derives the build,
+          # package, and release version from the tag name.
+          git tag -a "${NEXT}" -m "Release ${NEXT}"
+          git push origin "refs/tags/${NEXT}"
