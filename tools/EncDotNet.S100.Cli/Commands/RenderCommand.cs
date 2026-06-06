@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Datasets.Pipelines;
 using SkiaSharp;
 using Spectre.Console;
@@ -59,6 +60,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Background colour as a hex string (e.g. #FFFFFF or #80FFFFFF). Default opaque white.")]
         public string? Background { get; init; }
 
+        [CommandOption("--no-text")]
+        [Description("Suppress text/label drawing instructions. Equivalent to --hide text.")]
+        [DefaultValue(false)]
+        public bool NoText { get; init; }
+
+        [CommandOption("--hide")]
+        [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text.")]
+        public string? Hide { get; init; }
+
         public override ValidationResult Validate()
         {
             var baseResult = base.Validate();
@@ -82,6 +92,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             if (Background is not null && !TryParseHexColor(Background, out _))
                 return ValidationResult.Error($"Invalid --background colour '{Background}'.");
+
+            if (Hide is not null && !TryParseHideCategories(Hide, out _, out var badToken))
+                return ValidationResult.Error(
+                    $"Invalid --hide value '{badToken}'. Use a comma-separated list of: text, points, lines, areas.");
 
             var dir = Path.GetDirectoryName(Path.GetFullPath(OutputPath));
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -118,8 +132,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (settings.Background is not null && TryParseHexColor(settings.Background, out var bg))
                 background = bg;
 
+            var hidden = DrawingInstructionCategory.None;
+            if (settings.Hide is not null
+                && TryParseHideCategories(settings.Hide, out var parsedHide, out _))
+                hidden |= parsedHide;
+            if (settings.NoText)
+                hidden |= DrawingInstructionCategory.Text;
+
             var renderContext = RenderContextBuilder.Build(
-                processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep);
+                processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden);
 
             using var bitmap = headless
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
@@ -198,6 +219,56 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         }
 
         color = new RgbaColor(r, g, b, a);
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a comma-separated list of drawing-instruction category tokens
+    /// (e.g. <c>"text,points"</c>) into a <see cref="DrawingInstructionCategory"/>
+    /// flags value. Tokens are case-insensitive and accept both singular and
+    /// plural forms (e.g. <c>text</c>, <c>label</c>, <c>labels</c>; <c>point</c>
+    /// or <c>points</c>; etc.). Returns <see langword="false"/> on the first
+    /// unrecognised token; the offending token is returned via
+    /// <paramref name="badToken"/>.
+    /// </summary>
+    internal static bool TryParseHideCategories(
+        string value, out DrawingInstructionCategory categories, out string badToken)
+    {
+        categories = DrawingInstructionCategory.None;
+        badToken = string.Empty;
+
+        foreach (var raw in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            switch (raw.ToLowerInvariant())
+            {
+                case "text":
+                case "texts":
+                case "label":
+                case "labels":
+                    categories |= DrawingInstructionCategory.Text;
+                    break;
+                case "point":
+                case "points":
+                case "symbol":
+                case "symbols":
+                    categories |= DrawingInstructionCategory.Points;
+                    break;
+                case "line":
+                case "lines":
+                    categories |= DrawingInstructionCategory.Lines;
+                    break;
+                case "area":
+                case "areas":
+                case "fill":
+                case "fills":
+                    categories |= DrawingInstructionCategory.Areas;
+                    break;
+                default:
+                    badToken = raw;
+                    categories = DrawingInstructionCategory.None;
+                    return false;
+            }
+        }
         return true;
     }
 }

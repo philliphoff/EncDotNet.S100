@@ -19,6 +19,9 @@
 #               binary, e.g.  S100="/usr/local/bin/s100"
 #   WIDTH/HEIGHT  Output size in pixels (default 1600x1600).
 #   PALETTE       day | dusk | night (default day).
+#   EXTRA_OPTS    Extra flags passed verbatim to `s100 render` after the
+#                 standard --width/--height/--palette (e.g. --no-text for
+#                 BSIS-style clean fills, or --hide text,points).
 #
 set -euo pipefail
 
@@ -49,6 +52,7 @@ fi
 WIDTH="${WIDTH:-1600}"
 HEIGHT="${HEIGHT:-1600}"
 PALETTE="${PALETTE:-day}"
+EXTRA_OPTS="${EXTRA_OPTS:-}"
 
 # Default invocation: run the built Release DLL. Override via $S100.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -98,7 +102,7 @@ render_region() {
   echo "  dataset $gml"
 
   # shellcheck disable=SC2086
-  if $S100 render "$gml" "$preview" --width "$WIDTH" --height "$HEIGHT" --palette "$PALETTE"; then
+  if $S100 render "$gml" "$preview" --width "$WIDTH" --height "$HEIGHT" --palette "$PALETTE" $EXTRA_OPTS; then
     echo "  -> $preview"
   else
     echo "  ! render failed"

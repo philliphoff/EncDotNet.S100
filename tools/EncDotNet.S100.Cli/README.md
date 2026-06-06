@@ -40,11 +40,15 @@ and writes a PNG to `<output>`.
 | `--text-scale` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time-step index for time-series datasets (S-104 / S-111). |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
+| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
+| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
 s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
+s100 render seaice.gml seaice.png --no-text                # clean fill preview
+s100 render chart.gml chart.png --hide text,points         # hide text + symbols
 ```
 
 ### `s100 info <dataset>`

@@ -50,6 +50,9 @@ pixel size (preserving aspect, letter-boxed) and overlays oriented arrows via
 - **PNG output only** in v1.
 - **Pattern area-fills are omitted** on the vector headless path (points, lines,
   solid fills, and text render).
+- **Text suppression**: `--no-text` (or `--hide text,...`) drops the chosen
+  drawing-instruction categories from the rendered output, producing cleaner
+  previews for label-dense products such as S-411 sea-ice.
 - **Fixed-station coverage** (S-104/S-111 data coding format 3 / 8) is **not**
   supported headlessly; the CLI returns a descriptive error.
 - **S-57 is not supported.**

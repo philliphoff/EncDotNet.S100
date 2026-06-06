@@ -1,6 +1,36 @@
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
+/// Categories of <see cref="DrawingInstruction"/> that can be selectively
+/// suppressed from a rendered scene. Mirrors the four S-100 Part 9 instruction
+/// types (areas → lines → points → text) and is used by callers — typically
+/// the headless render path — that want to hide certain primitive classes
+/// (e.g. text labels at preview scales) without re-running the portrayal
+/// pipeline.
+/// </summary>
+[Flags]
+public enum DrawingInstructionCategory
+{
+    /// <summary>No categories are hidden — render everything.</summary>
+    None = 0,
+
+    /// <summary>Solid-colour and pattern area fills (<see cref="AreaInstruction"/>).</summary>
+    Areas = 1 << 0,
+
+    /// <summary>Line strokes (<see cref="LineInstruction"/>).</summary>
+    Lines = 1 << 1,
+
+    /// <summary>Point symbols (<see cref="PointInstruction"/>).</summary>
+    Points = 1 << 2,
+
+    /// <summary>Text labels (<see cref="TextInstruction"/>).</summary>
+    Text = 1 << 3,
+
+    /// <summary>All renderable categories.</summary>
+    All = Areas | Lines | Points | Text,
+}
+
+/// <summary>
 /// A unified, resource-unresolved S-100 Part 9 drawing instruction. Instances
 /// reference catalogue resources (symbols, line styles, area fills, fonts) by
 /// name, and reference dataset features by id (<see cref="FeatureReference"/>);
