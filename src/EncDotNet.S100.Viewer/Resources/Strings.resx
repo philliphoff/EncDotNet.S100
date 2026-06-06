@@ -593,7 +593,7 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Chrome Theme</value>
   </data>
   <data name="Settings_ChromeTheme_Help" xml:space="preserve">
-    <value>Controls the application chrome (panels, title bar, buttons). Picking S-100 Night switches the map palette to Night by default; you can then override the map palette independently.</value>
+    <value>Controls the application chrome (panels, title bar, buttons). Picking S-100 Night switches the map palette to Night by default; picking S-100 Dusk switches it to Dusk. You can then override the map palette independently.</value>
   </data>
   <data name="ChromeTheme_Light" xml:space="preserve">
     <value>Light</value>
@@ -603,6 +603,9 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="ChromeTheme_S100Night" xml:space="preserve">
     <value>S-100 Night</value>
+  </data>
+  <data name="ChromeTheme_S100Dusk" xml:space="preserve">
+    <value>S-100 Dusk</value>
   </data>
   <data name="Settings_SymbolScale" xml:space="preserve">
     <value>Symbol Scale</value>
