@@ -45,6 +45,42 @@
                     <Color x:Key="BorderColor30">#4C280808</Color>
                     <Color x:Key="OutlineColor">#301010</Color>
                 </ResourceDictionary>
+
+                <!--
+                  S-100 Dusk chrome variant. Inherits from ShadUI's
+                  Light dictionary via ChromeThemes.S100Dusk's
+                  inheritVariant — dusk is treated as a warm-dim
+                  *light* palette in chrome, so any key not overridden
+                  here resolves against Light. The overrides below
+                  shift surfaces to a low-saturation warm cream and
+                  text to a dim warm brown, evoking twilight without
+                  the dark-adapted-vision tradeoffs of S100Night.
+                  Status colours are intentionally left to inherit
+                  from Light in this first cut. See
+                  docs/design/s100-chrome-theme-spike.md.
+                -->
+                <ResourceDictionary x:Key="{x:Static services:ChromeThemes.S100Dusk}">
+                    <!-- Window / surface -->
+                    <Color x:Key="WindowBackgroundColor">#F5EDE0</Color>
+                    <Color x:Key="TitleBarBackgroundColor">#EBDFCC</Color>
+                    <Color x:Key="SidebarBackgroundColor">#EFE5D2</Color>
+                    <Color x:Key="CardBackgroundColor">#FAF3E6</Color>
+                    <Color x:Key="DialogBackgroundColor">#EFE5D2</Color>
+                    <Color x:Key="TabItemsBackgroundColor">#E5D8C0</Color>
+                    <Color x:Key="TabItemSelectedColor">#FAF3E6</Color>
+                    <Color x:Key="BusyAreaOverlayColor">#198A7560</Color>
+
+                    <!-- Text -->
+                    <Color x:Key="ForegroundColor">#3A2E1A</Color>
+                    <Color x:Key="ForegroundLeadColor">#6B5638</Color>
+                    <Color x:Key="MutedColor">#8A7560</Color>
+
+                    <!-- Borders / outlines -->
+                    <Color x:Key="BorderColor">#C8B89A</Color>
+                    <Color x:Key="BorderColor60">#D4C8AE</Color>
+                    <Color x:Key="BorderColor30">#4CC8B89A</Color>
+                    <Color x:Key="OutlineColor">#DDD0B8</Color>
+                </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>

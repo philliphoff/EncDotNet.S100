@@ -497,7 +497,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         using var __cmd = ViewerObservability.BeginCommand("palette.change");
 
         var palette = _settingsVm.SelectedPalette;
-        SetStatus(string.Format(Strings.Status_SwitchingPalette, palette));
 
         foreach (var (entry, proc) in _processors.ToArray())
         {
@@ -518,9 +517,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
 
-        SetStatus(string.Format(Strings.Status_PaletteApplied, palette));
-        _toasts.ShowSuccess(Strings.Toast_Success,
-            string.Format(Strings.Status_PaletteApplied, palette));
+        _toasts.ShowSuccess(Strings.Toast_Success, Strings.Toast_SettingsApplied);
     }
 
     public void RemoveEntry(DatasetEntry entry)

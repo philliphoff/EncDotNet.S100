@@ -60,17 +60,27 @@ internal static class CatalogueSpecDetection
     /// <paramref name="spec"/>, or null if not bundled / unreadable.
     /// </summary>
     public static string? ReadBuiltInFeatureCatalogueVersion(string spec)
+        => ReadBuiltInFeatureCatalogueInfo(spec).Version;
+
+    /// <summary>
+    /// Returns the version number and version date of the bundled feature
+    /// catalogue for <paramref name="spec"/>. Either component is null when
+    /// the catalogue is not bundled, unreadable, or omits the field.
+    /// </summary>
+    public static (string? Version, string? VersionDate) ReadBuiltInFeatureCatalogueInfo(string spec)
     {
         try
         {
             using var stream = Specifications.Specification.TryOpenFeatureCatalogue(spec);
-            if (stream is null) return null;
+            if (stream is null) return (null, null);
             var catalogue = FeatureCatalogueReader.Read(stream);
-            return string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber;
+            return (
+                string.IsNullOrEmpty(catalogue.VersionNumber) ? null : catalogue.VersionNumber,
+                string.IsNullOrEmpty(catalogue.VersionDate) ? null : catalogue.VersionDate);
         }
         catch
         {
-            return null;
+            return (null, null);
         }
     }
 

@@ -14,12 +14,14 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -29,7 +31,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// stations → station-glyph point layer; see S-104 Edition 2.0.0
 /// §10.2.3 / §10.2.7).
 /// </summary>
-public sealed class S104DatasetProcessor : IDatasetProcessor
+public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
 {
     // dcf2 only
     private readonly S104CoverageSource? _source;
@@ -216,6 +218,70 @@ public sealed class S104DatasetProcessor : IDatasetProcessor
                     SourceFeatureType: "s104.color-band"),
             },
         };
+    }
+
+    /// <summary>
+    /// Renders the gridded water-level surface to a standalone
+    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia coverage
+    /// core. The selected time step is taken from the
+    /// <see cref="S104RenderContext.TimeStep"/> (defaulting to the first
+    /// available step). Fixed-station (dcf8) datasets have no coverage colour
+    /// fill and therefore throw <see cref="NotSupportedException"/>.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, time step, mariner settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <exception cref="NotSupportedException">
+    /// Thrown for fixed-station (dcf8) datasets, which are not renderable
+    /// through the headless coverage path.
+    /// </exception>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_stationSeries is not null || _source is null)
+            throw new NotSupportedException(
+                "Headless rendering is not supported for S-104 fixed-station " +
+                "(data coding format 8) datasets; only gridded surfaces can be " +
+                "rendered to an image.");
+
+        var source = _source;
+        var catalogue = _catalogue!;
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
+        if (context is S104RenderContext { TimeStep: { } timeStep })
+            source.SelectTime(timeStep);
+        else
+            source.SelectTime(source.AvailableTimes[0]);
+
+        var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
+            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ConfigureAwait(false);
+
+        var extent = source.Metadata.Extent;
+        var renderer = new CoverageHeadlessRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+        };
+
+        return renderer.Render(
+            styledLayer,
+            extent.WestLongitude,
+            extent.EastLongitude,
+            extent.SouthLatitude,
+            extent.NorthLatitude,
+            widthPixels,
+            heightPixels);
     }
 
     // ---- dcf8 station series rendering ---------------------------------

@@ -190,7 +190,8 @@ public partial class MainWindow : ShadUI.Window
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
         {
-            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInFeatureCatalogueVersion(spec));
+            var (fcVersion, fcVersionDate) = CatalogueSpecDetection.ReadBuiltInFeatureCatalogueInfo(spec);
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, fcVersion, fcVersionDate);
 
             if (Specifications.Specification.HasPortrayalCatalogue(spec))
             {

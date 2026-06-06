@@ -26,19 +26,19 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:CatalogueEntry">
                     <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock Text="{Binding ProductSpec}"
-                                           FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Version}"
-                                           FontSize="11"
-                                           Opacity="0.6"
-                                           VerticalAlignment="Center"
-                                           IsVisible="{Binding Version, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                            </StackPanel>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="1">
+                            <TextBlock Text="{Binding DisplayTitle}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       Margin="0,3,0,0"
+                                       IsVisible="{Binding HasSubtitle}" />
                             <TextBlock Text="{Binding Path}"
                                        FontSize="11"
                                        Opacity="0.6"
+                                       IsVisible="{Binding ShowPath}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"

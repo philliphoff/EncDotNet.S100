@@ -6,6 +6,8 @@
   href: observability.md
 - name: MCP server
   href: mcp-server.md
+- name: Command-line rendering
+  href: cli.md
 - name: Design notes
   items:
     - name: Dynamic feature sources

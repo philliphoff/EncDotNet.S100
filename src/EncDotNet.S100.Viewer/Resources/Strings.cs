@@ -28,6 +28,17 @@ internal static class Strings
     private static string Get(string name) =>
         ResourceManager.GetString(name, Culture) ?? name;
 
+    /// <summary>
+    /// Returns the curated human-readable product title for a spec code
+    /// (e.g. <c>"S-101"</c> → "Electronic Navigational Chart"), or
+    /// <c>null</c> when the spec is not in the curated map. Lookup keys drop
+    /// the hyphen from the spec code (<c>"S-101"</c> → <c>SpecName_S101</c>).
+    /// </summary>
+    public static string? SpecDisplayName(string spec) =>
+        string.IsNullOrEmpty(spec)
+            ? null
+            : ResourceManager.GetString("SpecName_" + spec.Replace("-", string.Empty), Culture);
+
     // Window
     public static string Window_Title => Get(nameof(Window_Title));
 
@@ -221,6 +232,7 @@ internal static class Strings
     public static string ChromeTheme_Light => Get(nameof(ChromeTheme_Light));
     public static string ChromeTheme_Dark => Get(nameof(ChromeTheme_Dark));
     public static string ChromeTheme_S100Night => Get(nameof(ChromeTheme_S100Night));
+    public static string ChromeTheme_S100Dusk => Get(nameof(ChromeTheme_S100Dusk));
     public static string Settings_SymbolScale => Get(nameof(Settings_SymbolScale));
     public static string Settings_SymbolScale_Help => Get(nameof(Settings_SymbolScale_Help));
     public static string Settings_TextScale => Get(nameof(Settings_TextScale));
@@ -291,8 +303,6 @@ internal static class Strings
     public static string Status_Error => Get(nameof(Status_Error));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
     public static string Status_RenderingAtTime => Get(nameof(Status_RenderingAtTime));
-    public static string Status_SwitchingPalette => Get(nameof(Status_SwitchingPalette));
-    public static string Status_PaletteApplied => Get(nameof(Status_PaletteApplied));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
@@ -380,6 +390,7 @@ internal static class Strings
     public static string Toast_DatasetCancelled => Get(nameof(Toast_DatasetCancelled));
     public static string Toast_Cancel => Get(nameof(Toast_Cancel));
     public static string Toast_ExchangeSetLoading => Get(nameof(Toast_ExchangeSetLoading));
+    public static string Toast_SettingsApplied => Get(nameof(Toast_SettingsApplied));
 
     // MCP server
     public static string Status_McpRunning => Get(nameof(Status_McpRunning));

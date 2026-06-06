@@ -401,6 +401,52 @@
     <value>(built-in)</value>
   </data>
 
+  <!-- Curated product-specification titles (spec code -> human-readable name).
+       Shared by the Feature- and Portrayal-catalogue panels. Keys drop the
+       hyphen from the spec code (e.g. "S-101" -> SpecName_S101). -->
+  <data name="SpecName_S101" xml:space="preserve">
+    <value>Electronic Navigational Chart</value>
+  </data>
+  <data name="SpecName_S102" xml:space="preserve">
+    <value>Bathymetric Surface</value>
+  </data>
+  <data name="SpecName_S104" xml:space="preserve">
+    <value>Water Level Information for Surface Navigation</value>
+  </data>
+  <data name="SpecName_S111" xml:space="preserve">
+    <value>Surface Currents</value>
+  </data>
+  <data name="SpecName_S122" xml:space="preserve">
+    <value>Marine Protected Areas</value>
+  </data>
+  <data name="SpecName_S124" xml:space="preserve">
+    <value>Navigational Warnings</value>
+  </data>
+  <data name="SpecName_S125" xml:space="preserve">
+    <value>Marine Aids to Navigation</value>
+  </data>
+  <data name="SpecName_S127" xml:space="preserve">
+    <value>Marine Resources and Services</value>
+  </data>
+  <data name="SpecName_S128" xml:space="preserve">
+    <value>Catalogue of Nautical Products</value>
+  </data>
+  <data name="SpecName_S129" xml:space="preserve">
+    <value>Under Keel Clearance Management</value>
+  </data>
+  <data name="SpecName_S131" xml:space="preserve">
+    <value>Marine Harbour Infrastructure</value>
+  </data>
+  <data name="SpecName_S201" xml:space="preserve">
+    <value>Aids to Navigation Information</value>
+  </data>
+  <data name="SpecName_S411" xml:space="preserve">
+    <value>Sea Ice Information</value>
+  </data>
+  <data name="SpecName_S421" xml:space="preserve">
+    <value>Route Plan</value>
+  </data>
+
   <!-- Catalog (S-128) panel -->
   <data name="Catalog_EmptyMessage" xml:space="preserve">
     <value>No catalogues found.
@@ -547,7 +593,7 @@ Open an S-128 dataset to populate this panel.</value>
     <value>Chrome Theme</value>
   </data>
   <data name="Settings_ChromeTheme_Help" xml:space="preserve">
-    <value>Controls the application chrome (panels, title bar, buttons). Picking S-100 Night switches the map palette to Night by default; you can then override the map palette independently.</value>
+    <value>Controls the application chrome (panels, title bar, buttons). Picking S-100 Night switches the map palette to Night by default; picking S-100 Dusk switches it to Dusk. You can then override the map palette independently.</value>
   </data>
   <data name="ChromeTheme_Light" xml:space="preserve">
     <value>Light</value>
@@ -557,6 +603,9 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="ChromeTheme_S100Night" xml:space="preserve">
     <value>S-100 Night</value>
+  </data>
+  <data name="ChromeTheme_S100Dusk" xml:space="preserve">
+    <value>S-100 Dusk</value>
   </data>
   <data name="Settings_SymbolScale" xml:space="preserve">
     <value>Symbol Scale</value>
@@ -754,12 +803,6 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Status_RenderingAtTime" xml:space="preserve">
     <value>Rendering at {0:u}...</value>
-  </data>
-  <data name="Status_SwitchingPalette" xml:space="preserve">
-    <value>Switching to {0} palette...</value>
-  </data>
-  <data name="Status_PaletteApplied" xml:space="preserve">
-    <value>{0} palette applied.</value>
   </data>
   <data name="Status_FeatureNoDetails" xml:space="preserve">
     <value>Feature {0} (no details available)</value>
@@ -999,6 +1042,9 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="Toast_ExchangeSetLoading" xml:space="preserve">
     <value>Loading Exchange Set</value>
+  </data>
+  <data name="Toast_SettingsApplied" xml:space="preserve">
+    <value>Settings applied.</value>
   </data>
 
   <!-- MCP server -->

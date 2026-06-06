@@ -6,6 +6,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
+using Scene = EncDotNet.S100.Renderers.Skia.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -189,21 +190,35 @@ public sealed class MapsuiDisplayListRenderer
             .ThenBy(i => i.DrawingPriority)
             .ToList();
 
-        // 2. Build color resolver from palette
-        var resolveColor = BuildColorResolver(Palette);
+        // 2. Lower the non-pattern instructions into the shared, backend-agnostic
+        //    VectorScene. All S-100 Part 9 correctness (draw ordering, colour /
+        //    mm→px / symbol / line-style / text-anchor resolution, and the
+        //    lat/lon → EPSG:3857 projection half) now lives in VectorSceneBuilder;
+        //    the Mapsui-specific feature/style construction below merely consumes
+        //    that IR. Pattern fills are intentionally NOT represented in the IR for
+        //    this slice — they keep their dedicated collection / priority-clip /
+        //    insert phase below, so Mapsui pattern output is byte-for-byte
+        //    unchanged.
+        var builder = new Scene.VectorSceneBuilder
+        {
+            ResolveColor = Scene.ColorResolver.Create(Palette),
+            SymbolResolver = ResolveSymbolAsset,
+            LineStyleProvider = LineStyleProvider,
+            SymbolScale = SymbolScale,
+            TextScale = TextScale,
+        };
+        var scene = builder.Build(instructions, geometryProvider);
 
-        // 3. Convert each instruction to a Mapsui feature.
-        //    Pattern fills are collected and merged per unique pattern so that
-        //    overlapping polygons with the same globally-anchored pattern are
-        //    drawn exactly once, preventing alpha accumulation artifacts.
-        //    Merged patterns are inserted after all color fills to ensure no
-        //    solid fill can cover a previously-drawn pattern.
-        var mapFeatures = new List<IFeature>();
+        var mapFeatures = new List<IFeature>(scene.Ops.Count);
         var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
-        // Track which features produce pattern fills, so we can identify
-        // "non-patterned" color fill areas (like land) that should occlude patterns.
+        // 3a. Pattern bookkeeping (unchanged): collect pattern polygons grouped
+        //     by (pattern, priority), plus the non-patterned colour fills (e.g.
+        //     land) that clip them. Pattern fills are merged per unique pattern so
+        //     overlapping polygons with the same globally-anchored pattern are
+        //     drawn exactly once. This mirrors the legacy single-pass collection
+        //     and is kept separate from the IR for this slice.
         var featuresWithPatterns = new HashSet<string>(StringComparer.Ordinal);
         foreach (var instruction in sorted)
         {
@@ -211,9 +226,6 @@ public sealed class MapsuiDisplayListRenderer
                 featuresWithPatterns.Add(pa.FeatureReference);
         }
 
-        // Collect opaque color fill polygons from features that do NOT also
-        // produce a pattern fill. These represent areas (such as land) where
-        // patterns from other features should not be visible.
         var nonPatternedColorFillPolygons = new List<Polygon>();
 
         foreach (var instruction in sorted)
@@ -271,16 +283,22 @@ public sealed class MapsuiDisplayListRenderer
                 if (polygon is not null)
                     nonPatternedColorFillPolygons.Add(polygon);
             }
+        }
 
-            var mapFeature = CreateMapFeature(instruction, geom, resolveColor, this);
-            if (mapFeature is not null)
-            {
-                mapFeatures.Add(mapFeature);
+        // 3b. Build Mapsui features from the IR, in Part 9 draw order. Solid-area
+        //     ops mark the colour-fill boundary so merged patterns are inserted
+        //     after them (preventing a solid fill from occluding a pattern). The
+        //     scene contains the same non-pattern ops, in the same order, as the
+        //     legacy single-pass loop produced.
+        foreach (var op in scene.Ops)
+        {
+            var mapFeature = CreateMapFeature(op);
+            if (mapFeature is null)
+                continue;
 
-                // Track where color fills end so we can insert patterns after them
-                if (instruction is AreaInstruction { FillColor: not null })
-                    lastColorFillIndex = mapFeatures.Count;
-            }
+            mapFeatures.Add(mapFeature);
+            if (op is Scene.AreaPaintOp)
+                lastColorFillIndex = mapFeatures.Count;
         }
 
         // Clip lower-priority pattern groups to exclude areas covered by
@@ -325,25 +343,51 @@ public sealed class MapsuiDisplayListRenderer
         };
     }
 
-    private static IFeature? CreateMapFeature(
-        DrawingInstruction instruction,
-        FeatureGeometry? geometry,
-        Func<string?, MapsuiColor> resolveColor,
-        MapsuiDisplayListRenderer renderer)
+    private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
+
+    /// <summary>
+    /// Resolves a symbol name to a processed-SVG asset for the shared
+    /// <see cref="Scene.VectorSceneBuilder"/>, routing through the renderer's
+    /// cache-backed <see cref="GetSymbolEntry"/> so symbol processing is reused
+    /// across re-renders. The cached source carries the Mapsui
+    /// <c>svg-content://</c> prefix; the IR stores the raw processed SVG, so the
+    /// prefix is stripped here and re-applied by <see cref="CreatePointFeature"/>.
+    /// </summary>
+    private Scene.SymbolAsset? ResolveSymbolAsset(string symbolRef)
     {
-        var feature = instruction switch
+        var entry = GetSymbolEntry(symbolRef);
+        if (entry.Source is null)
+            return null;
+
+        const string prefix = "svg-content://";
+        var processed = entry.Source.StartsWith(prefix, StringComparison.Ordinal)
+            ? entry.Source[prefix.Length..]
+            : entry.Source;
+
+        return new Scene.SymbolAsset(processed, entry.RelativeOffsetX, entry.RelativeOffsetY);
+    }
+
+    /// <summary>
+    /// Converts a single backend-agnostic <see cref="Scene.PaintOp"/> into a
+    /// Mapsui <see cref="IFeature"/>, tagging it with the originating S-100
+    /// feature reference and applying scale-visibility limits. Geometry in the
+    /// op is already projected to EPSG:3857; sizes are already in display pixels.
+    /// </summary>
+    private IFeature? CreateMapFeature(Scene.PaintOp op)
+    {
+        IFeature? feature = op switch
         {
-            AreaInstruction area when geometry is not null => CreateAreaFeature(area, geometry, resolveColor, renderer),
-            LineInstruction line => CreateLineFeature(line, geometry, resolveColor, renderer),
-            PointInstruction point when geometry is not null => CreatePointFeature(point, geometry, resolveColor, renderer),
-            TextInstruction text when geometry is not null => CreateTextFeature(text, geometry, resolveColor, renderer),
+            Scene.AreaPaintOp area => CreateAreaFeature(area),
+            Scene.LinePaintOp line => CreateLineFeature(line),
+            Scene.PointPaintOp point => CreatePointFeature(point),
+            Scene.TextPaintOp text => CreateTextFeature(text),
             _ => null,
         };
 
         if (feature is not null)
         {
-            feature[FeatureRefKey] = instruction.FeatureReference;
-            ApplyScaleVisibility(feature, instruction);
+            feature[FeatureRefKey] = op.FeatureReference;
+            ApplyScaleVisibility(feature, op.ScaleMinimum, op.ScaleMaximum);
         }
 
         return feature;
@@ -357,24 +401,22 @@ public sealed class MapsuiDisplayListRenderer
     public const double DenomToResolutionMetres = 0.00028;
 
     /// <summary>
-    /// Maps the S-100 Part 9 §11.1 <see cref="DrawingInstruction.ScaleMinimum"/> /
-    /// <see cref="DrawingInstruction.ScaleMaximum"/> denominators on each
-    /// rendered style.  Per the field documentation in
-    /// <c>DrawingInstruction</c>, <c>ScaleMinimum</c> is the most zoomed-out
-    /// limit (largest allowed denominator) and maps to Mapsui's
-    /// <c>MaxVisible</c>; <c>ScaleMaximum</c> is the most zoomed-in limit
-    /// (smallest allowed denominator) and maps to <c>MinVisible</c>.
+    /// Maps the S-100 Part 9 §11.1 scale denominators carried on a
+    /// <see cref="Scene.PaintOp"/> onto each Mapsui style.  <c>ScaleMinimum</c>
+    /// is the most zoomed-out limit (largest allowed denominator) and maps to
+    /// Mapsui's <c>MaxVisible</c>; <c>ScaleMaximum</c> is the most zoomed-in
+    /// limit (smallest allowed denominator) and maps to <c>MinVisible</c>.
     /// </summary>
-    private static void ApplyScaleVisibility(IFeature feature, DrawingInstruction instruction)
+    private static void ApplyScaleVisibility(IFeature feature, double? scaleMinimum, double? scaleMaximum)
     {
-        if (!instruction.ScaleMinimum.HasValue && !instruction.ScaleMaximum.HasValue)
+        if (!scaleMinimum.HasValue && !scaleMaximum.HasValue)
             return;
 
-        double? maxRes = instruction.ScaleMinimum.HasValue
-            ? instruction.ScaleMinimum.Value * DenomToResolutionMetres
+        double? maxRes = scaleMinimum.HasValue
+            ? scaleMinimum.Value * DenomToResolutionMetres
             : (double?)null;
-        double? minRes = instruction.ScaleMaximum.HasValue
-            ? instruction.ScaleMaximum.Value * DenomToResolutionMetres
+        double? minRes = scaleMaximum.HasValue
+            ? scaleMaximum.Value * DenomToResolutionMetres
             : (double?)null;
 
         foreach (var style in feature.Styles)
@@ -385,118 +427,44 @@ public sealed class MapsuiDisplayListRenderer
         }
     }
 
-    private static IFeature? CreateAreaFeature(
-        AreaInstruction instruction,
-        FeatureGeometry geometry,
-        Func<string?, MapsuiColor> resolveColor,
-        MapsuiDisplayListRenderer renderer)
+    private static IFeature? CreateAreaFeature(Scene.AreaPaintOp op)
     {
-        var polygon = CreatePolygonFromGeometry(geometry);
+        var polygon = CreatePolygonFromWorld(op.WorldShell, op.WorldHoles);
         if (polygon is null)
             return null;
 
-        if (instruction.FillColor is not null)
+        var style = new VectorStyle
         {
-            // Solid color fill
-            var fillColor = resolveColor(instruction.FillColor);
-
-            if (instruction.Transparency.HasValue)
-            {
-                int alpha = (int)(255 * (1.0 - instruction.Transparency.Value));
-                fillColor = new MapsuiColor(fillColor.R, fillColor.G, fillColor.B, alpha);
-            }
-
-            var style = new VectorStyle
-            {
-                Fill = new Brush { Color = fillColor },
-                Outline = new Pen { Color = new MapsuiColor(0, 0, 0, 40), Width = 0.5 },
-            };
-
-            var feature = new GeometryFeature(polygon);
-            feature.Styles.Add(style);
-            return feature;
-        }
-
-        // Pattern fill via AreaFillReference, using a custom style so the
-        // pattern is anchored to the geometry and moves during panning.
-        var tilePng = renderer.GetPatternTilePng(instruction.AreaFillReference);
-        if (tilePng is null)
-            return null;
-
-        var patternStyle = new AnchoredPatternFillStyle
-        {
-            TilePng = tilePng,
+            Fill = new Brush { Color = ToMapsui(op.Fill) },
+            Outline = new Pen { Color = ToMapsui(op.OutlineColor), Width = op.OutlineWidthPx },
         };
 
-        var patternFeature = new GeometryFeature(polygon);
-        patternFeature.Styles.Add(patternStyle);
-        return patternFeature;
+        var feature = new GeometryFeature(polygon);
+        feature.Styles.Add(style);
+        return feature;
     }
 
-    private static IFeature? CreateLineFeature(
-        LineInstruction instruction,
-        FeatureGeometry? geometry,
-        Func<string?, MapsuiColor> resolveColor,
-        MapsuiDisplayListRenderer renderer)
+    private static IFeature? CreateLineFeature(Scene.LinePaintOp op)
     {
-        // Prefer augmented (synthetic) coordinates from AugmentedRay/ArcByRadius
-        // over the feature's natural geometry.
-        var coords = instruction.CoordinatesOverride ?? geometry?.Coordinates;
-        if (coords is null || coords.Count < 2)
+        if (op.World.Count < 2)
             return null;
 
-        var projected = ProjectCoordinates(coords);
-        var lineString = new LineString(projected.ToArray());
+        var coords = new Coordinate[op.World.Count];
+        for (int i = 0; i < op.World.Count; i++)
+            coords[i] = new Coordinate(op.World[i].X, op.World[i].Y);
+        var lineString = new LineString(coords);
 
-        // Resolve color, width, and dash pattern.  Inline lineStyle wins; if
-        // only a lineStyleReference is supplied, look up the external style
-        // through the LineStyleProvider (e.g. S-421 RTEACTLEGLINE).
-        string? colorToken = instruction.LineColor;
-        double width = instruction.LineWidth;
-        bool dashed = instruction.Dashes is { Count: > 0 };
-
-        if (colorToken is null && instruction.LineStyleReference is not null && renderer.LineStyleProvider is not null)
-        {
-            var externalStyle = renderer.LineStyleProvider(instruction.LineStyleReference);
-            if (externalStyle is not null)
-            {
-                colorToken = externalStyle.Color;
-                if (externalStyle.Width > 0)
-                    width = externalStyle.Width;
-                if (externalStyle.DashPattern is { Length: > 0 })
-                    dashed = true;
-            }
-        }
-
-        // S-100 Part 9 specifies pen widths in millimetres on the nominal
-        // display surface, where 1 portrayal pixel = 0.32 mm.  Mapsui Pen.Width
-        // is in screen pixels, so convert mm → px before assigning.
-        var widthPx = width > 0 ? (width / S100PixelSizeMm) : 0.0;
         var pen = new Pen
         {
-            Color = resolveColor(colorToken),
-            Width = Math.Max(widthPx, 1.0),
+            Color = ToMapsui(op.Color),
+            Width = op.WidthPx,
         };
-        if (dashed && instruction.Dashes is { Count: > 0 })
+        if (op.DashArrayPx is { Count: > 0 } dashes)
         {
-            // Build a SkiaSharp-compatible [on, off] dash array from the S-100
-            // dash specification.  The Dash command gives (offset, gapMm) pairs
-            // and the LineStyle second parameter gives the dash "on" length.
-            // NOTE: SkiaSharp applies the dash pattern in screen space, which
-            // causes a subtle "marquee" shift when the viewport pans.  This is
-            // an inherent limitation of the SkiaSharp/Mapsui rendering pipeline;
-            // a proper fix would require a custom Mapsui renderer that anchors
-            // the dash phase to the geometry's world coordinates.
-            var onMm = instruction.DashOnLengthMm > 0
-                ? instruction.DashOnLengthMm
-                : instruction.Dashes[0].Length;   // fallback: use gap length
-            var gapMm = instruction.Dashes[0].Length;
-            var onPx = (float)(onMm / S100PixelSizeMm);
-            var gapPx = (float)(gapMm / S100PixelSizeMm);
-            pen.DashArray = [Math.Max(onPx, 1f), Math.Max(gapPx, 1f)];
+            pen.DashArray = dashes.ToArray();
             pen.PenStyle = PenStyle.UserDefined;
         }
-        else if (dashed)
+        else if (op.DefaultDash)
         {
             pen.PenStyle = PenStyle.Dash;
         }
@@ -513,60 +481,24 @@ public sealed class MapsuiDisplayListRenderer
         return feature;
     }
 
-    private static IFeature? CreatePointFeature(
-        PointInstruction instruction,
-        FeatureGeometry geometry,
-        Func<string?, MapsuiColor> resolveColor,
-        MapsuiDisplayListRenderer renderer)
+    private static IFeature CreatePointFeature(Scene.PointPaintOp op)
     {
-        var coords = geometry.Coordinates;
+        var feature = new PointFeature(op.World.X, op.World.Y);
 
-        // S-100 Part 9 §11.5 AugmentedPoint (GeographicCRS) lets a rule
-        // override the per-instruction anchor — e.g. SOUNDG03 places each
-        // sounding of a MultiPoint feature at its own coordinate.
-        double lat, lon;
-        if (instruction.CoordinateOverride is { } anchor)
+        var hasSymbolOffset = op.OffsetXpx != 0 || op.OffsetYpx != 0;
+
+        if (op.Symbol is { } sym)
         {
-            (lat, lon) = (anchor.Latitude, anchor.Longitude);
-        }
-        else
-        {
-            if (coords.Count == 0)
-                return null;
-            (lat, lon) = coords[0];
-        }
-        var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+            // The IR stores the raw processed SVG; Mapsui consumes it via the
+            // svg-content:// pseudo-scheme.
+            var svgSource = "svg-content://" + sym.ProcessedSvg;
+            var svgScale = sym.Scale;
 
-        var feature = new PointFeature(mx, my);
-
-        // Translate the S-100 §11.3 LocalOffset (millimetres on the nominal
-        // display surface) to screen pixels using the standard 1 px = 0.32 mm
-        // convention.  Both ImageStyle and SymbolStyle expose Offset via the
-        // shared VectorStyle base.
-        var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
-        var symOffsetYpx = instruction.LocalOffsetY / S100PixelSizeMm;
-        var hasSymbolOffset = symOffsetXpx != 0 || symOffsetYpx != 0;
-
-        // Try to render with an actual SVG symbol
-        var symbolRef = instruction.SymbolReference;
-        var entry = renderer.GetSymbolEntry(symbolRef);
-        var svgSource = entry.Source;
-        if (svgSource is not null)
-        {
-            var svgScale = 0.6 * instruction.SymbolScale * renderer.SymbolScale;
-
-            // Recover S-100 Part 9 §11.5 pivot placement.  Mapsui's ImageStyle
-            // centres the SVG bounding box on the anchor (pivot semantics are
-            // ignored), so composite symbols built from off-centre glyph
-            // tiles — most visibly multi-digit soundings — collapse on top of
-            // each other.  Mapsui's RelativeOffset is expressed as a fraction
-            // of the symbol size and matches the (vbCenter - pivot)/vbSize
-            // ratio computed from the SVG, so it stays correct regardless of
-            // SymbolScale or any mm→px convention used by the SVG rasteriser.
-            // Mapsui's RelativeOffset uses +Y = up (map frame); SVG/screen use
-            // +Y = down, so the Y component is negated here.
-            var pivotRelX = entry.RelativeOffsetX;
-            var pivotRelY = -entry.RelativeOffsetY;
+            // Mapsui's RelativeOffset uses +Y = up (map frame); the IR carries
+            // the pivot in screen-space (+Y = down), so the Y component is
+            // negated here.
+            var pivotRelX = sym.PivotRelativeX;
+            var pivotRelY = -sym.PivotRelativeY;
             var hasPivotRelative = pivotRelX != 0 || pivotRelY != 0;
 
             // Add a nearly-invisible rectangle as a hit-test area so that
@@ -581,10 +513,10 @@ public sealed class MapsuiDisplayListRenderer
                 Line = null,
                 Outline = null,
             };
-            if (instruction.Rotation.HasValue)
-                hitStyle.SymbolRotation = instruction.Rotation.Value;
+            if (op.Rotation.HasValue)
+                hitStyle.SymbolRotation = op.Rotation.Value;
             if (hasSymbolOffset)
-                hitStyle.Offset = new Offset(symOffsetXpx, symOffsetYpx);
+                hitStyle.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
             if (hasPivotRelative)
                 hitStyle.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
             feature.Styles.Add(hitStyle);
@@ -594,10 +526,10 @@ public sealed class MapsuiDisplayListRenderer
                 Image = new Image { Source = svgSource, RasterizeSvg = true },
             };
             style.SymbolScale = svgScale;
-            if (instruction.Rotation.HasValue)
-                style.SymbolRotation = instruction.Rotation.Value;
+            if (op.Rotation.HasValue)
+                style.SymbolRotation = op.Rotation.Value;
             if (hasSymbolOffset)
-                style.Offset = new Offset(symOffsetXpx, symOffsetYpx);
+                style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
             if (hasPivotRelative)
                 style.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
             feature.Styles.Add(style);
@@ -605,113 +537,38 @@ public sealed class MapsuiDisplayListRenderer
         else
         {
             // Fallback: colored dot
-            var symbolColor = ResolveSymbolColor(symbolRef, resolveColor);
             var style = new SymbolStyle
             {
-                SymbolScale = 0.15 * instruction.SymbolScale * renderer.SymbolScale,
-                Fill = new Brush { Color = symbolColor },
+                SymbolScale = op.FallbackScale,
+                Fill = new Brush { Color = ToMapsui(op.FallbackColor) },
                 Line = null,
             };
-            if (instruction.Rotation.HasValue)
-                style.SymbolRotation = instruction.Rotation.Value;
+            if (op.Rotation.HasValue)
+                style.SymbolRotation = op.Rotation.Value;
             if (hasSymbolOffset)
-                style.Offset = new Offset(symOffsetXpx, symOffsetYpx);
+                style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
             feature.Styles.Add(style);
         }
 
         return feature;
     }
 
-    private static IFeature? CreateTextFeature(
-        TextInstruction instruction,
-        FeatureGeometry geometry,
-        Func<string?, MapsuiColor> resolveColor,
-        MapsuiDisplayListRenderer renderer)
+    private static IFeature CreateTextFeature(Scene.TextPaintOp op)
     {
-        var coords = geometry.Coordinates;
-        if (string.IsNullOrEmpty(instruction.Text))
-            return null;
-
-        // S-100 Part 9 §11.5 AugmentedPoint (GeographicCRS) anchor override
-        // takes precedence over any feature-derived anchor.
-        double lat, lon;
-        if (instruction.CoordinateOverride is { } anchor)
-        {
-            (lat, lon) = (anchor.Latitude, anchor.Longitude);
-        }
-        else if (coords.Count == 0)
-        {
-            return null;
-        }
-        else if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
-            && geometry.Type == GeometryType.Curve)
-        {
-            (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
-        }
-        else if (geometry.Type == GeometryType.Surface && coords.Count >= 3)
-        {
-            (lat, lon) = ComputeRingCentroid(coords);
-        }
-        else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
-        {
-            (lat, lon) = coords[coords.Count / 2];
-        }
-        else
-        {
-            (lat, lon) = coords[0];
-        }
-
-        var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
-
-        // Apply the optional S-100 §11.4 transparency attribute (0 = opaque,
-        // 1 = fully transparent) on top of the resolved palette colour.
-        var textColor = ApplyTransparency(resolveColor(instruction.FontColor), instruction.FontTransparency);
-
-        // Convert mm offsets (S-100 §11.4 nominal display surface) to screen
-        // pixels using the standard 1 px = 0.32 mm convention.
-        var offsetXpx = (instruction.OffsetXmm ?? 0) / S100PixelSizeMm;
-        var offsetYpx = (instruction.OffsetYmm ?? 0) / S100PixelSizeMm;
-
-        Brush? backBrush = null;
-        if (!string.IsNullOrEmpty(instruction.BackgroundColor))
-        {
-            var bgBase = resolveColor(instruction.BackgroundColor);
-            // Default background transparency: when the spec leaves it
-            // unspecified, fall back to the same translucency convention as
-            // legacy renderers (~50%).
-            var bgColor = ApplyTransparency(bgBase, instruction.BackgroundTransparency ?? 0.5);
-            backBrush = new Brush { Color = bgColor };
-        }
-
         var style = new LabelStyle
         {
-            Text = instruction.Text,
-            ForeColor = textColor,
-            Font = new Font { Size = instruction.FontSize * renderer.TextScale },
-            HorizontalAlignment = MapHAlign(instruction.HorizontalAlignment),
-            VerticalAlignment = MapVAlign(instruction.VerticalAlignment),
-            Offset = new Offset(offsetXpx, offsetYpx),
-            BackColor = backBrush,
+            Text = op.Text,
+            ForeColor = ToMapsui(op.ForeColor),
+            Font = new Font { Size = op.FontSizePx },
+            HorizontalAlignment = MapHAlign(op.HorizontalAlignment),
+            VerticalAlignment = MapVAlign(op.VerticalAlignment),
+            Offset = new Offset(op.OffsetXpx, op.OffsetYpx),
+            BackColor = op.BackColor is { } b ? new Brush { Color = ToMapsui(b) } : null,
         };
 
-        var feature = new PointFeature(mx, my);
+        var feature = new PointFeature(op.World.X, op.World.Y);
         feature.Styles.Add(style);
         return feature;
-    }
-
-    /// <summary>
-    /// Returns <paramref name="color"/> with its alpha attenuated by
-    /// <paramref name="transparency"/> (0 = unchanged opaque, 1 = fully
-    /// transparent).  When <paramref name="transparency"/> is null the input
-    /// colour is returned unchanged.
-    /// </summary>
-    private static MapsuiColor ApplyTransparency(MapsuiColor color, double? transparency)
-    {
-        if (!transparency.HasValue)
-            return color;
-        var t = Math.Clamp(transparency.Value, 0.0, 1.0);
-        var a = (int)Math.Round(color.A * (1.0 - t));
-        return new MapsuiColor(color.R, color.G, color.B, a);
     }
 
     private static LabelStyle.HorizontalAlignmentEnum MapHAlign(TextHorizontalAlignment a) => a switch
@@ -728,80 +585,10 @@ public sealed class MapsuiDisplayListRenderer
         _ => LabelStyle.VerticalAlignmentEnum.Center,
     };
 
-    /// <summary>
-    /// Centroid of a closed exterior ring (lat/lon, simple unweighted average
-    /// of the unique vertices).  Sufficient for label placement on the
-    /// near-equirectangular ring sizes typical of S-100 surface features.
-    /// </summary>
-    private static (double Lat, double Lon) ComputeRingCentroid(
-        IReadOnlyList<(double Lat, double Lon)> ring)
-    {
-        // Drop the closing duplicate vertex if present.
-        int count = ring.Count;
-        if (count >= 2 && ring[0] == ring[count - 1])
-            count--;
-        double sumLat = 0, sumLon = 0;
-        for (int i = 0; i < count; i++)
-        {
-            sumLat += ring[i].Lat;
-            sumLon += ring[i].Lon;
-        }
-        return (sumLat / count, sumLon / count);
-    }
-
-
-
     // ── Coordinate projection ──────────────────────────────────────────
 
-    /// <summary>
-    /// Interpolates a position at a relative distance (0.0–1.0) along a polyline.
-    /// </summary>
-    private static (double Lat, double Lon) InterpolateAlongPolyline(
-        IReadOnlyList<(double Lat, double Lon)> coords, double fraction)
-    {
-        if (coords.Count < 2)
-            return coords[0];
-
-        fraction = Math.Clamp(fraction, 0.0, 1.0);
-
-        // Compute total length of the polyline (in degrees — approximate but fine for interpolation)
-        double totalLength = 0;
-        for (int i = 1; i < coords.Count; i++)
-        {
-            double dLat = coords[i].Lat - coords[i - 1].Lat;
-            double dLon = coords[i].Lon - coords[i - 1].Lon;
-            totalLength += Math.Sqrt(dLat * dLat + dLon * dLon);
-        }
-
-        if (totalLength <= 0)
-            return coords[0];
-
-        double targetLength = totalLength * fraction;
-        double accumulated = 0;
-
-        for (int i = 1; i < coords.Count; i++)
-        {
-            double dLat = coords[i].Lat - coords[i - 1].Lat;
-            double dLon = coords[i].Lon - coords[i - 1].Lon;
-            double segmentLength = Math.Sqrt(dLat * dLat + dLon * dLon);
-
-            if (accumulated + segmentLength >= targetLength)
-            {
-                double t = segmentLength > 0 ? (targetLength - accumulated) / segmentLength : 0;
-                return (
-                    coords[i - 1].Lat + t * dLat,
-                    coords[i - 1].Lon + t * dLon);
-            }
-
-            accumulated += segmentLength;
-        }
-
-        return coords[^1];
-    }
-
     private static Polygon? CreatePolygonFromGeometry(FeatureGeometry geometry)
-    {
-        var shell = BuildLinearRing(geometry.Coordinates);
+    {        var shell = BuildLinearRing(geometry.Coordinates);
         if (shell is null)
             return null;
 
@@ -849,7 +636,55 @@ public sealed class MapsuiDisplayListRenderer
         return result;
     }
 
-    // ── SVG symbol processing ──────────────────────────────────────────
+    /// <summary>
+    /// Builds an NTS polygon from already-projected EPSG:3857 ring coordinates
+    /// carried by an <see cref="Scene.AreaPaintOp"/>. Mirrors
+    /// <see cref="CreatePolygonFromGeometry"/> (closing + minimum-vertex guards)
+    /// but skips the lat/lon → EPSG:3857 projection, which the IR already
+    /// performed, so degenerate rings are dropped identically to the legacy path.
+    /// </summary>
+    private static Polygon? CreatePolygonFromWorld(
+        IReadOnlyList<(double X, double Y)> shell,
+        IReadOnlyList<IReadOnlyList<(double X, double Y)>> holes)
+    {
+        var shellRing = BuildLinearRingFromWorld(shell);
+        if (shellRing is null)
+            return null;
+
+        if (holes.Count == 0)
+            return new Polygon(shellRing);
+
+        var holeRings = new List<LinearRing>(holes.Count);
+        foreach (var hole in holes)
+        {
+            var ring = BuildLinearRingFromWorld(hole);
+            if (ring is not null)
+                holeRings.Add(ring);
+        }
+
+        return holeRings.Count == 0
+            ? new Polygon(shellRing)
+            : new Polygon(shellRing, holeRings.ToArray());
+    }
+
+    private static LinearRing? BuildLinearRingFromWorld(IReadOnlyList<(double X, double Y)> coords)
+    {
+        if (coords.Count < 3)
+            return null;
+
+        var ring = new List<Coordinate>(coords.Count + 1);
+        foreach (var (x, y) in coords)
+            ring.Add(new Coordinate(x, y));
+
+        // Close the ring if not already closed.
+        if (ring.Count > 0 && !ring[0].Equals2D(ring[^1]))
+            ring.Add(new Coordinate(ring[0].X, ring[0].Y));
+
+        if (ring.Count < 4)
+            return null;
+
+        return new LinearRing(ring.ToArray());
+    }
 
     /// <summary>
     /// Returns a cached <see cref="SymbolEntry"/> for the given symbol name,
@@ -970,96 +805,6 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return null;
-    }
-
-    // ── S-100 Color resolution ─────────────────────────────────────────
-
-    /// <summary>
-    /// Builds a color resolver function from the given palette.
-    /// Falls back to black for unknown tokens.
-    /// </summary>
-    private static Func<string?, MapsuiColor> BuildColorResolver(ColorPalette? palette)
-    {
-        return token =>
-        {
-            if (string.IsNullOrEmpty(token))
-                return MapsuiColor.Black;
-
-            if (palette is not null && palette.TryResolve(token, out var hex))
-                return HexToColor(hex);
-
-            // S-100 Part 9 instructions may also carry inline hex literals
-            // (e.g. the S-421 RouteActionPoint XSL emits <foreground>AA44A8</foreground>).
-            // Treat any 6- or 8-digit hex string (with or without a leading '#')
-            // as a literal colour before giving up.
-            if (TryParseHexLiteral(token, out var literal))
-                return literal;
-
-            return MapsuiColor.Black;
-        };
-    }
-
-    private static MapsuiColor HexToColor(string hex)
-    {
-        if (TryParseHexLiteral(hex, out var color))
-            return color;
-
-        return MapsuiColor.Black;
-    }
-
-    /// <summary>
-    /// Parses a literal hex colour in the formats <c>RRGGBB</c>,
-    /// <c>#RRGGBB</c>, <c>RRGGBBAA</c>, or <c>#RRGGBBAA</c>.  Returns false
-    /// for anything else so the caller can fall back to a palette token
-    /// lookup.
-    /// </summary>
-    private static bool TryParseHexLiteral(string value, out MapsuiColor color)
-    {
-        color = MapsuiColor.Black;
-        if (string.IsNullOrEmpty(value)) return false;
-
-        var span = value.AsSpan();
-        if (span[0] == '#') span = span[1..];
-        if (span.Length != 6 && span.Length != 8) return false;
-
-        if (!int.TryParse(span[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
-            !int.TryParse(span.Slice(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
-            !int.TryParse(span.Slice(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            return false;
-        }
-
-        int a = 255;
-        if (span.Length == 8 &&
-            !int.TryParse(span.Slice(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out a))
-        {
-            return false;
-        }
-
-        color = new MapsuiColor(r, g, b, a);
-        return true;
-    }
-
-    private static MapsuiColor ResolveSymbolColor(string? symbolRef, Func<string?, MapsuiColor> resolveColor)
-    {
-        if (string.IsNullOrEmpty(symbolRef))
-            return MapsuiColor.Black;
-
-        // Symbol names like QUESMRK1, SAFCON03, BOYCAR01 etc.
-        // Map by prefix/known names to approximate colours
-        if (symbolRef.StartsWith("SAFCON", StringComparison.Ordinal))
-            return resolveColor("SNDG1");     // Sounding symbols — use sounding colour
-        if (symbolRef.StartsWith("BOYCAR", StringComparison.Ordinal) ||
-            symbolRef.StartsWith("BOYLAT", StringComparison.Ordinal))
-            return resolveColor("CHBLK");     // Buoy symbols — black
-        if (symbolRef.StartsWith("BCNLAT", StringComparison.Ordinal))
-            return resolveColor("CHBLK");     // Beacon symbols — black
-        if (symbolRef == "QUESMRK1")
-            return new MapsuiColor(200, 0, 200, 120); // Default/unknown — faint magenta
-        if (symbolRef.StartsWith("LIGHTS", StringComparison.Ordinal))
-            return resolveColor("LITYW");     // Lights — yellow
-
-        return resolveColor("OUTLW");
     }
 
     /// <summary>

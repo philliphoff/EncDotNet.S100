@@ -12,10 +12,12 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -34,7 +36,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IGmlFeature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHeadlessImageRenderer
     where TFeature : IGmlFeature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -214,6 +216,79 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
                     SourceDatasetId: _fileName),
             },
         };
+    }
+
+    /// <summary>
+    /// Renders this dataset to a standalone <see cref="SKBitmap"/> through the
+    /// headless, backend-agnostic Skia vector core
+    /// (<see cref="VectorSceneBuilder"/> → <see cref="SkiaDisplayListRenderer"/>),
+    /// bypassing Mapsui entirely. This is the vector analogue of the direct-Skia
+    /// coverage renderer and the basis for a headless tile-serving API.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, symbol/text scale, ECDIS display settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <remarks>
+    /// Pattern area-fills are not yet represented in the shared IR, so areas with
+    /// an area-fill reference are omitted here; all point, line, solid-colour
+    /// area, and text portrayal is rendered. Use <see cref="RenderAsync"/> (the
+    /// Mapsui path) for full pattern-fill fidelity. The viewport is auto-fitted
+    /// to the dataset extent and padded to the output aspect ratio.
+    /// </remarks>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var bg = background ?? new RgbaColor(255, 255, 255, 255);
+
+        // Honour the same pre-render gate as the Mapsui path (e.g. S-411
+        // time-window suppression). When the gate fires, the dataset
+        // contributes no portrayal for this context, so emit a blank
+        // background-filled bitmap rather than rendering stale content.
+        if (CheckPreRender(context) is not null)
+            return HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg);
+
+        var catalogue = _catalogue;
+        context?.EcdisDisplay?.ApplyTo(catalogue);
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
+        var featureSource = CreateFeatureXmlSource();
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+
+        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
+
+        return HeadlessVectorRenderer.Render(
+            instructions,
+            geometryProvider,
+            catalogue.ActivePalette,
+            symbolProvider: name =>
+            {
+                try { return catalogue.GetSymbol(name).SvgContent; }
+                catch { return null; }
+            },
+            lineStyleProvider: name =>
+            {
+                try { return catalogue.GetLineStyle(name); }
+                catch { return null; }
+            },
+            symbolScale: context?.SymbolScale ?? 1.0,
+            textScale: context?.TextScale ?? 1.0,
+            widthPixels: widthPixels,
+            heightPixels: heightPixels,
+            background: bg);
     }
 
     /// <inheritdoc/>
