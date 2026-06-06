@@ -85,4 +85,55 @@ public class CloseDatasetToolTests
         Assert.Contains("\"removed\":true", text);
         Assert.Contains("a.000", text);
     }
+
+    [Fact]
+    public async Task Close_all_datasets_removes_everything()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add("a.000", "S-101");
+        catalog.Add("b.h5", "S-102");
+        var gateway = new FakeDatasetLoadGateway
+        {
+            OnRemove = id => Task.FromResult(catalog.Remove(id)),
+        };
+        var tool = new CloseAllDatasetsTool(catalog, gateway);
+
+        var result = await tool.InvokeAsync();
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.True(ok!.Removed);
+        Assert.Equal(2, ok.Count);
+        Assert.Empty(catalog.Datasets);
+    }
+
+    [Fact]
+    public async Task Close_all_when_empty_is_graceful()
+    {
+        var tool = new CloseAllDatasetsTool(new FakeDatasetCatalog(), new FakeDatasetLoadGateway());
+
+        var result = await tool.InvokeAsync();
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.False(ok!.Removed);
+        Assert.Equal(0, ok.Count);
+        Assert.Empty(ok.RemovedDatasets);
+    }
+
+    [Fact]
+    public void Close_all_adapter_translates_success_payload()
+    {
+        var ok = ToolResult<CloseAllDatasetsResult>.Ok(new CloseAllDatasetsResult(
+            true, 2, new[]
+            {
+                new RemovedDataset("a.000", "S-101"),
+                new RemovedDataset("b.h5", "S-102"),
+            }));
+
+        var call = CloseAllDatasetsMcpAdapter.TranslateResult(ok);
+
+        Assert.False(call.IsError);
+        var text = Assert.IsType<ModelContextProtocol.Protocol.TextContentBlock>(call.Content[0]).Text;
+        Assert.Contains("\"removed\":true", text);
+        Assert.Contains("\"count\":2", text);
+    }
 }

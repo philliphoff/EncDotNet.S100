@@ -289,6 +289,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(OpenDatasetMcpAdapter.Create(new OpenDatasetTool(_catalog, _loadGateway)));
             tools.Add(CloseDatasetMcpAdapter.Create(new CloseDatasetTool(_catalog, _loadGateway)));
+            tools.Add(CloseAllDatasetsMcpAdapter.Create(new CloseAllDatasetsTool(_catalog, _loadGateway)));
         }
         return tools.Count == 0 ? null : tools;
     }

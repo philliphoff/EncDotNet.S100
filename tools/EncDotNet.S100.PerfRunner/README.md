@@ -30,11 +30,42 @@ dotnet run --project tools/EncDotNet.S100.PerfRunner -- s101-portray-warm \
 |------|-------------|
 | `s101-portray-cold` | Single cold-start S-101 parse + portray. No warmup — captures first-pass Lua/XSLT compile cost. |
 | `s101-portray-warm` | S-101 portrayal pipeline only (no render) with warmup. Pure pipeline throughput. |
-| `s101-render-warm` | S-101 pipeline + Mapsui display-list render (headless). |
+| `s101-render-warm` | S-101 pipeline + headless Mapsui layer build (no Avalonia UI thread, no Skia GPU raster pass). |
 | `s102-coverage` | S-102 HDF5 bathymetry: coverage pipeline + render. |
 | `s124-vector` | S-124 GML navigational warnings: XSLT-only vector pipeline. |
 | `s201-vector` | S-201 GML AtoN information: XSLT-only vector pipeline. |
 | `exchange-set-open` | Open a synthetic exchange set and walk all datasets. |
+
+## Interpreting warm numbers: pipeline vs live viewer render
+
+PerfRunner warm scenarios currently measure **library-side pipeline work**
+(parse/portray + headless Mapsui layer construction). They do **not** drive
+the Avalonia windowing/binding loop or the live Skia GPU render path used by
+`EncDotNet.S100.Viewer`.
+
+That means:
+
+- `s101-portray-warm` and `s101-real-warm` capture repeated portrayal + layer
+  build cost.
+- They do **not** include the viewer's steady-state warm raster cost in
+  `Mapsui.Rendering.Skia.MapRenderer.RenderToBitmapStream`.
+
+Use PerfRunner to track pipeline regressions, and run a live viewer trace when
+you need warm-rasterise numbers.
+
+### Live viewer warm-render trace recipe
+
+```bash
+# 1) Start the viewer normally and load the target dataset.
+dotnet run --project src/EncDotNet.S100.Viewer
+
+# 2) In another shell, attach dotnet-trace to the viewer process.
+dotnet-trace collect --process-id <viewer-pid> \
+    --providers Microsoft-DotNETCore-SampleProfiler
+```
+
+Interact with the map (pan/zoom/repaint) to collect warm frames, then inspect
+the trace for `Mapsui.Rendering.Skia.MapRenderer.RenderToBitmapStream`.
 
 ## Profiling (CPU and allocation traces)
 

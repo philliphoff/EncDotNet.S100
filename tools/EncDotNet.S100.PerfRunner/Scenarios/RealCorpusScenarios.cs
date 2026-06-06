@@ -60,12 +60,13 @@ internal sealed class S101RealColdScenario : IPerfScenario
 
 /// <summary>
 /// Warm S-101 render against a real UKHO trial cell, sharing the
-/// processor across iterations.
+/// processor across iterations. Measures library-side portrayal/layer
+/// build cost, not live Avalonia + Skia GPU rasterisation.
 /// </summary>
 internal sealed class S101RealWarmScenario : IPerfScenario
 {
     public string Name => "s101-real-warm";
-    public string Description => "S-101 warm pipeline+render on a real UKHO .000 cell from $ENC_DOTNET_PERF_REAL_S101.";
+    public string Description => "S-101 warm pipeline+headless layer build on a real UKHO .000 cell from $ENC_DOTNET_PERF_REAL_S101.";
 
     private Datasets.Pipelines.IDatasetProcessor? _processor;
 

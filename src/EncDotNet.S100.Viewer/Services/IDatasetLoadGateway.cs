@@ -24,10 +24,11 @@ internal enum DatasetPathKind
 /// load / unload code paths (<see cref="ViewModels.DatasetsViewModel"/>,
 /// <see cref="IDatasetLoaderService"/>, and
 /// <see cref="IExchangeSetService"/>). The MCP <c>open_dataset</c> /
-/// <c>close_dataset</c> tools depend on this seam so their orchestration
-/// logic (validation, catalog diffing, quiescence waiting, result
-/// shaping) stays testable with a fake while the actual collection /
-/// Mapsui-layer mutation is marshalled to the dispatcher here.
+/// <c>close_dataset</c> / <c>close_all_datasets</c> tools depend on this
+/// seam so their orchestration logic (validation, catalog diffing,
+/// quiescence waiting, result shaping) stays testable with a fake while
+/// the actual collection / Mapsui-layer mutation is marshalled to the
+/// dispatcher here.
 /// </summary>
 /// <remarks>
 /// The gateway deliberately reuses the same <c>Add</c> + <c>LoadAsync</c>

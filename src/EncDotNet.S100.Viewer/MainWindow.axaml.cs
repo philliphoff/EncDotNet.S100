@@ -46,6 +46,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
     private bool _exitAfterScreenshot;
+    private bool _closeAfterScreenshot;
     private bool _fullWindowScreenshot;
     private ViewerCommandSettings? _startupOptions;
 
@@ -362,6 +363,7 @@ public partial class MainWindow : ShadUI.Window
         _startupOptions = options;
         _screenshotPath = options?.ScreenshotPath;
         _exitAfterScreenshot = options?.ExitAfterScreenshot ?? false;
+        _closeAfterScreenshot = options?.CloseAfterScreenshot ?? false;
         _fullWindowScreenshot = options?.FullWindowScreenshot ?? false;
 
         // A fixed window size makes screenshots reproducible across
@@ -470,6 +472,11 @@ public partial class MainWindow : ShadUI.Window
             await Task.Delay(400);
             CaptureScreenshot(_screenshotPath);
 
+            if (_closeAfterScreenshot)
+            {
+                CloseAllDatasets();
+            }
+
             if (_exitAfterScreenshot)
             {
                 if (Avalonia.Application.Current?.ApplicationLifetime
@@ -482,6 +489,16 @@ public partial class MainWindow : ShadUI.Window
                     Close();
                 }
             }
+        }
+    }
+
+    private void CloseAllDatasets()
+    {
+        var loaded = _viewModel.Datasets.Entries.ToArray();
+        foreach (var entry in loaded)
+        {
+            _viewModel.Datasets.Entries.Remove(entry);
+            _loader.RemoveEntry(entry);
         }
     }
 
