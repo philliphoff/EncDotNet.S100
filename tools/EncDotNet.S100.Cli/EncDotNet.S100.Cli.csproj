@@ -5,11 +5,14 @@
     <AssemblyName>s100</AssemblyName>
     <RootNamespace>EncDotNet.S100.Cli</RootNamespace>
     <!--
-      Package-ready (a `dotnet tool install -g` global tool invoked as `s100`),
-      but publishing is gated until SkiaSharp native assets and the bundled
-      Specification content are verified to resolve from an installed tool.
+      Distributed as standalone, self-contained, per-RID release archives
+      (`s100-<version>-<rid>.{zip,tar.gz}`) attached to each GitHub Release, not
+      as a `dotnet tool install -g` global tool. A RID-agnostic packed tool does
+      not reliably lay out SkiaSharp's `runtimes/<rid>/native/libSkiaSharp.*`
+      native assets, so a self-contained publish (which lays them out correctly
+      and bundles the .NET runtime) is used instead. `PackAsTool` therefore
+      stays disabled. The `s100` command name comes from `AssemblyName` above.
     -->
-    <ToolCommandName>s100</ToolCommandName>
     <PackAsTool>false</PackAsTool>
   </PropertyGroup>
 
