@@ -144,7 +144,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
 
         var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var featureSource = CreateFeatureXmlSource();
         var pipeline = new PortrayalPipeline();
@@ -155,6 +155,8 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
         Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
             + $"{instructions.Count} drawing instructions");
 
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+
         var renderer = new MapsuiDisplayListRenderer
         {
             LayerName = $"{Spec.Name}: {_fileName}",
@@ -163,21 +165,9 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             AssetCache = _renderAssetCache,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = symbolName =>
-            {
-                try { return catalogue.GetSymbol(symbolName).SvgContent; }
-                catch { return null; }
-            },
-            AreaFillProvider = fillName =>
-            {
-                try { return catalogue.GetAreaFill(fillName); }
-                catch { return null; }
-            },
-            LineStyleProvider = name =>
-            {
-                try { return catalogue.GetLineStyle(name); }
-                catch { return null; }
-            },
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
         };
 
         var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
@@ -264,7 +254,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
 
         var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var featureSource = CreateFeatureXmlSource();
         var pipeline = new PortrayalPipeline();
@@ -272,32 +262,22 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             .ConfigureAwait(false);
         var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
 
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+
         var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
 
         return HeadlessVectorRenderer.Render(
             instructions,
             geometryProvider,
             catalogue.ActivePalette,
-            symbolProvider: name =>
-            {
-                try { return catalogue.GetSymbol(name).SvgContent; }
-                catch { return null; }
-            },
-            lineStyleProvider: name =>
-            {
-                try { return catalogue.GetLineStyle(name); }
-                catch { return null; }
-            },
+            symbolProvider: name => prewarm.ResolveSymbolSvg(name),
+            lineStyleProvider: name => prewarm.ResolveLineStyle(name),
             symbolScale: context?.SymbolScale ?? 1.0,
             textScale: context?.TextScale ?? 1.0,
             widthPixels: widthPixels,
             heightPixels: heightPixels,
             background: bg,
-            areaFillProvider: name =>
-            {
-                try { return catalogue.GetAreaFill(name); }
-                catch { return null; }
-            },
+            areaFillProvider: name => prewarm.ResolveAreaFill(name),
             hiddenCategories: context?.HiddenInstructionCategories
                 ?? DrawingInstructionCategory.None);
     }

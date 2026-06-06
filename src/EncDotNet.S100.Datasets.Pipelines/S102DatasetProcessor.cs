@@ -121,7 +121,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
         var metadata = _source.Metadata;
 
         var viewport = new EncDotNet.S100.Pipelines.Viewport
@@ -196,7 +196,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
         cancellationToken.ThrowIfCancellationRequested();
 
-        _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var styledLayer = (StyledCoverageLayer)await _pipeline
             .ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)

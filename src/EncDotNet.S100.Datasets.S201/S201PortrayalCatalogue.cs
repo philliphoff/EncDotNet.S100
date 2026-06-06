@@ -24,6 +24,6 @@ public sealed class S201PortrayalCatalogue : GmlPortrayalCatalogueBase
     public override SpecRef Spec => new("S-201", default);
 
     /// <inheritdoc/>
-    protected override System.Xml.XmlResolver CreateXmlResolver() =>
-        new FetchRuleFallbackXmlResolver(Provider);
+    protected override System.Xml.XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
+        new FetchRuleFallbackXmlResolver(Provider, registeredBytes);
 }

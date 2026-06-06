@@ -36,7 +36,7 @@ public class VectorPipeline
         _luaExecutor = luaExecutor;
     }
 
-    public Task<IVectorLayer> ProcessAsync(
+    public async Task<IVectorLayer> ProcessAsync(
         IFeatureXmlSource source,
         IVectorPortrayalCatalogue catalogue,
         Viewport? viewport = null,
@@ -64,7 +64,7 @@ public class VectorPipeline
             // display-list assembly; its internal telemetry spans cover those
             // sub-stages. It is render-bound, so it is constructed per call.
             var xsltExecutor = new XsltRuleExecutor(source, catalogue, viewport);
-            var instructions = xsltExecutor.Execute(marinerSettings, cancellationToken).ToList();
+            var instructions = (await xsltExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false)).ToList();
             activity?.SetTag("s100.pipeline.feature_types.count", xsltExecutor.LastFeatureTypeCount);
             activity?.SetTag("s100.pipeline.rules.count", xsltExecutor.LastRuleCount);
 
@@ -76,7 +76,7 @@ public class VectorPipeline
                 using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
                 {
                     var stageStart = Stopwatch.GetTimestamp();
-                    instructions.AddRange(_luaExecutor.Execute(marinerSettings, cancellationToken));
+                    instructions.AddRange(await _luaExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false));
                     RecordStageDuration(stageStart, "lua");
                     PipelineMetrics.StageInstructionsCount.Record(
                         instructions.Count,
@@ -116,7 +116,7 @@ public class VectorPipeline
                 Instructions = sorted,
             };
 
-            return Task.FromResult(layer);
+            return layer;
         }
         catch
         {

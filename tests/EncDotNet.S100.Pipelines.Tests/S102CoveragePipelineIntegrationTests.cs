@@ -40,8 +40,12 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         _provider.Dispose();
     }
 
-    private S102PortrayalCatalogue CreateCatalogue() =>
-        new(_engine, _provider);
+    private S102PortrayalCatalogue CreateCatalogue()
+    {
+        var c = new S102PortrayalCatalogue(_engine, _provider);
+        c.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        return c;
+    }
 
     [Fact]
     public async Task EndToEnd_ReadsHdf5_ProducesStyledLayer()

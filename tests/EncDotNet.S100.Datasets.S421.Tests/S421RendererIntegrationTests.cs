@@ -33,7 +33,7 @@ public class S421RendererIntegrationTests
             featureDoc = XDocument.Load(reader);
 
         var rule = catalogue.Rules.First();
-        var transform = catalogue.GetCompiledRule(rule.Name);
+        var transform = catalogue.GetCompiledRuleAsync(rule.Name).AsTask().GetAwaiter().GetResult();
 
         var displayList = new XDocument();
         using (var input = featureDoc.CreateReader())
@@ -78,7 +78,7 @@ public class S421RendererIntegrationTests
             Palette = catalogue.ActivePalette,
             SymbolProvider = name =>
             {
-                try { return catalogue.GetSymbol(name).SvgContent; }
+                try { return catalogue.GetSymbolAsync(name).AsTask().GetAwaiter().GetResult().SvgContent; }
                 catch { return null; }
             },
         };

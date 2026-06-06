@@ -31,9 +31,9 @@ public class LuaSourceCacheTests
         // not leak in.
         var openCountBefore = counting.GetOpenCount("Rules/main.lua");
 
-        var first = catalogue.GetLuaSource("main.lua");
-        var second = catalogue.GetLuaSource("main.lua");
-        var third = catalogue.GetLuaSource("main.lua");
+        var first = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var second = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var third = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
 
         Assert.NotNull(first);
         Assert.NotEmpty(first!);
@@ -59,9 +59,9 @@ public class LuaSourceCacheTests
         const string missing = "definitely-not-a-real-rule.lua";
         var openCountBefore = counting.GetOpenCount($"Rules/{missing}");
 
-        var a = catalogue.GetLuaSource(missing);
-        var b = catalogue.GetLuaSource(missing);
-        var c = catalogue.GetLuaSource(missing);
+        var a = catalogue.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult();
+        var b = catalogue.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult();
+        var c = catalogue.GetLuaSourceAsync(missing).AsTask().GetAwaiter().GetResult();
 
         Assert.Null(a);
         Assert.Null(b);
@@ -85,9 +85,9 @@ public class LuaSourceCacheTests
 
         var openCountBefore = counting.GetOpenCount("Rules/main.lua");
 
-        var first = catalogue.GetLuaSource("main.lua");
-        var second = catalogue.GetLuaSource("main.lua");
-        var third = catalogue.GetLuaSource("main.lua");
+        var first = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var second = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var third = catalogue.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
 
         Assert.NotNull(first);
         Assert.NotEmpty(first!);
@@ -116,8 +116,8 @@ public class LuaSourceCacheTests
         var providerB = await PortrayalCatalogueProvider.OpenAsync(countingB);
         var catalogueB = new S101PortrayalCatalogue(providerB);
 
-        var srcA = catalogueA.GetLuaSource("main.lua");
-        var srcB = catalogueB.GetLuaSource("main.lua");
+        var srcA = catalogueA.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
+        var srcB = catalogueB.GetLuaSourceAsync("main.lua").AsTask().GetAwaiter().GetResult();
 
         Assert.NotNull(srcA);
         Assert.NotNull(srcB);

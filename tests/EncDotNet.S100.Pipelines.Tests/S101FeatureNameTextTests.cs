@@ -117,10 +117,10 @@ public class S101FeatureNameTextTests
         var pcProvider = PortrayalCatalogueProvider.OpenAsync(pcSource).GetAwaiter().GetResult();
         var luaEngine = new MoonSharpLuaEngine();
         var catalogue = new S101PortrayalCatalogue(pcProvider, luaEngine);
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 
         var executor = new S101LuaRuleExecutor(luaEngine, dataset, catalogue, fc);
-        var emitted = executor.ExecuteRaw(MarinerSettings.Default);
+        var emitted = executor.ExecuteRawAsync(MarinerSettings.Default).GetAwaiter().GetResult();
 
         // Classify named features: featureName (NATC=48) holds an empty
         // top-level marker followed by a `name` sibling sub-attribute

@@ -23,11 +23,19 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 internal static class AssetSourceHelpers
 {
     /// <summary>
-    /// Opens <paramref name="relativePath"/> from <paramref name="source"/>
-    /// and returns a seekable stream positioned at the start. Non-seekable
-    /// streams (e.g. <c>ZipArchiveEntry.Open()</c>) are copied into a
-    /// <see cref="MemoryStream"/>; the original stream is disposed.
+    /// Opens <paramref name="relativePath"/> from <paramml="source"/>
+    /// synchronously and returns a seekable stream positioned at the start.
+    /// Prefer <see cref="OpenSeekableAsync"/> on new code paths.
     /// </summary>
+    /// <remarks>
+    /// SYNC BRIDGE: this helper exists because the per-spec dataset
+    /// processor constructors (S-101, S-102, ..., S-421) are synchronous —
+    /// their underlying parsers don't expose async loading. Open is a
+    /// one-shot cost paid once per dataset, not in the render hot path,
+    /// and <see cref="IAssetSource.OpenAsync"/> for <c>FileSystemAssetSource</c>
+    /// / <c>ZipAssetSource</c> is effectively synchronous (memory-backed
+    /// reads, no network I/O), so the awaiter-result bridge is bounded.
+    /// </remarks>
     public static Stream OpenSeekable(
         IAssetSource source,
         string relativePath,
@@ -46,6 +54,39 @@ internal static class AssetSourceHelpers
         {
             var buffer = new MemoryStream();
             stream.CopyTo(buffer);
+            buffer.Position = 0;
+            return buffer;
+        }
+        finally
+        {
+            stream.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Opens <paramref name="relativePath"/> from <paramref name="source"/>
+    /// and returns a seekable stream positioned at the start. Non-seekable
+    /// streams (e.g. <c>ZipArchiveEntry.Open()</c>) are copied into a
+    /// <see cref="MemoryStream"/>; the original stream is disposed.
+    /// </summary>
+    public static async Task<Stream> OpenSeekableAsync(
+        IAssetSource source,
+        string relativePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+
+        var stream = await source.OpenAsync(relativePath, cancellationToken).ConfigureAwait(false);
+        if (stream.CanSeek)
+        {
+            return stream;
+        }
+
+        try
+        {
+            var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
             buffer.Position = 0;
             return buffer;
         }

@@ -13,6 +13,6 @@ public sealed class S125PortrayalCatalogue : GmlPortrayalCatalogueBase
 {
     public S125PortrayalCatalogue(PortrayalCatalogueProvider provider) : base(provider) { }
     public override SpecRef Spec => new("S-125", default);
-    protected override System.Xml.XmlResolver CreateXmlResolver() =>
-        new FetchRuleFallbackXmlResolver(Provider);
+    protected override System.Xml.XmlResolver CreateXmlResolver(IReadOnlyDictionary<string, byte[]> registeredBytes) =>
+        new FetchRuleFallbackXmlResolver(Provider, registeredBytes);
 }

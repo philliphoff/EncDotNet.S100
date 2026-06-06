@@ -4,7 +4,7 @@ namespace EncDotNet.S100.Pipelines.Vector.Lua;
 /// Diagnostic extension of <see cref="IVectorRuleExecutor"/> for Lua-based
 /// portrayal engines (S-100 Part 9A). Exposes the raw pre-parse emit stream
 /// (<see cref="EmittedInstruction"/>) in addition to the typed
-/// <see cref="IVectorRuleExecutor.Execute"/> output.
+/// <see cref="IVectorRuleExecutor.ExecuteAsync"/> output.
 /// </summary>
 /// <remarks>
 /// The raw surface is intentionally kept off the shared
@@ -21,6 +21,6 @@ public interface ILuaVectorRuleExecutor : IVectorRuleExecutor
     /// </summary>
     /// <param name="mariner">Mariner-configurable display preferences (S-100 Part 9 §4.2).</param>
     /// <param name="cancellationToken">Honoured at coarse boundaries before Lua invocation.</param>
-    IReadOnlyList<EmittedInstruction> ExecuteRaw(
+    Task<IReadOnlyList<EmittedInstruction>> ExecuteRawAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default);
 }

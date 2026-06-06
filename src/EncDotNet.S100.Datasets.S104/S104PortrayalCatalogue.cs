@@ -124,16 +124,12 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// <summary>Gets the currently active color palette.</summary>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
-    /// <summary>
-    /// Switches the active palette. Unlike the previous implementation
-    /// (which returned a stub <see cref="ColorPalette.FromType"/> and
-    /// left the band table unchanged), this actually swaps the band
-    /// table returned by <see cref="ResolveColorScheme"/>.
-    /// </summary>
-    public void SwitchPalette(PaletteType type)
+    /// <inheritdoc/>
+    public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         _activePaletteType = type;
         ActivePalette = ColorPalette.FromType(type);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>

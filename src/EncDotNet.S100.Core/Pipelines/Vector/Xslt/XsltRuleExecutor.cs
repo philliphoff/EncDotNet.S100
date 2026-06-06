@@ -74,7 +74,7 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
 
     /// <inheritdoc />
     /// <remarks>The <paramref name="mariner"/> argument is ignored; see the type remarks.</remarks>
-    public IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<DrawingInstruction>> ExecuteAsync(MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "vector");
@@ -112,7 +112,7 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
         using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.xslt"))
         {
             var stageStart = Stopwatch.GetTimestamp();
-            drawingInstructionsDoc = RunXsltRules(featureDoc, applicableRules, _catalogue, _viewport, cancellationToken);
+            drawingInstructionsDoc = await RunXsltRulesAsync(featureDoc, applicableRules, _catalogue, _viewport, cancellationToken).ConfigureAwait(false);
             RecordStageDuration(stageStart, "xslt");
         }
 
@@ -156,7 +156,7 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
 
     // ── Stage 3: XSLT transformation ───────────────────────────────────
 
-    private static XDocument RunXsltRules(
+    private static async Task<XDocument> RunXsltRulesAsync(
         XDocument featureDoc,
         IReadOnlyList<PortrayalRule> rules,
         IVectorPortrayalCatalogue catalogue,
@@ -196,7 +196,7 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
                 args.AddParam("displayScale", string.Empty, viewport.ScaleDenominator);
             }
 
-            var transform = catalogue.GetCompiledRule(rule.Name);
+            var transform = await catalogue.GetCompiledRuleAsync(rule.Name, cancellationToken).ConfigureAwait(false);
             var resultFragment = new XDocument();
 
             var transformStart = Stopwatch.GetTimestamp();

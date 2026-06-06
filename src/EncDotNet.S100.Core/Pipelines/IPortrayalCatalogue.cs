@@ -9,7 +9,21 @@ public interface IPortrayalCatalogue
 
     /// <summary>The edition of the underlying portrayal catalogue (matches <see cref="PortrayalCatalogue.Version"/>).</summary>
     string Edition { get; }
+
+    /// <summary>The currently active colour palette.</summary>
     ColorPalette ActivePalette { get; }
-    void SwitchPalette(PaletteType type);
+
+    /// <summary>
+    /// Switches the active colour palette to <paramref name="type"/>.
+    /// </summary>
+    /// <remarks>
+    /// Asynchronous because catalogues that load palettes lazily from
+    /// <see cref="IAssetSource"/> may need to fetch the colour profile
+    /// XML on first access. Cached implementations complete
+    /// synchronously through the <see cref="ValueTask"/> fast path.
+    /// </remarks>
+    /// <param name="type">The palette mood (Day, Dusk, or Night).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default);
 }
  

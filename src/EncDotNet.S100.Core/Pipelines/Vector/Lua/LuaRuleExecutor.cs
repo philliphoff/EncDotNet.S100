@@ -78,7 +78,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<DrawingInstruction> Execute(
+    public async Task<IReadOnlyList<DrawingInstruction>> ExecuteAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mariner);
@@ -93,7 +93,13 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
 
         try
         {
-            var (emitted, provider) = ExecuteRawCore(mariner);
+            // Async pre-warm — load every Lua module declared by the catalogue
+            // so the synchronous MoonSharp require() loader can resolve modules
+            // without blocking. The snapshot dictionary is captured by the
+            // sync loader callback inside ExecuteRawCore.
+            var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
+
+            var (emitted, provider) = ExecuteRawCore(mariner, luaSources);
 
             Telemetry.LuaFeaturesCount.Add(
                 emitted.Count,
@@ -139,22 +145,48 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<EmittedInstruction> ExecuteRaw(
+    public async Task<IReadOnlyList<EmittedInstruction>> ExecuteRawAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(mariner);
         cancellationToken.ThrowIfCancellationRequested();
-        return ExecuteRawCore(mariner).Emitted;
+        var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
+        return ExecuteRawCore(mariner, luaSources).Emitted;
+    }
+
+    /// <summary>
+    /// Awaits every Lua rule file declared in the portrayal catalogue
+    /// manifest into a local snapshot dictionary so the synchronous MoonSharp
+    /// <c>require()</c> module loader (registered inside
+    /// <see cref="ExecuteRawCore"/>) can perform its lookups against an
+    /// in-memory map. This is the sync↔async bridge for Lua portrayal:
+    /// catalogues serve content asynchronously, the executor freezes the set
+    /// before driving the synchronous engine.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> LoadLuaSourcesAsync(CancellationToken cancellationToken)
+    {
+        var names = await _source.GetLuaSourceNamesAsync(cancellationToken).ConfigureAwait(false);
+        var dict = new Dictionary<string, string>(names.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var src = await _source.GetLuaSourceAsync(name, cancellationToken).ConfigureAwait(false);
+            if (src is not null)
+            {
+                dict[name] = src;
+            }
+        }
+        return dict;
     }
 
     private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
-        MarinerSettings mariner)
+        MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
     {
         var provider = _providerFactory.Create(mariner);
 
         using var lua = _luaEngine.CreateContext();
 
-        // 1. Resolve require() modules from the catalogue's cached source.
+        // 1. Resolve require() modules from the pre-loaded snapshot.
         //    Normalise the module name here (MoonSharp may pass it bare or with
         //    a .lua extension) so each catalogue need not repeat the logic.
         lua.SetModuleLoader(moduleName =>
@@ -162,16 +194,18 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)
                 ? moduleName
                 : $"{moduleName}.lua";
-            return _source.GetLuaSource(fileName);
+            return luaSources.TryGetValue(fileName, out var src) ? src : null;
         });
 
         // 2. Register the product's Host* functions.
         provider.RegisterHostFunctions(lua);
 
         // 3. Load main.lua (which require()s the S-100 scripting framework).
-        var mainSource = _source.GetLuaSource("main.lua")
-            ?? throw new InvalidOperationException(
+        if (!luaSources.TryGetValue("main.lua", out var mainSource))
+        {
+            throw new InvalidOperationException(
                 $"{_productTag} portrayal catalogue is missing required rule file 'main.lua'.");
+        }
         ExecuteScript(lua, mainSource, "main.lua");
 
         // 4. Run the provider's post-load shims/patches, in order.

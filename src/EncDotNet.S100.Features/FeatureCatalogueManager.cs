@@ -183,6 +183,9 @@ public sealed class FeatureCatalogueManager : IDisposable, ICatalogueProvider<Fe
         {
             try
             {
+                // SYNC BRIDGE: FC bundled IAssetSource is in-process
+                // resource-backed; this fallback runs once per spec inside
+                // a sync OpenRawCatalogue called from sync GetCatalogue.
                 stream = source.OpenAsync(FeatureCatalogueAssetName).GetAwaiter().GetResult();
             }
             catch

@@ -66,9 +66,10 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
-    public void SwitchPalette(PaletteType type)
+    public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
-        EnsurePalettesLoaded();
+        await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
+        await EnsureSpeedBandsLoadedAsync(cancellationToken).ConfigureAwait(false);
 
         if (!_cache.Palettes.TryGetValue(type, out var palette))
         {
@@ -91,18 +92,15 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// </summary>
     public CoverageColorScheme? ResolveColorScheme(MarinerSettings settings)
     {
-        // Touch the palette / band table so callers still pay the
-        // one-time load cost they previously did (keeps the asset-cache
-        // metrics and the PR-4 contract — see S111PaletteCacheTests —
-        // unchanged when SwitchPalette is the first call).
-        EnsurePalettesLoaded();
-        _ = EnsureSpeedBandsLoaded();
+        // Pre-warm contract: SwitchPaletteAsync warms palettes and the
+        // speed-band table so this sync method runs on cached state.
         return null;
     }
 
     public CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings)
     {
-        var bands = EnsureSpeedBandsLoaded();
+        var bands = _bands ?? throw new InvalidOperationException(
+            "S-111 speed bands have not been pre-warmed; call SwitchPaletteAsync before ResolveSymbolScheme.");
 
         var symbolBands = new List<SymbolBand>(bands.Count);
         foreach (var band in bands)
@@ -136,7 +134,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// first access. Subsequent calls are a no-op thanks to the sticky
     /// <see cref="IPortrayalAssetCache.PalettesLoaded"/> flag.
     /// </summary>
-    private void EnsurePalettesLoaded()
+    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
     {
         if (_cache.PalettesLoaded)
         {
@@ -158,8 +156,8 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
             (PaletteType.Night, "Night"),
         })
         {
-            using var stream = _provider.FetchAssetAsync(colorProfileItem, "ColorProfiles")
-                .GetAwaiter().GetResult();
+            cancellationToken.ThrowIfCancellationRequested();
+            using var stream = await _provider.FetchAssetAsync(colorProfileItem, "ColorProfiles", cancellationToken).ConfigureAwait(false);
             var palette = ColorProfileReader.Read(stream, name);
             if (palette.Colors.Count > 0)
             {
@@ -182,7 +180,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// <c>Rules/select_arrow.xsl</c> on first access; sticky on
     /// <see cref="_bandsLoaded"/>.
     /// </summary>
-    private IReadOnlyList<S111SpeedBandReader.SpeedBand> EnsureSpeedBandsLoaded()
+    private async ValueTask<IReadOnlyList<S111SpeedBandReader.SpeedBand>> EnsureSpeedBandsLoadedAsync(CancellationToken cancellationToken)
     {
         if (_bandsLoaded && _bands is not null)
         {
@@ -194,7 +192,7 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
             ?? throw new InvalidOperationException(
                 "S-111 portrayal catalogue does not contain a select_arrow rule file.");
 
-        using var stream = _provider.FetchAssetAsync(ruleFile).GetAwaiter().GetResult();
+        using var stream = await _provider.FetchAssetAsync(ruleFile, cancellationToken).ConfigureAwait(false);
         _bands = S111SpeedBandReader.Read(stream);
         _bandsLoaded = true;
         return _bands;

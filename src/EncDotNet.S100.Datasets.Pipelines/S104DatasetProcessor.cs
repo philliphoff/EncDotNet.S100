@@ -153,7 +153,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     {
         var source = _source!;
         var catalogue = _catalogue!;
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         DateTime selectedTime;
         if (context is S104RenderContext { TimeStep: { } timeStep })
@@ -257,7 +257,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
         var source = _source;
         var catalogue = _catalogue!;
-        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         if (context is S104RenderContext { TimeStep: { } timeStep })
             source.SelectTime(timeStep);

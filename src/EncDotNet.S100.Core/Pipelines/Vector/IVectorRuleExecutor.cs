@@ -24,7 +24,9 @@ public interface IVectorRuleExecutor
     /// <param name="cancellationToken">
     /// Signals that the render has been cancelled. Script interpreters are
     /// generally not interruptible mid-evaluation, so implementations honour
-    /// the token at coarse boundaries; the method remains synchronous.
+    /// the token at coarse boundaries; the asynchronous shape exists to allow
+    /// implementations to await catalogue asset loads (compiled XSLT, Lua
+    /// source) before driving the synchronous engine.
     /// </param>
-    IReadOnlyList<DrawingInstruction> Execute(MarinerSettings mariner, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DrawingInstruction>> ExecuteAsync(MarinerSettings mariner, CancellationToken cancellationToken = default);
 }

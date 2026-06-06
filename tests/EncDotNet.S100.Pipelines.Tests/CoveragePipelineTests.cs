@@ -294,6 +294,7 @@ public class CoveragePipelineTests
         public string Edition => "1.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }
+        public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         public MarinerSettings? LastSettings { get; private set; }
 

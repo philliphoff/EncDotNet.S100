@@ -41,16 +41,16 @@ public class S111PaletteCacheTests
         // Switch through every palette, in arbitrary order, including a
         // switch back to Day — none of these should re-open the asset
         // after the first one.
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPalette(PaletteType.Night);
+        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPalette(PaletteType.Dusk);
+        catalogue.SwitchPaletteAsync(PaletteType.Dusk).AsTask().GetAwaiter().GetResult();
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
         var after = counting.GetOpenCount(S111ColorProfileRelativePath);
@@ -75,7 +75,7 @@ public class S111PaletteCacheTests
         var provider = manager.GetProvider("S-111");
         var catalogue = new S111PortrayalCatalogue(provider);
 
-        catalogue.SwitchPalette(PaletteType.Day);
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         var afterSwitch = counting.GetOpenCount(S111ColorProfileRelativePath);
 
         // The defensive ActivePalette.Colors.Count == 0 re-load was the
