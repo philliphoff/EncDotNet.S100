@@ -36,7 +36,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IGmlFeature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHeadlessImageRenderer
     where TFeature : IGmlFeature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -249,6 +249,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var bg = background ?? new RgbaColor(255, 255, 255, 255);
+
+        // Honour the same pre-render gate as the Mapsui path (e.g. S-411
+        // time-window suppression). When the gate fires, the dataset
+        // contributes no portrayal for this context, so emit a blank
+        // background-filled bitmap rather than rendering stale content.
+        if (CheckPreRender(context) is not null)
+            return HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg);
+
         var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
         catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
@@ -279,7 +288,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor
             textScale: context?.TextScale ?? 1.0,
             widthPixels: widthPixels,
             heightPixels: heightPixels,
-            background: background ?? new RgbaColor(255, 255, 255, 255));
+            background: bg);
     }
 
     /// <inheritdoc/>

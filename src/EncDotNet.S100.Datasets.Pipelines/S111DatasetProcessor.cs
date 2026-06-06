@@ -15,6 +15,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Validation;
 using Mapsui;
 using Mapsui.Layers;
@@ -22,6 +23,7 @@ using Mapsui.Nts;
 using Mapsui.Projections;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -33,7 +35,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// fixed stations → station-arrow point layer; see S-111 Edition 2.0.0
 /// §10.2.3 / §10.2.7).
 /// </summary>
-public sealed class S111DatasetProcessor : IDatasetProcessor
+public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
 {
     // dcf2 only
     private readonly S111CoverageSource? _source;
@@ -280,6 +282,93 @@ public sealed class S111DatasetProcessor : IDatasetProcessor
                 : Array.Empty<string>(),
             StackEntries = stackEntries,
         };
+    }
+
+    /// <summary>
+    /// Renders the gridded surface-current arrows to a standalone
+    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia coverage
+    /// core (<see cref="CoverageHeadlessRenderer"/> +
+    /// <see cref="SkiaCoverageArrowRenderer"/>). The selected time step is taken
+    /// from <see cref="S111RenderContext.TimeStep"/> (defaulting to the first
+    /// available step). Fixed-station / ungeorectified (dcf3 / dcf8) datasets
+    /// emit point glyphs rather than a gridded coverage and therefore throw
+    /// <see cref="NotSupportedException"/>.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, time step, symbol scale).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <exception cref="NotSupportedException">
+    /// Thrown for dcf3 / dcf8 station-series datasets.
+    /// </exception>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_stationSeries is not null || _source is null || _catalogue is null || _provider is null)
+            throw new NotSupportedException(
+                "Headless rendering is not supported for S-111 fixed-station / " +
+                "ungeorectified (data coding format 3 or 8) datasets; only " +
+                "gridded surface-current coverages can be rendered to an image.");
+
+        var source = _source;
+        var catalogue = _catalogue;
+        var provider = _provider;
+        catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
+        if (context is S111RenderContext { TimeStep: { } timeStep })
+            source.SelectTime(timeStep);
+        else
+            source.SelectTime(source.AvailableTimes[0]);
+
+        var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
+            .ProcessAsync(source, catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ConfigureAwait(false);
+
+        var arrowRenderer = new SkiaCoverageArrowRenderer
+        {
+            Palette = catalogue.ActivePalette,
+            BaseSymbolScale = context?.SymbolScale ?? 1.0,
+            SymbolProvider = symbolName =>
+            {
+                var item = provider.Catalogue.Symbols
+                    .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase));
+                if (item is null) return null;
+
+                using var stream = provider.FetchAssetAsync(item, "Symbols").GetAwaiter().GetResult();
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            },
+        };
+
+        var nativeToWgs84 = _crsTransformFactory.Create(
+            styledLayer.Georeferencer.CRS, "EPSG:4326");
+
+        var extent = source.Metadata.Extent;
+        var renderer = new CoverageHeadlessRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+            ArrowRenderer = arrowRenderer,
+            NativeToWgs84 = nativeToWgs84,
+        };
+
+        return renderer.Render(
+            styledLayer,
+            extent.WestLongitude,
+            extent.EastLongitude,
+            extent.SouthLatitude,
+            extent.NorthLatitude,
+            widthPixels,
+            heightPixels);
     }
 
     /// <summary>

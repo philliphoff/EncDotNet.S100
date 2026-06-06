@@ -23,7 +23,7 @@ using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S101DatasetProcessor : IDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer
 {
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;

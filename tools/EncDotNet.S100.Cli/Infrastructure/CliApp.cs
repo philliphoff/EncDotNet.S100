@@ -1,0 +1,35 @@
+using EncDotNet.S100.Cli.Commands;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.Cli.Infrastructure;
+
+/// <summary>
+/// Builds the configured <see cref="CommandApp"/> for the <c>s100</c> CLI.
+/// Shared by the executable entry point and the test suite.
+/// </summary>
+internal static class CliApp
+{
+    public static CommandApp Build()
+    {
+        var app = new CommandApp();
+        app.Configure(config =>
+        {
+            config.SetApplicationName("s100");
+
+            config.AddCommand<RenderCommand>("render")
+                .WithDescription("Render an S-100 dataset to a PNG image.")
+                .WithExample("render", "dataset.h5", "out.png")
+                .WithExample("render", "warnings.gml", "out.png", "--width", "2048", "--height", "1536")
+                .WithExample("render", "currents.h5", "out.png", "--time-step", "2", "--palette", "night");
+
+            config.AddCommand<InfoCommand>("info")
+                .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")
+                .WithExample("info", "dataset.h5");
+
+            config.AddCommand<ListSpecsCommand>("list-specs")
+                .WithDescription("List supported product specifications and headless-render capability.")
+                .WithExample("list-specs");
+        });
+        return app;
+    }
+}

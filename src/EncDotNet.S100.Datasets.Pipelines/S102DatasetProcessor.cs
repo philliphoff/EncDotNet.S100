@@ -13,13 +13,15 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
 using Mapsui;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
+public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, IDisposable
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -169,6 +171,52 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDisposable
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    /// <summary>
+    /// Renders the bathymetric surface to a standalone <see cref="SKBitmap"/>
+    /// through the headless, Mapsui-free Skia coverage core
+    /// (<see cref="CoverageHeadlessRenderer"/> → <see cref="SkiaCoverageRenderer"/>).
+    /// The depth-band colour fill is fitted to the requested pixel rectangle,
+    /// preserving aspect against <paramref name="background"/>.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, mariner settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        _catalogue.SwitchPalette(context?.Palette ?? PaletteType.Day);
+
+        var styledLayer = (StyledCoverageLayer)await _pipeline
+            .ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+            .ConfigureAwait(false);
+
+        var extent = _source.Metadata.Extent;
+        var renderer = new CoverageHeadlessRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+        };
+
+        return renderer.Render(
+            styledLayer,
+            extent.WestLongitude,
+            extent.EastLongitude,
+            extent.SouthLatitude,
+            extent.NorthLatitude,
+            widthPixels,
+            heightPixels);
+    }
 
     /// <summary>
     /// Samples the bathymetric surface at the supplied geographic
