@@ -8,6 +8,22 @@ datasets).
 
 The command name is **`s100`**.
 
+## Distribution
+
+The `s100` executable ships **inside the S-100 Viewer application bundle** so a
+single download provides both the GUI and the command-line tool. CI publishes
+it self-contained (per platform RID) into a `cli/` subfolder of the viewer's
+publish output:
+
+| Platform | Location of `s100` |
+|---|---|
+| macOS | `EncDotNet.S100.Viewer.app/Contents/MacOS/cli/s100` (code-signed, notarized, and hardened-runtime alongside the viewer) |
+| Windows | `cli/s100.exe` next to the published viewer |
+| Linux | `cli/s100` next to the published viewer |
+
+On macOS the bundled `s100` binary and its native libraries are signed by the
+same step that signs the viewer, so it runs without Gatekeeper prompts.
+
 ## Commands
 
 ### `s100 render <dataset> <output>`
