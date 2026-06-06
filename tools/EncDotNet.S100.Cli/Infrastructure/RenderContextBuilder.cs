@@ -1,13 +1,15 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
 /// <summary>
 /// Builds the spec-specific <see cref="RenderContext"/> the dataset processors
-/// expect, mapping CLI options (palette, scales, time-step index) onto the
-/// correct context record. Time-series specs resolve their
-/// <c>--time-step</c> index against <see cref="ITimeAwareDatasetProcessor"/>.
+/// expect, mapping CLI options (palette, scales, time-step index, hidden
+/// instruction categories) onto the correct context record. Time-series specs
+/// resolve their <c>--time-step</c> index against
+/// <see cref="ITimeAwareDatasetProcessor"/>.
 /// </summary>
 internal static class RenderContextBuilder
 {
@@ -16,24 +18,25 @@ internal static class RenderContextBuilder
         PaletteType palette,
         double symbolScale,
         double textScale,
-        int timeStepIndex)
+        int timeStepIndex,
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
     {
         DateTime? timeStep = ResolveTimeStep(processor, timeStepIndex);
 
         return processor.Spec.Name switch
         {
-            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-122" => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-125" => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-127" => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-201" => new S201RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            "S-411" => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
-            _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale },
+            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-122" => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-125" => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-127" => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-201" => new S201RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            "S-411" => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
         };
     }
 

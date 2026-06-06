@@ -497,7 +497,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 textScale: context?.TextScale ?? 1.0,
                 widthPixels: widthPixels,
                 heightPixels: heightPixels,
-                background: background ?? new RgbaColor(255, 255, 255, 255));
+                background: background ?? new RgbaColor(255, 255, 255, 255),
+                hiddenCategories: context?.HiddenInstructionCategories
+                    ?? DrawingInstructionCategory.None);
         }
         finally
         {

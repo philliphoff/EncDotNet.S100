@@ -40,6 +40,15 @@ public static class HeadlessVectorRenderer
     /// <param name="widthPixels">Output bitmap width.</param>
     /// <param name="heightPixels">Output bitmap height.</param>
     /// <param name="background">Background fill colour.</param>
+    /// <param name="hiddenCategories">
+    /// Bitmask of instruction categories to suppress from the output (S-100
+    /// Part 9 instruction types — areas, lines, points, text). Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (render everything).
+    /// Hiding categories filters the display list before lowering, so the
+    /// remaining instructions keep their priorities, viewing-group state, and
+    /// extent. The auto-fitted viewport is computed from the filtered scene,
+    /// matching what the user actually sees.
+    /// </param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     public static SKBitmap Render(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -51,12 +60,16 @@ public static class HeadlessVectorRenderer
         double textScale,
         int widthPixels,
         int heightPixels,
-        RgbaColor background)
+        RgbaColor background,
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+
+        if (hiddenCategories != DrawingInstructionCategory.None)
+            instructions = FilterInstructions(instructions, hiddenCategories);
 
         var builder = new VectorSceneBuilder
         {
@@ -213,5 +226,33 @@ public static class HeadlessVectorRenderer
 
         minX = loX; minY = loY; maxX = hiX; maxY = hiY;
         return any;
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="instructions"/> with every entry whose
+    /// type is included in <paramref name="hidden"/> removed. The relative
+    /// order of the surviving instructions is preserved so downstream
+    /// priority / S-100 Part 9 type sorting in
+    /// <see cref="VectorSceneBuilder"/> behaves identically.
+    /// </summary>
+    private static IReadOnlyList<DrawingInstruction> FilterInstructions(
+        IReadOnlyList<DrawingInstruction> instructions,
+        DrawingInstructionCategory hidden)
+    {
+        var kept = new List<DrawingInstruction>(instructions.Count);
+        foreach (var inst in instructions)
+        {
+            var category = inst switch
+            {
+                AreaInstruction => DrawingInstructionCategory.Areas,
+                LineInstruction => DrawingInstructionCategory.Lines,
+                PointInstruction => DrawingInstructionCategory.Points,
+                TextInstruction => DrawingInstructionCategory.Text,
+                _ => DrawingInstructionCategory.None,
+            };
+            if ((hidden & category) == 0)
+                kept.Add(inst);
+        }
+        return kept;
     }
 }

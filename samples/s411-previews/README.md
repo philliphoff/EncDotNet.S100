@@ -42,6 +42,7 @@ file names from the BSIS portal.
 | `S100` | runs the Release DLL via `dotnet` | Command used to invoke the CLI (e.g. a published `s100` binary). |
 | `WIDTH` / `HEIGHT` | `1600` | Output size in pixels. |
 | `PALETTE` | `day` | `day` \| `dusk` \| `night`. |
+| `EXTRA_OPTS` | _empty_ | Extra flags forwarded verbatim to `s100 render` (e.g. `--no-text`). |
 
 ```bash
 # Use an installed global tool and a larger night-palette canvas
@@ -63,9 +64,17 @@ S100="s100" WIDTH=2048 HEIGHT=2048 PALETTE=night \
 - **The ZIP file names on the BSIS portal are dated and rotate** (often daily).
   The keys here point at a snapshot; if a download 404s, refresh the file name
   from <https://www.bsis-ice.de/IcePortal/ILP_S411.shtml>.
-- Previews include the full S-411 **egg-code text labels**, so dense ice can
-  look busier than the BSIS previews (which render solid colour only). Label
-  suppression is tracked as a CLI enhancement.
+- **Clean-fill previews:** to mirror the BSIS portal's text-free look, pass
+  `--no-text` to the CLI (or set `EXTRA_OPTS=--no-text` and have the script
+  forward it). For example:
+
+  ```bash
+  EXTRA_OPTS="--no-text" samples/s411-previews/s411_previews.sh
+  ```
+
+  This suppresses the S-411 egg-code labels at the renderer level while
+  leaving the fills, ice-edge lines, and symbols untouched. Use
+  `--hide text,points` to also drop point symbols.
 - This is sample/PoC code, not a supported product. Generated output under the
   chosen directory is intentionally not committed.
 - Data © the respective ice services (CIS, DMI, Met.no, US NWS/NIC, AARI, SHN,

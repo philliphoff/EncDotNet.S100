@@ -288,7 +288,9 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             textScale: context?.TextScale ?? 1.0,
             widthPixels: widthPixels,
             heightPixels: heightPixels,
-            background: bg);
+            background: bg,
+            hiddenCategories: context?.HiddenInstructionCategories
+                ?? DrawingInstructionCategory.None);
     }
 
     /// <inheritdoc/>
