@@ -95,6 +95,13 @@ public class ViewerCommandSettingsTests
     }
 
     [Fact]
+    public void Close_after_screenshot_requires_screenshot()
+    {
+        Assert.False(Ok(new ViewerCommandSettings { CloseAfterScreenshot = true }));
+        Assert.True(Ok(new ViewerCommandSettings { CloseAfterScreenshot = true, ScreenshotPath = "/tmp/x.png" }));
+    }
+
+    [Fact]
     public void Ephemeral_and_settings_are_mutually_exclusive()
     {
         Assert.False(Ok(new ViewerCommandSettings { Ephemeral = true, SettingsPath = "/tmp/s.json" }));

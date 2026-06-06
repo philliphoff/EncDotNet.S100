@@ -373,9 +373,9 @@ public partial class App : Application
         services.AddSingleton<IRenderActivityMonitor>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>());
         // Gateway over the existing GUI load/unload code path, used by the
-        // mutating open_dataset / close_dataset MCP tools so they reuse the
-        // same Add + LoadAsync / Remove + RemoveEntry flow as the file-open
-        // command rather than a parallel loader.
+        // mutating open_dataset / close_dataset / close_all_datasets MCP tools
+        // so they reuse the same Add + LoadAsync / Remove + RemoveEntry flow
+        // as the file-open command rather than a parallel loader.
         services.AddSingleton<IDatasetLoadGateway>(sp => new DatasetLoadGateway(
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<IDatasetLoaderService>(),

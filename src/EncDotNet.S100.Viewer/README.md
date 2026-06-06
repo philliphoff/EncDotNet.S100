@@ -292,7 +292,7 @@ to work unchanged; all flags below are additive.
 dotnet run --project src/EncDotNet.S100.Viewer -- \
   --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
   --bbox 47.5,-122.5,47.7,-122.1 --palette Night \
-  --screenshot /tmp/run/map.png --exit-after-screenshot \
+  --screenshot /tmp/run/map.png --close-after-screenshot --exit-after-screenshot \
   --log-file /tmp/run/viewer.log -v \
   path/to/dataset.h5
 ```
@@ -305,7 +305,7 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Nine viewer-only tools
+bound port back to the user's `settings.json`. Ten viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
@@ -322,7 +322,9 @@ breakdown, for measuring rendering performance), `open_dataset`
 (mutating — loads a file or exchange set through the viewer's own
 open code path and reports the resulting catalog id(s), bbox, and
 load duration), and `close_dataset` (mutating — unloads a dataset by
-catalog id, tolerating unknown ids gracefully). See
+catalog id, tolerating unknown ids gracefully), and
+`close_all_datasets` (mutating — unloads every currently-loaded
+dataset in one call). See
 `docs/mcp-server.md` for the full catalogue and the read-only /
 mutating split.
 
@@ -346,6 +348,9 @@ the run only.
 
 **Screenshots.** `--screenshot <PATH>` captures the map after the
 render has quiesced (rather than a fixed delay).
+`--close-after-screenshot` unloads all currently-loaded datasets right
+after capture (retention-test mode, keeps the app running unless
+`--exit-after-screenshot` is also set).
 `--exit-after-screenshot` makes it a one-shot capture-then-quit;
 `--full-window` captures the whole window (panels, toolbars, status
 bar) instead of just the map control; `--window-size <WIDTHxHEIGHT>`
@@ -372,6 +377,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--display-category <CAT>` | Override the ECDIS display category |
 | `--time-step <idx\|ts>` | Jump to a time step (index or timestamp) |
 | `--screenshot <PATH>` | Capture the map after render quiesces |
+| `--close-after-screenshot` | Unload all datasets after the screenshot |
 | `--exit-after-screenshot` | Quit after the screenshot (one-shot) |
 | `--full-window` | Capture the whole window, not just the map |
 | `--window-size <WxH>` | Force a fixed window size |

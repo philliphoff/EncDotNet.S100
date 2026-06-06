@@ -125,6 +125,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `get_render_stats` *(viewer only, read-only)* | Reports the cost of the most recently completed on-screen map paint: wall-clock `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a per-style breakdown (`style`, `calls`, `durationMs`, ordered by descending duration). Use it to measure rendering performance across pan / zoom, palette, or time-step changes. Describes the live map paint, not the offscreen `render_to_image` clone; returns `hasData = false` when no paint has occurred yet. Pair with `await_render_idle` so the reported paint reflects a settled view. |
 | `open_dataset` *(viewer only, **mutating**)* | Loads a dataset into the live viewer using its existing open code path, so agents can measure the load hot path. `path` is a single file (S-101 `.000`, HDF5 `.h5`, GML, etc.) OR an exchange set (a folder containing `CATALOG.XML`, or a `.zip` of one); the kind is auto-detected. `spec` optionally forces a product-spec hint (e.g. `S-102`) for single-file loads. Returns the resulting catalog id(s), `spec`, bounding box (`southLatitude`/`westLongitude`/`northLatitude`/`eastLongitude`), `count`, `loadDurationMs`, and `timedOut` (exchange-set quiescence). |
 | `close_dataset` *(viewer only, **mutating**)* | Unloads a currently-loaded dataset from the live viewer by its catalog `id` (as returned by `list_datasets` / `open_dataset`), using the viewer's existing close code path so agents can measure the unload hot path. An unknown / already-removed id resolves gracefully as a non-error result with `removed = false`. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
+| `close_all_datasets` *(viewer only, **mutating**)* | Unloads every currently-loaded dataset from the live viewer through the same close path used by `close_dataset`. Useful for retention loops that repeatedly load → render → unload without restarting the viewer process. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
 
 ### Read-only vs mutating tools
 
@@ -140,8 +141,9 @@ Tools fall into two groups:
   time step, loaded datasets, etc.). Use only when you intend to
   drive the viewer's UI from outside. Examples: `set_viewport`,
   `set_palette`, `set_display_category`, `set_time_step`,
-  `open_dataset`, and `close_dataset` (which load / unload datasets
-  through the viewer's own open / close code path).
+  `open_dataset`, `close_dataset`, and `close_all_datasets` (which
+  load / unload datasets through the viewer's own open / close code
+  path).
 
 Tool descriptions in the registered MCP catalogue identify each tool
 as one or the other; this table is the canonical reference.

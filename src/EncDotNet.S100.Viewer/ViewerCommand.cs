@@ -18,6 +18,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Quit the viewer immediately after the screenshot has been captured (one-shot capture).")]
     public bool ExitAfterScreenshot { get; set; }
 
+    [CommandOption("--close-after-screenshot")]
+    [Description("Unload all currently-loaded datasets after the screenshot has been captured (retention-test mode).")]
+    public bool CloseAfterScreenshot { get; set; }
+
     [CommandOption("--full-window")]
     [Description("Capture the entire viewer window (panels, toolbars, status bar) instead of just the map control.")]
     public bool FullWindowScreenshot { get; set; }
@@ -180,6 +184,9 @@ internal sealed class ViewerCommandSettings : CommandSettings
 
         if (ExitAfterScreenshot && ScreenshotPath is null)
             return Spectre.Console.ValidationResult.Error("--exit-after-screenshot requires --screenshot.");
+
+        if (CloseAfterScreenshot && ScreenshotPath is null)
+            return Spectre.Console.ValidationResult.Error("--close-after-screenshot requires --screenshot.");
 
         if (Ephemeral && SettingsPath is not null)
             return Spectre.Console.ValidationResult.Error("--ephemeral and --settings are mutually exclusive.");
