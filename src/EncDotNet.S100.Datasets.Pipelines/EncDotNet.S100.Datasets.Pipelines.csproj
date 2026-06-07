@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <Description>Per-spec IDatasetProcessor implementations, the DatasetPipelineFactory (file -&gt; processor detection), the headless image-render capability, the S-98 interoperability authority, and the validation runner for IHO S-100 product datasets. Consumed by the EncDotNet.S100 convenience package, the viewer, and the s100 CLI.</Description>
   </PropertyGroup>
 
   <ItemGroup>
