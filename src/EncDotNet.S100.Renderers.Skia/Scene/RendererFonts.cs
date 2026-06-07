@@ -1,0 +1,67 @@
+using System.Reflection;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Renderers.Skia.Scene;
+
+/// <summary>
+/// Resolves the default <see cref="SKTypeface"/> used by the headless Skia
+/// renderer for text labels.
+/// </summary>
+/// <remarks>
+/// <para>The renderer normally uses <see cref="SKTypeface.Default"/>, which on
+/// Linux is backed by <c>fontconfig</c>. When the self-contained
+/// <c>SkiaSharp.NativeAssets.Linux.NoDependencies</c> native library is shipped
+/// (issue #23), <c>libSkiaSharp.so</c> does not pull in <c>fontconfig</c>, so on
+/// a host without <c>fontconfig</c> and a font package installed,
+/// <see cref="SKTypeface.Default"/> resolves to an empty typeface
+/// (<see cref="SKTypeface.GlyphCount"/> == 0) and labels would render blank.</para>
+/// <para>To guarantee the headless render path produces real text without any
+/// system font infrastructure, an Open Sans face is embedded and used as a
+/// fallback <em>only</em> when the host default is unusable. Where the host does
+/// expose fonts (every desktop, and CI runners with <c>fontconfig</c>) the host
+/// default is returned unchanged, so existing visual-regression baselines are
+/// unaffected.</para>
+/// </remarks>
+internal static class RendererFonts
+{
+    private const string EmbeddedFontResource =
+        "EncDotNet.S100.Renderers.Skia.Assets.Fonts.OpenSans-Regular.ttf";
+
+    private static readonly Lazy<SKTypeface> LazyDefault = new(ResolveDefault);
+
+    /// <summary>
+    /// The typeface to use for label text: the host default when it can render
+    /// glyphs, otherwise the embedded Open Sans fallback.
+    /// </summary>
+    public static SKTypeface Default => LazyDefault.Value;
+
+    private static SKTypeface ResolveDefault()
+    {
+        var hostDefault = SKTypeface.Default;
+        if (IsUsable(hostDefault))
+            return hostDefault;
+
+        var embedded = TryLoadEmbedded();
+        return embedded ?? hostDefault;
+    }
+
+    private static bool IsUsable(SKTypeface? typeface) =>
+        typeface is { GlyphCount: > 0 } && !string.IsNullOrEmpty(typeface.FamilyName);
+
+    private static SKTypeface? TryLoadEmbedded()
+    {
+        try
+        {
+            using var stream = typeof(RendererFonts).Assembly
+                .GetManifestResourceStream(EmbeddedFontResource);
+            if (stream is null)
+                return null;
+
+            return SKTypeface.FromStream(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

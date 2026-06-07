@@ -37,7 +37,7 @@
     so the swap is ABI-neutral for the managed SkiaSharp binding.
   -->
   <ItemGroup Condition="'$(UseSkiaSharpLinuxNoDependencies)' == 'true'">
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
 

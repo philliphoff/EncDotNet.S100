@@ -274,7 +274,7 @@ public sealed class SkiaDisplayListRenderer
     {
         var (ax, ay) = t.Project(op.World);
 
-        using var font = new SKFont(SKTypeface.Default, (float)op.FontSizePx);
+        using var font = new SKFont(RendererFonts.Default, (float)op.FontSizePx);
         using var paint = new SKPaint { IsAntialias = true };
 
         font.MeasureText(op.Text, out var textBounds, paint);
