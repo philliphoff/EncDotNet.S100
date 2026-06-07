@@ -1,15 +1,22 @@
+using System;
 using EncDotNet.S100.Pipelines;
-using ProjNet.CoordinateSystems;
-using ProjNet.CoordinateSystems.Transformations;
+using global::ProjNet.CoordinateSystems;
+using global::ProjNet.CoordinateSystems.Transformations;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Crs.ProjNet;
 
 /// <summary>
 /// Creates CRS transforms backed by ProjNet.
 /// Supports WGS84 UTM zones (EPSG:326xx, EPSG:327xx) and EPSG:4326 ↔ EPSG:3857.
 /// </summary>
+/// <remarks>
+/// This is the only <see cref="ICrsTransformFactory"/> implementation in the
+/// repository. It depends solely on ProjNet (no map renderer), so headless
+/// consumers can reproject coverage products without linking Mapsui.
+/// </remarks>
 public sealed class ProjNetCrsTransformFactory : ICrsTransformFactory
 {
+    /// <inheritdoc />
     public ICrsTransform Create(string sourceCrs, string targetCrs)
     {
         if (string.Equals(sourceCrs, targetCrs, StringComparison.OrdinalIgnoreCase))

@@ -3,6 +3,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using Xunit;

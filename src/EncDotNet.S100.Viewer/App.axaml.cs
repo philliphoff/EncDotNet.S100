@@ -230,7 +230,7 @@ public partial class App : Application
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
                 new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
-                new EncDotNet.S100.Renderers.Mapsui.ProjNetCrsTransformFactory(),
+                new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
                 sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(),
