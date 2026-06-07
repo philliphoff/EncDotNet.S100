@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or general discussion
+    url: https://github.com/philliphoff/EncDotNet.S100/discussions
+    about: For "how do I…?" questions, usage help, and ideas, please use Discussions.
+  - name: Security vulnerability
+    url: https://github.com/philliphoff/EncDotNet.S100/security/advisories/new
+    about: Report security issues privately via GitHub Security Advisories — please do not open a public issue.
+  - name: Support
+    url: https://github.com/philliphoff/EncDotNet.S100/blob/main/SUPPORT.md
+    about: Where to ask questions vs. file bugs.
