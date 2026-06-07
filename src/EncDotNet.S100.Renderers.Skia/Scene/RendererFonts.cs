@@ -41,14 +41,20 @@ internal static class RendererFonts
         if (IsUsable(hostDefault))
             return hostDefault;
 
-        var embedded = TryLoadEmbedded();
+        var embedded = LoadEmbeddedFallback();
         return embedded ?? hostDefault;
     }
 
     private static bool IsUsable(SKTypeface? typeface) =>
         typeface is { GlyphCount: > 0 } && !string.IsNullOrEmpty(typeface.FamilyName);
 
-    private static SKTypeface? TryLoadEmbedded()
+    /// <summary>
+    /// Loads the embedded Open Sans fallback face, or <see langword="null"/> if
+    /// the resource is missing or cannot be decoded. Exposed for testing so the
+    /// fallback can be validated deterministically on hosts that already have a
+    /// usable system font (where <see cref="Default"/> would not exercise it).
+    /// </summary>
+    internal static SKTypeface? LoadEmbeddedFallback()
     {
         try
         {

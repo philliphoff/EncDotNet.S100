@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.VisualRegression.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Deterministic text fallback for hosts with no usable system font
          (e.g. NoDependencies native without fontconfig). See Assets/Fonts/README.md. -->
     <EmbeddedResource Include="Assets/Fonts/OpenSans-Regular.ttf">
