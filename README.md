@@ -140,7 +140,13 @@ product looks like in the viewer.
 ## Libraries
 
 For developers consuming EncDotNet.S100 directly, the solution is
-split into focused packages:
+split into focused packages.
+
+### Convenience facade
+
+| Package | Description |
+|---|---|
+| **EncDotNet.S100** | Batteries-included on-ramp: open a dataset, read its features, and render it to an image using the bundled feature and portrayal catalogues — no hand-wiring of catalogues or pipelines. Start here; drop down to the focused packages below only when you need finer control. |
 
 ### Core framework
 
