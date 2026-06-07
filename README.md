@@ -29,6 +29,26 @@ end users without requiring native dependencies, commercial S-52
 assets, or platform-specific tooling. Everything runs on macOS,
 Windows, and Linux out of the box.
 
+## Getting started
+
+New here? **[docs/getting-started.md](docs/getting-started.md)** walks you from
+zero to a rendered PNG in a few minutes — via either the batteries-included
+`EncDotNet.S100` library facade or the standalone `s100` command-line tool.
+
+```csharp
+using EncDotNet.S100;
+
+using var dataset = S100Dataset.Open("chart.000");   // detects the spec
+using var renderer = new PngS100DatasetRenderer();
+byte[] png = await renderer.RenderAsync(dataset);     // bundled FC + PC
+File.WriteAllBytes("out.png", png);
+```
+
+The runnable
+[`samples/EncDotNet.S100.Samples.Quickstart`](samples/EncDotNet.S100.Samples.Quickstart)
+console project demonstrates this end-to-end against a bundled synthetic
+fixture — `dotnet run` it with no setup.
+
 ## Supported standards
 
 Every supported product ships a reader, a portrayal pipeline, and a

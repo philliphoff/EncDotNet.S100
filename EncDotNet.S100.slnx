@@ -74,5 +74,6 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/EncDotNet.S100.Samples.Ais/EncDotNet.S100.Samples.Ais.csproj" />
+    <Project Path="samples/EncDotNet.S100.Samples.Quickstart/EncDotNet.S100.Samples.Quickstart.csproj" />
   </Folder>
 </Solution>
