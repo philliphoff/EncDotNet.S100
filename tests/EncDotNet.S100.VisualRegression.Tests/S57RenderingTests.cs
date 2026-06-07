@@ -43,6 +43,10 @@ public sealed class S57RenderingTests
         // runner rasterisation lands ~5.93% off the baseline (issue #177). We use
         // ProcessArchitecture (not OSArchitecture) so an x64 process emulated on
         // an arm64 OS is not over-relaxed.
+        //
+        // DELIBERATE per-RID tolerance — do NOT "tidy" this back to a single
+        // global 0.08 (that is what #186 did and it weakened the test on every
+        // platform; #177 restores the strict 5% everywhere except win-arm64).
         var maxDifferentPixelFraction =
             OperatingSystem.IsWindows()
             && RuntimeInformation.ProcessArchitecture == Architecture.Arm64

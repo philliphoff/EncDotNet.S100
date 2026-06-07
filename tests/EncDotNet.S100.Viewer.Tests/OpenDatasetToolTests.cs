@@ -160,6 +160,12 @@ public class OpenDatasetToolTests
                     // both adds together. This removes the timing race where a
                     // delayed second add could be mistaken for a failed load
                     // (issue #215).
+                    //
+                    // NOTE: collapsing the adds means this test now exercises
+                    // the fast path, not the quiet-window settle path. That
+                    // path is still covered deterministically by
+                    // ExchangeSet_partial_failure_settles_via_quiet_window
+                    // below (1 add dispatched as 2 -> settles via quiet window).
                     _ = Task.Run(async () =>
                     {
                         await Task.Delay(20);
