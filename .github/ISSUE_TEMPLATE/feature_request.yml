@@ -1,0 +1,82 @@
+name: Feature request
+description: Suggest a new feature, product, or capability for EncDotNet.S100.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature! Please describe the problem you're
+        trying to solve before jumping to a specific design — that helps us
+        consider alternatives.
+
+        For questions or open-ended discussion, use
+        [Discussions](https://github.com/philliphoff/EncDotNet.S100/discussions)
+        instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve? Who benefits and how?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: A concise description of what you'd like to see. APIs, UI, behavior, etc.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of the project would this touch? Pick the closest match.
+      options:
+        - "S-100 framework / Core / ExchangeSets / Features / Portrayals / Specifications"
+        - "S-101 ENC"
+        - "S-102 bathymetry"
+        - "S-104 water level"
+        - "S-111 surface currents"
+        - "S-122 marine protected areas"
+        - "S-124 navigational warnings"
+        - "S-125 marine aids to navigation"
+        - "S-127 marine resources and services"
+        - "S-128 catalogue of nautical products"
+        - "S-129 under keel clearance"
+        - "S-131 marine harbour infrastructure"
+        - "S-201 IALA aids to navigation information"
+        - "S-411 sea ice"
+        - "S-421 route plans"
+        - "Renderers (Skia / Mapsui)"
+        - "Viewer (Avalonia desktop app)"
+        - "Tooling (RenderS102, TestS101Lua, etc.)"
+        - "Build / CI / packaging"
+        - "Docs"
+        - "New product specification"
+        - "Other / cross-cutting"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you considered and why you discarded them.
+
+  - type: textarea
+    id: spec
+    attributes:
+      label: Spec references (optional)
+      description: |
+        For spec-derived behavior, cite the relevant section(s)
+        (e.g. "S-104 §10.2.3 WaterLevel attribute names").
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Use cases, examples, mockups, related issues, etc.
