@@ -6,6 +6,10 @@ The library is **UI-agnostic** — host it inside the desktop viewer, a
 CLI tool, or any process that can spin up an ASP.NET Core Kestrel
 listener.
 
+> **Packaging:** this library is not currently published to NuGet.
+> Consume it via project reference, or host it through the desktop
+> viewer.
+
 ## Stance
 
 - **Loopback-only.** The default `BindAddress` is `IPAddress.Loopback`.

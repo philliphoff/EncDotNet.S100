@@ -11,7 +11,11 @@
 
 **EncDotNet.S100** is a managed, cross-platform implementation of the
 IHO [S-100](https://iho.int/en/s-100-edition-5-2-0) Universal
-Hydrographic Data Model for .NET. It provides:
+Hydrographic Data Model for .NET. In plain terms, it reads and draws
+**electronic nautical charts and related marine data layers** —
+depths, currents, water levels, navigational warnings, aids to
+navigation, and more — and it runs on macOS, Windows, and Linux. It
+provides:
 
 - A set of **reusable libraries** for reading, portraying, rendering,
   and **validating** S-100 product data — from ISO 8211 ENC cells to
@@ -20,6 +24,9 @@ Hydrographic Data Model for .NET. It provides:
 - A **cross-platform desktop viewer** (Avalonia + Mapsui) that loads
   any combination of supported products from an exchange set or as
   loose files and renders them, time-aligned, on an interactive map.
+- A **standalone command-line tool** (`s100`) that renders any
+  supported dataset to a PNG from the shell — self-contained, with no
+  .NET install required — for batch and headless scripting.
 - An **optional MCP server** that exposes loaded datasets to AI
   agents (`list_datasets`, `describe_feature`, `sample_coverage`,
   `render_to_image`).
@@ -31,9 +38,18 @@ Windows, and Linux out of the box.
 
 ## Getting started
 
-New here? **[docs/getting-started.md](docs/getting-started.md)** walks you from
-zero to a rendered PNG in a few minutes — via either the batteries-included
-`EncDotNet.S100` library facade or the standalone `s100` command-line tool.
+**Just want to look at charts?** Download the desktop viewer from the
+[latest release](https://github.com/philliphoff/EncDotNet.S100/releases)
+— a pre-built, self-contained app for macOS, Windows, and Linux (no
+.NET install required) — and open a file or exchange set. The
+[getting-started guide](docs/getting-started.md#desktop-app) walks
+through it, and the [viewer section](#the-viewer) below tours the
+features.
+
+**Building on top of the data?** **[docs/getting-started.md](docs/getting-started.md)**
+also walks you from zero to a rendered PNG in a few minutes — via either the
+batteries-included `EncDotNet.S100` library facade or the standalone `s100`
+command-line tool.
 
 ```csharp
 using EncDotNet.S100;
@@ -108,7 +124,7 @@ OpenStreetMap basemap. Headline features:
   an overlay marker layer.
 - **Live overlays** through the dynamic-feature-source abstraction —
   an own-ship glyph with true-scale hull + arrowhead + CCRP cross at
-  zoom, plus an **AIS-target overlay** (PR-D3) backed by the
+  zoom, plus an **AIS-target overlay** backed by the
   [aisstream.io](https://aisstream.io) WebSocket service and rendered
   with a per-class palette using the same hull/arrowhead vocabulary.
 - **Optional MCP server** (off by default) exposing the loaded
@@ -137,10 +153,37 @@ product looks like in the viewer.
 | S-421 Route Plan | ![S-421 Route Plan](readme/S421Screenshot.png) |
 | S-57 (via S-101) | ![S-57 rendered via S-101 pipeline](docs/images/s57-viewer-us4fl1lt.png) |
 
+## Command-line tool
+
+`s100` is a cross-platform console tool that renders any supported
+product to a PNG from the shell, driving the same portrayal pipelines
+as the viewer through a headless Skia renderer — no UI required. It is
+suited to batch and scripted previews (sea-ice, surface-current, and
+chart thumbnails).
+
+```sh
+s100 render dataset.h5 out.png --palette night -w 2048 -h 1536
+s100 info dataset.h5          # detected spec, edition, and time steps
+s100 list-specs               # supported products
+```
+
+Each [release](https://github.com/philliphoff/EncDotNet.S100/releases)
+attaches a self-contained, per-platform archive that bundles the .NET
+runtime and native libraries, so **no .NET installation is required** —
+download, extract, and run. The same executable also ships inside the
+viewer application bundle. See [docs/cli.md](docs/cli.md) for the full
+command and option reference.
+
 ## Libraries
 
 For developers consuming EncDotNet.S100 directly, the solution is
-split into focused packages:
+split into focused packages.
+
+### Convenience facade
+
+| Package | Description |
+|---|---|
+| **EncDotNet.S100** | Batteries-included on-ramp: open a dataset, read its features, and render it to an image using the bundled feature and portrayal catalogues — no hand-wiring of catalogues or pipelines. Start here; drop down to the focused packages below only when you need finer control. |
 
 ### Core framework
 
@@ -189,14 +232,20 @@ split into focused packages:
 
 ### Dynamic feature sources
 
-| Package | Description |
+These ship in the repository but are **not currently published to
+NuGet** — consume them via project reference (or through the viewer).
+
+| Project | Description |
 |---|---|
 | **EncDotNet.S100.DynamicSources.Ais** | Decoder-agnostic AIS dynamic feature source: per-MMSI cache, ITU-R M.1371-aligned aging, projection to `DynamicFeature` with sentinel-collapsed motion. See [its README](src/EncDotNet.S100.DynamicSources.Ais/README.md). |
 | **EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo** | Production driver implementing `IAisMessageSource` over [aisstream.io](https://aisstream.io)'s WebSocket service. BCL-only (no third-party AIS or WebSocket deps). See [its README](src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md). |
 
 ### MCP server
 
-| Package | Description |
+These ship in the repository but are **not currently published to
+NuGet** — consume them via project reference (or through the viewer).
+
+| Project | Description |
 |---|---|
 | **EncDotNet.S100.Mcp.Tools** | Transport-agnostic Model Context Protocol tool surface (`list_datasets`, `describe_feature`, `sample_coverage`). See [its README](src/EncDotNet.S100.Mcp.Tools/README.md). |
 | **EncDotNet.S100.Mcp** | Streamable HTTP host that exposes the `Mcp.Tools` surface plus the viewer-injected `render_to_image` tool; bound to `127.0.0.1` by default, off by default, no authentication. See [its README](src/EncDotNet.S100.Mcp/README.md) and the [agent walkthrough](docs/mcp-server.md). |

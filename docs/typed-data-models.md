@@ -90,6 +90,5 @@ When adding a typed model for a new product spec:
 | S-122 | `S122MarineProtectedAreaDataset` | Pass 2 — catalogue of MPAs / restricted areas / VTS areas with typed information-type bindings. |
 | S-127 | `S127MarineServicesDataset` | Pass 2 — marine resources and services. |
 
-Other GML-encoded specs (S-129, S-131, S-411) are intentionally
-deferred to a future pass — the shared abstractions continue to be
-validated against new consumers before being rolled out further.
+Other GML-encoded specs (S-129, S-131, S-411) expose their data through
+the schema-agnostic feature bags rather than a typed root.

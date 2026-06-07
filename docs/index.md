@@ -29,7 +29,9 @@ pipeline, and a normative validation rule pack.
 
 ## Guides
 
-- [Getting started](getting-started.md) — render a supported dataset to PNG in a few minutes via the `EncDotNet.S100` facade or the standalone `s100` CLI, with pointers to sample data and a runnable console sample.
+- [Getting started](getting-started.md) — get S-100 data in front of you in a few minutes: download the desktop viewer, or render a dataset to PNG via the `EncDotNet.S100` facade or the standalone `s100` CLI.
+- [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's full feature tour: loading data, the layer stack, picking/identifying features, ECDIS display controls, palettes, and the timeline.
+- [Command-line rendering](cli.md) — the `s100` console tool for headless and batch PNG rendering.
 - [Typed data models](typed-data-models.md) — strongly-typed object-graph projections layered on top of the schema-agnostic feature bags exposed by each dataset reader.
 - [Observability](observability.md) — span tree, metrics catalogue, and OpenTelemetry / Aspire recipes for inspecting pipeline activity.
 - [MCP server](mcp-server.md) — Model Context Protocol surface (`list_datasets`, `describe_feature`, `sample_coverage`, `render_to_image`) used by AI agents to query loaded datasets.
