@@ -10,6 +10,46 @@ previews).
 The tool is structured with **subcommands** so its scope can grow (tiling,
 batch, validation, …) without breaking existing usage.
 
+## Install (standalone download)
+
+Each [GitHub Release](https://github.com/philliphoff/EncDotNet.S100/releases)
+attaches a **self-contained, per-platform archive** of `s100`. It bundles the
+.NET runtime and SkiaSharp's native libraries, so **no .NET installation is
+required** — just download, extract, and run.
+
+| Platform | Asset | Run |
+|---|---|---|
+| Windows x64 | `s100-<version>-win-x64.zip` | `s100.exe render dataset.h5 out.png` |
+| Windows arm64 | `s100-<version>-win-arm64.zip` | `s100.exe render dataset.h5 out.png` |
+| macOS (Apple silicon) | `s100-<version>-osx-arm64.tar.gz` | `./s100 render dataset.h5 out.png` |
+| Linux x64 | `s100-<version>-linux-x64.tar.gz` | `./s100 render dataset.h5 out.png` |
+| Linux arm64 | `s100-<version>-linux-arm64.tar.gz` | `./s100 render dataset.h5 out.png` |
+
+```bash
+# macOS / Linux
+tar -xzf s100-<version>-<rid>.tar.gz
+./s100 list-specs
+```
+
+The macOS archive is code-signed and notarized, so Gatekeeper verifies it
+online on first launch. If a copied binary is still quarantined, clear the
+attribute with `xattr -d com.apple.quarantine ./s100`.
+
+The same `s100` executable also ships inside the S-100 Viewer application
+bundle (under `cli/`); see the project README for that layout.
+
+### Future: installable `dotnet tool`
+
+A one-line `dotnet tool install -g` on-ramp remains a possible future addition.
+It was not adopted now because a classic global tool package is RID-agnostic
+(all assemblies land in a single `tools/<tfm>/any/` folder) and does not lay out
+SkiaSharp's `runtimes/<rid>/native/libSkiaSharp.*` native libraries where the
+host resolves them, causing a `DllNotFoundException` on the first render. .NET 8+
+does support **self-contained, RID-specific** tool packages, which would carry
+the native assets correctly, so publishing such a package (one per RID, heavier
+than the framework-dependent global tool) is a viable future complement to the
+standalone archives above.
+
 ## Quick start
 
 ```bash

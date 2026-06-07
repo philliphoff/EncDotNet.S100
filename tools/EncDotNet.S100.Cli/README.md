@@ -10,10 +10,36 @@ The command name is **`s100`**.
 
 ## Distribution
 
-The `s100` executable ships **inside the S-100 Viewer application bundle** so a
-single download provides both the GUI and the command-line tool. CI publishes
-it self-contained (per platform RID) into a `cli/` subfolder of the viewer's
-publish output:
+The `s100` CLI is distributed two ways, both produced by CI on each release:
+
+### Standalone download (recommended)
+
+Each GitHub Release attaches a **self-contained, per-platform archive** that
+bundles the .NET runtime and SkiaSharp's native libraries, so **no .NET
+installation is required**:
+
+| Platform | Asset | Extract & run |
+|---|---|---|
+| Windows x64 | `s100-<version>-win-x64.zip` | `s100.exe render …` |
+| Windows arm64 | `s100-<version>-win-arm64.zip` | `s100.exe render …` |
+| macOS (Apple silicon) | `s100-<version>-osx-arm64.tar.gz` | `./s100 render …` |
+| Linux x64 | `s100-<version>-linux-x64.tar.gz` | `./s100 render …` |
+| Linux arm64 | `s100-<version>-linux-arm64.tar.gz` | `./s100 render …` |
+
+The macOS archive is code-signed and notarized; Gatekeeper verifies the
+notarization online on first run. If macOS still quarantines the extracted
+binary (for example when copied between machines), clear the attribute with:
+
+```bash
+xattr -d com.apple.quarantine ./s100
+```
+
+### Inside the Viewer application bundle
+
+The `s100` executable also ships **inside the S-100 Viewer application bundle**
+so a single viewer download provides both the GUI and the command-line tool. CI
+publishes it self-contained (per platform RID) into a `cli/` subfolder of the
+viewer's publish output:
 
 | Platform | Location of `s100` |
 |---|---|

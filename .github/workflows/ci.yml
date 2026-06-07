@@ -184,6 +184,24 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
 
+      - name: Archive standalone s100 CLI (Linux)
+        # Package the self-contained `s100` CLI as its own per-RID release
+        # asset so users can download just the command-line tool without the
+        # viewer. The osx-arm64 archive is produced later, after the CLI is
+        # code-signed and notarized.
+        if: startsWith(matrix.rid, 'linux-')
+        shell: bash
+        run: >
+          tar -czf "s100-${{ steps.version.outputs.version }}-${{ matrix.rid }}.tar.gz"
+          -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli" .
+
+      - name: Archive standalone s100 CLI (Windows)
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: |
+          $cli = "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli"
+          Compress-Archive -Path "$cli/*" -DestinationPath "s100-${{ steps.version.outputs.version }}-${{ matrix.rid }}.zip"
+
       - name: Create macOS .app bundle
         if: matrix.rid == 'osx-arm64'
         run: |
@@ -287,6 +305,77 @@ jobs:
           echo "::warning::Stapling failed after 5 attempts. The app is still notarized; Gatekeeper will verify online."
           exit 1
 
+      - name: Sign standalone macOS s100 CLI
+        # The bundled CLI inside the .app is signed by the recursive loop above,
+        # but the standalone copy at .../publish/cli is a separate set of files
+        # and must be signed independently for its own release archive.
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          CLI="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli"
+          ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
+          MAIN_EXE="s100"
+          # Remove debug symbols; codesign treats .pdb as unsigned code objects.
+          find "$CLI" -name '*.pdb' -delete
+          # Sign every nested Mach-O (native dylibs such as libSkiaSharp.dylib)
+          # before the host executable.
+          find "$CLI" -type f ! -name "$MAIN_EXE" | while read -r f; do
+            if file "$f" | grep -q "Mach-O"; then
+              codesign --force --options runtime --timestamp \
+                --entitlements "$ENTITLEMENTS" \
+                --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            fi
+          done
+          # Sign the host executable last with hardened runtime + entitlements.
+          codesign --force --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            --sign "$APPLE_SIGNING_IDENTITY" "$CLI/s100"
+          codesign --verify --strict --verbose=2 "$CLI/s100"
+
+      - name: Notarize standalone macOS s100 CLI
+        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          CLI="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli"
+          # notarytool accepts .zip/.dmg/.pkg but not .tar.gz, so submit a
+          # throwaway .zip. The ticket is registered server-side against each
+          # binary's cdhash, so the distributed .tar.gz (identical signed
+          # binaries) passes Gatekeeper's online check on first run. A bare CLI
+          # cannot be stapled, so we rely on that online verification.
+          ditto -c -k --keepParent "$CLI" s100-cli-notarize.zip
+          xcrun notarytool submit s100-cli-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait \
+            --output-format json | tee cli-notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < cli-notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < cli-notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::CLI notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+
+      - name: Archive standalone macOS s100 CLI
+        if: matrix.rid == 'osx-arm64'
+        run: >
+          tar -czf "s100-${{ steps.version.outputs.version }}-osx-arm64.tar.gz"
+          -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli" .
+
+      - name: Upload standalone s100 CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: s100-cli-${{ matrix.rid }}
+          path: s100-*-${{ matrix.rid }}.*
+
       - name: Build macOS DMG
         if: matrix.rid == 'osx-arm64'
         env:
@@ -377,16 +466,21 @@ jobs:
         if: matrix.rid == 'osx-arm64'
         run: tar -czf "${{ matrix.artifact }}.tar.gz" EncDotNet.S100.Viewer.app
 
-      - name: Archive published app
-        if: matrix.rid != 'osx-arm64'
+      - name: Archive published app (Linux)
+        if: startsWith(matrix.rid, 'linux-')
         shell: bash
         run: tar -czf "${{ matrix.artifact }}.tar.gz" -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish" .
+
+      - name: Archive published app (Windows)
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: Compress-Archive -Path "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "${{ matrix.artifact }}.zip"
 
       - name: Upload published app
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.tar.gz
+          path: ${{ matrix.artifact }}.*
 
       - name: Upload macOS DMG
         if: matrix.rid == 'osx-arm64'
@@ -443,4 +537,7 @@ jobs:
           files: |
             artifacts/nupkgs/*.nupkg
             artifacts/Viewer-*/*.tar.gz
+            artifacts/Viewer-*/*.zip
+            artifacts/s100-cli-*/*.tar.gz
+            artifacts/s100-cli-*/*.zip
             artifacts/Viewer-*-dmg/*.dmg
