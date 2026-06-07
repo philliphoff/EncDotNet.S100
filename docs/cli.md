@@ -38,6 +38,18 @@ attribute with `xattr -d com.apple.quarantine ./s100`.
 The same `s100` executable also ships inside the S-100 Viewer application
 bundle (under `cli/`); see the project README for that layout.
 
+### Future: installable `dotnet tool`
+
+A one-line `dotnet tool install -g` on-ramp remains a possible future addition.
+It was not adopted now because a classic global tool package is RID-agnostic
+(all assemblies land in a single `tools/<tfm>/any/` folder) and does not lay out
+SkiaSharp's `runtimes/<rid>/native/libSkiaSharp.*` native libraries where the
+host resolves them, causing a `DllNotFoundException` on the first render. .NET 8+
+does support **self-contained, RID-specific** tool packages, which would carry
+the native assets correctly, so publishing such a package (one per RID, heavier
+than the framework-dependent global tool) is a viable future complement to the
+standalone archives above.
+
 ## Quick start
 
 ```bash
