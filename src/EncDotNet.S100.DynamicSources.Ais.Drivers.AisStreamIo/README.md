@@ -3,6 +3,9 @@
 `IAisMessageSource` driver targeting [aisstream.io](https://aisstream.io)'s
 free WebSocket AIS streaming service.
 
+> **Packaging:** this library is not currently published to NuGet.
+> Consume it via project reference, or through the desktop viewer.
+
 ## What ships here
 
 | Type | Purpose |

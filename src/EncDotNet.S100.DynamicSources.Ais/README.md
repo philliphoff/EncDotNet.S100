@@ -3,6 +3,9 @@
 Concrete `IDynamicFeatureSource` for AIS targets, plus the
 driver-agnostic `IAisMessageSource` abstraction.
 
+> **Packaging:** this library is not currently published to NuGet.
+> Consume it via project reference, or through the desktop viewer.
+
 ## What ships here
 
 | Type | Purpose |

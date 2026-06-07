@@ -3,8 +3,11 @@
 Foundation for a Model Context Protocol (MCP) server that exposes
 S-100 datasets to LLM-driven tooling. This project ships **the
 abstraction and the tool surface only** — no MCP protocol code, no
-viewer code, no transport. PR MCP-2 will layer the wire protocol on
-top of this.
+viewer code, no transport. The `EncDotNet.S100.Mcp` library layers the
+wire protocol on top of it.
+
+> **Packaging:** this library is not currently published to NuGet.
+> Consume it via project reference.
 
 ## Field conventions
 
