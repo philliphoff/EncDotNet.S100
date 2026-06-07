@@ -4,6 +4,15 @@ Per-spec `IDatasetProcessor` implementations, the S-98 interoperability
 authority, and the validation runner consumed by the viewer and the
 MCP server.
 
+> **Looking for the easy path?** Most consumers should use the
+> [`EncDotNet.S100`](../EncDotNet.S100/README.md) facade package, which wires this
+> factory to the bundled feature and portrayal catalogues and exposes a small
+> "open → render / read features" API. Use this package directly only when you
+> need full control over catalogues, CRS handling, or the pipeline itself.
+
+This package is published to NuGet (`IsPackable=true`) so the facade — and
+advanced à-la-carte consumers — can depend on it.
+
 ## Overview
 
 Each supported product ships an `IDatasetProcessor` that owns a parsed

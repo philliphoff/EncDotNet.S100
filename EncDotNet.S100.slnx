@@ -33,6 +33,7 @@
     <Project Path="src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <Project Path="src/EncDotNet.S100.Specifications/EncDotNet.S100.Specifications.csproj" />
     <Project Path="src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj" />
+    <Project Path="src/EncDotNet.S100/EncDotNet.S100.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EncDotNet.S100.Diagnostics.Export.Tests/EncDotNet.S100.Diagnostics.Export.Tests.csproj" />
@@ -58,6 +59,7 @@
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Tests/EncDotNet.S100.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Core.Tests/EncDotNet.S100.Core.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Features.Tests/EncDotNet.S100.Features.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
