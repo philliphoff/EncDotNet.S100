@@ -150,6 +150,37 @@ public sealed class OwnShipSourceTests
     }
 
     [Fact]
+    public void InitiallyDisabled_SeededProvider_PublishesNothing()
+    {
+        var stub = new StubOwnShipPositionProvider();
+        stub.Push(Fix());
+
+        using var src = new OwnShipSource(stub, geometryProvider: null, initiallyEnabled: false);
+
+        Assert.False(src.IsEnabled);
+        Assert.Empty(src.CurrentFeatures);
+    }
+
+    [Fact]
+    public void InitiallyDisabled_ProviderUpdatesIgnored_UntilEnabled()
+    {
+        var stub = new StubOwnShipPositionProvider();
+        using var src = new OwnShipSource(stub, geometryProvider: null, initiallyEnabled: false);
+
+        var events = new List<DynamicFeaturesChanged>();
+        src.Changed += (_, e) => events.Add(e);
+
+        stub.Push(Fix());
+        Assert.Empty(events);
+        Assert.Empty(src.CurrentFeatures);
+
+        src.IsEnabled = true;
+        Assert.Single(events);
+        Assert.Equal(DynamicSourceChangeKind.Added, events[0].Kind);
+        Assert.Single(src.CurrentFeatures);
+    }
+
+    [Fact]
     public void Metadata_HasExpectedShape()
     {
         var stub = new StubOwnShipPositionProvider();

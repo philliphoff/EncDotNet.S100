@@ -140,6 +140,16 @@ public partial class App : Application
             settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
         }
 
+        // Toggle the simulated own-ship overlay live from Settings. The
+        // source's IsEnabled gate empties (or republishes) the feature,
+        // so flipping the checkbox shows/hides the glyph without a
+        // restart.
+        var ownShipSource = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+        if (ownShipSource is not null)
+        {
+            settingsVm.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
+        }
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
@@ -320,7 +330,8 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()));
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>(),
+                initiallyEnabled: sp.GetRequiredService<ViewerSettings>().OwnShipOverlayEnabled));
         services.AddSingleton<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>());
 

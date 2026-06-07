@@ -78,10 +78,33 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
     public OwnShipSource(
         IOwnShipPositionProvider provider,
         IOwnShipVesselGeometryProvider? geometryProvider)
+        : this(provider, geometryProvider, initiallyEnabled: true)
+    {
+    }
+
+    /// <summary>
+    /// Creates the source with an explicit initial enabled state.
+    /// </summary>
+    /// <param name="provider">Position provider feeding own-ship fixes.</param>
+    /// <param name="geometryProvider">
+    /// Optional vessel-geometry sidecar provider.
+    /// </param>
+    /// <param name="initiallyEnabled">
+    /// Initial value of <see cref="IsEnabled"/>. When
+    /// <see langword="false"/> the source publishes nothing until it is
+    /// enabled — used to honour the persisted
+    /// <c>ViewerSettings.OwnShipOverlayEnabled</c> gate (off by default)
+    /// so the simulated own-ship overlay is hidden at launch.
+    /// </param>
+    public OwnShipSource(
+        IOwnShipPositionProvider provider,
+        IOwnShipVesselGeometryProvider? geometryProvider,
+        bool initiallyEnabled)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
         _geometryProvider = geometryProvider;
+        _isEnabled = initiallyEnabled;
 
         Metadata = new DynamicSourceMetadata
         {

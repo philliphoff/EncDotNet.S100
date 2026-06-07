@@ -1127,6 +1127,13 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
 
   <!-- Own-vessel dimensions (own-ship symbology PR) -->
+  <data name="Settings_OwnVessel_OverlayEnabled" xml:space="preserve">
+    <value>Show simulated own-ship position</value>
+    <comment>Checkbox label that enables or disables the mocked own-location overlay. Off by default.</comment>
+  </data>
+  <data name="Settings_OwnVessel_OverlayEnabled_Tooltip" xml:space="preserve">
+    <value>Show a simulated own-ship position glyph that dead-reckons across the chart. Intended for demonstration until a real GPS / NMEA source is connected. Disabled by default.</value>
+  </data>
   <data name="Settings_OwnVesselSection" xml:space="preserve">
     <value>Own Vessel</value>
     <comment>Heading of the Settings panel section that configures own-ship hull dimensions and the GPS antenna position.</comment>
