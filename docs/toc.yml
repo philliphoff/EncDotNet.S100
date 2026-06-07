@@ -1,5 +1,7 @@
 - name: Documentation
   href: index.md
+- name: Getting started
+  href: getting-started.md
 - name: Typed data models
   href: typed-data-models.md
 - name: Observability
