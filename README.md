@@ -20,6 +20,9 @@ Hydrographic Data Model for .NET. It provides:
 - A **cross-platform desktop viewer** (Avalonia + Mapsui) that loads
   any combination of supported products from an exchange set or as
   loose files and renders them, time-aligned, on an interactive map.
+- A **standalone command-line tool** (`s100`) that renders any
+  supported dataset to a PNG from the shell — self-contained, with no
+  .NET install required — for batch and headless scripting.
 - An **optional MCP server** that exposes loaded datasets to AI
   agents (`list_datasets`, `describe_feature`, `sample_coverage`,
   `render_to_image`).
@@ -136,6 +139,27 @@ product looks like in the viewer.
 | S-411 Sea Ice | ![S-411 Sea Ice](readme/S411Screenshot.png) |
 | S-421 Route Plan | ![S-421 Route Plan](readme/S421Screenshot.png) |
 | S-57 (via S-101) | ![S-57 rendered via S-101 pipeline](docs/images/s57-viewer-us4fl1lt.png) |
+
+## Command-line tool
+
+`s100` is a cross-platform console tool that renders any supported
+product to a PNG from the shell, driving the same portrayal pipelines
+as the viewer through a headless Skia renderer — no UI required. It is
+suited to batch and scripted previews (sea-ice, surface-current, and
+chart thumbnails).
+
+```sh
+s100 render dataset.h5 out.png --palette night -w 2048 -h 1536
+s100 info dataset.h5          # detected spec, edition, and time steps
+s100 list-specs               # supported products
+```
+
+Each [release](https://github.com/philliphoff/EncDotNet.S100/releases)
+attaches a self-contained, per-platform archive that bundles the .NET
+runtime and native libraries, so **no .NET installation is required** —
+download, extract, and run. The same executable also ships inside the
+viewer application bundle. See [docs/cli.md](docs/cli.md) for the full
+command and option reference.
 
 ## Libraries
 
