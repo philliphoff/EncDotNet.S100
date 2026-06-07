@@ -34,6 +34,30 @@ binary (for example when copied between machines), clear the attribute with:
 xattr -d com.apple.quarantine ./s100
 ```
 
+#### Linux runtime dependencies
+
+The self-contained archive bundles the .NET runtime and SkiaSharp's native
+libraries, but it does **not** bundle the handful of system shared libraries
+those components load from the OS. Minimal/server and container base images
+(for example `ubuntu`, `debian`, `mcr.microsoft.com/dotnet/runtime-deps`) often
+omit them, so install them before running `s100`:
+
+| Package | Required on | Why |
+|---|---|---|
+| `libicu` (`libicu74` on Ubuntu 24.04, `libicu72` on Debian 12) | **all** Linux | .NET globalization. Without it **every** command aborts at startup with a `Couldn't find a valid ICU package` failure. |
+| `libfontconfig1` | **x64** (hard requirement); recommended on arm64 | The x64 `libSkiaSharp.so` lists `libfontconfig.so.1` as a required (`NEEDED`) dependency, so any Skia/`render` command fails to load it with a `SKImageInfo` type-initializer error until it is installed. The arm64 native library does not link fontconfig, so it loads without it — but installing fontconfig (plus a font package) is still recommended for correct text rendering and to silence the `Fontconfig error: Cannot load default config file` warning. |
+
+Debian/Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libicu74 libfontconfig1 fontconfig
+# Debian 12: use libicu72 instead of libicu74
+```
+
+`s100 list-specs` and `s100 info` need only `libicu`; `s100 render` (the Skia
+path) additionally needs `libfontconfig1` on x64.
+
 ### Inside the Viewer application bundle
 
 The `s100` executable also ships **inside the S-100 Viewer application bundle**
