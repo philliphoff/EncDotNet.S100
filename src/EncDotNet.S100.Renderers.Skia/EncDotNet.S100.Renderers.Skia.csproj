@@ -28,6 +28,8 @@
       <LogicalName>EncDotNet.S100.Renderers.Skia.Assets.Fonts.OpenSans-Regular.ttf</LogicalName>
     </EmbeddedResource>
     <None Include="Assets/Fonts/README.md" />
+    <!-- Ship Open Sans' Apache-2.0 license/attribution alongside the font in the package. -->
+    <None Include="Assets/Fonts/LICENSE-OpenSans.txt" Pack="true" PackagePath="Assets/Fonts/" />
   </ItemGroup>
 
   <ItemGroup>

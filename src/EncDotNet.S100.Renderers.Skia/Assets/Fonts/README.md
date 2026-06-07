@@ -17,6 +17,11 @@ baselines are unaffected.
 
 ## Licence
 
-Open Sans is licensed under the Apache License, Version 2.0. The font is the same
-asset already redistributed under `EncDotNet.S100.Specifications/content/**/pc/Fonts/`
-as part of the official S-100 portrayal catalogues.
+Open Sans is licensed under the Apache License, Version 2.0 (Copyright 2010-2011,
+Google Inc.; designed by Steve Matteson). The full licence text and attribution
+are in [`LICENSE-OpenSans.txt`](LICENSE-OpenSans.txt) in this folder, and the asset
+is listed in the repository's root [`THIRD-PARTY-NOTICES.md`](../../../../THIRD-PARTY-NOTICES.md).
+
+This is the same Open Sans face already redistributed under the official S-100
+portrayal catalogues at
+`EncDotNet.S100.Specifications/content/**/pc/Fonts/OpenSans-Regular.ttf`.

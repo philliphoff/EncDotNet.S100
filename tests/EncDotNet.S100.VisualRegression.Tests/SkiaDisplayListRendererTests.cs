@@ -271,6 +271,46 @@ public sealed class SkiaDisplayListRendererTests
     }
 
     [Fact]
+    public void Select_UsesEmbeddedFallback_WhenHostDefaultIsUnusable()
+    {
+        // Simulates the headless-Linux case where SKTypeface.Default is the empty
+        // typeface (no fontconfig): the embedded fallback must engage.
+        using var embedded = RendererFonts.LoadEmbeddedFallback();
+        Assert.NotNull(embedded);
+
+        int factoryCalls = 0;
+        var selected = RendererFonts.Select(hostDefault: null, embeddedFactory: () =>
+        {
+            factoryCalls++;
+            return embedded;
+        });
+
+        Assert.Same(embedded, selected);
+        Assert.Equal(1, factoryCalls);
+    }
+
+    [Fact]
+    public void Select_PrefersHostDefault_WhenUsable_AndDoesNotLoadEmbedded()
+    {
+        // When the host exposes a usable font (every desktop / CI runner with
+        // fontconfig), the OS typeface is used and the embedded fallback is never
+        // even loaded — so OS-font output (and VR baselines) is unchanged.
+        using var usableHost = RendererFonts.LoadEmbeddedFallback(); // a known-usable face
+        Assert.NotNull(usableHost);
+        Assert.True(RendererFonts.IsUsable(usableHost));
+
+        int factoryCalls = 0;
+        var selected = RendererFonts.Select(hostDefault: usableHost, embeddedFactory: () =>
+        {
+            factoryCalls++;
+            return null;
+        });
+
+        Assert.Same(usableHost, selected);
+        Assert.Equal(0, factoryCalls);
+    }
+
+    [Fact]
     public void Render_TextOnlyScene_DrawsForegroundGlyphs()
     {
         // A text-only scene must paint real glyphs, not a blank background. This

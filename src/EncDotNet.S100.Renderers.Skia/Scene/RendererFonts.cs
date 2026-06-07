@@ -35,17 +35,33 @@ internal static class RendererFonts
     /// </summary>
     public static SKTypeface Default => LazyDefault.Value;
 
-    private static SKTypeface ResolveDefault()
+    private static SKTypeface ResolveDefault() =>
+        Select(SKTypeface.Default, LoadEmbeddedFallback) ?? SKTypeface.CreateDefault();
+
+    /// <summary>
+    /// Chooses the label typeface: <paramref name="hostDefault"/> when it can
+    /// render glyphs, otherwise the embedded fallback produced by
+    /// <paramref name="embeddedFactory"/> (only invoked when the host default is
+    /// unusable). Falls back to <paramref name="hostDefault"/> if the factory
+    /// yields nothing. Exposed for testing so the selection can be validated
+    /// deterministically without depending on the host's font configuration.
+    /// </summary>
+    internal static SKTypeface? Select(SKTypeface? hostDefault, Func<SKTypeface?> embeddedFactory)
     {
-        var hostDefault = SKTypeface.Default;
+        ArgumentNullException.ThrowIfNull(embeddedFactory);
+
         if (IsUsable(hostDefault))
             return hostDefault;
 
-        var embedded = LoadEmbeddedFallback();
-        return embedded ?? hostDefault;
+        return embeddedFactory() ?? hostDefault;
     }
 
-    private static bool IsUsable(SKTypeface? typeface) =>
+    /// <summary>
+    /// Whether the typeface can actually render text (has glyphs and a family
+    /// name). An empty <see cref="SKTypeface.Default"/> on a host without
+    /// <c>fontconfig</c> fails this check.
+    /// </summary>
+    internal static bool IsUsable(SKTypeface? typeface) =>
         typeface is { GlyphCount: > 0 } && !string.IsNullOrEmpty(typeface.FamilyName);
 
     /// <summary>
