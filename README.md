@@ -11,7 +11,11 @@
 
 **EncDotNet.S100** is a managed, cross-platform implementation of the
 IHO [S-100](https://iho.int/en/s-100-edition-5-2-0) Universal
-Hydrographic Data Model for .NET. It provides:
+Hydrographic Data Model for .NET. In plain terms, it reads and draws
+**electronic nautical charts and related marine data layers** —
+depths, currents, water levels, navigational warnings, aids to
+navigation, and more — and it runs on macOS, Windows, and Linux. It
+provides:
 
 - A set of **reusable libraries** for reading, portraying, rendering,
   and **validating** S-100 product data — from ISO 8211 ENC cells to
@@ -34,9 +38,18 @@ Windows, and Linux out of the box.
 
 ## Getting started
 
-New here? **[docs/getting-started.md](docs/getting-started.md)** walks you from
-zero to a rendered PNG in a few minutes — via either the batteries-included
-`EncDotNet.S100` library facade or the standalone `s100` command-line tool.
+**Just want to look at charts?** Download the desktop viewer from the
+[latest release](https://github.com/philliphoff/EncDotNet.S100/releases)
+— a pre-built, self-contained app for macOS, Windows, and Linux (no
+.NET install required) — and open a file or exchange set. The
+[getting-started guide](docs/getting-started.md#desktop-app) walks
+through it, and the [viewer section](#the-viewer) below tours the
+features.
+
+**Building on top of the data?** **[docs/getting-started.md](docs/getting-started.md)**
+also walks you from zero to a rendered PNG in a few minutes — via either the
+batteries-included `EncDotNet.S100` library facade or the standalone `s100`
+command-line tool.
 
 ```csharp
 using EncDotNet.S100;

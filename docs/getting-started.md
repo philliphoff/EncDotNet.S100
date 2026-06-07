@@ -1,8 +1,11 @@
 # Getting started
 
-This guide gets a supported S-100 dataset onto your screen — as a PNG — in a
-few minutes, with **no prior S-100 knowledge required**. There are two paths:
+This guide gets supported S-100 data in front of you in a few minutes, with
+**no prior S-100 knowledge required**. Pick the path that fits you:
 
+- **[Desktop app](#desktop-app)** — download the viewer and open a chart on an
+  interactive map. No coding and no .NET installation required. *Start here if
+  you just want to look at data.*
 - **[Library path](#library-path)** — render (or read features from) a dataset
   in ~20 lines of C# using the batteries-included `EncDotNet.S100` facade.
 - **[CLI path](#cli-path)** — download the standalone `s100` tool and render
@@ -12,6 +15,48 @@ If you just want to see it run, the
 [`EncDotNet.S100.Samples.Quickstart`](../samples/EncDotNet.S100.Samples.Quickstart)
 console sample does the library path end-to-end against a bundled synthetic
 fixture — clone the repo and `dotnet run` it.
+
+## Desktop app
+
+The **S-100 Viewer** is a cross-platform desktop application that loads any
+combination of supported products and renders them, time-aligned, on an
+interactive map over an OpenStreetMap basemap. It needs no .NET installation
+and no commercial chart assets.
+
+### 1. Download
+
+Each [GitHub Release](https://github.com/philliphoff/EncDotNet.S100/releases)
+attaches a pre-built, self-contained app per platform:
+
+| Platform | Asset | First launch |
+|---|---|---|
+| macOS (Apple silicon) | `.dmg` | Signed and Apple-notarized — open the DMG and drag the app to Applications. |
+| Windows | `.zip` | Extract and run the `.exe`. |
+| Linux | `.tar.gz` | Extract and run the executable. |
+
+### 2. Open some data
+
+Launch the app, then either **drag a file onto the window** or use the **File**
+menu. The viewer accepts:
+
+- **Exchange sets** — a folder containing a `CATALOG.XML`, or a `.zip` of one.
+  Every dataset the catalogue lists is loaded at once.
+- **Loose datasets** — an individual `.h5` (S-102 / S-104 / S-111), `.gml`
+  (any GML-encoded product), or `.000` (S-101 / S-57) file.
+
+No data yet? See [Where to get sample data](#where-to-get-sample-data) below.
+
+### 3. Explore
+
+Pan and zoom with the mouse, trackpad, or touch. From the activity bar you can:
+
+- toggle layers and see how products stack in the **Layer Stack**;
+- click features in **Pick Mode** to read their decoded attributes;
+- switch **Day / Dusk / Night** palettes and ECDIS display settings;
+- scrub the **timeline** for time-varying data (water levels, currents, ice).
+
+See the [viewer guide](../src/EncDotNet.S100.Viewer/README.md) for the full
+feature tour.
 
 ## Library path
 
@@ -136,6 +181,8 @@ with no downloads at all.
 
 ## Next steps
 
+- [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's
+  full feature tour.
 - [Command-line rendering](cli.md) — the full `s100` reference.
 - [Documentation index](index.md) — per-product libraries and conceptual guides.
 - [Typed data models](typed-data-models.md) — strongly-typed projections over
