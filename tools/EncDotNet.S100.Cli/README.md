@@ -45,18 +45,26 @@ omit them, so install them before running `s100`:
 | Package | Required on | Why |
 |---|---|---|
 | `libicu` (`libicu74` on Ubuntu 24.04, `libicu72` on Debian 12) | **all** Linux | .NET globalization. Without it **every** command aborts at startup with a `Couldn't find a valid ICU package` failure. |
-| `libfontconfig1` | **x64** (hard requirement); recommended on arm64 | The x64 `libSkiaSharp.so` lists `libfontconfig.so.1` as a required (`NEEDED`) dependency, so any Skia/`render` command fails to load it with a `SKImageInfo` type-initializer error until it is installed. The arm64 native library does not link fontconfig, so it loads without it — but installing fontconfig (plus a font package) is still recommended for correct text rendering and to silence the `Fontconfig error: Cannot load default config file` warning. |
+| `fontconfig` + a font package (e.g. `fonts-dejavu-core`) | optional | The bundled `libSkiaSharp.so` is the self-contained `SkiaSharp.NativeAssets.Linux.NoDependencies` build (issue #23), so `render` loads and draws text **without** fontconfig: labels fall back to a font embedded in the renderer. Installing fontconfig and a system font package only changes *which* font labels use (the discovered system font instead of the embedded fallback) and silences the `Fontconfig error: Cannot load default config file` warning. |
+
+> The shipped native library is now the same self-contained
+> `NoDependencies` build on both `linux-x64` and `linux-arm64`. Earlier
+> releases bundled the regular native, which hard-linked `libfontconfig.so.1`
+> on x64 (so `render` failed to load without it) and aborted on arm64 with
+> `undefined symbol: uuid_parse` once fontconfig was present (issue #221).
 
 Debian/Ubuntu:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y libicu74 libfontconfig1 fontconfig
+sudo apt-get install -y libicu74          # required
+sudo apt-get install -y fontconfig fonts-dejavu-core   # optional: system label fonts
 # Debian 12: use libicu72 instead of libicu74
 ```
 
 `s100 list-specs` and `s100 info` need only `libicu`; `s100 render` (the Skia
-path) additionally needs `libfontconfig1` on x64.
+path) also needs only `libicu` — text renders via an embedded fallback font even
+with no fontconfig or system fonts installed.
 
 ### Inside the Viewer application bundle
 
