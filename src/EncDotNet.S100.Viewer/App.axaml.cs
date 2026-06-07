@@ -197,6 +197,8 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
                 new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+        services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(
+            _ => new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
         services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
         {
             // One process-wide disk cache shared by every S-101 processor so the
@@ -232,9 +234,17 @@ public partial class App : Application
                 new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
                 sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
+
+        // The Mapsui renderer owns the processor -> ILayer conversion (issue
+        // #189): it holds the process-wide pattern-clip cache and the CRS
+        // transform factory used by the coverage renderers. #213 will later
+        // unify it under IS100DatasetRenderer<IReadOnlyList<ILayer>>.
+        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(sp =>
+            new EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer(
+                new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
+                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();

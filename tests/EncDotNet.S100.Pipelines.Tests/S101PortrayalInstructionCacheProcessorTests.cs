@@ -51,9 +51,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
-            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()),
-            sharedPatternClipCache: null,
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider(),
             sharedInstructionCache: instructionCache);
 
     [SkippableFact]
@@ -74,7 +72,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             // no shared-cache hits.
             var firstFactory = CreateFactory(sharedCache);
             var first = (S101DatasetProcessor)firstFactory.CreateProcessor(cell!);
-            var firstResult = await first.RenderAsync();
+            var firstResult = await first.BuildVectorPortrayalAsync();
             Assert.Equal(0, first.SharedInstructionCacheHits);
             Assert.Equal(1, sharedCache.Misses);
 
@@ -84,7 +82,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             // the MoonSharp Part 9A Lua run is skipped.
             var secondFactory = CreateFactory(sharedCache);
             var second = (S101DatasetProcessor)secondFactory.CreateProcessor(cell!);
-            var secondResult = await second.RenderAsync();
+            var secondResult = await second.BuildVectorPortrayalAsync();
 
             Assert.True(
                 second.SharedInstructionCacheHits >= 1,
@@ -116,9 +114,9 @@ public class S101PortrayalInstructionCacheProcessorTests
             CreateCatalogueManager(),
             new MoonSharpLuaEngine(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
-        var result = await processor.RenderAsync();
+        var result = await processor.BuildVectorPortrayalAsync();
 
         Assert.NotNull(result);
-        Assert.NotEmpty(result.Layers);
+        Assert.NotEmpty(result.SubLayers);
     }
 }

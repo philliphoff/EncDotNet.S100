@@ -35,7 +35,7 @@ namespace EncDotNet.S100.VisualRegression;
 /// <list type="number">
 ///   <item>The harness picks the right <see cref="IDatasetProcessor"/> via
 ///         <see cref="DatasetPipelineFactory"/> (same code path as the viewer).</item>
-///   <item>It invokes <see cref="IDatasetProcessor.RenderAsync"/> with a spec-specific
+///   <item>It invokes <see cref="MapsuiDatasetRenderer.RenderAsync"/> with a spec-specific
 ///         <see cref="RenderContext"/> derived from <see cref="HarnessOptions"/>.</item>
 ///   <item>The resulting Mapsui <see cref="ILayer"/>s are dropped into a
 ///         <see cref="Map"/>, the viewport is zoomed to the dataset extent, and
@@ -48,6 +48,7 @@ public sealed class RenderHarness : IDisposable
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly bool _ownsCatalogueManager;
     private readonly DatasetPipelineFactory _factory;
+    private readonly MapsuiDatasetRenderer _mapsuiRenderer;
 
     /// <summary>
     /// Creates a new harness with all bundled portrayal catalogues registered.
@@ -86,8 +87,8 @@ public sealed class RenderHarness : IDisposable
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
-            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+        _mapsuiRenderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
     }
 
     /// <summary>
@@ -101,7 +102,7 @@ public sealed class RenderHarness : IDisposable
 
         var processor = _factory.CreateProcessor(path);
         var context = BuildContext(processor, options);
-        var result = processor.RenderAsync(context).GetAwaiter().GetResult();
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
         return Rasterize(result, options);
     }
@@ -119,7 +120,7 @@ public sealed class RenderHarness : IDisposable
 
         var processor = _factory.CreateProcessor(path);
         var context = BuildContext(processor, options);
-        var result = processor.RenderAsync(context).GetAwaiter().GetResult();
+        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
 
         return (Rasterize(result, options), result);
     }

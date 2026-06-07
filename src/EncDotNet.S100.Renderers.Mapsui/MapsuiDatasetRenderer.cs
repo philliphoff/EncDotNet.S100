@@ -1,0 +1,425 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines;
+using Mapsui;
+using Mapsui.Layers;
+using Mapsui.Nts;
+using Mapsui.Projections;
+using Mapsui.Styles;
+using NetTopologySuite.Geometries;
+using CoreRgbaColor = EncDotNet.S100.Pipelines.RgbaColor;
+
+namespace EncDotNet.S100.Renderers.Mapsui;
+
+/// <summary>
+/// Converts a dataset processor's Mapsui-free portrayal output
+/// (<see cref="IVectorPortrayalSource"/> / <see cref="ICoveragePortrayalSource"/>)
+/// into a Mapsui-typed <see cref="DatasetResult"/>. This is the Mapsui-aware
+/// half of the portrayal-output seam: the processor (in the headless-facing
+/// <c>EncDotNet.S100.Datasets.Pipelines</c> assembly) builds an immutable
+/// snapshot of the dataset's portrayal, and this renderer rasterises it into
+/// <c>ILayer</c>s, owning every Mapsui type (NTS pattern clipping, feature
+/// tagging, out-of-scale-band cap, coverage / arrow / glyph layer build).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Issue #189 keystone: relocating the <c>processor → ILayer</c> conversion
+/// here lets the Pipelines assembly (and the headless facade / CLI that
+/// reference it) drop Mapsui as a dependency.
+/// </para>
+/// <para>
+/// This is a PLAIN renderer (consumes <see cref="IDatasetProcessor"/> +
+/// <see cref="RenderContext"/>). Issue #213 will later unify it under
+/// <c>IS100DatasetRenderer&lt;IReadOnlyList&lt;ILayer&gt;&gt;</c>; the present
+/// shape is structured so that adoption is purely additive.
+/// </para>
+/// </remarks>
+public sealed class MapsuiDatasetRenderer
+{
+    private readonly ICrsTransformFactory _crsTransformFactory;
+    private readonly IPatternClipCache? _patternClipCache;
+
+    // The processor's portrayal build holds the processor's own render gate,
+    // but the Mapsui conversion below uses two per-processor, non-thread-safe
+    // resources — the pattern-clip cache and the render-asset cache — so the
+    // whole render is serialized per processor here.
+    private static readonly ConditionalWeakTable<IDatasetProcessor, SemaphoreSlim> RenderGates = new();
+    private static readonly ConditionalWeakTable<IDatasetProcessor, MapsuiRenderAssetCache> AssetCaches = new();
+
+    /// <summary>
+    /// Creates a new renderer.
+    /// </summary>
+    /// <param name="crsTransformFactory">
+    /// CRS transform factory used by the coverage / arrow renderers to project
+    /// the native grid CRS to EPSG:3857.
+    /// </param>
+    /// <param name="patternClipCache">
+    /// Optional process-wide pattern-fill priority-clip cache (e.g. a
+    /// <see cref="DiskPatternClipCache"/>) shared across every S-101 render, so
+    /// the cold first open of a previously-seen cell skips the multi-second
+    /// NetTopologySuite clip. When <see langword="null"/> an in-memory
+    /// single-slot cache is used per render.
+    /// </param>
+    public MapsuiDatasetRenderer(
+        ICrsTransformFactory crsTransformFactory,
+        IPatternClipCache? patternClipCache = null)
+    {
+        ArgumentNullException.ThrowIfNull(crsTransformFactory);
+        _crsTransformFactory = crsTransformFactory;
+        _patternClipCache = patternClipCache;
+    }
+
+    /// <summary>
+    /// Renders the supplied processor's portrayal into Mapsui layers.
+    /// </summary>
+    /// <param name="processor">
+    /// The dataset processor; must implement <see cref="IVectorPortrayalSource"/>
+    /// or <see cref="ICoveragePortrayalSource"/>.
+    /// </param>
+    /// <param name="context">Optional render context (palette, scales, ECDIS, time step).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The Mapsui-typed render result.</returns>
+    /// <exception cref="NotSupportedException">
+    /// Thrown when the processor exposes neither portrayal-output capability.
+    /// </exception>
+    public async Task<DatasetResult> RenderAsync(
+        IDatasetProcessor processor,
+        RenderContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(processor);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var gate = RenderGates.GetValue(processor, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (processor is IVectorPortrayalSource vectorSource)
+            {
+                var result = await vectorSource.BuildVectorPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
+                return ConvertVector(processor, result);
+            }
+
+            if (processor is ICoveragePortrayalSource coverageSource)
+            {
+                var result = await coverageSource.BuildCoveragePortrayalAsync(context, cancellationToken).ConfigureAwait(false);
+                return ConvertCoverage(result);
+            }
+
+            throw new NotSupportedException(
+                $"Processor '{processor.GetType().Name}' implements neither IVectorPortrayalSource nor "
+                + "ICoveragePortrayalSource and cannot be rendered to Mapsui layers.");
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private DatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
+    {
+        var assetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache());
+
+        var layers = new List<ILayer>(result.SubLayers.Count);
+        var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
+        MRect? union = null;
+
+        foreach (var sub in result.SubLayers)
+        {
+            var renderer = new MapsuiDisplayListRenderer
+            {
+                LayerName = sub.LayerName,
+                Product = result.Product,
+                Palette = result.Palette,
+                AssetCache = assetCache,
+                PatternClipCache = sub.PatternClipCacheKey is not null
+                    ? (_patternClipCache ?? new InMemoryPatternClipCache())
+                    : null,
+                PatternClipCacheKey = sub.PatternClipCacheKey is not null
+                    ? QualifyPatternClipKey(sub.PatternClipCacheKey)
+                    : null,
+                SymbolScale = result.SymbolScale,
+                TextScale = result.TextScale,
+                SymbolProvider = result.SymbolProvider,
+                AreaFillProvider = result.AreaFillProvider,
+                LineStyleProvider = result.LineStyleProvider,
+            };
+
+            var layer = renderer.Render(sub.Instructions, result.GeometryProvider);
+
+            TagFeatures(layer, result.FeatureTags);
+
+            if (sub.ApplyOutOfBandCap
+                && result.OutOfBandMinDisplayScale is int denom
+                && layer is MemoryLayer memoryLayer)
+            {
+                var cap = denom * MapsuiDisplayListRenderer.DenomToResolutionMetres;
+                ApplyOutOfScaleBandCap(memoryLayer.Features, cap);
+            }
+
+            layers.Add(layer);
+            stackEntries.Add(new LayerStackEntry(
+                Layer: layer,
+                Plane: sub.Plane,
+                WithinPlanePriority: sub.WithinPlanePriority,
+                SourceDatasetId: result.SourceDatasetId,
+                SourceFeatureType: sub.SourceFeatureType));
+
+            union = Union(union, layer.Extent);
+        }
+
+        // GML XSLT products carry an authoritative, padded geographic extent
+        // (GeographicExtent) used verbatim. S-131 prefers its rendered layer's
+        // own extent but supplies a padded fallback for the layer-less case
+        // (FallbackGeographicExtent). S-101 / S-57 set neither and derive the
+        // extent purely from the built layers' union.
+        var extent =
+            ToMercator(result.GeographicExtent)
+            ?? union
+            ?? ToMercator(result.FallbackGeographicExtent)
+            ?? new MRect(0, 0, 0, 0);
+
+        return new DatasetResult
+        {
+            Layers = layers,
+            Extent = extent,
+            Info = result.Info,
+            Spec = result.Spec,
+            LayerNames = result.LayerNames,
+            StackEntries = stackEntries,
+        };
+    }
+
+    private DatasetResult ConvertCoverage(CoveragePortrayalResult result)
+    {
+        var layers = new List<ILayer>(result.SubLayers.Count);
+        var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
+        var layerNames = new List<string>(result.SubLayers.Count);
+        MRect? union = null;
+        MRect? fallback = null;
+
+        foreach (var sub in result.SubLayers)
+        {
+            ILayer? layer = null;
+
+            switch (sub)
+            {
+                case GridCoverageSubLayer grid:
+                {
+                    var renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
+                    {
+                        LayerName = grid.LayerName,
+                    };
+                    layer = renderer.Render(grid.Coverage, grid.Viewport);
+                    break;
+                }
+
+                case ArrowCoverageSubLayer arrow:
+                {
+                    var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
+                    {
+                        LayerName = arrow.LayerName,
+                        Palette = arrow.Palette,
+                        BaseSymbolScale = arrow.BaseSymbolScale,
+                        SymbolProvider = arrow.SymbolProvider,
+                    };
+                    layer = renderer.Render(arrow.Coverage, arrow.Viewport);
+                    fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
+                    break;
+                }
+
+                case GlyphCoverageSubLayer glyph:
+                {
+                    layer = BuildGlyphLayer(glyph);
+                    fallback = Union(fallback, ToMercator(glyph.Extent));
+                    break;
+                }
+            }
+
+            if (layer is null)
+                continue;
+
+            layers.Add(layer);
+            layerNames.Add(sub.LayerKey);
+            stackEntries.Add(new LayerStackEntry(
+                Layer: layer,
+                Plane: sub.Plane,
+                WithinPlanePriority: sub.WithinPlanePriority,
+                SourceDatasetId: result.SourceDatasetId,
+                SourceFeatureType: sub.SourceFeatureType));
+
+            union = Union(union, layer.Extent);
+        }
+
+        var extent = union ?? fallback ?? new MRect(0, 0, 0, 0);
+
+        return new DatasetResult
+        {
+            Layers = layers,
+            Extent = extent,
+            Info = result.Info,
+            Spec = result.Spec,
+            LayerNames = layerNames,
+            StackEntries = stackEntries,
+        };
+    }
+
+    private static MemoryLayer BuildGlyphLayer(GlyphCoverageSubLayer sub)
+    {
+        var features = new List<IFeature>(sub.Glyphs.Count);
+
+        foreach (var glyph in sub.Glyphs)
+        {
+            var feature = new GeometryFeature
+            {
+                Geometry = new Point(glyph.MercatorX, glyph.MercatorY),
+            };
+            feature[MapsuiDisplayListRenderer.FeatureRefKey] = glyph.FeatureRefTag;
+            foreach (var (key, value) in glyph.Attributes)
+                feature[key] = value;
+
+            switch (glyph.Symbol)
+            {
+                case PointGlyphSymbol.Svg when glyph.SvgSource is not null:
+                    feature.Styles.Add(new ImageStyle
+                    {
+                        Image = new Image { Source = glyph.SvgSource, RasterizeSvg = true },
+                        SymbolScale = glyph.SymbolScale,
+                        SymbolRotation = glyph.Rotation,
+                    });
+                    break;
+
+                case PointGlyphSymbol.Triangle:
+                    feature.Styles.Add(new SymbolStyle
+                    {
+                        SymbolType = SymbolType.Triangle,
+                        Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
+                        Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
+                        SymbolScale = glyph.SymbolScale,
+                        SymbolRotation = glyph.Rotation,
+                    });
+                    break;
+
+                default:
+                    feature.Styles.Add(new SymbolStyle
+                    {
+                        SymbolType = SymbolType.Ellipse,
+                        Fill = new Brush(ToMapsuiColor(glyph.FillColor)),
+                        Outline = new Pen(ToMapsuiColor(glyph.OutlineColor), glyph.OutlineWidth),
+                        SymbolScale = glyph.SymbolScale,
+                        SymbolRotation = glyph.Rotation,
+                    });
+                    break;
+            }
+
+            features.Add(feature);
+        }
+
+        return new MemoryLayer
+        {
+            Name = sub.LayerName,
+            Features = features,
+            Style = null,
+        };
+    }
+
+    /// <summary>
+    /// Appends the Mapsui clip-algorithm parameters and serialization
+    /// format-version to the processor's Mapsui-free identity key so the final
+    /// pattern-clip cache key self-invalidates when any of those change. Mirrors
+    /// the original in-processor key composition (S-101 PR-L2).
+    /// </summary>
+    private static string QualifyPatternClipKey(string identityKey)
+    {
+        var c = CultureInfo.InvariantCulture;
+        return identityKey
+            + "|tol:" + MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres.ToString("R", c)
+            + "|gate:" + MapsuiDisplayListRenderer.MinPointsToSimplifyForClip.ToString(c)
+            + "|fmt:" + DiskPatternClipCache.FormatVersion.ToString(c);
+    }
+
+    /// <summary>
+    /// Copies the S-98 feature tags (feature-type code and, for depth contours,
+    /// the VALDCO depth value) onto each built Mapsui feature so the
+    /// cross-dataset suppression rules can filter without re-portrayal
+    /// (R-101-102-B). The feature id is read back from the renderer's
+    /// feature-ref tag.
+    /// </summary>
+    private static void TagFeatures(ILayer layer, IReadOnlyDictionary<long, VectorFeatureTag>? tags)
+    {
+        if (tags is null || tags.Count == 0)
+            return;
+        if (layer is not MemoryLayer memoryLayer)
+            return;
+
+        foreach (var feature in memoryLayer.Features)
+        {
+            if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
+                continue;
+            if (!long.TryParse(featureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                continue;
+            if (!tags.TryGetValue(id, out var tag))
+                continue;
+
+            feature[FeatureTagKeys.FeatureType] = tag.FeatureType;
+            if (tag.DepthContourValue is not null)
+                feature[FeatureTagKeys.DepthContourValue] = tag.DepthContourValue;
+        }
+    }
+
+    /// <summary>
+    /// Clamps the maximum visible resolution (zoomed-out limit) of every style
+    /// on <paramref name="features"/> to <paramref name="maxResolution"/>,
+    /// suppressing point/line/text detail past the cell's intended scale band
+    /// (S-101 out-of-scale-band declutter, FC §3.1.1). Only ever tightens.
+    /// Exposed for diagnostics and tests.
+    /// </summary>
+    public static void ApplyOutOfScaleBandCap(IEnumerable<IFeature> features, double maxResolution)
+    {
+        foreach (var feature in features)
+        {
+            foreach (var style in feature.Styles)
+            {
+                if (style is null) continue;
+                if (style.MaxVisible > 0)
+                    style.MaxVisible = Math.Min(style.MaxVisible, maxResolution);
+            }
+        }
+    }
+
+    private static MRect? Union(MRect? acc, MRect? next)
+    {
+        if (next is null)
+            return acc;
+        if (acc is null)
+            return next;
+        return acc.Join(next);
+    }
+
+    private static MRect? ToMercator(GeographicBounds? bounds)
+    {
+        if (bounds is not { } b)
+            return null;
+        var (minX, minY) = SphericalMercator.FromLonLat(b.MinLongitude, b.MinLatitude);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(b.MaxLongitude, b.MaxLatitude);
+        return new MRect(minX, minY, maxX, maxY);
+    }
+
+    private static MRect? ToMercator(MercatorBounds? bounds)
+    {
+        if (bounds is not { } b)
+            return null;
+        return new MRect(b.MinX, b.MinY, b.MaxX, b.MaxY);
+    }
+
+    private static Color ToMapsuiColor(CoreRgbaColor c) => new(c.R, c.G, c.B, c.A);
+}

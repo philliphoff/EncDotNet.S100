@@ -11,6 +11,6 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// </summary>
 internal static class TestAuthority
 {
-    public static IInteroperabilityAuthorityProvider NewS98Provider()
-        => new InteroperabilityAuthorityProvider(new InteroperabilityAuthority());
+    public static IDisplayPlaneAuthorityProvider NewS98Provider()
+        => new DisplayPlaneAuthorityProvider();
 }

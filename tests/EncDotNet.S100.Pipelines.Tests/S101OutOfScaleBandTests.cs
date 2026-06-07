@@ -35,7 +35,7 @@ public class S101OutOfScaleBandTests
     }
 
     [Fact]
-    public void Resolve_SingleDataCoverage_ReturnsDenomTimesResolutionFactor()
+    public void Resolve_SingleDataCoverage_ReturnsMinimumDisplayScaleDenominator()
     {
         var features = new[]
         {
@@ -43,10 +43,10 @@ public class S101OutOfScaleBandTests
             Feature("DataCoverage", 2, ("minimumDisplayScale", "90000")),
         };
 
-        var result = S101DatasetProcessor.ResolveOutOfBandMaxResolution(features);
+        var result = S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features);
 
         Assert.NotNull(result);
-        Assert.Equal(90000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, result!.Value, 6);
+        Assert.Equal(90000, result!.Value);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class S101OutOfScaleBandTests
     {
         var features = new[] { Feature("DepthArea", 1), Feature("Sounding", 2) };
 
-        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMaxResolution(features));
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class S101OutOfScaleBandTests
     {
         var features = new[] { Feature("DataCoverage", 1) };
 
-        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMaxResolution(features));
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class S101OutOfScaleBandTests
     {
         var features = new[] { Feature("DataCoverage", 1, ("minimumDisplayScale", "not-a-number")) };
 
-        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMaxResolution(features));
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class S101OutOfScaleBandTests
     {
         var features = new[] { Feature("DataCoverage", 1, ("minimumDisplayScale", "0")) };
 
-        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMaxResolution(features));
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
     [Fact]
@@ -91,10 +91,10 @@ public class S101OutOfScaleBandTests
             Feature("DataCoverage", 3, ("minimumDisplayScale", "90000")),
         };
 
-        var result = S101DatasetProcessor.ResolveOutOfBandMaxResolution(features);
+        var result = S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features);
 
         Assert.NotNull(result);
-        Assert.Equal(180000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, result!.Value, 6);
+        Assert.Equal(180000, result!.Value);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class S101OutOfScaleBandTests
     {
         var features = new[] { Feature("DepthArea", 1, ("minimumDisplayScale", "90000")) };
 
-        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMaxResolution(features));
+        Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
     private static IFeature PointWithMaxVisible(double maxVisible)
@@ -117,7 +117,7 @@ public class S101OutOfScaleBandTests
     {
         var feature = PointWithMaxVisible(double.MaxValue);
 
-        S101DatasetProcessor.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
+        MapsuiDatasetRenderer.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
 
         Assert.Equal(25.2, GetMaxVisible(feature), 6);
     }
@@ -127,7 +127,7 @@ public class S101OutOfScaleBandTests
     {
         var feature = PointWithMaxVisible(10.0);
 
-        S101DatasetProcessor.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
+        MapsuiDatasetRenderer.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
 
         Assert.Equal(10.0, GetMaxVisible(feature), 6);
     }
@@ -137,7 +137,7 @@ public class S101OutOfScaleBandTests
     {
         var feature = PointWithMaxVisible(100.0);
 
-        S101DatasetProcessor.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
+        MapsuiDatasetRenderer.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
 
         Assert.Equal(25.2, GetMaxVisible(feature), 6);
     }
@@ -147,7 +147,7 @@ public class S101OutOfScaleBandTests
     {
         var feature = PointWithMaxVisible(0.0);
 
-        S101DatasetProcessor.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
+        MapsuiDatasetRenderer.ApplyOutOfScaleBandCap(new[] { feature }, 25.2);
 
         Assert.Equal(0.0, GetMaxVisible(feature), 6);
     }

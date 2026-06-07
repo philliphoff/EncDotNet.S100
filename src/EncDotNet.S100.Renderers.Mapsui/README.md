@@ -9,6 +9,16 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - **`MapsuiCoverageRenderer`** — `ICoverageRenderer<ILayer>` implementation that renders coverage data as a georeferenced raster overlay (S-102 / S-104 / S-111).
 - **`MapsuiCoverageArrowRenderer`** — renders current arrows (e.g. from S-111 data) as a georeferenced raster layer.
 - **`MapsuiDisplayListRenderer`** — product-agnostic vector renderer that consumes a list of `DrawingInstruction`s plus an `IFeatureGeometryProvider` and produces a `MemoryLayer` of styled point/line/area/text features. Used by every S-100 vector product (S-101, S-124, S-129, S-421); no per-spec subclass is required.
+- **`MapsuiDatasetRenderer`** — the entry point that converts a dataset processor's renderer-neutral portrayal output into a Mapsui-typed `DatasetResult` (layers + extent). It consumes the `IVectorPortrayalSource` / `ICoveragePortrayalSource` seam exposed by `EncDotNet.S100.Datasets.Pipelines` and owns everything Mapsui-specific: the NTS pattern-clip cache, feature-type tagging, out-of-scale-band cap application, S-101 area/line `ILayer` build, the S-111 arrow renderer, and the Mapsui-typed S-98 layer-stack. This is the seed of the future multi-layer renderer in issue #213 (which will adopt `IS100DatasetRenderer<IReadOnlyList<ILayer>>`); adopting that interface later is purely additive.
+
+> **Dependency direction (issue #189).** This package now references
+> `EncDotNet.S100.Datasets.Pipelines` (not the other way round), so that the
+> Pipelines assembly — and the headless facade / CLI built on it — stay
+> Mapsui-free. As a consequence this package **multi-targets `net10.0` only**
+> (it depends on the net10.0-only Pipelines assembly), whereas the rest of the
+> libraries multi-target `net8.0;net10.0`. The Mapsui-typed `DatasetResult`
+> keeps its original `EncDotNet.S100.Datasets.Pipelines` namespace (the type
+> physically moved here) so consumer `using` directives resolve unchanged.
 
 > **CRS transforms** moved to the Mapsui-free **`EncDotNet.S100.Crs.ProjNet`**
 > package (`ProjNetCrsTransformFactory`) so headless consumers can reproject

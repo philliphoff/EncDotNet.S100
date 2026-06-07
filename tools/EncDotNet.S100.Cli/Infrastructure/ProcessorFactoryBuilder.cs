@@ -41,7 +41,7 @@ internal static class ProcessorFactoryBuilder
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             featureCatalogueManager,
-            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()));
+            new DisplayPlaneAuthorityProvider());
 
         return (factory, catalogueManager);
     }

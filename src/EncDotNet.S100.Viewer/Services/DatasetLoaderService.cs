@@ -48,6 +48,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// stack in response to <see cref="IInteroperabilityAuthorityProvider.CurrentChanged"/>.
     /// </summary>
     private readonly IInteroperabilityAuthorityProvider _authorityProvider;
+    private readonly EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer _mapsuiRenderer;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -128,7 +129,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
         IToastService toasts,
-        IInteroperabilityAuthorityProvider authorityProvider)
+        IInteroperabilityAuthorityProvider authorityProvider,
+        EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -157,6 +159,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _toasts = toasts;
         ArgumentNullException.ThrowIfNull(authorityProvider);
         _authorityProvider = authorityProvider;
+        ArgumentNullException.ThrowIfNull(mapsuiRenderer);
+        _mapsuiRenderer = mapsuiRenderer;
         // Re-sort the live layer stack whenever the host swaps the
         // active authority. Cheap when no datasets are loaded.
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
@@ -327,7 +331,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 initialTime = adapter.SnapTo(globalNow);
 
             var initialContext = CreateRenderContext(processor, initialTime);
-            var result = await Task.Run(() => processor.RenderAsync(initialContext, token), token).ConfigureAwait(true);
+            var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
 
             token.ThrowIfCancellationRequested();
             ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
@@ -477,7 +481,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             try
             {
                 var context = CreateRenderContext(proc, snapped);
-                var result = await Task.Run(() => proc.RenderAsync(context, token), token).ConfigureAwait(true);
+                var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
 
                 token.ThrowIfCancellationRequested();
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
@@ -506,7 +510,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             {
                 var context = CreateRenderContext(proc, entry.CurrentTime);
 
-                var result = await Task.Run(() => proc.RenderAsync(context, CancellationToken.None));
+                var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, CancellationToken.None));
 
                 ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
                 entry.Info = result.Info;

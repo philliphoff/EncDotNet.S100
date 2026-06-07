@@ -32,7 +32,34 @@ internal static class SharedInfrastructure
         var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
         var pipelinesAssembly = factoryType.Assembly;
 
-        // Newest shape (PR-L1): adds IInteroperabilityAuthorityProvider.
+        // Newest shape (issue #189 PR2): the Mapsui-free factory takes an
+        // IDisplayPlaneAuthorityProvider in place of the former
+        // IInteroperabilityAuthorityProvider (which moved to the Mapsui package).
+        var displayPlaneProviderType = pipelinesAssembly.GetType(
+            "EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider",
+            throwOnError: false);
+        if (displayPlaneProviderType is not null)
+        {
+            var displayPlaneCtor = factoryType.GetConstructor(
+                [
+                    typeof(PortrayalCatalogueManager),
+                    typeof(ILuaEngine),
+                    typeof(ICrsTransformFactory),
+                    typeof(FeatureCatalogueManager),
+                    displayPlaneProviderType,
+                ]);
+            var displayPlaneImplType = pipelinesAssembly.GetType(
+                "EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider",
+                throwOnError: false);
+            if (displayPlaneCtor is not null && displayPlaneImplType is not null)
+            {
+                var displayPlaneProvider = Activator.CreateInstance(displayPlaneImplType)!;
+                return (Datasets.Pipelines.DatasetPipelineFactory)displayPlaneCtor.Invoke(
+                    [CatalogueManager, LuaEngine, CrsFactory, FeatureCatalogueManager, displayPlaneProvider]);
+            }
+        }
+
+        // Prior shape (issue #189 PR1): adds IInteroperabilityAuthorityProvider.
         // Resolved via reflection so this tooling stays compatible with base
         // SHA library binaries that do not yet expose the Interoperability
         // namespace.

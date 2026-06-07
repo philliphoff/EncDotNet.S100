@@ -27,7 +27,7 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
     public S128DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, authorityProvider, featureCatalogueManager)
     {
@@ -42,7 +42,7 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
@@ -57,7 +57,7 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager)
         : base(
             new S128PortrayalCatalogue(catalogueManager.GetProvider("S-128")),

@@ -10,7 +10,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Validation;
-using Mapsui.Layers;
+
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -36,7 +36,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
     public S411DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, authorityProvider, featureCatalogueManager)
     {
@@ -51,7 +51,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         IAssetSource source,
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
@@ -66,7 +66,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         Stream datasetStream,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
-        IInteroperabilityAuthorityProvider authorityProvider,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         FeatureCatalogueManager? featureCatalogueManager)
         : base(
             new S411PortrayalCatalogue(catalogueManager.GetProvider("S-411")),
@@ -97,20 +97,13 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         return _validationReport;
     }
 
-    protected override DatasetResult? CheckPreRender(RenderContext? context)
+    protected override string? GetSuppressionInfo(RenderContext? context)
     {
         if (context is S411RenderContext { TimeStep: { } t }
             && _dataset.IssueDate is { } issued
             && t < issued)
         {
-            return new DatasetResult
-            {
-                Layers = Array.Empty<ILayer>(),
-                Extent = ComputeExtent(),
-                Info = $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})",
-                Spec = new SpecRef("S-411", default),
-                StackEntries = Array.Empty<LayerStackEntry>(),
-            };
+            return $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})";
         }
         return null;
     }

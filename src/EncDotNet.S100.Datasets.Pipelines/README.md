@@ -43,6 +43,36 @@ processor wrapped in an `IDatasetProcessor`. `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+## Mapsui-free render seam (issue #189)
+
+This package is **Mapsui-free** so headless consumers (the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) facade and the `s100`
+CLI) do not acquire Mapsui as a transitive dependency. The processors
+do not build `ILayer`s; instead they expose a narrow, renderer-neutral
+portrayal-output seam:
+
+- `IVectorPortrayalSource.BuildVectorPortrayalAsync(...)` →
+  `VectorPortrayalResult` — immutable drawing-instruction slices,
+  geometry provider, resolved palette / asset snapshot, EPSG:3857
+  extent, layer keys, the out-of-scale-band cutoff *value*, and
+  Mapsui-free S-98 display-plane metadata.
+- `ICoveragePortrayalSource.BuildCoveragePortrayalAsync(...)` →
+  `CoveragePortrayalResult` — materialized `StyledCoverageLayer`(s)
+  plus viewport/georef, info, layer keys, and (S-111) the arrow symbol
+  scheme with prewarmed SVGs.
+
+Both build methods run under the processor's render gate and snapshot
+everything so the result is safe to convert in another assembly. The
+`payload → ILayer` conversion — and the Mapsui-typed `DatasetResult` —
+live in **`EncDotNet.S100.Renderers.Mapsui`** (`MapsuiDatasetRenderer`),
+which references this package (not the other way round). The map-free
+S-98 concepts (`IDisplayPlaneAuthority`, `DisplayPlaneAuthorityProvider`)
+stay here; the Mapsui-typed stack entries moved to the renderer.
+
+The `ProjNet`-based `ICrsTransformFactory` implementation lives in the
+separate **`EncDotNet.S100.Crs.ProjNet`** package, keeping CRS handling
+Mapsui-free too.
+
 ## Validation
 
 Every processor implements `IDatasetProcessor.Validate()`:
@@ -93,11 +123,11 @@ Because the cache key must be a faithful summary of everything that
 feeds the pipeline, `EcdisDisplayExtensions.ApplyTo` clears any prior
 viewing-group user overrides before applying the current hidden set, so
 the catalogue's effective visibility is a pure function of the settings
-value rather than of call history. `RenderAsync` is serialized by a
-`SemaphoreSlim` gate: the processor holds one long-lived catalogue
-whose palette / viewing-group / display-plane state is mutated per
-render and read throughout, and the viewer fires re-renders
-re-entrantly.
+value rather than of call history. The portrayal build
+(`BuildVectorPortrayalAsync`) is serialized by a `SemaphoreSlim` gate:
+the processor holds one long-lived catalogue whose palette /
+viewing-group / display-plane state is mutated per build and read
+throughout, and the viewer fires re-renders re-entrantly.
 
 That single-slot cache only helps re-renders of an *already-open*
 processor. A **cross-load** cache (`IPortrayalInstructionCache`, from
