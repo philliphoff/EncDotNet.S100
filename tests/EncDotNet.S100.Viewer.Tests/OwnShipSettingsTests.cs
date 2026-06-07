@@ -46,4 +46,20 @@ public class OwnShipSettingsTests
         var back = JsonSerializer.Deserialize<ViewerSettings>(json)!;
         Assert.Null(back.OwnShip);
     }
+
+    [Fact]
+    public void ViewerSettings_OwnShipOverlayEnabled_DefaultsToFalse()
+    {
+        var v = new ViewerSettings();
+        Assert.False(v.OwnShipOverlayEnabled);
+    }
+
+    [Fact]
+    public void ViewerSettings_OwnShipOverlayEnabled_RoundTripsThroughJson()
+    {
+        var v = new ViewerSettings { OwnShipOverlayEnabled = true };
+        var json = JsonSerializer.Serialize(v);
+        var back = JsonSerializer.Deserialize<ViewerSettings>(json)!;
+        Assert.True(back.OwnShipOverlayEnabled);
+    }
 }

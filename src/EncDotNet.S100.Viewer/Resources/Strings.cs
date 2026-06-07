@@ -421,6 +421,8 @@ internal static class Strings
 
     // Own-vessel dimensions (own-ship symbology PR)
     public static string Settings_OwnVesselSection => Get(nameof(Settings_OwnVesselSection));
+    public static string Settings_OwnVessel_OverlayEnabled => Get(nameof(Settings_OwnVessel_OverlayEnabled));
+    public static string Settings_OwnVessel_OverlayEnabled_Tooltip => Get(nameof(Settings_OwnVessel_OverlayEnabled_Tooltip));
     public static string Settings_OwnVesselSection_Help => Get(nameof(Settings_OwnVesselSection_Help));
     public static string Settings_OwnVessel_Length => Get(nameof(Settings_OwnVessel_Length));
     public static string Settings_OwnVessel_Length_Tooltip => Get(nameof(Settings_OwnVessel_Length_Tooltip));

@@ -211,6 +211,17 @@ internal sealed class ViewerSettings
     public bool OwnShipVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether the simulated ("mocked") own-ship position overlay is
+    /// active. When <see langword="false"/> (the default) the
+    /// <c>OwnShipSource</c> publishes no features so the synthetic
+    /// own-location glyph never appears. Distinct from the per-source
+    /// layer visibility tracked in <see cref="DynamicSourceVisibility"/>:
+    /// this gate is authoritative for the synthetic source — when it is
+    /// off, nothing is published regardless of layer visibility.
+    /// </summary>
+    public bool OwnShipOverlayEnabled { get; set; } = false;
+
+    /// <summary>
     /// Per-source visibility for dynamic feature sources (PR-D2.1),
     /// keyed by <c>IDynamicFeatureSource.Id</c>. Drives the Layer
     /// Stack panel's visibility toggle for the

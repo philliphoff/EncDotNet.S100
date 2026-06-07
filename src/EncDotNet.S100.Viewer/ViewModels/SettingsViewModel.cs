@@ -556,6 +556,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         ResetMcpPortCommand = new RelayCommand(() => McpPort = 0);
 
         var own = settings.OwnShip ?? new OwnShipSettings();
+        _ownShipOverlayEnabled = settings.OwnShipOverlayEnabled;
         _ownShipLength = own.LengthMetres;
         _ownShipBeam = own.BeamMetres;
         _ownShipBowOffset = own.BowOffsetMetres;
@@ -636,6 +637,33 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// the new dimensions.
     /// </summary>
     public event Action? OwnShipGeometryChanged;
+
+    /// <summary>
+    /// Raised when <see cref="OwnShipOverlayEnabled"/> changes. The
+    /// viewer wires this to the singleton <c>OwnShipSource.IsEnabled</c>
+    /// so the simulated own-ship overlay appears / disappears live.
+    /// </summary>
+    public event Action<bool>? OwnShipOverlayEnabledChanged;
+
+    private bool _ownShipOverlayEnabled;
+    /// <summary>
+    /// Whether the simulated ("mocked") own-ship position overlay is
+    /// shown. Defaults to <see langword="false"/>. Persisted to
+    /// <see cref="ViewerSettings.OwnShipOverlayEnabled"/>.
+    /// </summary>
+    public bool OwnShipOverlayEnabled
+    {
+        get => _ownShipOverlayEnabled;
+        set
+        {
+            if (SetProperty(ref _ownShipOverlayEnabled, value))
+            {
+                _settings.OwnShipOverlayEnabled = value;
+                _settings.Save();
+                OwnShipOverlayEnabledChanged?.Invoke(value);
+            }
+        }
+    }
 
     private void EnsureOwnShipSettings()
     {

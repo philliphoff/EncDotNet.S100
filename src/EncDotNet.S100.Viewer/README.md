@@ -216,6 +216,13 @@ dead-reckoning provider (Solent, course 090° T, 5 m/s). The
 abstraction is shaped so a future NMEA / AIS adapter can plug in
 without renderer changes.
 
+Because this position is simulated, the overlay is **disabled by
+default**. Tick **Show simulated own-ship position** in the **Own
+Vessel** section of the Settings panel to display it; the choice is
+persisted and takes effect immediately (no restart). This gate is
+authoritative for the synthetic source — when it is off, no own-ship
+feature is published regardless of the layer-visibility toggle.
+
 The own-ship glyph adapts to zoom:
 
 - **Zoomed in** (when the vessel is ≥ ~6 mm on screen) — a
@@ -232,9 +239,9 @@ Vessel** section of the Settings panel. Edits take effect
 immediately. See
 [`docs/design/own-ship-symbology.md`](../../docs/design/own-ship-symbology.md).
 
-Own-ship visibility is controlled by its row in the **Dynamic
-Arrows** plane of the Layer Stack panel and is persisted between
-sessions.
+Own-ship visibility (once the simulated overlay is enabled) is
+controlled by its row in the **Dynamic Arrows** plane of the Layer
+Stack panel and is persisted between sessions.
 
 ### Picking dynamic features
 
@@ -418,7 +425,7 @@ application-data location. Persisted across sessions:
 - Day / Dusk / Night palette and ECDIS display category.
 - Per-spec viewing-group overrides and display-plane toggles.
 - Mariner depth / distance units and contour values.
-- Own-ship visibility and vessel geometry.
+- Simulated own-ship overlay enable, visibility, and vessel geometry.
 - MCP server enable / disable.
 
 Older settings shapes are migrated forward silently; missing values
