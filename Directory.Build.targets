@@ -16,6 +16,17 @@
   </ItemGroup>
 
   <!--
+    Ship the repository's third-party notices (Apache-2.0 Open Sans / Droid Sans
+    fonts redistributed by EncDotNet.S100.Renderers.Skia and
+    EncDotNet.S100.Specifications) inside every package, so binary consumers
+    receive the required license text + attribution (Apache-2.0 §4). The file is
+    self-contained (attributions + full licence text).
+  -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false' And Exists('$(MSBuildThisFileDirectory)THIRD-PARTY-NOTICES.md')">
+    <None Include="$(MSBuildThisFileDirectory)THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+  <!--
     SkiaSharp Linux native selection (issue #23).
 
     The regular `SkiaSharp.NativeAssets.Linux` native `libSkiaSharp.so` (pulled in

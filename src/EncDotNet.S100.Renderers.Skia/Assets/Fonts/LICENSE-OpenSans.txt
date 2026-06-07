@@ -1,14 +1,19 @@
 Open Sans
 
-SIL/Google digitized font data. Open Sans was designed by Steve Matteson
-(Ascender Corp.) and is licensed under the Apache License, Version 2.0.
+Open Sans was designed by Steve Matteson (Ascender Corp.) and is licensed under
+the Apache License, Version 2.0.
 
 Copyright 2010-2011, Google Inc.
+Upstream source: https://fonts.google.com/specimen/Open+Sans (Google Fonts, Apache-2.0)
 
 This directory bundles "OpenSans-Regular.ttf" as an embedded resource of
 EncDotNet.S100.Renderers.Skia (see README.md in this folder). The file is the
 same asset already redistributed under the IHO S-100 portrayal catalogues at
 src/EncDotNet.S100.Specifications/content/**/pc/Fonts/OpenSans-Regular.ttf.
+
+A repository-wide listing of bundled third-party assets (covering this font and
+the Droid Sans / Open Sans faces under the Specifications package) is in
+THIRD-PARTY-NOTICES.md at the repository root.
 
 The full text of the Apache License, Version 2.0 follows.
 

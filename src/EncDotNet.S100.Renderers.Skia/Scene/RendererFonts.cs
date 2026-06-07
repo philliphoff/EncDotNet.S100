@@ -35,6 +35,10 @@ internal static class RendererFonts
     /// </summary>
     public static SKTypeface Default => LazyDefault.Value;
 
+    // The real "host default unusable" branch (empty SKTypeface.Default on a
+    // host without fontconfig) cannot be forced deterministically in a unit test,
+    // so end-to-end engagement of the embedded fallback is covered by the arm64
+    // Docker render proof (issue #23); Select() below is unit-tested directly.
     private static SKTypeface ResolveDefault() =>
         Select(SKTypeface.Default, LoadEmbeddedFallback) ?? SKTypeface.CreateDefault();
 
