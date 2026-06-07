@@ -45,6 +45,7 @@ jobs:
             tools/EncDotNet.S100.PerfRunner \
             tools/EncDotNet.S100.PerfReport \
             tools/perf \
+            src/EncDotNet.S100.Crs.ProjNet \
             src/EncDotNet.S100.Diagnostics.Export \
             Directory.Packages.props
 
