@@ -66,18 +66,10 @@ jobs:
       - name: Pack NuGet packages
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          dotnet pack src/EncDotNet.S100.Core/EncDotNet.S100.Core.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Datasets.S111/EncDotNet.S100.Datasets.S111.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.ExchangeSets/EncDotNet.S100.ExchangeSets.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Features/EncDotNet.S100.Features.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
-          dotnet pack src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+        # Pack every packable project in the solution. Projects opt out via
+        # <IsPackable>false</IsPackable> (hosts, tooling, tests), so new
+        # Datasets.SXXX libraries are published automatically with no edit here.
+        run: dotnet pack EncDotNet.S100.slnx --no-build --configuration Release --output nupkgs -p:Version=$VERSION
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v4

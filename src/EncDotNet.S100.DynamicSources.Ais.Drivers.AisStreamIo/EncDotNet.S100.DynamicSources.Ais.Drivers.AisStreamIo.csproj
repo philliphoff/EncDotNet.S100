@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ais\EncDotNet.S100.DynamicSources.Ais.csproj" />

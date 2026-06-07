@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
     <AssemblyName>s100</AssemblyName>
     <RootNamespace>EncDotNet.S100.Cli</RootNamespace>
     <!--
