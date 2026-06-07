@@ -6,7 +6,7 @@ can query the datasets you have loaded in the viewer.
 
 The server is **off by default** and **listens on the loopback
 address only**. There is no authentication; the loopback isolation is
-the only protection in v1.
+the only protection.
 
 ## Field conventions
 
@@ -46,11 +46,9 @@ assume canonical units for these cases.
   (regularly-gridded time-series) surface speeds with `units = "knots"`,
   while data coding format 8 (time series at fixed stations) surface
   speeds with `units = "metres/second"`. The two values come from
-  different paths in `EncDotNet.S100.Datasets.S111` and have not yet
-  been normalised. TODO: pick one canonical unit at the MCP boundary
-  (almost certainly metres/second, matching the strongly-typed
-  `speedMetresPerSecond` field on `SurfaceCurrentSample` /
-  `SurfaceCurrentStationSample`) and rescale the other path.
+  different paths in `EncDotNet.S100.Datasets.S111`. Consult the
+  strongly-typed `speedMetresPerSecond` field on `SurfaceCurrentSample` /
+  `SurfaceCurrentStationSample` when you need a single canonical unit.
 
 ## Enable it
 
@@ -117,7 +115,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
 | `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
-| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported in v1. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
 | `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
@@ -170,11 +168,9 @@ view exactly.
 
 `render_to_image` is **viewer-only**: it is injected into the hosted
 MCP server by `EncDotNet.S100.Viewer` via the
-`S100McpServerOptions.AdditionalTools` extension point. A future
-headless MCP host would need to supply its own equivalent (or
-something domain-appropriate) — the catalog-only
+`S100McpServerOptions.AdditionalTools` extension point. The catalog-only
 `EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
-dependency.
+dependency, so a non-viewer host supplies its own equivalent.
 
 ## Sample agent prompts
 
@@ -192,8 +188,10 @@ dependency.
 - There is no auth. Any local process on the machine can connect,
   including malicious code. Only enable MCP when you trust everything
   running locally.
-- The tools are strictly read-only. No tool can write files, load
-  data, or mutate viewer state.
+- Most tools are read-only, but some **mutate viewer state** (loading
+  or unloading datasets, driving the viewport, palette, or time step) —
+  see the read-only vs mutating breakdown above. None can write
+  arbitrary files.
 
 ## Disable from the UI
 

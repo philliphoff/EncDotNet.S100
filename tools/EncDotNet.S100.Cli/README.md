@@ -96,23 +96,17 @@ headless render path.
 | Vector (GML) | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | `HeadlessVectorRenderer` |
 | Coverage (HDF5) | S-102, S-104 (gridded), S-111 (gridded) | `CoverageHeadlessRenderer` |
 
-## Limitations (v1)
+## Limitations
 
 - **PNG output only.**
 - **Vector pattern area-fills are omitted** on the headless path; points,
-  lines, solid-area fills, and text render. (This is a limitation of
-  `HeadlessVectorRenderer`, not the CLI.)
+  lines, solid-area fills, and text render.
 - **Coverage fixed-station datasets are not supported.** S-104 / S-111 datasets
   using data coding format 3 or 8 (time series at fixed stations) emit point
   glyphs through the Mapsui path only; the CLI reports a clear "not supported"
   error.
 - **S-57 renders through the S-101 pipeline.** Datasets are translated to
   `S101Document` in-memory and rasterised with S-101 symbology (not S-52).
-- **Mapsui is linked but not used to render.** The CLI transitively references
-  `EncDotNet.S100.Renderers.Mapsui` for the spec-detection factory and the
-  `ProjNetCrsTransformFactory`, but no Mapsui rendering runs on the headless
-  path. Decoupling the factory and CRS transform from the Mapsui assembly is
-  tracked as follow-up work.
 
 ## Exit codes
 

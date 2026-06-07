@@ -7,8 +7,13 @@ Mapsui-free Skia *headless* renderers so it can run without a UI — making it
 suitable for batch scripts (e.g. generating sea-ice or surface-current
 previews).
 
-The tool is structured with **subcommands** so its scope can grow (tiling,
-batch, validation, …) without breaking existing usage.
+It offers three subcommands:
+
+| Command | Purpose |
+|---|---|
+| `s100 render <dataset> <output>` | Render a dataset to a PNG image. |
+| `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
+| `s100 list-specs` | List the supported product specifications and which support headless rendering. |
 
 ## Install (standalone download)
 
@@ -38,18 +43,6 @@ attribute with `xattr -d com.apple.quarantine ./s100`.
 The same `s100` executable also ships inside the S-100 Viewer application
 bundle (under `cli/`); see the project README for that layout.
 
-### Future: installable `dotnet tool`
-
-A one-line `dotnet tool install -g` on-ramp remains a possible future addition.
-It was not adopted now because a classic global tool package is RID-agnostic
-(all assemblies land in a single `tools/<tfm>/any/` folder) and does not lay out
-SkiaSharp's `runtimes/<rid>/native/libSkiaSharp.*` native libraries where the
-host resolves them, causing a `DllNotFoundException` on the first render. .NET 8+
-does support **self-contained, RID-specific** tool packages, which would carry
-the native assets correctly, so publishing such a package (one per RID, heavier
-than the framework-dependent global tool) is a viable future complement to the
-standalone archives above.
-
 ## Quick start
 
 ```bash
@@ -66,40 +59,36 @@ dotnet run --project tools/EncDotNet.S100.Cli -- \
 
 ## How it works
 
-1. `DatasetPipelineFactory.DetectProductSpec` sniffs the file (extension +
-   content) to determine the product specification.
-2. `DatasetPipelineFactory.CreateProcessor` builds the matching
-   `IDatasetProcessor`, wired to the portrayal and feature catalogues bundled in
-   `EncDotNet.S100.Specifications`.
-3. The CLI feature-tests the processor for `IHeadlessImageRenderer`. If present,
-   it builds a spec-specific `RenderContext` (palette, scales, and — for
-   time-series specs implementing `ITimeAwareDatasetProcessor` — a `DateTime`
-   resolved from `--time-step`) and calls `RenderHeadlessAsync`.
-4. The resulting `SKBitmap` is encoded to PNG and written to the output path.
+The CLI detects a dataset's product specification from the file, runs that
+spec's portrayal pipeline — the same pipeline the Avalonia viewer uses, wired to
+the feature and portrayal catalogues bundled in the tool — and encodes the
+result to PNG. Vector specs (S-101 and the GML products) and coverage specs
+(S-102/104/111) each rasterise through their own headless Skia renderer; for
+S-111 the current arrows are overlaid on the coverage. No UI or map projection
+stack is involved, so it runs anywhere .NET does.
 
-Vector specs (S-101 and all GML products) render through
-`HeadlessVectorRenderer`; coverage specs (S-102/104/111) render through
-`CoverageHeadlessRenderer`, which fits the coverage extent into the requested
-pixel size (preserving aspect, letter-boxed) and overlays oriented arrows via
-`SkiaCoverageArrowRenderer` for S-111.
+## Render options
 
-## Capabilities and limitations
+| Option | Default | Description |
+|---|---|---|
+| `-w`, `--width` / `-h`, `--height` | `1024` × `768` | Output image size in pixels. |
+| `--palette` | `day` | Colour palette: `day`, `dusk`, or `night`. |
+| `--symbol-scale` / `--text-scale` | `1.0` | Symbol and text scale factors. |
+| `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104 / S-111). |
+| `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
+| `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
+| `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
 
-- **Supported (headless):** S-101; S-122/124/125/127/128/129/131/201/411/421;
-  S-102; S-104 and S-111 *gridded* coverages.
-- **PNG output only** in v1.
-- **Pattern area-fills are omitted** on the vector headless path (points, lines,
-  solid fills, and text render).
-- **Text suppression**: `--no-text` (or `--hide text,...`) drops the chosen
-  drawing-instruction categories from the rendered output, producing cleaner
-  previews for label-dense products such as S-411 sea-ice.
-- **Fixed-station coverage** (S-104/S-111 data coding format 3 / 8) is **not**
-  supported headlessly; the CLI returns a descriptive error.
-- **S-57 is not supported.**
-- **Mapsui is linked but does no rendering.** The CLI transitively references
-  the Mapsui renderer for the spec-detection factory and the
-  `ProjNetCrsTransformFactory`. No Mapsui code runs on the headless render path;
-  fully decoupling these is tracked as follow-up work.
+## Capabilities
+
+- **Headless rendering** for S-101; S-102; S-104 and S-111 *gridded* coverages;
+  and the GML products S-122/124/125/127/128/129/131/201/411/421.
+- **PNG output.**
+- **Text and category suppression** via `--no-text` / `--hide` for cleaner
+  previews of label-dense products.
+- **Fixed-station coverage** (S-104 / S-111 data coding format 3 / 8) is not
+  rendered headlessly; the CLI returns a descriptive error.
+- **S-57 is not supported** by the headless path.
 
 See the project README under `tools/EncDotNet.S100.Cli/README.md` for the full
 option reference and exit codes.

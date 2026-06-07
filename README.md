@@ -108,7 +108,7 @@ OpenStreetMap basemap. Headline features:
   an overlay marker layer.
 - **Live overlays** through the dynamic-feature-source abstraction —
   an own-ship glyph with true-scale hull + arrowhead + CCRP cross at
-  zoom, plus an **AIS-target overlay** (PR-D3) backed by the
+  zoom, plus an **AIS-target overlay** backed by the
   [aisstream.io](https://aisstream.io) WebSocket service and rendered
   with a per-class palette using the same hull/arrowhead vocabulary.
 - **Optional MCP server** (off by default) exposing the loaded
