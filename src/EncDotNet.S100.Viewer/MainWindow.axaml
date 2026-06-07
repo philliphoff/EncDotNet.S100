@@ -146,6 +146,15 @@
 
     <Panel>
     <DockPanel>
+        <!--
+          In-window menu bar. On macOS this control is invisible and the
+          NativeMenu (set in NativeMenuBuilder) is exported to the system
+          menu bar; on Windows and Linux it renders the same menu inline at
+          the top of the window so the File/View menus are reachable there.
+        -->
+        <NativeMenuBar DockPanel.Dock="Top"
+                       IsVisible="{OnPlatform true, macOS=false}" />
+
         <!-- Status bar at bottom -->
         <Border DockPanel.Dock="Bottom"
                 Background="{DynamicResource BackgroundColor}"
