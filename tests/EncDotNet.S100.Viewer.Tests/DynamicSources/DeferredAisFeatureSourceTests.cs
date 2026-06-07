@@ -149,8 +149,14 @@ public class DeferredAisFeatureSourceTests
             notifier.Publish(SnapshotWithSpan(8 - i * 0.5, 8 - i * 0.5));
         }
 
-        // Wait long enough for the trailing call to fire.
-        await Task.Delay(200);
+        // Wait deterministically for the single trailing debounced call to
+        // land rather than racing a fixed delay (issue #215).
+        Assert.True(
+            await fakeSub.AreaUpdatedSignal.WaitAsync(TimeSpan.FromSeconds(5)),
+            "Debounced UpdateArea did not fire within 5 s");
+        // A short margin to surface any (incorrect) extra debounced fire
+        // before asserting that the burst coalesced to exactly one call.
+        await Task.Delay(100);
 
         Assert.Single(fakeSub.AreaUpdates);
     }
@@ -314,6 +320,13 @@ internal sealed class FakeAisSubscription : IAisSubscription
     public bool SupportsAreaUpdate { get; set; } = true;
     public List<BoundingBox?> AreaUpdates { get; } = new();
 
+    /// <summary>
+    /// Released once per <see cref="TryUpdateArea"/> call so tests can wait
+    /// deterministically for a (debounced) area update to land instead of
+    /// racing a fixed delay.
+    /// </summary>
+    public SemaphoreSlim AreaUpdatedSignal { get; } = new(0);
+
     public event EventHandler<AisPositionReport>? PositionReportReceived;
     public event EventHandler<AisStaticVoyageData>? StaticVoyageDataReceived;
     public event EventHandler<AisTargetLost>? TargetLost;
@@ -323,6 +336,7 @@ internal sealed class FakeAisSubscription : IAisSubscription
         if (!SupportsAreaUpdate) return false;
         AreaUpdates.Add(area);
         _active = _active with { Area = area };
+        AreaUpdatedSignal.Release();
         return true;
     }
 
