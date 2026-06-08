@@ -414,4 +414,10 @@ public sealed class PanelSizes
     /// share of vertical space occupied by the entry list (top row).
     /// </summary>
     public double? CatalogInnerSplit { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Vessels-tab inner splitter — the
+    /// share of vertical space occupied by the vessel list (top row).
+    /// </summary>
+    public double? VesselsInnerSplit { get; set; }
 }

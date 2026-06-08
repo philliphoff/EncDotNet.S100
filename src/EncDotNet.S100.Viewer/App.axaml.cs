@@ -418,6 +418,7 @@ public partial class App : Application
         services.AddSingleton<CatalogPanelViewModel>();
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
+        services.AddSingleton<VesselListViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
@@ -470,6 +471,12 @@ public partial class App : Application
             title: Strings.Pane_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<VesselListViewModel, VesselListView>(
+            id: "Vessels",
+            order: 65,
+            title: Strings.Pane_Vessels,
+            tooltip: Strings.Tooltip_Vessels,
+            iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 70,

@@ -317,6 +317,21 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private double? _vesselsInnerSplit;
+    /// <summary>Persisted fraction <c>[0,1]</c> of the Vessels-tab master/detail splitter.</summary>
+    public double? VesselsInnerSplit
+    {
+        get => _vesselsInnerSplit;
+        set
+        {
+            if (SetProperty(ref _vesselsInnerSplit, value) && _settingsInitialized)
+            {
+                _settings.Panels.VesselsInnerSplit = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
     private readonly DebouncedSettingsSaver _sizeSaver;
 
     /// <summary>
@@ -1055,6 +1070,7 @@ internal sealed class MainViewModel : ViewModelBase
         _bottomDockSavedHeight = settings.Panels.BottomDockHeight;
         _datasetsInnerSplit = settings.Panels.DatasetsInnerSplit;
         _catalogInnerSplit = settings.Panels.CatalogInnerSplit;
+        _vesselsInnerSplit = settings.Panels.VesselsInnerSplit;
 
         // Enable persistence write-backs only after hydration is complete.
         // Setters check this flag to avoid writing during initial assignment.

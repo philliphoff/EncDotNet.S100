@@ -1,0 +1,300 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+             x:Class="EncDotNet.S100.Viewer.Views.VesselListView"
+             x:DataType="vm:VesselListViewModel">
+
+    <UserControl.Styles>
+        <!--
+          Mirror of the main window's `GridSplitter.PaneSplitter` style.
+          UserControls don't inherit window-scoped styles, so we keep a
+          local copy here for the Vessels panel's master/detail splitter.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Footer: vessel count (hidden when the list is empty; the
+             placeholder carries the empty-state message instead). -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="12,4,12,8"
+                IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Summary}"
+                       FontSize="11"
+                       Opacity="0.7"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Body: empty-state placeholder and the master/detail layout
+             share the fill slot so the placeholder centres in the
+             available space. -->
+        <Grid>
+
+            <!-- Empty state: distinguishes the AIS overlay being off from
+                 it being on but not yet populated. -->
+            <Border IsVisible="{Binding IsEmpty}"
+                    Padding="16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel Spacing="8" HorizontalAlignment="Center" MaxWidth="260">
+                    <ic:FluentIcon Icon="VehicleShip"
+                                   IconVariant="Regular"
+                                   FontSize="32"
+                                   Opacity="0.4"
+                                   HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding EmptyMessage}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Opacity="0.6"
+                               FontSize="12" />
+                </StackPanel>
+            </Border>
+
+            <!-- Master/detail: a compact vessel list (master) over a
+                 properties sub-pane (detail) for the selected vessel. -->
+            <Grid IsVisible="{Binding !IsEmpty}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="2*" MinHeight="80" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" MinHeight="80" />
+                </Grid.RowDefinitions>
+
+                <!-- Vessel list (master) -->
+                <ListBox Grid.Row="0"
+                         ItemsSource="{Binding Vessels}"
+                         SelectedItem="{Binding SelectedVessel, Mode=TwoWay}"
+                         SelectionMode="Single"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem">
+                            <Setter Property="Padding" Value="12,6" />
+                            <Setter Property="Margin" Value="0,1" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="Template">
+                                <ControlTemplate>
+                                    <Border Name="PART_Container"
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="4"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                          HorizontalAlignment="Stretch"
+                                                          HorizontalContentAlignment="Stretch" />
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter>
+                        </Style>
+                        <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
+                            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
+                            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                        </Style>
+                        <Style Selector="ListBoxItem:selected TextBlock">
+                            <Setter Property="Foreground" Value="White" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:VesselListItem">
+                            <Border Background="Transparent"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_VesselRow}">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <!-- Ship-type pictogram, tinted by class. -->
+                                    <ic:FluentIcon Grid.Column="0"
+                                                   Icon="VehicleShip"
+                                                   IconVariant="Regular"
+                                                   FontSize="22"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0,1,10,0"
+                                                   Foreground="{Binding ShipTypeClass,
+                                                       Converter={x:Static conv:VesselClassBrushConverter.Instance}}" />
+
+                                    <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding StateText}"
+                                                   FontSize="11"
+                                                   Opacity="0.75" />
+                                        <TextBlock Text="{Binding RangeBearingText}"
+                                                   IsVisible="{Binding HasRangeBearing}"
+                                                   FontSize="11"
+                                                   Opacity="0.75" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Splitter between list and properties. The 1px hairline
+                     is a separate non-hit-testing border; the GridSplitter
+                     sits on top with the standard 4px hit target. -->
+                <Border Grid.Row="1"
+                        Height="1"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False"
+                        Background="{DynamicResource BorderColor}" />
+                <GridSplitter Grid.Row="1"
+                              Classes="PaneSplitter"
+                              Height="4"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              ResizeDirection="Rows"
+                              ResizeBehavior="PreviousAndNext"
+                              bh:HoverDelay.DelayMilliseconds="500"
+                              bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).VesselsInnerSplit, Mode=TwoWay}" />
+
+                <!-- Properties sub-pane (detail) for the selected vessel. -->
+                <Border Grid.Row="2" ClipToBounds="True">
+                    <Panel>
+                        <!-- Empty-state placeholder -->
+                        <TextBlock IsVisible="{Binding !HasSelection}"
+                                   Text="{x:Static loc:Strings.Vessels_Detail_Placeholder}"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap"
+                                   Margin="16"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center" />
+
+                        <ScrollViewer IsVisible="{Binding HasSelection}"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      Padding="12,8">
+                            <StackPanel DataContext="{Binding SelectedVessel}"
+                                        x:DataType="vm:VesselListItem"
+                                        Spacing="6">
+                                <StackPanel.Styles>
+                                    <Style Selector="TextBlock.section">
+                                        <Setter Property="FontSize" Value="11" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                        <Setter Property="Opacity" Value="0.5" />
+                                        <Setter Property="Margin" Value="0,6,0,2" />
+                                    </Style>
+                                    <Style Selector="TextBlock.label">
+                                        <Setter Property="FontSize" Value="12" />
+                                        <Setter Property="Opacity" Value="0.6" />
+                                        <Setter Property="VerticalAlignment" Value="Top" />
+                                    </Style>
+                                    <Style Selector="TextBlock.value">
+                                        <Setter Property="FontSize" Value="12" />
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </StackPanel.Styles>
+
+                                <!-- Header -->
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding ShipTypeText}"
+                                           FontSize="12"
+                                           Opacity="0.6" />
+
+                                <!-- Identity -->
+                                <TextBlock Classes="section" Text="{x:Static loc:Strings.Vessels_Detail_Identity}" />
+                                <Grid ColumnDefinitions="108,*">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_State}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding StateText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Mmsi}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding MmsiText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasCallSign}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_CallSign}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding CallSign}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasImo}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Imo}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding ImoText}" />
+                                </Grid>
+
+                                <!-- Motion -->
+                                <TextBlock Classes="section"
+                                           Text="{x:Static loc:Strings.Vessels_Detail_Motion}"
+                                           IsVisible="{Binding HasMotion}" />
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasSpeed}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Speed}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding SpeedText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasCourse}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Course}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding CourseText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasHeading}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Heading}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding HeadingText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasRateOfTurn}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_RateOfTurn}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding RateOfTurnText}" />
+                                </Grid>
+
+                                <!-- Relative to own ship -->
+                                <TextBlock Classes="section"
+                                           Text="{x:Static loc:Strings.Vessels_Detail_Range}"
+                                           IsVisible="{Binding HasRangeBearing}" />
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasRangeBearing}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Distance}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DistanceText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasRangeBearing}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Bearing}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding BearingText}" />
+                                </Grid>
+
+                                <!-- Voyage -->
+                                <TextBlock Classes="section"
+                                           Text="{x:Static loc:Strings.Vessels_Detail_Voyage}"
+                                           IsVisible="{Binding HasVoyage}" />
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDestination}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Destination}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DestinationText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasEta}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Eta}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding EtaText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDraught}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Draught}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DraughtText}" />
+                                </Grid>
+
+                                <!-- Dimensions -->
+                                <TextBlock Classes="section"
+                                           Text="{x:Static loc:Strings.Vessels_Detail_Dimensions}"
+                                           IsVisible="{Binding HasDimensions}" />
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDimensions}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Dimensions}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DimensionsText}" />
+                                </Grid>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Panel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+
+</UserControl>

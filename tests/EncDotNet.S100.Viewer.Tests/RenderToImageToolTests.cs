@@ -41,6 +41,8 @@ public class RenderToImageToolTests
         public void SetViewportToExtent(MRect mercatorExtent) { }
         public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
+        public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
+
         public Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, CancellationToken ct = default)
         {
             ObservedWidth = widthPx;

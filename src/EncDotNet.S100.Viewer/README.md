@@ -170,6 +170,31 @@ identifier. Selecting a result jumps the pick report to the
 corresponding feature, even when producer datasets reuse `gml:id`s
 across distinct features.
 
+A **Vessels** activity-bar panel lists the live AIS targets,
+nearest to the own ship first, in a master/detail layout. Each
+compact list row shows the vessel name, a ship-type pictogram
+tinted by class, its navigation state, and the range and bearing
+from the own ship. Selecting a row recentres the map on that
+vessel while preserving the current zoom and reveals a properties
+sub-pane below the list with the vessel's full detail: identity
+(type, status, MMSI, call sign, IMO), motion (speed, course,
+heading, rate of turn), range/bearing relative to the own ship,
+voyage (destination, ETA, draught), and hull dimensions
+(length × beam). Each detail field appears only once the
+corresponding AIS report has been received. The split between the
+list and the properties sub-pane is draggable and persisted.
+
+Range and bearing are shown only when the own-ship overlay is
+enabled (**Settings → simulated own-ship**); with it off, the list
+still shows vessels but omits the per-row range/bearing line and
+the detail pane's *Relative to own ship* section, and falls back to
+name ordering. When the list is empty the panel shows a
+placeholder that distinguishes the two reasons: the AIS overlay
+being switched off (prompting the user to enable it in Settings)
+versus the overlay being on but not yet populated — which is the
+normal state until the AIS zoom gate opens (see *AIS zoom-gated
+subscription* below).
+
 ## Display category and palette
 
 Standard ECDIS-style controls are available from the **View** menu

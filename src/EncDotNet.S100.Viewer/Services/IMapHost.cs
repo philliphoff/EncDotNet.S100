@@ -86,6 +86,21 @@ internal interface IMapHost
     void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution);
 
     /// <summary>
+    /// Pans the navigator to centre on the supplied WGS-84 lat/lon
+    /// <b>without changing the current zoom level</b> (resolution is
+    /// preserved). Intended for UI-driven "reveal this feature"
+    /// gestures — e.g. selecting a vessel in the Vessels panel — where
+    /// the user wants the target brought into view at the zoom they are
+    /// already using. The move is animated over
+    /// <paramref name="durationMs"/>. No-op when the map's navigator is
+    /// unavailable.
+    /// </summary>
+    /// <param name="latitudeWgs84">Target centre latitude in WGS-84 degrees.</param>
+    /// <param name="longitudeWgs84">Target centre longitude in WGS-84 degrees.</param>
+    /// <param name="durationMs">Animation duration in milliseconds (0 = instantaneous).</param>
+    void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300);
+
+    /// <summary>
     /// Captures the current map view as a PNG byte array.
     /// </summary>
     /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>
