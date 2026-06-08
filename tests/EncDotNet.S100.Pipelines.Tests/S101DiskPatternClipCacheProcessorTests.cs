@@ -54,24 +54,28 @@ public class S101DiskPatternClipCacheProcessorTests
                 new MoonSharpLuaEngine(),
                 new ProjNetCrsTransformFactory(),
                 fcManager,
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                    new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()),
-                sharedCache);
+                new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+
+            // The pattern-clip cache is owned by the Mapsui renderer (issue
+            // #189): a single renderer holding the shared disk cache converts
+            // both cold opens, so the second open's area build is served from
+            // disk even though the two processors share nothing else.
+            var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory(), sharedCache);
 
             // First cold open: the disk cache is empty, so the clip is computed
-            // (a miss) and persisted. This processor sees no clip-cache hits.
+            // (a miss) and persisted. No clip-cache hits yet.
             var first = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
-            await first.RenderAsync();
-            Assert.Equal(0, first.PatternClipCacheHits);
+            await renderer.RenderAsync(first);
+            Assert.Equal(0, sharedCache.Hits);
 
             // Second cold open (simulates reopening the cell, even after a
             // restart): a brand-new processor over the same shared disk cache.
             // Its area render must be served from disk — a clip-cache hit — so
             // the multi-second NetTopologySuite overlay is skipped.
             var second = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
-            await second.RenderAsync();
+            await renderer.RenderAsync(second);
             Assert.True(
-                second.PatternClipCacheHits >= 1,
+                sharedCache.Hits >= 1,
                 "Second cold open should hit the warm disk pattern-clip cache.");
         }
         finally

@@ -5,23 +5,23 @@ using System.Globalization;
 using System.IO;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
-using Mapsui;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, IDisposable
+public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, IDisposable
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -29,7 +29,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly string _fileName;
     private readonly PortrayalPipeline _pipeline;
-    private readonly MapsuiCoverageRenderer _renderer;
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -98,76 +98,81 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         var provider = catalogueManager.GetProvider("S-102");
         _catalogue = new S102PortrayalCatalogue(luaEngine, provider);
 
-        // Hoist pipeline + renderer to fields: Render() is invoked many times
-        // (each Mapsui redraw) but neither holds per-render state, so a single
-        // instance is safe and avoids repeated allocation on the hot path.
+        // Hoist pipeline to a field: BuildCoveragePortrayalAsync is invoked
+        // many times (each redraw) but the pipeline holds no per-render state,
+        // so a single instance is safe and avoids repeated allocation on the
+        // hot path. The Mapsui coverage renderer lives in the renderer package.
         _pipeline = new PortrayalPipeline();
-        _renderer = new MapsuiCoverageRenderer(_crsTransformFactory)
-        {
-            LayerName = $"S-102: {_fileName}",
-        };
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
     }
 
     public void Dispose()
     {
-        // PortrayalPipeline and MapsuiCoverageRenderer are not currently
-        // disposable, but keep Dispose explicit so future allocations to these
-        // fields can be cleaned up here without further plumbing.
+        // PortrayalPipeline is not currently disposable, but keep Dispose
+        // explicit so future allocations to these fields can be cleaned up
+        // here without further plumbing.
+        _renderGate.Dispose();
     }
 
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public async Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-        var metadata = _source.Metadata;
-
-        var viewport = new EncDotNet.S100.Pipelines.Viewport
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            MinLatitude = metadata.Extent.SouthLatitude,
-            MaxLatitude = metadata.Extent.NorthLatitude,
-            MinLongitude = metadata.Extent.WestLongitude,
-            MaxLongitude = metadata.Extent.EastLongitude,
-            WidthPixels = metadata.GridMetadata.NumColumns,
-            HeightPixels = metadata.GridMetadata.NumRows,
-            ScaleDenominator = 50_000,
-        };
+            await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+            var metadata = _source.Metadata;
 
-        var pipeline = _pipeline;
-        var layer = await pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
-            .ConfigureAwait(false);
-        var styledLayer = (StyledCoverageLayer)layer;
+            var viewport = new EncDotNet.S100.Pipelines.Viewport
+            {
+                MinLatitude = metadata.Extent.SouthLatitude,
+                MaxLatitude = metadata.Extent.NorthLatitude,
+                MinLongitude = metadata.Extent.WestLongitude,
+                MaxLongitude = metadata.Extent.EastLongitude,
+                WidthPixels = metadata.GridMetadata.NumColumns,
+                HeightPixels = metadata.GridMetadata.NumRows,
+                ScaleDenominator = 50_000,
+            };
 
-        var renderer = _renderer;
+            var pipeline = _pipeline;
+            var layer = await pipeline.ProcessAsync(_source, _catalogue, context?.Mariner ?? MarinerSettings.Default, cancellationToken)
+                .ConfigureAwait(false);
+            var styledLayer = (StyledCoverageLayer)layer;
 
-        var mapLayer = renderer.Render(styledLayer, viewport);
-        var extent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
+            int crs = _dataset.HorizontalCRS ?? 4326;
+            var geoId = _dataset.GeographicIdentifier ?? _fileName;
+            var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
 
-        int crs = _dataset.HorizontalCRS ?? 4326;
-        var geoId = _dataset.GeographicIdentifier ?? _fileName;
-        var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
-
-        return new DatasetResult
-        {
-            Layers = [mapLayer],
-            Extent = extent,
-            Info = info,
-            Spec = new SpecRef("S-102", default),
-            StackEntries = new[]
+            return new CoveragePortrayalResult
             {
                 // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
                 // ("gridded bathymetry replaces depth area and depth
-                // contours"). S-102 always emits a single coverage layer
-                // here; PR-L1 leaves WithinPlanePriority at 0.
-                new LayerStackEntry(
-                    Layer: mapLayer,
-                    Plane: EncDotNet.S100.Interoperability.S98DisplayPlane.Bathymetry,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName),
-            },
-        };
+                // contours"). S-102 always emits a single coverage layer;
+                // PR-L1 leaves WithinPlanePriority at 0.
+                SubLayers = new CoverageSubLayerBase[]
+                {
+                    new GridCoverageSubLayer
+                    {
+                        LayerKey = "s102.surface",
+                        LayerName = $"S-102: {_fileName}",
+                        Plane = S98DisplayPlane.Bathymetry,
+                        WithinPlanePriority = 0,
+                        Coverage = styledLayer,
+                        Viewport = viewport,
+                    },
+                },
+                Spec = new SpecRef("S-102", default),
+                SourceDatasetId = _fileName,
+                Info = info,
+            };
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef) => null;

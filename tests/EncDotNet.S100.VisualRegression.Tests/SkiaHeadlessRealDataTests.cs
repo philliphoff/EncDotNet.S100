@@ -34,8 +34,8 @@ public sealed class SkiaHeadlessRealDataTests
         return manager;
     }
 
-    private static IInteroperabilityAuthorityProvider CreateAuthorityProvider() =>
-        new InteroperabilityAuthorityProvider(new InteroperabilityAuthority());
+    private static IDisplayPlaneAuthorityProvider CreateAuthorityProvider() =>
+        new DisplayPlaneAuthorityProvider();
 
     private static void MaybeDump(SKBitmap bitmap, string name)
     {

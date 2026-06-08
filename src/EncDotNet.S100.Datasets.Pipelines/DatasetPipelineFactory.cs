@@ -5,60 +5,9 @@ using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting;
-using Mapsui;
-using Mapsui.Layers;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
-
-/// <summary>
-/// Result of processing a dataset through the portrayal pipeline.
-/// </summary>
-public sealed class DatasetResult
-{
-    public required IReadOnlyList<ILayer> Layers { get; init; }
-    public required MRect Extent { get; init; }
-    public required string Info { get; init; }
-    /// <summary>The product specification (name + edition) of the rendered dataset.</summary>
-    public required SpecRef Spec { get; init; }
-
-    /// <summary>
-    /// Optional human-readable display names for each layer in
-    /// <see cref="Layers"/>, parallel by index. Processors that emit
-    /// more than one layer (e.g. S-111 with a colour band plus an
-    /// arrow overlay) populate this list so the UI can show
-    /// per-sub-layer toggles. Single-layer products leave it null
-    /// and the disclosure UI is hidden. When non-null, the list
-    /// length must match <see cref="Layers"/>.
-    /// </summary>
-    public IReadOnlyList<string>? LayerNames { get; init; }
-
-    /// <summary>
-    /// S-98 cross-dataset stack metadata, parallel by index to
-    /// <see cref="Layers"/> when supplied (every entry's
-    /// <see cref="LayerStackEntry.Layer"/> appears in
-    /// <see cref="Layers"/> exactly once and at the same index).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// PR-L1 plumbing: each processor declares the S-98 display
-    /// plane every layer it emits should live in (S-98 Annex A
-    /// §4.4.1; S-98 Main §9.2.1). The viewer's dataset loader
-    /// pumps every loaded dataset's entries through
-    /// <see cref="LayerStackBuilder"/> to compute the global paint
-    /// order across products.
-    /// </para>
-    /// <para>
-    /// The <see cref="Layers"/> field stays in place — the two
-    /// collections must remain in sync (same length, same instances
-    /// in the same positions). The <c>Layers</c> field exists so
-    /// downstream code that doesn't care about plane metadata
-    /// remains source-compatible.
-    /// </para>
-    /// </remarks>
-    public IReadOnlyList<LayerStackEntry>? StackEntries { get; init; }
-}
 
 /// <summary>
 /// Detects dataset type from file extension and creates
@@ -70,8 +19,7 @@ public sealed class DatasetPipelineFactory
     private readonly ILuaEngine _luaEngine;
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
-    private readonly Interoperability.IInteroperabilityAuthorityProvider _authorityProvider;
-    private readonly IPatternClipCache? _sharedPatternClipCache;
+    private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
     private readonly IPortrayalInstructionCache? _sharedInstructionCache;
 
     /// <summary>
@@ -81,37 +29,29 @@ public sealed class DatasetPipelineFactory
     /// for the lifetime of the manager — not just the lifetime of the
     /// factory. The supplied <paramref name="authorityProvider"/> is
     /// forwarded to every GML-based processor so they resolve the
-    /// cross-dataset paint-order authority through the host's DI
-    /// container rather than a static singleton.
+    /// default S-98 display plane through the host's DI container rather
+    /// than a static singleton.
     /// </summary>
     /// <param name="catalogueManager">Portrayal catalogue manager shared by every processor.</param>
     /// <param name="luaEngine">Lua engine for Part 9A portrayal.</param>
     /// <param name="crsTransformFactory">CRS transform factory for coverage products.</param>
     /// <param name="featureCatalogueManager">Feature catalogue manager (shared FC parse cache).</param>
-    /// <param name="authorityProvider">Cross-dataset paint-order authority provider.</param>
-    /// <param name="sharedPatternClipCache">
-    /// Optional process-wide pattern-clip cache (e.g. a
-    /// <see cref="DiskPatternClipCache"/>) shared by every S-101 processor this
-    /// factory produces, so the cold first open of a previously-seen cell skips
-    /// the multi-second NetTopologySuite clip. When <see langword="null"/> each
-    /// S-101 processor falls back to its own in-memory single-slot cache — the
-    /// behaviour used by tools and tests.
-    /// </param>
+    /// <param name="authorityProvider">Default S-98 display-plane authority provider.</param>
     /// <param name="sharedInstructionCache">
     /// Optional process-wide portrayal-instruction cache (e.g. a
-    /// <see cref="DiskPortrayalInstructionCache"/>) shared by every S-101
-    /// processor this factory produces, so a fresh open of a previously-
-    /// portrayed cell skips the multi-second MoonSharp Part 9A Lua run. When
-    /// <see langword="null"/> each S-101 processor falls back to a bounded
-    /// per-processor in-memory cache — the behaviour used by tools and tests.
+    /// <see cref="EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache"/>)
+    /// shared by every S-101 processor this factory produces, so a fresh open
+    /// of a previously-portrayed cell skips the multi-second MoonSharp Part 9A
+    /// Lua run. When <see langword="null"/> each S-101 processor falls back to a
+    /// bounded per-processor in-memory cache — the behaviour used by tools and
+    /// tests.
     /// </param>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         ICrsTransformFactory crsTransformFactory,
         FeatureCatalogueManager featureCatalogueManager,
-        Interoperability.IInteroperabilityAuthorityProvider authorityProvider,
-        IPatternClipCache? sharedPatternClipCache = null,
+        IDisplayPlaneAuthorityProvider authorityProvider,
         IPortrayalInstructionCache? sharedInstructionCache = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -125,7 +65,6 @@ public sealed class DatasetPipelineFactory
         _crsTransformFactory = crsTransformFactory;
         _featureCatalogueManager = featureCatalogueManager;
         _authorityProvider = authorityProvider;
-        _sharedPatternClipCache = sharedPatternClipCache;
         _sharedInstructionCache = sharedInstructionCache;
     }
 
@@ -422,7 +361,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(path, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
+            "S-101" => new S101DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(path, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(path, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(path, _catalogueManager, _crsTransformFactory),
@@ -470,7 +409,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedPatternClipCache, _sharedInstructionCache),
+            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache),
             "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),

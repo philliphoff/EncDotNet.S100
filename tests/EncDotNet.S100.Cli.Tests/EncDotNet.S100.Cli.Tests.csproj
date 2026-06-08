@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\_shared\MapsuiDependencyClosure.cs" Link="TestSupport\MapsuiDependencyClosure.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\tools\EncDotNet.S100.Cli\EncDotNet.S100.Cli.csproj" />
   </ItemGroup>
 

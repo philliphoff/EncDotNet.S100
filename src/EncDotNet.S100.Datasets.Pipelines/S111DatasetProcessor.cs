@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Validation;
 using EncDotNet.S100.Hdf5;
@@ -14,15 +15,8 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
-using Mapsui.Nts;
-using Mapsui.Projections;
-using Mapsui.Styles;
-using NetTopologySuite.Geometries;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -35,7 +29,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// fixed stations → station-arrow point layer; see S-111 Edition 2.0.0
 /// §10.2.3 / §10.2.7).
 /// </summary>
-public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
+public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
 {
     // dcf2 only
     private readonly S111CoverageSource? _source;
@@ -68,6 +62,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     private readonly S111DatasetData _data;
     private readonly string _fileName;
 
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -165,18 +160,27 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         }
     }
 
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public async Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_stationSeries is not null)
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return await RenderStationSeriesAsync(_stationSeries, context, cancellationToken).ConfigureAwait(false);
+            if (_stationSeries is not null)
+            {
+                return await BuildStationSeriesAsync(_stationSeries, context, cancellationToken).ConfigureAwait(false);
+            }
+            return await BuildGriddedAsync(context, cancellationToken).ConfigureAwait(false);
         }
-        return await RenderGriddedAsync(context, cancellationToken).ConfigureAwait(false);
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 
-    private async Task<DatasetResult> RenderGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
+    private async Task<CoveragePortrayalResult> BuildGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var source = _source!;
         var catalogue = _catalogue!;
@@ -213,38 +217,10 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
-        // The bundled S-111 portrayal catalogue
-        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow
-        // symbology only — no coverageFill on surfaceCurrentSpeed.
-        // S-111 therefore emits a single arrow sub-layer; rendering a
-        // synthetic colour-band heatmap on top of S-101 ENC was
-        // removed because it obscured the base chart.
-        var layers = new List<ILayer>();
-
         // NOTE: pre-warm every catalogue symbol so the synchronous Mapsui
         // arrow renderer's SymbolProvider lambda reads from a memory dict.
         // The symbol set is small (one entry per S-111 speed band).
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
-
-        var arrowRenderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
-        {
-            LayerName = $"S-111 Arrows: {_fileName}",
-            Palette = catalogue.ActivePalette,
-            BaseSymbolScale = context?.SymbolScale ?? 1.0,
-            SymbolProvider = symbolName =>
-                symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
-        };
-        var arrowLayer = arrowRenderer.Render(styledLayer, viewport);
-        MRect extent;
-        if (arrowLayer is not null)
-        {
-            layers.Add(arrowLayer);
-            extent = arrowLayer.Extent ?? ComputeMercatorExtent(metadata);
-        }
-        else
-        {
-            extent = ComputeMercatorExtent(metadata);
-        }
 
         int crs = _dataset!.HorizontalCRS ?? 4326;
         var geoId = _dataset.GeographicIdentifier ?? _fileName;
@@ -253,31 +229,44 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             : "";
         var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
 
-        // The bundled portrayal catalogue (S-111 Ed 2.0.0,
-        // select_arrow.xsl) declares the arrow sub-layer with
-        // intra-product displayPlane="OverRadar"; S-98 Annex A
-        // §A-6.9.1 maps current arrows to the DynamicArrows plane.
-        var stackEntries = new List<LayerStackEntry>();
-        if (arrowLayer is not null)
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow symbology
+        // only — no coverageFill on surfaceCurrentSpeed. S-111 therefore emits
+        // a single arrow sub-layer; rendering a synthetic colour-band heatmap
+        // on top of S-101 ENC was removed because it obscured the base chart.
+        //
+        // The bundled portrayal catalogue (S-111 Ed 2.0.0, select_arrow.xsl)
+        // declares the arrow sub-layer with intra-product
+        // displayPlane="OverRadar"; S-98 Annex A §A-6.9.1 maps current arrows
+        // to the DynamicArrows plane.
+        return new CoveragePortrayalResult
         {
-            stackEntries.Add(new LayerStackEntry(
-                Layer: arrowLayer,
-                Plane: S98DisplayPlane.DynamicArrows,
-                WithinPlanePriority: 10,
-                SourceDatasetId: _fileName,
-                SourceFeatureType: "s111.arrows"));
-        }
-
-        return new DatasetResult
-        {
-            Layers = layers,
-            Extent = extent,
-            Info = info,
+            SubLayers = new CoverageSubLayerBase[]
+            {
+                new ArrowCoverageSubLayer
+                {
+                    LayerKey = "s111.arrows",
+                    LayerName = $"S-111 Arrows: {_fileName}",
+                    Plane = S98DisplayPlane.DynamicArrows,
+                    WithinPlanePriority = 10,
+                    SourceFeatureType = "s111.arrows",
+                    Coverage = styledLayer,
+                    Viewport = viewport,
+                    Palette = catalogue.ActivePalette,
+                    BaseSymbolScale = context?.SymbolScale ?? 1.0,
+                    SymbolProvider = symbolName =>
+                        symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
+                    FallbackExtent = new GeographicBounds(
+                        metadata.Extent.WestLongitude,
+                        metadata.Extent.SouthLatitude,
+                        metadata.Extent.EastLongitude,
+                        metadata.Extent.NorthLatitude),
+                },
+            },
             Spec = new SpecRef("S-111", default),
-            LayerNames = arrowLayer is not null
-                ? new[] { "s111.arrows" }
-                : Array.Empty<string>(),
-            StackEntries = stackEntries,
+            SourceDatasetId = _fileName,
+            Info = info,
+            LayerNames = new[] { "s111.arrows" },
         };
     }
 
@@ -362,22 +351,6 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             heightPixels);
     }
 
-    /// <summary>
-    /// Computes the Mercator extent from the dataset's WGS-84 bounding
-    /// box, padded by half a cell to match
-    /// <see cref="MapsuiCoverageArrowRenderer"/>'s alignment. Used as a
-    /// fallback when the arrow renderer returns no layer (e.g. an
-    /// all-NoData time step).
-    /// </summary>
-    private static MRect ComputeMercatorExtent(CoverageMetadata metadata)
-    {
-        var (minX, minY) = SphericalMercator.FromLonLat(
-            metadata.Extent.WestLongitude, metadata.Extent.SouthLatitude);
-        var (maxX, maxY) = SphericalMercator.FromLonLat(
-            metadata.Extent.EastLongitude, metadata.Extent.NorthLatitude);
-        return new MRect(minX, minY, maxX, maxY);
-    }
-
     // ---- dcf8 station series rendering ---------------------------------
 
     /// <summary>
@@ -388,7 +361,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// table; otherwise (DCF 8) a hardcoded palette is used.
     /// Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
     /// </summary>
-    private async Task<DatasetResult> RenderStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
+    private async Task<CoveragePortrayalResult> BuildStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
     {
         DateTime selectedTime;
         if (context is S111RenderContext { TimeStep: { } timeStep })
@@ -419,7 +392,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
 
-        var features = new List<IFeature>(ds.Stations.Count);
+        var glyphs = new List<PointGlyph>(ds.Stations.Count);
         double mercMinX = double.PositiveInfinity, mercMinY = double.PositiveInfinity;
         double mercMaxX = double.NegativeInfinity, mercMaxY = double.NegativeInfinity;
 
@@ -445,21 +418,18 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             var speed = station.SpeedsMetresPerSecond[idx];
             var direction = station.DirectionsDegreesTrue[idx];
 
-            var feature = new GeometryFeature
+            var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                Geometry = new Point(mx, my),
+                ["StationId"] = station.Identifier,
+                ["SpeedMetresPerSecond"] = speed,
+                ["SpeedKnots"] = speed * 1.9438444924406046,
+                ["DirectionDegreesTrue"] = direction,
+                ["SampleTime"] = station.TimeAt(idx),
+                ["Latitude"] = station.Latitude,
+                ["Longitude"] = station.Longitude,
             };
-            feature[MapsuiDisplayListRenderer.FeatureRefKey] =
-                StationFeatureRefPrefix + station.Identifier;
-            feature["StationId"] = station.Identifier;
-            feature["SpeedMetresPerSecond"] = speed;
-            feature["SpeedKnots"] = speed * 1.9438444924406046;
-            feature["DirectionDegreesTrue"] = direction;
-            feature["SampleTime"] = station.TimeAt(idx);
-            feature["Latitude"] = station.Latitude;
-            feature["Longitude"] = station.Longitude;
 
-            Color arrowColour;
+            RgbaColor arrowColour;
             double symbolScale;
             string? svgSource = null;
             string? symbolRef = null;
@@ -470,7 +440,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 var hex = colorScheme.Resolve(speed);
                 arrowColour = hex is not null
                     ? ParseHexColor(hex)
-                    : new Color(0x80, 0x80, 0x80); // grey fallback for out-of-range
+                    : new RgbaColor(0x80, 0x80, 0x80); // grey fallback for out-of-range
 
                 // Use PC symbol scheme for scaling and SVG symbol if available
                 if (symbolScheme is not null)
@@ -521,75 +491,78 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
                 symbolScale = SymbolScaleForSpeed(speed);
             }
 
-            // Symbol orientation: Mapsui rotation is counter-clockwise
-            // from east; compass bearing is clockwise from north. Negate
-            // to convert.
+            // Symbol orientation: Mapsui rotation is counter-clockwise from
+            // east; compass bearing is clockwise from north. Negate to convert.
             if (svgSource is not null)
             {
                 // PC SVG arrow symbol
-                feature.Styles.Add(new ImageStyle
+                glyphs.Add(new PointGlyph
                 {
-                    Image = new Image { Source = svgSource, RasterizeSvg = true },
+                    MercatorX = mx,
+                    MercatorY = my,
+                    FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
+                    Attributes = attributes,
+                    Symbol = PointGlyphSymbol.Svg,
+                    SvgSource = svgSource,
                     SymbolScale = symbolScale * 0.6,
-                    SymbolRotation = -direction,
+                    Rotation = -direction,
                 });
             }
             else
             {
                 // Triangle fallback
-                feature.Styles.Add(new SymbolStyle
+                glyphs.Add(new PointGlyph
                 {
-                    SymbolType = SymbolType.Triangle,
-                    Fill = new Brush(arrowColour),
-                    Outline = new Pen(arrowColour, 1.0),
+                    MercatorX = mx,
+                    MercatorY = my,
+                    FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
+                    Attributes = attributes,
+                    Symbol = PointGlyphSymbol.Triangle,
+                    FillColor = arrowColour,
+                    OutlineColor = arrowColour,
+                    OutlineWidth = 1.0,
                     SymbolScale = symbolScale,
-                    SymbolRotation = -direction,
+                    Rotation = -direction,
                 });
             }
-
-            features.Add(feature);
         }
 
-        var layer = new MemoryLayer
-        {
-            Name = $"S-111: {_fileName}",
-            Features = features,
-            Style = null,
-        };
-
         var extent = ds.Stations.Count == 0
-            ? new MRect(0, 0, 0, 0)
-            : new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
+            ? (MercatorBounds?)null
+            : new MercatorBounds(mercMinX, mercMinY, mercMaxX, mercMaxY);
 
         var dcfLabel = ds.DataCodingFormat == 3 ? "nodes" : "stations";
         var info = $"{ds.GeographicIdentifier ?? _fileName} — {ds.Stations.Count} {dcfLabel}, " +
                    $"time: {selectedTime:u}";
 
-        return new DatasetResult
+        return new CoveragePortrayalResult
         {
-            Layers = [layer],
-            Extent = extent,
-            Info = info,
-            Spec = new SpecRef("S-111", default),
             // S-111 station glyphs (dcf3/dcf8) — point overlays on the
             // catch-all OtherChartOverlays plane.
-            StackEntries = new[]
+            SubLayers = new CoverageSubLayerBase[]
             {
-                new LayerStackEntry(
-                    Layer: layer,
-                    Plane: S98DisplayPlane.OtherChartOverlays,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName,
-                    SourceFeatureType: "s111.stations"),
+                new GlyphCoverageSubLayer
+                {
+                    LayerKey = "s111.stations",
+                    LayerName = $"S-111: {_fileName}",
+                    Plane = S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "s111.stations",
+                    Glyphs = glyphs,
+                    Extent = extent,
+                },
             },
+            Spec = new SpecRef("S-111", default),
+            SourceDatasetId = _fileName,
+            Info = info,
         };
     }
 
     /// <summary>
     /// Parses a hex color string (e.g. "#RRGGBB" or "#AARRGGBB") into
-    /// a Mapsui <see cref="Color"/>.
+    /// an <see cref="RgbaColor"/>.
     /// </summary>
-    private static Color ParseHexColor(string hex)
+    private static RgbaColor ParseHexColor(string hex)
     {
         var span = hex.AsSpan();
         if (span.Length > 0 && span[0] == '#')
@@ -597,22 +570,22 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
         if (span.Length == 6)
         {
-            int r = int.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            int g = int.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            int b = int.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            return new Color(r, g, b);
+            byte r = byte.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            byte g = byte.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            byte b = byte.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return new RgbaColor(r, g, b);
         }
 
         if (span.Length == 8)
         {
-            int a = int.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            int r = int.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            int g = int.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            int b = int.Parse(span[6..8], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-            return new Color(r, g, b, a);
+            byte a = byte.Parse(span[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            byte r = byte.Parse(span[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            byte g = byte.Parse(span[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            byte b = byte.Parse(span[6..8], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            return new RgbaColor(r, g, b, a);
         }
 
-        return new Color(0x80, 0x80, 0x80);
+        return new RgbaColor(0x80, 0x80, 0x80);
     }
 
     private static IReadOnlyList<DateTime> ComputeStationUnionTimes(S111StationSeriesDataset ds)
@@ -632,15 +605,15 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// Graduated Beaufort-style palette across 0..2.0 m/s with a hot
     /// overflow above 2.0 m/s.
     /// </summary>
-    private static Color ColorByMagnitude(float speedMetresPerSecond)
+    private static RgbaColor ColorByMagnitude(float speedMetresPerSecond)
     {
         if (float.IsNaN(speedMetresPerSecond) || speedMetresPerSecond < 0.25f)
-            return new Color(0xcf, 0xe2, 0xf3); // very pale blue
-        if (speedMetresPerSecond < 0.50f) return new Color(0x6f, 0xa8, 0xdc);
-        if (speedMetresPerSecond < 1.00f) return new Color(0x3d, 0x85, 0xc6);
-        if (speedMetresPerSecond < 1.50f) return new Color(0x1c, 0x45, 0x87);
-        if (speedMetresPerSecond < 2.00f) return new Color(0xa6, 0x4d, 0x79);
-        return new Color(0xc1, 0x12, 0x1f);
+            return new RgbaColor(0xcf, 0xe2, 0xf3); // very pale blue
+        if (speedMetresPerSecond < 0.50f) return new RgbaColor(0x6f, 0xa8, 0xdc);
+        if (speedMetresPerSecond < 1.00f) return new RgbaColor(0x3d, 0x85, 0xc6);
+        if (speedMetresPerSecond < 1.50f) return new RgbaColor(0x1c, 0x45, 0x87);
+        if (speedMetresPerSecond < 2.00f) return new RgbaColor(0xa6, 0x4d, 0x79);
+        return new RgbaColor(0xc1, 0x12, 0x1f);
     }
 
     /// <summary>

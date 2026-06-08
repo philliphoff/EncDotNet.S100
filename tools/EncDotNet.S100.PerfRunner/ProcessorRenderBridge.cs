@@ -1,3 +1,5 @@
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using EncDotNet.S100.Datasets.Pipelines;
 
@@ -51,6 +53,14 @@ internal static class ProcessorRenderBridge
 
     private static Func<IDatasetProcessor, RenderContext?, CancellationToken, DatasetResult> Create()
     {
+        // Candidate shape (issue #189 PR2): RenderAsync moved off
+        // IDatasetProcessor onto MapsuiDatasetRenderer in the Mapsui package.
+        var rendererPath = TryCreateMapsuiRendererInvoker();
+        if (rendererPath is not null)
+        {
+            return rendererPath;
+        }
+
         var type = typeof(IDatasetProcessor);
 
         var asyncMethod = type.GetMethod(
@@ -85,7 +95,69 @@ internal static class ProcessorRenderBridge
         }
 
         throw new InvalidOperationException(
-            "IDatasetProcessor exposes neither RenderAsync(RenderContext?, CancellationToken) " +
-            "nor Render(RenderContext?); the perf harness cannot bind a render entry point.");
+            "IDatasetProcessor exposes neither a MapsuiDatasetRenderer render entry, " +
+            "RenderAsync(RenderContext?, CancellationToken), nor Render(RenderContext?); " +
+            "the perf harness cannot bind a render entry point.");
+    }
+
+    private static Func<IDatasetProcessor, RenderContext?, CancellationToken, DatasetResult>? TryCreateMapsuiRendererInvoker()
+    {
+        Type? rendererType;
+        try
+        {
+            var mapsuiAssembly = Assembly.Load(new AssemblyName("EncDotNet.S100.Renderers.Mapsui"));
+            rendererType = mapsuiAssembly.GetType(
+                "EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer",
+                throwOnError: false);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or BadImageFormatException)
+        {
+            return null;
+        }
+
+        if (rendererType is null)
+        {
+            return null;
+        }
+
+        var renderMethod = rendererType.GetMethod(
+            "RenderAsync",
+            BindingFlags.Public | BindingFlags.Instance,
+            binder: null,
+            types: [typeof(IDatasetProcessor), typeof(RenderContext), typeof(CancellationToken)],
+            modifiers: null);
+        if (renderMethod is null || renderMethod.ReturnType != typeof(Task<DatasetResult>))
+        {
+            return null;
+        }
+
+        var ctor = rendererType.GetConstructors().FirstOrDefault(c =>
+        {
+            var parameters = c.GetParameters();
+            return parameters.Length >= 1
+                && parameters[0].ParameterType.IsInstanceOfType(SharedInfrastructure.CrsFactory);
+        });
+        if (ctor is null)
+        {
+            return null;
+        }
+
+        var ctorParameters = ctor.GetParameters();
+        var ctorArgs = new object?[ctorParameters.Length];
+        ctorArgs[0] = SharedInfrastructure.CrsFactory;
+        for (var i = 1; i < ctorParameters.Length; i++)
+        {
+            ctorArgs[i] = ctorParameters[i].HasDefaultValue ? ctorParameters[i].DefaultValue : null;
+        }
+
+        var renderer = ctor.Invoke(ctorArgs);
+
+        return (processor, context, cancellationToken) =>
+        {
+            var task = (Task<DatasetResult>)renderMethod.Invoke(
+                renderer,
+                [processor, context, cancellationToken])!;
+            return task.GetAwaiter().GetResult();
+        };
     }
 }

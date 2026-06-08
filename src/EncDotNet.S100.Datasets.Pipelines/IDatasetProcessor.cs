@@ -8,9 +8,11 @@ using EncDotNet.S100.Validation;
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
-/// Processes a dataset file and renders it into Mapsui layers.
-/// Constructed once per file; <see cref="RenderAsync"/> may be called
-/// multiple times with different spec-specific contexts.
+/// Processes a dataset file and exposes feature/coverage pick info,
+/// enumeration, and validation. Rendering is performed separately by a
+/// renderer that consumes the processor's portrayal-output seam (e.g.
+/// <c>IVectorPortrayalSource</c> / <c>ICoveragePortrayalSource</c>), so this
+/// abstraction carries no renderer (Mapsui) type. Constructed once per file.
 /// </summary>
 public interface IDatasetProcessor
 {
@@ -25,29 +27,9 @@ public interface IDatasetProcessor
     SpecRef Spec { get; }
 
     /// <summary>
-    /// Renders the dataset into portrayal layers. The render path is
-    /// CPU-bound on already-parsed, in-memory data; the returned task
-    /// typically completes synchronously. The supplied
-    /// <paramref name="cancellationToken"/> is honoured cooperatively at
-    /// pipeline-stage and per-row boundaries so a render in flight can be
-    /// abandoned (e.g. when the viewer's selected time step changes).
-    /// </summary>
-    /// <param name="context">
-    /// Optional spec-specific render context (palette, opacity, selected
-    /// time step, viewport). When <c>null</c> the processor renders with
-    /// its defaults.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Token observed cooperatively during rendering; cancellation surfaces
-    /// as an <see cref="OperationCanceledException"/>.
-    /// </param>
-    /// <returns>The rendered dataset result.</returns>
-    Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Returns information about a feature identified by its reference string
-    /// (as stored in the Mapsui feature via <c>FeatureRefKey</c>), or <c>null</c>
-    /// if the feature cannot be found.
+    /// (as stored in the rendered feature via the renderer's feature-ref key),
+    /// or <c>null</c> if the feature cannot be found.
     /// </summary>
     /// <remarks>
     /// Real-world datasets occasionally contain features that share a

@@ -13,17 +13,15 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
-public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer
+public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
 {
     private readonly S101Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
@@ -32,26 +30,13 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
-    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
-
-    // Cache of the pattern-fill priority clip geometry. The clip result is
-    // palette-independent, so caching lets a Day/Dusk/Night palette switch
-    // reuse the previously computed clip instead of re-paying the multi-second
-    // NetTopologySuite overlay.
-    //
-    // Defaults to a per-processor single-slot in-memory cache (step 1), which
-    // only helps re-renders of this already-open dataset. When the host injects
-    // a shared DiskPatternClipCache (step 2) it is used instead, persisting the
-    // clip to disk so the cold first open of a previously-seen cell is fast even
-    // after a restart. The disk cache is process-global, so the clip key is
-    // fully qualified with _patternClipScope (see BuildDatasetScopeKey) to avoid
-    // cross-cell collisions. Guarded by _renderGate.
-    private readonly IPatternClipCache _patternClipCache;
 
     // Deterministic per-dataset scope prepended to the portrayal cache key when
-    // forming the disk clip-cache key. Encodes dataset content + clip params +
-    // CRS + FormatVersion so the disk key is globally unique and self-
-    // invalidating. Constant for the lifetime of this processor.
+    // forming the (Mapsui-side) pattern-clip cache key. Encodes dataset content
+    // (SHA-256) + name + edition + CRS so the resulting clip key is globally
+    // unique and self-invalidating. The Mapsui renderer appends its own
+    // algorithm / serialization-format qualifiers. Constant for the lifetime of
+    // this processor.
     private readonly string _patternClipScope;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private FeatureCatalogueDecoder? _decoder;
@@ -110,14 +95,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     internal int PortrayalCacheMisses { get; private set; }
 
     /// <summary>
-    /// Number of area renders whose pattern-fill priority clip was served from
-    /// the pattern-clip cache (the multi-second NetTopologySuite overlay was
-    /// skipped — e.g. on a palette switch, or a warm disk-cache cold open).
-    /// Exposed for tests.
-    /// </summary>
-    internal long PatternClipCacheHits => _patternClipCache.Hits;
-
-    /// <summary>
     /// Number of renders whose post-pipeline instruction list was served from
     /// the shared cross-load instruction cache (the MoonSharp Part 9A Lua run
     /// was skipped — e.g. a fresh processor re-opening a previously-portrayed
@@ -141,9 +118,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache = null,
         IPortrayalInstructionCache? sharedInstructionCache = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedPatternClipCache, sharedInstructionCache)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache)
     {
     }
 
@@ -158,7 +134,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache = null,
         IPortrayalInstructionCache? sharedInstructionCache = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
@@ -166,7 +141,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             catalogueManager,
             luaEngine,
             featureCatalogueManager,
-            sharedPatternClipCache,
             sharedInstructionCache)
     {
     }
@@ -177,7 +151,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPatternClipCache? sharedPatternClipCache,
         IPortrayalInstructionCache? sharedInstructionCache)
     {
         ArgumentNullException.ThrowIfNull(datasetStream);
@@ -199,9 +172,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         }
         _dataset = S101Dataset.Open(new MemoryStream(datasetBytes, writable: false));
 
-        // When a shared disk cache is injected use it (persistent, cross-cell,
-        // process-global); otherwise fall back to a per-processor in-memory slot.
-        _patternClipCache = sharedPatternClipCache ?? new InMemoryPatternClipCache();
         _patternClipScope = BuildDatasetScopeKey(datasetBytes, _dataset);
 
         // When a shared instruction cache is injected use it (persistent,
@@ -231,30 +201,29 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
     /// <summary>
     /// Builds the deterministic per-dataset scope that, prefixed to the
-    /// portrayal cache key, fully qualifies the disk pattern-clip cache key so
-    /// it is globally unique and self-invalidating.
+    /// portrayal cache key, qualifies the (Mapsui-side) pattern-clip cache key
+    /// with this dataset's content identity so it is unique per cell and
+    /// self-invalidating on content change.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The pattern-fill priority clip geometry is a pure function of the dataset
     /// geometry and the clip parameters (it is palette-independent — the palette
-    /// only recolours tiles applied after clipping). The scope therefore
-    /// encodes:
+    /// only recolours tiles applied after clipping). This scope encodes the
+    /// content-identity portion that the renderer cannot know:
     /// </para>
     /// <list type="bullet">
     /// <item>the SHA-256 of the raw dataset bytes (content identity);</item>
     /// <item>the S-101 product-specification edition and dataset name from the
     /// DSID record (belt-and-suspenders alongside the content hash);</item>
-    /// <item>the clip parameters that affect the output geometry —
-    /// <see cref="MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres"/>
-    /// and <see cref="MapsuiDisplayListRenderer.MinPointsToSimplifyForClip"/>;</item>
-    /// <item>the rendering CRS (EPSG:3857, the renderer's fixed projection);</item>
-    /// <item>the <see cref="DiskPatternClipCache.FormatVersion"/> stamp.</item>
+    /// <item>the rendering CRS (EPSG:3857, the renderer's fixed projection).</item>
     /// </list>
     /// <para>
-    /// Any change to dataset content, clip parameters, the CRS, or the cache /
-    /// serialization format yields a different scope and therefore a cache miss
-    /// (recompute), so persisted geometry can never be reused incorrectly.
+    /// The Mapsui renderer appends the clip algorithm parameters and the
+    /// serialization format-version stamp before consulting its pattern-clip
+    /// cache, so any change to dataset content, clip parameters, the CRS, or the
+    /// cache / serialization format yields a cache miss (recompute) and persisted
+    /// geometry can never be reused incorrectly.
     /// </para>
     /// </remarks>
     internal static string BuildDatasetScopeKey(byte[] datasetBytes, S101Dataset dataset)
@@ -262,7 +231,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         ArgumentNullException.ThrowIfNull(datasetBytes);
         ArgumentNullException.ThrowIfNull(dataset);
 
-        var c = System.Globalization.CultureInfo.InvariantCulture;
         var contentHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(datasetBytes)).ToLowerInvariant();
 
@@ -271,10 +239,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         sb.Append("ds:").Append(contentHash);
         sb.Append("|name:").Append(id.DatasetName);
         sb.Append("|ed:").Append(id.ProductSpecificationEdition);
-        sb.Append("|tol:").Append(MapsuiDisplayListRenderer.PatternClipSimplifyToleranceMetres.ToString("R", c));
-        sb.Append("|gate:").Append(MapsuiDisplayListRenderer.MinPointsToSimplifyForClip.ToString(c));
         sb.Append("|crs:EPSG:3857");
-        sb.Append("|fmt:").Append(DiskPatternClipCache.FormatVersion.ToString(c));
         return sb.ToString();
     }
 
@@ -370,16 +335,19 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         }
     }
 
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         // Serialize against re-entrant renders that share the long-lived
-        // catalogue state and the portrayal-instruction cache.
+        // catalogue state and the portrayal-instruction cache. Everything that
+        // reads mutable catalogue state (palette switch, ECDIS apply, Lua
+        // pipeline, asset pre-warm) is snapshotted here so the returned result
+        // is safe to convert to Mapsui layers off the gate.
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await RenderCoreAsync(context, cancellationToken).ConfigureAwait(false);
+            return await BuildVectorPortrayalCoreAsync(context, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -409,7 +377,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// the headless renderer does not perform NetTopologySuite
     /// priority-clipping of overlapping patterns or land-occlusion, so
     /// patterns may visibly bleed across opaque overlay fills. Use
-    /// <see cref="RenderAsync"/> (the Mapsui path) for full pattern-fill
+    /// <see cref="BuildVectorPortrayalAsync"/> (the Mapsui path) for full pattern-fill
     /// fidelity. Unlike that path, this produces a single bitmap (no S-102
     /// interleave split) and draw order follows the shared core's S-100
     /// Part 9 ordering.
@@ -473,7 +441,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         }
     }
 
-    private async Task<DatasetResult> RenderCoreAsync(RenderContext? context, CancellationToken cancellationToken)
+    private async Task<VectorPortrayalResult> BuildVectorPortrayalCoreAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
@@ -543,102 +511,118 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
         // S-101 area fills and S-101 line work / points / text. We split
         // the S-101 display list along the AreaInstruction boundary into
-        // two Mapsui layers so the LayerStackBuilder can interleave S-102.
-        // PR-L0 TBD-3 resolved: split in the processor (double pipeline
-        // pass / type pre-filter) rather than the renderer. The double
-        // render is small per cell (< 5% per design note §4.2.1); a
-        // future v2 mitigation could be a single-pass dual-sink renderer
-        // if profiling on large datasets shows it matters.
+        // two sub-layers so the Mapsui renderer's LayerStackBuilder can
+        // interleave S-102. Splitting here (in the processor) keeps the
+        // type pre-filter Mapsui-free; the renderer rasterises each slice.
         var areaInstructions = prepared.Where(i => i is AreaInstruction).ToList();
         var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
 
         var geometryProvider = new S101FeatureGeometryProvider(_dataset);
 
-        // Fully qualify the clip-cache key with the per-dataset scope so a
-        // process-global disk cache cannot collide across cells. The portrayal-
-        // content hash is folded in so a rule / catalogue change (which changes
-        // the instructions and therefore the clip geometry) invalidates the
-        // persisted clip. The in-memory fallback is unaffected (its scope is
-        // constant within this processor).
+        // Mapsui-free pattern-clip cache identity: the per-dataset scope
+        // (content hash + name + edition + CRS) qualified by the portrayal-
+        // content hash and per-render cache key. The Mapsui renderer appends
+        // its own clip-algorithm / serialization-format qualifiers before
+        // consulting the actual pattern-clip cache it owns.
         var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{cacheKey}";
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
-        var areaLayer = CreateRenderer(s101Cat, palette, context, suffix: "areas", patternClipCacheKey: patternClipKey, prewarm: prewarm)
-            .Render(areaInstructions, geometryProvider);
-        var lineLayer = CreateRenderer(s101Cat, palette, context, suffix: "lines", patternClipCacheKey: null, prewarm: prewarm)
-            .Render(otherInstructions, geometryProvider);
+        // PR-L2 R-101-102-B: feature tags (S-101 feature-type code and, for
+        // DepthContour, the VALDCO depth value) the Mapsui renderer copies onto
+        // each built IFeature so the S-98 rule engine can suppress depth
+        // features without re-running portrayal. See S98DefaultRules.
+        _featureIndex ??= BuildFeatureIndex();
+        var featureTags = BuildFeatureTags(_featureIndex.Values);
 
-        // PR-L2 R-101-102-B: tag every Mapsui IFeature with its S-101
-        // feature-type code and (for DepthContour) its VALDCO depth
-        // value, so the S-98 rule engine can filter without re-running
-        // portrayal. See S98DefaultRules.SuppressS101DepthFeatures.
-        TagMapsuiFeaturesWithFeatureType(areaLayer);
-        TagMapsuiFeaturesWithFeatureType(lineLayer);
+        // Out-of-scale-band declutter cutoff (S-101 DataCoverage /
+        // minimumDisplayScale, FC §3.1.1): the most-permissive denominator the
+        // Mapsui renderer multiplies into a maximum visible resolution and
+        // clamps onto the line-work styles. Honour the mariner's
+        // IgnoreScaleMinimum override (disables the cap, consistent with SCAMIN).
+        var outOfBandMinDisplayScale = mariner.IgnoreScaleMinimum
+            ? (int?)null
+            : ResolveOutOfBandMinDisplayScale(_featureIndex.Values);
 
-        // Out-of-scale-band declutter: when the viewport is zoomed out past
-        // the cell's intended display scale band (S-101 DataCoverage /
-        // minimumDisplayScale, FC §3.1.1), the point/line/text display
-        // collapses into an unreadable mass of overlapping symbology. Cap
-        // those detail features' maximum visible resolution so they drop out
-        // when zoomed too far out, while leaving the area fills uncapped so
-        // the cell's land / depth-area silhouette stays visible as a
-        // coverage footprint. Honour the mariner's IgnoreScaleMinimum
-        // override (S-101 PC context parameter) so "show everything
-        // regardless of scale" disables the cap, consistent with SCAMIN.
-        if (!mariner.IgnoreScaleMinimum)
-        {
-            _featureIndex ??= BuildFeatureIndex();
-            var bandMaxResolution = ResolveOutOfBandMaxResolution(_featureIndex.Values);
-            if (bandMaxResolution is double cap && lineLayer is MemoryLayer lineMemoryLayer)
-                ApplyOutOfScaleBandCap(lineMemoryLayer.Features, cap);
-        }
-
-        // Union the two layer extents (each is in EPSG:3857). Mapsui
-        // returns a zero-extent rect when a layer has no features, so
-        // skip such layers in the union.
-        var areaExtent = areaLayer.Extent;
-        var lineExtent = lineLayer.Extent;
-        var layerExtent = areaExtent is null
-            ? (lineExtent ?? new MRect(0, 0, 0, 0))
-            : (lineExtent is null ? areaExtent : areaExtent.Join(lineExtent));
-
-        Console.WriteLine($"[S101-Lua] Rendered {areaInstructions.Count} area + {otherInstructions.Count} non-area instructions");
+        Console.WriteLine($"[S101-Lua] Prepared {areaInstructions.Count} area + {otherInstructions.Count} non-area instructions");
 
         var info = $"{_dataset.DatasetName} — {_dataset.FeatureCount} features, " +
                    $"{prepared.Count} instructions";
 
-        var layers = new ILayer[] { areaLayer, lineLayer };
-
-        return new DatasetResult
+        return new VectorPortrayalResult
         {
-            Layers = layers,
-            Extent = layerExtent,
-            Info = info,
-            Spec = new SpecRef("S-101", default),
-            // Sub-layer keys so the viewer's per-sub-layer disclosure
-            // can toggle areas vs line work independently.
-            LayerNames = new[] { "s101.areas", "s101.linework" },
-            StackEntries = new[]
+            SubLayers = new[]
             {
                 // Area fills land on the deepest base-chart plane so
-                // S-102 (Bathymetry, 10) can sit on top of them.
-                new LayerStackEntry(
-                    Layer: areaLayer,
-                    Plane: S98DisplayPlane.BaseChartUnder,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName,
-                    SourceFeatureType: "area"),
+                // S-102 (Bathymetry, 10) can sit on top of them. Pattern
+                // fills live here, so this sub-layer carries the clip key.
+                new VectorSubLayer
+                {
+                    LayerKey = "s101.areas",
+                    LayerName = $"S-101 (areas): {_fileName}",
+                    Instructions = areaInstructions,
+                    Plane = S98DisplayPlane.BaseChartUnder,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "area",
+                    PatternClipCacheKey = patternClipKey,
+                    ApplyOutOfBandCap = false,
+                },
                 // Line work, points, symbols, and text remain on the
-                // base-chart "over" plane (above Bathymetry).
-                new LayerStackEntry(
-                    Layer: lineLayer,
-                    Plane: S98DisplayPlane.BaseChartOver,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName,
-                    SourceFeatureType: "linework"),
+                // base-chart "over" plane (above Bathymetry); these carry
+                // the out-of-scale-band declutter cap and no pattern fills.
+                new VectorSubLayer
+                {
+                    LayerKey = "s101.linework",
+                    LayerName = $"S-101 (lines): {_fileName}",
+                    Instructions = otherInstructions,
+                    Plane = S98DisplayPlane.BaseChartOver,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "linework",
+                    PatternClipCacheKey = null,
+                    ApplyOutOfBandCap = true,
+                },
             },
+            Palette = palette,
+            GeometryProvider = geometryProvider,
+            Product = "S-101",
+            Spec = new SpecRef("S-101", default),
+            SourceDatasetId = _fileName,
+            Info = info,
+            SymbolScale = context?.SymbolScale ?? 1.0,
+            TextScale = context?.TextScale ?? 1.0,
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
+            LayerNames = new[] { "s101.areas", "s101.linework" },
+            FeatureTags = featureTags,
+            OutOfBandMinDisplayScale = outOfBandMinDisplayScale,
         };
+    }
+
+    /// <summary>
+    /// Builds the Mapsui-free feature-tag map (feature id → tag) the renderer
+    /// copies onto built features for S-98 depth-feature suppression. Carries
+    /// the feature-type code and, for <c>DepthContour</c>, the numeric VALDCO
+    /// depth value (preserving the MSC.232(82) §5.8 safety-contour exception).
+    /// </summary>
+    private static IReadOnlyDictionary<long, VectorFeatureTag> BuildFeatureTags(
+        IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
+    {
+        var tags = new Dictionary<long, VectorFeatureTag>();
+        foreach (var feature in features)
+        {
+            object? depthValue = null;
+            if (string.Equals(feature.FeatureType, "DepthContour", StringComparison.Ordinal) &&
+                feature.Attributes.TryGetValue("valueOfDepthContour", out var depthRaw) &&
+                depthRaw is not null)
+            {
+                depthValue = depthRaw;
+            }
+
+            tags[feature.Id] = new VectorFeatureTag(feature.FeatureType, depthValue);
+        }
+
+        return tags;
     }
 
     /// <summary>
@@ -699,24 +683,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     }
 
     /// <summary>
-    /// Resolves the cell's out-of-scale-band cutoff as a Mapsui maximum
-    /// visible resolution (m/px in EPSG:3857) from the
-    /// <c>DataCoverage</c> feature's <c>minimumDisplayScale</c> attribute
-    /// (S-101 FC §3.1.1 — the smallest scale, i.e. largest denominator, at
-    /// which the cell is intended to be displayed). Detail features become
-    /// invisible once the viewport resolution exceeds this value (i.e. the
-    /// chart is zoomed out beyond its compilation scale band).
+    /// Resolves the cell's out-of-scale-band cutoff as the most-permissive
+    /// (largest) <c>minimumDisplayScale</c> denominator across the
+    /// <c>DataCoverage</c> features (S-101 FC §3.1.1 — the smallest scale, i.e.
+    /// largest denominator, at which the cell is intended to be displayed).
+    /// Detail features become invisible once the viewport is zoomed out beyond
+    /// this band. Mapsui-free: the renderer multiplies this denominator by its
+    /// denominator-to-resolution constant to obtain the maximum visible
+    /// resolution it clamps onto the styles.
     /// </summary>
     /// <param name="features">The dataset's vector features.</param>
     /// <returns>
-    /// The cutoff resolution (<c>minimumDisplayScale × DenomToResolutionMetres</c>),
-    /// or <see langword="null"/> when no <c>DataCoverage</c> feature carries a
-    /// usable <c>minimumDisplayScale</c>. When several <c>DataCoverage</c>
-    /// features declare different bands, the most permissive (largest
-    /// denominator) is used so detail stays visible wherever any coverage
-    /// region still permits it.
+    /// The largest usable <c>minimumDisplayScale</c> denominator, or
+    /// <see langword="null"/> when no <c>DataCoverage</c> feature carries one.
+    /// When several <c>DataCoverage</c> features declare different bands, the
+    /// most permissive (largest denominator) is used so detail stays visible
+    /// wherever any coverage region still permits it.
     /// </returns>
-    internal static double? ResolveOutOfBandMaxResolution(
+    internal static int? ResolveOutOfBandMinDisplayScale(
         IEnumerable<EncDotNet.S100.Pipelines.Vector.Feature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
@@ -735,111 +719,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             minDisplayScale = minDisplayScale is null ? denom : Math.Max(minDisplayScale.Value, denom);
         }
 
-        return minDisplayScale is null
-            ? null
-            : minDisplayScale.Value * MapsuiDisplayListRenderer.DenomToResolutionMetres;
-    }
-
-    /// <summary>
-    /// Clamps the maximum visible resolution (zoomed-out limit) of every
-    /// style on <paramref name="features"/> to <paramref name="maxResolution"/>,
-    /// suppressing point/line/text detail when the viewport is zoomed out
-    /// past the cell's intended scale band. The clamp only ever
-    /// <em>reduces</em> visibility: a tighter SCAMIN-derived limit already
-    /// applied by the renderer is preserved, and any style with a
-    /// non-positive (sentinel) limit is left untouched.
-    /// </summary>
-    /// <param name="features">The Mapsui features to cap (point/line/text).</param>
-    /// <param name="maxResolution">The band cutoff resolution (m/px).</param>
-    internal static void ApplyOutOfScaleBandCap(IEnumerable<IFeature> features, double maxResolution)
-    {
-        ArgumentNullException.ThrowIfNull(features);
-
-        foreach (var mapFeature in features)
-        {
-            foreach (var style in mapFeature.Styles)
-            {
-                if (style is null) continue;
-                // Only tighten: default MaxVisible (double.MaxValue) and any
-                // looser SCAMIN limit collapse to the band cap; a tighter
-                // SCAMIN limit wins; non-positive sentinels are preserved.
-                if (style.MaxVisible > 0)
-                    style.MaxVisible = Math.Min(style.MaxVisible, maxResolution);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Tags every Mapsui feature on <paramref name="layer"/> with the
-    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Interoperability.FeatureTagKeys.FeatureType"/>
-    /// (and, for <c>DepthContour</c>, the numeric depth value under
-    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Interoperability.FeatureTagKeys.DepthContourValue"/>).
-    /// </summary>
-    /// <remarks>
-    /// The Mapsui renderer stamps each <c>IFeature</c> with the
-    /// originating S-100 feature reference under
-    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>. We read
-    /// that, look up the originating <see cref="Pipelines.Vector.Feature"/>
-    /// in the lazily-built feature index, and copy the feature-type
-    /// code plus the safety-contour exception payload (VALDCO /
-    /// <c>valueOfDepthContour</c>, S-101 FC §3.1.1) onto the Mapsui
-    /// feature. This is the data the PR-L2 R-101-102-B rule consumes
-    /// to suppress depth area / contour features while preserving the
-    /// safety contour (MSC.232(82) §5.8).
-    /// </remarks>
-    private void TagMapsuiFeaturesWithFeatureType(ILayer layer)
-    {
-        if (layer is not MemoryLayer memoryLayer) return;
-
-        _featureIndex ??= BuildFeatureIndex();
-
-        foreach (var mapFeature in memoryLayer.Features)
-        {
-            if (mapFeature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
-                continue;
-
-            if (!long.TryParse(featureRef, System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var id))
-                continue;
-
-            if (!_featureIndex.TryGetValue(id, out var feature))
-                continue;
-
-            mapFeature[Interoperability.FeatureTagKeys.FeatureType] = feature.FeatureType;
-
-            if (string.Equals(feature.FeatureType, "DepthContour", StringComparison.Ordinal) &&
-                feature.Attributes.TryGetValue("valueOfDepthContour", out var depthRaw) &&
-                depthRaw is not null)
-            {
-                mapFeature[Interoperability.FeatureTagKeys.DepthContourValue] = depthRaw;
-            }
-        }
-    }
-
-    private MapsuiDisplayListRenderer CreateRenderer(
-        S101PortrayalCatalogue catalogue,
-        ColorPalette palette,
-        RenderContext? context,
-        string suffix,
-        string? patternClipCacheKey,
-        CataloguePreWarm.PreWarmResult prewarm)
-    {
-        return new MapsuiDisplayListRenderer
-        {
-            LayerName = $"S-101 ({suffix}): {_fileName}",
-            Product = "S-101",
-            Palette = palette,
-            AssetCache = _renderAssetCache,
-            // Only the area renderer carries pattern fills, so wire the clip
-            // cache there; the line renderer has no pattern fills to clip.
-            PatternClipCache = patternClipCacheKey is not null ? _patternClipCache : null,
-            PatternClipCacheKey = patternClipCacheKey,
-            SymbolScale = context?.SymbolScale ?? 1.0,
-            TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
-            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
-            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-        };
+        return minDisplayScale;
     }
 
     public FeatureInfo? GetFeatureInfo(string featureRef)

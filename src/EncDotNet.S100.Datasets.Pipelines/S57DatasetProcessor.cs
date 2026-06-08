@@ -12,12 +12,10 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -27,7 +25,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="S101Document"/> and reusing the S-101 portrayal pipeline.
 /// Symbology is S-101 (not S-52); coverage is breadth-first.
 /// </summary>
-public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer
+public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
 {
     // Serialises render calls so the catalogue's mutable palette / ECDIS
     // state is not mutated mid-build by a concurrent render.
@@ -39,7 +37,6 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
-    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -109,14 +106,14 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
     }
 
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await RenderCoreAsync(context, cancellationToken).ConfigureAwait(false);
+            return await BuildVectorPortrayalCoreAsync(context, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -124,7 +121,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
         }
     }
 
-    private async Task<DatasetResult> RenderCoreAsync(RenderContext? context, CancellationToken cancellationToken)
+    private async Task<VectorPortrayalResult> BuildVectorPortrayalCoreAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var mariner = MarinerSettings.Default;
 
@@ -149,43 +146,39 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
-        var vectorRenderer = new MapsuiDisplayListRenderer
+        var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
+
+        var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
+                   $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
+
+        return new VectorPortrayalResult
         {
-            LayerName = $"S-57: {_fileName}",
-            Product = "S-57",
+            // S-57 is the legacy ENC fallback; treat the whole layer as
+            // base-chart line-work + symbology on BaseChartOver (S-98 §9.2.1
+            // layer 2). We do not split S-57 into areas vs lines — the legacy
+            // renderer mixes them.
+            SubLayers = new[]
+            {
+                new VectorSubLayer
+                {
+                    LayerKey = "s57.main",
+                    LayerName = $"S-57: {_fileName}",
+                    Instructions = prepared,
+                    Plane = S98DisplayPlane.BaseChartOver,
+                    WithinPlanePriority = 0,
+                },
+            },
             Palette = palette,
-            AssetCache = _renderAssetCache,
+            GeometryProvider = geometryProvider,
+            Product = "S-57",
+            Spec = new SpecRef("S-57", default),
+            SourceDatasetId = _fileName,
+            Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-        };
-        var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
-        var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
-        var layerExtent = mapLayer.Extent ?? new MRect(0, 0, 0, 0);
-
-        var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
-                   $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
-
-        return new DatasetResult
-        {
-            Layers = [mapLayer],
-            Extent = layerExtent,
-            Info = info,
-            Spec = new SpecRef("S-57", default),
-            // S-57 is the legacy ENC fallback; treat the whole layer
-            // as base-chart line-work + symbology on BaseChartOver
-            // (S-98 §9.2.1 layer 2). We do not split S-57 into areas
-            // vs lines in PR-L1 — the legacy renderer mixes them.
-            StackEntries = new[]
-            {
-                new LayerStackEntry(
-                    Layer: mapLayer,
-                    Plane: S98DisplayPlane.BaseChartOver,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName),
-            },
         };
     }
 
@@ -308,7 +301,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IHeadlessImageRende
     /// Renders this S-57 cell to a standalone <see cref="SKBitmap"/> through
     /// the headless, backend-agnostic Skia vector core, bypassing Mapsui. The
     /// S-57 dataset is translated to S-101 in-memory (the same pipeline as
-    /// <see cref="RenderAsync"/>) and the resulting drawing instructions are
+    /// <see cref="BuildVectorPortrayalAsync"/>) and the resulting drawing instructions are
     /// rasterised by <see cref="HeadlessVectorRenderer"/>.
     /// </summary>
     /// <param name="widthPixels">Output bitmap width in pixels.</param>

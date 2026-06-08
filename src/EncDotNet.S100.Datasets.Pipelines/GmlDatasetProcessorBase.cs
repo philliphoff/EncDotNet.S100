@@ -6,17 +6,14 @@ using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
-using Mapsui.Projections;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -36,14 +33,19 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IGmlFeature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHeadlessImageRenderer
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
     where TFeature : IGmlFeature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
-    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
-    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
+    private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
+
+    // Serializes portrayal builds for this processor. The build mutates
+    // shared catalogue state (palette switch, ECDIS apply) and the asset
+    // pre-warm, so concurrent renders (e.g. Day/Night while a tile request
+    // is in flight) must not interleave. Mirrors the S-101 render gate.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
 
     /// <summary>
     /// Initializes the shared processor state. Called by subclass constructors
@@ -53,16 +55,16 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
     /// <param name="decoder">Optional feature-catalogue decoder for attribute decoding.</param>
     /// <param name="fileName">Dataset file name (used in feature info).</param>
     /// <param name="authorityProvider">
-    /// Resolves the cross-dataset paint-order authority each time the
-    /// processor builds a <see cref="LayerStackEntry"/>. Required —
-    /// processors receive the provider via DI rather than reaching
-    /// for a static singleton.
+    /// Resolves the default S-98 display plane for this dataset's content.
+    /// Required — processors receive the provider via DI rather than reaching
+    /// for a static singleton. The Mapsui-typed cross-dataset sort authority
+    /// lives in the renderer package; the processor only needs the plane.
     /// </param>
     protected GmlDatasetProcessorBase(
         GmlPortrayalCatalogueBase catalogue,
         FeatureCatalogueDecoder? decoder,
         string fileName,
-        IInteroperabilityAuthorityProvider authorityProvider)
+        IDisplayPlaneAuthorityProvider authorityProvider)
     {
         ArgumentNullException.ThrowIfNull(catalogue);
         ArgumentNullException.ThrowIfNull(authorityProvider);
@@ -105,11 +107,12 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
     protected virtual IReadOnlyList<FeatureReference> BuildFeatureReferences(TFeature feature) => [];
 
     /// <summary>
-    /// Called before the pipeline runs. Return a non-null <see cref="DatasetResult"/>
-    /// to short-circuit rendering (e.g. S-411 hides when time slider is before
-    /// issue date).
+    /// Called before the pipeline runs. Return a non-null info string to
+    /// suppress rendering (the dataset contributes no portrayal for this
+    /// context, e.g. S-411 hides when the time slider is before the issue
+    /// date); the returned text becomes the dataset's status line.
     /// </summary>
-    protected virtual DatasetResult? CheckPreRender(RenderContext? context) => null;
+    protected virtual string? GetSuppressionInfo(RenderContext? context) => null;
 
     /// <summary>
     /// Post-processes drawing instructions after the pipeline runs. Override
@@ -135,77 +138,85 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
     protected string FileName => _fileName;
 
     /// <inheritdoc/>
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var preResult = CheckPreRender(context);
-        if (preResult is not null) return preResult;
-
-        var catalogue = _catalogue;
-        context?.EcdisDisplay?.ApplyTo(catalogue);
-        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-
-        var featureSource = CreateFeatureXmlSource();
-        var pipeline = new PortrayalPipeline();
-        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
-
-        Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
-            + $"{instructions.Count} drawing instructions");
-
-        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
-
-        var renderer = new MapsuiDisplayListRenderer
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            LayerName = $"{Spec.Name}: {_fileName}",
-            Product = Spec.Name,
-            Palette = catalogue.ActivePalette,
-            AssetCache = _renderAssetCache,
-            SymbolScale = context?.SymbolScale ?? 1.0,
-            TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
-            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
-            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-        };
-
-        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
-        var layer = renderer.Render(instructions, geometryProvider);
-
-        var featureTypes = featureSource.FeatureTypesPresent;
-        var suffix = BuildInfoSuffix();
-        var info = $"{Spec.Name} {ProductDescription} — {_fileName}\n"
-            + $"Features: {Features.Count} ({string.Join(", ", featureTypes)})\n"
-            + (suffix.Length > 0 ? suffix + "\n" : "")
-            + $"Drawing instructions: {instructions.Count}";
-
-        return new DatasetResult
-        {
-            Layers = [layer],
-            Extent = ComputeExtent(),
-            Info = info,
-            Spec = Spec,
-            StackEntries = new[]
+            var suppressedInfo = GetSuppressionInfo(context);
+            if (suppressedInfo is not null)
             {
-                new LayerStackEntry(
-                    Layer: layer,
-                    // S-98 cross-dataset plane assignment per design note
-                    // §3 / §4.2. PR-L1 ships default planes only — no IC
-                    // override, no per-feature filter (TBD-5).
-                    //
-                    // The plane is resolved through the currently active
-                    // authority (via the injected provider) so a runtime
-                    // policy swap (e.g. S-98 → strict load-order) takes
-                    // effect on the next render. The recorded plane is
-                    // the conceptual "where does this content belong?"
-                    // answer; sort policy is what the authority's Sort()
-                    // does with it.
-                    Plane: _authorityProvider.Current.GetDefaultPlane(Spec.Name),
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName),
-            },
-        };
+                return new VectorPortrayalResult
+                {
+                    SubLayers = Array.Empty<VectorSubLayer>(),
+                    Palette = _catalogue.ActivePalette,
+                    GeometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features),
+                    Product = Spec.Name,
+                    Spec = Spec,
+                    SourceDatasetId = _fileName,
+                    Info = suppressedInfo,
+                    GeographicExtent = ComputeGeographicExtent(),
+                };
+            }
+
+            var catalogue = _catalogue;
+            context?.EcdisDisplay?.ApplyTo(catalogue);
+            await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+            var featureSource = CreateFeatureXmlSource();
+            var pipeline = new PortrayalPipeline();
+            var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+
+            Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
+                + $"{instructions.Count} drawing instructions");
+
+            var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+
+            var featureTypes = featureSource.FeatureTypesPresent;
+            var suffix = BuildInfoSuffix();
+            var info = $"{Spec.Name} {ProductDescription} — {_fileName}\n"
+                + $"Features: {Features.Count} ({string.Join(", ", featureTypes)})\n"
+                + (suffix.Length > 0 ? suffix + "\n" : "")
+                + $"Drawing instructions: {instructions.Count}";
+
+            var subLayer = new VectorSubLayer
+            {
+                LayerKey = Spec.Name,
+                LayerName = $"{Spec.Name}: {_fileName}",
+                Instructions = instructions,
+                // S-98 cross-dataset plane assignment per design note §3 / §4.2.
+                // PR-L1 ships default planes only — no IC override, no per-feature
+                // filter (TBD-5). The plane is resolved through the active
+                // default-plane authority via the injected provider.
+                Plane = _authorityProvider.Current.GetDefaultPlane(Spec.Name),
+                WithinPlanePriority = 0,
+            };
+
+            return new VectorPortrayalResult
+            {
+                SubLayers = new[] { subLayer },
+                Palette = catalogue.ActivePalette,
+                GeometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features),
+                Product = Spec.Name,
+                Spec = Spec,
+                SourceDatasetId = _fileName,
+                Info = info,
+                SymbolScale = context?.SymbolScale ?? 1.0,
+                TextScale = context?.TextScale ?? 1.0,
+                SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+                AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+                LineStyleProvider = name => prewarm.ResolveLineStyle(name),
+                GeographicExtent = ComputeGeographicExtent(),
+            };
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 
     /// <summary>
@@ -249,7 +260,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
         // time-window suppression). When the gate fires, the dataset
         // contributes no portrayal for this context, so emit a blank
         // background-filled bitmap rather than rendering stale content.
-        if (CheckPreRender(context) is not null)
+        if (GetSuppressionInfo(context) is not null)
             return HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg);
 
         var catalogue = _catalogue;
@@ -351,8 +362,12 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
         };
     }
 
-    /// <summary>Computes the geographic extent of all features in Spherical Mercator.</summary>
-    protected MRect ComputeExtent()
+    /// <summary>
+    /// Computes the padded geographic extent (lat / lon degrees) of all
+    /// features. The Mapsui renderer projects this to Spherical Mercator;
+    /// keeping it Mapsui-free lets the headless path share the same bounds.
+    /// </summary>
+    protected GeographicBounds ComputeGeographicExtent()
     {
         double minLon = double.MaxValue, minLat = double.MaxValue;
         double maxLon = double.MinValue, maxLat = double.MinValue;
@@ -375,13 +390,15 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IHe
             foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
         }
 
-        if (!any) return new MRect(0, 0, 0, 0);
+        if (!any) return new GeographicBounds(0, 0, 0, 0);
 
         var pad = MinExtentPadding;
         var latPad = Math.Max(pad, (maxLat - minLat) * 0.1);
         var lonPad = Math.Max(pad, (maxLon - minLon) * 0.1);
-        var (mx1, my1) = SphericalMercator.FromLonLat(minLon - lonPad, minLat - latPad);
-        var (mx2, my2) = SphericalMercator.FromLonLat(maxLon + lonPad, maxLat + latPad);
-        return new MRect(mx1, my1, mx2, my2);
+        return new GeographicBounds(
+            minLon - lonPad,
+            minLat - latPad,
+            maxLon + lonPad,
+            maxLat + latPad);
     }
 }

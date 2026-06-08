@@ -41,7 +41,7 @@ internal sealed class S100PipelineHost : IDisposable
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             featureManager,
-            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()));
+            new DisplayPlaneAuthorityProvider());
     }
 
     /// <summary>

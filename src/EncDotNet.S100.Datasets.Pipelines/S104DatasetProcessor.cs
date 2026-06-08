@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S104.Validation;
 using EncDotNet.S100.Hdf5;
@@ -13,14 +14,8 @@ using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
-using Mapsui.Nts;
-using Mapsui.Styles;
-using NetTopologySuite.Geometries;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -31,7 +26,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// stations → station-glyph point layer; see S-104 Edition 2.0.0
 /// §10.2.3 / §10.2.7).
 /// </summary>
-public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
+public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
 {
     // dcf2 only
     private readonly S104CoverageSource? _source;
@@ -51,10 +46,10 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     private DateTime? _stationSelectedTime;
 
     /// <summary>
-    /// Prefix used on <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/>
-    /// tags for dcf8 station-series point features. The remainder is the
-    /// station identifier. <see cref="GetFeatureInfo"/> recognises this
-    /// prefix to route station picks back through this processor.
+    /// Prefix used on the renderer's feature-ref tag for dcf8 station-series
+    /// point features. The remainder is the station identifier.
+    /// <see cref="GetFeatureInfo"/> recognises this prefix to route station
+    /// picks back through this processor.
     /// </summary>
     internal const string StationFeatureRefPrefix = "station:";
 
@@ -62,12 +57,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     private readonly S104DatasetData _data;
     private readonly string _fileName;
 
-    /// <summary>
-    /// Long-lived coverage renderer reused across renders so its palette-/
-    /// value-independent projection layout cache survives palette switches
-    /// and time-step changes.
-    /// </summary>
-    private MapsuiCoverageRenderer? _colorRenderer;
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -138,18 +128,27 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
         }
     }
 
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public async Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_stationSeries is not null)
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return RenderStationSeries(_stationSeries, context);
+            if (_stationSeries is not null)
+            {
+                return BuildStationSeries(_stationSeries, context);
+            }
+            return await BuildGriddedAsync(context, cancellationToken).ConfigureAwait(false);
         }
-        return await RenderGriddedAsync(context, cancellationToken).ConfigureAwait(false);
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 
-    private async Task<DatasetResult> RenderGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
+    private async Task<CoveragePortrayalResult> BuildGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var source = _source!;
         var catalogue = _catalogue!;
@@ -185,13 +184,6 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             .ConfigureAwait(false);
         var styledLayer = (StyledCoverageLayer)layer;
 
-        var colorRenderer = _colorRenderer ??= new MapsuiCoverageRenderer(_crsTransformFactory)
-        {
-            LayerName = $"S-104: {_fileName}",
-        };
-        var colorLayer = colorRenderer.Render(styledLayer, viewport);
-        var extent = colorLayer.Extent ?? new MRect(0, 0, 0, 0);
-
         var griddedDataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
         int crs = griddedDataset.HorizontalCRS ?? 4326;
         var geoId = griddedDataset.GeographicIdentifier ?? _fileName;
@@ -200,23 +192,26 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             : "";
         var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
 
-        return new DatasetResult
+        return new CoveragePortrayalResult
         {
-            Layers = [colorLayer],
-            Extent = extent,
-            Info = info,
-            Spec = new SpecRef("S-104", default),
             // S-104 colour band → OnDemandSurface (S-98 Main §9.2.1
             // layer 6 "Official on demand data"; Annex A §A-6.9.1).
-            StackEntries = new[]
+            SubLayers = new CoverageSubLayerBase[]
             {
-                new LayerStackEntry(
-                    Layer: colorLayer,
-                    Plane: S98DisplayPlane.OnDemandSurface,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName,
-                    SourceFeatureType: "s104.color-band"),
+                new GridCoverageSubLayer
+                {
+                    LayerKey = "s104.color-band",
+                    LayerName = $"S-104: {_fileName}",
+                    Plane = S98DisplayPlane.OnDemandSurface,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "s104.color-band",
+                    Coverage = styledLayer,
+                    Viewport = viewport,
+                },
             },
+            Spec = new SpecRef("S-104", default),
+            SourceDatasetId = _fileName,
+            Info = info,
         };
     }
 
@@ -286,7 +281,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
     // ---- dcf8 station series rendering ---------------------------------
 
-    private DatasetResult RenderStationSeries(S104StationSeriesDataset ds, RenderContext? context)
+    private CoveragePortrayalResult BuildStationSeries(S104StationSeriesDataset ds, RenderContext? context)
     {
         DateTime selectedTime;
         if (context is S104RenderContext { TimeStep: { } timeStep })
@@ -302,7 +297,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
 
-        var features = new List<IFeature>(ds.Stations.Count);
+        var glyphs = new List<PointGlyph>(ds.Stations.Count);
         double mercMinX = double.PositiveInfinity, mercMinY = double.PositiveInfinity;
         double mercMaxX = double.NegativeInfinity, mercMaxY = double.NegativeInfinity;
 
@@ -331,63 +326,57 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
             var fill = TrendFill(trend);
             var stroke = ResolveStrokeColor(height, ds.WaterLevelTrendThreshold);
 
-            var feature = new GeometryFeature
+            glyphs.Add(new PointGlyph
             {
-                Geometry = new Point(mx, my),
-            };
-            feature[MapsuiDisplayListRenderer.FeatureRefKey] =
-                StationFeatureRefPrefix + station.Identifier;
-            feature["StationId"] = station.Identifier;
-            feature["WaterLevelHeight"] = height;
-            feature["WaterLevelTrend"] = (int)trend;
-            feature["WaterLevelTrendLabel"] = DecodeTrend(trend);
-            feature["SampleTime"] = station.TimeAt(idx);
-            feature["Latitude"] = station.Latitude;
-            feature["Longitude"] = station.Longitude;
-
-            feature.Styles.Add(new SymbolStyle
-            {
-                SymbolType = SymbolType.Ellipse,
-                Fill = new Brush(fill),
-                Outline = new Pen(stroke, 1.5),
+                MercatorX = mx,
+                MercatorY = my,
+                FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
+                Attributes = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    ["StationId"] = station.Identifier,
+                    ["WaterLevelHeight"] = height,
+                    ["WaterLevelTrend"] = (int)trend,
+                    ["WaterLevelTrendLabel"] = DecodeTrend(trend),
+                    ["SampleTime"] = station.TimeAt(idx),
+                    ["Latitude"] = station.Latitude,
+                    ["Longitude"] = station.Longitude,
+                },
+                Symbol = PointGlyphSymbol.Ellipse,
+                FillColor = fill,
+                OutlineColor = stroke,
+                OutlineWidth = 1.5,
                 SymbolScale = 0.7,
             });
-
-            features.Add(feature);
         }
 
-        var layer = new MemoryLayer
-        {
-            Name = $"S-104: {_fileName}",
-            Features = features,
-            Style = null,
-        };
-
         var extent = ds.Stations.Count == 0
-            ? new MRect(0, 0, 0, 0)
-            : new MRect(mercMinX, mercMinY, mercMaxX, mercMaxY);
+            ? (MercatorBounds?)null
+            : new MercatorBounds(mercMinX, mercMinY, mercMaxX, mercMaxY);
 
         var info = $"{ds.GeographicIdentifier ?? _fileName} — {ds.Stations.Count} stations, " +
                    $"time: {selectedTime:u}";
 
-        return new DatasetResult
+        return new CoveragePortrayalResult
         {
-            Layers = [layer],
-            Extent = extent,
-            Info = info,
-            Spec = new SpecRef("S-104", default),
-            // S-104 station glyphs (PR-I) are point overlays drawn
-            // above coverage but below cautions, per the
-            // MSC.530(106)/Rev.1 §App.2 layer-6 catch-all reading.
-            StackEntries = new[]
+            // S-104 station glyphs (PR-I) are point overlays drawn above
+            // coverage but below cautions, per the MSC.530(106)/Rev.1
+            // §App.2 layer-6 catch-all reading.
+            SubLayers = new CoverageSubLayerBase[]
             {
-                new LayerStackEntry(
-                    Layer: layer,
-                    Plane: S98DisplayPlane.OtherChartOverlays,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName,
-                    SourceFeatureType: "s104.stations"),
+                new GlyphCoverageSubLayer
+                {
+                    LayerKey = "s104.stations",
+                    LayerName = $"S-104: {_fileName}",
+                    Plane = S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority = 0,
+                    SourceFeatureType = "s104.stations",
+                    Glyphs = glyphs,
+                    Extent = extent,
+                },
             },
+            Spec = new SpecRef("S-104", default),
+            SourceDatasetId = _fileName,
+            Info = info,
         };
     }
 
@@ -408,26 +397,25 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, IHeadlessImageRend
     /// Trend → fill colour table (S-104 Edition 2.0.0 §10.2.7 trend
     /// enumeration: 0 unknown, 1 decreasing, 2 increasing, 3 steady).
     /// </summary>
-    private static Color TrendFill(byte trend) => trend switch
+    private static RgbaColor TrendFill(byte trend) => trend switch
     {
-        1 => new Color(42, 111, 151),    // #2a6f97 descending blue
-        2 => new Color(193, 18, 31),     // #c1121f ascending red
-        3 => new Color(42, 157, 143),    // #2a9d8f neutral teal
-        _ => new Color(128, 128, 128),   // #808080 unknown grey
+        1 => new RgbaColor(42, 111, 151),    // #2a6f97 descending blue
+        2 => new RgbaColor(193, 18, 31),     // #c1121f ascending red
+        3 => new RgbaColor(42, 157, 143),    // #2a9d8f neutral teal
+        _ => new RgbaColor(128, 128, 128),   // #808080 unknown grey
     };
 
-    private static Color ResolveStrokeColor(float height, double? trendThreshold)
+    private static RgbaColor ResolveStrokeColor(float height, double? trendThreshold)
     {
-        if (trendThreshold is null) return new Color(0, 0, 0);
+        if (trendThreshold is null) return new RgbaColor(0, 0, 0);
         return height >= trendThreshold.Value
-            ? new Color(255, 255, 255)
-            : new Color(0, 0, 0);
+            ? new RgbaColor(255, 255, 255)
+            : new RgbaColor(0, 0, 0);
     }
 
     /// <summary>
-    /// Resolves dcf8 station picks routed via the Mapsui
-    /// <see cref="MapsuiDisplayListRenderer.FeatureRefKey"/> tag the
-    /// glyph layer attaches to each station point. Refs are formatted as
+    /// Resolves dcf8 station picks routed via the renderer's feature-ref tag
+    /// the glyph layer attaches to each station point. Refs are formatted as
     /// <c>"station:&lt;id&gt;"</c> (see <see cref="StationFeatureRefPrefix"/>).
     /// For dcf2 gridded datasets and other refs this returns <c>null</c>;
     /// callers should fall back to <see cref="GetCoverageInfo"/>.

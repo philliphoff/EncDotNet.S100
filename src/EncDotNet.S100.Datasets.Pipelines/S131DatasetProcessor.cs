@@ -15,12 +15,9 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
-using Mapsui;
-using Mapsui.Layers;
-using Mapsui.Projections;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -43,7 +40,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="S101DatasetProcessor"/>.
 /// </para>
 /// </remarks>
-public sealed class S131DatasetProcessor : IDatasetProcessor
+public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource
 {
     private readonly S131Dataset _dataset;
     private readonly PortrayalCatalogueProvider _provider;
@@ -51,7 +48,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
-    private readonly MapsuiRenderAssetCache _renderAssetCache = new();
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
@@ -114,10 +111,26 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
     }
 
     /// <inheritdoc/>
-    public async Task<DatasetResult> RenderAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Serialize against re-entrant renders sharing the long-lived catalogue
+        // palette / ECDIS state; snapshot everything so the result is safe to
+        // convert to Mapsui layers off the gate.
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await BuildVectorPortrayalCoreAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    private async Task<VectorPortrayalResult> BuildVectorPortrayalCoreAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
         var mariner = context?.Mariner ?? MarinerSettings.Default;
 
         var fc = _featureCatalogueManager.GetCatalogue("S-131")
@@ -146,46 +159,41 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(_catalogue, prepared, cancellationToken).ConfigureAwait(false);
 
-        // Render to Mapsui layer
-        var vectorRenderer = new MapsuiDisplayListRenderer
-        {
-            LayerName = $"S-131: {_fileName}",
-            Product = "S-131",
-            Palette = palette,
-            AssetCache = _renderAssetCache,
-            SymbolScale = context?.SymbolScale ?? 1.0,
-            TextScale = context?.TextScale ?? 1.0,
-            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
-            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
-            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
-        };
-
         var geometryProvider = new GmlFeatureGeometryProvider<S131Feature>(_dataset.Features);
-        var mapLayer = vectorRenderer.Render(prepared, geometryProvider);
-        var layerExtent = mapLayer.Extent ?? ComputeExtent();
-        Console.WriteLine($"[S131] Rendered {prepared.Count} instructions to Mapsui layer");
+        Console.WriteLine($"[S131] Prepared {prepared.Count} instructions");
 
         var info = $"{_fileName} — {_dataset.Features.Length} features, " +
                    $"{_dataset.InformationTypes.Length} info types, " +
                    $"{prepared.Count} instructions";
 
-        return new DatasetResult
+        return new VectorPortrayalResult
         {
-            Layers = [mapLayer],
-            Extent = layerExtent,
-            Info = info,
-            Spec = new SpecRef("S-131", default),
             // S-131 (Marine Harbour Infrastructure) is out of S-98
             // Annex A Table 1-1 scope, so default plane derives from
             // MSC.530(106)/Rev.1 §App.2 layer 6 (catch-all overlays).
-            StackEntries = new[]
+            SubLayers = new[]
             {
-                new LayerStackEntry(
-                    Layer: mapLayer,
-                    Plane: S98DisplayPlane.OtherChartOverlays,
-                    WithinPlanePriority: 0,
-                    SourceDatasetId: _fileName),
+                new VectorSubLayer
+                {
+                    LayerKey = "s131.main",
+                    LayerName = $"S-131: {_fileName}",
+                    Instructions = prepared,
+                    Plane = S98DisplayPlane.OtherChartOverlays,
+                    WithinPlanePriority = 0,
+                },
             },
+            Palette = palette,
+            GeometryProvider = geometryProvider,
+            Product = "S-131",
+            Spec = new SpecRef("S-131", default),
+            SourceDatasetId = _fileName,
+            Info = info,
+            SymbolScale = context?.SymbolScale ?? 1.0,
+            TextScale = context?.TextScale ?? 1.0,
+            SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            AreaFillProvider = name => prewarm.ResolveAreaFill(name),
+            LineStyleProvider = name => prewarm.ResolveLineStyle(name),
+            FallbackGeographicExtent = ComputeGeographicExtent(),
         };
     }
 
@@ -269,7 +277,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         };
     }
 
-    private MRect ComputeExtent()
+    private GeographicBounds ComputeGeographicExtent()
     {
         double minLat = double.MaxValue, maxLat = double.MinValue;
         double minLon = double.MaxValue, maxLon = double.MinValue;
@@ -296,12 +304,10 @@ public sealed class S131DatasetProcessor : IDatasetProcessor
         }
 
         if (!hasCoords)
-            return new MRect(0, 0, 0, 0);
+            return new GeographicBounds(0, 0, 0, 0);
 
         const double pad = 0.01;
-        var (minX, minY) = SphericalMercator.FromLonLat(minLon - pad, minLat - pad);
-        var (maxX, maxY) = SphericalMercator.FromLonLat(maxLon + pad, maxLat + pad);
-        return new MRect(minX, minY, maxX, maxY);
+        return new GeographicBounds(minLon - pad, minLat - pad, maxLon + pad, maxLat + pad);
     }
 
     private static void UpdateBounds(double lat, double lon,

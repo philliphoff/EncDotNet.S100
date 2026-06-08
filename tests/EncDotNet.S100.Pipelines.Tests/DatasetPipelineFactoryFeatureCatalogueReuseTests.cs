@@ -52,15 +52,13 @@ public class DatasetPipelineFactoryFeatureCatalogueReuseTests
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             fcManager,
-            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
         var factory2 = new DatasetPipelineFactory(
             pcManager,
             new MoonSharpLuaEngine(),
             new ProjNetCrsTransformFactory(),
             fcManager,
-            new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
 
         // Even after two factories that, pre-PR-B, would each have
         // built their own FC manager and forced a parse, the shared

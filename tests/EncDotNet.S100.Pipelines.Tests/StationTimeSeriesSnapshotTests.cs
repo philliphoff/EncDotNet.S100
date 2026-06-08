@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
 using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -78,7 +79,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = p.RenderAsync().GetAwaiter().GetResult();
+            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
             var info = p.GetFeatureInfo("station:ST01");
 
             Assert.NotNull(info);
@@ -100,7 +101,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S111DatasetProcessor(path, new PortrayalCatalogueManager(), IdentityFactory.Instance);
-            _ = p.RenderAsync().GetAwaiter().GetResult();
+            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
             var info = p.GetFeatureInfo("station:S1");
 
             Assert.NotNull(info);
@@ -123,7 +124,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = p.RenderAsync().GetAwaiter().GetResult();
+            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
             // unknown ref returns null FeatureInfo entirely
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station"));
