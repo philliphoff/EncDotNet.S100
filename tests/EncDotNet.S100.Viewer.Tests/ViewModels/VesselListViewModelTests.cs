@@ -278,9 +278,14 @@ public class VesselListViewModelTests
             string.Format(CultureInfo.CurrentCulture, Strings.Vessels_DraughtFormat, 8.5),
             item.DraughtText);
 
+        Assert.True(item.HasDimensionsSection);
         Assert.True(item.HasDimensions);
         Assert.Contains("200", item.DimensionsText);
         Assert.Contains("30", item.DimensionsText);
+
+        // Type and status are surfaced together in the detail header.
+        Assert.Contains("Cargo", item.HeaderSubtitle);
+        Assert.Contains(item.StateText, item.HeaderSubtitle);
     }
 
     [Fact]
@@ -306,7 +311,46 @@ public class VesselListViewModelTests
         Assert.False(item.HasEta);
         Assert.False(item.HasDraught);
         Assert.False(item.HasDimensions);
+        Assert.False(item.HasDimensionsSection);
         Assert.False(item.HasRangeBearing);
+    }
+
+    [Fact]
+    public void Draught_BelongsToDimensionsSection_NotVoyage()
+    {
+        var (vm, ais, _, _) = Make(ownShipEnabled: false);
+        // Draught present but no destination/ETA and no hull dimensions.
+        ais.SetFeatures(new[] { Vessel(7, 1, 0, "Deep", draughtMetres: 11.2) });
+        Raise(ais);
+
+        var item = Assert.Single(vm.Vessels);
+        Assert.True(item.HasDraught);
+        Assert.False(item.HasVoyage);
+        Assert.True(item.HasDimensionsSection);
+    }
+
+    [Fact]
+    public void Selection_SurvivesResortWhenOrderChanges()
+    {
+        // Own ship off, so ordering falls back to name; a rename changes a
+        // vessel's sort position and triggers a reconcile (Move/Insert).
+        var (vm, ais, _, _) = Make(ownShipEnabled: false);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Mike") });
+        Raise(ais);
+
+        var selected = vm.Vessels[0];
+        vm.SelectedVessel = selected;
+        Assert.True(vm.HasSelection);
+
+        // A second vessel arrives that sorts before the selection by name,
+        // pushing the selected row to a new index.
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Mike"), Vessel(2, 2, 0, "Alpha") });
+        Raise(ais);
+
+        Assert.Equal("Alpha", vm.Vessels[0].Name);
+        // The selection is preserved by reference across the re-sort.
+        Assert.Same(selected, vm.SelectedVessel);
+        Assert.True(vm.HasSelection);
     }
 
     [Fact]

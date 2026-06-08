@@ -180,6 +180,7 @@
 
                         <ScrollViewer IsVisible="{Binding HasSelection}"
                                       HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto"
                                       Padding="12,8">
                             <StackPanel DataContext="{Binding SelectedVessel}"
                                         x:DataType="vm:VesselListItem"
@@ -202,21 +203,18 @@
                                     </Style>
                                 </StackPanel.Styles>
 
-                                <!-- Header -->
+                                <!-- Header: name with a type · status subtitle. -->
                                 <TextBlock Text="{Binding Name}"
                                            FontSize="15"
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding ShipTypeText}"
+                                <TextBlock Text="{Binding HeaderSubtitle}"
                                            FontSize="12"
-                                           Opacity="0.6" />
+                                           Opacity="0.6"
+                                           TextWrapping="Wrap" />
 
                                 <!-- Identity -->
                                 <TextBlock Classes="section" Text="{x:Static loc:Strings.Vessels_Detail_Identity}" />
-                                <Grid ColumnDefinitions="108,*">
-                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_State}" />
-                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding StateText}" />
-                                </Grid>
                                 <Grid ColumnDefinitions="108,*">
                                     <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Mmsi}" />
                                     <TextBlock Grid.Column="1" Classes="value" Text="{Binding MmsiText}" />
@@ -276,18 +274,18 @@
                                     <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Eta}" />
                                     <TextBlock Grid.Column="1" Classes="value" Text="{Binding EtaText}" />
                                 </Grid>
-                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDraught}">
-                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Draught}" />
-                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DraughtText}" />
-                                </Grid>
 
                                 <!-- Dimensions -->
                                 <TextBlock Classes="section"
                                            Text="{x:Static loc:Strings.Vessels_Detail_Dimensions}"
-                                           IsVisible="{Binding HasDimensions}" />
+                                           IsVisible="{Binding HasDimensionsSection}" />
                                 <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDimensions}">
                                     <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Dimensions}" />
                                     <TextBlock Grid.Column="1" Classes="value" Text="{Binding DimensionsText}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="108,*" IsVisible="{Binding HasDraught}">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="{x:Static loc:Strings.Vessels_Label_Draught}" />
+                                    <TextBlock Grid.Column="1" Classes="value" Text="{Binding DraughtText}" />
                                 </Grid>
                             </StackPanel>
                         </ScrollViewer>

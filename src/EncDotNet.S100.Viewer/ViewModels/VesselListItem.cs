@@ -49,6 +49,17 @@ internal sealed class VesselListItem : ViewModelBase
         set => SetProperty(ref _shipTypeText, value);
     }
 
+    private string _headerSubtitle = string.Empty;
+    /// <summary>
+    /// Combined "type · status" line shown under the vessel name in the
+    /// detail header.
+    /// </summary>
+    public string HeaderSubtitle
+    {
+        get => _headerSubtitle;
+        set => SetProperty(ref _headerSubtitle, value);
+    }
+
     private string _stateText = string.Empty;
     /// <summary>Localised navigation/state label (e.g. "At anchor").</summary>
     public string StateText
@@ -287,6 +298,17 @@ internal sealed class VesselListItem : ViewModelBase
     }
 
     // --- Dimensions -----------------------------------------------------
+
+    private bool _hasDimensionsSection;
+    /// <summary>
+    /// Whether any dimension-related field (hull size or draught) is
+    /// available. Gates the "Dimensions" detail section as a whole.
+    /// </summary>
+    public bool HasDimensionsSection
+    {
+        get => _hasDimensionsSection;
+        set => SetProperty(ref _hasDimensionsSection, value);
+    }
 
     private string? _dimensionsText;
     /// <summary>Formatted length × beam, or <see langword="null"/>.</summary>

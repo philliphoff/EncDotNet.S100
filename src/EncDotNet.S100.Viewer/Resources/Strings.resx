@@ -1342,6 +1342,10 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Vessels_Detail_Placeholder" xml:space="preserve">
     <value>Select a vessel to view its details.</value>
   </data>
+  <data name="Vessels_HeaderSubtitleFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>{0} = ship-type label, {1} = navigation status.</comment>
+  </data>
   <data name="Vessels_Detail_Identity" xml:space="preserve">
     <value>Identity</value>
   </data>
@@ -1368,9 +1372,6 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="Vessels_Label_Imo" xml:space="preserve">
     <value>IMO</value>
-  </data>
-  <data name="Vessels_Label_State" xml:space="preserve">
-    <value>Status</value>
   </data>
   <data name="Vessels_Label_Heading" xml:space="preserve">
     <value>Heading</value>

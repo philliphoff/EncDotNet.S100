@@ -78,6 +78,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     private readonly Dictionary<string, VesselListItem> _itemsById = new(StringComparer.Ordinal);
 
     private int _dirty;
+    private bool _suppressSelectionWrite;
 
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
@@ -138,6 +139,16 @@ internal sealed class VesselListViewModel : ViewModelBase
         get => _selectedVessel;
         set
         {
+            // While the list is being reconciled (rows moved/inserted to
+            // re-sort), the ListBox can transiently clear its selection and
+            // write null back through this two-way binding. Ignore those
+            // writes so a re-sort never drops the user's selection; the
+            // real value is re-asserted once the reconcile completes.
+            if (_suppressSelectionWrite)
+            {
+                return;
+            }
+
             if (SetProperty(ref _selectedVessel, value))
             {
                 OnPropertyChanged(nameof(HasSelection));
@@ -252,7 +263,27 @@ internal sealed class VesselListViewModel : ViewModelBase
         }
 
         RemoveVanished(seen);
-        Resort();
+
+        // Reordering the collection (Move/Insert) can make the ListBox drop
+        // its selection mid-reconcile. Suppress selection write-back during
+        // the churn, then re-assert the retained selection so the ListBox
+        // re-syncs without a recentre.
+        var retained = _selectedVessel;
+        _suppressSelectionWrite = true;
+        try
+        {
+            Resort();
+        }
+        finally
+        {
+            _suppressSelectionWrite = false;
+        }
+
+        if (_selectedVessel is not null && ReferenceEquals(_selectedVessel, retained))
+        {
+            OnPropertyChanged(nameof(SelectedVessel));
+        }
+
         UpdateSummary();
     }
 
@@ -304,6 +335,11 @@ internal sealed class VesselListViewModel : ViewModelBase
         var navStatus = GetAttribute<AisNavigationStatus>(feature, "navigationStatus");
         var sogKn = feature.Motion?.SpeedOverGroundKn;
         item.StateText = ResolveState(navStatus, sogKn);
+        item.HeaderSubtitle = string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.Vessels_HeaderSubtitleFormat,
+            item.ShipTypeText,
+            item.StateText);
 
         UpdateIdentity(item, feature);
         UpdateMotion(item, feature, sogKn);
@@ -367,13 +403,7 @@ internal sealed class VesselListViewModel : ViewModelBase
             ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_EtaFormat, etaValue.UtcDateTime)
             : null;
 
-        var draught = GetAttribute<double>(feature, "draughtMetres");
-        item.HasDraught = draught is { } d && !double.IsNaN(d) && d > 0.0;
-        item.DraughtText = item.HasDraught
-            ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_DraughtFormat, draught!.Value)
-            : null;
-
-        item.HasVoyage = item.HasDestination || item.HasEta || item.HasDraught;
+        item.HasVoyage = item.HasDestination || item.HasEta;
     }
 
     private static void UpdateDimensions(VesselListItem item, DynamicFeature feature)
@@ -393,6 +423,14 @@ internal sealed class VesselListViewModel : ViewModelBase
             item.HasDimensions = false;
             item.DimensionsText = null;
         }
+
+        var draught = GetAttribute<double>(feature, "draughtMetres");
+        item.HasDraught = draught is { } d && !double.IsNaN(d) && d > 0.0;
+        item.DraughtText = item.HasDraught
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_DraughtFormat, draught!.Value)
+            : null;
+
+        item.HasDimensionsSection = item.HasDimensions || item.HasDraught;
     }
 
     private static void UpdateRangeBearing(

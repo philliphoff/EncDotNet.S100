@@ -479,6 +479,7 @@ internal static class Strings
     public static string Vessels_BearingFormat => Get(nameof(Vessels_BearingFormat));
     public static string Vessels_DistanceBearingFormat => Get(nameof(Vessels_DistanceBearingFormat));
     public static string Vessels_Detail_Placeholder => Get(nameof(Vessels_Detail_Placeholder));
+    public static string Vessels_HeaderSubtitleFormat => Get(nameof(Vessels_HeaderSubtitleFormat));
     public static string Vessels_Detail_Identity => Get(nameof(Vessels_Detail_Identity));
     public static string Vessels_Detail_Motion => Get(nameof(Vessels_Detail_Motion));
     public static string Vessels_Detail_Voyage => Get(nameof(Vessels_Detail_Voyage));
@@ -488,7 +489,6 @@ internal static class Strings
     public static string Vessels_Label_CallSign => Get(nameof(Vessels_Label_CallSign));
     public static string Vessels_Label_Mmsi => Get(nameof(Vessels_Label_Mmsi));
     public static string Vessels_Label_Imo => Get(nameof(Vessels_Label_Imo));
-    public static string Vessels_Label_State => Get(nameof(Vessels_Label_State));
     public static string Vessels_Label_Heading => Get(nameof(Vessels_Label_Heading));
     public static string Vessels_Label_Course => Get(nameof(Vessels_Label_Course));
     public static string Vessels_Label_Speed => Get(nameof(Vessels_Label_Speed));
