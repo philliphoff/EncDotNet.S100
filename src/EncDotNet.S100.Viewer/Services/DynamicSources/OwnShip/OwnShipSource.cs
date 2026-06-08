@@ -243,18 +243,21 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
 
     private DynamicFeature Project(OwnShipPosition fix)
     {
-        // Synthetic / GPS-only drivers expose Course Over Ground but
-        // not a separate gyro Heading. Default renderer keys the
-        // predictor line off Heading, so we mirror COG → Heading so
-        // the predictor draws for v1. A future driver that
-        // distinguishes the two will populate them separately.
+        // Heading is published separately from Course Over Ground when
+        // the provider knows it (a real gyro, or an impersonated AIS
+        // target reporting heading independently of COG). When the
+        // provider supplies no heading we mirror COG → Heading so the
+        // default renderer's predictor line still draws — a COG-only
+        // driver behaves exactly as before.
+        var headingDeg = fix.HeadingDeg ?? fix.CourseOverGroundDeg;
         var motion =
             fix.CourseOverGroundDeg is null && fix.SpeedOverGroundMs is null
+                && fix.HeadingDeg is null
                 ? null
                 : new DynamicMotion
                 {
                     CourseOverGroundDeg = fix.CourseOverGroundDeg,
-                    HeadingDeg = fix.CourseOverGroundDeg,
+                    HeadingDeg = headingDeg,
                     SpeedOverGroundKn = fix.SpeedOverGroundMs is { } ms
                         ? ms * MetresPerSecondToKnots
                         : null,

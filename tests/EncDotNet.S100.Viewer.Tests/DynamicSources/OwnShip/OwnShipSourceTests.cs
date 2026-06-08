@@ -11,8 +11,36 @@ public sealed class OwnShipSourceTests
 {
     private static OwnShipPosition Fix(
         double lat = 50.8, double lon = -1.3,
-        double? cog = 90.0, double? sogMs = 5.0)
-        => new(lat, lon, cog, sogMs, DateTimeOffset.UnixEpoch);
+        double? cog = 90.0, double? sogMs = 5.0, double? heading = null)
+        => new(lat, lon, cog, sogMs, DateTimeOffset.UnixEpoch, heading);
+
+    [Fact]
+    public void Project_MirrorsCourseToHeading_WhenHeadingNull()
+    {
+        var stub = new StubOwnShipPositionProvider();
+        using var src = new OwnShipSource(stub);
+
+        stub.Push(Fix(cog: 90.0, heading: null));
+
+        var motion = src.CurrentFeatures[0].Motion;
+        Assert.NotNull(motion);
+        Assert.Equal(90.0, motion!.CourseOverGroundDeg);
+        Assert.Equal(90.0, motion.HeadingDeg);
+    }
+
+    [Fact]
+    public void Project_PublishesIndependentHeading_WhenProvided()
+    {
+        var stub = new StubOwnShipPositionProvider();
+        using var src = new OwnShipSource(stub);
+
+        stub.Push(Fix(cog: 90.0, heading: 75.0));
+
+        var motion = src.CurrentFeatures[0].Motion;
+        Assert.NotNull(motion);
+        Assert.Equal(90.0, motion!.CourseOverGroundDeg);
+        Assert.Equal(75.0, motion.HeadingDeg);
+    }
 
     [Fact]
     public void Construction_NoFix_HasEmptyCurrentFeatures()

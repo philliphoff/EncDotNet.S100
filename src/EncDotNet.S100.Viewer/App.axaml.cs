@@ -314,14 +314,16 @@ public partial class App : Application
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
-        // Own-ship dynamic source (PR-D2). Synthetic driver scaffolds
-        // a moving point at Solent (50.8°N 1.3°W) tracking due east
-        // at 5 m/s (~9.7 kn); a future real-GPS / NMEA-replay driver
-        // implements IOwnShipPositionProvider instead. The source is
-        // also exposed as IDynamicFeatureSource so the overlay host
-        // discovers it via GetServices&lt;IDynamicFeatureSource&gt;().
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(_ =>
-            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SyntheticOwnShipPositionProvider(
+        // Own-ship dynamic source. The steerable driver dead-reckons a
+        // moving point seeded at Solent (50.8°N 1.3°W) tracking due east
+        // at 5 m/s (~9.7 kn) and exposes IOwnShipHelm so map gestures,
+        // the helm panel, the MCP set_own_ship tool, and pirate mode can
+        // steer it. A future real-GPS / NMEA-replay driver implements
+        // IOwnShipPositionProvider instead. The source is also exposed as
+        // IDynamicFeatureSource so the overlay host discovers it via
+        // GetServices&lt;IDynamicFeatureSource&gt;().
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>(_ =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider(
                 start: new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipPosition(
                     Latitude: 50.8,
                     Longitude: -1.3,
@@ -329,6 +331,10 @@ public partial class App : Application
                     SpeedOverGroundMs: 5.0,
                     Timestamp: DateTimeOffset.UtcNow),
                 cadence: TimeSpan.FromSeconds(1)));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
 
         // Vessel geometry provider — reads user-configured dimensions
         // from ViewerSettings.OwnShip and pushes them onto every

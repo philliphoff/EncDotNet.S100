@@ -36,9 +36,19 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 /// <see langword="null"/> when no speed is known.
 /// </param>
 /// <param name="Timestamp">UTC instant the fix was observed.</param>
+/// <param name="HeadingDeg">
+/// Gyro/true heading in degrees true (0–360), or
+/// <see langword="null"/> when no separate heading is known — in which
+/// case <see cref="OwnShipSource"/> falls back to mirroring
+/// <see cref="CourseOverGroundDeg"/>. Kept distinct from course so a
+/// driver that knows both (a real gyro, or an impersonated AIS target
+/// reporting heading independently of COG) orients the true-scale hull
+/// correctly.
+/// </param>
 internal sealed record OwnShipPosition(
     double Latitude,
     double Longitude,
     double? CourseOverGroundDeg,
     double? SpeedOverGroundMs,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    double? HeadingDeg = null);
