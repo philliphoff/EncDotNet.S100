@@ -415,7 +415,8 @@ public partial class App : Application
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<IRenderActivityMonitor>(),
-            sp.GetRequiredService<IDatasetLoadGateway>()));
+            sp.GetRequiredService<IDatasetLoadGateway>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

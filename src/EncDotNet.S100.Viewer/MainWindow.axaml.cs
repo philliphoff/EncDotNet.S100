@@ -462,6 +462,7 @@ public partial class MainWindow : ShadUI.Window
             _loader.DatasetLoaded -= handler;
         }
 
+        ApplyStartupOwnShip();
         ApplyStartupViewport();
 
         if (_screenshotPath is not null)
@@ -533,6 +534,33 @@ public partial class MainWindow : ShadUI.Window
 
             if (now - lastEvent >= QuietWindowMs) return;
             if (now - startedAt >= MaxWaitMs) return;
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--own-ship-pos</c> / <c>--own-ship-cog</c> /
+    /// <c>--own-ship-sog</c> startup options by driving the own-ship
+    /// helm, if any were supplied. No-op otherwise. Runs after datasets
+    /// load and before framing/capture so an agent can snapshot own-ship
+    /// in a known kinematic state.
+    /// </summary>
+    private void ApplyStartupOwnShip()
+    {
+        if (_startupOptions is not { } options || !options.HasOwnShipOption) return;
+
+        var helm = ResolveOrFallback<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(
+            static () => null!);
+        if (helm is null) return;
+
+        if (options.ParsedOwnShipPosition is { } pos)
+        {
+            helm.SetState(pos.Latitude, pos.Longitude,
+                options.OwnShipCourse, options.OwnShipSpeed);
+        }
+        else
+        {
+            if (options.OwnShipCourse is { } cog) helm.SetCourse(cog);
+            if (options.OwnShipSpeed is { } sog) helm.SetSpeed(sog);
         }
     }
 

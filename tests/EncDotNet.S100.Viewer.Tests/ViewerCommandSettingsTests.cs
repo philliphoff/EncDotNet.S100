@@ -152,4 +152,49 @@ public class ViewerCommandSettingsTests
         Assert.False(Ok(new ViewerCommandSettings { McpBind = "not-an-ip" }));
         Assert.True(Ok(new ViewerCommandSettings { McpBind = "127.0.0.1" }));
     }
+
+    [Theory]
+    [InlineData("47.6,-122.3", true)]
+    [InlineData("91,0", false)]
+    [InlineData("47.6", false)]
+    public void OwnShipPosition_is_validated(string raw, bool expected)
+    {
+        Assert.Equal(expected, Ok(new ViewerCommandSettings { OwnShipPosition = raw }));
+    }
+
+    [Theory]
+    [InlineData(0.0, true)]
+    [InlineData(359.9, true)]
+    [InlineData(360.0, false)]
+    [InlineData(-1.0, false)]
+    public void OwnShipCourse_is_range_checked(double cog, bool expected)
+    {
+        Assert.Equal(expected, Ok(new ViewerCommandSettings { OwnShipCourse = cog }));
+    }
+
+    [Theory]
+    [InlineData(0.0, true)]
+    [InlineData(5.0, true)]
+    [InlineData(-0.1, false)]
+    public void OwnShipSpeed_is_range_checked(double sog, bool expected)
+    {
+        Assert.Equal(expected, Ok(new ViewerCommandSettings { OwnShipSpeed = sog }));
+    }
+
+    [Fact]
+    public void ParsedOwnShipPosition_parses_latlon()
+    {
+        var s = new ViewerCommandSettings { OwnShipPosition = "47.6,-122.3" };
+        Assert.Equal((47.6, -122.3), s.ParsedOwnShipPosition);
+        Assert.Null(new ViewerCommandSettings().ParsedOwnShipPosition);
+    }
+
+    [Fact]
+    public void HasOwnShipOption_true_for_any_own_ship_option()
+    {
+        Assert.True(new ViewerCommandSettings { OwnShipPosition = "0,0" }.HasOwnShipOption);
+        Assert.True(new ViewerCommandSettings { OwnShipCourse = 90 }.HasOwnShipOption);
+        Assert.True(new ViewerCommandSettings { OwnShipSpeed = 1 }.HasOwnShipOption);
+        Assert.False(new ViewerCommandSettings().HasOwnShipOption);
+    }
 }

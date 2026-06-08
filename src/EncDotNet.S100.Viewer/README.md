@@ -370,7 +370,7 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Ten viewer-only tools
+bound port back to the user's `settings.json`. Eleven viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
@@ -378,6 +378,10 @@ centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
 OtherInformation / All), `set_time_step` (mutating — drives the
 global time clock to a sample by index or timestamp),
+`set_own_ship` (mutating — positions and steers the simulated
+own-ship: WGS-84 `lat`/`lon`, `cog`, `sog`, `heading`, and
+`hold`/resume; works independently of the overlay's visibility so it
+can pre-position before a screenshot),
 `await_render_idle` (read-only — blocks
 until the live map settles so a following `render_to_image` is
 deterministic instead of racing the render pass),
@@ -411,6 +415,13 @@ zoom-to-extent so the framing is reproducible.
 capture before a screenshot. These override the persisted values for
 the run only.
 
+**Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
+own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course
+over ground (degrees true `[0, 360)`), and `--own-ship-sog <MS>` sets
+its speed over ground (metres per second, `>= 0`). Applied after the
+datasets load and before any screenshot, independent of whether the
+own-ship overlay is currently shown.
+
 **Screenshots.** `--screenshot <PATH>` captures the map after the
 render has quiesced (rather than a fixed delay).
 `--close-after-screenshot` unloads all currently-loaded datasets right
@@ -441,6 +452,9 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--palette Day\|Dusk\|Night` | Override the palette |
 | `--display-category <CAT>` | Override the ECDIS display category |
 | `--time-step <idx\|ts>` | Jump to a time step (index or timestamp) |
+| `--own-ship-pos <LAT,LON>` | Place the simulated own-ship at a WGS-84 position |
+| `--own-ship-cog <DEG>` | Set own-ship course over ground (degrees true) |
+| `--own-ship-sog <MS>` | Set own-ship speed over ground (metres/second) |
 | `--screenshot <PATH>` | Capture the map after render quiesces |
 | `--close-after-screenshot` | Unload all datasets after the screenshot |
 | `--exit-after-screenshot` | Quit after the screenshot (one-shot) |
