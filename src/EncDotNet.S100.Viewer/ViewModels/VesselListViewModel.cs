@@ -264,9 +264,9 @@ internal sealed class VesselListViewModel : ViewModelBase
         RemoveVanished(seen);
 
         // Reordering the collection (Move/Insert) can make the ListBox drop
-        // its selection mid-reconcile. Suppress selection write-back during
-        // the churn, then re-assert the retained selection so the ListBox
-        // re-syncs without a recentre.
+        // its visual selection mid-reconcile. Suppress selection write-back
+        // during the churn so the VM keeps the selection (held by reference),
+        // then force the control to re-sync afterwards.
         var retained = _selectedVessel;
         _suppressSelectionWrite = true;
         try
@@ -278,8 +278,18 @@ internal sealed class VesselListViewModel : ViewModelBase
             _suppressSelectionWrite = false;
         }
 
-        if (_selectedVessel is not null && ReferenceEquals(_selectedVessel, retained))
+        // Re-assert the retained selection. Avalonia won't re-push a
+        // reference-equal value through the SelectedItem binding, so a plain
+        // notification leaves the ListBox highlight cleared. Briefly clear
+        // and restore the backing field — bypassing the setter so no map
+        // recentre fires — which makes the binding push null and then the
+        // item back, restoring the highlight. This is synchronous, so
+        // HasSelection never visibly flips.
+        if (retained is not null && ReferenceEquals(_selectedVessel, retained))
         {
+            _selectedVessel = null;
+            OnPropertyChanged(nameof(SelectedVessel));
+            _selectedVessel = retained;
             OnPropertyChanged(nameof(SelectedVessel));
         }
 
