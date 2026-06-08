@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>ProjNet-backed implementation of the EncDotNet.S100.Core ICrsTransformFactory abstraction (WGS84 UTM zones and EPSG:4326 ↔ EPSG:3857). Mapsui-free, so headless consumers (the EncDotNet.S100 facade and the s100 CLI) can reproject coverage products without linking a map renderer.</Description>
+    <PackageTags>S-100;CRS;projection;ProjNet;EPSG;IHO;hydrography</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ProjNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+  </ItemGroup>
+
+</Project>

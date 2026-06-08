@@ -9,7 +9,10 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 - **`MapsuiCoverageRenderer`** — `ICoverageRenderer<ILayer>` implementation that renders coverage data as a georeferenced raster overlay (S-102 / S-104 / S-111).
 - **`MapsuiCoverageArrowRenderer`** — renders current arrows (e.g. from S-111 data) as a georeferenced raster layer.
 - **`MapsuiDisplayListRenderer`** — product-agnostic vector renderer that consumes a list of `DrawingInstruction`s plus an `IFeatureGeometryProvider` and produces a `MemoryLayer` of styled point/line/area/text features. Used by every S-100 vector product (S-101, S-124, S-129, S-421); no per-spec subclass is required.
-- **`ProjNetCrsTransformFactory`** — `ICrsTransformFactory` implementation using [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) for coordinate transformations between UTM, WGS84, and Web Mercator.
+
+> **CRS transforms** moved to the Mapsui-free **`EncDotNet.S100.Crs.ProjNet`**
+> package (`ProjNetCrsTransformFactory`) so headless consumers can reproject
+> coverage products without linking a map renderer.
 
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
