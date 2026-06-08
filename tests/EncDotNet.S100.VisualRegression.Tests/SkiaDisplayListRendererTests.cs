@@ -254,6 +254,94 @@ public sealed class SkiaDisplayListRendererTests
         return run;
     }
 
+    // ── Embedded font fallback (issue #23) ─────────────────────────────
+
+    [Fact]
+    public void EmbeddedFallbackFont_LoadsWithGlyphs()
+    {
+        // The headless renderer falls back to this embedded face when the host
+        // has no usable system font (e.g. the NoDependencies SkiaSharp native on
+        // a box without fontconfig). The resource must be present and decodable
+        // on every platform, independent of any system font infrastructure.
+        using var typeface = RendererFonts.LoadEmbeddedFallback();
+
+        Assert.NotNull(typeface);
+        Assert.True(typeface!.GlyphCount > 0, "Embedded fallback font has no glyphs.");
+        Assert.Contains("Open Sans", typeface.FamilyName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Select_UsesEmbeddedFallback_WhenHostDefaultIsUnusable()
+    {
+        // Simulates the headless-Linux case where SKTypeface.Default is the empty
+        // typeface (no fontconfig): the embedded fallback must engage.
+        using var embedded = RendererFonts.LoadEmbeddedFallback();
+        Assert.NotNull(embedded);
+
+        int factoryCalls = 0;
+        var selected = RendererFonts.Select(hostDefault: null, embeddedFactory: () =>
+        {
+            factoryCalls++;
+            return embedded;
+        });
+
+        Assert.Same(embedded, selected);
+        Assert.Equal(1, factoryCalls);
+    }
+
+    [Fact]
+    public void Select_PrefersHostDefault_WhenUsable_AndDoesNotLoadEmbedded()
+    {
+        // When the host exposes a usable font (every desktop / CI runner with
+        // fontconfig), the OS typeface is used and the embedded fallback is never
+        // even loaded — so OS-font output (and VR baselines) is unchanged.
+        using var usableHost = RendererFonts.LoadEmbeddedFallback(); // a known-usable face
+        Assert.NotNull(usableHost);
+        Assert.True(RendererFonts.IsUsable(usableHost));
+
+        int factoryCalls = 0;
+        var selected = RendererFonts.Select(hostDefault: usableHost, embeddedFactory: () =>
+        {
+            factoryCalls++;
+            return null;
+        });
+
+        Assert.Same(usableHost, selected);
+        Assert.Equal(0, factoryCalls);
+    }
+
+    [Fact]
+    public void Render_TextOnlyScene_DrawsForegroundGlyphs()
+    {
+        // A text-only scene must paint real glyphs, not a blank background. This
+        // guards the label path that resolves its typeface via RendererFonts so
+        // that text renders even where SKTypeface.Default is unusable.
+        var scene = new VectorScene([
+            new TextPaintOp
+            {
+                FeatureReference = "text",
+                World = Project(0.005, 0.005),
+                Text = "ABC",
+                FontSizePx = 40,
+                ForeColor = Black,
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+
+        int foreground = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        for (int x = 0; x < bitmap.Width; x++)
+        {
+            var p = bitmap.GetPixel(x, y);
+            if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                foreground++;
+        }
+
+        Assert.True(foreground > 20,
+            $"Text-only scene produced too few foreground pixels ({foreground}); labels did not render.");
+    }
+
     private static SKBitmap Render(VectorScene scene, Viewport viewport)
     {
         var renderer = new SkiaDisplayListRenderer { Background = White };

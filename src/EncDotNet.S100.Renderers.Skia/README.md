@@ -46,3 +46,28 @@ dedicated pattern collection / priority-clip / insert phase.
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
 
+## Linux arm64 native dependency
+
+When you publish a **`linux-arm64`** executable that uses this renderer, reference
+the self-contained SkiaSharp native in **your application project**:
+
+```xml
+<!-- In your app's .csproj -->
+<ItemGroup>
+  <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
+  <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+</ItemGroup>
+```
+
+The regular `SkiaSharp.NativeAssets.Linux` arm64 `libSkiaSharp.so` declares
+undefined `uuid_*` / `FT_Get_BDF_Property` symbols that abort once
+`fontconfig`/`freetype` load on a normal arm64 host, so any render path crashes
+with `undefined symbol: …`. The `…NoDependencies` build is self-contained and
+renders on both x64 and arm64. Native RID asset selection belongs to the final
+executable, so this library does **not** apply the swap to your build. See
+[issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23).
+
+Text labels render without any system font infrastructure: this package embeds an
+Open Sans face (Apache-2.0) used as a fallback when the host exposes no usable
+system font (e.g. the `NoDependencies` native on a box without `fontconfig`).
+

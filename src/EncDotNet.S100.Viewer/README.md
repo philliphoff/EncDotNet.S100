@@ -25,6 +25,36 @@ User settings (recent files, panel layout, ECDIS overrides, vessel
 geometry, …) are persisted per user; the viewer ignores or migrates
 older settings shapes silently rather than refusing to start.
 
+## Linux runtime prerequisites
+
+The published `linux-x64` / `linux-arm64` archives are self-contained —
+they bundle the .NET runtime and SkiaSharp's native `libSkiaSharp.so`
+(the self-contained *NoDependencies* build, so Skia itself needs no
+system fontconfig/freetype; see issue #23). They do **not** bundle the
+system libraries the .NET runtime and the Avalonia/X11 windowing stack
+load from the OS. Desktop distributions usually already have these;
+minimal/server or container images do not. On Debian/Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libicu74 \
+  fontconfig fonts-dejavu-core \
+  libx11-6 libice6 libsm6 libxext6 libxrender1 libxi6 libxcursor1 libxrandr2 \
+  libgl1 libegl1
+# Debian 12 / older Ubuntu: use the matching libicu (e.g. libicu72 / libicu70).
+```
+
+| Group | Packages | Why |
+|---|---|---|
+| Globalization | `libicu` | .NET requires ICU at startup; without it the app aborts with `Couldn't find a valid ICU package`. |
+| Fonts | `fontconfig`, a font package (e.g. `fonts-dejavu-core`) | Text/label rendering. The bundled Skia does not *require* fontconfig to load, but without installed fonts labels render blank. |
+| Windowing (X11) | `libx11-6 libice6 libsm6 libxext6 libxrender1 libxi6 libxcursor1 libxrandr2` | Avalonia creates its window via X11. |
+| GPU / GL | `libgl1 libegl1` | OpenGL/EGL acceleration; the viewer falls back to software rendering if unavailable, but the loader still resolves these. |
+
+A working display server (X11, or Wayland via XWayland) is required —
+the viewer is a GUI application and has no headless mode.
+
 ## Supported products
 
 | Standard | Subject | Encoding | Portrayal | Validation pack |

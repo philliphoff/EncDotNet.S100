@@ -13,4 +13,14 @@
     <EmbeddedResource Include="content\**\*" />
   </ItemGroup>
 
+  <!--
+    This package embeds Apache-2.0 fonts (Open Sans, Droid Sans) under
+    content/**/pc/Fonts/. Pack their license + attribution so a binary consumer
+    of this package alone receives it (Apache-2.0 §4). The repository-wide
+    THIRD-PARTY-NOTICES.md is also packed centrally via Directory.Build.targets.
+  -->
+  <ItemGroup>
+    <None Include="LICENSE-Fonts.txt" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
 </Project>

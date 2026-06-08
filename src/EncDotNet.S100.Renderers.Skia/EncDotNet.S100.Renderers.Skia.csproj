@@ -5,9 +5,31 @@
     <TargetFramework />
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
   </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <!-- Ship the self-contained SkiaSharp Linux native so the headless render
+         path works on arm64 and on hosts without fontconfig (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Svg.Skia" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.VisualRegression.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Deterministic text fallback for hosts with no usable system font
+         (e.g. NoDependencies native without fontconfig). See Assets/Fonts/README.md. -->
+    <EmbeddedResource Include="Assets/Fonts/OpenSans-Regular.ttf">
+      <LogicalName>EncDotNet.S100.Renderers.Skia.Assets.Fonts.OpenSans-Regular.ttf</LogicalName>
+    </EmbeddedResource>
+    <None Include="Assets/Fonts/README.md" />
+    <!-- Ship Open Sans' Apache-2.0 license/attribution alongside the font in the package. -->
+    <None Include="Assets/Fonts/LICENSE-OpenSans.txt" Pack="true" PackagePath="Assets/Fonts/" />
   </ItemGroup>
 
   <ItemGroup>

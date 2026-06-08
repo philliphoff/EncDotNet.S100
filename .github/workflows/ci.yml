@@ -83,6 +83,8 @@ jobs:
         include:
           - os: windows-11-arm
             name: win-arm64
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read

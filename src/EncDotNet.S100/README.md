@@ -16,6 +16,29 @@ That single package transitively brings in the readers, the pipeline factory, th
 Lua/MoonSharp portrayal engine, the bundled specifications, and the headless Skia
 renderer.
 
+### Linux arm64 native dependency
+
+If you publish a **`linux-arm64`** application that uses this facade (or the Skia
+renderer directly), reference the self-contained SkiaSharp native in **your
+executable project**:
+
+```xml
+<!-- In your app's .csproj -->
+<ItemGroup>
+  <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" />
+  <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+</ItemGroup>
+```
+
+The regular `SkiaSharp.NativeAssets.Linux` arm64 `libSkiaSharp.so` declares
+undefined `uuid_*` / `FT_Get_BDF_Property` symbols that abort the process once
+`fontconfig`/`freetype` load on a normal arm64 desktop or container. The
+`…NoDependencies` build is self-contained and renders on both x64 and arm64.
+Native RID asset selection belongs to the final executable, so this package does
+**not** force the swap on your behalf. See
+[issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23).
+
+
 ## Quickstart — render a dataset to PNG
 
 ```csharp

@@ -32,7 +32,25 @@ attaches a pre-built, self-contained app per platform:
 |---|---|---|
 | macOS (Apple silicon) | `.dmg` | Signed and Apple-notarized — open the DMG and drag the app to Applications. |
 | Windows | `.zip` | Extract and run the `.exe`. |
-| Linux | `.tar.gz` | Extract and run the executable. |
+| Linux | `.tar.gz` | Extract and run the executable. See [Linux prerequisites](#linux-prerequisites) below. |
+
+#### Linux prerequisites
+
+The Linux archive is self-contained but relies on a few system libraries
+for globalization, fonts, and the X11/OpenGL windowing stack. On a
+minimal or container image install them first (Debian/Ubuntu):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libicu74 fontconfig fonts-dejavu-core \
+  libx11-6 libice6 libsm6 libxext6 libxrender1 libxi6 libxcursor1 libxrandr2 \
+  libgl1 libegl1
+```
+
+A running display server (X11, or Wayland via XWayland) is required. See
+the [viewer README](../src/EncDotNet.S100.Viewer/README.md#linux-runtime-prerequisites)
+for the full breakdown and the headless `s100` CLI's
+[lighter requirements](cli.md).
 
 ### 2. Open some data
 

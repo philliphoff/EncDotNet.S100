@@ -15,4 +15,41 @@
     <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
+  <!--
+    Ship the repository's third-party notices (Apache-2.0 Open Sans / Droid Sans
+    fonts redistributed by EncDotNet.S100.Renderers.Skia and
+    EncDotNet.S100.Specifications) inside every package, so binary consumers
+    receive the required license text + attribution (Apache-2.0 §4). The file is
+    self-contained (attributions + full licence text).
+  -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false' And Exists('$(MSBuildThisFileDirectory)THIRD-PARTY-NOTICES.md')">
+    <None Include="$(MSBuildThisFileDirectory)THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+  <!--
+    SkiaSharp Linux native selection (issue #23).
+
+    The regular `SkiaSharp.NativeAssets.Linux` native `libSkiaSharp.so` (pulled in
+    transitively via Mapsui, Avalonia.Skia and Topten.RichTextKit) declares
+    undefined `uuid_*` and `FT_Get_BDF_Property` symbols that it expects the host
+    to satisfy from system libuuid / libfreetype. On arm64 those are not
+    resolvable from the (local-scope) dlopen that fontconfig/freetype use, so any
+    Skia render path aborts at runtime with `undefined symbol: …` once those
+    system libraries load — which breaks both the viewer and the `s100` CLI on
+    arm64 Linux desktops (and the arm64 CI test runner, which has fontconfig).
+
+    Projects that emit or load Skia on Linux (the viewer, the CLI, and the Skia /
+    visual-regression test projects) opt in by setting
+    `<UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>`. That
+    excludes the regular native and ships the self-contained `…NoDependencies`
+    build instead, whose `libSkiaSharp.so` statically bundles those dependencies
+    and renders on both x64 and arm64 regardless of the host's fontconfig/freetype.
+    The package version is unchanged (kept in lockstep in Directory.Packages.props),
+    so the swap is ABI-neutral for the managed SkiaSharp binding.
+  -->
+  <ItemGroup Condition="'$(UseSkiaSharpLinuxNoDependencies)' == 'true'">
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+  </ItemGroup>
+
 </Project>
