@@ -165,6 +165,22 @@ internal sealed class MapsuiMapHost : IMapHost
         nav.CenterOn(x, y, durationMs);
     }
 
+    public (double Latitude, double Longitude)? TryGetViewportCenterWgs84()
+    {
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        var (lon, lat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
+        if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
+            return null;
+
+        return (lat, lon);
+    }
+
     public void AddOverlayLayer(ILayer layer)
     {
         ArgumentNullException.ThrowIfNull(layer);

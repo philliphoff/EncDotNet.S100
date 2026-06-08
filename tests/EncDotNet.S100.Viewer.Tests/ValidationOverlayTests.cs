@@ -37,6 +37,7 @@ public class ValidationOverlayTests
         public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
+        public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
         public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)

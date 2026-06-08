@@ -101,6 +101,20 @@ internal interface IMapHost
     void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300);
 
     /// <summary>
+    /// Returns the current viewport centre in WGS-84 degrees, or
+    /// <see langword="null"/> when the map's navigator is unavailable or
+    /// the viewport has not yet been laid out. Used by UI panels that want
+    /// to order content by proximity to what the user is currently looking
+    /// at — e.g. the Vessels panel sorts nearest-first relative to the
+    /// viewport centre when no own-ship reference position is available.
+    /// </summary>
+    /// <returns>
+    /// The viewport-centre latitude/longitude in WGS-84 degrees, or
+    /// <see langword="null"/> when no laid-out viewport exists.
+    /// </returns>
+    (double Latitude, double Longitude)? TryGetViewportCenterWgs84();
+
+    /// <summary>
     /// Captures the current map view as a PNG byte array.
     /// </summary>
     /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>

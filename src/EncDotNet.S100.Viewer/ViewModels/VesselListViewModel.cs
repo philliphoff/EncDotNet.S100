@@ -43,8 +43,11 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// Range and bearing are computed relative to the own ship and are only
 /// shown when the own-ship overlay is enabled — i.e. when the
 /// <c>"ownship"</c> dynamic source is publishing a position feature.
-/// When it is off, rows omit the range/bearing line and the list falls
-/// back to name ordering.
+/// When it is off, rows omit the range/bearing line and the list is
+/// ordered nearest-first relative to the current map viewport centre
+/// (falling back to name ordering only when no laid-out viewport is
+/// available). Selecting a vessel recentres the map on it, so the
+/// selection naturally floats to the top of the viewport-ordered list.
 /// </para>
 /// </remarks>
 internal sealed class VesselListViewModel : ViewModelBase
@@ -167,18 +170,6 @@ internal sealed class VesselListViewModel : ViewModelBase
     /// </summary>
     public bool HasSelection => _selectedVessel is not null;
 
-    private string? _summary;
-    /// <summary>
-    /// Footer text: a vessel count when the list is populated, or
-    /// <see langword="null"/> (footer hidden) when empty. The empty case
-    /// is surfaced by the <see cref="EmptyMessage"/> placeholder instead.
-    /// </summary>
-    public string? Summary
-    {
-        get => _summary;
-        private set => SetProperty(ref _summary, value);
-    }
-
     private bool _isEmpty = true;
     /// <summary>
     /// Whether the list is currently empty. Drives the centred
@@ -237,6 +228,14 @@ internal sealed class VesselListViewModel : ViewModelBase
         var features = _ais?.CurrentFeatures.ToArray() ?? Array.Empty<DynamicFeature>();
         var own = ResolveOwnShip();
 
+        // When the own-ship overlay is on it is the reference point for
+        // both range/bearing and list ordering. When it is off, fall back
+        // to the current viewport centre so the list is ordered by what the
+        // user is actually looking at (rather than by MMSI, whose order is
+        // meaningless to the navigator). Either may be null — e.g. no
+        // laid-out map yet — in which case ordering falls back to name.
+        var sortOrigin = own ?? _mapHostAccessor.Current?.TryGetViewportCenterWgs84();
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var feature in features)
         {
@@ -259,7 +258,7 @@ internal sealed class VesselListViewModel : ViewModelBase
                 _itemsById[feature.Id] = item;
             }
 
-            UpdateItem(item, feature, lat, lon, own);
+            UpdateItem(item, feature, lat, lon, own, sortOrigin);
         }
 
         RemoveVanished(seen);
@@ -284,7 +283,7 @@ internal sealed class VesselListViewModel : ViewModelBase
             OnPropertyChanged(nameof(SelectedVessel));
         }
 
-        UpdateSummary();
+        UpdateEmptyState();
     }
 
     /// <summary>
@@ -323,10 +322,14 @@ internal sealed class VesselListViewModel : ViewModelBase
         DynamicFeature feature,
         double lat,
         double lon,
-        (double Latitude, double Longitude)? own)
+        (double Latitude, double Longitude)? own,
+        (double Latitude, double Longitude)? sortOrigin)
     {
         item.Latitude = lat;
         item.Longitude = lon;
+        item.SortDistanceMetres = sortOrigin is { } origin
+            ? VesselGeoMath.DistanceMetres(origin.Latitude, origin.Longitude, lat, lon)
+            : null;
         item.Name = ResolveName(feature);
         item.ShipTypeClass = GetAttribute<AisShipTypeClass>(feature, "shipTypeClass")
             ?? AisShipTypeClass.Unknown;
@@ -500,13 +503,15 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     /// <summary>
     /// Reconciles <see cref="Vessels"/> with the nearest-first ordering of
-    /// <see cref="_itemsById"/>, moving existing rows rather than replacing
-    /// them so item identity (and thus selection) is preserved.
+    /// <see cref="_itemsById"/> (by <see cref="VesselListItem.SortDistanceMetres"/>,
+    /// i.e. distance from the own ship or, when it is off, the viewport
+    /// centre), moving existing rows rather than replacing them so item
+    /// identity (and thus selection) is preserved.
     /// </summary>
     private void Resort()
     {
         var ordered = _itemsById.Values
-            .OrderBy(v => v.DistanceMetres ?? double.PositiveInfinity)
+            .OrderBy(v => v.SortDistanceMetres ?? double.PositiveInfinity)
             .ThenBy(v => v.Name, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(v => v.Id, StringComparer.Ordinal)
             .ToList();
@@ -540,23 +545,15 @@ internal sealed class VesselListViewModel : ViewModelBase
         }
     }
 
-    private void UpdateSummary()
+    private void UpdateEmptyState()
     {
         var empty = Vessels.Count == 0;
         IsEmpty = empty;
         if (empty)
         {
-            // No footer count when empty; the centred placeholder carries
-            // the message instead.
-            Summary = null;
             EmptyMessage = IsAisActive
                 ? Strings.Vessels_Empty_NoData
                 : Strings.Vessels_Empty_Disabled;
-        }
-        else
-        {
-            Summary = string.Format(
-                CultureInfo.CurrentCulture, Strings.Vessels_CountFooter, Vessels.Count);
         }
     }
 

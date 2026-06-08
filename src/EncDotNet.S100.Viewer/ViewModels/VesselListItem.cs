@@ -343,4 +343,14 @@ internal sealed class VesselListItem : ViewModelBase
         get => _longitude;
         set => SetProperty(ref _longitude, value);
     }
+
+    /// <summary>
+    /// Great-circle distance in metres from the current sort origin
+    /// (the own-ship fix when the own-ship overlay is on, otherwise the
+    /// map viewport centre), or <see langword="null"/> when no origin is
+    /// available. Drives the nearest-first list ordering and is distinct
+    /// from <see cref="DistanceMetres"/>, which is only populated for the
+    /// own-ship range/bearing display.
+    /// </summary>
+    public double? SortDistanceMetres { get; set; }
 }

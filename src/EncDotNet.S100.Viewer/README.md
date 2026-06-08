@@ -179,16 +179,19 @@ vessel while preserving the current zoom and reveals a properties
 sub-pane below the list with the vessel's full detail: identity
 (type, status, MMSI, call sign, IMO), motion (speed, course,
 heading, rate of turn), range/bearing relative to the own ship,
-voyage (destination, ETA, draught), and hull dimensions
-(length × beam). Each detail field appears only once the
+voyage (destination, ETA), and dimensions (length × beam and
+draught). Each detail field appears only once the
 corresponding AIS report has been received. The split between the
 list and the properties sub-pane is draggable and persisted.
 
 Range and bearing are shown only when the own-ship overlay is
 enabled (**Settings → simulated own-ship**); with it off, the list
 still shows vessels but omits the per-row range/bearing line and
-the detail pane's *Relative to own ship* section, and falls back to
-name ordering. When the list is empty the panel shows a
+the detail pane's *Relative to own ship* section, and orders the
+list nearest-first relative to the current map viewport centre
+instead (so the vessels you are looking at sort to the top, and a
+selected vessel — which recentres the map — floats to the top).
+When the list is empty the panel shows a
 placeholder that distinguishes the two reasons: the AIS overlay
 being switched off (prompting the user to enable it in Settings)
 versus the overlay being on but not yet populated — which is the

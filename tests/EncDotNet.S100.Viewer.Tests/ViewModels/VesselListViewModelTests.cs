@@ -332,8 +332,9 @@ public class VesselListViewModelTests
     [Fact]
     public void Selection_SurvivesResortWhenOrderChanges()
     {
-        // Own ship off, so ordering falls back to name; a rename changes a
-        // vessel's sort position and triggers a reconcile (Move/Insert).
+        // Own ship off and no viewport centre, so ordering falls back to
+        // name; a new arrival changes a vessel's sort position and triggers
+        // a reconcile (Move/Insert).
         var (vm, ais, _, _) = Make(ownShipEnabled: false);
         ais.SetFeatures(new[] { Vessel(1, 1, 0, "Mike") });
         Raise(ais);
@@ -351,6 +352,23 @@ public class VesselListViewModelTests
         // The selection is preserved by reference across the re-sort.
         Assert.Same(selected, vm.SelectedVessel);
         Assert.True(vm.HasSelection);
+    }
+
+    [Fact]
+    public void OrdersByViewportCenter_WhenOwnShipDisabled()
+    {
+        var (vm, ais, _, host) = Make(ownShipEnabled: false);
+        // The viewport is centred near vessel "Near" (10,10); vessel "Far"
+        // sits far away at (0,0). With no own ship, ordering should key off
+        // the viewport centre, not MMSI (whose order would put 100 first).
+        host.ViewportCenter = (10, 10);
+        ais.SetFeatures(new[] { Vessel(100, 0, 0, "Far"), Vessel(900, 10.1, 10, "Near") });
+        Raise(ais);
+
+        Assert.Equal("Near", vm.Vessels[0].Name);
+        Assert.Equal("Far", vm.Vessels[1].Name);
+        // Range/bearing stay hidden — they require an own-ship reference.
+        Assert.False(vm.Vessels[0].HasRangeBearing);
     }
 
     [Fact]

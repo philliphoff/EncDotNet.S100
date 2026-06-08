@@ -474,7 +474,6 @@ internal static class Strings
     public static string Vessels_Empty_Disabled => Get(nameof(Vessels_Empty_Disabled));
     public static string Vessels_Empty_NoData => Get(nameof(Vessels_Empty_NoData));
     public static string Vessels_Unnamed => Get(nameof(Vessels_Unnamed));
-    public static string Vessels_CountFooter => Get(nameof(Vessels_CountFooter));
     public static string Vessels_DistanceFormat => Get(nameof(Vessels_DistanceFormat));
     public static string Vessels_BearingFormat => Get(nameof(Vessels_BearingFormat));
     public static string Vessels_DistanceBearingFormat => Get(nameof(Vessels_DistanceBearingFormat));

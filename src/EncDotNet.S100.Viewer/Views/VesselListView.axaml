@@ -29,17 +29,6 @@
 
     <DockPanel LastChildFill="True">
 
-        <!-- Footer: vessel count (hidden when the list is empty; the
-             placeholder carries the empty-state message instead). -->
-        <Border DockPanel.Dock="Bottom"
-                Padding="12,4,12,8"
-                IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Text="{Binding Summary}"
-                       FontSize="11"
-                       Opacity="0.7"
-                       TextWrapping="Wrap" />
-        </Border>
-
         <!-- Body: empty-state placeholder and the master/detail layout
              share the fill slot so the placeholder centres in the
              available space. -->
@@ -180,10 +169,10 @@
 
                         <ScrollViewer IsVisible="{Binding HasSelection}"
                                       HorizontalScrollBarVisibility="Disabled"
-                                      VerticalScrollBarVisibility="Auto"
-                                      Padding="12,8">
+                                      VerticalScrollBarVisibility="Auto">
                             <StackPanel DataContext="{Binding SelectedVessel}"
                                         x:DataType="vm:VesselListItem"
+                                        Margin="12,8"
                                         Spacing="6">
                                 <StackPanel.Styles>
                                     <Style Selector="TextBlock.section">
