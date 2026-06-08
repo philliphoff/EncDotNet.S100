@@ -1266,4 +1266,199 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Tooltip_DynamicHit" xml:space="preserve">
     <value>Dynamic-source feature picked from the live overlay.</value>
   </data>
+  <data name="Pane_Vessels" xml:space="preserve">
+    <value>VESSELS</value>
+  </data>
+  <data name="Tooltip_Vessels" xml:space="preserve">
+    <value>AIS vessels — nearest first</value>
+  </data>
+  <data name="Tooltip_VesselRow" xml:space="preserve">
+    <value>Select to centre the map on this vessel.</value>
+  </data>
+  <data name="Vessels_Empty_Disabled" xml:space="preserve">
+    <value>The AIS overlay is turned off. Enable it under Settings → AIS to list nearby vessels.</value>
+  </data>
+  <data name="Vessels_Empty_NoData" xml:space="preserve">
+    <value>The AIS overlay is on but hasn't received any vessels yet. Zoom in to an area with traffic to populate the list.</value>
+  </data>
+  <data name="Vessels_Unnamed" xml:space="preserve">
+    <value>Unnamed vessel</value>
+  </data>
+  <data name="Vessels_DistanceFormat" xml:space="preserve">
+    <value>{0:0.0} NM</value>
+    <comment>{0} = distance in nautical miles.</comment>
+  </data>
+  <data name="Vessels_BearingFormat" xml:space="preserve">
+    <value>{0:000}°</value>
+    <comment>{0} = bearing in degrees true (0-359).</comment>
+  </data>
+  <data name="Vessels_DistanceBearingFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>{0} = distance text, {1} = bearing text.</comment>
+  </data>
+  <data name="Vessels_State_UnderWayUsingEngine" xml:space="preserve">
+    <value>Under way (engine)</value>
+  </data>
+  <data name="Vessels_State_AtAnchor" xml:space="preserve">
+    <value>At anchor</value>
+  </data>
+  <data name="Vessels_State_NotUnderCommand" xml:space="preserve">
+    <value>Not under command</value>
+  </data>
+  <data name="Vessels_State_RestrictedManoeuvrability" xml:space="preserve">
+    <value>Restricted manoeuvrability</value>
+  </data>
+  <data name="Vessels_State_ConstrainedByDraught" xml:space="preserve">
+    <value>Constrained by draught</value>
+  </data>
+  <data name="Vessels_State_Moored" xml:space="preserve">
+    <value>Moored</value>
+  </data>
+  <data name="Vessels_State_Aground" xml:space="preserve">
+    <value>Aground</value>
+  </data>
+  <data name="Vessels_State_EngagedInFishing" xml:space="preserve">
+    <value>Fishing</value>
+  </data>
+  <data name="Vessels_State_UnderWaySailing" xml:space="preserve">
+    <value>Under way (sailing)</value>
+  </data>
+  <data name="Vessels_State_AisSart" xml:space="preserve">
+    <value>AIS-SART</value>
+  </data>
+  <data name="Vessels_State_Moving" xml:space="preserve">
+    <value>Under way</value>
+  </data>
+  <data name="Vessels_State_Stopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="Vessels_State_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Vessels_Detail_Placeholder" xml:space="preserve">
+    <value>Select a vessel to view its details.</value>
+  </data>
+  <data name="Vessels_HeaderSubtitleFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>{0} = ship-type label, {1} = navigation status.</comment>
+  </data>
+  <data name="Vessels_Detail_Identity" xml:space="preserve">
+    <value>Identity</value>
+  </data>
+  <data name="Vessels_Detail_Motion" xml:space="preserve">
+    <value>Motion</value>
+  </data>
+  <data name="Vessels_Detail_Voyage" xml:space="preserve">
+    <value>Voyage</value>
+  </data>
+  <data name="Vessels_Detail_Dimensions" xml:space="preserve">
+    <value>Dimensions</value>
+  </data>
+  <data name="Vessels_Detail_Range" xml:space="preserve">
+    <value>Relative to own ship</value>
+  </data>
+  <data name="Vessels_Label_Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Vessels_Label_CallSign" xml:space="preserve">
+    <value>Call sign</value>
+  </data>
+  <data name="Vessels_Label_Mmsi" xml:space="preserve">
+    <value>MMSI</value>
+  </data>
+  <data name="Vessels_Label_Imo" xml:space="preserve">
+    <value>IMO</value>
+  </data>
+  <data name="Vessels_Label_Heading" xml:space="preserve">
+    <value>Heading</value>
+  </data>
+  <data name="Vessels_Label_Course" xml:space="preserve">
+    <value>Course</value>
+  </data>
+  <data name="Vessels_Label_Speed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="Vessels_Label_RateOfTurn" xml:space="preserve">
+    <value>Rate of turn</value>
+  </data>
+  <data name="Vessels_Label_Bearing" xml:space="preserve">
+    <value>Bearing</value>
+  </data>
+  <data name="Vessels_Label_Distance" xml:space="preserve">
+    <value>Distance</value>
+  </data>
+  <data name="Vessels_Label_Destination" xml:space="preserve">
+    <value>Destination</value>
+  </data>
+  <data name="Vessels_Label_Eta" xml:space="preserve">
+    <value>ETA</value>
+  </data>
+  <data name="Vessels_Label_Draught" xml:space="preserve">
+    <value>Draught</value>
+  </data>
+  <data name="Vessels_Label_Dimensions" xml:space="preserve">
+    <value>Length × beam</value>
+  </data>
+  <data name="Vessels_SpeedFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+    <comment>{0} = speed over ground in knots.</comment>
+  </data>
+  <data name="Vessels_RateOfTurnFormat" xml:space="preserve">
+    <value>{0:0} °/min</value>
+    <comment>{0} = rate of turn in degrees per minute.</comment>
+  </data>
+  <data name="Vessels_DraughtFormat" xml:space="preserve">
+    <value>{0:0.0} m</value>
+    <comment>{0} = static draught in metres.</comment>
+  </data>
+  <data name="Vessels_DimensionsFormat" xml:space="preserve">
+    <value>{0:0} × {1:0} m</value>
+    <comment>{0} = length in metres, {1} = beam in metres.</comment>
+  </data>
+  <data name="Vessels_EtaFormat" xml:space="preserve">
+    <value>{0:dd MMM HH:mm} UTC</value>
+    <comment>{0} = estimated time of arrival (UTC).</comment>
+  </data>
+  <data name="Vessels_ShipType_Unknown" xml:space="preserve">
+    <value>Unknown</value>
+  </data>
+  <data name="Vessels_ShipType_Cargo" xml:space="preserve">
+    <value>Cargo</value>
+  </data>
+  <data name="Vessels_ShipType_Tanker" xml:space="preserve">
+    <value>Tanker</value>
+  </data>
+  <data name="Vessels_ShipType_Passenger" xml:space="preserve">
+    <value>Passenger</value>
+  </data>
+  <data name="Vessels_ShipType_HighSpeedCraft" xml:space="preserve">
+    <value>High-speed craft</value>
+  </data>
+  <data name="Vessels_ShipType_Pleasure" xml:space="preserve">
+    <value>Pleasure craft</value>
+  </data>
+  <data name="Vessels_ShipType_Fishing" xml:space="preserve">
+    <value>Fishing</value>
+  </data>
+  <data name="Vessels_ShipType_Tug" xml:space="preserve">
+    <value>Tug / towing</value>
+  </data>
+  <data name="Vessels_ShipType_SearchAndRescue" xml:space="preserve">
+    <value>Search and rescue</value>
+  </data>
+  <data name="Vessels_ShipType_LawEnforcement" xml:space="preserve">
+    <value>Law enforcement</value>
+  </data>
+  <data name="Vessels_ShipType_Military" xml:space="preserve">
+    <value>Military</value>
+  </data>
+  <data name="Vessels_ShipType_Sailing" xml:space="preserve">
+    <value>Sailing</value>
+  </data>
+  <data name="Vessels_ShipType_PilotVessel" xml:space="preserve">
+    <value>Pilot vessel</value>
+  </data>
+  <data name="Vessels_ShipType_Other" xml:space="preserve">
+    <value>Other</value>
+  </data>
 </root>

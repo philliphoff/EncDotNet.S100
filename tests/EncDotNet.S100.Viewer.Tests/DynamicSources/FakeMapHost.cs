@@ -29,6 +29,21 @@ internal sealed class FakeMapHost : IMapHost
     public void SetViewportToExtent(MRect mercatorExtent) { }
     public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
+    /// <summary>Records every <see cref="CenterOn"/> call (lat, lon).</summary>
+    public List<(double Latitude, double Longitude)> CenterOnCalls { get; } = new();
+
+    public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300)
+        => CenterOnCalls.Add((latitudeWgs84, longitudeWgs84));
+
+    /// <summary>
+    /// Viewport centre returned by <see cref="TryGetViewportCenterWgs84"/>.
+    /// Tests set this to exercise viewport-relative vessel ordering; the
+    /// default (<see langword="null"/>) mimics an unlaid-out map.
+    /// </summary>
+    public (double Latitude, double Longitude)? ViewportCenter { get; set; }
+
+    public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => ViewportCenter;
+
     public Task<byte[]?> RenderCurrentViewToPngAsync(
         int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)
         => Task.FromResult<byte[]?>(null);

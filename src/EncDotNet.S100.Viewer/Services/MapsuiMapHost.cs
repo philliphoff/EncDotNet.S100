@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
+using Mapsui.Projections;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using Mapsui.UI.Avalonia;
@@ -144,6 +145,40 @@ internal sealed class MapsuiMapHost : IMapHost
         {
             nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
         }
+    }
+
+    public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300)
+    {
+        if (double.IsNaN(latitudeWgs84) || double.IsNaN(longitudeWgs84)
+            || double.IsInfinity(latitudeWgs84) || double.IsInfinity(longitudeWgs84)
+            || latitudeWgs84 < -90.0 || latitudeWgs84 > 90.0)
+        {
+            return;
+        }
+
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return;
+
+        var (x, y) = SphericalMercator.FromLonLat(longitudeWgs84, latitudeWgs84);
+        // CenterOn keeps the current resolution, so the zoom level is
+        // preserved — only the viewport centre moves.
+        nav.CenterOn(x, y, durationMs);
+    }
+
+    public (double Latitude, double Longitude)? TryGetViewportCenterWgs84()
+    {
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        var (lon, lat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
+        if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
+            return null;
+
+        return (lat, lon);
     }
 
     public void AddOverlayLayer(ILayer layer)
