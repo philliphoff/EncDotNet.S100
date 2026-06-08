@@ -34,24 +34,28 @@ public sealed class S57RenderingTests
         // quality-of-data hatching) — geometry, colour, and symbology are
         // identical, and the worst per-channel delta is a partial-coverage ~47.
         //
-        //   linux-x64 / osx-arm64 : 2.383% (byte-identical renders)
-        //   win-arm64             : 5.93%  (different Skia AA/raster path)
+        //   linux-x64 / osx-arm64   : 2.383% (byte-identical renders)
+        //   linux-arm64 / win-arm64 : 5.93%  (arm64 Skia AA/raster path)
         //
-        // Keep the strict 5% bound everywhere — it preserves the test's power on
-        // the platforms that actually run it in CI (linux-x64 has ~2.6% of
-        // headroom) — and relax to 8% ONLY on win-arm64, whose heterogeneous
-        // runner rasterisation lands ~5.93% off the baseline (issue #177). We use
-        // ProcessArchitecture (not OSArchitecture) so an x64 process emulated on
-        // an arm64 OS is not over-relaxed.
+        // Keep the strict 5% bound on the platforms whose render is byte-identical
+        // to the baseline — linux-x64 (the build job, ~2.6% of headroom) and
+        // osx-arm64 — which preserves the test's power where it counts. Relax to
+        // 8% on the arm64 CI runners (linux-arm64 and win-arm64), whose NEON
+        // rasterisation lands ~5.93% off the baseline. linux-arm64 joined
+        // win-arm64 here once the NoDependencies SkiaSharp native (#224) replaced
+        // the previous Linux native build and switched the arm64 leg onto the same
+        // divergent AA path (issues #177, #215, #224). We test ProcessArchitecture
+        // (not OSArchitecture) so an x64 process emulated on an arm64 OS is not
+        // over-relaxed, and exclude macOS, whose arm64 render is byte-identical.
         //
         // DELIBERATE per-RID tolerance — do NOT "tidy" this back to a single
         // global 0.08 (that is what #186 did and it weakened the test on every
-        // platform; #177 restores the strict 5% everywhere except win-arm64).
-        var maxDifferentPixelFraction =
-            OperatingSystem.IsWindows()
-            && RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? 0.08
-                : 0.05;
+        // platform); the strict 5% is retained on linux-x64, win-x64, and
+        // osx-arm64.
+        var isArm64CiRunner =
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+            && !OperatingSystem.IsMacOS();
+        var maxDifferentPixelFraction = isArm64CiRunner ? 0.08 : 0.05;
         return TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction);
     }
 }
