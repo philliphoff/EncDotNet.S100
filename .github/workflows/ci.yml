@@ -115,6 +115,16 @@ jobs:
           name: test-results-${{ matrix.name }}
           path: TestResults/*.trx
 
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendering-snapshots-${{ matrix.name }}
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
   publish:
     needs: build
     strategy:

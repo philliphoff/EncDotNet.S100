@@ -151,11 +151,25 @@ public class OpenDatasetToolTests
                 {
                     // Fire-and-forget adds after the trigger returns, like
                     // the real exchange-set service; 2 datasets dispatched.
+                    // The two adds are issued as a single synchronous burst
+                    // (no await between them) so the tool's quiescence quiet
+                    // window can never open *between* them: the fast path
+                    // (added >= dispatched) resolves deterministically. If the
+                    // whole continuation is starved past the quiet window, the
+                    // tool simply keeps waiting up to maxWaitMs and still sees
+                    // both adds together. This removes the timing race where a
+                    // delayed second add could be mistaken for a failed load
+                    // (issue #215).
+                    //
+                    // NOTE: collapsing the adds means this test now exercises
+                    // the fast path, not the quiet-window settle path. That
+                    // path is still covered deterministically by
+                    // ExchangeSet_partial_failure_settles_via_quiet_window
+                    // below (1 add dispatched as 2 -> settles via quiet window).
                     _ = Task.Run(async () =>
                     {
                         await Task.Delay(20);
                         catalog.Add("a.000", "S-101");
-                        await Task.Delay(20);
                         catalog.Add("b.000", "S-102");
                     });
                     return Task.FromResult(2);

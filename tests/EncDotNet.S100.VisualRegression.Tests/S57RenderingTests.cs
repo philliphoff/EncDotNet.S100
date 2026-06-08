@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using EncDotNet.S100.VisualRegression;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
@@ -27,10 +28,30 @@ public sealed class S57RenderingTests
         });
 
         // S-57 is translated in-memory to S-101 and rendered through the full
-        // portrayal stack; the resulting raster drifts slightly across platforms
-        // (notably font/anti-aliasing on win-arm64, observed ~5.93% vs the
-        // committed baseline). Allow a modest 8% tolerance for this end-to-end
-        // snapshot so platform pixel jitter doesn't fail CI.
-        return TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction: 0.08);
+        // portrayal stack. The committed baseline was baked on win-x64. Measured
+        // differences vs that baseline are confined to the anti-aliased fringe of
+        // thin vector strokes (depth-contour lines and the diagonal
+        // quality-of-data hatching) — geometry, colour, and symbology are
+        // identical, and the worst per-channel delta is a partial-coverage ~47.
+        //
+        //   linux-x64 / osx-arm64 : 2.383% (byte-identical renders)
+        //   win-arm64             : 5.93%  (different Skia AA/raster path)
+        //
+        // Keep the strict 5% bound everywhere — it preserves the test's power on
+        // the platforms that actually run it in CI (linux-x64 has ~2.6% of
+        // headroom) — and relax to 8% ONLY on win-arm64, whose heterogeneous
+        // runner rasterisation lands ~5.93% off the baseline (issue #177). We use
+        // ProcessArchitecture (not OSArchitecture) so an x64 process emulated on
+        // an arm64 OS is not over-relaxed.
+        //
+        // DELIBERATE per-RID tolerance — do NOT "tidy" this back to a single
+        // global 0.08 (that is what #186 did and it weakened the test on every
+        // platform; #177 restores the strict 5% everywhere except win-arm64).
+        var maxDifferentPixelFraction =
+            OperatingSystem.IsWindows()
+            && RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? 0.08
+                : 0.05;
+        return TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction);
     }
 }

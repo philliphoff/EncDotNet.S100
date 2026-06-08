@@ -31,20 +31,28 @@ public sealed class DebouncedSettingsSaverTests
     {
         var saves = 0;
         using var fired = new ManualResetEventSlim();
+        // A wide window so a rapid synchronous burst of requests cannot
+        // realistically straddle it, even under heavy CI scheduler load.
+        const int delayMilliseconds = 1000;
         using var saver = new DebouncedSettingsSaver(
             () => { Interlocked.Increment(ref saves); fired.Set(); },
-            delayMilliseconds: 100);
+            delayMilliseconds: delayMilliseconds);
 
+        // Issue the requests as a rapid synchronous burst (no sleeps): each
+        // RequestSave restarts the single debounce timer, so only the final
+        // one survives and fires exactly once. The previous version spaced
+        // the calls with Thread.Sleep(10); under CI starvation a sleep could
+        // exceed the 100 ms window, letting the timer fire mid-burst and then
+        // re-arm — producing a second save (flaky, issue #215).
         for (int i = 0; i < 10; i++)
         {
             saver.RequestSave();
-            Thread.Sleep(10);
         }
 
         Assert.True(fired.Wait(TimeSpan.FromSeconds(5)), "Saver did not fire within 5 s");
-        // Give any (incorrectly) scheduled extra fires a chance to land
-        // before asserting coalescence. The debounce window is 100 ms,
-        // so 300 ms is plenty without being painfully slow.
+        // Give any (incorrectly) scheduled extra fire a chance to land before
+        // asserting coalescence. A spurious second timer would fire at roughly
+        // the same instant as the first, so a short margin is sufficient.
         Thread.Sleep(300);
 
         Assert.Equal(1, saves);
