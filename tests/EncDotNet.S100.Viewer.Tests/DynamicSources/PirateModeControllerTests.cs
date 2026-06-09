@@ -103,7 +103,10 @@ public sealed class PirateModeControllerTests
         Assert.Equal(50.0, call.Lat);
         Assert.Equal(-1.0, call.Lon);
         Assert.Equal(90.0, call.Cog);
-        Assert.Equal(88.0, call.Heading);
+        // Heading is deliberately not adopted from AIS; the helm has no
+        // gyro-heading control, so passing null lets the arrow mirror
+        // course as the user steers.
+        Assert.Null(call.Heading);
         Assert.NotNull(call.SogMs);
         Assert.Equal(10.0 * 0.514_444_444, call.SogMs!.Value, 4);
 
@@ -128,8 +131,12 @@ public sealed class PirateModeControllerTests
     }
 
     [Fact]
-    public void Update_ForFollowedTarget_PushesNewFix()
+    public void Update_AfterAdoption_DoesNotApply()
     {
+        // Adopt-and-detach: once the initial fix has landed, subsequent
+        // AIS updates for the followed target must NOT be applied —
+        // otherwise the user's helm commands would be silently overwritten
+        // on the next AIS tick.
         var raw = Raw(Target(lat: 50.0, lon: -1.0));
         var (controller, helm, _, _) = Build(raw);
         controller.Follow(123);
@@ -141,9 +148,45 @@ public sealed class PirateModeControllerTests
             ChangedIds = new[] { "ais:123" },
         });
 
-        Assert.Equal(2, helm.States.Count);
-        Assert.Equal(51.0, helm.States[1].Lat);
-        Assert.Equal(-2.0, helm.States[1].Lon);
+        Assert.Single(helm.States);
+        Assert.Equal(50.0, helm.States[0].Lat);
+        Assert.Equal(-1.0, helm.States[0].Lon);
+    }
+
+    [Fact]
+    public void Update_WhileArmedWaiting_AdoptsFirstReport()
+    {
+        // Armed-waiting: target was not yet in the AIS snapshot when
+        // Follow ran, so the very next report for that target must
+        // adopt. After that, further reports are ignored.
+        var raw = Raw(); // empty
+        var (controller, helm, geom, _) = Build(raw);
+        controller.Follow(123);
+
+        Assert.Empty(helm.States);
+        Assert.Null(controller.LastFixUtc);
+
+        raw.SetFeatures(new[] { Target(lat: 51.0, lon: -2.0) });
+        raw.RaiseChanged(new DynamicFeaturesChanged
+        {
+            Kind = DynamicSourceChangeKind.Updated,
+            ChangedIds = new[] { "ais:123" },
+        });
+
+        Assert.Single(helm.States);
+        Assert.Equal(51.0, helm.States[0].Lat);
+        Assert.NotNull(controller.LastFixUtc);
+        Assert.Equal(1, geom.SetCount);
+
+        // A second update must not push another fix.
+        raw.SetFeatures(new[] { Target(lat: 52.0, lon: -3.0) });
+        raw.RaiseChanged(new DynamicFeaturesChanged
+        {
+            Kind = DynamicSourceChangeKind.Updated,
+            ChangedIds = new[] { "ais:123" },
+        });
+
+        Assert.Single(helm.States);
     }
 
     [Fact]
@@ -251,8 +294,10 @@ public sealed class PirateModeControllerTests
     }
 
     [Fact]
-    public void Reset_ReReadsSnapshot()
+    public void Reset_AfterAdoption_DoesNotReApply()
     {
+        // Adopt-and-detach: a Reset event after adoption is ignored
+        // just like any other update.
         var raw = Raw(Target(lat: 50, lon: -1));
         var (controller, helm, _, _) = Build(raw);
         controller.Follow(123);
@@ -260,8 +305,24 @@ public sealed class PirateModeControllerTests
         raw.SetFeatures(new[] { Target(lat: 60, lon: -3) });
         raw.RaiseChanged(new DynamicFeaturesChanged { Kind = DynamicSourceChangeKind.Reset });
 
-        Assert.Equal(2, helm.States.Count);
-        Assert.Equal(60.0, helm.States[1].Lat);
+        Assert.Single(helm.States);
+        Assert.Equal(50.0, helm.States[0].Lat);
+    }
+
+    [Fact]
+    public void Reset_WhileArmedWaiting_AdoptsFix()
+    {
+        // Reset carries no ids but must still let armed-waiting adopt
+        // if the target is now present in the new snapshot.
+        var raw = Raw(); // empty
+        var (controller, helm, _, _) = Build(raw);
+        controller.Follow(123);
+
+        raw.SetFeatures(new[] { Target(lat: 60, lon: -3) });
+        raw.RaiseChanged(new DynamicFeaturesChanged { Kind = DynamicSourceChangeKind.Reset });
+
+        Assert.Single(helm.States);
+        Assert.Equal(60.0, helm.States[0].Lat);
     }
 
     [Fact]
