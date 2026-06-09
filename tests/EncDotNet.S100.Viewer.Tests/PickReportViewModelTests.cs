@@ -490,4 +490,66 @@ public class PickReportViewModelTests
 
         Assert.False(vm.HasPick);
     }
+
+    private static DynamicPickHit Hit(string featureId) => new()
+    {
+        SourceId = "ais.aisstream",
+        SourceDisplayName = "AIS",
+        FeatureId = featureId,
+        DisplayLabel = featureId,
+        LastUpdated = DateTimeOffset.UtcNow,
+        Latitude = 50.0,
+        Longitude = -1.0,
+    };
+
+    [Theory]
+    [InlineData("ais:123456789", true, 123456789u)]
+    [InlineData("ais:1", true, 1u)]
+    [InlineData("ais:0", false, 0u)]
+    [InlineData("ownship", false, 0u)]
+    [InlineData("ais:notanumber", false, 0u)]
+    [InlineData("", false, 0u)]
+    public void TryGetAisMmsi_ParsesOnlyAisFeatureIds(string featureId, bool expected, uint expectedMmsi)
+    {
+        var ok = PickReportViewModel.TryGetAisMmsi(Hit(featureId), out var mmsi);
+
+        Assert.Equal(expected, ok);
+        if (expected)
+            Assert.Equal(expectedMmsi, mmsi);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_OnAisHit_RaisesRequestedWithMmsi()
+    {
+        var vm = new PickReportViewModel();
+        uint? raised = null;
+        vm.TakeHelmRequested += (_, mmsi) => raised = mmsi;
+
+        var hit = Hit("ais:987654321");
+        Assert.True(vm.TakeHelmCommand.CanExecute(hit));
+        vm.TakeHelmCommand.Execute(hit);
+
+        Assert.Equal(987654321u, raised);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_OnNonAisHit_IsDisabledAndDoesNotRaise()
+    {
+        var vm = new PickReportViewModel();
+        var raised = false;
+        vm.TakeHelmRequested += (_, _) => raised = true;
+
+        var hit = Hit("ownship");
+        Assert.False(vm.TakeHelmCommand.CanExecute(hit));
+        vm.TakeHelmCommand.Execute(hit);
+
+        Assert.False(raised);
+    }
+
+    [Fact]
+    public void IsAisTarget_TracksFeatureId()
+    {
+        Assert.True(Hit("ais:42").IsAisTarget);
+        Assert.False(Hit("ownship").IsAisTarget);
+    }
 }

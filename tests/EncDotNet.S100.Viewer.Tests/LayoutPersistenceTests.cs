@@ -44,6 +44,8 @@ public sealed class LayoutPersistenceTests : IDisposable
         public bool AutoOpenOnContentSignal { get; init; }
 
         public Control CreateIcon() => new ContentControl();
+        public bool IsVisible { get; init; } = true;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     }
 
     private sealed class SignalingVm : IActivityTabContentSignal

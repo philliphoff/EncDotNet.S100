@@ -465,7 +465,9 @@ internal static class Strings
     public static string PickReport_Mmsi => Get(nameof(PickReport_Mmsi));
     public static string PickReport_VesselName => Get(nameof(PickReport_VesselName));
     public static string PickReport_CallSign => Get(nameof(PickReport_CallSign));
+    public static string PickReport_TakeHelm => Get(nameof(PickReport_TakeHelm));
     public static string Tooltip_DynamicHit => Get(nameof(Tooltip_DynamicHit));
+    public static string Tooltip_TakeHelm => Get(nameof(Tooltip_TakeHelm));
 
     // Vessels (AIS) activity panel.
     public static string Pane_Vessels => Get(nameof(Pane_Vessels));
@@ -530,4 +532,31 @@ internal static class Strings
     public static string Vessels_State_Moving => Get(nameof(Vessels_State_Moving));
     public static string Vessels_State_Stopped => Get(nameof(Vessels_State_Stopped));
     public static string Vessels_State_Unknown => Get(nameof(Vessels_State_Unknown));
+
+    // Helm panel
+    public static string Pane_Helm => Get(nameof(Pane_Helm));
+    public static string Tooltip_Helm => Get(nameof(Tooltip_Helm));
+    public static string Helm_ControlsHeader => Get(nameof(Helm_ControlsHeader));
+    public static string Helm_ReadoutHeader => Get(nameof(Helm_ReadoutHeader));
+    public static string Helm_OrderedCourse => Get(nameof(Helm_OrderedCourse));
+    public static string Helm_OrderedSpeed => Get(nameof(Helm_OrderedSpeed));
+    public static string Helm_TurnRate => Get(nameof(Helm_TurnRate));
+    public static string Helm_Hold => Get(nameof(Helm_Hold));
+    public static string Helm_Resume => Get(nameof(Helm_Resume));
+    public static string Helm_Steady => Get(nameof(Helm_Steady));
+    public static string Helm_Port => Get(nameof(Helm_Port));
+    public static string Helm_Starboard => Get(nameof(Helm_Starboard));
+    public static string Helm_Readout_Position => Get(nameof(Helm_Readout_Position));
+    public static string Helm_Readout_Course => Get(nameof(Helm_Readout_Course));
+    public static string Helm_Readout_Speed => Get(nameof(Helm_Readout_Speed));
+    public static string Helm_Readout_Heading => Get(nameof(Helm_Readout_Heading));
+    public static string Helm_BearingFormat => Get(nameof(Helm_BearingFormat));
+    public static string Helm_SpeedFormat => Get(nameof(Helm_SpeedFormat));
+    public static string Tooltip_Helm_Course => Get(nameof(Tooltip_Helm_Course));
+    public static string Tooltip_Helm_Speed => Get(nameof(Tooltip_Helm_Speed));
+    public static string Tooltip_Helm_TurnRate => Get(nameof(Tooltip_Helm_TurnRate));
+    public static string Tooltip_Helm_HoldResume => Get(nameof(Tooltip_Helm_HoldResume));
+    public static string Tooltip_Helm_Steady => Get(nameof(Tooltip_Helm_Steady));
+    public static string Tooltip_Helm_Port => Get(nameof(Tooltip_Helm_Port));
+    public static string Tooltip_Helm_Starboard => Get(nameof(Tooltip_Helm_Starboard));
 }

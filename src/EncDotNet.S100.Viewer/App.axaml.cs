@@ -132,9 +132,11 @@ public partial class App : Application
             settingsVm.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
         };
 
-        // Re-publish own-ship fix when vessel dimensions change.
-        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()
-            as EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider;
+        // Re-publish own-ship fix when vessel dimensions change. Resolve
+        // the concrete settings-backed provider directly: the public
+        // IOwnShipVesselGeometryProvider is now the overridable wrapper
+        // (pirate mode), so the cast would otherwise miss.
+        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
         if (ownShipGeom is not null)
         {
             settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
@@ -148,6 +150,41 @@ public partial class App : Application
         if (ownShipSource is not null)
         {
             settingsVm.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
+        }
+
+        // Pirate mode: engage when the user picks "Take the helm of this
+        // vessel" on an AIS hit in the pick report. The coordinator opens
+        // the visibility gates, persists the source selection, and starts
+        // the controller following. Routing the overlay-enable through
+        // settingsVm keeps the checkbox + persisted flag in sync.
+        var pirateController = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>();
+        var pickReport = s_services.GetService<PickReportViewModel>();
+        if (pirateController is not null)
+        {
+            var pirateCoordinator = new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeCoordinator(
+                pirateController,
+                s_services.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(),
+                s_services.GetRequiredService<ViewerSettings>(),
+                enabled => settingsVm.OwnShipOverlayEnabled = enabled);
+
+            if (pickReport is not null)
+            {
+                pickReport.TakeHelmRequested += (_, mmsi) => pirateCoordinator.Engage(mmsi);
+            }
+
+            // If the user turns the own-ship overlay off while pirate mode
+            // is active, disengage: otherwise the followed AIS target stays
+            // excluded (hidden) while own-ship is also hidden, making the
+            // vessel vanish entirely. Disengage clears the exclusion +
+            // geometry override and reverts the source to Simulated.
+            settingsVm.OwnShipOverlayEnabledChanged += enabled =>
+            {
+                if (!enabled && pirateController.IsActive)
+                    pirateCoordinator.Disengage();
+            };
+
+            // Re-arm pirate mode at launch if the last session left it on.
+            pirateCoordinator.RestoreFromSettings();
         }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -314,14 +351,16 @@ public partial class App : Application
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
-        // Own-ship dynamic source (PR-D2). Synthetic driver scaffolds
-        // a moving point at Solent (50.8°N 1.3°W) tracking due east
-        // at 5 m/s (~9.7 kn); a future real-GPS / NMEA-replay driver
-        // implements IOwnShipPositionProvider instead. The source is
-        // also exposed as IDynamicFeatureSource so the overlay host
-        // discovers it via GetServices&lt;IDynamicFeatureSource&gt;().
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(_ =>
-            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SyntheticOwnShipPositionProvider(
+        // Own-ship dynamic source. The steerable driver dead-reckons a
+        // moving point seeded at Solent (50.8°N 1.3°W) tracking due east
+        // at 5 m/s (~9.7 kn) and exposes IOwnShipHelm so map gestures,
+        // the helm panel, the MCP set_own_ship tool, and pirate mode can
+        // steer it. A future real-GPS / NMEA-replay driver implements
+        // IOwnShipPositionProvider instead. The source is also exposed as
+        // IDynamicFeatureSource so the overlay host discovers it via
+        // GetServices&lt;IDynamicFeatureSource&gt;().
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>(_ =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider(
                 start: new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipPosition(
                     Latitude: 50.8,
                     Longitude: -1.3,
@@ -329,13 +368,27 @@ public partial class App : Application
                     SpeedOverGroundMs: 5.0,
                     Timestamp: DateTimeOffset.UtcNow),
                 cadence: TimeSpan.FromSeconds(1)));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelmState>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
 
         // Vessel geometry provider — reads user-configured dimensions
         // from ViewerSettings.OwnShip and pushes them onto every
         // DynamicFeature so OwnShipRenderer can draw a true-scale hull.
+        // The settings provider is wrapped by the overridable provider so
+        // pirate mode can temporarily adopt an impersonated target's
+        // dimensions without persisting them.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>(sp =>
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>());
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>());
 
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource(
@@ -373,6 +426,18 @@ public partial class App : Application
         EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
             .AddAisOverlay(services);
 
+        // Pirate mode: own-ship impersonates a selected live AIS target.
+        // The controller reads the raw AIS source (via the exclusion
+        // decorator's Inner) so it still sees the followed target, drives
+        // the helm with each report, adopts the target's dimensions via
+        // the geometry override, and tells the decorator to hide the
+        // followed target so it is not double-drawn.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>()));
+
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow
         // (it needs IMapHost, which only exists after the MapControl
@@ -409,7 +474,8 @@ public partial class App : Application
             sp.GetRequiredService<IRenderStateControllerAccessor>(),
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<IRenderActivityMonitor>(),
-            sp.GetRequiredService<IDatasetLoadGateway>()));
+            sp.GetRequiredService<IDatasetLoadGateway>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
@@ -428,6 +494,7 @@ public partial class App : Application
         services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
+        services.AddSingleton<HelmViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
@@ -477,6 +544,19 @@ public partial class App : Application
             title: Strings.Pane_Vessels,
             tooltip: Strings.Tooltip_Vessels,
             iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Helm tab — shown only while own-vessel tracking is enabled
+        // (its visibility source bridges SettingsViewModel.OwnShipOverlayEnabled).
+        // Never persisted as last-selected so it can't be restored while hidden.
+        services.AddActivityTab<HelmViewModel, HelmView>(
+            id: "Helm",
+            order: 67,
+            title: Strings.Pane_Helm,
+            tooltip: Strings.Tooltip_Helm,
+            iconFactory: static () => new FluentIcon { Icon = Icon.TopSpeed, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            visibilitySourceFactory: static sp =>
+                new EncDotNet.S100.Viewer.ViewModels.Activities.OwnShipTrackingVisibilitySource(
+                    sp.GetRequiredService<SettingsViewModel>()));
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 70,

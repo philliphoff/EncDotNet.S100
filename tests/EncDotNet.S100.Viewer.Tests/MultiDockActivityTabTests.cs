@@ -44,12 +44,118 @@ public sealed class MultiDockActivityTabTests : IDisposable
         public bool AutoOpenOnContentSignal { get; init; }
 
         public Control CreateIcon() => new ContentControl();
+        public bool IsVisible { get; init; } = true;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     }
 
     private sealed class SignalingVm : IActivityTabContentSignal
     {
         public event EventHandler? ContentBecameAvailable;
         public void Raise() => ContentBecameAvailable?.Invoke(this, EventArgs.Empty);
+    }
+
+    private sealed class MutableTab : IActivityTab
+    {
+        private bool _isVisible = true;
+
+        public required string Id { get; init; }
+        public int Order { get; init; }
+        public string Title { get; init; } = "T";
+        public string Tooltip { get; init; } = "Tip";
+        public object ViewModel { get; init; } = new object();
+        public Type ViewType { get; init; } = typeof(ContentControl);
+        public bool PersistAsLastSelected { get; init; } = true;
+        public TabDock Dock { get; init; } = TabDock.Left;
+        public bool AutoOpenOnContentSignal { get; init; }
+
+        public Control CreateIcon() => new ContentControl();
+
+        public bool IsVisible
+        {
+            get => _isVisible;
+            set
+            {
+                if (_isVisible == value) return;
+                _isVisible = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsVisible)));
+            }
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    [Fact]
+    public void HidingSelectedLeftTab_MovesSelectionToFirstVisibleTab()
+    {
+        var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
+        var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
+
+        var vm = CreateViewModel(new IActivityTab[] { datasets, helm });
+        vm.SelectTabCommand.Execute(helm);
+        Assert.Same(helm, vm.SelectedLeftTab);
+
+        helm.IsVisible = false;
+
+        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.True(vm.IsLeftDockOpen);
+    }
+
+    [Fact]
+    public void HidingSelectedLeftTab_WithNoOtherVisibleTab_ClosesDock()
+    {
+        var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
+
+        var vm = CreateViewModel(new IActivityTab[] { helm });
+        vm.SelectTabCommand.Execute(helm);
+        Assert.Same(helm, vm.SelectedLeftTab);
+
+        helm.IsVisible = false;
+
+        Assert.Null(vm.SelectedLeftTab);
+        Assert.False(vm.IsLeftDockOpen);
+    }
+
+    [Fact]
+    public void SelectTabCommand_IgnoresHiddenTab()
+    {
+        var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
+        var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false, IsVisible = false };
+
+        var vm = CreateViewModel(new IActivityTab[] { datasets, helm });
+
+        vm.SelectTabCommand.Execute(helm);
+
+        Assert.NotSame(helm, vm.SelectedLeftTab);
+    }
+
+    [Fact]
+    public void HiddenTab_IsNotRestoredAtStartup()
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath, LastSelectedActivity = "Helm" };
+        var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
+        var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false, IsVisible = false };
+
+        var vm = CreateViewModel(new IActivityTab[] { datasets, helm }, settings);
+
+        Assert.Same(datasets, vm.SelectedLeftTab);
+    }
+
+    [Fact]
+    public void SystemFallback_AfterHide_DoesNotPersistLastSelected()
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+        var datasets = new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left };
+        var helm = new MutableTab { Id = "Helm", Order = 67, Dock = TabDock.Left, PersistAsLastSelected = false };
+
+        var vm = CreateViewModel(new IActivityTab[] { datasets, helm }, settings);
+        vm.SelectTabCommand.Execute(helm);
+
+        helm.IsVisible = false;
+
+        // Falling back to Datasets is system-driven and must not overwrite
+        // the persisted last-selected activity.
+        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Null(settings.LastSelectedActivity);
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource

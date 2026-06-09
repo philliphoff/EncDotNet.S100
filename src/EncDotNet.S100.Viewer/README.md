@@ -269,10 +269,12 @@ in the translated projection.
 A live "own ship" overlay sits alongside the static datasets,
 publishing a single moving point through the
 [dynamic-feature-source](../../docs/design/dynamic-feature-source.md)
-abstraction. Today the position is driven by a synthetic
-dead-reckoning provider (Solent, course 090° T, 5 m/s). The
-abstraction is shaped so a future NMEA / AIS adapter can plug in
-without renderer changes.
+abstraction. The position is driven by a **steerable** dead-reckoning
+provider seeded at the Solent (course 090° T, 5 m/s) that you can drive
+from the **Helm** panel, the `set_own_ship` MCP tool, and CLI flags.
+The abstraction is shaped so a future NMEA / GPS adapter can plug in
+without renderer changes. See
+[`docs/design/steerable-own-ship.md`](../../docs/design/steerable-own-ship.md).
 
 Because this position is simulated, the overlay is **disabled by
 default**. Tick **Show simulated own-ship position** in the **Own
@@ -301,6 +303,19 @@ Own-ship visibility (once the simulated overlay is enabled) is
 controlled by its row in the **Dynamic Arrows** plane of the Layer
 Stack panel and is persisted between sessions.
 
+### Pirate mode (follow an AIS target)
+
+You can make own-ship **impersonate a live AIS target**: pick a vessel
+and choose **Take the helm** in the Pick Report. Own-ship then adopts
+the target's position, course, speed, heading, and dimensions,
+dead-reckoning smoothly between the target's reports. The followed
+target is hidden from the AIS overlay (no double-draw); turning the
+own-ship overlay off disengages pirate mode so the vessel can't
+disappear. The selection is persisted and re-armed at the next launch.
+Switching back to the simulated source leaves own-ship at the last
+adopted fix (no teleport). See
+[`docs/design/steerable-own-ship.md`](../../docs/design/steerable-own-ship.md).
+
 ### Picking dynamic features
 
 Click (or long-press, on touch) on any dynamic-source target
@@ -311,7 +326,8 @@ last-updated relative time, position, course / heading / speed
 when available, and the full attribute snapshot (MMSI, vessel
 name, call sign, etc. for AIS). Dataset and dynamic hits stack in
 one panel so a single click reveals everything under the
-crosshair. The hit-test radius is 12 device pixels (matches the
+crosshair. For AIS hits a **Take the helm** button engages pirate
+mode (see above). The hit-test radius is 12 device pixels (matches the
 AIS pictogram outer disc). See
 [`docs/design/dynamic-source-pick.md`](../../docs/design/dynamic-source-pick.md).
 
@@ -370,7 +386,7 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Ten viewer-only tools
+bound port back to the user's `settings.json`. Eleven viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
@@ -378,6 +394,10 @@ centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
 OtherInformation / All), `set_time_step` (mutating — drives the
 global time clock to a sample by index or timestamp),
+`set_own_ship` (mutating — positions and steers the simulated
+own-ship: WGS-84 `lat`/`lon`, `cog`, `sog`, `heading`, and
+`hold`/resume; works independently of the overlay's visibility so it
+can pre-position before a screenshot),
 `await_render_idle` (read-only — blocks
 until the live map settles so a following `render_to_image` is
 deterministic instead of racing the render pass),
@@ -411,6 +431,13 @@ zoom-to-extent so the framing is reproducible.
 capture before a screenshot. These override the persisted values for
 the run only.
 
+**Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
+own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course
+over ground (degrees true `[0, 360)`), and `--own-ship-sog <MS>` sets
+its speed over ground (metres per second, `>= 0`). Applied after the
+datasets load and before any screenshot, independent of whether the
+own-ship overlay is currently shown.
+
 **Screenshots.** `--screenshot <PATH>` captures the map after the
 render has quiesced (rather than a fixed delay).
 `--close-after-screenshot` unloads all currently-loaded datasets right
@@ -441,6 +468,9 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--palette Day\|Dusk\|Night` | Override the palette |
 | `--display-category <CAT>` | Override the ECDIS display category |
 | `--time-step <idx\|ts>` | Jump to a time step (index or timestamp) |
+| `--own-ship-pos <LAT,LON>` | Place the simulated own-ship at a WGS-84 position |
+| `--own-ship-cog <DEG>` | Set own-ship course over ground (degrees true) |
+| `--own-ship-sog <MS>` | Set own-ship speed over ground (metres/second) |
 | `--screenshot <PATH>` | Capture the map after render quiesces |
 | `--close-after-screenshot` | Unload all datasets after the screenshot |
 | `--exit-after-screenshot` | Quit after the screenshot (one-shot) |

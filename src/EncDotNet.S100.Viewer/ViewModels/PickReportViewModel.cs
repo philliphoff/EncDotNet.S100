@@ -54,6 +54,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
+        TakeHelmCommand = new RelayCommand<DynamicPickHit>(
+            hit => { if (hit is not null && TryGetAisMmsi(hit, out var mmsi)) TakeHelmRequested?.Invoke(this, mmsi); },
+            hit => hit is not null && TryGetAisMmsi(hit, out _));
 
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
@@ -292,6 +295,40 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>Clears the panel.</summary>
     public ICommand ClearCommand { get; }
+
+    /// <summary>
+    /// "Take the helm of this vessel" (pirate mode). Parameter is the
+    /// <see cref="DynamicPickHit"/> to impersonate. Enabled only for AIS
+    /// hits (feature id <c>"ais:{mmsi}"</c>); raises
+    /// <see cref="TakeHelmRequested"/> with the parsed MMSI so the app
+    /// can engage <c>PirateModeController</c>. The view-model owns no
+    /// service references directly so unit tests can drive it without a
+    /// controller double.
+    /// </summary>
+    public ICommand TakeHelmCommand { get; }
+
+    /// <summary>
+    /// Raised when the user invokes <see cref="TakeHelmCommand"/> on an
+    /// AIS hit. The payload is the target's MMSI.
+    /// </summary>
+    public event EventHandler<uint>? TakeHelmRequested;
+
+    /// <summary>
+    /// Attempts to extract a numeric MMSI from a dynamic hit that
+    /// represents an AIS target. AIS feature ids follow the
+    /// <c>"ais:{mmsi}"</c> convention defined by
+    /// <c>AisDynamicFeatureSource.FeatureIdForMmsi</c>.
+    /// </summary>
+    internal static bool TryGetAisMmsi(DynamicPickHit hit, out uint mmsi)
+    {
+        mmsi = 0;
+        if (hit is null) return false;
+        const string prefix = "ais:";
+        var id = hit.FeatureId;
+        if (string.IsNullOrEmpty(id) || !id.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+        return uint.TryParse(id.AsSpan(prefix.Length), out mmsi) && mmsi != 0;
+    }
 
     /// <summary>
     /// Raised when the user clicks a row in the References list.

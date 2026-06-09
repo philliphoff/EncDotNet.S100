@@ -1266,6 +1266,13 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Tooltip_DynamicHit" xml:space="preserve">
     <value>Dynamic-source feature picked from the live overlay.</value>
   </data>
+  <data name="PickReport_TakeHelm" xml:space="preserve">
+    <value>Take the helm</value>
+    <comment>Button on an AIS pick hit: own-ship impersonates this target (pirate mode).</comment>
+  </data>
+  <data name="Tooltip_TakeHelm" xml:space="preserve">
+    <value>Own-ship adopts this AIS target's position, course, speed, and dimensions, updating as the target reports.</value>
+  </data>
   <data name="Pane_Vessels" xml:space="preserve">
     <value>VESSELS</value>
   </data>
@@ -1460,5 +1467,80 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   </data>
   <data name="Vessels_ShipType_Other" xml:space="preserve">
     <value>Other</value>
+  </data>
+  <data name="Pane_Helm" xml:space="preserve">
+    <value>Helm</value>
+  </data>
+  <data name="Tooltip_Helm" xml:space="preserve">
+    <value>Helm — steer the simulated own-ship</value>
+  </data>
+  <data name="Helm_ControlsHeader" xml:space="preserve">
+    <value>CONTROLS</value>
+  </data>
+  <data name="Helm_ReadoutHeader" xml:space="preserve">
+    <value>READOUT</value>
+  </data>
+  <data name="Helm_OrderedCourse" xml:space="preserve">
+    <value>Course (°T)</value>
+  </data>
+  <data name="Helm_OrderedSpeed" xml:space="preserve">
+    <value>Speed (m/s)</value>
+  </data>
+  <data name="Helm_TurnRate" xml:space="preserve">
+    <value>Rate of turn (°/s)</value>
+  </data>
+  <data name="Helm_Hold" xml:space="preserve">
+    <value>Hold</value>
+  </data>
+  <data name="Helm_Resume" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="Helm_Steady" xml:space="preserve">
+    <value>Steady</value>
+  </data>
+  <data name="Helm_Port" xml:space="preserve">
+    <value>Port 5°</value>
+  </data>
+  <data name="Helm_Starboard" xml:space="preserve">
+    <value>Stbd 5°</value>
+  </data>
+  <data name="Helm_Readout_Position" xml:space="preserve">
+    <value>Position</value>
+  </data>
+  <data name="Helm_Readout_Course" xml:space="preserve">
+    <value>COG</value>
+  </data>
+  <data name="Helm_Readout_Speed" xml:space="preserve">
+    <value>SOG</value>
+  </data>
+  <data name="Helm_Readout_Heading" xml:space="preserve">
+    <value>Heading</value>
+  </data>
+  <data name="Helm_BearingFormat" xml:space="preserve">
+    <value>{0:000.0}°T</value>
+  </data>
+  <data name="Helm_SpeedFormat" xml:space="preserve">
+    <value>{0:0.0} kn</value>
+  </data>
+  <data name="Tooltip_Helm_Course" xml:space="preserve">
+    <value>Set the ordered course over ground (degrees true)</value>
+  </data>
+  <data name="Tooltip_Helm_Speed" xml:space="preserve">
+    <value>Set the ordered speed over ground (metres per second)</value>
+  </data>
+  <data name="Tooltip_Helm_TurnRate" xml:space="preserve">
+    <value>Set a constant rate of turn (degrees per second; negative turns to port)</value>
+  </data>
+  <data name="Tooltip_Helm_HoldResume" xml:space="preserve">
+    <value>Stop the vessel, or resume the previous speed</value>
+  </data>
+  <data name="Tooltip_Helm_Steady" xml:space="preserve">
+    <value>Stop turning — hold a steady course</value>
+  </data>
+  <data name="Tooltip_Helm_Port" xml:space="preserve">
+    <value>Alter course 5° to port</value>
+  </data>
+  <data name="Tooltip_Helm_Starboard" xml:space="preserve">
+    <value>Alter course 5° to starboard</value>
   </data>
 </root>

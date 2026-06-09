@@ -23,6 +23,14 @@ internal static class ActivityTabServiceCollectionExtensions
     /// <param name="tooltip">Tooltip text (already-resolved <see cref="Resources.Strings"/> value).</param>
     /// <param name="iconFactory">Factory that returns a fresh icon control for each consumer.</param>
     /// <param name="persistAsLastSelected">When <c>true</c>, selecting the tab updates <see cref="ViewerSettings.LastSelectedActivity"/>.</param>
+    /// <param name="dock">Which dock the tab lives in.</param>
+    /// <param name="autoOpenOnContentSignal">When <c>true</c>, the dock auto-opens on the tab view-model's content signal.</param>
+    /// <param name="visibilitySourceFactory">
+    /// Optional factory that resolves an <see cref="ITabVisibilitySource"/>
+    /// from the service provider. When supplied, the tab is shown only
+    /// while the source reports it visible; when omitted, the tab is
+    /// always visible.
+    /// </param>
     public static IServiceCollection AddActivityTab<TViewModel, TView>(
         this IServiceCollection services,
         string id,
@@ -32,7 +40,8 @@ internal static class ActivityTabServiceCollectionExtensions
         Func<Control> iconFactory,
         bool persistAsLastSelected = true,
         TabDock dock = TabDock.Left,
-        bool autoOpenOnContentSignal = false)
+        bool autoOpenOnContentSignal = false,
+        Func<IServiceProvider, ITabVisibilitySource?>? visibilitySourceFactory = null)
         where TViewModel : class
         where TView : Control, new()
     {
@@ -51,7 +60,8 @@ internal static class ActivityTabServiceCollectionExtensions
             sp.GetRequiredService<TViewModel>(),
             persistAsLastSelected,
             dock,
-            autoOpenOnContentSignal));
+            autoOpenOnContentSignal,
+            visibilitySourceFactory?.Invoke(sp)));
 
         return services;
     }

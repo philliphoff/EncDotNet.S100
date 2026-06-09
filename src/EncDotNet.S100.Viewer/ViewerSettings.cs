@@ -240,6 +240,25 @@ internal sealed class ViewerSettings
     public OwnShipSettings? OwnShip { get; set; }
 
     /// <summary>
+    /// Selects which driver supplies the own-ship position — the
+    /// steerable simulator (<c>"Simulated"</c>, the default) or pirate
+    /// mode following a live AIS target (<c>"FollowAisTarget"</c>).
+    /// Stored as the <see cref="OwnShipPositionSource"/> enum's string
+    /// name. Absent / legacy settings default to the simulator, so the
+    /// original dead-reckoned behaviour is preserved with no explicit
+    /// migration. Unrecognised values fall back to the simulator.
+    /// </summary>
+    public string OwnShipPositionSource { get; set; } = "Simulated";
+
+    /// <summary>
+    /// MMSI of the AIS target impersonated in pirate mode, or
+    /// <see langword="null"/> when no target is selected. Only
+    /// meaningful while <see cref="OwnShipPositionSource"/> is
+    /// <c>"FollowAisTarget"</c>.
+    /// </summary>
+    public uint? OwnShipFollowMmsi { get; set; }
+
+    /// <summary>
     /// Optional AIS overlay configuration (PR-D3). When present and
     /// <see cref="AisOverlaySettings.Enabled"/> is <see langword="true"/>,
     /// the viewer registers an <c>AisDynamicFeatureSource</c> backed

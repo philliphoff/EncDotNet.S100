@@ -96,6 +96,20 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("For time-varying data, jump to this time step after loading — a zero-based index or an ISO-8601 UTC timestamp.")]
     public string? TimeStep { get; set; }
 
+    // ── Own-ship helm ────────────────────────────────────────────────
+
+    [CommandOption("--own-ship-pos <LATLON>")]
+    [Description("Place the simulated own-ship at this WGS-84 latitude,longitude after loading (e.g. 47.6,-122.3).")]
+    public string? OwnShipPosition { get; set; }
+
+    [CommandOption("--own-ship-cog <DEG>")]
+    [Description("Set the simulated own-ship course over ground in degrees true [0,360).")]
+    public double? OwnShipCourse { get; set; }
+
+    [CommandOption("--own-ship-sog <MS>")]
+    [Description("Set the simulated own-ship speed over ground in metres per second (>= 0).")]
+    public double? OwnShipSpeed { get; set; }
+
     // ── Logging / diagnostics ────────────────────────────────────────
 
     [CommandOption("--log-file <PATH>")]
@@ -142,6 +156,14 @@ internal sealed class ViewerCommandSettings : CommandSettings
     /// <summary>Parsed window size as (width, height) in pixels, or <c>null</c>.</summary>
     public (int Width, int Height)? ParsedWindowSize =>
         TryParseWindowSize(WindowSize, out var w, out var h) ? (w, h) : null;
+
+    /// <summary>Parsed own-ship position as (latitude, longitude), or <c>null</c>.</summary>
+    public (double Latitude, double Longitude)? ParsedOwnShipPosition =>
+        TryParseLatLon(OwnShipPosition, out var lat, out var lon) ? (lat, lon) : null;
+
+    /// <summary>True when any own-ship helm option was supplied.</summary>
+    public bool HasOwnShipOption =>
+        OwnShipPosition is not null || OwnShipCourse.HasValue || OwnShipSpeed.HasValue;
 
     public override Spectre.Console.ValidationResult Validate()
     {
@@ -190,6 +212,16 @@ internal sealed class ViewerCommandSettings : CommandSettings
 
         if (Ephemeral && SettingsPath is not null)
             return Spectre.Console.ValidationResult.Error("--ephemeral and --settings are mutually exclusive.");
+
+        if (OwnShipPosition is not null && !TryParseLatLon(OwnShipPosition, out _, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--own-ship-pos must be 'LAT,LON' in decimal degrees (got '{OwnShipPosition}').");
+
+        if (OwnShipCourse is { } cog && (double.IsNaN(cog) || double.IsInfinity(cog) || cog < 0 || cog >= 360))
+            return Spectre.Console.ValidationResult.Error("--own-ship-cog must be in [0, 360) degrees.");
+
+        if (OwnShipSpeed is { } sog && (double.IsNaN(sog) || double.IsInfinity(sog) || sog < 0))
+            return Spectre.Console.ValidationResult.Error("--own-ship-sog must be a non-negative number of metres per second.");
 
         return Spectre.Console.ValidationResult.Success();
     }

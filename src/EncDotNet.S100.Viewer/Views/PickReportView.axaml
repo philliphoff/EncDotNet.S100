@@ -6,6 +6,7 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
+             x:Name="PickRoot"
              x:DataType="vm:PickReportViewModel">
 
     <!--
@@ -134,6 +135,14 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                        <Button Content="{x:Static loc:Strings.PickReport_TakeHelm}"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,4,0,0"
+                                                FontSize="12"
+                                                IsVisible="{Binding IsAisTarget}"
+                                                Command="{Binding DataContext.TakeHelmCommand, ElementName=PickRoot}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TakeHelm}" />
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

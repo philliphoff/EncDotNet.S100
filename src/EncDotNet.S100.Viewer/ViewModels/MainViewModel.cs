@@ -387,7 +387,7 @@ internal sealed class MainViewModel : ViewModelBase
             return;
         }
 
-        var firstLeft = LeftTabs.Count > 0 ? LeftTabs[0] : null;
+        var firstLeft = LeftTabs.FirstOrDefault(t => t.IsVisible);
         if (firstLeft is not null)
         {
             SelectedLeftTab = firstLeft;
@@ -411,6 +411,12 @@ internal sealed class MainViewModel : ViewModelBase
 
     private void RouteSelection(IActivityTab tab)
     {
+        // Never route selection to a hidden tab (e.g. the Helm tab while
+        // own-vessel tracking is disabled). The activity-bar button is
+        // hidden by binding, but selection can also be driven
+        // programmatically (restore, default, content auto-open).
+        if (!tab.IsVisible) return;
+
         switch (tab.Dock)
         {
             case TabDock.Left: SelectedLeftTab = tab; break;
@@ -418,6 +424,58 @@ internal sealed class MainViewModel : ViewModelBase
             case TabDock.Bottom: SelectedBottomTab = tab; break;
         }
     }
+
+    /// <summary>
+    /// Reacts to a tab's <see cref="IActivityTab.IsVisible"/> toggling. When
+    /// a now-hidden tab is the selected tab in its dock, moves selection to
+    /// the first remaining visible tab in that dock, or clears the
+    /// selection and closes the dock when none remain. System-driven, so it
+    /// does not persist <see cref="ViewerSettings.LastSelectedActivity"/>.
+    /// </summary>
+    private void OnTabVisibilityChanged(IActivityTab tab)
+    {
+        if (tab.IsVisible) return;
+
+        switch (tab.Dock)
+        {
+            case TabDock.Left when ReferenceEquals(_selectedLeftTab, tab):
+            {
+                var next = LeftTabs.FirstOrDefault(t => t.IsVisible);
+                if (next is not null)
+                {
+                    SetLeftSelectionSystem(next);
+                }
+                else
+                {
+                    SetLeftSelectionSystem(null);
+                    IsLeftDockOpen = false;
+                }
+                break;
+            }
+            case TabDock.Right when ReferenceEquals(_selectedRightTab, tab):
+                SelectedRightTab = RightTabs.FirstOrDefault(t => t.IsVisible);
+                break;
+            case TabDock.Bottom when ReferenceEquals(_selectedBottomTab, tab):
+                SelectedBottomTab = BottomTabs.FirstOrDefault(t => t.IsVisible);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Sets the left-dock selection without persisting
+    /// <see cref="ViewerSettings.LastSelectedActivity"/> and without forcing
+    /// the dock open — used for system-driven fix-ups (a selected tab being
+    /// hidden), not user clicks.
+    /// </summary>
+    private void SetLeftSelectionSystem(IActivityTab? tab)
+    {
+        if (ReferenceEquals(_selectedLeftTab, tab)) return;
+        _selectedLeftTab = tab;
+        OnPropertyChanged(nameof(SelectedLeftTab));
+        OnPropertyChanged(nameof(SelectedLeftTabId));
+        OnPropertyChanged(nameof(LeftDockTitle));
+    }
+
 
     private string? _statusText;
     public string? StatusText
@@ -904,6 +962,22 @@ internal sealed class MainViewModel : ViewModelBase
         LeftDockTopTabs = LeftTabs.Where(t => t.Order < 1000).ToArray();
         LeftDockBottomTabs = LeftTabs.Where(t => t.Order >= 1000).ToArray();
 
+        // Watch for tabs whose visibility toggles dynamically (e.g. the
+        // Helm tab, shown only while own-vessel tracking is enabled). When
+        // the currently-selected tab becomes hidden we move selection to
+        // another visible tab (or close the dock). ActivityTab marshals the
+        // PropertyChanged onto the UI thread, so this handler is UI-safe.
+        foreach (var tab in _tabs)
+        {
+            tab.PropertyChanged += (sender, e) =>
+            {
+                if (e.PropertyName == nameof(IActivityTab.IsVisible) && sender is IActivityTab changed)
+                {
+                    OnTabVisibilityChanged(changed);
+                }
+            };
+        }
+
         SelectTabCommand = new RelayCommand<IActivityTab>(tab =>
         {
             if (tab is not null) RouteSelection(tab);
@@ -1022,18 +1096,20 @@ internal sealed class MainViewModel : ViewModelBase
         // the first registered left-dock tab.
         if (settings.LastSelectedActivity is { } lastId
             && _tabsById.TryGetValue(lastId, out var restoredTab)
-            && restoredTab.Dock == TabDock.Left)
+            && restoredTab.Dock == TabDock.Left
+            && restoredTab.IsVisible)
         {
             _selectedLeftTab = restoredTab;
         }
         else if (_tabsById.TryGetValue(DefaultTabId, out var defaultTab)
-            && defaultTab.Dock == TabDock.Left)
+            && defaultTab.Dock == TabDock.Left
+            && defaultTab.IsVisible)
         {
             _selectedLeftTab = defaultTab;
         }
-        else if (LeftTabs.Count > 0)
+        else
         {
-            _selectedLeftTab = LeftTabs[0];
+            _selectedLeftTab = LeftTabs.FirstOrDefault(t => t.IsVisible);
         }
 
         // PR-M3: restore persisted dock visibility before wiring auto-open

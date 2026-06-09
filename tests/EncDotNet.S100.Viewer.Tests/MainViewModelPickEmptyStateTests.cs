@@ -43,6 +43,8 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         public TabDock Dock { get; init; } = TabDock.Left;
         public bool AutoOpenOnContentSignal { get; init; }
         public Control CreateIcon() => new ContentControl();
+        public bool IsVisible { get; init; } = true;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     }
 
     private sealed class EmptyCatalogSource : IDatasetCatalogSource

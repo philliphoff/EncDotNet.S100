@@ -22,8 +22,19 @@ namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 /// explicitly out of scope for PR-M1.
 /// </para>
 /// </remarks>
-internal interface IActivityTab
+internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
 {
+    /// <summary>
+    /// Whether this tab is currently visible in the activity bar. Tabs
+    /// registered with an <see cref="ITabVisibilitySource"/> toggle this
+    /// dynamically (e.g. the Helm tab is shown only while own-vessel
+    /// tracking is enabled); tabs without a source are always visible.
+    /// Implementations raise <see cref="System.ComponentModel.INotifyPropertyChanged.PropertyChanged"/>
+    /// when this changes so the activity-bar binding and
+    /// <see cref="MainViewModel"/> selection fix-up can react.
+    /// </summary>
+    bool IsVisible { get; }
+
     /// <summary>
     /// Stable identifier (e.g. <c>"Datasets"</c>). Used to bind the
     /// activity-bar buttons to <see cref="MainViewModel.SelectedTabId"/>

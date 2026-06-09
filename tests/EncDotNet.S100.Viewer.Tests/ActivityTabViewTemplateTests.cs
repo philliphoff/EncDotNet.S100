@@ -30,6 +30,8 @@ public sealed class ActivityTabViewTemplateTests
         public bool AutoOpenOnContentSignal => false;
 
         public Control CreateIcon() => new ContentControl();
+        public bool IsVisible { get; init; } = true;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
     }
 
     [Fact]
