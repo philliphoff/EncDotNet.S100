@@ -57,6 +57,14 @@ internal sealed record DynamicPickHit
     /// <summary>Source-defined attribute rows (vessel name, MMSI, …).</summary>
     public IReadOnlyList<DynamicPickAttributeRow> Attributes { get; init; }
         = Array.Empty<DynamicPickAttributeRow>();
+
+    /// <summary>
+    /// True when this hit represents an AIS target — i.e. its
+    /// <see cref="FeatureId"/> follows the <c>"ais:{mmsi}"</c> convention.
+    /// Gates the "take the helm" (pirate-mode) action in the pick report.
+    /// </summary>
+    public bool IsAisTarget =>
+        PickReportViewModel.TryGetAisMmsi(this, out _);
 }
 
 /// <summary>

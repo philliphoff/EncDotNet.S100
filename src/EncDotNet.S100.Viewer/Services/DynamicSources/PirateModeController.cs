@@ -89,18 +89,16 @@ internal sealed class PirateModeController : IDisposable
     private bool _disposed;
 
     public PirateModeController(
-        IDynamicFeatureSource rawAis,
         ExcludingAisFeatureSource exclusion,
         IOwnShipHelm helm,
         IOwnShipVesselGeometryOverride geometryOverride)
     {
-        ArgumentNullException.ThrowIfNull(rawAis);
         ArgumentNullException.ThrowIfNull(exclusion);
         ArgumentNullException.ThrowIfNull(helm);
         ArgumentNullException.ThrowIfNull(geometryOverride);
 
-        _rawAis = rawAis;
         _exclusion = exclusion;
+        _rawAis = exclusion.Inner;
         _helm = helm;
         _geometryOverride = geometryOverride;
 

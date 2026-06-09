@@ -73,6 +73,14 @@ internal sealed class ExcludingAisFeatureSource : IDynamicFeatureSource, IAsyncD
     public DynamicSourceMetadata Metadata => _inner.Metadata;
 
     /// <summary>
+    /// The raw, undecorated source this decorator wraps. The pirate-mode
+    /// controller reads it directly so it still sees the excluded target;
+    /// exposing it here guarantees the controller and the overlay share a
+    /// matched raw/decorated pair.
+    /// </summary>
+    internal IDynamicFeatureSource Inner => _inner;
+
+    /// <summary>
     /// The feature id to hide from the published snapshot, or
     /// <see langword="null"/> to publish the inner source unchanged.
     /// Conventionally an AIS feature id (<c>"ais:{mmsi}"</c>). Setting it

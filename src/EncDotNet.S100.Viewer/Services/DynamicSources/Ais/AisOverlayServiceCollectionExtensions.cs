@@ -25,13 +25,23 @@ internal static class AisOverlayServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<IDynamicFeatureSource>(sp =>
+        // Build the raw source once and wrap it in the pirate-mode
+        // exclusion decorator. The decorator is the PUBLIC AIS source —
+        // overlay, vessel list, and pick read it (so an impersonated
+        // target is hidden); the pirate-mode controller reads the raw
+        // inner via ExcludingAisFeatureSource.Inner so it still sees the
+        // followed target. Only the decorator is registered as
+        // IDynamicFeatureSource to avoid a double AIS layer.
+        services.AddSingleton<ExcludingAisFeatureSource>(sp =>
         {
             var settings = sp.GetRequiredService<ViewerSettings>();
             var loggerFactory = sp.GetService<ILoggerFactory>();
             var notifier = sp.GetService<IMapViewportNotifier>();
-            return BuildSource(settings.AisOverlay, loggerFactory, notifier);
+            var raw = BuildSource(settings.AisOverlay, loggerFactory, notifier);
+            return new ExcludingAisFeatureSource(raw);
         });
+        services.AddSingleton<IDynamicFeatureSource>(sp =>
+            sp.GetRequiredService<ExcludingAisFeatureSource>());
 
         return services;
     }

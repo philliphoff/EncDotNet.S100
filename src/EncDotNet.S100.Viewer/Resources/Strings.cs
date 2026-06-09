@@ -465,7 +465,9 @@ internal static class Strings
     public static string PickReport_Mmsi => Get(nameof(PickReport_Mmsi));
     public static string PickReport_VesselName => Get(nameof(PickReport_VesselName));
     public static string PickReport_CallSign => Get(nameof(PickReport_CallSign));
+    public static string PickReport_TakeHelm => Get(nameof(PickReport_TakeHelm));
     public static string Tooltip_DynamicHit => Get(nameof(Tooltip_DynamicHit));
+    public static string Tooltip_TakeHelm => Get(nameof(Tooltip_TakeHelm));
 
     // Vessels (AIS) activity panel.
     public static string Pane_Vessels => Get(nameof(Pane_Vessels));

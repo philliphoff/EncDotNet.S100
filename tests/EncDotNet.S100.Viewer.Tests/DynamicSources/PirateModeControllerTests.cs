@@ -81,7 +81,7 @@ public sealed class PirateModeControllerTests
         var exclusion = new ExcludingAisFeatureSource(raw);
         var helm = new RecordingHelm();
         var geom = new RecordingGeometryOverride();
-        var controller = new PirateModeController(raw, exclusion, helm, geom);
+        var controller = new PirateModeController(exclusion, helm, geom);
         return (controller, helm, geom, exclusion);
     }
 

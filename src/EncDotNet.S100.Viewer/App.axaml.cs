@@ -132,9 +132,11 @@ public partial class App : Application
             settingsVm.SelectedPalette = ChromeThemes.GetDefaultPaletteFor(chromeTheme);
         };
 
-        // Re-publish own-ship fix when vessel dimensions change.
-        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>()
-            as EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider;
+        // Re-publish own-ship fix when vessel dimensions change. Resolve
+        // the concrete settings-backed provider directly: the public
+        // IOwnShipVesselGeometryProvider is now the overridable wrapper
+        // (pirate mode), so the cast would otherwise miss.
+        var ownShipGeom = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
         if (ownShipGeom is not null)
         {
             settingsVm.OwnShipGeometryChanged += () => ownShipGeom.NotifyChanged();
@@ -148,6 +150,41 @@ public partial class App : Application
         if (ownShipSource is not null)
         {
             settingsVm.OwnShipOverlayEnabledChanged += enabled => ownShipSource.IsEnabled = enabled;
+        }
+
+        // Pirate mode: engage when the user picks "Take the helm of this
+        // vessel" on an AIS hit in the pick report. The coordinator opens
+        // the visibility gates, persists the source selection, and starts
+        // the controller following. Routing the overlay-enable through
+        // settingsVm keeps the checkbox + persisted flag in sync.
+        var pirateController = s_services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>();
+        var pickReport = s_services.GetService<PickReportViewModel>();
+        if (pirateController is not null)
+        {
+            var pirateCoordinator = new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeCoordinator(
+                pirateController,
+                s_services.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicFeatureSourceRegistry>(),
+                s_services.GetRequiredService<ViewerSettings>(),
+                enabled => settingsVm.OwnShipOverlayEnabled = enabled);
+
+            if (pickReport is not null)
+            {
+                pickReport.TakeHelmRequested += (_, mmsi) => pirateCoordinator.Engage(mmsi);
+            }
+
+            // If the user turns the own-ship overlay off while pirate mode
+            // is active, disengage: otherwise the followed AIS target stays
+            // excluded (hidden) while own-ship is also hidden, making the
+            // vessel vanish entirely. Disengage clears the exclusion +
+            // geometry override and reverts the source to Simulated.
+            settingsVm.OwnShipOverlayEnabledChanged += enabled =>
+            {
+                if (!enabled && pirateController.IsActive)
+                    pirateCoordinator.Disengage();
+            };
+
+            // Re-arm pirate mode at launch if the last session left it on.
+            pirateCoordinator.RestoreFromSettings();
         }
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -341,9 +378,17 @@ public partial class App : Application
         // Vessel geometry provider — reads user-configured dimensions
         // from ViewerSettings.OwnShip and pushes them onto every
         // DynamicFeature so OwnShipRenderer can draw a true-scale hull.
+        // The settings provider is wrapped by the overridable provider so
+        // pirate mode can temporarily adopt an impersonated target's
+        // dimensions without persisting them.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryProvider>(sp =>
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SettingsOwnShipVesselGeometryProvider>());
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OverridableOwnShipVesselGeometryProvider>());
 
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource(
@@ -380,6 +425,18 @@ public partial class App : Application
                 rendererKey: "vessel.ais");
         EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
             .AddAisOverlay(services);
+
+        // Pirate mode: own-ship impersonates a selected live AIS target.
+        // The controller reads the raw AIS source (via the exclusion
+        // decorator's Inner) so it still sees the followed target, drives
+        // the helm with each report, adopts the target's dimensions via
+        // the geometry override, and tells the decorator to hide the
+        // followed target so it is not double-drawn.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(sp =>
+            new EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipVesselGeometryOverride>()));
 
         // PR-D2.1: dynamic-source registry accessor. The real registry
         // is the DynamicSourceOverlayHost constructed in MainWindow
