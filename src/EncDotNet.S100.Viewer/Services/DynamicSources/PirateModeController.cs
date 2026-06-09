@@ -72,7 +72,7 @@ internal enum PirateFollowOutcome
 /// course/speed — a documented edge.
 /// </para>
 /// </remarks>
-internal sealed class PirateModeController : IDisposable
+internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
 {
     private const double KnotsToMetresPerSecond = 0.514_444_444;
 

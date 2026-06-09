@@ -4,12 +4,15 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Windows.Input;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 
@@ -76,22 +79,53 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     private readonly IDynamicFeatureSource? _ais;
     private readonly IDynamicFeatureSource? _ownShip;
+    private readonly IHelmStatusProvider? _helmStatus;
+    private readonly IDynamicFeatureSource? _helmTargetSource;
     private readonly IMapHostAccessor _mapHostAccessor;
     private readonly DispatcherTimer? _timer;
     private readonly Dictionary<string, VesselListItem> _itemsById = new(StringComparer.Ordinal);
 
+    private VesselListItem? _ownShipItem;
+    private bool _wasHelmActive;
     private int _dirty;
     private bool _suppressSelectionWrite;
 
     public VesselListViewModel(
         IEnumerable<IDynamicFeatureSource> sources,
         IMapHostAccessor mapHostAccessor)
+        : this(sources, mapHostAccessor, helmStatus: null, helmTargetSource: null)
+    {
+    }
+
+    /// <param name="sources">All registered dynamic feature sources.</param>
+    /// <param name="mapHostAccessor">Accessor for the live map host.</param>
+    /// <param name="helmStatus">
+    /// Read-only pirate-mode status used to label the own-ship row and gate
+    /// the release-helm command. <see langword="null"/> in tests / when no
+    /// helm is wired.
+    /// </param>
+    /// <param name="helmTargetSource">
+    /// The <em>raw</em> (undecorated) AIS source — typically
+    /// <see cref="ExcludingAisFeatureSource.Inner"/> — used to resolve the
+    /// impersonated target's display name, since the decorated source hides
+    /// it. <see langword="null"/> when unavailable.
+    /// </param>
+    public VesselListViewModel(
+        IEnumerable<IDynamicFeatureSource> sources,
+        IMapHostAccessor mapHostAccessor,
+        IHelmStatusProvider? helmStatus,
+        IDynamicFeatureSource? helmTargetSource)
     {
         ArgumentNullException.ThrowIfNull(sources);
         ArgumentNullException.ThrowIfNull(mapHostAccessor);
 
         _mapHostAccessor = mapHostAccessor;
+        _helmStatus = helmStatus;
+        _helmTargetSource = helmTargetSource;
         Vessels = new ObservableCollection<VesselListItem>();
+
+        TakeHelmCommand = new RelayCommand(ExecuteTakeHelm, CanTakeHelm);
+        ReleaseHelmCommand = new RelayCommand(ExecuteReleaseHelm, CanReleaseHelm);
 
         // Resolve the dynamic sources by renderer key. There is at most
         // one of each; FirstOrDefault keeps the panel inert (empty, no
@@ -155,6 +189,8 @@ internal sealed class VesselListViewModel : ViewModelBase
             if (SetProperty(ref _selectedVessel, value))
             {
                 OnPropertyChanged(nameof(HasSelection));
+                TakeHelmCommand.NotifyCanExecuteChanged();
+                ReleaseHelmCommand.NotifyCanExecuteChanged();
                 if (value is not null)
                 {
                     _mapHostAccessor.Current?.CenterOn(value.Latitude, value.Longitude);
@@ -169,6 +205,77 @@ internal sealed class VesselListViewModel : ViewModelBase
     /// the placeholder otherwise.
     /// </summary>
     public bool HasSelection => _selectedVessel is not null;
+
+    /// <summary>
+    /// Takes the helm of the selected AIS target (engages pirate mode).
+    /// Enabled only when a non-own-ship row with a known MMSI is selected.
+    /// The view-model owns no helm services; it raises
+    /// <see cref="TakeHelmRequested"/> so the app can engage the
+    /// pirate-mode coordinator.
+    /// </summary>
+    public RelayCommand TakeHelmCommand { get; }
+
+    /// <summary>
+    /// Releases the helm (disengages pirate mode). Enabled only while a
+    /// target is being followed. Raises <see cref="ReleaseHelmRequested"/>.
+    /// </summary>
+    public RelayCommand ReleaseHelmCommand { get; }
+
+    /// <summary>
+    /// Raised when <see cref="TakeHelmCommand"/> runs, carrying the MMSI of
+    /// the target to impersonate.
+    /// </summary>
+    public event EventHandler<uint>? TakeHelmRequested;
+
+    /// <summary>
+    /// Raised when <see cref="ReleaseHelmCommand"/> runs.
+    /// </summary>
+    public event EventHandler? ReleaseHelmRequested;
+
+    private bool CanTakeHelm()
+        => _helmStatus is not null
+            && _selectedVessel is { IsOwnShip: false, Mmsi: not null };
+
+    private void ExecuteTakeHelm()
+    {
+        if (_selectedVessel is { IsOwnShip: false, Mmsi: { } mmsi })
+        {
+            TakeHelmRequested?.Invoke(this, mmsi);
+        }
+    }
+
+    private bool CanReleaseHelm() => _helmStatus?.IsActive == true;
+
+    private void ExecuteReleaseHelm()
+    {
+        if (CanReleaseHelm())
+        {
+            ReleaseHelmRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the list immediately and, when the own-ship row is
+    /// present, selects it. Called by the app right after the pirate-mode
+    /// coordinator engages from this panel so the own-ship detail pane (and
+    /// the "Release the helm" button) is reachable without the user hunting
+    /// for the row. Runs on the UI thread.
+    /// </summary>
+    internal void HandleHelmEngaged()
+    {
+        Refresh();
+        if (_ownShipItem is not null)
+        {
+            SelectedVessel = _ownShipItem;
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the list immediately after the pirate-mode coordinator
+    /// disengages from this panel so the own-ship row drops its "helming"
+    /// label and the command states update. Runs on the UI thread.
+    /// </summary>
+    internal void HandleHelmDisengaged() => Refresh();
 
     private bool _isEmpty = true;
     /// <summary>
@@ -226,7 +333,8 @@ internal sealed class VesselListViewModel : ViewModelBase
     internal void Refresh()
     {
         var features = _ais?.CurrentFeatures.ToArray() ?? Array.Empty<DynamicFeature>();
-        var own = ResolveOwnShip();
+        var ownFeature = ResolveOwnShipFeature();
+        var own = ownFeature is { } f ? (f.Coordinates[0].Latitude, f.Coordinates[0].Longitude) : ((double, double)?)null;
 
         // When the own-ship overlay is on it is the reference point for
         // both range/bearing and list ordering. When it is off, fall back
@@ -261,6 +369,12 @@ internal sealed class VesselListViewModel : ViewModelBase
             UpdateItem(item, feature, lat, lon, own, sortOrigin);
         }
 
+        // The own ship (the vessel the user is helming) is shown as a
+        // pinned top row whenever the overlay is publishing a fix — even
+        // when no AIS targets are present — so it stays selectable and the
+        // helm can be released from the list.
+        UpdateOwnShipRow(ownFeature, seen);
+
         RemoveVanished(seen);
 
         // Reordering the collection (Move/Insert) can make the ListBox drop
@@ -293,17 +407,32 @@ internal sealed class VesselListViewModel : ViewModelBase
             OnPropertyChanged(nameof(SelectedVessel));
         }
 
+        // When pirate mode has just engaged, the followed AIS target is now
+        // hidden (its row removed, dropping any selection on it). Auto-select
+        // the own-ship row so the user keeps a detail pane — and the
+        // "Release the helm" button — without hunting for it.
+        var helmActive = _helmStatus?.IsActive == true;
+        if (helmActive && !_wasHelmActive && _ownShipItem is not null && _selectedVessel is null)
+        {
+            SelectedVessel = _ownShipItem;
+        }
+        _wasHelmActive = helmActive;
+
+        TakeHelmCommand.NotifyCanExecuteChanged();
+        ReleaseHelmCommand.NotifyCanExecuteChanged();
+
         UpdateEmptyState();
     }
 
     /// <summary>
-    /// Returns the own-ship reference position, or <see langword="null"/>
-    /// when the own-ship overlay is off. "Off" is signalled by the
-    /// own-ship source publishing no feature — <c>OwnShipSource</c> only
-    /// empties its snapshot when disabled, never mid-update, so this is a
-    /// stable enabled/visible signal rather than a transient one.
+    /// Returns the own-ship feature currently published by the own-ship
+    /// source (a single point with a valid position), or
+    /// <see langword="null"/> when the overlay is off / has no fix yet.
+    /// "Off" is signalled by the source publishing no feature —
+    /// <c>OwnShipSource</c> only empties its snapshot when disabled, never
+    /// mid-update, so this is a stable enabled/visible signal.
     /// </summary>
-    private (double Latitude, double Longitude)? ResolveOwnShip()
+    private DynamicFeature? ResolveOwnShipFeature()
     {
         if (_ownShip is null)
         {
@@ -320,11 +449,124 @@ internal sealed class VesselListViewModel : ViewModelBase
             var (lat, lon) = feature.Coordinates[0];
             if (IsValidLatLon(lat, lon))
             {
-                return (lat, lon);
+                return feature;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Creates / updates / removes the pinned own-ship row from the
+    /// <paramref name="ownFeature"/> fix. Adds its id to
+    /// <paramref name="seen"/> so the shared <see cref="RemoveVanished"/>
+    /// path drops it (and clears any selection on it) when the overlay
+    /// turns off — no duplicated removal logic. Also resolves the
+    /// "helming / waiting" label from the pirate-mode status.
+    /// </summary>
+    private void UpdateOwnShipRow(DynamicFeature? ownFeature, HashSet<string> seen)
+    {
+        if (ownFeature is null)
+        {
+            _ownShipItem = null;
+            return;
+        }
+
+        seen.Add(OwnShipRendererKey);
+
+        if (!_itemsById.TryGetValue(OwnShipRendererKey, out var item))
+        {
+            item = new VesselListItem { Id = OwnShipRendererKey };
+            _itemsById[OwnShipRendererKey] = item;
+        }
+
+        _ownShipItem = item;
+
+        var (lat, lon) = ownFeature.Coordinates[0];
+        item.IsOwnShip = true;
+        item.Mmsi = null;
+        item.Latitude = lat;
+        item.Longitude = lon;
+        // The own ship is the reference point, so it carries no range or
+        // bearing and always sorts first (see Resort).
+        item.SortDistanceMetres = null;
+        item.HasRangeBearing = false;
+        item.DistanceMetres = null;
+        item.DistanceText = string.Empty;
+        item.BearingText = string.Empty;
+        item.RangeBearingText = string.Empty;
+
+        item.Name = Strings.Vessels_OwnShip_Name;
+        item.ShipTypeClass = AisShipTypeClass.Unknown;
+        item.ShipTypeText = string.Empty;
+
+        var sogKn = ownFeature.Motion?.SpeedOverGroundKn;
+        UpdateMotion(item, ownFeature, sogKn);
+        UpdateOwnShipHelmLabel(item);
+
+        item.StateText = item.HasHelmingText ? item.HelmingText! : Strings.Vessels_OwnShip_Name;
+        item.HeaderSubtitle = item.HasHelmingText ? item.HelmingText! : Strings.Vessels_OwnShip_Name;
+
+        // Identity / voyage / dimensions are not meaningful for the
+        // simulated own ship; clear any stale flags.
+        item.MmsiText = string.Empty;
+        item.HasCallSign = false;
+        item.HasImo = false;
+        item.HasVoyage = false;
+        item.HasDestination = false;
+        item.HasEta = false;
+        item.HasDimensionsSection = false;
+        item.HasDimensions = false;
+        item.HasDraught = false;
+    }
+
+    /// <summary>
+    /// Sets the own-ship row's "Helming &lt;target&gt;" / "Waiting for
+    /// &lt;target&gt;" subtitle from the pirate-mode status. Distinguishes
+    /// a fix-adopted follow (helming) from an armed-but-waiting follow.
+    /// </summary>
+    private void UpdateOwnShipHelmLabel(VesselListItem item)
+    {
+        if (_helmStatus is not { IsActive: true } status || status.FollowedMmsi is not { } mmsi)
+        {
+            item.IsHelming = false;
+            item.HelmingText = null;
+            item.HasHelmingText = false;
+            return;
+        }
+
+        var targetLabel = ResolveFollowedTargetLabel(mmsi);
+        var helming = status.LastFixUtc is not null;
+        item.IsHelming = helming;
+        item.HelmingText = string.Format(
+            CultureInfo.CurrentCulture,
+            helming ? Strings.Vessels_OwnShip_HelmingFormat : Strings.Vessels_OwnShip_WaitingFormat,
+            targetLabel);
+        item.HasHelmingText = true;
+    }
+
+    /// <summary>
+    /// Resolves the impersonated target's display name from the raw AIS
+    /// feed (the decorated source hides it), falling back to the MMSI.
+    /// </summary>
+    private string ResolveFollowedTargetLabel(uint mmsi)
+    {
+        var mmsiText = mmsi.ToString(CultureInfo.InvariantCulture);
+        if (_helmTargetSource is null)
+        {
+            return mmsiText;
+        }
+
+        var featureId = AisDynamicFeatureSource.FeatureIdForMmsi(mmsi);
+        foreach (var feature in _helmTargetSource.CurrentFeatures)
+        {
+            if (string.Equals(feature.Id, featureId, StringComparison.Ordinal))
+            {
+                return GetString(feature, "vesselName") ?? mmsiText;
+            }
+        }
+
+        return mmsiText;
     }
 
     private void UpdateItem(
@@ -363,9 +605,16 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     private static void UpdateIdentity(VesselListItem item, DynamicFeature feature)
     {
-        item.MmsiText = feature.Attributes.TryGetValue("mmsi", out var mmsiObj) && mmsiObj is uint mmsi
-            ? mmsi.ToString(CultureInfo.InvariantCulture)
-            : string.Empty;
+        if (feature.Attributes.TryGetValue("mmsi", out var mmsiObj) && mmsiObj is uint mmsi)
+        {
+            item.Mmsi = mmsi;
+            item.MmsiText = mmsi.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            item.Mmsi = null;
+            item.MmsiText = string.Empty;
+        }
 
         var callSign = GetString(feature, "callSign");
         item.CallSign = callSign;
@@ -500,6 +749,10 @@ internal sealed class VesselListViewModel : ViewModelBase
         {
             var removed = _itemsById[id];
             _itemsById.Remove(id);
+            if (ReferenceEquals(removed, _ownShipItem))
+            {
+                _ownShipItem = null;
+            }
             if (ReferenceEquals(removed, _selectedVessel))
             {
                 // Clear via the field (not the setter) so dropping a stale
@@ -512,16 +765,18 @@ internal sealed class VesselListViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Reconciles <see cref="Vessels"/> with the nearest-first ordering of
-    /// <see cref="_itemsById"/> (by <see cref="VesselListItem.SortDistanceMetres"/>,
+    /// Reconciles <see cref="Vessels"/> with the desired ordering of
+    /// <see cref="_itemsById"/> — the own-ship row pinned first, then AIS
+    /// targets nearest-first (by <see cref="VesselListItem.SortDistanceMetres"/>,
     /// i.e. distance from the own ship or, when it is off, the viewport
-    /// centre), moving existing rows rather than replacing them so item
+    /// centre) — moving existing rows rather than replacing them so item
     /// identity (and thus selection) is preserved.
     /// </summary>
     private void Resort()
     {
         var ordered = _itemsById.Values
-            .OrderBy(v => v.SortDistanceMetres ?? double.PositiveInfinity)
+            .OrderByDescending(v => v.IsOwnShip)
+            .ThenBy(v => v.SortDistanceMetres ?? double.PositiveInfinity)
             .ThenBy(v => v.Name, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(v => v.Id, StringComparer.Ordinal)
             .ToList();

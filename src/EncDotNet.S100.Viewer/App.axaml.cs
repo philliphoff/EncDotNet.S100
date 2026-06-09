@@ -172,6 +172,25 @@ public partial class App : Application
                 pickReport.TakeHelmRequested += (_, mmsi) => pirateCoordinator.Engage(mmsi);
             }
 
+            // Take/release the helm from the Vessels panel. Engage hides the
+            // followed target, so after engaging refresh the list and select
+            // the own-ship row (HandleHelmEngaged) to keep the Release button
+            // reachable; disengage just refreshes the label/command state.
+            var vesselList = s_services.GetService<VesselListViewModel>();
+            if (vesselList is not null)
+            {
+                vesselList.TakeHelmRequested += (_, mmsi) =>
+                {
+                    pirateCoordinator.Engage(mmsi);
+                    vesselList.HandleHelmEngaged();
+                };
+                vesselList.ReleaseHelmRequested += (_, _) =>
+                {
+                    pirateCoordinator.Disengage();
+                    vesselList.HandleHelmDisengaged();
+                };
+            }
+
             // If the user turns the own-ship overlay off while pirate mode
             // is active, disengage: otherwise the followed AIS target stays
             // excluded (hidden) while own-ship is also hidden, making the
@@ -484,7 +503,11 @@ public partial class App : Application
         services.AddSingleton<CatalogPanelViewModel>();
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
-        services.AddSingleton<VesselListViewModel>();
+        services.AddSingleton<VesselListViewModel>(sp => new VesselListViewModel(
+            sp.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>(),
+            sp.GetRequiredService<IMapHostAccessor>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.PirateModeController>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();

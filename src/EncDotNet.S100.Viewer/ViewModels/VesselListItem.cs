@@ -25,6 +25,64 @@ internal sealed class VesselListItem : ViewModelBase
     /// </summary>
     public required string Id { get; init; }
 
+    private bool _isOwnShip;
+    /// <summary>
+    /// Whether this row represents the simulated own ship (the vessel the
+    /// user is helming) rather than a received AIS target. Own-ship rows
+    /// are pinned to the top of the list and carry no range/bearing (they
+    /// are the reference point), and they expose the helm controls.
+    /// </summary>
+    public bool IsOwnShip
+    {
+        get => _isOwnShip;
+        set => SetProperty(ref _isOwnShip, value);
+    }
+
+    private uint? _mmsi;
+    /// <summary>
+    /// Numeric MMSI for an AIS target row, or <see langword="null"/> for
+    /// the own-ship row (or before an MMSI has been received). Drives the
+    /// "take the helm" affordance, which impersonates a target by MMSI.
+    /// </summary>
+    public uint? Mmsi
+    {
+        get => _mmsi;
+        set => SetProperty(ref _mmsi, value);
+    }
+
+    private bool _isHelming;
+    /// <summary>
+    /// Whether the own-ship row is actively impersonating a live AIS
+    /// target (pirate mode engaged <em>and</em> a fix has been adopted).
+    /// <see langword="false"/> while merely armed-and-waiting for the
+    /// target's first report. Only meaningful when <see cref="IsOwnShip"/>.
+    /// </summary>
+    public bool IsHelming
+    {
+        get => _isHelming;
+        set => SetProperty(ref _isHelming, value);
+    }
+
+    private string? _helmingText;
+    /// <summary>
+    /// Subtitle shown on the own-ship row while it is impersonating (or
+    /// waiting to impersonate) a target — e.g. "Helming ATLANTIC" or
+    /// "Waiting for 123456789". <see langword="null"/> when not following.
+    /// </summary>
+    public string? HelmingText
+    {
+        get => _helmingText;
+        set => SetProperty(ref _helmingText, value);
+    }
+
+    private bool _hasHelmingText;
+    /// <summary>Whether <see cref="HelmingText"/> should be shown.</summary>
+    public bool HasHelmingText
+    {
+        get => _hasHelmingText;
+        set => SetProperty(ref _hasHelmingText, value);
+    }
+
     private string _name = string.Empty;
     /// <summary>Display name (vessel name, else MMSI, else a placeholder).</summary>
     public string Name

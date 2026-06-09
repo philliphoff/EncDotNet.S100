@@ -107,13 +107,23 @@
                             <Border Background="Transparent"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_VesselRow}">
                                 <Grid ColumnDefinitions="Auto,*">
-                                    <!-- Ship-type pictogram, tinted by class. -->
+                                    <!-- Own-ship pictogram (pinned top row). -->
+                                    <ic:FluentIcon Grid.Column="0"
+                                                   Icon="MyLocation"
+                                                   IconVariant="Filled"
+                                                   FontSize="22"
+                                                   VerticalAlignment="Top"
+                                                   Margin="0,1,10,0"
+                                                   IsVisible="{Binding IsOwnShip}"
+                                                   Foreground="{DynamicResource AccentBrush}" />
+                                    <!-- AIS target pictogram, tinted by class. -->
                                     <ic:FluentIcon Grid.Column="0"
                                                    Icon="VehicleShip"
                                                    IconVariant="Regular"
                                                    FontSize="22"
                                                    VerticalAlignment="Top"
                                                    Margin="0,1,10,0"
+                                                   IsVisible="{Binding !IsOwnShip}"
                                                    Foreground="{Binding ShipTypeClass,
                                                        Converter={x:Static conv:VesselClassBrushConverter.Instance}}" />
 
@@ -201,6 +211,22 @@
                                            FontSize="12"
                                            Opacity="0.6"
                                            TextWrapping="Wrap" />
+
+                                <!-- Helm controls: take the helm of an AIS
+                                     target, or release it from the own-ship
+                                     row while helming. -->
+                                <Button Content="{x:Static loc:Strings.Vessels_TakeHelm}"
+                                        IsVisible="{Binding !IsOwnShip}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding $parent[UserControl].((vm:VesselListViewModel)DataContext).TakeHelmCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_VesselTakeHelm}" />
+                                <Button Content="{x:Static loc:Strings.Vessels_ReleaseHelm}"
+                                        IsVisible="{Binding IsOwnShip}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,6,0,0"
+                                        Command="{Binding $parent[UserControl].((vm:VesselListViewModel)DataContext).ReleaseHelmCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_VesselReleaseHelm}" />
 
                                 <!-- Identity -->
                                 <TextBlock Classes="section" Text="{x:Static loc:Strings.Vessels_Detail_Identity}" />

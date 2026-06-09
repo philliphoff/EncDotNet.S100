@@ -7,6 +7,7 @@ using EncDotNet.S100.DynamicSources.Ais;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 using EncDotNet.S100.Viewer.Tests.DynamicSources;
@@ -110,6 +111,18 @@ public class VesselListViewModelTests
     private static void Raise(FakeDynamicFeatureSource source, DynamicSourceChangeKind kind = DynamicSourceChangeKind.Added)
         => source.RaiseChanged(new DynamicFeaturesChanged { Kind = kind, ChangedIds = Array.Empty<string>() });
 
+    /// <summary>Returns the AIS rows only, excluding the pinned own-ship row.</summary>
+    private static IReadOnlyList<VesselListItem> AisRows(VesselListViewModel vm)
+        => vm.Vessels.Where(v => !v.IsOwnShip).ToList();
+
+    /// <summary>Test double for the pirate-mode helm status.</summary>
+    private sealed class FakeHelmStatus : IHelmStatusProvider
+    {
+        public bool IsActive { get; set; }
+        public uint? FollowedMmsi { get; set; }
+        public DateTimeOffset? LastFixUtc { get; set; }
+    }
+
     /// <summary>
     /// Builds a VM wired to a fresh AIS source and an own-ship source. By
     /// default the own ship is "enabled" (publishing a position feature at
@@ -124,7 +137,9 @@ public class VesselListViewModelTests
         double ownLat = 0,
         double ownLon = 0,
         bool includeOwnShip = true,
-        FakeDynamicFeatureSource? aisSource = null)
+        FakeDynamicFeatureSource? aisSource = null,
+        IHelmStatusProvider? helm = null,
+        FakeDynamicFeatureSource? helmTarget = null)
     {
         var ais = aisSource ?? NewAisSource();
         var ownShip = NewOwnShipSource();
@@ -140,7 +155,9 @@ public class VesselListViewModelTests
             ? new IDynamicFeatureSource[] { ais, ownShip }
             : new IDynamicFeatureSource[] { ais };
 
-        var vm = new VesselListViewModel(sources, accessor);
+        var vm = helm is not null || helmTarget is not null
+            ? new VesselListViewModel(sources, accessor, helm, helmTarget)
+            : new VesselListViewModel(sources, accessor);
         return (vm, ais, ownShip, host);
     }
 
@@ -153,10 +170,11 @@ public class VesselListViewModelTests
         ais.SetFeatures(new[] { Vessel(111, 10, 0, "Far"), Vessel(222, 1, 0, "Near") });
         Raise(ais);
 
-        Assert.Equal(2, vm.Vessels.Count);
-        Assert.Equal("Near", vm.Vessels[0].Name);
-        Assert.Equal("Far", vm.Vessels[1].Name);
-        Assert.True(vm.Vessels[0].DistanceMetres < vm.Vessels[1].DistanceMetres);
+        var rows = AisRows(vm);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("Near", rows[0].Name);
+        Assert.Equal("Far", rows[1].Name);
+        Assert.True(rows[0].DistanceMetres < rows[1].DistanceMetres);
     }
 
     [Fact]
@@ -167,8 +185,9 @@ public class VesselListViewModelTests
 
         var (vm, _, _, _) = Make(aisSource: ais);
 
-        Assert.Single(vm.Vessels);
-        Assert.Equal("Already", vm.Vessels[0].Name);
+        var rows = AisRows(vm);
+        Assert.Single(rows);
+        Assert.Equal("Already", rows[0].Name);
     }
 
     [Fact]
@@ -192,7 +211,7 @@ public class VesselListViewModelTests
         ais.SetFeatures(new[] { Vessel(1, 12.5, -7.25, "Target") });
         Raise(ais);
 
-        vm.SelectedVessel = vm.Vessels[0];
+        vm.SelectedVessel = AisRows(vm).Single();
 
         var call = Assert.Single(host.CenterOnCalls);
         Assert.Equal(12.5, call.Latitude, 6);
@@ -249,7 +268,7 @@ public class VesselListViewModelTests
         });
         Raise(ais);
 
-        var item = Assert.Single(vm.Vessels);
+        var item = Assert.Single(AisRows(vm));
         Assert.Equal("Cargo", item.ShipTypeText);
         Assert.Equal("123456789", item.MmsiText);
         Assert.True(item.HasCallSign);
@@ -378,8 +397,9 @@ public class VesselListViewModelTests
         ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
         Raise(ais);
 
+        var target = AisRows(vm).Single();
         Assert.False(vm.HasSelection);
-        vm.SelectedVessel = vm.Vessels[0];
+        vm.SelectedVessel = target;
         Assert.True(vm.HasSelection);
         vm.SelectedVessel = null;
         Assert.False(vm.HasSelection);
@@ -417,14 +437,15 @@ public class VesselListViewModelTests
         var (vm, ais, ownShip, _) = Make(ownShipEnabled: false);
         ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
         Raise(ais);
-        Assert.False(vm.Vessels[0].HasRangeBearing);
+        var target = AisRows(vm).Single();
+        Assert.False(target.HasRangeBearing);
 
         // Own-ship overlay toggled on: it publishes a feature and raises.
         ownShip.SetFeatures(new[] { OwnFeature(0, 0) });
         Raise(ownShip);
 
-        Assert.True(vm.Vessels[0].HasRangeBearing);
-        Assert.NotNull(vm.Vessels[0].DistanceMetres);
+        Assert.True(target.HasRangeBearing);
+        Assert.NotNull(target.DistanceMetres);
     }
 
     [Fact]
@@ -434,14 +455,14 @@ public class VesselListViewModelTests
         ais.SetFeatures(new[] { Vessel(1, 1, 0, "Gone") });
         Raise(ais);
 
-        vm.SelectedVessel = vm.Vessels[0];
+        vm.SelectedVessel = AisRows(vm).Single();
         Assert.Single(host.CenterOnCalls);
 
         ais.SetFeatures(Array.Empty<DynamicFeature>());
         Raise(ais, DynamicSourceChangeKind.Removed);
 
         Assert.Null(vm.SelectedVessel);
-        Assert.Empty(vm.Vessels);
+        Assert.Empty(AisRows(vm)); // own-ship row remains, AIS row gone
         Assert.Single(host.CenterOnCalls); // no additional center call on removal
     }
 
@@ -457,7 +478,7 @@ public class VesselListViewModelTests
         });
         Raise(ais);
 
-        var item = Assert.Single(vm.Vessels);
+        var item = Assert.Single(AisRows(vm));
         Assert.Equal("Good", item.Name);
     }
 
@@ -466,9 +487,9 @@ public class VesselListViewModelTests
     {
         var accessor = new MapHostAccessor { Current = new FakeMapHost() };
 
-        // Only an own-ship-keyed source; no "vessel.ais" source present.
+        // Only an own-ship-keyed source, publishing nothing (overlay off);
+        // no "vessel.ais" source present.
         var other = NewOwnShipSource();
-        other.SetFeatures(new[] { OwnFeature(0, 0) });
 
         var vm = new VesselListViewModel(new IDynamicFeatureSource[] { other }, accessor);
 
@@ -482,13 +503,14 @@ public class VesselListViewModelTests
         ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
         Raise(ais);
 
-        var before = vm.Vessels[0].DistanceMetres;
+        var target = AisRows(vm).Single();
+        var before = target.DistanceMetres;
 
         // Move own ship right next to the target.
         ownShip.SetFeatures(new[] { OwnFeature(1, 0) });
         Raise(ownShip, DynamicSourceChangeKind.Updated);
 
-        var after = vm.Vessels[0].DistanceMetres;
+        var after = target.DistanceMetres;
         Assert.NotNull(before);
         Assert.NotNull(after);
         Assert.True(after < before);
@@ -510,8 +532,9 @@ public class VesselListViewModelTests
     [Fact]
     public void EmptyState_AisActiveButNoData_ShowsWaitingMessage()
     {
-        // An active AIS source with no features yet (e.g. zoom-gated).
-        var (vm, _, _, _) = Make();
+        // An active AIS source with no features yet (e.g. zoom-gated) and
+        // the own-ship overlay off, so the list is genuinely empty.
+        var (vm, _, _, _) = Make(ownShipEnabled: false);
 
         Assert.True(vm.IsEmpty);
         Assert.Equal(Strings.Vessels_Empty_NoData, vm.EmptyMessage);
@@ -530,5 +553,161 @@ public class VesselListViewModelTests
 
         Assert.True(vm.IsEmpty);
         Assert.Equal(Strings.Vessels_Empty_Disabled, vm.EmptyMessage);
+    }
+
+    [Fact]
+    public void OwnShipRow_PinnedFirst_AndMarked_WhenEnabled()
+    {
+        var (vm, ais, _, _) = Make();
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+
+        Assert.True(vm.Vessels[0].IsOwnShip);
+        Assert.Equal(Strings.Vessels_OwnShip_Name, vm.Vessels[0].Name);
+        Assert.False(vm.Vessels[0].HasRangeBearing);
+        Assert.Single(AisRows(vm));
+    }
+
+    [Fact]
+    public void OwnShipRow_AbsentWhenOverlayOff()
+    {
+        var (vm, ais, _, _) = Make(ownShipEnabled: false);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+
+        Assert.DoesNotContain(vm.Vessels, v => v.IsOwnShip);
+    }
+
+    [Fact]
+    public void OwnShipRow_ShowsHelmingLabel_WhenFollowingWithFix()
+    {
+        var ais = NewAisSource();
+        var helm = new FakeHelmStatus
+        {
+            IsActive = true,
+            FollowedMmsi = 1,
+            LastFixUtc = DateTimeOffset.UnixEpoch,
+        };
+        var (vm, _, _, _) = Make(aisSource: ais, helm: helm, helmTarget: ais);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Bandit") });
+        Raise(ais);
+
+        var own = vm.Vessels.Single(v => v.IsOwnShip);
+        Assert.True(own.IsHelming);
+        Assert.True(own.HasHelmingText);
+        Assert.Contains("Bandit", own.HelmingText);
+    }
+
+    [Fact]
+    public void OwnShipRow_ShowsWaitingLabel_WhenArmedWithoutFix()
+    {
+        var ais = NewAisSource();
+        var helm = new FakeHelmStatus
+        {
+            IsActive = true,
+            FollowedMmsi = 1,
+            LastFixUtc = null,
+        };
+        var (vm, _, _, _) = Make(aisSource: ais, helm: helm, helmTarget: ais);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Bandit") });
+        Raise(ais);
+
+        var own = vm.Vessels.Single(v => v.IsOwnShip);
+        Assert.False(own.IsHelming);
+        Assert.True(own.HasHelmingText);
+        Assert.Contains("Bandit", own.HelmingText);
+    }
+
+    [Fact]
+    public void OwnShipRow_NoHelmingLabel_WhenInactive()
+    {
+        var helm = new FakeHelmStatus { IsActive = false };
+        var (vm, ais, _, _) = Make(helm: helm);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+
+        var own = vm.Vessels.Single(v => v.IsOwnShip);
+        Assert.False(own.IsHelming);
+        Assert.False(own.HasHelmingText);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_EnabledForAisRow_RaisesWithMmsi()
+    {
+        var helm = new FakeHelmStatus();
+        var (vm, ais, _, _) = Make(helm: helm);
+        ais.SetFeatures(new[] { Vessel(4242, 1, 0, "Target") });
+        Raise(ais);
+
+        Assert.False(vm.TakeHelmCommand.CanExecute(null)); // nothing selected
+        vm.SelectedVessel = AisRows(vm).Single();
+        Assert.True(vm.TakeHelmCommand.CanExecute(null));
+
+        uint? raised = null;
+        vm.TakeHelmRequested += (_, mmsi) => raised = mmsi;
+        vm.TakeHelmCommand.Execute(null);
+        Assert.Equal(4242u, raised);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_DisabledForOwnShipRow()
+    {
+        var helm = new FakeHelmStatus();
+        var (vm, ais, _, _) = Make(helm: helm);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+
+        vm.SelectedVessel = vm.Vessels.Single(v => v.IsOwnShip);
+        Assert.False(vm.TakeHelmCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ReleaseHelmCommand_EnabledWhileHelming_RaisesEvent()
+    {
+        var helm = new FakeHelmStatus
+        {
+            IsActive = true,
+            FollowedMmsi = 1,
+            LastFixUtc = DateTimeOffset.UnixEpoch,
+        };
+        var (vm, ais, _, _) = Make(helm: helm);
+        Raise(ais);
+
+        Assert.True(vm.ReleaseHelmCommand.CanExecute(null));
+
+        var raised = false;
+        vm.ReleaseHelmRequested += (_, _) => raised = true;
+        vm.ReleaseHelmCommand.Execute(null);
+        Assert.True(raised);
+    }
+
+    [Fact]
+    public void ReleaseHelmCommand_DisabledWhenNotHelming()
+    {
+        var helm = new FakeHelmStatus { IsActive = false };
+        var (vm, ais, _, _) = Make(helm: helm);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+
+        Assert.False(vm.ReleaseHelmCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void EngagingHelm_AutoSelectsOwnShipRow()
+    {
+        var helm = new FakeHelmStatus { IsActive = false };
+        var (vm, ais, _, _) = Make(helm: helm);
+        ais.SetFeatures(new[] { Vessel(1, 1, 0, "Target") });
+        Raise(ais);
+        Assert.Null(vm.SelectedVessel);
+
+        // App engages pirate mode, then notifies the panel.
+        helm.IsActive = true;
+        helm.FollowedMmsi = 1;
+        helm.LastFixUtc = DateTimeOffset.UnixEpoch;
+        vm.HandleHelmEngaged();
+
+        Assert.NotNull(vm.SelectedVessel);
+        Assert.True(vm.SelectedVessel!.IsOwnShip);
     }
 }
