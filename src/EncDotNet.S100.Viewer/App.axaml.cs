@@ -335,6 +335,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelmState>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
 
         // Vessel geometry provider — reads user-configured dimensions
         // from ViewerSettings.OwnShip and pushes them onto every
@@ -435,6 +437,7 @@ public partial class App : Application
         services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
+        services.AddSingleton<HelmViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
@@ -484,6 +487,19 @@ public partial class App : Application
             title: Strings.Pane_Vessels,
             tooltip: Strings.Tooltip_Vessels,
             iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Helm tab — shown only while own-vessel tracking is enabled
+        // (its visibility source bridges SettingsViewModel.OwnShipOverlayEnabled).
+        // Never persisted as last-selected so it can't be restored while hidden.
+        services.AddActivityTab<HelmViewModel, HelmView>(
+            id: "Helm",
+            order: 67,
+            title: Strings.Pane_Helm,
+            tooltip: Strings.Tooltip_Helm,
+            iconFactory: static () => new FluentIcon { Icon = Icon.TopSpeed, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            visibilitySourceFactory: static sp =>
+                new EncDotNet.S100.Viewer.ViewModels.Activities.OwnShipTrackingVisibilitySource(
+                    sp.GetRequiredService<SettingsViewModel>()));
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 70,

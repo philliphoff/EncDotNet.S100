@@ -221,7 +221,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="activities:IActivityTab">
-                            <Grid>
+                            <Grid IsVisible="{Binding IsVisible}">
                                 <Border Width="3" HorizontalAlignment="Left"
                                         Background="{DynamicResource AccentBrush}">
                                     <Border.IsVisible>
@@ -262,7 +262,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="activities:IActivityTab">
-                            <Grid>
+                            <Grid IsVisible="{Binding IsVisible}">
                                 <Border Width="3" HorizontalAlignment="Left"
                                         Background="{DynamicResource AccentBrush}">
                                     <Border.IsVisible>

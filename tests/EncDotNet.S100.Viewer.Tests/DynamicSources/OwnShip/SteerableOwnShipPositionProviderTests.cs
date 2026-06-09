@@ -200,6 +200,49 @@ public sealed class SteerableOwnShipPositionProviderTests
         Assert.Equal(6.0, provider.Current!.SpeedOverGroundMs);
     }
 
+    // ---- Helm-state readback (IOwnShipHelmState) ----------------------
+
+    [Fact]
+    public void HelmState_ReflectsHoldResume()
+    {
+        using var provider = SteerableOwnShipPositionProvider.CreateManual(
+            Start(cog: 90.0, sogMs: 6.0));
+
+        Assert.False(provider.IsHeld);
+        Assert.Equal(6.0, provider.CommandedSpeedMs);
+
+        provider.Hold();
+        Assert.True(provider.IsHeld);
+        Assert.Equal(6.0, provider.CommandedSpeedMs); // remembered for Resume
+
+        provider.Resume();
+        Assert.False(provider.IsHeld);
+        Assert.Equal(6.0, provider.CommandedSpeedMs);
+    }
+
+    [Fact]
+    public void HelmState_ReflectsCommandedSpeed()
+    {
+        using var provider = SteerableOwnShipPositionProvider.CreateManual(
+            Start(cog: 90.0, sogMs: 6.0));
+
+        provider.SetSpeed(3.5);
+        Assert.Equal(3.5, provider.CommandedSpeedMs);
+        Assert.False(provider.IsHeld);
+    }
+
+    [Fact]
+    public void HelmState_ReflectsTurnRate()
+    {
+        using var provider = SteerableOwnShipPositionProvider.CreateManual(
+            Start(cog: 0.0, sogMs: 0.0));
+
+        Assert.Equal(0.0, provider.TurnRateDegPerSec);
+
+        provider.SetTurnRate(2.5);
+        Assert.Equal(2.5, provider.TurnRateDegPerSec);
+    }
+
     [Fact]
     public void SteerToward_PointsCourseAtTarget()
     {

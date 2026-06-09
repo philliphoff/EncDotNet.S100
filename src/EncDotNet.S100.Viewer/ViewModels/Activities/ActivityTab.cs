@@ -1,5 +1,7 @@
 using System;
+using System.ComponentModel;
 using Avalonia.Controls;
+using Avalonia.Threading;
 
 namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 
@@ -8,11 +10,13 @@ namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 /// view-model and view types so DI registration is one line per tab in
 /// <see cref="App"/>.
 /// </summary>
-internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
+internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
     where TViewModel : class
     where TView : Control, new()
 {
     private readonly Func<Control> _iconFactory;
+    private readonly ITabVisibilitySource? _visibility;
+    private bool _isVisible;
 
     public ActivityTab(
         string id,
@@ -23,7 +27,8 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
         TViewModel viewModel,
         bool persistAsLastSelected,
         TabDock dock = TabDock.Left,
-        bool autoOpenOnContentSignal = false)
+        bool autoOpenOnContentSignal = false,
+        ITabVisibilitySource? visibility = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(title);
@@ -40,7 +45,16 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
         PersistAsLastSelected = persistAsLastSelected;
         Dock = dock;
         AutoOpenOnContentSignal = autoOpenOnContentSignal;
+
+        _visibility = visibility;
+        _isVisible = visibility?.IsVisible ?? true;
+        if (_visibility is not null)
+        {
+            _visibility.VisibilityChanged += OnVisibilityChanged;
+        }
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Id { get; }
     public int Order { get; }
@@ -52,5 +66,40 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab
     public TabDock Dock { get; }
     public bool AutoOpenOnContentSignal { get; }
 
+    public bool IsVisible
+    {
+        get => _isVisible;
+        private set
+        {
+            if (_isVisible == value) return;
+            _isVisible = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisible)));
+        }
+    }
+
     public Control CreateIcon() => _iconFactory();
+
+    private void OnVisibilityChanged(bool value)
+    {
+        // The visibility source typically fires on the UI thread (a
+        // settings checkbox), but marshal to be safe so the activity-bar
+        // binding and the MainViewModel selection fix-up run on the UI
+        // thread. When no Avalonia app is running (unit tests) apply inline.
+        if (Avalonia.Application.Current is not null && !Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => IsVisible = value);
+        }
+        else
+        {
+            IsVisible = value;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_visibility is not null)
+        {
+            _visibility.VisibilityChanged -= OnVisibilityChanged;
+        }
+    }
 }

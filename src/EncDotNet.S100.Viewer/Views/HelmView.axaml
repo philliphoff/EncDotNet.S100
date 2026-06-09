@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.HelmView"
+             x:DataType="vm:HelmViewModel">
+
+    <ScrollViewer>
+        <StackPanel Spacing="12" Margin="12,8,12,12">
+
+            <!-- Controls -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Helm_ControlsHeader}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           LetterSpacing="0.5"
+                           Opacity="0.7" />
+
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_OrderedCourse}"
+                               VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Row="0" Grid.Column="1"
+                                   Value="{Binding CourseDeg}"
+                                   Minimum="0" Maximum="359.9"
+                                   Increment="1"
+                                   FormatString="0.0"
+                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_Course}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_OrderedSpeed}"
+                               VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                   Value="{Binding SpeedMs}"
+                                   Minimum="0" Maximum="100"
+                                   Increment="0.5"
+                                   FormatString="0.0"
+                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_Speed}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_TurnRate}"
+                               VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Row="2" Grid.Column="1"
+                                   Value="{Binding TurnRateDegPerSec}"
+                                   Minimum="-20" Maximum="20"
+                                   Increment="0.5"
+                                   FormatString="0.0"
+                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_TurnRate}" />
+                </Grid>
+
+                <UniformGrid Columns="2" Margin="0,2,0,0">
+                    <Button Content="{x:Static loc:Strings.Helm_Port}"
+                            Command="{Binding PortCommand}"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,0,2,0"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_Port}" />
+                    <Button Content="{x:Static loc:Strings.Helm_Starboard}"
+                            Command="{Binding StarboardCommand}"
+                            HorizontalAlignment="Stretch"
+                            Margin="2,0,0,0"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_Starboard}" />
+                </UniformGrid>
+
+                <UniformGrid Columns="2">
+                    <ToggleButton IsChecked="{Binding IsHeld, Mode=OneWay}"
+                                  Command="{Binding HoldResumeCommand}"
+                                  HorizontalAlignment="Stretch"
+                                  HorizontalContentAlignment="Center"
+                                  Margin="0,0,2,0"
+                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_HoldResume}">
+                        <Panel>
+                            <TextBlock Text="{x:Static loc:Strings.Helm_Hold}"
+                                       IsVisible="{Binding !IsHeld}" />
+                            <TextBlock Text="{x:Static loc:Strings.Helm_Resume}"
+                                       IsVisible="{Binding IsHeld}" />
+                        </Panel>
+                    </ToggleButton>
+                    <Button Content="{x:Static loc:Strings.Helm_Steady}"
+                            Command="{Binding SteadyCommand}"
+                            HorizontalAlignment="Stretch"
+                            Margin="2,0,0,0"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Helm_Steady}" />
+                </UniformGrid>
+            </StackPanel>
+
+            <!-- Live readout -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Helm_ReadoutHeader}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           LetterSpacing="0.5"
+                           Opacity="0.7" />
+
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="4" ColumnSpacing="8">
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_Readout_Position}"
+                               Opacity="0.7" />
+                    <TextBlock Grid.Row="0" Grid.Column="1"
+                               Text="{Binding PositionText}"
+                               FontFamily="monospace" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_Readout_Course}"
+                               Opacity="0.7" />
+                    <TextBlock Grid.Row="1" Grid.Column="1"
+                               Text="{Binding CourseText}"
+                               FontFamily="monospace" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_Readout_Speed}"
+                               Opacity="0.7" />
+                    <TextBlock Grid.Row="2" Grid.Column="1"
+                               Text="{Binding SpeedText}"
+                               FontFamily="monospace" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Helm_Readout_Heading}"
+                               Opacity="0.7" />
+                    <TextBlock Grid.Row="3" Grid.Column="1"
+                               Text="{Binding HeadingText}"
+                               FontFamily="monospace" />
+                </Grid>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

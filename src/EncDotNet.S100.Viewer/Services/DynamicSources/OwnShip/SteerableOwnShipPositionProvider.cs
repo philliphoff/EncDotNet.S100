@@ -27,7 +27,7 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 /// </para>
 /// </remarks>
 internal sealed class SteerableOwnShipPositionProvider
-    : IOwnShipPositionProvider, IOwnShipHelm, IDisposable
+    : IOwnShipPositionProvider, IOwnShipHelm, IOwnShipHelmState, IDisposable
 {
     /// <summary>WGS-84 mean Earth radius in metres.</summary>
     private const double EarthRadiusMetres = 6_371_008.8;
@@ -112,6 +112,26 @@ internal sealed class SteerableOwnShipPositionProvider
 
     /// <inheritdoc />
     public event EventHandler<OwnShipPosition>? Updated;
+
+    // ---- IOwnShipHelmState -------------------------------------------
+
+    /// <inheritdoc />
+    public bool IsHeld
+    {
+        get { lock (_gate) return _speedMs == 0.0 && _resumeSpeedMs > 0.0; }
+    }
+
+    /// <inheritdoc />
+    public double TurnRateDegPerSec
+    {
+        get { lock (_gate) return _turnRateDegPerSec; }
+    }
+
+    /// <inheritdoc />
+    public double CommandedSpeedMs
+    {
+        get { lock (_gate) return (_speedMs == 0.0 && _resumeSpeedMs > 0.0) ? _resumeSpeedMs : _speedMs; }
+    }
 
     /// <summary>
     /// Advances the simulation by <paramref name="elapsed"/> of
