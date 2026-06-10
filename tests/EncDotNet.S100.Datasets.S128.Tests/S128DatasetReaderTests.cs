@@ -384,20 +384,11 @@ public class S128DatasetReaderTests
             </S128:Dataset>
             """;
 
-        var activities = new System.Collections.Concurrent.ConcurrentBag<System.Diagnostics.Activity>();
-        using var listener = new System.Diagnostics.ActivityListener
+        var activities = CaptureOwnThreadActivities(() =>
         {
-            ShouldListenTo = src => src.Name == "EncDotNet.S100.Datasets.S128",
-            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
-                System.Diagnostics.ActivitySamplingResult.AllData,
-            ActivityStopped = activities.Add,
-        };
-        System.Diagnostics.ActivitySource.AddActivityListener(listener);
-
-        using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml)))
-        {
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
             _ = S128Dataset.Open(stream);
-        }
+        });
 
         var open = activities.Single(a => a.OperationName == "s100.dataset.open");
         Assert.Contains(open.Events, e => e.Name == "s100.s128.axisOrderAssumed");
@@ -443,23 +434,62 @@ public class S128DatasetReaderTests
             </S128:Dataset>
             """;
 
+        var activities = CaptureOwnThreadActivities(() =>
+        {
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
+            _ = S128Dataset.Open(stream);
+        });
+
+        var open = activities.Single(a => a.OperationName == "s100.dataset.open");
+        Assert.DoesNotContain(open.Events, e => e.Name == "s100.s128.axisOrderAssumed");
+        Assert.Null(open.GetTagItem("s100.s128.axisOrderAssumed"));
+    }
+
+    /// <summary>
+    /// Captures S-128 activities produced solely by the supplied synchronous
+    /// <paramref name="body"/> on the current test thread.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="System.Diagnostics.ActivityListener"/> is process-global,
+    /// so when xUnit runs S-128 test classes in parallel, activities from other
+    /// concurrent <c>S128Dataset.Open(...)</c> calls would otherwise leak into
+    /// the capture and break a <c>Single(...)</c> assertion. Because
+    /// <c>S128Dataset.Open</c> is fully synchronous, its root activity starts
+    /// and stops on this test's own managed thread; we therefore record only the
+    /// activity ids started on that thread and keep only those when stopped.
+    /// </remarks>
+    /// <param name="body">The synchronous action whose activities to capture.</param>
+    /// <returns>The activities started and stopped on the current test thread.</returns>
+    private static List<System.Diagnostics.Activity> CaptureOwnThreadActivities(Action body)
+    {
+        int testThreadId = Environment.CurrentManagedThreadId;
+        var ownThreadActivityIds = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>();
         var activities = new System.Collections.Concurrent.ConcurrentBag<System.Diagnostics.Activity>();
+
         using var listener = new System.Diagnostics.ActivityListener
         {
             ShouldListenTo = src => src.Name == "EncDotNet.S100.Datasets.S128",
             Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
                 System.Diagnostics.ActivitySamplingResult.AllData,
-            ActivityStopped = activities.Add,
+            ActivityStarted = activity =>
+            {
+                if (Environment.CurrentManagedThreadId == testThreadId)
+                {
+                    ownThreadActivityIds.TryAdd(activity.Id!, 0);
+                }
+            },
+            ActivityStopped = activity =>
+            {
+                if (activity.Id is not null && ownThreadActivityIds.ContainsKey(activity.Id))
+                {
+                    activities.Add(activity);
+                }
+            },
         };
         System.Diagnostics.ActivitySource.AddActivityListener(listener);
 
-        using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml)))
-        {
-            _ = S128Dataset.Open(stream);
-        }
+        body();
 
-        var open = activities.Single(a => a.OperationName == "s100.dataset.open");
-        Assert.DoesNotContain(open.Events, e => e.Name == "s100.s128.axisOrderAssumed");
-        Assert.Null(open.GetTagItem("s100.s128.axisOrderAssumed"));
+        return activities.ToList();
     }
 }
