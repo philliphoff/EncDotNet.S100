@@ -33,6 +33,26 @@ global rather than editing the bundled catalogue. Current patches:
 
 If upstream fixes a defect, the corresponding patch is dropped.
 
+## Portrayal diagnostics and trace output
+
+The S-100 Part 9A rules emit `Debug.Trace` diagnostics for **expected,
+spec-compliant fallbacks** — most visibly the `OBSTRN07` rule raising
+*"Neither valueOfSounding or defaultClearanceDepth have a value"* for an
+`Obstruction` / `Wreck` / `UnderwaterAwashRock` feature that legitimately
+carries no depth value, after which `main.lua` substitutes Default
+symbology and the cell still renders. These are **not** errors.
+
+`S101LuaDataProvider` therefore routes all Lua/host diagnostic trace
+output through an injectable sink (the optional `trace` constructor
+parameter). When omitted, messages go to `System.Diagnostics.Trace`,
+which is silent on standard output unless a listener is attached — so
+these high-volume, benign fallbacks no longer pollute render/validation
+output. Pass an explicit `Action<string>` to capture or surface them
+(for example behind a verbose/debug flag or in tests). The bundled CLI
+wires this to `--debug`: `s100 render … --debug` mirrors the
+`[Lua]`/`[Host]` diagnostics to **stderr** while keeping stdout (and the
+PNG result) unchanged.
+
 ## Legacy feature-name compatibility
 
 The bundled Portrayal Catalogue is **S-101 Edition 2.0.0**, whose Lua
