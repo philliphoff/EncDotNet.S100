@@ -43,6 +43,29 @@ processor wrapped in an `IDatasetProcessor`. `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### S-101 sequential updates (S-100 Part 10a)
+
+An S-101 cell may ship as a base (`….000`) plus ordered update files
+(`….001`, `….002`, …). Updates are folded into the base to produce an
+"up-to-date" dataset before portrayal. The merge engine lives in
+`EncDotNet.S100.Datasets.S101` (`S101UpdateApplicator`); this library
+supplies the two ways callers locate the pieces:
+
+- **From an exchange set** — `S101ExchangeSetUpdatePlan.Build(...)`
+  groups a catalogue's entries so each base cell is paired with its
+  in-set updates (ordered by `updateNumber`). `ExchangeSetLoader` and
+  the viewer use this, then call
+  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(source, baseRelativePath, updateRelativePaths)`.
+- **From a loose file** — `S101FilesystemUpdateDiscovery.FindSequentialUpdates(baseFilePath)`
+  finds sibling update files in the base cell's directory. The CLI
+  uses this, then calls
+  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(baseFilePath, updateFilePaths)`.
+
+Application is **best-effort**: a missing, out-of-order, or unreadable
+update is recorded in `S101DatasetProcessor.UpdateReport` but never
+prevents the (partially) updated cell from rendering. Cross-exchange-set
+/ cross-directory application is intentionally not supported.
+
 ## Mapsui-free render seam (issue #189)
 
 This package is **Mapsui-free** so headless consumers (the

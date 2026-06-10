@@ -11,6 +11,7 @@ This library reads S-101 datasets encoded in ISO 8211 format and executes the S-
 - **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.
 - **`S101PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT/Lua rules, symbols, line styles, area fills, and color palettes.
 - **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline.
+- **`S101UpdateApplicator`**, **`S101Document.ApplyChanges`** — sequential update support (see below).
 - **`DrawingInstructionParser`** (in `EncDotNet.S100.Core`) — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
 
 ## Bundled-adapter Lua patches
@@ -147,6 +148,37 @@ tell which layer of the pipeline a problem came from.
 | SRID | Surface | Ring-based polygon geometry |
 | FRID | Feature | Object class, attributes, spatial associations |
 | IRID | Information type | Metadata records referenced by features |
+
+Every record-id field also carries `RVER` (record version) and `RUIN`
+(record update instruction), and the feature/information association and
+attribute fields carry their inline per-element update instructions
+(`SAUI` / `FAUI` / `IUIN` / `ATIN`). These are read into the model to
+drive sequential update application.
+
+## Sequential updates
+
+Like S-57, an S-101 cell is distributed as a base dataset (`….000`,
+application profile `1`) plus ordered update files (`….001`, `….002`, …,
+application profile `2`). Updates carry record- and element-level
+insert / delete / modify instructions (S-100 Part 10a) that must be
+applied in sequence to obtain the up-to-date cell.
+
+- **`S101Document.ApplyChanges(update)`** merges one update document into
+  a new document (pure; the design mirrors `EncDotNet.S57.S57Document.ApplyChanges`).
+- **`S101UpdateApplicator.Apply(base, orderedUpdates, out report)`** folds
+  an ordered update list onto a base cell and returns an `S101UpdateReport`.
+  Application is **best-effort**: an unreadable file, or an invalid /
+  non-contiguous update, is recorded in the report and never prevents the
+  (partially) updated dataset from being used.
+- **`S101Dataset.OpenWithUpdates(basePath, updatePaths)`** opens a base
+  cell and applies its update files, exposing the outcome via
+  `S101Dataset.UpdateReport`.
+
+Within an exchange set, `ExchangeSetLoader` groups each S-101 base cell
+with the update files that target it **in the same set**
+(`S101ExchangeSetUpdatePlan`) and emits a single up-to-date processor per
+cell; updates with no in-set base surface as a best-effort warning.
+Cross-exchange-set application is not yet supported.
 
 ## Installation
 

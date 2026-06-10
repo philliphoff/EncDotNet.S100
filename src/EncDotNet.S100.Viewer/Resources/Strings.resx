@@ -845,6 +845,18 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_ExchangeSetCancelled" xml:space="preserve">
     <value>Cancelled after loading {0} of {1} datasets from {2}.</value>
   </data>
+  <data name="Status_ExchangeSetOrphanUpdate" xml:space="preserve">
+    <value>Skipped update {0}: no matching base cell in this exchange set.</value>
+    <comment>{0} = update file relative path. Shown when an S-101 update (.001/.002/…) has no base (.000) in the same exchange set.</comment>
+  </data>
+  <data name="Status_ExchangeSetUpdatesApplied" xml:space="preserve">
+    <value>Applied {0} update(s) to {1}.</value>
+    <comment>{0} = number of S-101 sequential updates applied, {1} = cell display name.</comment>
+  </data>
+  <data name="Status_ExchangeSetUpdatesPartial" xml:space="preserve">
+    <value>Applied {0} update(s) to {1} with warnings: {2}</value>
+    <comment>{0} = updates applied, {1} = cell display name, {2} = first warning/error message from the update report.</comment>
+  </data>
 
   <!-- Exchange-set progress overlay (es3-progress) -->
   <data name="Progress_ExchangeSetTitle" xml:space="preserve">

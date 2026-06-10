@@ -180,6 +180,8 @@ internal static class S101DocumentReader
         reader.TryGetSubfield<string>("DSTL", out var dstl);
         reader.TryGetSubfield<string>("DSRD", out var dsrd);
         reader.TryGetSubfield<string>("DSLG", out var dslg);
+        reader.TryGetSubfield<string>("DSAB", out var dsab);
+        reader.TryGetSubfield<string>("DSED", out var dsed);
 
         return new S101DatasetIdentification
         {
@@ -194,7 +196,64 @@ internal static class S101DocumentReader
             DatasetTitle = dstl ?? "",
             DatasetReferenceDate = dsrd ?? "",
             DatasetLanguage = dslg ?? "",
+            DatasetAbstract = dsab ?? "",
+            DatasetEdition = dsed ?? "",
+            UpdateNumber = ParseUpdateNumber(dsnm),
         };
+    }
+
+    /// <summary>
+    /// Derives the update number from the dataset file extension carried in
+    /// DSID/DSNM (<c>….000</c> = base, <c>….001</c> = update 1, …). Returns
+    /// <c>0</c> when no numeric three-digit extension is present.
+    /// </summary>
+    /// <remarks>S-100 Part 10a / S-101 dataset file naming.</remarks>
+    private static int ParseUpdateNumber(string? datasetName)
+    {
+        if (string.IsNullOrEmpty(datasetName))
+            return 0;
+
+        var ext = Path.GetExtension(datasetName);
+        if (ext.Length == 4 &&
+            int.TryParse(ext.AsSpan(1), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var update))
+        {
+            return update;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Reads the record update instruction (RUIN / SAUI / FAUI / IUIN / ATIN)
+    /// from the supplied reader, mapping the ISO 8211 byte value to
+    /// <see cref="S101UpdateInstruction"/>. Returns
+    /// <see cref="S101UpdateInstruction.None"/> when absent. S-100 Part 10a.
+    /// </summary>
+    private static S101UpdateInstruction ReadUpdateInstruction(Iso8211FieldReader reader, string subfield)
+    {
+        if (reader.TryGetSubfield<byte>(subfield, out var value) &&
+            Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value))
+        {
+            return (S101UpdateInstruction)value;
+        }
+
+        return S101UpdateInstruction.None;
+    }
+
+    private static S101UpdateInstruction ReadUpdateInstruction(Iso8211SubfieldGroup group, string subfield)
+    {
+        try
+        {
+            var value = group.GetSubfield<byte>(subfield);
+            return Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value)
+                ? (S101UpdateInstruction)value
+                : S101UpdateInstruction.None;
+        }
+        catch (KeyNotFoundException)
+        {
+            return S101UpdateInstruction.None;
+        }
     }
 
     private static S101DatasetStructureInfo ParseDssi(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
@@ -225,6 +284,8 @@ internal static class S101DocumentReader
         var pridDef = ddr.GetFieldDefinition("PRID")!;
         var pridReader = new Iso8211FieldReader(pridDef, pridField.Data);
         var rcid = pridReader.GetSubfield<uint>("RCID");
+        pridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(pridReader, "RUIN");
 
         int y = 0, x = 0;
         var c2it = record.GetFieldByTag("C2IT");
@@ -236,7 +297,7 @@ internal static class S101DocumentReader
             x = c2itReader.GetSubfield<int>("XCOO");
         }
 
-        return new S101PointRecord { RecordId = rcid, Y = y, X = x };
+        return new S101PointRecord { RecordId = rcid, Y = y, X = x, RecordVersion = rver, UpdateInstruction = ruin };
     }
 
     /// <summary>
@@ -256,6 +317,8 @@ internal static class S101DocumentReader
         var mridDef = ddr.GetFieldDefinition("MRID")!;
         var mridReader = new Iso8211FieldReader(mridDef, mridField.Data);
         var rcid = mridReader.GetSubfield<uint>("RCID");
+        mridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(mridReader, "RUIN");
 
         var coords = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
         var c3ilField = record.GetFieldByTag("C3IL");
@@ -277,6 +340,8 @@ internal static class S101DocumentReader
         {
             RecordId = rcid,
             Points = coords.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 
@@ -288,6 +353,8 @@ internal static class S101DocumentReader
         var cridDef = ddr.GetFieldDefinition("CRID")!;
         var cridReader = new Iso8211FieldReader(cridDef, cridField.Data);
         var rcid = cridReader.GetSubfield<uint>("RCID");
+        cridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(cridReader, "RUIN");
 
         // PTAS — point topology associations (start/end)
         var ptas = ImmutableArray.CreateBuilder<S101PointAssociation>();
@@ -323,6 +390,8 @@ internal static class S101DocumentReader
             RecordId = rcid,
             PointAssociations = ptas.ToImmutable(),
             IntermediateCoordinates = coords.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 
@@ -334,6 +403,8 @@ internal static class S101DocumentReader
         var ccidDef = ddr.GetFieldDefinition("CCID")!;
         var ccidReader = new Iso8211FieldReader(ccidDef, ccidField.Data);
         var rcid = ccidReader.GetSubfield<uint>("RCID");
+        ccidReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(ccidReader, "RUIN");
 
         var components = ImmutableArray.CreateBuilder<S101CurveUsage>();
         foreach (var cucoField in record.GetFieldsByTag("CUCO"))
@@ -353,6 +424,8 @@ internal static class S101DocumentReader
         {
             RecordId = rcid,
             CurveComponents = components.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 
@@ -364,6 +437,8 @@ internal static class S101DocumentReader
         var sridDef = ddr.GetFieldDefinition("SRID")!;
         var sridReader = new Iso8211FieldReader(sridDef, sridField.Data);
         var rcid = sridReader.GetSubfield<uint>("RCID");
+        sridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(sridReader, "RUIN");
 
         var rings = ImmutableArray.CreateBuilder<S101RingAssociation>();
         foreach (var riasField in record.GetFieldsByTag("RIAS"))
@@ -384,6 +459,8 @@ internal static class S101DocumentReader
         {
             RecordId = rcid,
             RingAssociations = rings.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 
@@ -396,6 +473,8 @@ internal static class S101DocumentReader
         var fridReader = new Iso8211FieldReader(fridDef, fridField.Data);
         var rcid = fridReader.GetSubfield<uint>("RCID");
         fridReader.TryGetSubfield<ushort>("NFTC", out var nftc);
+        fridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(fridReader, "RUIN");
 
         // FOID
         ushort agen = 0;
@@ -421,10 +500,13 @@ internal static class S101DocumentReader
             {
                 var natc = group.GetSubfield<ushort>("NATC");
                 var atix = group.GetSubfield<ushort>("ATIX");
+                ushort paix = 0;
+                try { paix = group.GetSubfield<ushort>("PAIX"); } catch (KeyNotFoundException) { }
+                var atin = ReadUpdateInstruction(group, "ATIN");
                 string atvl;
                 try { atvl = group.GetSubfield<string>("ATVL"); }
                 catch (KeyNotFoundException) { atvl = ""; }
-                attributes.Add(new S101Attribute(natc, atix, atvl));
+                attributes.Add(new S101Attribute(natc, atix, atvl, paix, atin));
             }
         }
 
@@ -439,7 +521,8 @@ internal static class S101DocumentReader
                 var rrnm = group.GetSubfield<byte>("RRNM");
                 var rrid = group.GetSubfield<uint>("RRID");
                 var ornt = group.GetSubfield<byte>("ORNT");
-                spatials.Add(new S101SpatialAssociation(rrnm, rrid, ornt));
+                var saui = ReadUpdateInstruction(group, "SAUI");
+                spatials.Add(new S101SpatialAssociation(rrnm, rrid, ornt, saui));
             }
         }
 
@@ -456,7 +539,8 @@ internal static class S101DocumentReader
                 var rrid = group.GetSubfield<uint>("RRID");
                 ushort narc = 0;
                 try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
-                featureAssociations.Add(new S101FeatureAssociation(nfac, rrid, narc));
+                var faui = ReadUpdateInstruction(group, "FAUI");
+                featureAssociations.Add(new S101FeatureAssociation(nfac, rrid, narc, faui));
             }
         }
 
@@ -473,7 +557,8 @@ internal static class S101DocumentReader
                 var rrid = group.GetSubfield<uint>("RRID");
                 ushort narc = 0;
                 try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
-                informationAssociations.Add(new S101InformationAssociation(niac, rrid, narc));
+                var iuin = ReadUpdateInstruction(group, "IUIN");
+                informationAssociations.Add(new S101InformationAssociation(niac, rrid, narc, iuin));
             }
         }
 
@@ -488,6 +573,8 @@ internal static class S101DocumentReader
             SpatialAssociations = spatials.ToImmutable(),
             FeatureAssociations = featureAssociations.ToImmutable(),
             InformationAssociations = informationAssociations.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 
@@ -500,6 +587,8 @@ internal static class S101DocumentReader
         var iridReader = new Iso8211FieldReader(iridDef, iridField.Data);
         var rcid = iridReader.GetSubfield<uint>("RCID");
         iridReader.TryGetSubfield<ushort>("NITC", out var nitc);
+        iridReader.TryGetSubfield<ushort>("RVER", out var rver);
+        var ruin = ReadUpdateInstruction(iridReader, "RUIN");
 
         var attributes = ImmutableArray.CreateBuilder<S101Attribute>();
         foreach (var attrField in record.GetFieldsByTag("ATTR"))
@@ -510,10 +599,13 @@ internal static class S101DocumentReader
             {
                 var natc = group.GetSubfield<ushort>("NATC");
                 var atix = group.GetSubfield<ushort>("ATIX");
+                ushort paix = 0;
+                try { paix = group.GetSubfield<ushort>("PAIX"); } catch (KeyNotFoundException) { }
+                var atin = ReadUpdateInstruction(group, "ATIN");
                 string atvl;
                 try { atvl = group.GetSubfield<string>("ATVL"); }
                 catch (KeyNotFoundException) { atvl = ""; }
-                attributes.Add(new S101Attribute(natc, atix, atvl));
+                attributes.Add(new S101Attribute(natc, atix, atvl, paix, atin));
             }
         }
 
@@ -522,6 +614,8 @@ internal static class S101DocumentReader
             RecordId = rcid,
             InformationTypeCode = nitc,
             Attributes = attributes.ToImmutable(),
+            RecordVersion = rver,
+            UpdateInstruction = ruin,
         };
     }
 }

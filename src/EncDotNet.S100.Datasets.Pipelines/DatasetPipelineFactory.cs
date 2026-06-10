@@ -428,6 +428,72 @@ public sealed class DatasetPipelineFactory
     }
 
     /// <summary>
+    /// Creates an S-101 dataset processor for the base cell at
+    /// <paramref name="baseRelativePath"/> with the in-set sequential update
+    /// files at <paramref name="updateRelativePaths"/> applied (best-effort)
+    /// before portrayal. Used by exchange-set bulk loading to collapse a cell and
+    /// its updates into a single up-to-date dataset. S-101 / S-100 Part 10a.
+    /// </summary>
+    /// <param name="source">The asset source backing the exchange set.</param>
+    /// <param name="baseRelativePath">Source-relative path of the base cell (<c>….000</c>).</param>
+    /// <param name="updateRelativePaths">Source-relative paths of the update files, in ascending update-number order.</param>
+    public IDatasetProcessor CreateS101ProcessorWithUpdates(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
+        ArgumentNullException.ThrowIfNull(updateRelativePaths);
+
+        return new S101DatasetProcessor(
+            source,
+            baseRelativePath,
+            updateRelativePaths,
+            _catalogueManager,
+            _luaEngine,
+            _featureCatalogueManager,
+            _sharedInstructionCache);
+    }
+
+    /// <summary>
+    /// Creates an S-101 dataset processor for the base cell file at
+    /// <paramref name="baseFilePath"/> with the sibling sequential update files
+    /// at <paramref name="updateFilePaths"/> applied (best-effort) before
+    /// portrayal. Used by command-line callers pointed at a loose base cell on
+    /// the local file system; the update files must live in the same directory
+    /// as the base cell. See <see cref="S101FilesystemUpdateDiscovery"/> for
+    /// locating the updates. S-101 / S-100 Part 10a.
+    /// </summary>
+    /// <param name="baseFilePath">Path to the base cell file (<c>….000</c>).</param>
+    /// <param name="updateFilePaths">Paths of the sibling update files, in ascending update-number order.</param>
+    public IDatasetProcessor CreateS101ProcessorWithUpdates(
+        string baseFilePath,
+        IReadOnlyList<string> updateFilePaths)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(baseFilePath);
+        ArgumentNullException.ThrowIfNull(updateFilePaths);
+
+        var fullBase = Path.GetFullPath(baseFilePath);
+        var directory = Path.GetDirectoryName(fullBase)
+            ?? throw new ArgumentException(
+                "Base cell path must include a directory.", nameof(baseFilePath));
+        var source = FileSystemAssetSource.Create(directory);
+
+        var baseRelative = Path.GetFileName(fullBase);
+        var updateRelatives = updateFilePaths.Select(Path.GetFileName).ToList();
+
+        return new S101DatasetProcessor(
+            source,
+            baseRelative,
+            updateRelatives,
+            _catalogueManager,
+            _luaEngine,
+            _featureCatalogueManager,
+            _sharedInstructionCache);
+    }
+
+    /// <summary>
     /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
     /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
     /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).

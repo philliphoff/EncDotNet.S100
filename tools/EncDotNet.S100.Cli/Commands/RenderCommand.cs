@@ -120,7 +120,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return 2;
             }
 
-            var processor = factory.CreateProcessor(settings.DatasetPath);
+            var processor = DatasetProcessorLoader.Create(factory, spec, settings);
 
             if (processor is not IHeadlessImageRenderer headless)
             {

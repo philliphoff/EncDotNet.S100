@@ -24,6 +24,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
 {
     private readonly S101Dataset _dataset;
+    private readonly S101UpdateReport? _updateReport;
     private readonly PortrayalCatalogueProvider _provider;
     private readonly S101PortrayalCatalogue _catalogue;
     private readonly PortrayalCatalogueManager _catalogueManager;
@@ -113,6 +114,12 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     public SpecRef Spec => new("S-101", default);
 
+    /// <summary>
+    /// Outcome of applying sequential updates when this processor was constructed
+    /// for a base cell plus in-set update files; otherwise <see langword="null"/>.
+    /// </summary>
+    public S101UpdateReport? UpdateReport => _updateReport;
+
     public S101DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
@@ -145,6 +152,32 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     {
     }
 
+    /// <summary>
+    /// Initializes a new <see cref="S101DatasetProcessor"/> for a base cell at
+    /// <paramref name="baseRelativePath"/> with the sequential update files at
+    /// <paramref name="updateRelativePaths"/> applied (best-effort) before
+    /// portrayal. Used by exchange-set bulk loading to collapse a cell and its
+    /// in-set updates into a single up-to-date dataset; the apply outcome is
+    /// exposed via <see cref="UpdateReport"/>. S-101 / S-100 Part 10a.
+    /// </summary>
+    public S101DatasetProcessor(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
+        : this(
+            PrepareWithUpdates(source, baseRelativePath, updateRelativePaths),
+            AssetSourceHelpers.GetFileName(baseRelativePath),
+            catalogueManager,
+            luaEngine,
+            featureCatalogueManager,
+            sharedInstructionCache)
+    {
+    }
+
     private S101DatasetProcessor(
         Stream datasetStream,
         string fileName,
@@ -152,27 +185,34 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache)
+        : this(
+            PrepareFromStream(datasetStream),
+            fileName,
+            catalogueManager,
+            luaEngine,
+            featureCatalogueManager,
+            sharedInstructionCache)
     {
-        ArgumentNullException.ThrowIfNull(datasetStream);
+    }
+
+    private S101DatasetProcessor(
+        PreparedDataset prepared,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache)
+    {
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _catalogueManager = catalogueManager;
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
 
-        // Buffer the raw dataset bytes once so we can (a) parse the document and
-        // (b) compute a content hash for the disk clip-cache scope key. S-101
-        // cells are small enough (a few MB) that buffering is cheap, and the
-        // content hash makes the persisted clip auto-invalidate when the cell's
-        // bytes change.
-        byte[] datasetBytes;
-        using (datasetStream)
-        {
-            datasetBytes = ReadAllBytes(datasetStream);
-        }
-        _dataset = S101Dataset.Open(new MemoryStream(datasetBytes, writable: false));
+        _dataset = prepared.Dataset;
+        _updateReport = prepared.Report;
 
-        _patternClipScope = BuildDatasetScopeKey(datasetBytes, _dataset);
+        _patternClipScope = BuildDatasetScopeKey(prepared.ScopeBytes, _dataset);
 
         // When a shared instruction cache is injected use it (persistent,
         // cross-cell, process-global); otherwise fall back to a bounded
@@ -183,6 +223,90 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         _featureCatalogueManager = featureCatalogueManager;
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+    }
+
+    /// <summary>A parsed dataset paired with the bytes used for the cache scope key and an optional update report.</summary>
+    private readonly record struct PreparedDataset(S101Dataset Dataset, byte[] ScopeBytes, S101UpdateReport? Report);
+
+    /// <summary>
+    /// Buffers and parses a single dataset stream (no updates). S-101 cells are
+    /// small enough that buffering the raw bytes for content hashing is cheap.
+    /// </summary>
+    private static PreparedDataset PrepareFromStream(Stream datasetStream)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        byte[] datasetBytes;
+        using (datasetStream)
+        {
+            datasetBytes = ReadAllBytes(datasetStream);
+        }
+        var dataset = S101Dataset.Open(new MemoryStream(datasetBytes, writable: false));
+        return new PreparedDataset(dataset, datasetBytes, Report: null);
+    }
+
+    /// <summary>
+    /// Reads a base cell plus its update files from <paramref name="source"/> and
+    /// applies them (best-effort) into a single up-to-date dataset. A file that
+    /// fails to read, or an invalid / non-contiguous update, is recorded in the
+    /// returned report and never aborts the load.
+    /// </summary>
+    private static PreparedDataset PrepareWithUpdates(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
+        ArgumentNullException.ThrowIfNull(updateRelativePaths);
+
+        var baseBytes = ReadAsset(source, baseRelativePath);
+        var baseDocument = S101Dataset.Open(new MemoryStream(baseBytes, writable: false)).Document;
+
+        var scopeStream = new MemoryStream();
+        scopeStream.Write(baseBytes, 0, baseBytes.Length);
+
+        var readMessages = new List<S101UpdateMessage>();
+        var updates = new List<S101Document>(updateRelativePaths.Count);
+        foreach (var updatePath in updateRelativePaths)
+        {
+            try
+            {
+                var updateBytes = ReadAsset(source, updatePath);
+                scopeStream.Write(updateBytes, 0, updateBytes.Length);
+                updates.Add(S101Dataset.Open(new MemoryStream(updateBytes, writable: false)).Document);
+            }
+            catch (Exception ex)
+            {
+                readMessages.Add(new S101UpdateMessage(
+                    S101UpdateSeverity.Error,
+                    $"Failed to read update '{AssetSourceHelpers.GetFileName(updatePath)}': {ex.Message}."));
+            }
+        }
+
+        updates.Sort((a, b) => a.Identification.UpdateNumber.CompareTo(b.Identification.UpdateNumber));
+
+        var merged = S101UpdateApplicator.Apply(baseDocument, updates, out var report);
+
+        if (readMessages.Count > 0)
+        {
+            report = new S101UpdateReport
+            {
+                BaseUpdateNumber = report.BaseUpdateNumber,
+                AppliedThroughUpdateNumber = report.AppliedThroughUpdateNumber,
+                Inserted = report.Inserted,
+                Deleted = report.Deleted,
+                Modified = report.Modified,
+                Messages = [.. readMessages, .. report.Messages],
+            };
+        }
+
+        return new PreparedDataset(S101Dataset.FromDocument(merged), scopeStream.ToArray(), report);
+    }
+
+    private static byte[] ReadAsset(IAssetSource source, string relativePath)
+    {
+        using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
+        return ReadAllBytes(stream);
     }
 
     /// <summary>

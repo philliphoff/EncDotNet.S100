@@ -100,6 +100,7 @@ and writes a PNG to `<output>`.
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
+| `--no-updates` | off | Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
@@ -107,13 +108,25 @@ s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
 s100 render seaice.gml seaice.png --no-text                # clean fill preview
 s100 render chart.gml chart.png --hide text,points         # hide text + symbols
+s100 render NL4NZ110.000 cell.png                          # applies .001/.002/… updates
+s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
 ```
+
+> **S-101 sequential updates.** When pointed at an S-101 base cell
+> (`….000`), `render` and `info` discover sibling update files
+> (`….001`, `….002`, …) in the same directory and apply them in order
+> before processing the cell, mirroring how an exchange set is loaded
+> in the viewer. Application is best-effort: a missing, out-of-order, or
+> unreadable update is reported but never blocks the command. Pass
+> `--no-updates` to operate on the base cell exactly as named.
 
 ### `s100 info <dataset>`
 
 Prints the detected specification, edition, whether the dataset supports
 headless rendering, and — for time-series datasets — the available time steps
-with their indices (use the index with `render --time-step`).
+with their indices (use the index with `render --time-step`). For an S-101
+base cell, sibling sequential updates are applied first (see `--no-updates`)
+so the reported model reflects the up-to-date cell.
 
 ### `s100 list-specs`
 
