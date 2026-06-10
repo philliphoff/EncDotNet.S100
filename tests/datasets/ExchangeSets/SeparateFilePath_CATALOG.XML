@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic fixture modelled on UKHO S-101 IC-ENC exchange sets:
+     a bare fileName plus a separate filePath directory element. -->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>TEST_SEPARATE_FILEPATH</S100XC:identifier>
+    <S100XC:dateTime>2022-02-07T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>101GB00502793.000</S100XC:fileName>
+      <S100XC:filePath>101GB00502793</S100XC:filePath>
+      <S100XC:productSpecification>
+        <S100XC:name>S-101</S100XC:name>
+        <S100XC:productIdentifier>S-101</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+  <S100XC:supportFileDiscoveryMetadata>
+    <S100XC:S100_SupportFileDiscoveryMetadata>
+      <S100XC:fileName>101GB00G2BXXX.TXT</S100XC:fileName>
+      <S100XC:filePath>support</S100XC:filePath>
+    </S100XC:S100_SupportFileDiscoveryMetadata>
+  </S100XC:supportFileDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

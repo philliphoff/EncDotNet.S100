@@ -56,7 +56,7 @@ public sealed class ExchangeSet : IDisposable
     public Task<Stream> FetchDatasetAsync(DatasetDiscoveryMetadata dataset, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dataset);
-        return _source.OpenAsync(NormalizeFileName(dataset.FileName), cancellationToken);
+        return _source.OpenAsync(ResolveRelativePath(dataset.FilePath, dataset.FileName), cancellationToken);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class ExchangeSet : IDisposable
     public Task<Stream> FetchSupportFileAsync(SupportFileDiscoveryMetadata supportFile, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(supportFile);
-        return _source.OpenAsync(NormalizeFileName(supportFile.FileName), cancellationToken);
+        return _source.OpenAsync(ResolveRelativePath(supportFile.FilePath, supportFile.FileName), cancellationToken);
     }
 
     /// <summary>
@@ -74,24 +74,79 @@ public sealed class ExchangeSet : IDisposable
     public Task<Stream> FetchCatalogueFileAsync(CatalogueDiscoveryMetadata catalogueFile, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(catalogueFile);
-        return _source.OpenAsync(NormalizeFileName(catalogueFile.FileName), cancellationToken);
+        return _source.OpenAsync(ResolveRelativePath(catalogueFile.FilePath, catalogueFile.FileName), cancellationToken);
     }
 
     /// <inheritdoc />
     public void Dispose() => _source.Dispose();
 
     /// <summary>
-    /// Strips the <c>file:/</c> URI prefix that S-100 exchange catalogues may use on file names.
+    /// Normalizes a catalogue-declared file name into a source-relative path:
+    /// strips the <c>file:/</c> URI prefix, converts Windows-style
+    /// backslash separators to forward slashes, and removes any leading
+    /// slashes (which S-100 catalogues occasionally use to denote
+    /// "from the exchange set root" but which would otherwise be treated
+    /// as an absolute path by the underlying asset source).
     /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 17.</remarks>
     public static string NormalizeFileName(string fileName)
     {
         ArgumentException.ThrowIfNullOrEmpty(fileName);
 
-        if (fileName.StartsWith("file:/", StringComparison.OrdinalIgnoreCase))
+        var name = fileName;
+
+        if (name.StartsWith("file:/", StringComparison.OrdinalIgnoreCase))
         {
-            return fileName["file:/".Length..];
+            name = name["file:/".Length..];
         }
 
-        return fileName;
+        name = name.Replace('\\', '/').TrimStart('/');
+
+        return name;
+    }
+
+    /// <summary>
+    /// Resolves the source-relative path of a catalogue entry from its
+    /// optional <c>filePath</c> directory and its <c>fileName</c>.
+    /// </summary>
+    /// <param name="filePath">
+    /// The directory of the file relative to the exchange set root, as
+    /// declared by the catalogue's <c>filePath</c> element. May be
+    /// <see langword="null"/>, empty, Windows-separated, or carry a
+    /// leading slash. When absent, the file is assumed to live at the
+    /// root (or the <paramref name="fileName"/> itself carries the path).
+    /// </param>
+    /// <param name="fileName">The catalogue-declared file name.</param>
+    /// <returns>A normalized, forward-slashed, root-relative path.</returns>
+    /// <remarks>
+    /// S-100 Edition 5.2.1 Part 17. Some producers (e.g. UKHO S-101,
+    /// NOAA S-102) place datasets in sub-directories and declare the
+    /// directory separately via <c>filePath</c> while <c>fileName</c>
+    /// carries only the bare file name; others fold the whole path into
+    /// <c>fileName</c>. Both forms resolve here.
+    /// </remarks>
+    public static string ResolveRelativePath(string? filePath, string fileName)
+    {
+        var normalizedName = NormalizeFileName(fileName);
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return normalizedName;
+        }
+
+        var directory = filePath.Replace('\\', '/').Trim().Trim('/');
+        if (directory.Length == 0)
+        {
+            return normalizedName;
+        }
+
+        // Guard against double-prefixing when the file name already
+        // carries the directory portion.
+        if (normalizedName.StartsWith(directory + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return normalizedName;
+        }
+
+        return directory + "/" + normalizedName;
     }
 }

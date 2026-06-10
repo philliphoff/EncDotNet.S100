@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic fixture modelled on NOAA S-102 IC-ENC exchange sets:
+     dataset discovery items wrapped in a product-specific element and
+     namespace (S102_DatasetDiscoveryMetadata), with a Windows-style,
+     leading-backslash filePath. Inner fields remain in the S100XC
+     namespace. -->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc"
+    xmlns:S102XC="http://www.iho.int/s102/2.0/xc"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>TEST_PRODUCT_WRAPPER</S100XC:identifier>
+    <S100XC:dateTime>2020-05-19T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:datasetDiscoveryMetadata>
+    <S102XC:S102_DatasetDiscoveryMetadata>
+      <S100XC:fileName>102USA16LGBAC200408.H5</S100XC:fileName>
+      <S100XC:filePath>\S102\PBC_UTM11N_MLLW_LALB</S100XC:filePath>
+      <S100XC:productSpecification>
+        <S100XC:name>S-102</S100XC:name>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S102XC:S102_DatasetDiscoveryMetadata>
+    <S102XC:S102_DatasetDiscoveryMetadata>
+      <S100XC:fileName>102USA16LGBAD200408.H5</S100XC:fileName>
+      <S100XC:filePath>\S102\PBC_UTM11N_MLLW_LALB</S100XC:filePath>
+      <S100XC:productSpecification>
+        <S100XC:name>S-102</S100XC:name>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S102XC:S102_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

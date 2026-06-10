@@ -152,7 +152,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     break;
                 }
 
-                var relativePath = ExchangeSet.NormalizeFileName(metadata.FileName);
+                var relativePath = metadata.RelativePath;
                 var spec = DatasetPipelineFactory.MapProductIdentifierToSpec(
                     metadata.ProductSpecification?.ProductIdentifier);
                 if (spec is null)

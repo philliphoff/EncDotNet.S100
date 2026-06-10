@@ -55,17 +55,20 @@ public static class ExchangeCatalogueReader
             Certificates = ReadCertificateBlock(root.Element(xc + "certificates")),
             DatasetDiscoveryMetadata = root
                 .Element(xc + "datasetDiscoveryMetadata")?
-                .Elements(xc + "S100_DatasetDiscoveryMetadata")
+                .Elements()
+                .Where(e => e.Name.LocalName.EndsWith("_DatasetDiscoveryMetadata", StringComparison.Ordinal))
                 .Select(e => ReadDatasetDiscovery(e, xc, lan))
                 .ToList() ?? [],
             SupportFileDiscoveryMetadata = root
                 .Element(xc + "supportFileDiscoveryMetadata")?
-                .Elements(xc + "S100_SupportFileDiscoveryMetadata")
+                .Elements()
+                .Where(e => e.Name.LocalName.EndsWith("_SupportFileDiscoveryMetadata", StringComparison.Ordinal))
                 .Select(e => ReadSupportFileDiscovery(e, xc))
                 .ToList() ?? [],
             CatalogueDiscoveryMetadata = root
                 .Element(xc + "catalogueDiscoveryMetadata")?
-                .Elements(xc + "S100_CatalogueDiscoveryMetadata")
+                .Elements()
+                .Where(e => e.Name.LocalName.EndsWith("_CatalogueDiscoveryMetadata", StringComparison.Ordinal))
                 .Select(e => ReadCatalogueDiscovery(e, xc, lan))
                 .ToList() ?? [],
         };
@@ -113,6 +116,7 @@ public static class ExchangeCatalogueReader
         return new DatasetDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
+            FilePath = (string?)element.Element(xc + "filePath"),
             Description = ReadCharacterString(element.Element(xc + "description")),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DataProtection = ParseBool(element, "dataProtection", xc),
@@ -148,6 +152,7 @@ public static class ExchangeCatalogueReader
         return new SupportFileDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
+            FilePath = (string?)element.Element(xc + "filePath"),
             RevisionStatus = (string?)element.Element(xc + "revisionStatus"),
             EditionNumber = ParseInt(element, "editionNumber", xc),
             IssueDate = (string?)element.Element(xc + "issueDate"),
@@ -174,6 +179,7 @@ public static class ExchangeCatalogueReader
         return new CatalogueDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
+            FilePath = (string?)element.Element(xc + "filePath"),
             Purpose = (string?)element.Element(xc + "purpose"),
             EditionNumber = ParseInt(element, "editionNumber", xc),
             Scope = (string?)element.Element(xc + "scope"),

@@ -40,7 +40,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         foreach (var ds in catalogue.DatasetDiscoveryMetadata)
         {
             var result = await VerifyFileAsync(
-                source, ds.FileName, ds.DigitalSignatureValue, ds.DigitalSignatureAlgorithm,
+                source, ds.RelativePath, ds.DigitalSignatureValue, ds.DigitalSignatureAlgorithm,
                 certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }
@@ -49,7 +49,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         foreach (var sf in catalogue.SupportFileDiscoveryMetadata)
         {
             var result = await VerifyFileAsync(
-                source, sf.FileName, sf.DigitalSignatureValue, sf.DigitalSignatureAlgorithm,
+                source, sf.RelativePath, sf.DigitalSignatureValue, sf.DigitalSignatureAlgorithm,
                 certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }
@@ -58,7 +58,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         foreach (var cf in catalogue.CatalogueDiscoveryMetadata)
         {
             var result = await VerifyFileAsync(
-                source, cf.FileName, cf.DigitalSignatureValue, cf.DigitalSignatureAlgorithm,
+                source, cf.RelativePath, cf.DigitalSignatureValue, cf.DigitalSignatureAlgorithm,
                 certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }

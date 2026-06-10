@@ -13,6 +13,32 @@ This library parses S-100 Exchange Set `CATALOG.XML` files and provides access t
 - **`SupportFileDiscoveryMetadata`** — metadata for support files.
 - **`CatalogueDiscoveryMetadata`** — metadata for embedded catalogues.
 
+## File path resolution
+
+Producers lay out exchange sets in different ways, and the catalogue can
+describe a file's location in several forms. `ExchangeSet` normalizes all
+of them into a single source-relative path:
+
+- A separate `<filePath>` directory element combined with a bare
+  `<fileName>` (e.g. UKHO S-101: `filePath=101GB00502793`,
+  `fileName=101GB00502793.000`).
+- A full path folded into `<fileName>`, optionally with a `file:/` URI
+  prefix (e.g. `file:/S-101/DATASET_FILES/101AU005BTB01.000`).
+- Windows-style separators and a leading slash in `<filePath>`
+  (e.g. NOAA S-102: `\S102\PBC_UTM11N_MLLW_LALB`).
+
+Use **`DatasetDiscoveryMetadata.RelativePath`** (and the equivalent on the
+support/catalogue metadata types) — or the static
+`ExchangeSet.ResolveRelativePath(filePath, fileName)` — to obtain the path
+to pass to an `IAssetSource`. `ExchangeSet.NormalizeFileName` handles the
+`file:/` prefix, backslash separators, and leading slashes on a bare file
+name.
+
+The reader also recognizes dataset/support/catalogue discovery items that
+are wrapped in product-specific elements and namespaces
+(e.g. `S102_DatasetDiscoveryMetadata` in `http://www.iho.int/s102/2.0/xc`),
+not just the generic `S100_DatasetDiscoveryMetadata`.
+
 ## Digital Signature Verification
 
 The library implements the S-100 Part 15 Data Protection Scheme for **signature verification**. Exchange sets may include per-file digital signatures (DSA or ECDSA P-256 over SHA-256) embedded in `CATALOG.XML`, along with a certificate block referencing the signing data provider.
