@@ -17,12 +17,25 @@ public class S101LegacyFeatureNamesTests
     [InlineData("BuoySafeWater", "SafeWaterBuoy")]
     [InlineData("BuoySpecialPurposeGeneral", "SpecialPurposeGeneralBuoy")]
     [InlineData("BuoyNewDangerMarking", "EmergencyWreckMarkingBuoy")]
+    [InlineData("BuoyEmergencyWreckMarking", "EmergencyWreckMarkingBuoy")]
     [InlineData("BeaconCardinal", "CardinalBeacon")]
     [InlineData("BeaconIsolatedDanger", "IsolatedDangerBeacon")]
     [InlineData("BeaconLateral", "LateralBeacon")]
     [InlineData("BeaconSafeWater", "SafeWaterBeacon")]
     [InlineData("BeaconSpecialPurposeGeneral", "SpecialPurposeGeneralBeacon")]
     public void Normalize_LegacyBuoyOrBeacon_ReturnsRenamed(string legacy, string expected)
+    {
+        Assert.Equal(expected, S101LegacyFeatureNames.Normalize(legacy));
+    }
+
+    [Theory]
+    [InlineData("RestrictedAreaNavigational", "RestrictedArea")]
+    [InlineData("RestrictedAreaRegulatory", "RestrictedArea")]
+    [InlineData("TrafficSeparationZone", "SeparationZoneOrLine")]
+    [InlineData("TrafficSeparationLine", "SeparationZoneOrLine")]
+    [InlineData("restrictedareanavigational", "RestrictedArea")]
+    [InlineData("TRAFFICSEPARATIONLINE", "SeparationZoneOrLine")]
+    public void Normalize_LegacyMergedArea_ReturnsRenamed(string legacy, string expected)
     {
         Assert.Equal(expected, S101LegacyFeatureNames.Normalize(legacy));
     }

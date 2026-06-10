@@ -46,12 +46,18 @@ Catalogue report the **pre-2.0.0** names (`BuoyLateral`,
 falls back to **DEFAULT** (`QUESMRK1`) symbology.
 
 `S101LegacyFeatureNames.Normalize` maps the legacy class names to their
-2.0.0 equivalents so the correct rule runs. Because simple attribute
-names are stable across these editions, only the feature **class** name
-needs remapping. The shim is applied **only** at the portrayal boundary
-(`S101LuaDataProvider.HostFeatureGetCode`); feature names are left
-as-authored everywhere else (document reader, vector source,
-validation, info panels).
+2.0.0 equivalents so the correct rule runs. This covers both the
+word-reordered buoy/beacon classes (`BuoyLateral` → `LateralBuoy`,
+`BeaconCardinal` → `CardinalBeacon`, …) and classes that were **merged**
+in 2.0.0: `RestrictedAreaNavigational` / `RestrictedAreaRegulatory` →
+`RestrictedArea`, `TrafficSeparationZone` / `TrafficSeparationLine` →
+`SeparationZoneOrLine`, and `BuoyEmergencyWreckMarking` /
+`BuoyNewDangerMarking` → `EmergencyWreckMarkingBuoy`. Because simple
+attribute names are stable across these editions, only the feature
+**class** name needs remapping. The shim is applied **only** at the
+portrayal boundary (`S101LuaDataProvider.HostFeatureGetCode`); feature
+names are left as-authored everywhere else (document reader, vector
+source, validation, info panels).
 
 `MooringWarpingFacility` was structurally removed in 2.0.0, so it is
 mapped conditionally on `categoryOfMooringWarpingFacility`

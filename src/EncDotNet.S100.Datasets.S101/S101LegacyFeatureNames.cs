@@ -12,12 +12,16 @@ namespace EncDotNet.S100.Datasets.S101;
 /// <para>
 /// Between S-101 1.x and 2.0.0 several compound feature class names were
 /// re-ordered (for example <c>BuoyLateral</c> became <c>LateralBuoy</c> and
-/// <c>BeaconCardinal</c> became <c>CardinalBeacon</c>). Because the S-100
-/// Part 9A Lua portrayal dispatcher (<c>main.lua</c>) loads and invokes a rule
-/// module whose file name and global function name both equal the feature's
-/// class code (<c>require(feature.Code)</c> then <c>_G[feature.Code](...)</c>),
-/// a dataset that reports a legacy class code finds no matching 2.0.0 rule
-/// module and falls back to DEFAULT symbology.
+/// <c>BeaconCardinal</c> became <c>CardinalBeacon</c>), and a few classes were
+/// merged: the 1.x <c>RestrictedAreaNavigational</c> and
+/// <c>RestrictedAreaRegulatory</c> classes became a single
+/// <c>RestrictedArea</c>, and <c>TrafficSeparationZone</c> /
+/// <c>TrafficSeparationLine</c> became <c>SeparationZoneOrLine</c>. Because the
+/// S-100 Part 9A Lua portrayal dispatcher (<c>main.lua</c>) loads and invokes a
+/// rule module whose file name and global function name both equal the
+/// feature's class code (<c>require(feature.Code)</c> then
+/// <c>_G[feature.Code](...)</c>), a dataset that reports a legacy class code
+/// finds no matching 2.0.0 rule module and falls back to DEFAULT symbology.
 /// </para>
 /// <para>
 /// Simple attribute names are stable across these editions, so re-mapping only
@@ -65,6 +69,21 @@ public static class S101LegacyFeatureNames
             ["BuoySpecialPurposeGeneral"] = "SpecialPurposeGeneralBuoy",
             // The "new danger marking" buoy was renamed "emergency wreck marking".
             ["BuoyNewDangerMarking"] = "EmergencyWreckMarkingBuoy",
+            // The 1.x compound order "Buoy*" was also reversed for this class.
+            ["BuoyEmergencyWreckMarking"] = "EmergencyWreckMarkingBuoy",
+
+            // Restricted areas: S-101 1.x split RestrictedArea into the separate
+            // RestrictedAreaNavigational and RestrictedAreaRegulatory classes;
+            // 2.0.0 merged them back into a single RestrictedArea discriminated
+            // by categoryOfRestrictedArea/restriction.
+            ["RestrictedAreaNavigational"] = "RestrictedArea",
+            ["RestrictedAreaRegulatory"] = "RestrictedArea",
+
+            // Traffic separation: S-101 1.x had separate TrafficSeparationZone
+            // (area) and TrafficSeparationLine (curve) classes; 2.0.0 merged them
+            // into SeparationZoneOrLine (whose rule handles both primitives).
+            ["TrafficSeparationZone"] = "SeparationZoneOrLine",
+            ["TrafficSeparationLine"] = "SeparationZoneOrLine",
 
             // Beacons (S-101 2.0.0 reverses the compound order).
             ["BeaconCardinal"] = "CardinalBeacon",
