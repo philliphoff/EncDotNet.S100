@@ -60,6 +60,24 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             return 0;
         }
+        catch (NotSupportedException ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 4;
+        }
+        catch (S100DatasetNotSupportedException ex)
+        {
+            // Recognised-but-not-yet-implemented spec feature (e.g. data coding
+            // format 1). Does not derive from NotSupportedException, so it needs
+            // its own catch to map to exit 4 rather than the generic exit-1 path.
+            // See issue #253.
+            AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 4;
+        }
         catch (S100DatasetSchemaException ex)
         {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");

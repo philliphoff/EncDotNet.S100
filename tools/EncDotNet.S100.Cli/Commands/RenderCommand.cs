@@ -161,6 +161,19 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 AnsiConsole.WriteException(ex);
             return 4;
         }
+        catch (S100DatasetNotSupportedException ex)
+        {
+            // Distinct from NotSupportedException (e.g. the dcf8 headless path):
+            // readers raise this for recognised-but-not-yet-implemented spec
+            // features such as data coding format 1 (irregular fixed-station
+            // time series). It does not derive from NotSupportedException, so it
+            // needs its own catch to avoid falling through to the generic exit-1
+            // path. See issue #253.
+            AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 4;
+        }
         catch (S100DatasetSchemaException ex)
         {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");
