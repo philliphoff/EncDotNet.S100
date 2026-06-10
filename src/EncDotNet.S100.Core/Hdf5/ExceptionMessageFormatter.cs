@@ -12,12 +12,18 @@ public static class ExceptionMessageFormatter
     /// <summary>
     /// Formats the standard "missing required attribute / group" message.
     /// </summary>
+    /// <param name="additionalContext">
+    /// Optional extra sentence appended after the standard text — used,
+    /// for example, to note that the dataset declares an unexpected
+    /// product-specification edition that may explain the failure.
+    /// </param>
     public static string FormatSchema(
         string product,
         string? file,
         string groupPath,
         string? attributeOrDataset,
-        string? specReference)
+        string? specReference,
+        string? additionalContext = null)
     {
         string subject = string.IsNullOrEmpty(file)
             ? $"{product} dataset"
@@ -29,7 +35,9 @@ public static class ExceptionMessageFormatter
 
         string cite = specReference is null ? string.Empty : $" ({specReference})";
 
-        return $"{subject} {missing}{cite}. The file appears to be non-conforming.";
+        string note = string.IsNullOrEmpty(additionalContext) ? string.Empty : $" {additionalContext}";
+
+        return $"{subject} {missing}{cite}. The file appears to be non-conforming.{note}";
     }
 
     /// <summary>

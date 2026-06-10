@@ -149,4 +149,5 @@ headless render path.
 | `2` | Product specification could not be detected. |
 | `3` | The detected spec does not support headless rendering. |
 | `4` | The dataset is recognised but its shape is unsupported (e.g. fixed-station coverage). |
+| `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |
 | non-zero | Argument validation failure (missing file, bad palette, etc.). |
