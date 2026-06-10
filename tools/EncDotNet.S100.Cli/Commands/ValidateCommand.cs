@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -41,6 +43,15 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         [DefaultValue(false)]
         public bool Strict { get; init; }
 
+        [CommandOption("--suppress")]
+        [Description(
+            "Comma-separated list of rule ids (or glob patterns using '*') whose findings are " +
+            "dropped from the report and ignored by the exit code — e.g. " +
+            "--suppress S101-R-1.2,S101-R-3.2 or --suppress \"S101-*\". Useful for muting a " +
+            "known rule class (such as feature-catalogue-version mismatches) to surface the " +
+            "more-likely-real findings.")]
+        public string? Suppress { get; init; }
+
         public override ValidationResult Validate()
         {
             var baseResult = base.Validate();
@@ -49,6 +60,10 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
 
             if (!TryParseFormat(Format, out _))
                 return ValidationResult.Error($"Unknown format '{Format}'. Use text or json.");
+
+            if (Suppress is not null && !TryParseSuppressPatterns(Suppress, out _))
+                return ValidationResult.Error(
+                    "--suppress must be a comma-separated list of one or more rule ids or patterns.");
 
             return ValidationResult.Success();
         }
@@ -75,9 +90,13 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             var processor = factory.CreateProcessor(settings.DatasetPath);
             var report = processor.Validate();
 
+            string[] patterns = Array.Empty<string>();
+            if (settings.Suppress is not null)
+                TryParseSuppressPatterns(settings.Suppress, out patterns);
+
             return format == OutputFormat.Json
-                ? EmitJson(processor.Spec, report, settings.Strict)
-                : EmitText(processor.Spec, report, settings.Strict);
+                ? EmitJson(processor.Spec, report, settings.Strict, patterns)
+                : EmitText(processor.Spec, report, settings.Strict, patterns);
         }
         catch (NotSupportedException ex)
         {
@@ -109,7 +128,7 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         }
     }
 
-    private static int EmitText(SpecRef spec, ValidationReport? report, bool strict)
+    private static int EmitText(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)
     {
         if (report is null)
         {
@@ -118,10 +137,14 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             return 0;
         }
 
-        if (report.Findings.IsDefaultOrEmpty)
+        var (kept, suppressedCount) = Partition(report, suppressPatterns);
+
+        if (kept.IsEmpty)
         {
-            AnsiConsole.MarkupLineInterpolated(
-                $"[green]Valid[/] — {Markup.Escape(spec.Name)} ([grey]{report.RulesEvaluated} rule(s) evaluated, no findings[/])");
+            var suffix = suppressedCount > 0
+                ? $" ([grey]{report.RulesEvaluated} rule(s) evaluated; {suppressedCount} finding(s) suppressed[/])"
+                : $" ([grey]{report.RulesEvaluated} rule(s) evaluated, no findings[/])";
+            AnsiConsole.MarkupLineInterpolated($"[green]Valid[/] — {Markup.Escape(spec.Name)}{suffix}");
             return 0;
         }
 
@@ -131,7 +154,7 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         table.AddColumn("Message");
         table.AddColumn("Location");
 
-        foreach (var finding in report.Findings)
+        foreach (var finding in kept)
         {
             table.AddRow(
                 SeverityMarkup(finding.Severity),
@@ -142,27 +165,39 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
 
         AnsiConsole.Write(table);
 
-        int errors = report.FindingsOfSeverity(ValidationSeverity.Error).Count();
-        int warnings = report.FindingsOfSeverity(ValidationSeverity.Warning).Count();
-        int infos = report.FindingsOfSeverity(ValidationSeverity.Info).Count();
+        int errors = kept.Count(f => f.Severity == ValidationSeverity.Error);
+        int warnings = kept.Count(f => f.Severity == ValidationSeverity.Warning);
+        int infos = kept.Count(f => f.Severity == ValidationSeverity.Info);
+        int rulesWithFindings = kept.Select(f => f.RuleId).Distinct().Count();
 
         AnsiConsole.MarkupLineInterpolated(
-            $"[grey]{report.RulesEvaluated} rule(s) evaluated, {report.RulesWithFindings} with findings:[/] [red]{errors} error(s)[/], [yellow]{warnings} warning(s)[/], [blue]{infos} info[/].");
+            $"[grey]{report.RulesEvaluated} rule(s) evaluated, {rulesWithFindings} with findings:[/] [red]{errors} error(s)[/], [yellow]{warnings} warning(s)[/], [blue]{infos} info[/].");
 
-        return Failed(report, strict) ? FindingsExitCode : 0;
+        if (suppressedCount > 0)
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]{suppressedCount} finding(s) suppressed via --suppress {Markup.Escape(string.Join(",", suppressPatterns))}.[/]");
+
+        return Failed(kept, strict) ? FindingsExitCode : 0;
     }
 
-    private static int EmitJson(SpecRef spec, ValidationReport? report, bool strict)
+    private static int EmitJson(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)
     {
+        var kept = report is null
+            ? ImmutableArray<ValidationFinding>.Empty
+            : Partition(report, suppressPatterns).Kept;
+        int suppressedCount = report is null ? 0 : report.Findings.Length - kept.Length;
+
         var payload = new
         {
             specification = spec.Name,
             edition = spec.Edition.ToString(),
             rulesAvailable = report is not null,
             rulesEvaluated = report?.RulesEvaluated ?? 0,
-            rulesWithFindings = report?.RulesWithFindings ?? 0,
-            valid = report is null || report.Findings.IsDefaultOrEmpty,
-            findings = (report?.Findings ?? System.Collections.Immutable.ImmutableArray<ValidationFinding>.Empty)
+            rulesWithFindings = kept.Select(f => f.RuleId).Distinct().Count(),
+            valid = report is null || kept.IsEmpty,
+            suppressedPatterns = suppressPatterns.Count > 0 ? suppressPatterns.ToArray() : null,
+            suppressedCount,
+            findings = kept
                 .Select(f => new
                 {
                     ruleId = f.RuleId,
@@ -185,11 +220,31 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         };
 
         Console.Out.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
-        return report is not null && Failed(report, strict) ? FindingsExitCode : 0;
+        return report is not null && Failed(kept, strict) ? FindingsExitCode : 0;
     }
 
-    private static bool Failed(ValidationReport report, bool strict) =>
-        report.HasErrors || (strict && report.HasWarnings);
+    /// <summary>
+    /// Splits a report's findings into the set kept after applying the
+    /// <paramref name="suppressPatterns"/> and the count that were suppressed.
+    /// A finding is suppressed when its <see cref="ValidationFinding.RuleId"/>
+    /// matches any pattern (see <see cref="IsSuppressed"/>).
+    /// </summary>
+    private static (ImmutableArray<ValidationFinding> Kept, int Suppressed) Partition(
+        ValidationReport report, IReadOnlyList<string> suppressPatterns)
+    {
+        if (report.Findings.IsDefaultOrEmpty)
+            return (ImmutableArray<ValidationFinding>.Empty, 0);
+
+        if (suppressPatterns.Count == 0)
+            return (report.Findings, 0);
+
+        var kept = report.Findings.Where(f => !IsSuppressed(f.RuleId, suppressPatterns)).ToImmutableArray();
+        return (kept, report.Findings.Length - kept.Length);
+    }
+
+    private static bool Failed(IReadOnlyCollection<ValidationFinding> findings, bool strict) =>
+        findings.Any(f => f.Severity == ValidationSeverity.Error)
+        || (strict && findings.Any(f => f.Severity == ValidationSeverity.Warning));
 
     private static string FormatLocation(ValidationFinding finding)
     {
@@ -250,5 +305,45 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             case "json": format = OutputFormat.Json; return true;
             default: format = OutputFormat.Text; return false;
         }
+    }
+
+    /// <summary>
+    /// Parses the <c>--suppress</c> value (a comma-separated list of rule ids
+    /// or glob patterns) into its constituent patterns. Empty tokens are
+    /// dropped; returns <see langword="false"/> when no non-empty pattern
+    /// remains so the command can reject a value such as <c>","</c>.
+    /// </summary>
+    internal static bool TryParseSuppressPatterns(string value, out string[] patterns)
+    {
+        patterns = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return patterns.Length > 0;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="ruleId"/> matches any
+    /// of the supplied <paramref name="patterns"/> (see <see cref="RuleIdMatches"/>).
+    /// </summary>
+    internal static bool IsSuppressed(string ruleId, IReadOnlyList<string> patterns)
+    {
+        for (int i = 0; i < patterns.Count; i++)
+        {
+            if (RuleIdMatches(ruleId, patterns[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Case-insensitive glob match of a rule id against a single pattern. The
+    /// only wildcard is <c>*</c>, which matches any run of characters
+    /// (including none); every other character must match literally. A pattern
+    /// with no wildcard therefore behaves as an exact, case-insensitive rule-id
+    /// match (e.g. <c>S101-R-1.2</c>), while <c>S101-*</c> or
+    /// <c>*-PROJ-UNSUPPORTED</c> match a whole class of rules.
+    /// </summary>
+    internal static bool RuleIdMatches(string ruleId, string pattern)
+    {
+        var regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+        return Regex.IsMatch(ruleId, regex, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 }

@@ -26,6 +26,7 @@ internal static class CliApp
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack.")
                 .WithExample("validate", "warnings.gml")
                 .WithExample("validate", "route.gml", "--strict")
+                .WithExample("validate", "chart.000", "--suppress", "S101-R-1.2,S101-R-3.2")
                 .WithExample("validate", "currents.h5", "--format", "json");
 
             config.AddCommand<InfoCommand>("info")

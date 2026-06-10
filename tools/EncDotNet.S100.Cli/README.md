@@ -133,6 +133,7 @@ this is distinct from a dataset that was evaluated and found conformant.
 | Option | Default | Description |
 |---|---|---|
 | `--format <fmt>` | `text` | Output format: `text` (a findings table) or `json` (machine-readable, for CI). |
+| `--suppress <list>` | _none_ | Comma-separated list of rule ids (or `*` glob patterns) whose findings are dropped from the report **and** ignored by the exit code — e.g. `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. Compiler-style "no-warn": mute a known rule class (such as a feature-catalogue-version mismatch) to surface the more-likely-real findings. The count of suppressed findings is still reported. |
 | `--strict` | off | Treat warnings as failures: exit `6` when any warning (not just an error) is present. |
 | `--debug` | off | Print full stack traces on error. |
 
@@ -140,11 +141,19 @@ this is distinct from a dataset that was evaluated and found conformant.
 s100 validate warnings.gml                 # human-readable findings table
 s100 validate route.gml --strict           # fail the build on warnings too
 s100 validate currents.h5 --format json    # machine-readable report for CI
+s100 validate chart.000 --suppress S101-R-1.2,S101-R-3.2   # mute a rule class
+s100 validate chart.000 --suppress "S101-*"                # glob: mute a whole spec's rules
 ```
 
-By default the command exits `0` when no **error**-severity findings are
-present (warnings and info are reported but do not fail); pass `--strict` to
-also fail on warnings. Exit code `6` signals failing findings.
+The `--suppress` patterns are matched case-insensitively against each finding's
+rule id; `*` is the only wildcard and matches any run of characters, so a
+pattern with no `*` is an exact rule-id match. Suppressed findings are removed
+from the table/JSON and do not contribute to the exit code, but the trailing
+summary still reports how many were suppressed.
+
+By default the command exits `0` when no **error**-severity findings remain
+after suppression (warnings and info are reported but do not fail); pass
+`--strict` to also fail on warnings. Exit code `6` signals failing findings.
 
 ### `s100 list-specs`
 
