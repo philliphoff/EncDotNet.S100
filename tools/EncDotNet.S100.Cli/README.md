@@ -148,6 +148,6 @@ headless render path.
 | `1` | Unhandled error (use `--debug` for a stack trace). |
 | `2` | Product specification could not be detected. |
 | `3` | The detected spec does not support headless rendering. |
-| `4` | The dataset is recognised but its shape is unsupported (e.g. fixed-station coverage). |
+| `4` | The dataset is recognised but its shape or encoding is unsupported — e.g. a fixed-station coverage, or a data coding format the reader does not yet implement (such as dcf1, irregular time series at fixed stations). |
 | `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |
 | non-zero | Argument validation failure (missing file, bad palette, etc.). |
