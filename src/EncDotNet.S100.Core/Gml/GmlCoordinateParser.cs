@@ -129,6 +129,14 @@ public static class GmlCoordinateParser
         {
             exteriorRing = ParseRingCoordinates(exterior, gmlNs);
         }
+        else
+        {
+            // Producer-bug compensation: some datasets (e.g. S-128 GML 1.0
+            // IC-ENC/DK catalogues) emit <gml:Polygon><gml:posList> directly,
+            // omitting the <gml:exterior>/<gml:LinearRing> wrapper. Fall back to
+            // a direct posList/pos sequence under the surface container.
+            exteriorRing = ParseRingCoordinates(surfaceContainer, gmlNs);
+        }
 
         foreach (var interior in surfaceContainer.Descendants(gmlNs + "interior"))
         {
@@ -144,8 +152,38 @@ public static class GmlCoordinateParser
         if (posList is not null)
             return ParsePosList(posList.Value);
 
+        return ParsePosSequence(ringContainer.Descendants(gmlNs + "pos"));
+    }
+
+    /// <summary>
+    /// Parses a sequence of <c>gml:pos</c> elements into coordinate pairs.
+    /// </summary>
+    /// <remarks>
+    /// A conformant <c>gml:pos</c> carries a full coordinate (≥ 2 ordinates);
+    /// in that case each element yields one pair. As a producer-bug
+    /// compensation (seen in S-128 GML 1.0 IC-ENC datasets) where every
+    /// <c>gml:pos</c> carries a <em>single</em> ordinate, the ordinates are
+    /// flattened across elements and paired up (lat, lon).
+    /// </remarks>
+    private static ImmutableArray<(double, double)> ParsePosSequence(IEnumerable<XElement> posElements)
+    {
+        var elements = posElements as IReadOnlyList<XElement> ?? posElements.ToArray();
+        if (elements.Count == 0)
+            return ImmutableArray<(double, double)>.Empty;
+
+        bool allSingleOrdinate = elements.All(e =>
+            e.Value.Split(Separators, StringSplitOptions.RemoveEmptyEntries).Length == 1);
+
+        // Every <gml:pos> held exactly one ordinate: re-interpret as a flat
+        // ordinate stream and pair the values into (lat, lon) coordinates.
+        if (allSingleOrdinate)
+        {
+            var flattened = string.Join(' ', elements.Select(e => e.Value));
+            return ParsePosList(flattened);
+        }
+
         var coords = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var pos in ringContainer.Descendants(gmlNs + "pos"))
+        foreach (var pos in elements)
         {
             var coord = ParsePos(pos.Value);
             if (coord is not null) coords.Add(coord.Value);

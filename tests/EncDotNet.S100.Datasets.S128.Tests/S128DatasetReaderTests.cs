@@ -242,4 +242,112 @@ public class S128DatasetReaderTests
         Assert.Single(ds.Features);
         Assert.Equal("DistributorInformation", ds.Features[0].FeatureType);
     }
+
+    /// <summary>
+    /// Variant A producer bug (S-128 GML 1.0 IC-ENC/DK): polygons encoded as
+    /// <c>&lt;gml:Polygon&gt;&lt;gml:posList&gt;</c> with no
+    /// <c>&lt;gml:exterior&gt;/&lt;gml:LinearRing&gt;</c> wrapper, and features
+    /// keyed by the non-standard <c>gml:gmlId</c>. The reader must still parse
+    /// the exterior ring and populate the feature identifier (otherwise the
+    /// geometry provider drops the feature and the dataset renders blank — see
+    /// issue #243).
+    /// </summary>
+    [Fact]
+    public void Reader_ParsesExteriorlessPolygon_AndGmlIdFallback()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <S128:Dataset xmlns:S128="http://www.iho.int/S128/gml/1.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/1.0"
+                          xmlns:xlink="http://www.w3.org/1999/xlink"
+                          gml:id="TEST">
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-128</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <member>
+                <S128:ElectronicChart gml:gmlId="GST.ElectronicChart.DK1">
+                  <geometry>
+                    <S100:surfaceProperty>
+                      <gml:Polygon>
+                        <gml:posList>50.4 -2.0 50.8 -2.0 50.8 -1.0 50.4 -1.0 50.4 -2.0</gml:posList>
+                      </gml:Polygon>
+                    </S100:surfaceProperty>
+                  </geometry>
+                </S128:ElectronicChart>
+              </member>
+            </S128:Dataset>
+            """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
+        var ds = S128Dataset.Open(stream);
+
+        var f = ds.Features.Single();
+        Assert.Equal("ElectronicChart", f.FeatureType);
+        Assert.Equal("GST.ElectronicChart.DK1", f.Id);
+        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.All(f.ExteriorRing, p =>
+        {
+            Assert.InRange(p.Latitude, 50.0, 51.0);
+            Assert.InRange(p.Longitude, -3.0, 0.0);
+        });
+    }
+
+    /// <summary>
+    /// Variant B producer bug (S-128 GML 1.0 IC-ENC): each ordinate is emitted
+    /// in its own single-value <c>&lt;gml:pos&gt;</c> element rather than as
+    /// full coordinate tuples. The reader must flatten and pair the ordinates
+    /// into (lat, lon) coordinates (otherwise the ring is empty and the dataset
+    /// renders blank — see issue #243).
+    /// </summary>
+    [Fact]
+    public void Reader_ParsesSingleOrdinatePosElements()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <S128:Dataset xmlns:S128="http://www.iho.int/S128/gml/1.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/1.0"
+                          xmlns:xlink="http://www.w3.org/1999/xlink"
+                          gml:id="TEST">
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-128</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <member>
+                <S128:ElectronicChart gml:id="E001">
+                  <geometry>
+                    <S100:surfaceProperty>
+                      <gml:Surface gml:id="S1">
+                        <gml:patches>
+                          <gml:PolygonPatch>
+                            <gml:exterior>
+                              <gml:LinearRing>
+                                <gml:pos>41.68</gml:pos><gml:pos>21.61</gml:pos>
+                                <gml:pos>41.68</gml:pos><gml:pos>22.90</gml:pos>
+                                <gml:pos>40.10</gml:pos><gml:pos>22.90</gml:pos>
+                                <gml:pos>40.10</gml:pos><gml:pos>21.61</gml:pos>
+                                <gml:pos>41.68</gml:pos><gml:pos>21.61</gml:pos>
+                              </gml:LinearRing>
+                            </gml:exterior>
+                          </gml:PolygonPatch>
+                        </gml:patches>
+                      </gml:Surface>
+                    </S100:surfaceProperty>
+                  </geometry>
+                </S128:ElectronicChart>
+              </member>
+            </S128:Dataset>
+            """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml));
+        var ds = S128Dataset.Open(stream);
+
+        var f = ds.Features.Single();
+        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.All(f.ExteriorRing, p =>
+        {
+            Assert.InRange(p.Latitude, 40.0, 42.0);
+            Assert.InRange(p.Longitude, 21.0, 23.0);
+        });
+    }
 }

@@ -160,7 +160,7 @@ internal static class S128DatasetReader
 
     private static S128Feature ParseFeature(XElement element, XNamespace s100Ns)
     {
-        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
+        var id = ReadGmlId(element);
         var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
         var (simple, complex) = ParseAttributes(element, s100Ns);
         var refs = ParseReferences(element);
@@ -182,7 +182,7 @@ internal static class S128DatasetReader
 
     private static S128InformationType ParseInformationType(XElement element, XNamespace s100Ns)
     {
-        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value ?? "";
+        var id = ReadGmlId(element);
         var (simple, complex) = ParseAttributes(element, s100Ns);
         return new S128InformationType
         {
@@ -194,6 +194,18 @@ internal static class S128DatasetReader
     }
 
     // ── Geometry ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the GML identifier of an element, accepting the non-standard
+    /// <c>gml:gmlId</c> spelling as a producer-bug fallback. Some S-128 GML 1.0
+    /// IC-ENC/DK catalogue datasets emit <c>gml:gmlId</c> instead of the
+    /// conformant <c>gml:id</c>; without this fallback those features carry an
+    /// empty identifier and are dropped by the geometry provider.
+    /// </summary>
+    private static string ReadGmlId(XElement element) =>
+        element.Attribute(GmlNamespaces.Gml + "id")?.Value
+        ?? element.Attribute(GmlNamespaces.Gml + "gmlId")?.Value
+        ?? "";
 
     private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
         ParseGeometry(XElement featureElement, XNamespace s100Ns)
