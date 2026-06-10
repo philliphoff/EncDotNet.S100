@@ -22,6 +22,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     private readonly S101Document _doc;
     private readonly FeatureCatalogue _fc;
+    private readonly Action<string> _trace;
 
     // Lookup indices built lazily
     private Dictionary<uint, S101FeatureRecord>? _featureById;
@@ -33,12 +34,28 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
 
-    public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue)
+    /// <summary>
+    /// Initialises the provider.
+    /// </summary>
+    /// <param name="dataset">The S-101 dataset to portray.</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue (ISO 19110).</param>
+    /// <param name="trace">
+    /// Optional sink for host/Lua diagnostic trace output (the S-100 Part 9A
+    /// <c>Debug.Trace</c> / <c>HostDebuggerEntry</c> "trace" channel, plus host
+    /// type-binding diagnostics). When <c>null</c>, messages are routed to
+    /// <see cref="System.Diagnostics.Trace"/>, which is silent on standard output
+    /// unless a listener is attached. This keeps expected, spec-compliant
+    /// portrayal fallbacks (for example the <c>OBSTRN07</c> rule selecting Default
+    /// symbology when a feature legitimately carries neither <c>valueOfSounding</c>
+    /// nor <c>defaultClearanceDepth</c>) from polluting console output.
+    /// </param>
+    public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue, Action<string>? trace = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
         _doc = dataset.Document;
         _fc = featureCatalogue;
+        _trace = trace ?? (message => System.Diagnostics.Trace.WriteLine(message));
     }
 
     /// <inheritdoc/>
@@ -236,8 +253,8 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// </summary>
     public void RegisterHostFunctions(ILuaContext lua)
     {
-        // Debug table — route Trace to host for diagnostics
-        lua.SetGlobal("HostDebugTrace", (Action<string>)(msg => Console.WriteLine($"[Lua] {msg}")));
+        // Debug table — route Trace to the host diagnostic sink
+        lua.SetGlobal("HostDebugTrace", (Action<string>)(msg => _trace($"[Lua] {msg}")));
         lua.Execute("""
             Debug = {
                 Trace = function(msg) if msg then HostDebugTrace(tostring(msg)) end end,
@@ -304,7 +321,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         lua.SetGlobal("HostDebuggerEntry", (Action<string, string?>)((action, message) =>
         {
             if (action == "trace" && message is not null)
-                Console.WriteLine($"[Lua] {message}");
+                _trace($"[Lua] {message}");
         }));
     }
 
@@ -465,7 +482,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         EnsureFeatureTypeLookup();
         if (!_featureTypeByCode!.TryGetValue(code, out var ft))
         {
-            Console.WriteLine($"[Host] FeatureTypeInfo not found: {code}");
+            _trace($"[Host] FeatureTypeInfo not found: {code}");
             return new Dictionary<string, object?>();
         }
 
@@ -473,7 +490,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         if (code == "DepthArea")
         {
             var bindings = (IReadOnlyDictionary<string, object?>)result["AttributeBindings"]!;
-            Console.WriteLine($"[Host] DepthArea bindings: {string.Join(", ", bindings.Keys.Where(k => k != "Type"))}");
+            _trace($"[Host] DepthArea bindings: {string.Join(", ", bindings.Keys.Where(k => k != "Type"))}");
         }
         return result;
     }
