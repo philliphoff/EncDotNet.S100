@@ -184,6 +184,20 @@ draught). Each detail field appears only once the
 corresponding AIS report has been received. The split between the
 list and the properties sub-pane is draggable and persisted.
 
+When the simulated own-ship overlay is enabled, the own ship also
+appears in the list as a **top-pinned row** (marked with a distinct
+own-ship pictogram and the name *Own ship*), so it stays visible and
+selectable alongside the AIS targets. While own-ship is *helming* a
+live AIS target (see *Pirate mode* below), its row shows a
+**"Helming &lt;target&gt;"** subtitle — or **"Waiting for &lt;target&gt;"**
+while armed but before the target's first report has been adopted —
+so it is always clear which vessel you are driving. From the detail
+pane you can **Take the helm** of a selected AIS target, or
+**Release the helm** from the own-ship row to revert to simulated
+control (own-ship keeps the target's last position and course; no
+snap-back). Engaging the helm hides the followed target and
+auto-selects the own-ship row so the release control stays reachable.
+
 Range and bearing are shown only when the own-ship overlay is
 enabled (**Settings → simulated own-ship**); with it off, the list
 still shows vessels but omits the per-row range/bearing line and
@@ -283,6 +297,11 @@ persisted and takes effect immediately (no restart). This gate is
 authoritative for the synthetic source — when it is off, no own-ship
 feature is published regardless of the layer-visibility toggle.
 
+When the overlay is enabled and a fix is available, an interactive
+launch **frames the map on the own ship** (centre + harbour-scale
+zoom) instead of opening at the whole-world default. An explicit
+`--bbox` / `--center` / `--zoom` on the command line still wins.
+
 The own-ship glyph adapts to zoom:
 
 - **Zoomed in** (when the vessel is ≥ ~6 mm on screen) — a
@@ -306,14 +325,17 @@ Stack panel and is persisted between sessions.
 ### Pirate mode (follow an AIS target)
 
 You can make own-ship **impersonate a live AIS target**: pick a vessel
-and choose **Take the helm** in the Pick Report. Own-ship then adopts
-the target's position, course, speed, heading, and dimensions,
-dead-reckoning smoothly between the target's reports. The followed
-target is hidden from the AIS overlay (no double-draw); turning the
-own-ship overlay off disengages pirate mode so the vessel can't
-disappear. The selection is persisted and re-armed at the next launch.
-Switching back to the simulated source leaves own-ship at the last
-adopted fix (no teleport). See
+and choose **Take the helm** — either from the Pick Report or from the
+**Vessels** panel's detail pane. Own-ship then adopts the target's
+position, course, speed, heading, and dimensions, dead-reckoning
+smoothly between the target's reports. While helming, the own-ship row
+in the Vessels list shows a *Helming &lt;target&gt;* label, and a
+**Release the helm** button there (or turning the own-ship overlay off)
+disengages. The followed target is hidden from the AIS overlay (no
+double-draw); turning the own-ship overlay off disengages pirate mode
+so the vessel can't disappear. The selection is persisted and re-armed
+at the next launch. Switching back to the simulated source leaves
+own-ship at the last adopted fix (no teleport). See
 [`docs/design/steerable-own-ship.md`](../../docs/design/steerable-own-ship.md).
 
 ### Picking dynamic features

@@ -473,9 +473,17 @@ internal static class Strings
     public static string Pane_Vessels => Get(nameof(Pane_Vessels));
     public static string Tooltip_Vessels => Get(nameof(Tooltip_Vessels));
     public static string Tooltip_VesselRow => Get(nameof(Tooltip_VesselRow));
+    public static string Tooltip_OwnShipRow => Get(nameof(Tooltip_OwnShipRow));
     public static string Vessels_Empty_Disabled => Get(nameof(Vessels_Empty_Disabled));
     public static string Vessels_Empty_NoData => Get(nameof(Vessels_Empty_NoData));
     public static string Vessels_Unnamed => Get(nameof(Vessels_Unnamed));
+    public static string Vessels_OwnShip_Name => Get(nameof(Vessels_OwnShip_Name));
+    public static string Vessels_OwnShip_HelmingFormat => Get(nameof(Vessels_OwnShip_HelmingFormat));
+    public static string Vessels_OwnShip_WaitingFormat => Get(nameof(Vessels_OwnShip_WaitingFormat));
+    public static string Vessels_TakeHelm => Get(nameof(Vessels_TakeHelm));
+    public static string Vessels_ReleaseHelm => Get(nameof(Vessels_ReleaseHelm));
+    public static string Tooltip_VesselTakeHelm => Get(nameof(Tooltip_VesselTakeHelm));
+    public static string Tooltip_VesselReleaseHelm => Get(nameof(Tooltip_VesselReleaseHelm));
     public static string Vessels_DistanceFormat => Get(nameof(Vessels_DistanceFormat));
     public static string Vessels_BearingFormat => Get(nameof(Vessels_BearingFormat));
     public static string Vessels_DistanceBearingFormat => Get(nameof(Vessels_DistanceBearingFormat));

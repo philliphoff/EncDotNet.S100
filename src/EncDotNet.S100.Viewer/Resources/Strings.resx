@@ -1291,6 +1291,35 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Vessels_Unnamed" xml:space="preserve">
     <value>Unnamed vessel</value>
   </data>
+  <data name="Vessels_OwnShip_Name" xml:space="preserve">
+    <value>Own ship</value>
+    <comment>Name of the own-ship row pinned to the top of the Vessels list.</comment>
+  </data>
+  <data name="Vessels_OwnShip_HelmingFormat" xml:space="preserve">
+    <value>Helming {0}</value>
+    <comment>{0} = the impersonated AIS target's name or MMSI. Shown on the own-ship row while pirate mode has adopted a fix.</comment>
+  </data>
+  <data name="Vessels_OwnShip_WaitingFormat" xml:space="preserve">
+    <value>Waiting for {0}</value>
+    <comment>{0} = the target's name or MMSI. Shown on the own-ship row while armed for pirate mode but before the target's first report has been adopted.</comment>
+  </data>
+  <data name="Vessels_TakeHelm" xml:space="preserve">
+    <value>Take the helm</value>
+    <comment>Button in the Vessels detail pane: own-ship impersonates the selected AIS target (pirate mode).</comment>
+  </data>
+  <data name="Vessels_ReleaseHelm" xml:space="preserve">
+    <value>Release the helm</value>
+    <comment>Button in the Vessels detail pane: stop impersonating; own-ship reverts to simulated control at the target's last fix.</comment>
+  </data>
+  <data name="Tooltip_VesselTakeHelm" xml:space="preserve">
+    <value>Own-ship adopts this AIS target's position, course, speed, and dimensions, updating as the target reports.</value>
+  </data>
+  <data name="Tooltip_VesselReleaseHelm" xml:space="preserve">
+    <value>Stop impersonating the target. Own-ship keeps its current position and course under your manual control.</value>
+  </data>
+  <data name="Tooltip_OwnShipRow" xml:space="preserve">
+    <value>Your own ship. Select to centre the map on it; use the helm controls to steer.</value>
+  </data>
   <data name="Vessels_DistanceFormat" xml:space="preserve">
     <value>{0:0.0} NM</value>
     <comment>{0} = distance in nautical miles.</comment>

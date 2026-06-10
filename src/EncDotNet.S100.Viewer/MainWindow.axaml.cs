@@ -420,6 +420,69 @@ public partial class MainWindow : ShadUI.Window
         {
             Opened += async (_, _) => await RunStartupAutomationAsync(datasetPaths);
         }
+        else if (options?.HasExplicitViewport != true)
+        {
+            // Interactive launch with no CLI-driven viewport: if the
+            // own-ship overlay is enabled, frame the map on the own-ship
+            // rather than leaving it at the whole-world default.
+            Opened += async (_, _) => await FrameOnOwnShipAtStartupAsync();
+        }
+    }
+
+    /// <summary>
+    /// Interactive-launch framing: when the own-ship overlay is enabled,
+    /// centre and zoom the map on the own-ship instead of the whole-world
+    /// default. If the overlay is enabled but no fix has arrived yet, waits
+    /// briefly for the first fix (via <see cref="OwnShipSource.Changed"/>)
+    /// before framing, then gives up quietly. No-op when the overlay is
+    /// disabled or an explicit CLI viewport was supplied.
+    /// </summary>
+    private async Task FrameOnOwnShipAtStartupAsync()
+    {
+        var source = ResolveOrFallback<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(
+            static () => null!);
+        if (source is null || !source.IsEnabled) return;
+
+        if (TryFrameOnOwnShip(source)) return;
+
+        // No fix yet: wait once for the first published feature, with a
+        // short timeout so launch isn't blocked if no fix ever arrives.
+        var tcs = new TaskCompletionSource();
+        void OnChanged(object? sender, EncDotNet.S100.DynamicSources.DynamicFeaturesChanged e) => tcs.TrySetResult();
+        source.Changed += OnChanged;
+        try
+        {
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+            if (completed == tcs.Task)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => TryFrameOnOwnShip(source));
+            }
+        }
+        finally
+        {
+            source.Changed -= OnChanged;
+        }
+    }
+
+    /// <summary>
+    /// Centres and zooms the map on the own-ship's current fix, if one is
+    /// published. Returns <see langword="true"/> when framing was applied.
+    /// </summary>
+    private bool TryFrameOnOwnShip(
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource source)
+    {
+        if (MapControl.Map?.Navigator is not { } nav) return false;
+
+        var feature = source.CurrentFeatures.FirstOrDefault();
+        if (feature?.Coordinates is not { Count: > 0 } coords) return false;
+
+        var (lat, lon) = coords[0];
+        var (x, y) = SphericalMercator.FromLonLat(lon, lat);
+        // Harbour-scale resolution (~web-mercator zoom 13): close enough to
+        // see the own-ship and its surroundings without losing context.
+        const double resolution = 156543.03392804097 / (1 << 13);
+        nav.CenterOnAndZoomTo(new MPoint(x, y), resolution, duration: 0);
+        return true;
     }
 
     /// <summary>

@@ -23,20 +23,36 @@ internal enum PirateFollowOutcome
 }
 
 /// <summary>
-/// Drives "pirate mode": own-ship impersonates a selected live AIS
-/// target. Subscribes to the <i>raw</i> AIS source so it always sees the
-/// followed target (even though that target is hidden from the overlay by
-/// <see cref="ExcludingAisFeatureSource"/>), and on every matching report
-/// pushes an absolute correction into <see cref="IOwnShipHelm"/>. The
-/// steerable provider dead-reckons between reports, so own-ship motion is
-/// smooth even when AIS updates are seconds-to-minutes apart.
+/// Drives "take the helm" mode: own-ship adopts a selected live AIS
+/// target's current fix and geometry <em>once</em>, then detaches so the
+/// user has full helm control of a simulated copy. Subsequent AIS reports
+/// for the original target are deliberately ignored — pressing port /
+/// starboard / changing speed must not be silently overwritten by the
+/// next AIS update.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>Adopt-and-detach.</b> <see cref="Follow"/> snapshots the target's
+/// fix and geometry into the helm. From that point on the user is
+/// driving a simulated vessel — the original AIS target keeps reporting
+/// independently (and is hidden from the overlay via
+/// <see cref="ExcludingAisFeatureSource"/> while helming so the two do
+/// not visually overlap). <see cref="Stop"/> releases the exclusion and
+/// the geometry override; the helmed copy stays at its current position
+/// and reverts to the user's configured own-ship geometry.
+/// </para>
+/// <para>
+/// <b>Armed-waiting.</b> If the target is not present in the AIS
+/// snapshot at <see cref="Follow"/> time (e.g. the zoom-gated source has
+/// not activated yet), the controller stays armed and adopts the very
+/// first report it sees for that MMSI. After that first adoption, the
+/// adoption gate closes and subsequent reports no longer touch the helm.
+/// </para>
 /// <para>
 /// <b>Two AIS surfaces.</b> The controller reads the raw, undecorated
 /// source; the overlay / vessel list / pick read the decorated
 /// (excluding) source. Subscribing to the decorator would starve the
-/// controller of the very target it follows.
+/// controller of the very target it needs to snapshot.
 /// </para>
 /// <para>
 /// <b>Geometry.</b> The followed target's
@@ -58,12 +74,6 @@ internal enum PirateFollowOutcome
 /// cannot deadlock.
 /// </para>
 /// <para>
-/// <b>Target loss / staleness.</b> When the target drops out of the AIS
-/// snapshot (stale-sweep / <c>TargetLost</c>), the controller stops
-/// issuing corrections; the helm keeps dead-reckoning the last known
-/// motion and <see cref="LastFixUtc"/> lets the UI surface staleness.
-/// </para>
-/// <para>
 /// <b>Motion semantics.</b> Missing motion components (a target that
 /// reports position but not COG/SOG/heading) are passed through as
 /// <see langword="null"/>, which <see cref="IOwnShipHelm.SetState"/>
@@ -72,7 +82,7 @@ internal enum PirateFollowOutcome
 /// course/speed — a documented edge.
 /// </para>
 /// </remarks>
-internal sealed class PirateModeController : IDisposable
+internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
 {
     private const double KnotsToMetresPerSecond = 0.514_444_444;
 
@@ -118,23 +128,25 @@ internal sealed class PirateModeController : IDisposable
         get { lock (_gate) return _active ? _followedMmsi : null; }
     }
 
-    /// <summary>UTC of the most recently applied AIS correction, or
-    /// <see langword="null"/> when none has been applied since the last
-    /// <see cref="Follow"/>. Lets the UI surface a staleness warning.</summary>
+    /// <summary>UTC of the adopted AIS fix (set once when the target is
+    /// snapshotted into the helm), or <see langword="null"/> until the
+    /// initial adoption lands.</summary>
     public DateTimeOffset? LastFixUtc
     {
         get { lock (_gate) return _lastFixUtc; }
     }
 
     /// <summary>
-    /// Begins (or re-targets) impersonation of the AIS target identified
-    /// by <paramref name="mmsi"/>. Hides the target from the overlay,
-    /// adopts its current fix/geometry immediately when present, and
-    /// tracks subsequent reports.
+    /// Begins (or re-targets) helming of the AIS target identified by
+    /// <paramref name="mmsi"/>: hides the target from the overlay, then
+    /// snapshots its current fix/geometry into the helm if present and
+    /// detaches. If the target is not yet present, stays armed and adopts
+    /// the first subsequent report. After adoption, further AIS updates
+    /// for the target are intentionally ignored — the user is now driving.
     /// </summary>
     /// <returns>
     /// <see cref="PirateFollowOutcome.AppliedFix"/> when the target was
-    /// already known and own-ship jumped to it; otherwise
+    /// already known and own-ship snapshotted from it; otherwise
     /// <see cref="PirateFollowOutcome.ArmedWaiting"/>.
     /// </returns>
     public PirateFollowOutcome Follow(uint mmsi)
@@ -187,6 +199,12 @@ internal sealed class PirateModeController : IDisposable
             var followedId = _followedFeatureId;
             if (followedId is null) return;
 
+            // Adopt-and-detach: once the initial snapshot has landed,
+            // ignore further AIS updates so the user's helm commands are
+            // not silently overwritten. Only the armed-waiting case still
+            // needs to react to incoming reports.
+            if (_lastFixUtc is not null) return;
+
             // A Reset carries no ids; always re-read. Otherwise act only
             // when our target is among the touched ids.
             if (e.Kind != DynamicSourceChangeKind.Reset
@@ -200,10 +218,12 @@ internal sealed class PirateModeController : IDisposable
     }
 
     /// <summary>
-    /// Applies the followed target's current fix to the helm. Must be
-    /// called while holding <see cref="_gate"/>; performs its side effects
-    /// (geometry override, then helm correction) under the lock so a
-    /// concurrent <see cref="Stop"/> or re-target cannot interleave.
+    /// Snapshots the followed target's current fix into the helm. Must
+    /// be called while holding <see cref="_gate"/>; performs its side
+    /// effects (geometry override, then helm correction) under the lock
+    /// so a concurrent <see cref="Stop"/> or re-target cannot interleave.
+    /// Sets <see cref="_lastFixUtc"/> on success, which closes the
+    /// adoption gate so subsequent AIS reports are ignored.
     /// </summary>
     /// <returns><see langword="true"/> when a fix was applied.</returns>
     private bool ApplyFixLocked()
@@ -228,7 +248,6 @@ internal sealed class PirateModeController : IDisposable
 
         var (lat, lon) = feature.Coordinates[0];
         double? cog = feature.Motion?.CourseOverGroundDeg;
-        double? heading = feature.Motion?.HeadingDeg;
         double? sogMs = feature.Motion?.SpeedOverGroundKn is { } kn
             ? kn * KnotsToMetresPerSecond
             : null;
@@ -237,7 +256,14 @@ internal sealed class PirateModeController : IDisposable
         // correction already sees the adopted dimensions. A target with no
         // dimensions overrides with null (pictogram), not the user's size.
         _geometryOverride.SetOverride(feature.VesselGeometry);
-        _helm.SetState(lat, lon, cog, sogMs, heading);
+
+        // Heading is deliberately passed as null so the steerable
+        // provider mirrors course → heading. The helm panel only
+        // commands course; pinning gyro heading to the adopted AIS
+        // heading would leave the arrow stuck at that bearing as the
+        // user steers (course rotates, heading does not), both during
+        // helming and after release.
+        _helm.SetState(lat, lon, cog, sogMs, headingDeg: null);
         _lastFixUtc = feature.LastUpdated;
         return true;
     }
