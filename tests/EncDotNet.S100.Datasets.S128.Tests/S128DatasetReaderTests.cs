@@ -350,4 +350,116 @@ public class S128DatasetReaderTests
             Assert.InRange(p.Longitude, 21.0, 23.0);
         });
     }
+
+    /// <summary>
+    /// When a dataset carries geometry but no <c>&lt;gml:Envelope&gt;</c>, the
+    /// axis-order heuristic cannot run and the reader assumes lat-lon. That
+    /// assumption must be surfaced as a diagnostic (never silent) so a
+    /// lon-lat producer cannot yield a plausible-but-mirrored chart unnoticed.
+    /// </summary>
+    [Fact]
+    public void Reader_EmitsAxisOrderWarning_WhenGeometryHasNoEnvelope()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <S128:Dataset xmlns:S128="http://www.iho.int/S128/gml/1.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/1.0"
+                          xmlns:xlink="http://www.w3.org/1999/xlink"
+                          gml:id="TEST">
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-128</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <member>
+                <S128:ElectronicChart gml:gmlId="GST.ElectronicChart.DK1">
+                  <geometry>
+                    <S100:surfaceProperty>
+                      <gml:Polygon>
+                        <gml:posList>50.4 -2.0 50.8 -2.0 50.8 -1.0 50.4 -1.0 50.4 -2.0</gml:posList>
+                      </gml:Polygon>
+                    </S100:surfaceProperty>
+                  </geometry>
+                </S128:ElectronicChart>
+              </member>
+            </S128:Dataset>
+            """;
+
+        var activities = new System.Collections.Concurrent.ConcurrentBag<System.Diagnostics.Activity>();
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = src => src.Name == "EncDotNet.S100.Datasets.S128",
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
+                System.Diagnostics.ActivitySamplingResult.AllData,
+            ActivityStopped = activities.Add,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml)))
+        {
+            _ = S128Dataset.Open(stream);
+        }
+
+        var open = activities.Single(a => a.OperationName == "s100.dataset.open");
+        Assert.Contains(open.Events, e => e.Name == "s100.s128.axisOrderAssumed");
+        Assert.Equal(true, open.GetTagItem("s100.s128.axisOrderAssumed"));
+    }
+
+    /// <summary>
+    /// The axis-order warning must NOT fire when an envelope is present (the
+    /// heuristic can verify the ordering).
+    /// </summary>
+    [Fact]
+    public void Reader_DoesNotEmitAxisOrderWarning_WhenEnvelopePresent()
+    {
+        const string gml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <S128:Dataset xmlns:S128="http://www.iho.int/S128/2.0"
+                          xmlns:gml="http://www.opengis.net/gml/3.2"
+                          xmlns:S100="http://www.iho.int/s100gml/5.0"
+                          xmlns:xlink="http://www.w3.org/1999/xlink"
+                          gml:id="TEST">
+              <gml:boundedBy>
+                <gml:Envelope srsName="EPSG:4326">
+                  <gml:lowerCorner>50.20 -3.00</gml:lowerCorner>
+                  <gml:upperCorner>51.00  0.00</gml:upperCorner>
+                </gml:Envelope>
+              </gml:boundedBy>
+              <S100:DatasetIdentificationInformation>
+                <S100:productIdentifier>S-128</S100:productIdentifier>
+              </S100:DatasetIdentificationInformation>
+              <S128:members>
+                <S128:ElectronicProduct gml:id="F1">
+                  <S128:geometry>
+                  <S100:surfaceProperty><S100:Surface gml:id="s1">
+                    <gml:patches><gml:PolygonPatch>
+                      <gml:exterior><gml:LinearRing>
+                        <gml:posList>50.4 -2.0 50.8 -2.0 50.8 -1.0 50.4 -1.0 50.4 -2.0</gml:posList>
+                      </gml:LinearRing></gml:exterior>
+                    </gml:PolygonPatch></gml:patches>
+                  </S100:Surface></S100:surfaceProperty>
+                  </S128:geometry>
+                </S128:ElectronicProduct>
+              </S128:members>
+            </S128:Dataset>
+            """;
+
+        var activities = new System.Collections.Concurrent.ConcurrentBag<System.Diagnostics.Activity>();
+        using var listener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = src => src.Name == "EncDotNet.S100.Datasets.S128",
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) =>
+                System.Diagnostics.ActivitySamplingResult.AllData,
+            ActivityStopped = activities.Add,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(listener);
+
+        using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(gml)))
+        {
+            _ = S128Dataset.Open(stream);
+        }
+
+        var open = activities.Single(a => a.OperationName == "s100.dataset.open");
+        Assert.DoesNotContain(open.Events, e => e.Name == "s100.s128.axisOrderAssumed");
+        Assert.Null(open.GetTagItem("s100.s128.axisOrderAssumed"));
+    }
 }

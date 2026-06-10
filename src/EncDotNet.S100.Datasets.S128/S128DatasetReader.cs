@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Xml.Linq;
 using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
 using EncDotNet.S100.Gml;
@@ -98,6 +99,21 @@ internal static class S128DatasetReader
             foreach (var f in features) swapped.Add(SwapFeatureAxes(f));
             features = swapped;
         }
+        else if (envelope is null && HasGeometry(features))
+        {
+            // No <gml:Envelope> anchor: the axis-order heuristic cannot run, so
+            // coordinates are assumed to be lat-lon (S-100 Part 10b §6.2). Some
+            // GML 1.0 producers emit lon-lat, which would render a mirrored
+            // chart with no other signal. Surface a diagnostic warning so the
+            // assumption is never silent. See issue #247.
+            __activity?.SetTag("s100.s128.axisOrderAssumed", true);
+            __activity?.AddEvent(new ActivityEvent(
+                "s100.s128.axisOrderAssumed",
+                tags: new ActivityTagsCollection
+                {
+                    ["message"] = "Dataset has geometry but no gml:Envelope; axis order assumed lat-lon and could not be verified.",
+                }));
+        }
 
         return new S128Dataset
         {
@@ -107,6 +123,11 @@ internal static class S128DatasetReader
             InformationTypes = infoTypes.ToImmutable(),
         };
     }
+
+    private static bool HasGeometry(IEnumerable<S128Feature> features) =>
+        features.Any(f => !f.ExteriorRing.IsDefaultOrEmpty
+            || !f.Points.IsDefaultOrEmpty
+            || (!f.Curves.IsDefaultOrEmpty && f.Curves.Length > 0));
 
     /// <summary>
     /// Returns all member/imember candidate elements found beneath the dataset
