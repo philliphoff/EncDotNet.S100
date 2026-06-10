@@ -107,6 +107,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
     public override int Execute(CommandContext context, Settings settings)
     {
+        using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
         try
         {

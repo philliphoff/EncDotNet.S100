@@ -14,7 +14,7 @@ internal class DatasetCommandSettings : CommandSettings
     public string DatasetPath { get; init; } = string.Empty;
 
     [CommandOption("--debug")]
-    [Description("Show full stack traces on error.")]
+    [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
     public bool Debug { get; init; }
 
     public override Spectre.Console.ValidationResult Validate()

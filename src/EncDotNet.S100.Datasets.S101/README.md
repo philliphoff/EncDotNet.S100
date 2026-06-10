@@ -48,7 +48,10 @@ parameter). When omitted, messages go to `System.Diagnostics.Trace`,
 which is silent on standard output unless a listener is attached — so
 these high-volume, benign fallbacks no longer pollute render/validation
 output. Pass an explicit `Action<string>` to capture or surface them
-(for example behind a verbose/debug flag or in tests).
+(for example behind a verbose/debug flag or in tests). The bundled CLI
+wires this to `--debug`: `s100 render … --debug` mirrors the
+`[Lua]`/`[Host]` diagnostics to **stderr** while keeping stdout (and the
+PNG result) unchanged.
 
 ## Legacy feature-name compatibility
 
