@@ -4,6 +4,19 @@ public sealed class CatalogueDiscoveryMetadata
 {
     public required string FileName { get; init; }
 
+    /// <summary>
+    /// The directory of the catalogue file relative to the exchange set
+    /// root, as declared by the catalogue's <c>filePath</c> element.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 17.</remarks>
+    public string? FilePath { get; init; }
+
+    /// <summary>
+    /// The source-relative path of the catalogue file, combining
+    /// <see cref="FilePath"/> and <see cref="FileName"/>.
+    /// </summary>
+    public string RelativePath => ExchangeSet.ResolveRelativePath(FilePath, FileName);
+
     public string? Purpose { get; init; }
 
     public int? EditionNumber { get; init; }

@@ -71,7 +71,7 @@ public sealed class ExchangeSetLoader
             cancellationToken.ThrowIfCancellationRequested();
 
             var metadata = datasets[i];
-            var relativePath = ExchangeSet.NormalizeFileName(metadata.FileName);
+            var relativePath = metadata.RelativePath;
             progress?.Report(new ExchangeSetProgress(i + 1, total, relativePath));
 
             IDatasetProcessor? processor = null;

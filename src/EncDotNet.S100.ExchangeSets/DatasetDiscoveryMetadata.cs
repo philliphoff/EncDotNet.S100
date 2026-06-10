@@ -4,6 +4,23 @@ public sealed class DatasetDiscoveryMetadata
 {
     public required string FileName { get; init; }
 
+    /// <summary>
+    /// The directory of the dataset file relative to the exchange set
+    /// root, as declared by the catalogue's <c>filePath</c> element.
+    /// May be <see langword="null"/> when the file lives at the root or
+    /// the path is folded into <see cref="FileName"/>.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 17.</remarks>
+    public string? FilePath { get; init; }
+
+    /// <summary>
+    /// The source-relative path of the dataset file, combining
+    /// <see cref="FilePath"/> and <see cref="FileName"/> and normalizing
+    /// separators. This is the path to pass to an
+    /// <see cref="EncDotNet.S100.Core.IAssetSource"/>.
+    /// </summary>
+    public string RelativePath => ExchangeSet.ResolveRelativePath(FilePath, FileName);
+
     public string? Description { get; init; }
 
     public bool CompressionFlag { get; init; }
