@@ -20,8 +20,16 @@ public static class S102DatasetReader
 
         var root = file.Root;
 
-        int? horizontalCRS = root.AttributeExists("horizontalCRS")
-            ? (int)root.ReadInt64Attribute("horizontalCRS")
+        // Horizontal CRS is encoded under different root-attribute names across
+        // S-102 editions: Edition 3.0.0 uses `horizontalCRS`, whereas the older
+        // Edition 2.1 (and the S-100 Part 10c gridded-coverage profile it built
+        // on) uses `horizontalDatumValue` (the EPSG code) alongside
+        // `horizontalDatumReference` (= "EPSG"). Resolve whichever is present so
+        // both editions georeference correctly; prefer the newer name when both
+        // exist. (See issue #239.)
+        int? horizontalCRS =
+            root.AttributeExists("horizontalCRS") ? (int)root.ReadInt64Attribute("horizontalCRS")
+            : root.AttributeExists("horizontalDatumValue") ? (int)root.ReadInt64Attribute("horizontalDatumValue")
             : null;
 
         string? epoch = root.AttributeExists("epoch")
