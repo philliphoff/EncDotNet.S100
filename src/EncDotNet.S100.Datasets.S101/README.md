@@ -46,18 +46,27 @@ Catalogue report the **pre-2.0.0** names (`BuoyLateral`,
 falls back to **DEFAULT** (`QUESMRK1`) symbology.
 
 `S101LegacyFeatureNames.Normalize` maps the legacy class names to their
-2.0.0 equivalents so the correct rule runs. Because simple attribute
-names are stable across these editions, only the feature **class** name
-needs remapping. The shim is applied **only** at the portrayal boundary
-(`S101LuaDataProvider.HostFeatureGetCode`); feature names are left
-as-authored everywhere else (document reader, vector source,
-validation, info panels).
+2.0.0 equivalents so the correct rule runs. This covers both the
+word-reordered buoy/beacon classes (`BuoyLateral` → `LateralBuoy`,
+`BeaconCardinal` → `CardinalBeacon`, …) and classes that were **merged**
+in 2.0.0: `RestrictedAreaNavigational` / `RestrictedAreaRegulatory` →
+`RestrictedArea`, `TrafficSeparationZone` / `TrafficSeparationLine` →
+`SeparationZoneOrLine`, and `BuoyEmergencyWreckMarking` /
+`BuoyNewDangerMarking` → `EmergencyWreckMarkingBuoy`. Because simple
+attribute names are stable across these editions, only the feature
+**class** name needs remapping. The shim is applied **only** at the
+portrayal boundary (`S101LuaDataProvider.HostFeatureGetCode`); feature
+names are left as-authored everywhere else (document reader, vector
+source, validation, info panels).
 
 `MooringWarpingFacility` was structurally removed in 2.0.0, so it is
 mapped conditionally on `categoryOfMooringWarpingFacility`
 (dolphin → `Dolphin`, bollard → `Bollard`, post/pile → `Pile`,
 mooring buoy → `MooringBuoy`); categories without a clean 2.0.0
-equivalent are left unchanged and stay on DEFAULT. These conditional
+equivalent — and instances with an absent or empty category — are
+routed to the `Default` rule module so the dispatcher's `require`
+always resolves (DEFAULT symbology) instead of throwing
+`module 'MooringWarpingFacility' not found`. These conditional
 targets are approximations — only the class name is aliased, not the
 attributes the 2.0.0 rule reads — so symbology may be generic, and a
 target rule that rejects the feature's geometric primitive simply

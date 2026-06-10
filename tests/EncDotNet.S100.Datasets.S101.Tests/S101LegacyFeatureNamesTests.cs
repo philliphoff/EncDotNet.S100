@@ -17,12 +17,25 @@ public class S101LegacyFeatureNamesTests
     [InlineData("BuoySafeWater", "SafeWaterBuoy")]
     [InlineData("BuoySpecialPurposeGeneral", "SpecialPurposeGeneralBuoy")]
     [InlineData("BuoyNewDangerMarking", "EmergencyWreckMarkingBuoy")]
+    [InlineData("BuoyEmergencyWreckMarking", "EmergencyWreckMarkingBuoy")]
     [InlineData("BeaconCardinal", "CardinalBeacon")]
     [InlineData("BeaconIsolatedDanger", "IsolatedDangerBeacon")]
     [InlineData("BeaconLateral", "LateralBeacon")]
     [InlineData("BeaconSafeWater", "SafeWaterBeacon")]
     [InlineData("BeaconSpecialPurposeGeneral", "SpecialPurposeGeneralBeacon")]
     public void Normalize_LegacyBuoyOrBeacon_ReturnsRenamed(string legacy, string expected)
+    {
+        Assert.Equal(expected, S101LegacyFeatureNames.Normalize(legacy));
+    }
+
+    [Theory]
+    [InlineData("RestrictedAreaNavigational", "RestrictedArea")]
+    [InlineData("RestrictedAreaRegulatory", "RestrictedArea")]
+    [InlineData("TrafficSeparationZone", "SeparationZoneOrLine")]
+    [InlineData("TrafficSeparationLine", "SeparationZoneOrLine")]
+    [InlineData("restrictedareanavigational", "RestrictedArea")]
+    [InlineData("TRAFFICSEPARATIONLINE", "SeparationZoneOrLine")]
+    public void Normalize_LegacyMergedArea_ReturnsRenamed(string legacy, string expected)
     {
         Assert.Equal(expected, S101LegacyFeatureNames.Normalize(legacy));
     }
@@ -76,30 +89,30 @@ public class S101LegacyFeatureNamesTests
     [InlineData("6")]   // chain/wire/cable — no clean 2.0.0 equivalent
     [InlineData("99")]  // unknown enumerant
     [InlineData("")]    // present but empty
-    public void Normalize_MooringWarpingFacility_UnmappedCategory_ReturnsUnchanged(string category)
+    public void Normalize_MooringWarpingFacility_UnmappedCategory_RoutesToDefault(string category)
     {
         var result = S101LegacyFeatureNames.Normalize(
             "MooringWarpingFacility",
             code => category);
 
-        Assert.Equal("MooringWarpingFacility", result);
+        Assert.Equal("Default", result);
     }
 
     [Fact]
-    public void Normalize_MooringWarpingFacility_NullLookupResult_ReturnsUnchanged()
+    public void Normalize_MooringWarpingFacility_NullLookupResult_RoutesToDefault()
     {
         var result = S101LegacyFeatureNames.Normalize(
             "MooringWarpingFacility",
             code => null);
 
-        Assert.Equal("MooringWarpingFacility", result);
+        Assert.Equal("Default", result);
     }
 
     [Fact]
-    public void Normalize_MooringWarpingFacility_NoLookup_ReturnsUnchanged()
+    public void Normalize_MooringWarpingFacility_NoLookup_RoutesToDefault()
     {
         Assert.Equal(
-            "MooringWarpingFacility",
+            "Default",
             S101LegacyFeatureNames.Normalize("MooringWarpingFacility"));
     }
 
