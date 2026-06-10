@@ -63,7 +63,10 @@ source, validation, info panels).
 mapped conditionally on `categoryOfMooringWarpingFacility`
 (dolphin → `Dolphin`, bollard → `Bollard`, post/pile → `Pile`,
 mooring buoy → `MooringBuoy`); categories without a clean 2.0.0
-equivalent are left unchanged and stay on DEFAULT. These conditional
+equivalent — and instances with an absent or empty category — are
+routed to the `Default` rule module so the dispatcher's `require`
+always resolves (DEFAULT symbology) instead of throwing
+`module 'MooringWarpingFacility' not found`. These conditional
 targets are approximations — only the class name is aliased, not the
 attributes the 2.0.0 rule reads — so symbology may be generic, and a
 target rule that rejects the feature's geometric primitive simply

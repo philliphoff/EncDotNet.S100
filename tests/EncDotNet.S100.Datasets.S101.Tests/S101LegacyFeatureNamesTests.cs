@@ -89,30 +89,30 @@ public class S101LegacyFeatureNamesTests
     [InlineData("6")]   // chain/wire/cable — no clean 2.0.0 equivalent
     [InlineData("99")]  // unknown enumerant
     [InlineData("")]    // present but empty
-    public void Normalize_MooringWarpingFacility_UnmappedCategory_ReturnsUnchanged(string category)
+    public void Normalize_MooringWarpingFacility_UnmappedCategory_RoutesToDefault(string category)
     {
         var result = S101LegacyFeatureNames.Normalize(
             "MooringWarpingFacility",
             code => category);
 
-        Assert.Equal("MooringWarpingFacility", result);
+        Assert.Equal("Default", result);
     }
 
     [Fact]
-    public void Normalize_MooringWarpingFacility_NullLookupResult_ReturnsUnchanged()
+    public void Normalize_MooringWarpingFacility_NullLookupResult_RoutesToDefault()
     {
         var result = S101LegacyFeatureNames.Normalize(
             "MooringWarpingFacility",
             code => null);
 
-        Assert.Equal("MooringWarpingFacility", result);
+        Assert.Equal("Default", result);
     }
 
     [Fact]
-    public void Normalize_MooringWarpingFacility_NoLookup_ReturnsUnchanged()
+    public void Normalize_MooringWarpingFacility_NoLookup_RoutesToDefault()
     {
         Assert.Equal(
-            "MooringWarpingFacility",
+            "Default",
             S101LegacyFeatureNames.Normalize("MooringWarpingFacility"));
     }
 
