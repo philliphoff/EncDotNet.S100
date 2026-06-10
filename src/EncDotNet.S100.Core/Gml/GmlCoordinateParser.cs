@@ -130,6 +130,16 @@ public static class GmlCoordinateParser
             exteriorRing = ParseRingCoordinates(exterior, gmlNs);
         }
 
+        // Additive producer-bug fallback: only when the standard parse above
+        // yielded no exterior vertices. Some datasets (e.g. S-128 GML 1.0
+        // IC-ENC/DK catalogues) emit <gml:Polygon><gml:posList> directly,
+        // omitting the <gml:exterior>/<gml:LinearRing> wrapper. Conformant
+        // surfaces never reach this branch.
+        if (exteriorRing.IsDefaultOrEmpty)
+        {
+            exteriorRing = ParseRingCoordinates(surfaceContainer, gmlNs);
+        }
+
         foreach (var interior in surfaceContainer.Descendants(gmlNs + "interior"))
         {
             interiorRings.Add(ParseRingCoordinates(interior, gmlNs));
@@ -144,12 +154,49 @@ public static class GmlCoordinateParser
         if (posList is not null)
             return ParsePosList(posList.Value);
 
+        return ParsePosSequence(ringContainer.Descendants(gmlNs + "pos"));
+    }
+
+    /// <summary>
+    /// Parses a sequence of <c>gml:pos</c> elements into coordinate pairs.
+    /// </summary>
+    /// <remarks>
+    /// The conformant interpretation — each <c>gml:pos</c> carries a full
+    /// position (≥ 2 ordinates) and yields one coordinate — is attempted
+    /// first and is the only path taken by standard data. <em>Only</em> when
+    /// that yields zero vertices is an additive producer-bug fallback tried:
+    /// some S-128 GML 1.0 IC-ENC datasets split each coordinate's ordinates
+    /// across consecutive single-value <c>gml:pos</c> elements, so the
+    /// ordinates are flattened and paired up (lat, lon).
+    /// </remarks>
+    private static ImmutableArray<(double, double)> ParsePosSequence(IEnumerable<XElement> posElements)
+    {
+        var elements = posElements as IReadOnlyList<XElement> ?? posElements.ToArray();
+        if (elements.Count == 0)
+            return ImmutableArray<(double, double)>.Empty;
+
+        // Standard path (unchanged for conformant data): each gml:pos is a
+        // full position.
         var coords = ImmutableArray.CreateBuilder<(double, double)>();
-        foreach (var pos in ringContainer.Descendants(gmlNs + "pos"))
+        foreach (var pos in elements)
         {
             var coord = ParsePos(pos.Value);
             if (coord is not null) coords.Add(coord.Value);
         }
-        return coords.ToImmutable();
+        if (coords.Count > 0)
+            return coords.ToImmutable();
+
+        // Additive fallback: the standard parse produced no vertices. If every
+        // gml:pos holds exactly one ordinate, re-interpret them as a flat
+        // ordinate stream and pair the values into (lat, lon) coordinates.
+        bool allSingleOrdinate = elements.All(e =>
+            e.Value.Split(Separators, StringSplitOptions.RemoveEmptyEntries).Length == 1);
+        if (allSingleOrdinate)
+        {
+            var flattened = string.Join(' ', elements.Select(e => e.Value));
+            return ParsePosList(flattened);
+        }
+
+        return ImmutableArray<(double, double)>.Empty;
     }
 }

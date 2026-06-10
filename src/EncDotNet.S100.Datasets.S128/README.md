@@ -70,6 +70,27 @@ samples surface, edge cases here may need expanding.
    present and parsed coords clearly fall outside as-is but inside when
    swapped, the reader globally flips axes. Skipped silently when no
    envelope is declared (the upstream 2.0.0 sample omits it).
+5. **`gml:gmlId` identifier fallback.** Some S-128 **GML 1.0** IC-ENC/DK
+   catalogue datasets key features with the non-standard `gml:gmlId`
+   attribute instead of `gml:id`. The reader accepts either; without this
+   the feature identifier is empty and the geometry provider drops the
+   feature (rendering blank — see issue #243).
+6. **Exterior-less polygons.** Some GML 1.0 datasets emit
+   `<gml:Polygon><gml:posList>…` directly, omitting the
+   `<gml:exterior>/<gml:LinearRing>` wrapper. The shared
+   `GmlCoordinateParser` falls back to a direct `posList`/`pos` sequence
+   under the surface as the exterior ring.
+7. **Single-ordinate `<gml:pos>` rings.** Some GML 1.0 datasets split each
+   coordinate's ordinates across consecutive single-value `<gml:pos>`
+   elements (`<gml:pos>41.68</gml:pos><gml:pos>21.61</gml:pos>…`). The
+   shared `GmlCoordinateParser` detects this and flattens the ordinates
+   into (lat, lon) pairs.
+
+> **Note on GML 1.0 datasets.** Compensations 5–7 recover *geometry* from
+> the older S-128 GML 1.0 encoding so those catalogues are no longer blank.
+> Full *portrayal* of GML 1.0 feature classes (`ElectronicChart`,
+> `PaperChart`, …) and a reliable axis order for lon-lat datasets that ship
+> no `<gml:Envelope>` are tracked separately in issue #247.
 
 ## Status heuristic
 
