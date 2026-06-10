@@ -26,6 +26,13 @@ internal static class S104FixtureBuilder
         [H5Name("trend")] public float Trend;
     }
 
+    // IC-ENC NL shape — spec member names, trend stored as Int16 (issue #254).
+    public struct Int16TrendRow
+    {
+        [H5Name("waterLevelHeight")] public float WaterLevelHeight;
+        [H5Name("waterLevelTrend")] public short WaterLevelTrend;
+    }
+
     // Legacy synthetic-fixture shape — C# names that happen to match struct fields.
     public struct LegacyRow
     {
