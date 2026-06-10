@@ -39,6 +39,49 @@ public class S104DatasetReaderErrorTests
     }
 
     [Fact]
+    public void Read_MissingAttribute_WithDraftEdition_AppendsDeclaredEditionNote()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            WriteFileMissingAttribute(
+                path,
+                omit: "gridOriginLatitude",
+                productSpecification: "INT.IHO.S-104.0.8");
+
+            using var file = PureHdfFile.Open(path);
+            var ex = Assert.Throws<S100DatasetSchemaException>(() => S104DatasetReader.Read(file));
+
+            Assert.Equal("gridOriginLatitude", ex.AttributeOrDataset);
+            Assert.Contains("INT.IHO.S-104.0.8", ex.Message);
+            Assert.Contains("2.0.0", ex.Message);
+            Assert.NotNull(ex.AdditionalContext);
+            Assert.Contains("INT.IHO.S-104.0.8", ex.AdditionalContext!);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Read_MissingAttribute_WithCurrentEdition_DoesNotAppendEditionNote()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            WriteFileMissingAttribute(
+                path,
+                omit: "gridOriginLatitude",
+                productSpecification: "INT.IHO.S-104.2.0");
+
+            using var file = PureHdfFile.Open(path);
+            var ex = Assert.Throws<S100DatasetSchemaException>(() => S104DatasetReader.Read(file));
+
+            Assert.Null(ex.AdditionalContext);
+            Assert.DoesNotContain("different edition", ex.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Read_UnsupportedDataCodingFormat_ThrowsNotSupportedException()
     {
         var path = Path.GetTempFileName() + ".h5";
@@ -58,7 +101,7 @@ public class S104DatasetReaderErrorTests
         finally { File.Delete(path); }
     }
 
-    private static void WriteFileMissingAttribute(string path, string omit)
+    private static void WriteFileMissingAttribute(string path, string omit, string? productSpecification = null)
     {
         var attrs = new Dictionary<string, object>
         {
@@ -81,9 +124,13 @@ public class S104DatasetReaderErrorTests
             },
         };
 
+        var rootAttrs = new Dictionary<string, object> { ["horizontalCRS"] = 4326 };
+        if (productSpecification is not null)
+            rootAttrs["productSpecification"] = productSpecification;
+
         var file = new H5File
         {
-            Attributes = new() { ["horizontalCRS"] = 4326 },
+            Attributes = rootAttrs,
             ["WaterLevel"] = new H5Group
             {
                 Attributes = new() { ["dataCodingFormat"] = (byte)2 },

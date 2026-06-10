@@ -77,6 +77,15 @@ public static class S104DatasetReader
             ? root.ReadDoubleAttribute("waterLevelTrendThreshold")
             : null;
 
+        // S-100 Part 10c §10.2.1 — the root carries the productSpecification
+        // string (e.g. "INT.IHO.S-104.2.0"). This reader implements the
+        // Edition 2.0.0 layout; a dataset that declares a different edition
+        // may legitimately encode attributes differently, so we surface the
+        // declared edition when a schema failure occurs below.
+        string? productSpecification = root.AttributeExists("productSpecification")
+            ? root.ReadStringAttribute("productSpecification")
+            : null;
+
         var wlGroup = root.OpenGroup("WaterLevel");
         const string WaterLevelPath = "/WaterLevel";
 
@@ -97,7 +106,7 @@ public static class S104DatasetReader
 
         if (dataCodingFormat == 8)
         {
-            var stations = ReadStationSeries(root, wlGroup);
+            var stations = ReadStationSeriesGuarded(root, wlGroup, productSpecification);
             DateTime? minTime = null, maxTime = null;
             foreach (var s in stations)
             {
@@ -121,7 +130,7 @@ public static class S104DatasetReader
             });
         }
 
-        var coverages = ReadCoverages(wlGroup, dataCodingFormat);
+        var coverages = ReadCoveragesGuarded(wlGroup, dataCodingFormat, productSpecification);
 
         return new S104DatasetData.GriddedCoverage(new S104Dataset
         {
@@ -134,6 +143,101 @@ public static class S104DatasetReader
             MethodWaterLevelProduct = methodWaterLevelProduct,
             Coverages = coverages,
         });
+    }
+
+    /// <summary>
+    /// Runs <see cref="ReadCoverages"/>, enriching any
+    /// <see cref="S100DatasetSchemaException"/> with a note about the
+    /// dataset's declared product-specification edition when that edition
+    /// is not the Edition 2.0.0 this reader implements (see
+    /// <see cref="DeclaredEditionMismatchNote"/>).
+    /// </summary>
+    private static List<WaterLevelCoverage> ReadCoveragesGuarded(
+        IHdf5Group wlGroup, int dataCodingFormat, string? productSpecification)
+    {
+        try
+        {
+            return ReadCoverages(wlGroup, dataCodingFormat);
+        }
+        catch (S100DatasetSchemaException ex) when (DeclaredEditionMismatchNote(productSpecification) is { } note)
+        {
+            throw ex.WithAdditionalContext(note);
+        }
+    }
+
+    /// <summary>
+    /// Runs <see cref="ReadStationSeries"/>, enriching any
+    /// <see cref="S100DatasetSchemaException"/> with the declared-edition
+    /// note when the dataset targets an edition other than 2.0.0.
+    /// </summary>
+    private static IReadOnlyList<WaterLevelStation> ReadStationSeriesGuarded(
+        IHdf5Group root, IHdf5Group wlGroup, string? productSpecification)
+    {
+        try
+        {
+            return ReadStationSeries(root, wlGroup);
+        }
+        catch (S100DatasetSchemaException ex) when (DeclaredEditionMismatchNote(productSpecification) is { } note)
+        {
+            throw ex.WithAdditionalContext(note);
+        }
+    }
+
+    /// <summary>
+    /// Returns a human-readable note when <paramref name="productSpecification"/>
+    /// declares an S-104 edition other than the 2.0.0 layout this reader
+    /// implements (e.g. the draft <c>INT.IHO.S-104.0.8</c>), or
+    /// <c>null</c> when the declared edition is absent, unparseable, or
+    /// already 2.x. The note explains that the expected attribute layout
+    /// may differ for the declared edition.
+    /// </summary>
+    private static string? DeclaredEditionMismatchNote(string? productSpecification)
+    {
+        if (string.IsNullOrWhiteSpace(productSpecification))
+            return null;
+
+        if (!TryParseEditionMajor(productSpecification, out int major))
+            return null;
+
+        if (major == 2)
+            return null;
+
+        return $"The dataset declares productSpecification '{productSpecification}', " +
+            "a different edition than the S-104 Edition 2.0.0 layout this build implements, " +
+            "which may explain the unexpected attribute layout.";
+    }
+
+    /// <summary>
+    /// Extracts the leading numeric edition component from a
+    /// productSpecification string of the form
+    /// <c>INT.IHO.S-104.&lt;major&gt;[.&lt;minor&gt;]</c> (S-100 Part 10c
+    /// §10.2.1). Returns <c>false</c> when no numeric edition can be found.
+    /// </summary>
+    private static bool TryParseEditionMajor(string productSpecification, out int major)
+    {
+        major = 0;
+        // The edition trails the product code, e.g. "INT.IHO.S-104.0.8".
+        var tokens = productSpecification.Split('.');
+        for (int i = tokens.Length - 1; i >= 0; i--)
+        {
+            // Walk back to the first numeric token; its predecessor chain
+            // up to the product code holds the edition. The first numeric
+            // token after the product code ("S-104") is the major version.
+            if (int.TryParse(tokens[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                continue;
+
+            // tokens[i] is the last non-numeric token (the product code);
+            // the next token is the major edition.
+            if (i + 1 < tokens.Length &&
+                int.TryParse(tokens[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out major))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        return false;
     }
 
     private static List<WaterLevelCoverage> ReadCoverages(IHdf5Group wlGroup, int dataCodingFormat)

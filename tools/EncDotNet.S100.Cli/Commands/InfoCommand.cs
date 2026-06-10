@@ -1,5 +1,6 @@
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Hdf5;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -58,6 +59,13 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             return 0;
+        }
+        catch (S100DatasetSchemaException ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 5;
         }
         catch (Exception ex)
         {

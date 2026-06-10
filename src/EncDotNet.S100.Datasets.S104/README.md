@@ -7,7 +7,7 @@ Reader and coverage pipeline for S-104 Water Level Information for Surface Navig
 This library reads S-104 datasets from HDF5 files and provides time-series water level height and trend grids for the portrayal pipeline. Key types include:
 
 - **`S104Dataset`** — root model containing horizontal CRS, data coding format, and time-step coverages.
-- **`S104DatasetReader`** — reads an S-104 dataset from an `IHdf5File` (regular grid format).
+- **`S104DatasetReader`** — reads an S-104 dataset from an `IHdf5File` (regular grid format). The reader targets the Edition 2.0.0 HDF5 layout; when a required attribute is missing it raises `S100DatasetSchemaException`, and if the dataset declares a different `productSpecification` edition (e.g. the draft `INT.IHO.S-104.0.8`) the exception message notes that the declared edition may explain the unexpected layout.
 - **`S104CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S104PortrayalCatalogue`** — viewer-parity heatmap catalogue with hand-coded Day / Dusk / Night band tables (see *Portrayal* below).
 - **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models. `WaterLevelCoverage.GroupPath` carries the HDF5 instance path (e.g. `/WaterLevel/WaterLevel.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.

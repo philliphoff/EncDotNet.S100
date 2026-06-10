@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -158,6 +159,13 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (settings.Debug)
                 AnsiConsole.WriteException(ex);
             return 4;
+        }
+        catch (S100DatasetSchemaException ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 5;
         }
         catch (Exception ex)
         {

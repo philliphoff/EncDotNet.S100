@@ -38,6 +38,16 @@ public sealed class S100DatasetSchemaException : Exception
     public string? SpecReference { get; }
 
     /// <summary>
+    /// Optional extra context appended to the message — for example a
+    /// note that the dataset declares an unexpected product-specification
+    /// edition that may explain the failure. Preserved across
+    /// <see cref="WithFile"/> so the note is not lost when a processor
+    /// attaches the source file name. <c>null</c> when no extra context
+    /// is attached.
+    /// </summary>
+    public string? AdditionalContext { get; }
+
+    /// <summary>
     /// Initializes a new <see cref="S100DatasetSchemaException"/>.
     /// </summary>
     public S100DatasetSchemaException(
@@ -47,7 +57,8 @@ public sealed class S100DatasetSchemaException : Exception
         string? attributeOrDataset,
         string? specReference,
         string message,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        string? additionalContext = null)
         : base(message, innerException)
     {
         ArgumentNullException.ThrowIfNull(product);
@@ -59,6 +70,7 @@ public sealed class S100DatasetSchemaException : Exception
         GroupPath = groupPath;
         AttributeOrDataset = attributeOrDataset;
         SpecReference = specReference;
+        AdditionalContext = additionalContext;
     }
 
     /// <summary>
@@ -78,7 +90,30 @@ public sealed class S100DatasetSchemaException : Exception
             GroupPath,
             AttributeOrDataset,
             SpecReference,
-            ExceptionMessageFormatter.FormatSchema(Product, file, GroupPath, AttributeOrDataset, SpecReference),
-            InnerException);
+            ExceptionMessageFormatter.FormatSchema(Product, file, GroupPath, AttributeOrDataset, SpecReference, AdditionalContext),
+            InnerException,
+            AdditionalContext);
+    }
+
+    /// <summary>
+    /// Returns a copy of this exception with <paramref name="additionalContext"/>
+    /// appended to the message. Used by readers to note, for example,
+    /// that the dataset declares an unexpected product-specification
+    /// edition that may explain a missing-attribute failure.
+    /// </summary>
+    public S100DatasetSchemaException WithAdditionalContext(string? additionalContext)
+    {
+        if (string.Equals(AdditionalContext, additionalContext, StringComparison.Ordinal))
+            return this;
+
+        return new S100DatasetSchemaException(
+            Product,
+            File,
+            GroupPath,
+            AttributeOrDataset,
+            SpecReference,
+            ExceptionMessageFormatter.FormatSchema(Product, File, GroupPath, AttributeOrDataset, SpecReference, additionalContext),
+            InnerException,
+            additionalContext);
     }
 }
