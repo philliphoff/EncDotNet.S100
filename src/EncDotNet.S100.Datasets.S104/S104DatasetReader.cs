@@ -351,8 +351,13 @@ public static class S104DatasetReader
     /// <c>Trend</c>. All three are accepted (case-insensitive).
     /// </para>
     /// <para>
-    /// <c>waterLevelTrend</c> is spec-encoded as a uint8 enumeration but UKHO
-    /// dcf2 files store it as <c>f32</c>; both are decoded.
+    /// <c>waterLevelTrend</c> is spec-encoded as a uint8 enumeration (S-100
+    /// Part 10c permits small-integer storage), but producers vary: UKHO dcf2
+    /// files store it as <c>f32</c>, and IC-ENC NL feeds store it as
+    /// <c>Int16</c>. All small-integer and floating widths are decoded via
+    /// <see cref="DecodeTrend"/>; an unrecognised trend width is dropped to
+    /// <c>0</c> (nodata) rather than failing the whole read, since the trend is
+    /// auxiliary to the renderable water-level height (issue #254).
     /// </para>
     /// </remarks>
     private static WaterLevelValue[] ReadValues(IHdf5Group group)
@@ -383,35 +388,49 @@ public static class S104DatasetReader
                     $"S-104 height member '{heightMember.Name}' has unsupported kind {heightMember.Kind}."),
             };
 
-            byte trend = 0;
-            if (trendMember is not null)
-            {
-                trend = trendMember.Kind switch
-                {
-                    CompoundMemberKind.UInt8 or CompoundMemberKind.Int8 =>
-                        record[trendMember.Offset],
-                    // UKHO dcf2 stores trend as f32 — round to nearest valid enum byte.
-                    CompoundMemberKind.Float32 => (byte)Math.Clamp(
-                        (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
-                            record.Slice(trendMember.Offset, 4))),
-                        0, 255),
-                    CompoundMemberKind.Float64 => (byte)Math.Clamp(
-                        (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
-                            record.Slice(trendMember.Offset, 8))),
-                        0, 255),
-                    CompoundMemberKind.UInt16 => (byte)Math.Clamp(
-                        (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(
-                            record.Slice(trendMember.Offset, 2)),
-                        0, 255),
-                    _ => throw new NotSupportedException(
-                        $"S-104 trend member '{trendMember.Name}' has unsupported kind {trendMember.Kind}."),
-                };
-            }
+            byte trend = trendMember is null ? (byte)0 : DecodeTrend(trendMember, record);
 
             result[i] = new WaterLevelValue(height, trend);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Decodes a single <c>waterLevelTrend</c> compound member into the byte
+    /// trend enumeration (0 nodata / 1 decreasing / 2 increasing / 3 steady).
+    /// </summary>
+    /// <remarks>
+    /// S-104 Edition 2.0.0 §10.2.6 / S-100 Part 10c §10.2.1 — the trend is an
+    /// enumerated indicator that producers may store in any small numeric
+    /// width. All signed/unsigned 8/16/32-bit integer kinds and both float
+    /// widths are accepted (clamped to <c>0..255</c>). Any other kind is
+    /// dropped to <c>0</c> (nodata) rather than throwing, so a renderable
+    /// water-level height grid is never lost to an unrepresentable trend
+    /// (issue #254).
+    /// </remarks>
+    private static byte DecodeTrend(CompoundMemberInfo trendMember, ReadOnlySpan<byte> record)
+    {
+        var field = record.Slice(trendMember.Offset, trendMember.Size);
+        return trendMember.Kind switch
+        {
+            CompoundMemberKind.UInt8 or CompoundMemberKind.Int8 => field[0],
+            CompoundMemberKind.Int16 => (byte)Math.Clamp(
+                (int)System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(field), 0, 255),
+            CompoundMemberKind.UInt16 => (byte)Math.Clamp(
+                (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(field), 0, 255),
+            CompoundMemberKind.Int32 => (byte)Math.Clamp(
+                System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(field), 0, 255),
+            CompoundMemberKind.UInt32 => (byte)Math.Clamp(
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(field), 0u, 255u),
+            // UKHO dcf2 stores trend as f32 — round to nearest valid enum byte.
+            CompoundMemberKind.Float32 => (byte)Math.Clamp(
+                (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(field)), 0, 255),
+            CompoundMemberKind.Float64 => (byte)Math.Clamp(
+                (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(field)), 0, 255),
+            // Drop an unrepresentable trend rather than failing the whole read.
+            _ => (byte)0,
+        };
     }
 
     // -------------------------------------------------------------------
@@ -678,24 +697,7 @@ public static class S104DatasetReader
                     $"S-104 height member '{heightMember.Name}' has unsupported kind {heightMember.Kind}."),
             };
 
-            trends[i] = trendMember is null ? (byte)0 : trendMember.Kind switch
-            {
-                CompoundMemberKind.UInt8 or CompoundMemberKind.Int8 => record[trendMember.Offset],
-                CompoundMemberKind.Float32 => (byte)Math.Clamp(
-                    (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(
-                        record.Slice(trendMember.Offset, 4))),
-                    0, 255),
-                CompoundMemberKind.Float64 => (byte)Math.Clamp(
-                    (int)Math.Round(System.Buffers.Binary.BinaryPrimitives.ReadDoubleLittleEndian(
-                        record.Slice(trendMember.Offset, 8))),
-                    0, 255),
-                CompoundMemberKind.UInt16 => (byte)Math.Clamp(
-                    (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(
-                        record.Slice(trendMember.Offset, 2)),
-                    0, 255),
-                _ => throw new NotSupportedException(
-                    $"S-104 trend member '{trendMember.Name}' has unsupported kind {trendMember.Kind}."),
-            };
+            trends[i] = trendMember is null ? (byte)0 : DecodeTrend(trendMember, record);
         }
 
         return (heights, trends);

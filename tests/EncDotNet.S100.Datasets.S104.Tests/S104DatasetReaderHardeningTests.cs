@@ -185,4 +185,39 @@ public class S104DatasetReaderHardeningTests
         }
         finally { File.Delete(path); }
     }
+
+    /// <summary>
+    /// IC-ENC NL dcf2 files encode <c>waterLevelTrend</c> as <c>Int16</c>
+    /// (issue #254). The reader must decode the Int16 trend rather than
+    /// aborting the whole read, so the renderable height grid still draws
+    /// and the trend value round-trips to the correct enum byte.
+    /// </summary>
+    [Fact]
+    public void Read_AcceptsInt16Trend()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 },
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = -0.75f, WaterLevelTrend = 1 },
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = 0.25f, WaterLevelTrend = 3 },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 3, useF64GridAttrs: true, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Equal(3, coverage.Values.Length);
+            Assert.Equal(1.5f, coverage.Values[0].Height);
+            Assert.Equal((byte)2, coverage.Values[0].Trend);
+            Assert.Equal(-0.75f, coverage.Values[1].Height);
+            Assert.Equal((byte)1, coverage.Values[1].Trend);
+            Assert.Equal(0.25f, coverage.Values[2].Height);
+            Assert.Equal((byte)3, coverage.Values[2].Trend);
+        }
+        finally { File.Delete(path); }
+    }
 }
