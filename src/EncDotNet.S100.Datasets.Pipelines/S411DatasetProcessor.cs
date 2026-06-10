@@ -19,8 +19,6 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
     private readonly S411Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-411", default);
     protected override string ProductDescription => "Sea Ice";
     protected override IReadOnlyList<S411Feature> Features => _dataset.Features;
 
@@ -72,12 +70,15 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
             new S411PortrayalCatalogue(catalogueManager.GetProvider("S-411")),
             featureCatalogueManager?.GetDecoder("S-411"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-411")
     {
         using (datasetStream)
         {
             _dataset = S411Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

@@ -43,6 +43,21 @@ processor wrapped in an `IDatasetProcessor`. `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
+### Declared-edition assessment (issue #248)
+
+Every processor populates `IDatasetProcessor.Spec` with the dataset's
+*declared* product-specification edition (HDF5 `productSpecification`
+root attribute, S-101 `ProductSpecificationEdition`, or GML
+`productEdition`) and exposes an optional
+`IDatasetProcessor.VersionAssessment` (`SpecVersionAssessment?`). The
+assessment is computed by `SupportedSpecEditions.Assess(...)`, which
+compares the declared edition against the **editions this build
+implements** for that product (the central `SupportedSpecEditions`
+table — product-spec editions, *not* catalogue version numbers). When
+the declared edition diverges in a way that may degrade rendering,
+`VersionAssessment.IsWarning` is true and surfaces non-blockingly in
+the CLI (`s100 info` / `render`) and the viewer's dataset list.
+
 ## Mapsui-free render seam (issue #189)
 
 This package is **Mapsui-free** so headless consumers (the

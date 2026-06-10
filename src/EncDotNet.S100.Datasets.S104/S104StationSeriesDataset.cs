@@ -74,6 +74,15 @@ public sealed class S104StationSeriesDataset
 /// </summary>
 public abstract record S104DatasetData
 {
+    /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-104.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Surfaced so the pipeline
+    /// can report the dataset's declared edition and warn on a version
+    /// mismatch (see <c>SpecVersionAssessment</c>).
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
     /// <summary>S-104 dcf2 — regularly-gridded water-level coverage.</summary>
     public sealed record GriddedCoverage(S104Dataset Dataset) : S104DatasetData;
 

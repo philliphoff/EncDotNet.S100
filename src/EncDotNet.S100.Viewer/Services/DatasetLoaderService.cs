@@ -347,6 +347,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             entry.IsLoaded = true;
             entry.Info = result.Info;
+            entry.SetVersionAssessment(processor.VersionAssessment);
             entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
 
             // Run the spec's normative validation rule pack against

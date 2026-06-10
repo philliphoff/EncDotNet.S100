@@ -17,8 +17,6 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
     private readonly S129Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-129", default);
     protected override string ProductDescription => "Under Keel Clearance Management";
     protected override IReadOnlyList<S129Feature> Features => _dataset.Features;
 
@@ -61,12 +59,15 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
             new S129PortrayalCatalogue(catalogueManager.GetProvider("S-129")),
             featureCatalogueManager?.GetDecoder("S-129"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-129")
     {
         using (datasetStream)
         {
             _dataset = S129Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

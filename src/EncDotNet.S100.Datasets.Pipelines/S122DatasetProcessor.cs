@@ -16,8 +16,6 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
     private readonly S122Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-122", default);
     protected override string ProductDescription => "Marine Protected Areas";
     protected override IReadOnlyList<S122Feature> Features => _dataset.Features;
 
@@ -61,12 +59,15 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
             new S122PortrayalCatalogue(catalogueManager.GetProvider("S-122")),
             featureCatalogueManager?.GetDecoder("S-122"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-122")
     {
         using (datasetStream)
         {
             _dataset = S122Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

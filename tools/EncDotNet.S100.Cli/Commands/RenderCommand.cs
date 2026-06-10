@@ -122,6 +122,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             var processor = factory.CreateProcessor(settings.DatasetPath);
 
+            // Non-blocking: warn (on stderr) when the dataset's declared
+            // edition diverges from what this build implements. Rendering still
+            // proceeds (issue #248).
+            if (processor.VersionAssessment?.IsWarning == true)
+            {
+                Console.Error.WriteLine(processor.VersionAssessment.BuildMessage());
+            }
+
             if (processor is not IHeadlessImageRenderer headless)
             {
                 AnsiConsole.MarkupLineInterpolated(

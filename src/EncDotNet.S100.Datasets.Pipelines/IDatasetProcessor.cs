@@ -27,6 +27,17 @@ public interface IDatasetProcessor
     SpecRef Spec { get; }
 
     /// <summary>
+    /// How the dataset's declared product specification edition
+    /// (<see cref="Spec"/>) relates to the version of the catalogue used to
+    /// process it, or <c>null</c> when no catalogue self-describes its
+    /// version (so no assessment can be made). Computed once at construction
+    /// — catalogue resolution is a one-shot per processor — and surfaced by
+    /// hosts (CLI <c>info</c>/<c>render</c>, viewer layer list) to warn on a
+    /// version mismatch per S-100 Edition 5.2.1 Part 2 §6.
+    /// </summary>
+    SpecVersionAssessment? VersionAssessment => null;
+
+    /// <summary>
     /// Returns information about a feature identified by its reference string
     /// (as stored in the rendered feature via the renderer's feature-ref key),
     /// or <c>null</c> if the feature cannot be found.

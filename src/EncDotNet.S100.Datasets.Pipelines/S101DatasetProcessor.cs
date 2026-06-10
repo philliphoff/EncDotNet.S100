@@ -111,7 +111,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private static readonly EcdisDisplaySettings UnfilteredEcdisDisplay =
         new() { Category = EcdisDisplayCategory.All };
 
-    public SpecRef Spec => new("S-101", default);
+    public SpecRef Spec { get; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
 
     public S101DatasetProcessor(
         string path,
@@ -172,6 +175,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         }
         _dataset = S101Dataset.Open(new MemoryStream(datasetBytes, writable: false));
 
+        // S-101 declares its product-spec edition in the ISO 8211 dataset
+        // identification (PRED subfield); surface it so the pipeline can warn
+        // on a version mismatch with the edition this build implements.
+        var declaredEdition = _dataset.Document.Identification?.ProductSpecificationEdition;
+        Spec = !string.IsNullOrWhiteSpace(declaredEdition)
+            && SpecVersion.TryParse(declaredEdition, out var s101Edition)
+            ? new SpecRef("S-101", s101Edition)
+            : new SpecRef("S-101", default);
+
         _patternClipScope = BuildDatasetScopeKey(datasetBytes, _dataset);
 
         // When a shared instruction cache is injected use it (persistent,
@@ -183,6 +195,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         _featureCatalogueManager = featureCatalogueManager;
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
     }
 
     /// <summary>

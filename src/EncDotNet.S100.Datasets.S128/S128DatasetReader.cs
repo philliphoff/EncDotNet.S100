@@ -118,6 +118,7 @@ internal static class S128DatasetReader
         return new S128Dataset
         {
             ProductIdentifier = productId ?? "S-128",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             Features = features.ToImmutable(),
             InformationTypes = infoTypes.ToImmutable(),

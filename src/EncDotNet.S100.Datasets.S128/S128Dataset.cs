@@ -18,6 +18,13 @@ public sealed class S128Dataset
     /// <summary>The product specification identifier (e.g. <c>"S-128"</c>).</summary>
     public string? ProductIdentifier { get; init; }
 
+    /// <summary>
+    /// The declared product-specification edition (e.g. <c>"2.0.0"</c>) read
+    /// from <c>DatasetIdentificationInformation/productEdition</c>, or
+    /// <c>null</c> when the dataset declares none. S-100 Part 10b.
+    /// </summary>
+    public string? DeclaredEdition { get; init; }
+
     /// <summary>The dataset identifier (gml:id of the dataset root).</summary>
     public string? DatasetIdentifier { get; init; }
 

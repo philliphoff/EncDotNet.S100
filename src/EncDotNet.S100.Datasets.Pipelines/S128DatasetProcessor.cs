@@ -16,8 +16,6 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
     private readonly S128Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-128", default);
     protected override string ProductDescription => "Catalogue of Nautical Products";
     protected override IReadOnlyList<S128Feature> Features => _dataset.Features;
 
@@ -63,12 +61,15 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
             new S128PortrayalCatalogue(catalogueManager.GetProvider("S-128")),
             featureCatalogueManager?.GetDecoder("S-128"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-128")
     {
         using (datasetStream)
         {
             _dataset = S128Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

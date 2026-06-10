@@ -64,23 +64,53 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         GmlPortrayalCatalogueBase catalogue,
         FeatureCatalogueDecoder? decoder,
         string fileName,
-        IDisplayPlaneAuthorityProvider authorityProvider)
+        IDisplayPlaneAuthorityProvider authorityProvider,
+        string specName)
     {
         ArgumentNullException.ThrowIfNull(catalogue);
         ArgumentNullException.ThrowIfNull(authorityProvider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(specName);
         _catalogue = catalogue;
         _decoder = decoder;
         _fileName = fileName;
         _authorityProvider = authorityProvider;
 
-        // Catalogue resolution is a one-shot per processor instance; emit
-        // the diagnostic at construction so the per-Render hot path stays
-        // free of the (cheap but non-zero) telemetry overhead.
-        CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+        // Seed the spec with its canonical name and an unknown edition; the
+        // declared edition is refined by SetDeclaredEdition once the subclass
+        // has parsed the dataset. Catalogue-resolution telemetry is emitted
+        // there too, so it reflects the declared edition.
+        Spec = new SpecRef(specName, default);
     }
 
     /// <inheritdoc/>
-    public abstract SpecRef Spec { get; }
+    public SpecRef Spec { get; private set; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; private set; }
+
+    /// <summary>
+    /// Records the dataset's declared product-spec edition (parsed from the
+    /// GML <c>productEdition</c> / application-schema namespace) and computes
+    /// the <see cref="VersionAssessment"/> against the edition this build
+    /// implements. Subclasses call this once, from their constructor, after
+    /// parsing the dataset. Also emits the one-shot catalogue-resolution
+    /// telemetry for this processor instance.
+    /// </summary>
+    /// <param name="declaredEdition">
+    /// The declared edition string (e.g. <c>"2.0.0"</c>), or <c>null</c> when
+    /// the dataset declares none.
+    /// </param>
+    protected void SetDeclaredEdition(string? declaredEdition)
+    {
+        if (!string.IsNullOrWhiteSpace(declaredEdition)
+            && SpecVersion.TryParse(declaredEdition, out var edition))
+        {
+            Spec = new SpecRef(Spec.Name, edition);
+        }
+
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
+        CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+    }
 
     /// <summary>
     /// Human-readable product description for info strings (e.g.

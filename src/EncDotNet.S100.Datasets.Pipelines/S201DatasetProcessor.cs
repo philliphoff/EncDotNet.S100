@@ -23,7 +23,6 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
     private bool _validationCached;
 
     /// <inheritdoc />
-    public override SpecRef Spec => new("S-201", default);
     /// <inheritdoc />
     protected override string ProductDescription => "Aids to Navigation Information";
     /// <inheritdoc />
@@ -69,12 +68,15 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
             new S201PortrayalCatalogue(catalogueManager.GetProvider("S-201")),
             featureCatalogueManager?.GetDecoder("S-201"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-201")
     {
         using (datasetStream)
         {
             _dataset = S201Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     /// <inheritdoc />

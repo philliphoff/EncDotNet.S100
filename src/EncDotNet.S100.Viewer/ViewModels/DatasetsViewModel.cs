@@ -46,6 +46,48 @@ internal sealed class DatasetEntry : ViewModelBase
         set => SetProperty(ref _isLoaded, value);
     }
 
+    private bool _hasVersionWarning;
+    /// <summary>
+    /// True when the dataset's declared product-spec edition diverges from
+    /// the edition this build implements in a way that may degrade rendering
+    /// (issue #248). Drives the persistent warning badge in the dataset list.
+    /// </summary>
+    public bool HasVersionWarning
+    {
+        get => _hasVersionWarning;
+        private set => SetProperty(ref _hasVersionWarning, value);
+    }
+
+    private string? _versionWarningTooltip;
+    /// <summary>
+    /// The human-readable warning shown as the badge tooltip, or <c>null</c>
+    /// when <see cref="HasVersionWarning"/> is false.
+    /// </summary>
+    public string? VersionWarningTooltip
+    {
+        get => _versionWarningTooltip;
+        private set => SetProperty(ref _versionWarningTooltip, value);
+    }
+
+    /// <summary>
+    /// Records the dataset's spec-version assessment, raising the warning
+    /// badge when the divergence is significant. A <c>null</c> assessment or
+    /// a non-warning assessment clears the badge.
+    /// </summary>
+    public void SetVersionAssessment(SpecVersionAssessment? assessment)
+    {
+        if (assessment?.IsWarning == true)
+        {
+            VersionWarningTooltip = assessment.BuildMessage();
+            HasVersionWarning = true;
+        }
+        else
+        {
+            HasVersionWarning = false;
+            VersionWarningTooltip = null;
+        }
+    }
+
     // ── Per-dataset display state ─────────────────────────────────────
     //
     // These properties drive the underlying Mapsui ILayer.Enabled and
