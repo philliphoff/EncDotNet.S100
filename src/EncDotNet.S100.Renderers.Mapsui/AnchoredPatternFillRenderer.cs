@@ -102,13 +102,24 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
         if (tileScreenW <= 0.01f || tileScreenH <= 0.01f)
             return false;
 
+        // Snap the repeat spacing to whole pixels. The lattice is anchored to a
+        // fixed world origin and stepped many times across the polygon, so any
+        // fractional component in the step causes successive tiles to land on
+        // varying sub-pixel offsets, giving the pattern an inconsistent, shimmery
+        // sharpness. Stepping by a whole number of pixels keeps every tile aligned
+        // to the same pixel phase. The symbol is centred well within the cell, so
+        // the sub-millimetre difference between the (transparent) tile edge and the
+        // snapped step is invisible.
+        float tileStepW = MathF.Max(1f, MathF.Round(tileScreenW));
+        float tileStepH = MathF.Max(1f, MathF.Round(tileScreenH));
+
         // Anchor the lattice to a fixed world origin projected to screen space so
         // the pattern is shared by all polygons (S-100 areaCRS=GlobalGeometry) and
         // stays seamless across overlapping geometries during panning.
-        int startCol = (int)Math.Floor((bounds.Left - anchorScreenX) / tileScreenW);
-        int endCol = (int)Math.Ceiling((bounds.Right - anchorScreenX) / tileScreenW);
-        int startRow = (int)Math.Floor((bounds.Top - anchorScreenY) / tileScreenH);
-        int endRow = (int)Math.Ceiling((bounds.Bottom - anchorScreenY) / tileScreenH);
+        int startCol = (int)Math.Floor((bounds.Left - anchorScreenX) / tileStepW);
+        int endCol = (int)Math.Ceiling((bounds.Right - anchorScreenX) / tileStepW);
+        int startRow = (int)Math.Floor((bounds.Top - anchorScreenY) / tileStepH);
+        int endRow = (int)Math.Ceiling((bounds.Bottom - anchorScreenY) / tileStepH);
 
         var tileScale = SKMatrix.CreateScale(onScreenPxPerMm, onScreenPxPerMm);
 
@@ -126,8 +137,8 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
         {
             for (int col = startCol; col <= endCol; col++)
             {
-                float tx = (float)anchorScreenX + col * tileScreenW;
-                float ty = (float)anchorScreenY + row * tileScreenH;
+                float tx = (float)anchorScreenX + col * tileStepW;
+                float ty = (float)anchorScreenY + row * tileStepH;
                 var tileMatrix = SKMatrix.Concat(SKMatrix.CreateTranslation(tx, ty), tileScale);
                 canvas.DrawPicture(patternStyle.Tile, ref tileMatrix);
             }
