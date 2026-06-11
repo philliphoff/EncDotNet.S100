@@ -23,11 +23,14 @@ internal static class CliApp
                 .WithExample("render", "currents.h5", "out.png", "--time-step", "2", "--palette", "night");
 
             config.AddCommand<ValidateCommand>("validate")
-                .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack.")
+                .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
                 .WithExample("validate", "warnings.gml")
                 .WithExample("validate", "route.gml", "--strict")
                 .WithExample("validate", "chart.000", "--suppress", "S101-R-1.2,S101-R-3.2")
-                .WithExample("validate", "currents.h5", "--format", "json");
+                .WithExample("validate", "currents.h5", "--format", "json")
+                .WithExample("validate", "exchangeset/CATALOG.XML")
+                .WithExample("validate", "exchangeset.zip", "--format", "json")
+                .WithExample("validate", "s57set/CATALOG.031");
 
             config.AddCommand<InfoCommand>("info")
                 .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")

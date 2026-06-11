@@ -76,6 +76,51 @@ rebadgePrefix: "S101-as-S57/")` in
 [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
 and cached on the processor.
 
+## Exchange-set integrity verification
+
+`S57ExchangeSetVerification` integrity-verifies an S-57 / S-63 exchange
+set (a folder containing a `CATALOG.031`) and **maps the result onto the
+same S-100 [`ExchangeSetVerificationResult`](../EncDotNet.S100.ExchangeSets/README.md)
+model** used for native S-100 exchange sets, so both products surface
+uniformly through the CLI (`s100 validate`) and any future viewer wiring.
+
+```csharp
+using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.ExchangeSets;
+
+ExchangeSetVerificationResult result =
+    await S57ExchangeSetVerification.VerifyAsync("/path/to/s57set");
+
+bool integrity = result.IntegrityVerified;   // no CRC mismatches / missing files
+bool signed    = result.AllValid;            // strict: every file signature Ok
+```
+
+It is a deliberately thin **adapter**, not a shared interface: the
+upstream S-57 verifier (`EncDotNet.S57` 0.5.0+) is rooted at a directory
+path (`CATALOG.031` plus the files it references), whereas the S-100
+verifier is `IAssetSource`-based. Forcing both behind one interface would
+distort both, so only the *result* is mapped.
+
+Mapping notes:
+
+- Outcomes are mapped **by name** (`S57VerificationOutcome` →
+  [`VerificationOutcome`](../EncDotNet.S100.ExchangeSets/README.md)). The
+  two enums are kept byte-identical; mapping by name means a future
+  divergence fails loudly rather than silently mis-mapping.
+- Both the **signature** dimension (`Outcome`) and the **checksum**
+  dimension (`ChecksumOutcome`) are preserved independently.
+- S-57 integrity uses a CRC-32 (the `CATALOG.031` field), not the SHA-256
+  digest the S-100 model carries, so the per-file CRC values are surfaced
+  through `FileVerificationResult.Detail` and `ComputedSha256` is left
+  `null`.
+- The verdict semantics match S-100: `NoChecksum` / `NotSigned` are
+  **non-failing** (an unsigned-but-intact set has `IntegrityVerified ==
+  true` but `AllValid == false`); only `ChecksumMismatch` / `FileMissing`
+  / `Error` / invalid signatures fail integrity. This is identical to the
+  upstream S-57 `AllValid`.
+- Today the upstream S-57 verifier reports every file as `NotSigned`
+  (S-63 signature verification is a seam); CRC checking is fully wired.
+
 ## Usage
 
 ```csharp

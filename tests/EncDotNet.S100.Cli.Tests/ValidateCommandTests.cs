@@ -7,6 +7,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// End-to-end smoke tests that run the <c>s100 validate</c> command in-process
 /// against a committed synthetic dataset fixture.
 /// </summary>
+[Collection(ConsoleCollection.Name)]
 public sealed class ValidateCommandTests
 {
     private static string FixturePath(string fileName) =>

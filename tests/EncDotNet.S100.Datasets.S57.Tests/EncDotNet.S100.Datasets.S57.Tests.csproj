@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
   </ItemGroup>
 
 </Project>

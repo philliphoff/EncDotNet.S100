@@ -7,6 +7,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// dataset's declared edition genuinely diverges from the build-implemented
 /// edition — and stays silent otherwise (no false positives).
 /// </summary>
+[Collection(ConsoleCollection.Name)]
 public sealed class SpecVersionWarningCliTests
 {
     private const string WarningFragment = "rendering may be incomplete or incorrect";

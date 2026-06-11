@@ -8,8 +8,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// portrayal diagnostics on stderr when <c>s100 render … --debug</c> is used
 /// while keeping them silent by default (issue #241).
 /// </summary>
-[Collection(nameof(DiagnosticTraceScopeTests))]
-[CollectionDefinition(nameof(DiagnosticTraceScopeTests), DisableParallelization = true)]
+[Collection(ConsoleCollection.Name)]
 public sealed class DiagnosticTraceScopeTests
 {
     [Fact]
