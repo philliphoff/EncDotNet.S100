@@ -41,7 +41,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             if (assessment is not null)
             {
                 table.AddRow(
-                    "Implemented edition",
+                    "Supported edition",
                     Markup.Escape(string.Join(", ", assessment.Supported)));
 
                 if (assessment.Catalogue is { } catalogue)
@@ -54,8 +54,8 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                 var (label, colour) = assessment.Kind switch
                 {
                     SpecMatchKind.Exact => ("matches", "green"),
-                    SpecMatchKind.CatalogueNewerCompatible => ("build implements a newer, compatible edition", "green"),
-                    SpecMatchKind.CatalogueOlder => ("build implements an older edition — may be incomplete", "yellow"),
+                    SpecMatchKind.CatalogueNewerCompatible => ("application supports a newer, compatible edition", "green"),
+                    SpecMatchKind.CatalogueOlder => ("application supports an older edition — may be incomplete", "yellow"),
                     SpecMatchKind.MajorDivergence => ("incompatible edition — may be incomplete or incorrect", "red"),
                     _ => ("not declared", "grey"),
                 };

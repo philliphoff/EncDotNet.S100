@@ -51,8 +51,8 @@ public class SpecVersionAssessmentTests
         Assert.Equal(SpecMatchKind.MajorDivergence, a!.Kind);
         Assert.True(a.IsWarning);
         var message = a.BuildMessage();
-        Assert.Contains("S-111 0.8.0", message);
-        Assert.Contains("S-111 2.0.0", message);
+        Assert.Contains("S-111 edition 0.8.0", message);
+        Assert.Contains("S-111 edition 2.0.0", message);
     }
 
     [Fact]

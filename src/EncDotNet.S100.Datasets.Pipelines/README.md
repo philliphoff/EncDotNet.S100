@@ -51,9 +51,11 @@ root attribute, S-101 `ProductSpecificationEdition`, or GML
 `productEdition`) and exposes an optional
 `IDatasetProcessor.VersionAssessment` (`SpecVersionAssessment?`). The
 assessment is computed by `SupportedSpecEditions.Assess(...)`, which
-compares the declared edition against the **editions this build
-implements** for that product (the central `SupportedSpecEditions`
-table — product-spec editions, *not* catalogue version numbers). When
+compares the declared edition against the **editions this application
+supports** for that product (the central `SupportedSpecEditions`
+table — product-spec editions, *not* catalogue version numbers; an
+FC/PC declares only its own version, never the product-spec edition it
+targets, so the supported edition must be asserted in code). When
 the declared edition diverges in a way that may degrade rendering,
 `VersionAssessment.IsWarning` is true and surfaces non-blockingly in
 the CLI (`s100 info` / `render`) and the viewer's dataset list.

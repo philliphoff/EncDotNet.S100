@@ -3,7 +3,7 @@ using EncDotNet.S100.Core;
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
-/// The set of product specification editions this build implements for each
+/// The set of product specification editions this application supports for each
 /// S-100 product, keyed by canonical spec name (<c>"S-NNN"</c>).
 /// </summary>
 /// <remarks>
@@ -42,7 +42,7 @@ public static class SupportedSpecEditions
         };
 
     /// <summary>
-    /// Returns the editions the build implements for <paramref name="specName"/>
+    /// Returns the editions the application supports for <paramref name="specName"/>
     /// (canonical or tolerant form), or an empty list when the product is not
     /// registered.
     /// </summary>
@@ -60,7 +60,7 @@ public static class SupportedSpecEditions
 
     /// <summary>
     /// Builds a <see cref="SpecVersionAssessment"/> for <paramref name="declared"/>
-    /// against the editions this build implements, or <c>null</c> when the
+    /// against the editions this application supports, or <c>null</c> when the
     /// product is not registered. <paramref name="catalogue"/> is carried
     /// through for informational display only.
     /// </summary>

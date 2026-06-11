@@ -2,13 +2,13 @@ namespace EncDotNet.S100.Core;
 
 /// <summary>
 /// A user-facing assessment of how the product specification edition a
-/// dataset declares relates to the edition(s) of that product this build
+/// dataset declares relates to the edition(s) of that product this application
 /// actually implements.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The warning deliberately compares the dataset's declared edition against
-/// the <em>edition this build implements</em> — not against the Feature or
+/// the <em>edition this application supports</em> — not against the Feature or
 /// Portrayal Catalogue version number. Catalogue versions advance on their
 /// own release cadence and routinely differ from the product-spec edition
 /// (e.g. the S-101 portrayal catalogue is at version 2.0.0 while the product
@@ -57,7 +57,7 @@ public sealed record SpecVersionAssessment
     /// </summary>
     public SpecVersion Implemented { get; }
 
-    /// <summary>Every edition of this product the build implements.</summary>
+    /// <summary>Every edition of this product the application supports.</summary>
     public IReadOnlyList<SpecVersion> Supported { get; }
 
     /// <summary>
@@ -79,7 +79,7 @@ public sealed record SpecVersionAssessment
 
     /// <summary>
     /// <c>true</c> when the divergence may produce incomplete or incorrect
-    /// output — the build implements an older edition on the same major
+    /// output — the application supports an older edition on the same major
     /// (<see cref="SpecMatchKind.CatalogueOlder"/>) or no edition on the
     /// declared major (<see cref="SpecMatchKind.MajorDivergence"/>). A build
     /// that implements a newer backward-compatible edition is divergent but
@@ -89,11 +89,11 @@ public sealed record SpecVersionAssessment
 
     /// <summary>
     /// Builds the assessment for a declared spec and the set of editions the
-    /// build implements for that product.
+    /// application supports for that product.
     /// </summary>
     /// <param name="declared">The dataset's declared product spec.</param>
     /// <param name="supported">
-    /// Every edition of the product the build implements. Must be non-empty;
+    /// Every edition of the product the application supports. Must be non-empty;
     /// returns <c>null</c> when empty (no support known).
     /// </param>
     /// <param name="catalogue">
@@ -140,19 +140,34 @@ public sealed record SpecVersionAssessment
 
     /// <summary>
     /// Returns a single-line, human-readable description of the divergence,
-    /// e.g. <c>"Dataset targets S-104 0.8.0 but this build implements S-104
-    /// 2.0.0; rendering may be incomplete or incorrect."</c> Returns
-    /// <c>null</c> when <see cref="IsDivergent"/> is <c>false</c>.
+    /// e.g. <c>"Dataset targets S-104 edition 0.8.0, but this application
+    /// supports S-104 edition 2.0.0; rendering may be incomplete or
+    /// incorrect."</c> Returns <c>null</c> when <see cref="IsDivergent"/> is
+    /// <c>false</c>.
     /// </summary>
+    /// <remarks>
+    /// The supported edition is attributed to "this application" because it is
+    /// a property of the reader/portrayal implementation in this codebase: an
+    /// S-100 Feature or Portrayal Catalogue does not declare which
+    /// product-specification edition it targets (only its own catalogue
+    /// version), so the supported edition cannot be derived from the loaded
+    /// catalogue and is instead asserted by the build (see
+    /// <c>SupportedSpecEditions</c>).
+    /// </remarks>
     public string? BuildMessage()
     {
         if (!IsDivergent) return null;
 
-        var tail = IsWarning
-            ? "rendering may be incomplete or incorrect."
-            : "this build implements a newer, backward-compatible edition.";
+        if (IsWarning)
+        {
+            return $"Dataset targets {Declared.Name} edition {Declared.Edition}, but this "
+                + $"application supports {Declared.Name} edition {Implemented}; rendering "
+                + "may be incomplete or incorrect.";
+        }
 
-        return $"Dataset targets {Declared.Name} {Declared.Edition} but this build "
-            + $"implements {Declared.Name} {Implemented}; {tail}";
+        // Divergent but benign: the application supports a newer edition on the
+        // same major, which reads the declared edition's data correctly.
+        return $"Dataset targets {Declared.Name} edition {Declared.Edition}; this application "
+            + $"supports the newer, backward-compatible edition {Implemented}.";
     }
 }
