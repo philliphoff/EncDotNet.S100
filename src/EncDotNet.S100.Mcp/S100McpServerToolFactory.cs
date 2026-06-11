@@ -75,7 +75,8 @@ internal static class S100McpServerToolFactory
         QueryFeaturesTool queryFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
-        ListTimeStepsTool listTimeSteps)
+        ListTimeStepsTool listTimeSteps,
+        FindNearestTool findNearest)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
@@ -85,6 +86,7 @@ internal static class S100McpServerToolFactory
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
+        yield return CreateFindNearestTool(findNearest);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -223,7 +225,8 @@ internal static class S100McpServerToolFactory
             "geographic query (point / bounding box / polygon / polyline). Supports S-122, S-124, " +
             "S-125, S-127, S-128, S-129, S-131, S-201, S-411, and S-421. Each result includes the " +
             "dataset ID, spec, feature ID, feature type, and bounding box — follow up with " +
-            "describe_feature for full attributes. Pagination is server-side.";
+            "describe_feature for full attributes. An optional attribute filter narrows results by attribute " +
+            "content as well as geometry. Pagination is server-side.";
 
         var del = ([Description("Spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] string query,
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
@@ -231,6 +234,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   [Description("Optional attribute filter as a JSON object of code -> value, e.g. {\"categoryOfRestrictedArea\":\"14\",\"status\":\"1\"}. All entries must match (AND); matching is case-insensitive against both simple and complex attributes. A null value (e.g. {\"restriction\":null}) tests only that the attribute is present.")] string? attributes = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -240,7 +244,8 @@ internal static class S100McpServerToolFactory
                         featureType,
                         ParseTimeQuery(times),
                         page,
-                        pageSize),
+                        pageSize,
+                        ParseAttributeFilter(attributes)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -326,8 +331,87 @@ internal static class S100McpServerToolFactory
         });
     }
 
+    private static McpServerTool CreateFindNearestTool(FindNearestTool inner)
+    {
+        var description =
+            "Returns the loaded GML-encoded vector features nearest to a query point (WGS-84 decimal " +
+            "degrees), ranked closest-first by great-circle distance to each feature's bounding box. " +
+            "Supports S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, and S-421. " +
+            "Answers positional questions such as \"what is the closest restricted area to my position?\" " +
+            "without paging query_features through expanding boxes. Optional spec, feature-type, " +
+            "attribute, and maximum-distance filters. Each result carries the distance in metres " +
+            "(0 when the point is inside the feature's bounds). Read-only and side-effect free.";
+
+        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
+                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
+                   [Description("Optional spec filter (e.g. \"S-122/1.0.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"RestrictedArea\"); null matches every feature type.")] string? featureType = null,
+                   [Description("Optional attribute filter as a JSON object of code -> value (same shape as query_features); all entries must match.")] string? attributes = null,
+                   [Description("Maximum number of nearest features to return; clamped to 1..200.")] int maxResults = 10,
+                   [Description("Optional maximum distance in metres; features farther than this are excluded. Null means no cap.")] double? maxDistanceMeters = null,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new FindNearestRequest(
+                        latitude,
+                        longitude,
+                        ParseSpec(spec),
+                        featureType,
+                        ParseAttributeFilter(attributes),
+                        maxResults,
+                        maxDistanceMeters),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = FindNearestTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
     private static SpecRef? ParseSpec(string? spec)
         => string.IsNullOrWhiteSpace(spec) ? null : SpecRef.Parse(spec);
+
+    /// <summary>
+    /// Parses the attribute-filter JSON object (<c>{ "code": "value", … }</c>)
+    /// into an <see cref="AttributeFilter"/>. A null JSON value for a key
+    /// produces a presence-only predicate. Returns <c>null</c> when the
+    /// input is null/blank so the tool treats it as "no filter".
+    /// </summary>
+    private static AttributeFilter? ParseAttributeFilter(string? attributesJson)
+    {
+        if (string.IsNullOrWhiteSpace(attributesJson))
+        {
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(attributesJson);
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("attributes must be a JSON object of code -> value.", nameof(attributesJson));
+        }
+
+        var builder = System.Collections.Immutable.ImmutableArray.CreateBuilder<AttributePredicate>();
+        foreach (var property in root.EnumerateObject())
+        {
+            var value = property.Value.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => property.Value.GetString(),
+                JsonValueKind.Number => property.Value.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => throw new ArgumentException(
+                    $"attribute '{property.Name}' must map to a string, number, boolean, or null.",
+                    nameof(attributesJson)),
+            };
+            builder.Add(new AttributePredicate(property.Name, value));
+        }
+
+        return builder.Count == 0 ? null : new AttributeFilter(builder.ToImmutable());
+    }
 
     private static GeoQuery? ParseGeoQuery(string? queryJson)
         => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);

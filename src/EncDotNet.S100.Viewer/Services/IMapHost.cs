@@ -4,6 +4,27 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
+/// A WGS-84 description of a map viewport: the bounding box the viewport
+/// covers, its centre, and the equivalent web-mercator zoom level.
+/// Returned by <see cref="IMapHost.TryGetViewportWgs84"/>.
+/// </summary>
+/// <param name="South">South edge in decimal degrees, WGS-84.</param>
+/// <param name="West">West edge in decimal degrees, WGS-84.</param>
+/// <param name="North">North edge in decimal degrees, WGS-84.</param>
+/// <param name="East">East edge in decimal degrees, WGS-84.</param>
+/// <param name="CenterLatitude">Viewport-centre latitude in decimal degrees, WGS-84.</param>
+/// <param name="CenterLongitude">Viewport-centre longitude in decimal degrees, WGS-84.</param>
+/// <param name="Zoom">Equivalent standard web-mercator zoom level.</param>
+internal sealed record MapViewportWgs84(
+    double South,
+    double West,
+    double North,
+    double East,
+    double CenterLatitude,
+    double CenterLongitude,
+    double Zoom);
+
+/// <summary>
 /// Minimal map mutation surface used by services that need to manage
 /// dataset layers without taking a hard dependency on
 /// <see cref="Mapsui.UI.Avalonia.MapControl"/>. Implemented by
@@ -113,6 +134,41 @@ internal interface IMapHost
     /// <see langword="null"/> when no laid-out viewport exists.
     /// </returns>
     (double Latitude, double Longitude)? TryGetViewportCenterWgs84();
+
+    /// <summary>
+    /// Returns the current viewport as a WGS-84 frame (bounding box plus
+    /// centre and web-mercator zoom level), or <see langword="null"/>
+    /// when the navigator is unavailable or the viewport has not yet been
+    /// laid out. Used by the read-only <c>get_viewer_state</c> MCP tool so
+    /// scripted runs can assert the live viewport without issuing a
+    /// side-effecting <c>set_viewport</c>.
+    /// </summary>
+    /// <remarks>
+    /// Implemented as a default-interface method returning
+    /// <see langword="null"/> so existing test doubles need not change;
+    /// <see cref="MapsuiMapHost"/> overrides it with the live value.
+    /// </remarks>
+    MapViewportWgs84? TryGetViewportWgs84() => null;
+
+    /// <summary>
+    /// Converts a pixel coordinate in an image of the supplied dimensions
+    /// to a WGS-84 lat/lon using the live viewport, mirroring the
+    /// world-extent that <see cref="RenderCurrentViewToPngAsync"/> would
+    /// capture at the same size. Returns <see langword="null"/> when the
+    /// navigator is unavailable or the conversion falls outside valid
+    /// WGS-84 ranges. Powers the read-only <c>pick_feature_at</c> MCP tool.
+    /// </summary>
+    /// <param name="xPixels">Horizontal pixel offset from the image's left edge.</param>
+    /// <param name="yPixels">Vertical pixel offset from the image's top edge.</param>
+    /// <param name="widthPx">Reference image width in pixels (matches a prior render_to_image call).</param>
+    /// <param name="heightPx">Reference image height in pixels.</param>
+    /// <remarks>
+    /// Implemented as a default-interface method returning
+    /// <see langword="null"/> so existing test doubles need not change;
+    /// <see cref="MapsuiMapHost"/> overrides it with the live conversion.
+    /// </remarks>
+    (double Latitude, double Longitude)? TryScreenToWgs84(
+        double xPixels, double yPixels, int widthPx, int heightPx) => null;
 
     /// <summary>
     /// Captures the current map view as a PNG byte array.

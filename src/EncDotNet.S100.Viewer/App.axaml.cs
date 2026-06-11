@@ -494,7 +494,9 @@ public partial class App : Application
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<IRenderActivityMonitor>(),
             sp.GetRequiredService<IDatasetLoadGateway>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelmState>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

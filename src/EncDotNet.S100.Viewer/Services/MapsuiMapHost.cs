@@ -22,6 +22,12 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal sealed class MapsuiMapHost : IMapHost
 {
+    // Standard web-mercator resolution (metres / pixel) at zoom 0 with a
+    // 256-pixel tile: 2 * pi * 6378137 / 256. Used to invert the
+    // navigator resolution back to a zoom level for get_viewer_state,
+    // matching the forward mapping in SetViewportTool.
+    private const double ResolutionAtZoomZero = 156543.03392804097;
+
     private readonly MapControl _mapControl;
 
     /// <summary>
@@ -177,6 +183,86 @@ internal sealed class MapsuiMapHost : IMapHost
         var (lon, lat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
         if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
             return null;
+
+        return (lat, lon);
+    }
+
+    public MapViewportWgs84? TryGetViewportWgs84()
+    {
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        var extent = viewport.ToExtent();
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
+            return null;
+
+        var (west, south) = SphericalMercator.ToLonLat(extent.MinX, extent.MinY);
+        var (east, north) = SphericalMercator.ToLonLat(extent.MaxX, extent.MaxY);
+        var (centerLon, centerLat) = SphericalMercator.ToLonLat(viewport.CenterX, viewport.CenterY);
+
+        if (double.IsNaN(south) || double.IsNaN(west) || double.IsNaN(north) || double.IsNaN(east)
+            || double.IsNaN(centerLat) || double.IsNaN(centerLon))
+        {
+            return null;
+        }
+
+        // Convert the metres-per-pixel resolution back to a standard
+        // web-mercator zoom level (the inverse of set_viewport's mapping).
+        var zoom = viewport.Resolution > 0
+            ? Math.Log2(ResolutionAtZoomZero / viewport.Resolution)
+            : 0.0;
+
+        return new MapViewportWgs84(
+            Math.Clamp(south, -90.0, 90.0),
+            Math.Clamp(west, -180.0, 180.0),
+            Math.Clamp(north, -90.0, 90.0),
+            Math.Clamp(east, -180.0, 180.0),
+            Math.Clamp(centerLat, -90.0, 90.0),
+            Math.Clamp(centerLon, -180.0, 180.0),
+            zoom);
+    }
+
+    public (double Latitude, double Longitude)? TryScreenToWgs84(
+        double xPixels, double yPixels, int widthPx, int heightPx)
+    {
+        if (widthPx <= 0 || heightPx <= 0)
+            return null;
+        if (double.IsNaN(xPixels) || double.IsNaN(yPixels)
+            || double.IsInfinity(xPixels) || double.IsInfinity(yPixels))
+        {
+            return null;
+        }
+
+        if (_mapControl.Map is not { } liveMap || liveMap.Navigator is not { } liveNav)
+            return null;
+
+        var liveViewport = liveNav.Viewport;
+        if (liveViewport.Width <= 0 || liveViewport.Height <= 0)
+            return null;
+
+        var extent = liveViewport.ToExtent();
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
+            return null;
+
+        // Build a transient navigator sized to the reference image and
+        // fitted to the live world extent exactly as
+        // RenderCurrentViewToPngAsync does, so a pixel here maps to the
+        // same world point the agent sees in render_to_image output.
+        using var probe = new Map { CRS = liveMap.CRS };
+        probe.Navigator.SetSize(widthPx, heightPx);
+        probe.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+
+        var world = probe.Navigator.Viewport.ScreenToWorld(xPixels, yPixels);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            return null;
+        }
 
         return (lat, lon);
     }

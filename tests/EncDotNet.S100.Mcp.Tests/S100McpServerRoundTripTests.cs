@@ -30,6 +30,7 @@ public class S100McpServerRoundTripTests
             {
                 "describe_feature",
                 "find_at",
+                "find_nearest",
                 "list_datasets",
                 "list_specs",
                 "list_time_steps",

@@ -33,6 +33,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly IDatasetLoadGateway? _loadGateway;
     private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
+    private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider? _ownShipPosition;
+    private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelmState? _ownShipHelmState;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -48,7 +50,9 @@ internal sealed class McpServerHost : IAsyncDisposable
         GlobalTimeService? globalTime = null,
         IRenderActivityMonitor? renderActivityMonitor = null,
         IDatasetLoadGateway? loadGateway = null,
-        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null)
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null,
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider? ownShipPosition = null,
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelmState? ownShipHelmState = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -60,6 +64,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         _renderActivityMonitor = renderActivityMonitor;
         _loadGateway = loadGateway;
         _ownShipHelm = ownShipHelm;
+        _ownShipPosition = ownShipPosition;
+        _ownShipHelmState = ownShipHelmState;
         _loggers = loggers;
     }
 
@@ -273,6 +279,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
             tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
+            tools.Add(PickFeatureAtMcpAdapter.Create(new PickFeatureAtTool(_mapHostAccessor, _catalog)));
         }
         if (_renderStateAccessor is not null)
         {
@@ -298,6 +305,18 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(SetOwnShipMcpAdapter.Create(new SetOwnShipTool(_ownShipHelm)));
         }
+
+        // get_viewer_state aggregates whatever read-side accessors are
+        // wired; it degrades gracefully (null sections) rather than
+        // failing, so it is always registered.
+        tools.Add(GetViewerStateMcpAdapter.Create(new GetViewerStateTool(
+            _mapHostAccessor,
+            _renderStateAccessor,
+            _globalTime,
+            _catalog,
+            _ownShipPosition,
+            _ownShipHelmState)));
+
         return tools.Count == 0 ? null : tools;
     }
 

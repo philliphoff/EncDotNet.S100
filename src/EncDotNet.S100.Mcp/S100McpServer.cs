@@ -116,8 +116,9 @@ public sealed class S100McpServer : IAsyncDisposable
         var sampleCoverageAlong = new SampleCoverageAlongTool(_catalog);
         var listSpecs = new ListSpecsTool(_catalog);
         var listTimeSteps = new ListTimeStepsTool(_catalog);
+        var findNearest = new FindNearestTool(_catalog);
         var tools = S100McpServerToolFactory
-            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt, queryFeatures, sampleCoverageAlong, listSpecs, listTimeSteps)
+            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt, queryFeatures, sampleCoverageAlong, listSpecs, listTimeSteps, findNearest)
             .ToList();
 
         if (_options.AdditionalTools is { Count: > 0 } extra)

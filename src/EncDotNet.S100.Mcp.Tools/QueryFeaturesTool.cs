@@ -34,7 +34,8 @@ public sealed record QueryFeaturesRequest(
     [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
-    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
+    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
+    [property: Description("Optional attribute filter. Predicates are combined with logical AND and matched (case-insensitively) against both simple and complex attributes; a predicate with no value is a presence test.")] AttributeFilter? Attributes = null);
 
 /// <summary>
 /// Per-feature summary returned by <see cref="QueryFeaturesTool"/>.
@@ -155,6 +156,11 @@ public sealed class QueryFeaturesTool
                 }
 
                 if (!GmlFeatureGeometry.Intersects(feature, request.Query))
+                {
+                    continue;
+                }
+
+                if (!GmlFeatureAttributes.Matches(feature, request.Attributes))
                 {
                     continue;
                 }
