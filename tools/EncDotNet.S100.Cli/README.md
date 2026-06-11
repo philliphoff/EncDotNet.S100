@@ -1,10 +1,12 @@
 # EncDotNet.S100.Cli (`s100`)
 
-A small, cross-platform command-line tool that renders any supported S-100
-dataset to a PNG image by running the dataset's portrayal pipeline through the
-Mapsui-free Skia *headless* renderer. It is intended as the basis for batch
-scripts (for example, generating previews of sea-ice or surface-current
-datasets).
+A small, cross-platform command-line tool for working with S-100 datasets. Its
+primary command renders any supported dataset to a PNG image by running the
+dataset's portrayal pipeline through the Mapsui-free Skia *headless* renderer;
+it can also report a dataset's product specification (`info`) and validate a
+dataset against its specification's normative rule pack (`validate`). It is
+intended as the basis for batch scripts (for example, generating previews of
+sea-ice or surface-current datasets, or gating a data pipeline on validation).
 
 The command name is **`s100`**.
 
@@ -62,9 +64,9 @@ sudo apt-get install -y fontconfig fonts-dejavu-core   # optional: system label 
 # Debian 12: use libicu72 instead of libicu74
 ```
 
-`s100 list-specs` and `s100 info` need only `libicu`; `s100 render` (the Skia
-path) also needs only `libicu` — text renders via an embedded fallback font even
-with no fontconfig or system fonts installed.
+`s100 list-specs`, `s100 info`, and `s100 validate` need only `libicu`;
+`s100 render` (the Skia path) also needs only `libicu` — text renders via an
+embedded fallback font even with no fontconfig or system fonts installed.
 
 ### Inside the Viewer application bundle
 
@@ -100,6 +102,7 @@ and writes a PNG to `<output>`.
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
+| `--no-updates` | off | Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
@@ -107,13 +110,63 @@ s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
 s100 render seaice.gml seaice.png --no-text                # clean fill preview
 s100 render chart.gml chart.png --hide text,points         # hide text + symbols
+s100 render NL4NZ110.000 cell.png                          # applies .001/.002/… updates
+s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
 ```
+
+> **S-101 sequential updates.** When pointed at an S-101 base cell
+> (`….000`), `render` and `info` discover sibling update files
+> (`….001`, `….002`, …) in the same directory and apply them in order
+> before processing the cell, mirroring how an exchange set is loaded
+> in the viewer. Application is best-effort: a missing, out-of-order, or
+> unreadable update is reported but never blocks the command. Pass
+> `--no-updates` to operate on the base cell exactly as named.
 
 ### `s100 info <dataset>`
 
 Prints the detected specification, edition, whether the dataset supports
 headless rendering, and — for time-series datasets — the available time steps
-with their indices (use the index with `render --time-step`).
+with their indices (use the index with `render --time-step`). For an S-101
+base cell, sibling sequential updates are applied first (see `--no-updates`)
+so the reported model reflects the up-to-date cell.
+
+### `s100 validate <dataset>`
+
+Detects the product specification of `<dataset>` and runs that spec's normative
+validation rule pack against the parsed dataset, reporting the findings. Each
+finding carries a spec-traceable rule id (e.g. `S127-R-2.1`), a severity, a
+message, and — where the rule can locate the problem — a feature id or
+geographic position.
+
+Validation is a pure function of the parsed dataset: it does not depend on the
+palette, opacity, or selected time step. Specs without a rule pack today —
+S-101, S-201, and S-57 — report *no rules available* and exit successfully;
+this is distinct from a dataset that was evaluated and found conformant.
+
+| Option | Default | Description |
+|---|---|---|
+| `--format <fmt>` | `text` | Output format: `text` (a findings table) or `json` (machine-readable, for CI). |
+| `--suppress <list>` | _none_ | Comma-separated list of rule ids (or `*` glob patterns) whose findings are dropped from the report **and** ignored by the exit code — e.g. `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. Compiler-style "no-warn": mute a known rule class (such as a feature-catalogue-version mismatch) to surface the more-likely-real findings. The count of suppressed findings is still reported. |
+| `--strict` | off | Treat warnings as failures: exit `6` when any warning (not just an error) is present. |
+| `--debug` | off | Print full stack traces on error. |
+
+```bash
+s100 validate warnings.gml                 # human-readable findings table
+s100 validate route.gml --strict           # fail the build on warnings too
+s100 validate currents.h5 --format json    # machine-readable report for CI
+s100 validate chart.000 --suppress S101-R-1.2,S101-R-3.2   # mute a rule class
+s100 validate chart.000 --suppress "S101-*"                # glob: mute a whole spec's rules
+```
+
+The `--suppress` patterns are matched case-insensitively against each finding's
+rule id; `*` is the only wildcard and matches any run of characters, so a
+pattern with no `*` is an exact rule-id match. Suppressed findings are removed
+from the table/JSON and do not contribute to the exit code, but the trailing
+summary still reports how many were suppressed.
+
+By default the command exits `0` when no **error**-severity findings remain
+after suppression (warnings and info are reported but do not fail); pass
+`--strict` to also fail on warnings. Exit code `6` signals failing findings.
 
 ### `s100 list-specs`
 
@@ -150,4 +203,5 @@ headless render path.
 | `3` | The detected spec does not support headless rendering. |
 | `4` | The dataset is recognised but its shape or encoding is unsupported — e.g. a fixed-station coverage, or a data coding format the reader does not yet implement (such as dcf1, irregular time series at fixed stations). |
 | `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |
+| `6` | `validate` only: the dataset was evaluated and produced failing findings (any error-severity finding, or — with `--strict` — any warning). |
 | non-zero | Argument validation failure (missing file, bad palette, etc.). |

@@ -39,6 +39,21 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when this entry's bytes live inside an exchange-set asset source.</summary>
     public bool IsFromExchangeSet => Source is not null;
 
+    /// <summary>
+    /// Source-relative paths of the S-101 sequential update files
+    /// (<c>….001</c>, <c>….002</c>, …) to apply over the base cell at
+    /// <see cref="RelativePath"/>, in ascending update-number order.
+    /// Empty for plain file loads, non-S-101 datasets, and S-101 cells
+    /// with no in-set updates. When non-empty, the loader builds the
+    /// up-to-date dataset via
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory.CreateS101ProcessorWithUpdates"/>.
+    /// S-101 / S-100 Part 10a.
+    /// </summary>
+    public IReadOnlyList<string> UpdateRelativePaths { get; }
+
+    /// <summary>True when this entry has in-set S-101 updates to apply.</summary>
+    public bool HasUpdates => UpdateRelativePaths.Count > 0;
+
     private bool _isLoaded;
     public bool IsLoaded
     {
@@ -375,12 +390,14 @@ internal sealed class DatasetEntry : ViewModelBase
         string productSpec,
         IAssetSource? source,
         string? relativePath,
-        string? displayName)
+        string? displayName,
+        IReadOnlyList<string>? updateRelativePaths = null)
     {
         FilePath = filePath;
         ProductSpec = productSpec;
         Source = source;
         RelativePath = relativePath;
+        UpdateRelativePaths = updateRelativePaths ?? Array.Empty<string>();
         DisplayName = displayName ?? System.IO.Path.GetFileName(
             relativePath is { Length: > 0 } ? relativePath : filePath);
         ToggleVisibilityCommand = new RelayCommand(() => IsVisible = !IsVisible);
@@ -608,7 +625,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
         IAssetSource source,
         string relativePath,
         string productSpec,
-        string? displayName = null)
+        string? displayName = null,
+        IReadOnlyList<string>? updateRelativePaths = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -623,7 +641,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
             productSpec: productSpec,
             source: source,
             relativePath: relativePath,
-            displayName: displayName);
+            displayName: displayName,
+            updateRelativePaths: updateRelativePaths);
         Entries.Insert(0, entry);
         return entry;
     }

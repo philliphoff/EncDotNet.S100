@@ -321,12 +321,16 @@ public sealed class MapsuiDisplayListRenderer
         int insertAt = lastColorFillIndex >= 0 ? lastColorFillIndex : 0;
         foreach (var (patternRef, _, geometry) in clippedPatterns)
         {
-            var tilePng = GetPatternTilePng(patternRef);
-            if (tilePng is null)
+            var tile = GetPatternTilePicture(patternRef);
+            if (tile is null)
                 continue;
 
             var feature = new GeometryFeature(geometry);
-            feature.Styles.Add(new AnchoredPatternFillStyle { TilePng = tilePng });
+            feature.Styles.Add(new AnchoredPatternFillStyle
+            {
+                Tile = tile.Value.Picture,
+                TileRect = tile.Value.Rect,
+            });
             mapFeatures.Insert(insertAt, feature);
             insertAt++;
         }
@@ -808,7 +812,52 @@ public sealed class MapsuiDisplayListRenderer
     }
 
     /// <summary>
-    /// Clips pattern groups so that:
+    /// In-memory cache of resolution-independent pattern tile pictures, keyed by
+    /// palette identity and area-fill name. Pictures are reused across the whole
+    /// render so the SVG is parsed and recorded only once per pattern.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)?> _patternPictureCache = new();
+
+    /// <summary>
+    /// Returns the resolution-independent pattern tile picture (and its millimetre
+    /// repeat rectangle) for the given area-fill name, building and caching on
+    /// first access. Returns <c>null</c> when the fill or its symbol cannot be
+    /// resolved under the active palette.
+    /// </summary>
+    private (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)? GetPatternTilePicture(string? fillName)
+    {
+        if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
+            return null;
+
+        var paletteKey = System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(Palette!);
+        var key = string.Concat(paletteKey.ToString(System.Globalization.CultureInfo.InvariantCulture), "|", fillName);
+        return _patternPictureCache.GetOrAdd(key, _ => ProducePatternTilePicture(fillName));
+    }
+
+    private (SkiaSharp.SKPicture Picture, SkiaSharp.SKRect Rect)? ProducePatternTilePicture(string fillName)
+    {
+        try
+        {
+            var areaFill = AreaFillProvider!(fillName);
+            if (areaFill?.PatternSymbol is not null)
+            {
+                var svgContent = SymbolProvider!(areaFill.PatternSymbol);
+                if (svgContent is not null)
+                {
+                    var processed = SvgProcessor.Process(svgContent, Palette);
+                    var picture = SkiaSvgRasterizer.BuildPatternTilePicture(processed, areaFill, out var rect);
+                    if (picture is not null)
+                        return (picture, rect);
+                }
+            }
+        }
+        catch
+        {
+            // Area fill or symbol not found — skip pattern
+        }
+
+        return null;
+    }
     /// 1. Lower-priority patterns are clipped by higher-priority pattern areas
     ///    (e.g. DIAMOND1 at priority 9 is clipped by DQUAL at priority 12).
     /// 2. All patterns are clipped to exclude non-patterned color fill areas

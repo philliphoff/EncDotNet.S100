@@ -1,5 +1,6 @@
 using Mapsui;
 using Mapsui.Extensions;
+using EncDotNet.S100.Renderers.Skia;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;
@@ -82,33 +83,69 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
 
         var bounds = path.Bounds;
 
-        // Decode the tile PNG into an SKImage
-        using var tileImage = SKImage.FromEncodedData(patternStyle.TilePng);
-        if (tileImage is null)
+        // The tile is a vector SKPicture recorded in millimetre units. It is
+        // stamped once per lattice cell via canvas.DrawPicture, so every copy is
+        // played back through the canvas transform (including the surface's device
+        // scale) and rasterized at the surface's true device resolution. This keeps
+        // the pattern crisp at any zoom level and on HiDPI/Retina surfaces.
+        //
+        // A picture *shader* was tried first but appeared blurry on Retina: an
+        // SKPictureShader caches its rasterized tile at the shader's local-matrix
+        // density only (here onScreenPxPerMm = 1.5) and the canvas CTM then upsamples
+        // that cached tile by the device scale (2x), softening the pattern. Stamping
+        // avoids the intermediate tile cache entirely.
+        const float onScreenPxPerMm = (float)SkiaSvgRasterizer.DefaultPixelsPerMm;
+        var (anchorScreenX, anchorScreenY) = viewport.WorldToScreenXY(0, 0);
+
+        float tileScreenW = patternStyle.TileRect.Width * onScreenPxPerMm;
+        float tileScreenH = patternStyle.TileRect.Height * onScreenPxPerMm;
+        if (tileScreenW <= 0.01f || tileScreenH <= 0.01f)
             return false;
 
-        // Anchor the shader to a fixed world-coordinate origin projected to screen
-        // space. S-100 area fills with areaCRS=GlobalGeometry use a single global
-        // tile grid shared by all polygons. Using a per-polygon anchor would cause
-        // overlapping polygons with the same pattern to produce moiré artifacts.
-        // The world origin (0,0) is arbitrary but consistent — since the pattern
-        // repeats, any fixed point produces seamless tiling across all polygons.
-        var (anchorScreenX, anchorScreenY) = viewport.WorldToScreenXY(0, 0);
-        var anchorMatrix = SKMatrix.CreateTranslation((float)anchorScreenX, (float)anchorScreenY);
-        using var shader = tileImage.ToShader(
-            SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, anchorMatrix);
+        // Snap the repeat spacing to whole pixels. The lattice is anchored to a
+        // fixed world origin and stepped many times across the polygon, so any
+        // fractional component in the step causes successive tiles to land on
+        // varying sub-pixel offsets, giving the pattern an inconsistent, shimmery
+        // sharpness. Stepping by a whole number of pixels keeps every tile aligned
+        // to the same pixel phase. The symbol is centred well within the cell, so
+        // the sub-millimetre difference between the (transparent) tile edge and the
+        // snapped step is invisible.
+        float tileStepW = MathF.Max(1f, MathF.Round(tileScreenW));
+        float tileStepH = MathF.Max(1f, MathF.Round(tileScreenH));
 
-        using var fillPaint = new SKPaint
-        {
-            IsAntialias = true,
-            Style = SKPaintStyle.Fill,
-            Shader = shader,
-            Color = new SKColor(255, 255, 255, (byte)(opacity * 255)),
-        };
+        // Anchor the lattice to a fixed world origin projected to screen space so
+        // the pattern is shared by all polygons (S-100 areaCRS=GlobalGeometry) and
+        // stays seamless across overlapping geometries during panning.
+        int startCol = (int)Math.Floor((bounds.Left - anchorScreenX) / tileStepW);
+        int endCol = (int)Math.Ceiling((bounds.Right - anchorScreenX) / tileStepW);
+        int startRow = (int)Math.Floor((bounds.Top - anchorScreenY) / tileStepH);
+        int endRow = (int)Math.Ceiling((bounds.Bottom - anchorScreenY) / tileStepH);
+
+        var tileScale = SKMatrix.CreateScale(onScreenPxPerMm, onScreenPxPerMm);
 
         canvas.Save();
-        canvas.ClipPath(path);
-        canvas.DrawRect(bounds, fillPaint);
+        canvas.ClipPath(path, antialias: true);
+
+        bool useLayer = opacity < 0.999f;
+        if (useLayer)
+        {
+            using var layerPaint = new SKPaint { Color = new SKColor(0, 0, 0, (byte)(opacity * 255)) };
+            canvas.SaveLayer(layerPaint);
+        }
+
+        for (int row = startRow; row <= endRow; row++)
+        {
+            for (int col = startCol; col <= endCol; col++)
+            {
+                float tx = (float)anchorScreenX + col * tileStepW;
+                float ty = (float)anchorScreenY + row * tileStepH;
+                var tileMatrix = SKMatrix.Concat(SKMatrix.CreateTranslation(tx, ty), tileScale);
+                canvas.DrawPicture(patternStyle.Tile, ref tileMatrix);
+            }
+        }
+
+        if (useLayer)
+            canvas.Restore();
         canvas.Restore();
 
         // Draw outline

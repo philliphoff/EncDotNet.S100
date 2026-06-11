@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic exchange-set catalogue used by ExchangeSetServiceLoaderTests
+  to exercise the S-101 orphan-update path (S-101 / S-100 Part 10a).
+
+  A single S-101 update (.001) is shipped with no matching base cell
+  (.000) in the same exchange set. Because cross-exchange-set update
+  application is not supported, the loader must skip the orphan with a
+  best-effort warning and dispatch no dataset entry.
+
+  Dataset files referenced by <fileName> are NOT shipped — the test
+  uses a NoopLoader so RequestLoad never opens them.
+-->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc/5.0"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTH_S101_ORPHAN_v1</S100XC:identifier>
+    <S100XC:dateTime>2026-01-15T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Hydrographic Office</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-101/SYNTH101.001</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>delta</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>1</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-12</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-101</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>1.1.0</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-101</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

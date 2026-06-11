@@ -22,6 +22,13 @@ internal static class CliApp
                 .WithExample("render", "warnings.gml", "out.png", "--width", "2048", "--height", "1536")
                 .WithExample("render", "currents.h5", "out.png", "--time-step", "2", "--palette", "night");
 
+            config.AddCommand<ValidateCommand>("validate")
+                .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack.")
+                .WithExample("validate", "warnings.gml")
+                .WithExample("validate", "route.gml", "--strict")
+                .WithExample("validate", "chart.000", "--suppress", "S101-R-1.2,S101-R-3.2")
+                .WithExample("validate", "currents.h5", "--format", "json");
+
             config.AddCommand<InfoCommand>("info")
                 .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")
                 .WithExample("info", "dataset.h5");

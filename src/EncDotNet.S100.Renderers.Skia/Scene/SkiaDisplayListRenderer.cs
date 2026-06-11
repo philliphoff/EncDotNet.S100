@@ -162,10 +162,18 @@ public sealed class SkiaDisplayListRenderer
         foreach (var hole in op.WorldHoles)
             AddRing(path, hole, t);
 
+        // Tiles are rasterized supersampled (PatternTileRenderPixelsPerMm); scale
+        // the shader back down by PatternTileShaderScale so they draw at their
+        // intended on-screen size. Downsampling a high-resolution tile keeps the
+        // pattern crisp instead of blurring an upsampled low-resolution one.
+        const float tileScale = (float)SkiaSvgRasterizer.PatternTileShaderScale;
         var (anchorX, anchorY) = t.Project((0, 0));
-        var anchorMatrix = SKMatrix.CreateTranslation(anchorX, anchorY);
+        var localMatrix = SKMatrix.Concat(
+            SKMatrix.CreateTranslation(anchorX, anchorY),
+            SKMatrix.CreateScale(tileScale, tileScale));
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
         using var shader = tileImage.ToShader(
-            SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, anchorMatrix);
+            SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, sampling, localMatrix);
 
         using var paint = new SKPaint
         {

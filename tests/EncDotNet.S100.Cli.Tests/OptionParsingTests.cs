@@ -78,4 +78,47 @@ public sealed class OptionParsingTests
         Assert.Equal(DrawingInstructionCategory.None, categories);
         Assert.Equal(expectedBadToken, badToken);
     }
+
+    [Theory]
+    [InlineData("S101-R-1.2", new[] { "S101-R-1.2" })]
+    [InlineData(" S101-R-1.2 , S101-R-3.2 ", new[] { "S101-R-1.2", "S101-R-3.2" })]
+    [InlineData("S101-*,,S102-*", new[] { "S101-*", "S102-*" })]
+    public void TryParseSuppressPatterns_splits_and_trims(string input, string[] expected)
+    {
+        Assert.True(ValidateCommand.TryParseSuppressPatterns(input, out var patterns));
+        Assert.Equal(expected, patterns);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(",")]
+    [InlineData("  ,  ")]
+    public void TryParseSuppressPatterns_rejects_empty(string input)
+    {
+        Assert.False(ValidateCommand.TryParseSuppressPatterns(input, out var patterns));
+        Assert.Empty(patterns);
+    }
+
+    [Theory]
+    [InlineData("S101-R-1.2", "S101-R-1.2", true)]   // exact
+    [InlineData("S101-R-1.2", "s101-r-1.2", true)]   // case-insensitive
+    [InlineData("S101-R-1.2", "S101-R-1.3", false)]  // dot is literal, not wildcard
+    [InlineData("S101-R-1.2", "S101-*", true)]       // prefix glob
+    [InlineData("S111-PROJ-UNSUPPORTED", "*-PROJ-UNSUPPORTED", true)] // suffix glob
+    [InlineData("S101-R-1.2", "S101-R-1.*", true)]   // mid glob
+    [InlineData("S102-R-4.1", "S101-*", false)]      // non-match
+    [InlineData("anything", "*", true)]              // match-all
+    public void RuleIdMatches_supports_case_insensitive_globs(string ruleId, string pattern, bool expected)
+    {
+        Assert.Equal(expected, ValidateCommand.RuleIdMatches(ruleId, pattern));
+    }
+
+    [Fact]
+    public void IsSuppressed_matches_any_pattern()
+    {
+        string[] patterns = ["S101-R-1.2", "S102-*"];
+        Assert.True(ValidateCommand.IsSuppressed("S101-R-1.2", patterns));
+        Assert.True(ValidateCommand.IsSuppressed("S102-R-9.9", patterns));
+        Assert.False(ValidateCommand.IsSuppressed("S104-R-1.1", patterns));
+    }
 }

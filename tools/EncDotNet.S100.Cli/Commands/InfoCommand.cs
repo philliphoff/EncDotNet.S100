@@ -27,7 +27,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                 return 2;
             }
 
-            var processor = factory.CreateProcessor(settings.DatasetPath);
+            var processor = DatasetProcessorLoader.Create(factory, spec, settings);
 
             var table = new Table().Border(TableBorder.Rounded);
             table.AddColumn("Property");

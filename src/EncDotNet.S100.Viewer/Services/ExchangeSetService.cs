@@ -120,7 +120,16 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             }
 
             _status.StatusText = string.Format(Strings.Status_ExchangeSetLoading, folderOrZipPath);
-            progress?.Report(new ExchangeSetProgress(folderOrZipPath, datasets.Count, 0, 0, null));
+
+            // Group S-101 base cells with their in-set sequential updates
+            // (….001/.002/…) so each cell loads as a single up-to-date
+            // dataset rather than one entry per file. Non-S-101 datasets
+            // and S-101 cells with no in-set updates are unaffected.
+            // S-101 / S-100 Part 10a.
+            var plan = S101ExchangeSetUpdatePlan.Build(datasets);
+            activity?.SetTag("s100.exchangeset.plan.count", plan.Count);
+
+            progress?.Report(new ExchangeSetProgress(folderOrZipPath, plan.Count, 0, 0, null));
 
             var tracked = new TrackedExchangeSet(folderOrZipPath, exchangeSet);
             _tracked.Add(tracked);
@@ -129,12 +138,13 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             var assetSource = tracked.ExchangeSet.Source;
             var producer = tracked.ExchangeSet.Catalogue.Contact?.Organization;
             var issueDate = ResolveLatestIssueDate(datasets);
+
             tracked.Header = _datasets.RegisterExchangeSetHeader(
                 assetSource,
                 folderOrZipPath,
                 producer,
                 issueDate,
-                datasets.Count,
+                plan.Count,
                 closeAction: CloseExchangeSetFromHeader);
             exchangeSet = null;
             source = null;
@@ -144,7 +154,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             var skipMessages = new List<string>();
             var cancelled = false;
 
-            foreach (var metadata in datasets)
+            foreach (var item in plan)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -152,7 +162,24 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     break;
                 }
 
-                var relativePath = ExchangeSet.NormalizeFileName(metadata.FileName);
+                var metadata = item.Base;
+                var relativePath = metadata.RelativePath;
+
+                // An S-101 update with no base cell in this exchange set
+                // cannot be applied on its own. Per the best-effort policy
+                // we skip it with a warning rather than failing the load.
+                if (item.Kind == S101LoadItemKind.OrphanUpdate)
+                {
+                    var orphanMsg = string.Format(Strings.Status_ExchangeSetOrphanUpdate, relativePath);
+                    _status.StatusText = orphanMsg;
+                    _toasts.ShowWarning(Strings.Toast_Warning, orphanMsg);
+                    skipMessages.Add(orphanMsg);
+                    skipped++;
+                    progress?.Report(new ExchangeSetProgress(
+                        folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
+                    continue;
+                }
+
                 var spec = DatasetPipelineFactory.MapProductIdentifierToSpec(
                     metadata.ProductSpecification?.ProductIdentifier);
                 if (spec is null)
@@ -166,27 +193,32 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     skipMessages.Add(msg);
                     skipped++;
                     progress?.Report(new ExchangeSetProgress(
-                        folderOrZipPath, datasets.Count, dispatched + skipped, skipped, relativePath));
+                        folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
                     continue;
                 }
+
+                var updateRelativePaths = item.Updates.Count == 0
+                    ? (IReadOnlyList<string>)Array.Empty<string>()
+                    : item.Updates.Select(u => u.RelativePath).ToList();
 
                 var entry = _datasets.AddFromExchangeSet(
                     tracked.ExchangeSet.Source,
                     relativePath,
                     spec,
-                    displayName: Path.GetFileName(relativePath));
+                    displayName: Path.GetFileName(relativePath),
+                    updateRelativePaths: updateRelativePaths);
                 tracked.Entries.Add(entry);
                 _datasets.RequestLoad(entry);
                 dispatched++;
                 progress?.Report(new ExchangeSetProgress(
-                    folderOrZipPath, datasets.Count, dispatched + skipped, skipped, relativePath));
+                    folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
             }
 
             if (cancelled)
             {
                 var cancelledMsg = string.Format(
                     Strings.Status_ExchangeSetCancelled,
-                    dispatched, datasets.Count, folderOrZipPath);
+                    dispatched, plan.Count, folderOrZipPath);
                 _status.StatusText = cancelledMsg;
                 _toasts.ShowInfo(Strings.Toast_Info, cancelledMsg);
             }
@@ -201,7 +233,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var partialMsg = string.Format(
                     Strings.Status_ExchangeSetLoadedWithErrors,
-                    dispatched, datasets.Count, folderOrZipPath, skipped);
+                    dispatched, plan.Count, folderOrZipPath, skipped);
                 _status.StatusText = partialMsg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetLoaded, partialMsg);
             }
@@ -247,7 +279,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             return new ExchangeSetOpenResult
             {
                 SourcePath = folderOrZipPath,
-                Total = datasets.Count,
+                Total = plan.Count,
                 Loaded = dispatched,
                 SkippedUnsupported = skipped,
                 Cancelled = cancelled,

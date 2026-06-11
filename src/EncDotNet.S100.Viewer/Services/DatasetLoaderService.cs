@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
@@ -219,6 +220,34 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     private void SetStatus(string? text) => StatusChanged?.Invoke(text);
 
+    /// <summary>
+    /// Surfaces the outcome of S-101 sequential update application as a
+    /// status message (and, when updates failed to apply cleanly, a
+    /// non-blocking warning toast). Updates are applied best-effort, so
+    /// a partial result never prevents the dataset from rendering.
+    /// S-101 / S-100 Part 10a.
+    /// </summary>
+    private void SurfaceUpdateReport(DatasetEntry entry, S101UpdateReport report)
+    {
+        var appliedCount = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
+        var problem = report.Messages
+            .FirstOrDefault(m => m.Severity >= S101UpdateSeverity.Warning);
+
+        if (problem.Severity >= S101UpdateSeverity.Warning)
+        {
+            var msg = string.Format(
+                Strings.Status_ExchangeSetUpdatesPartial,
+                appliedCount, entry.DisplayName, problem.Text);
+            SetStatus(msg);
+            _toasts.ShowWarning(Strings.Toast_Warning, msg);
+        }
+        else if (appliedCount > 0)
+        {
+            SetStatus(string.Format(
+                Strings.Status_ExchangeSetUpdatesApplied, appliedCount, entry.DisplayName));
+        }
+    }
+
     public void Initialize(IMapHost host, ViewerCommandSettings? options)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -303,10 +332,29 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
         try
         {
-            var processor = await Task.Run(() => fromExchangeSet
-                ? _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec)
-                : _pipelineFactory.CreateProcessor(entry.FilePath), token);
+            var processor = await Task.Run(() =>
+            {
+                if (!fromExchangeSet)
+                    return _pipelineFactory.CreateProcessor(entry.FilePath);
+
+                // Collapse an S-101 base cell and its in-set sequential
+                // updates into a single up-to-date dataset. S-101 / S-100
+                // Part 10a.
+                return entry.HasUpdates
+                    ? _pipelineFactory.CreateS101ProcessorWithUpdates(
+                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths)
+                    : _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
+            }, token);
             _processors[entry] = processor;
+
+            // Surface any S-101 update-application diagnostics. Updates are
+            // applied best-effort: a partial/failed apply never blocks the
+            // load, but the user is warned so stale or skipped updates are
+            // visible. S-101 / S-100 Part 10a.
+            if (processor is S101DatasetProcessor { UpdateReport: { } updateReport })
+            {
+                SurfaceUpdateReport(entry, updateReport);
+            }
 
             // Surface S-128 catalogues into the Dataset Catalog panel.
             if (processor is S128DatasetProcessor s128)

@@ -120,7 +120,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return 2;
             }
 
-            var processor = factory.CreateProcessor(settings.DatasetPath);
+            var processor = DatasetProcessorLoader.Create(factory, spec, settings);
 
             // Non-blocking: warn (on stderr) when the dataset's declared
             // edition diverges from what this build implements. Rendering still
