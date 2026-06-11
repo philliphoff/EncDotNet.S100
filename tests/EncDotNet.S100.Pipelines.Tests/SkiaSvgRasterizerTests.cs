@@ -126,4 +126,44 @@ public class SkiaSvgRasterizerTests
         Assert.True(hasPixelInLeftOfOffsetRow,
             "Expected the wrapping copy to produce non-transparent pixels near the left edge of the offset row.");
     }
+
+    [Fact]
+    public void BuildPatternTilePicture_SimpleGrid_RecordsTileRectInMillimetres()
+    {
+        var fill = new AreaFill
+        {
+            Name = "test",
+            V1X = 20,
+            V1Y = 0,
+            V2X = 0, // no offset → simple grid
+            V2Y = 20,
+        };
+
+        using var picture = SkiaSvgRasterizer.BuildPatternTilePicture(TestSvg, fill, out var tileRect);
+
+        Assert.NotNull(picture);
+        // Recorded in millimetre units: the repeat rectangle equals the tiling
+        // vectors (no supersampling, no pixel scaling) so it is resolution-independent.
+        Assert.Equal(20f, tileRect.Width);
+        Assert.Equal(20f, tileRect.Height); // single height
+    }
+
+    [Fact]
+    public void BuildPatternTilePicture_ParallelogramLattice_RecordsDoubleHeightTileRect()
+    {
+        var fill = new AreaFill
+        {
+            Name = "test",
+            V1X = 20,
+            V1Y = 0,
+            V2X = 10, // half-width offset → parallelogram
+            V2Y = 20,
+        };
+
+        using var picture = SkiaSvgRasterizer.BuildPatternTilePicture(TestSvg, fill, out var tileRect);
+
+        Assert.NotNull(picture);
+        Assert.Equal(20f, tileRect.Width);
+        Assert.Equal(40f, tileRect.Height); // double height for offset row
+    }
 }
