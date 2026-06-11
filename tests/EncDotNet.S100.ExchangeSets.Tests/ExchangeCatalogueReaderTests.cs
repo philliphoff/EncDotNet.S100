@@ -70,6 +70,43 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
+    public void Dataset_ExpectedHash_IsParsedFromHashMrn()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:datasetDiscoveryMetadata>
+                    <S100XC:S100_DatasetDiscoveryMetadata>
+                        <S100XC:fileName>test.000</S100XC:fileName>
+                        <S100XC:resourceHash>urn:mrn:iho:s100:hash:sha256:a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447</S100XC:resourceHash>
+                    </S100XC:S100_DatasetDiscoveryMetadata>
+                </S100XC:datasetDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        var dataset = Assert.Single(catalogue.DatasetDiscoveryMetadata);
+        Assert.NotNull(dataset.ExpectedHash);
+        Assert.Equal("sha256", dataset.ExpectedHash.Algorithm);
+        Assert.Equal(
+            "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447",
+            dataset.ExpectedHash.HexValue);
+    }
+
+    [Fact]
+    public void Dataset_ExpectedHash_IsNullWhenAbsent()
+    {
+        var catalogue = ReadTestCatalogue();
+
+        Assert.All(catalogue.DatasetDiscoveryMetadata, ds => Assert.Null(ds.ExpectedHash));
+    }
+
+    [Fact]
     public void Datasets_HasExpectedCount()
     {
         var catalogue = ReadTestCatalogue();

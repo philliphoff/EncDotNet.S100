@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Validation;
 using Spectre.Console;
@@ -54,9 +56,13 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
 
         public override ValidationResult Validate()
         {
-            var baseResult = base.Validate();
-            if (!baseResult.Successful)
-                return baseResult;
+            if (string.IsNullOrWhiteSpace(DatasetPath))
+                return ValidationResult.Error("A dataset or exchange set path is required.");
+
+            // Accept a single dataset file, or an exchange set expressed as a
+            // directory / CATALOG.XML / .zip (resolved later in Execute).
+            if (!File.Exists(DatasetPath) && !Directory.Exists(DatasetPath))
+                return ValidationResult.Error($"Path not found: {DatasetPath}");
 
             if (!TryParseFormat(Format, out _))
                 return ValidationResult.Error($"Unknown format '{Format}'. Use text or json.");
@@ -73,6 +79,21 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
     {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         TryParseFormat(settings.Format, out var format);
+
+        // An exchange set (folder / CATALOG.XML / .zip) is integrity-verified
+        // rather than run through a single-dataset rule pack.
+        if (ExchangeSetInput.LooksLikeExchangeSet(settings.DatasetPath))
+        {
+            return VerifyExchangeSet(settings, format);
+        }
+
+        // An S-57 / S-63 exchange set (CATALOG.031) is integrity-verified via the
+        // S-57 verifier (CRC + signature), mapped onto the same result model.
+        if (ExchangeSetInput.LooksLikeS57ExchangeSet(settings.DatasetPath))
+        {
+            return VerifyS57ExchangeSet(settings, format);
+        }
+
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
         try
         {
@@ -126,6 +147,201 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
         {
             catalogueManager.Dispose();
         }
+    }
+
+    // ── Exchange set integrity / signature verification ──────────────
+
+    /// <summary>
+    /// Verifies an exchange set's per-file digital signatures and checksums,
+    /// reporting the outcomes and mapping failures to the shared findings exit
+    /// code. S-100 Edition 5.2.1 Part 15.
+    /// </summary>
+    private static int VerifyExchangeSet(Settings settings, OutputFormat format)
+    {
+        IAssetSource? source = null;
+        try
+        {
+            string cataloguePath;
+            string kind;
+            (source, cataloguePath, kind) = ExchangeSetInput.Open(settings.DatasetPath);
+
+            using var exchangeSet = ExchangeSet.OpenAsync(source, cataloguePath).GetAwaiter().GetResult();
+            source = null; // ownership transferred to ExchangeSet; disposed below.
+
+            var verifier = new ExchangeSetVerifier();
+            var result = verifier
+                .VerifyAsync(
+                    exchangeSet.Source,
+                    exchangeSet.Catalogue,
+                    new TrustAnchorOptions { AllowUntrustedCertificates = true })
+                .GetAwaiter()
+                .GetResult();
+
+            return format == OutputFormat.Json
+                ? EmitVerifyJson(result, settings.Strict)
+                : EmitVerifyText(result, kind, settings.Strict);
+        }
+        catch (Exception ex)
+        {
+            ReportException("Error", ex, format, settings.Debug);
+            return 1;
+        }
+        finally
+        {
+            source?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Integrity-verifies an S-57 / S-63 exchange set (<c>CATALOG.031</c>) using
+    /// the upstream S-57 verifier, mapped onto the same result model and
+    /// exit-code semantics as the S-100 path so both products surface uniformly.
+    /// </summary>
+    private static int VerifyS57ExchangeSet(Settings settings, OutputFormat format)
+    {
+        try
+        {
+            var root = ExchangeSetInput.ResolveS57Root(settings.DatasetPath);
+
+            var result = S57ExchangeSetVerification
+                .VerifyAsync(root, allowUntrustedCertificates: true)
+                .GetAwaiter()
+                .GetResult();
+
+            return format == OutputFormat.Json
+                ? EmitVerifyJson(result, settings.Strict, product: "S-57")
+                : EmitVerifyText(result, "S-57 folder", settings.Strict);
+        }
+        catch (Exception ex)
+        {
+            ReportException("Error", ex, format, settings.Debug);
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// A file fails verification when its signature is invalid/untrusted or its
+    /// checksum mismatches / the file is missing. With <paramref name="strict"/>,
+    /// an unsigned file or a file with no declared checksum also fails.
+    /// </summary>
+    private static bool FileFailed(FileVerificationResult file, bool strict)
+    {
+        var signatureFailed = file.Outcome switch
+        {
+            VerificationOutcome.SignatureInvalid => true,
+            VerificationOutcome.CertificateUntrusted => true,
+            VerificationOutcome.CertificateExpired => true,
+            VerificationOutcome.CertificateNotFound => true,
+            VerificationOutcome.FileMissing => true,
+            VerificationOutcome.Error => true,
+            VerificationOutcome.NotSigned => strict,
+            _ => false,
+        };
+
+        var checksumFailed = file.ChecksumOutcome switch
+        {
+            VerificationOutcome.ChecksumMismatch => true,
+            VerificationOutcome.FileMissing => true,
+            VerificationOutcome.Error => true,
+            VerificationOutcome.NoChecksum => strict,
+            _ => false,
+        };
+
+        return signatureFailed || checksumFailed;
+    }
+
+    private static int EmitVerifyText(ExchangeSetVerificationResult result, string kind, bool strict)
+    {
+        if (result.FileResults.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]Exchange set declares no files to verify.[/]");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("File");
+        table.AddColumn("Signature");
+        table.AddColumn("Checksum");
+        table.AddColumn("SHA-256");
+        table.AddColumn("Detail");
+
+        foreach (var file in result.FileResults)
+        {
+            table.AddRow(
+                Markup.Escape(file.FileName),
+                OutcomeMarkup(file.Outcome, FileFailed(file, strict)),
+                OutcomeMarkup(file.ChecksumOutcome, FileFailed(file, strict)),
+                Markup.Escape(ShortDigest(file.ComputedSha256)),
+                Markup.Escape(file.Detail ?? string.Empty));
+        }
+
+        AnsiConsole.Write(table);
+
+        int failed = result.FileResults.Count(f => FileFailed(f, strict));
+        AnsiConsole.MarkupLineInterpolated(
+            $"[grey]{result.FileResults.Count} file(s) in {kind}; integrity {(result.IntegrityVerified ? "intact" : "compromised")}; signatures {SignatureSummary(result)}.[/]");
+
+        if (failed == 0)
+        {
+            AnsiConsole.MarkupLine("[green]Verified[/] — no verification failures.");
+            return 0;
+        }
+
+        AnsiConsole.MarkupLineInterpolated($"[red]{failed} file(s) failed verification.[/]");
+        return FindingsExitCode;
+    }
+
+    private static int EmitVerifyJson(ExchangeSetVerificationResult result, bool strict, string product = "S-100")
+    {
+        int failed = result.FileResults.Count(f => FileFailed(f, strict));
+
+        var payload = new
+        {
+            kind = "exchange-set",
+            product,
+            fileCount = result.FileResults.Count,
+            integrityVerified = result.IntegrityVerified,
+            hasChecksumMismatches = result.HasChecksumMismatches,
+            hasMissingFiles = result.HasMissingFiles,
+            isUnsigned = result.FileResults.Count > 0 && result.IsUnsigned,
+            valid = failed == 0,
+            failedCount = failed,
+            files = result.FileResults
+                .Select(f => new
+                {
+                    fileName = f.FileName,
+                    signatureOutcome = f.Outcome.ToString(),
+                    checksumOutcome = f.ChecksumOutcome.ToString(),
+                    computedSha256 = f.ComputedSha256,
+                    detail = f.Detail,
+                    failed = FileFailed(f, strict),
+                })
+                .ToArray(),
+        };
+
+        Console.Out.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+        return failed == 0 ? 0 : FindingsExitCode;
+    }
+
+    private static string SignatureSummary(ExchangeSetVerificationResult result)
+    {
+        if (result.FileResults.Count > 0 && result.IsUnsigned)
+            return "unsigned";
+        return result.AllValid ? "all valid" : "see table";
+    }
+
+    private static string ShortDigest(string? hex) =>
+        string.IsNullOrEmpty(hex) ? "—" : hex[..Math.Min(12, hex.Length)];
+
+    private static string OutcomeMarkup(VerificationOutcome outcome, bool failed)
+    {
+        var colour = outcome switch
+        {
+            VerificationOutcome.Ok => "green",
+            VerificationOutcome.NotSigned or VerificationOutcome.NoChecksum => failed ? "yellow" : "grey",
+            _ => "red",
+        };
+        return $"[{colour}]{outcome}[/]";
     }
 
     private static int EmitText(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)

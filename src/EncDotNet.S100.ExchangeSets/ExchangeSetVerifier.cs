@@ -11,9 +11,14 @@ namespace EncDotNet.S100.ExchangeSets;
 /// <remarks>
 /// S-100 Edition 5.2.1 Part 15. Signatures are computed over the raw bytes of
 /// each referenced file and verified against the certificate identified by
-/// <see cref="DigitalSignatureValue.CertificateRef"/>.
+/// <see cref="DigitalSignatureValue.CertificateRef"/>. Each file is also
+/// integrity-checked: its SHA-256 digest is computed and, when the catalogue
+/// declares a cryptographic hash (Part 15 §15-8.10), compared against it. This
+/// integrity dimension is reported independently of the signature dimension
+/// (see <see cref="FileVerificationResult.ChecksumOutcome"/>), so even an
+/// unsigned exchange set can be checked for missing or corrupt files.
 /// </remarks>
-public sealed class ExchangeSetVerifier : IExchangeSetVerifier
+public class ExchangeSetVerifier : IExchangeSetVerifier
 {
     /// <summary>Buffer size used when streaming file content for hashing.</summary>
     private const int StreamBufferSize = 81920;
@@ -41,7 +46,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         {
             var result = await VerifyFileAsync(
                 source, ds.RelativePath, ds.DigitalSignatureValue, ds.DigitalSignatureAlgorithm,
-                certLookup, trustAnchors, cancellationToken);
+                ds.ExpectedHash, certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }
 
@@ -50,7 +55,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         {
             var result = await VerifyFileAsync(
                 source, sf.RelativePath, sf.DigitalSignatureValue, sf.DigitalSignatureAlgorithm,
-                certLookup, trustAnchors, cancellationToken);
+                sf.ExpectedHash, certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }
 
@@ -59,7 +64,7 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         {
             var result = await VerifyFileAsync(
                 source, cf.RelativePath, cf.DigitalSignatureValue, cf.DigitalSignatureAlgorithm,
-                certLookup, trustAnchors, cancellationToken);
+                cf.ExpectedHash, certLookup, trustAnchors, cancellationToken);
             results.Add(result);
         }
 
@@ -70,33 +75,122 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         return new ExchangeSetVerificationResult { FileResults = results };
     }
 
-    private static async Task<FileVerificationResult> VerifyFileAsync(
+    private async Task<FileVerificationResult> VerifyFileAsync(
         IAssetSource source,
         string fileName,
         DigitalSignatureValue? signatureValue,
         DigitalSignatureAlgorithm algorithm,
+        CryptographicHash? expectedHash,
         Dictionary<string, CertificateEntry> certLookup,
         TrustAnchorOptions trustAnchors,
         CancellationToken cancellationToken)
     {
-        if (signatureValue is null)
+        // Hash the file content once, regardless of whether it is signed, so
+        // that an unsigned exchange set can still be integrity-checked. The
+        // same SHA-256 digest feeds both the checksum dimension and (when a
+        // signature is present) the signature verification below.
+        byte[] fileHash;
+        try
+        {
+            var normalizedPath = ExchangeSet.NormalizeFileName(fileName);
+            await using var stream = await OpenContentForHashingAsync(
+                source, normalizedPath, signatureValue, cancellationToken);
+            fileHash = await ComputeSha256HashAsync(stream, cancellationToken);
+        }
+        catch (FileNotFoundException)
         {
             return new FileVerificationResult
             {
                 FileName = fileName,
-                Outcome = VerificationOutcome.NotSigned,
+                Outcome = VerificationOutcome.FileMissing,
+                ChecksumOutcome = VerificationOutcome.FileMissing,
             };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new FileVerificationResult
+            {
+                FileName = fileName,
+                Outcome = VerificationOutcome.Error,
+                ChecksumOutcome = VerificationOutcome.Error,
+                Detail = $"Failed to read file: {ex.Message}",
+            };
+        }
+
+        var computedHex = Convert.ToHexString(fileHash).ToLowerInvariant();
+
+        // Checksum dimension: compare against the declared cryptographic hash
+        // when one is present (S-100 Edition 5.2.1 Part 15 §15-8.10), otherwise
+        // report that there is nothing to validate against.
+        var checksumOutcome = expectedHash is null
+            ? VerificationOutcome.NoChecksum
+            : expectedHash.Matches(computedHex)
+                ? VerificationOutcome.Ok
+                : VerificationOutcome.ChecksumMismatch;
+
+        // Signature dimension: independent of the checksum result.
+        var (signatureOutcome, detail) = EvaluateSignature(
+            signatureValue, algorithm, fileHash, certLookup, trustAnchors);
+
+        return new FileVerificationResult
+        {
+            FileName = fileName,
+            Outcome = signatureOutcome,
+            ChecksumOutcome = checksumOutcome,
+            ComputedSha256 = computedHex,
+            Detail = detail,
+        };
+    }
+
+    /// <summary>
+    /// Opens the file content that should be hashed for verification.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation returns the raw bytes from the asset source.
+    /// This is the seam where Part 15 decryption would slot in: a future
+    /// override (or injected decrypted-content provider) could return the
+    /// decrypted, decompressed bytes for a <c>dataStatus="encrypted"</c>
+    /// signature (S-100 Edition 5.2.1 Part 15 §15-8.8, Table 15-10) so that the
+    /// computed digest matches the signature, which is produced over the
+    /// unencrypted resource. The <paramref name="signatureValue"/> is supplied
+    /// so an override can decide whether decryption is required.
+    /// </remarks>
+    /// <param name="source">The asset source containing the file.</param>
+    /// <param name="normalizedPath">The normalized, source-relative file path.</param>
+    /// <param name="signatureValue">The file's signature value, if any.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A readable stream over the bytes to hash.</returns>
+    protected virtual Task<Stream> OpenContentForHashingAsync(
+        IAssetSource source,
+        string normalizedPath,
+        DigitalSignatureValue? signatureValue,
+        CancellationToken cancellationToken)
+    {
+        return source.OpenAsync(normalizedPath, cancellationToken);
+    }
+
+    /// <summary>
+    /// Evaluates the digital-signature dimension for a file whose content has
+    /// already been hashed. Returns <see cref="VerificationOutcome.NotSigned"/>
+    /// when the file carries no signature.
+    /// </summary>
+    private static (VerificationOutcome Outcome, string? Detail) EvaluateSignature(
+        DigitalSignatureValue? signatureValue,
+        DigitalSignatureAlgorithm algorithm,
+        byte[] fileHash,
+        Dictionary<string, CertificateEntry> certLookup,
+        TrustAnchorOptions trustAnchors)
+    {
+        if (signatureValue is null)
+        {
+            return (VerificationOutcome.NotSigned, null);
         }
 
         // Resolve the certificate
         if (!certLookup.TryGetValue(signatureValue.CertificateRef, out var certEntry))
         {
-            return new FileVerificationResult
-            {
-                FileName = fileName,
-                Outcome = VerificationOutcome.CertificateNotFound,
-                Detail = $"Certificate '{signatureValue.CertificateRef}' not found in catalogue.",
-            };
+            return (VerificationOutcome.CertificateNotFound,
+                $"Certificate '{signatureValue.CertificateRef}' not found in catalogue.");
         }
 
         X509Certificate2 cert;
@@ -110,12 +204,8 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
         }
         catch (CryptographicException ex)
         {
-            return new FileVerificationResult
-            {
-                FileName = fileName,
-                Outcome = VerificationOutcome.Error,
-                Detail = $"Failed to parse certificate '{signatureValue.CertificateRef}': {ex.Message}",
-            };
+            return (VerificationOutcome.Error,
+                $"Failed to parse certificate '{signatureValue.CertificateRef}': {ex.Message}");
         }
 
         using (cert)
@@ -124,63 +214,22 @@ public sealed class ExchangeSetVerifier : IExchangeSetVerifier
             var trustOutcome = ValidateCertificateTrust(cert, trustAnchors);
             if (trustOutcome is not null)
             {
-                return new FileVerificationResult
-                {
-                    FileName = fileName,
-                    Outcome = trustOutcome.Value,
-                    Detail = trustOutcome.Value == VerificationOutcome.CertificateExpired
-                        ? $"Certificate '{signatureValue.CertificateRef}' expired on {cert.NotAfter:O}."
-                        : $"Certificate '{signatureValue.CertificateRef}' is not trusted.",
-                };
-            }
-
-            // Hash the file content
-            byte[] fileHash;
-            try
-            {
-                var normalizedPath = ExchangeSet.NormalizeFileName(fileName);
-                await using var stream = await source.OpenAsync(normalizedPath, cancellationToken);
-                fileHash = await ComputeSha256HashAsync(stream, cancellationToken);
-            }
-            catch (FileNotFoundException)
-            {
-                return new FileVerificationResult
-                {
-                    FileName = fileName,
-                    Outcome = VerificationOutcome.FileMissing,
-                };
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                return new FileVerificationResult
-                {
-                    FileName = fileName,
-                    Outcome = VerificationOutcome.Error,
-                    Detail = $"Failed to read file: {ex.Message}",
-                };
+                var detail = trustOutcome.Value == VerificationOutcome.CertificateExpired
+                    ? $"Certificate '{signatureValue.CertificateRef}' expired on {cert.NotAfter:O}."
+                    : $"Certificate '{signatureValue.CertificateRef}' is not trusted.";
+                return (trustOutcome.Value, detail);
             }
 
             // Verify the signature
-            bool valid;
             try
             {
-                valid = VerifySignature(cert, algorithm, fileHash, signatureValue.Value);
+                var valid = VerifySignature(cert, algorithm, fileHash, signatureValue.Value);
+                return (valid ? VerificationOutcome.Ok : VerificationOutcome.SignatureInvalid, null);
             }
             catch (CryptographicException ex)
             {
-                return new FileVerificationResult
-                {
-                    FileName = fileName,
-                    Outcome = VerificationOutcome.Error,
-                    Detail = $"Signature verification error: {ex.Message}",
-                };
+                return (VerificationOutcome.Error, $"Signature verification error: {ex.Message}");
             }
-
-            return new FileVerificationResult
-            {
-                FileName = fileName,
-                Outcome = valid ? VerificationOutcome.Ok : VerificationOutcome.SignatureInvalid,
-            };
         }
     }
 

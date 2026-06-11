@@ -123,6 +123,7 @@ public static class ExchangeCatalogueReader
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
             DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            ExpectedHash = ReadExpectedHash(element),
             Copyright = ParseBool(element, "copyright", xc),
             Classification = ReadCodeListValue(element.Element(xc + "classification")),
             Purpose = (string?)element.Element(xc + "purpose"),
@@ -164,6 +165,7 @@ public static class ExchangeCatalogueReader
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
             DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            ExpectedHash = ReadExpectedHash(element),
             SupportedResources = element
                 .Elements(xc + "supportedResource")
                 .Select(e => e.Value.Trim())
@@ -189,6 +191,7 @@ public static class ExchangeCatalogueReader
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
             DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
+            ExpectedHash = ReadExpectedHash(element),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
             DefaultLocaleCharacterEncoding = ReadLocaleCharacterEncoding(defaultLocaleEl, lan),
@@ -348,6 +351,31 @@ public static class ExchangeCatalogueReader
             CertificateRef = certRef,
             Value = Convert.FromBase64String(base64),
         };
+    }
+
+    /// <summary>
+    /// Discovers an S-100 cryptographic hash MRN
+    /// (<c>urn:mrn:iho:s100:hash:&lt;algorithm&gt;:&lt;hex&gt;</c>) declared
+    /// within a discovery-metadata element. The specification defines the MRN
+    /// namespace but not a fixed catalogue slot, so this scans the element's
+    /// descendant values best-effort and returns the first that parses.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.10, Table 15-12.</remarks>
+    private static CryptographicHash? ReadExpectedHash(XElement element)
+    {
+        foreach (var node in element.DescendantNodesAndSelf().OfType<XText>())
+        {
+            if (CryptographicHash.TryParse(node.Value, out var hash))
+                return hash;
+        }
+
+        foreach (var attribute in element.Descendants().Attributes())
+        {
+            if (CryptographicHash.TryParse(attribute.Value, out var hash))
+                return hash;
+        }
+
+        return null;
     }
 
     /// <summary>

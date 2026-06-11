@@ -40,6 +40,14 @@ public sealed class DatasetDiscoveryMetadata
     /// <remarks>S-100 Edition 5.2.1 Part 15 §15-4.2.</remarks>
     public DigitalSignatureValue? DigitalSignatureValue { get; init; }
 
+    /// <summary>
+    /// The declared cryptographic hash for this dataset file, if the catalogue
+    /// carries one. Used to integrity-check the file independently of any
+    /// digital signature.
+    /// </summary>
+    /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.10, Table 15-12.</remarks>
+    public CryptographicHash? ExpectedHash { get; init; }
+
     public bool Copyright { get; init; }
 
     public string? Classification { get; init; }
