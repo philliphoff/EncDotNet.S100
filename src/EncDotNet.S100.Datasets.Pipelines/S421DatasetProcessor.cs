@@ -16,8 +16,6 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
     private readonly S421Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-421", default);
     protected override string ProductDescription => "Route Plan";
     protected override IReadOnlyList<S421Feature> Features => _dataset.Features;
     protected override double MinExtentPadding => 0.05;
@@ -61,12 +59,15 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
             new S421PortrayalCatalogue(catalogueManager.GetProvider("S-421")),
             featureCatalogueManager?.GetDecoder("S-421"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-421")
     {
         using (datasetStream)
         {
             _dataset = S421Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

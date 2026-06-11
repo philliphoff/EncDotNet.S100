@@ -48,6 +48,13 @@ public static class S102DatasetReader
             ? root.ReadStringAttribute("metadata")
             : null;
 
+        // S-100 Part 10c §10.2.1 — the root carries the productSpecification
+        // string (e.g. "INT.IHO.S-102.3.0.0"); surfaced so the pipeline can
+        // report the declared edition and warn on a version mismatch.
+        string? productSpecification = root.AttributeExists("productSpecification")
+            ? root.ReadStringAttribute("productSpecification")
+            : null;
+
         var coverages = ReadCoverages(root);
 
         return new S102Dataset
@@ -57,6 +64,7 @@ public static class S102DatasetReader
             GeographicIdentifier = geographicIdentifier,
             IssueDate = issueDate,
             Metadata = metadata,
+            DeclaredProductSpecification = productSpecification,
             Coverages = coverages,
         };
     }

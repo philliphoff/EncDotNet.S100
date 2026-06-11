@@ -23,7 +23,6 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
     private bool _validationCached;
 
     /// <inheritdoc />
-    public override SpecRef Spec => new("S-125", default);
     protected override string ProductDescription => "Marine Aids to Navigation";
     protected override IReadOnlyList<S125Feature> Features => _dataset.Features;
 
@@ -67,12 +66,15 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
             new S125PortrayalCatalogue(catalogueManager.GetProvider("S-125")),
             featureCatalogueManager?.GetDecoder("S-125"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-125")
     {
         using (datasetStream)
         {
             _dataset = S125Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>

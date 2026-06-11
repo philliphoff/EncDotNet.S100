@@ -102,6 +102,7 @@ internal static class S131DatasetReader
         return new S131Dataset
         {
             ProductIdentifier = productId ?? "S-131",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             Features = features.ToImmutable(),
             InformationTypes = informationTypes.ToImmutable(),

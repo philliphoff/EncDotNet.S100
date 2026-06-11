@@ -61,7 +61,11 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
-    public SpecRef Spec => new("S-104", default);
+    /// <inheritdoc/>
+    public SpecRef Spec { get; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
 
     /// <summary>Available forecast time steps in this dataset.</summary>
     public IReadOnlyList<DateTime> AvailableTimes =>
@@ -126,6 +130,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 }
                 break;
         }
+
+        Spec = HdfDeclaredSpec.Resolve(_data.DeclaredProductSpecification, "S-104");
+        VersionAssessment = SupportedSpecEditions.Assess(Spec);
     }
 
     /// <inheritdoc/>

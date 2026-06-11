@@ -33,7 +33,10 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
-    public SpecRef Spec => new("S-102", default);
+    public SpecRef Spec { get; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
 
     public S102DatasetProcessor(
         string path,
@@ -95,6 +98,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         }
         _source = new S102CoverageSource(_dataset);
 
+        Spec = HdfDeclaredSpec.Resolve(_dataset.DeclaredProductSpecification, "S-102");
+
         var provider = catalogueManager.GetProvider("S-102");
         _catalogue = new S102PortrayalCatalogue(luaEngine, provider);
 
@@ -105,6 +110,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _pipeline = new PortrayalPipeline();
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
     }
 
     public void Dispose()

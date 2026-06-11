@@ -69,6 +69,15 @@ public sealed class S111StationSeriesDataset
 /// </summary>
 public abstract record S111DatasetData
 {
+    /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-111.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Surfaced so the pipeline
+    /// can report the dataset's declared edition and warn on a version
+    /// mismatch (see <c>SpecVersionAssessment</c>).
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
     /// <summary>S-111 dcf2 — regularly-gridded surface-current coverage.</summary>
     public sealed record GriddedCoverage(S111Dataset Dataset) : S111DatasetData;
 

@@ -63,6 +63,7 @@ internal static class S421DatasetReader
         return new S421Dataset
         {
             ProductIdentifier = productId ?? "S-421",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             Features = features.ToImmutable(),
             InformationTypes = informationTypes.ToImmutable(),

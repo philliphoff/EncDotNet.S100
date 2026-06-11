@@ -133,6 +133,7 @@ internal static class S411DatasetReader
         return new S411Dataset
         {
             ProductIdentifier = "S-411",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             IssueDate = issueDate,
             Features = features.ToImmutable(),
@@ -261,6 +262,7 @@ internal static class S411DatasetReader
         return new S411Dataset
         {
             ProductIdentifier = productId ?? "S-411",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
             IssueDate = issueDate,
             Features = features.ToImmutable(),

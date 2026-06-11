@@ -127,7 +127,10 @@ public static class S104DatasetReader
                 Stations = stations,
                 MinTime = minTime,
                 MaxTime = maxTime,
-            });
+            })
+            {
+                DeclaredProductSpecification = productSpecification,
+            };
         }
 
         var coverages = ReadCoveragesGuarded(wlGroup, dataCodingFormat, productSpecification);
@@ -142,7 +145,10 @@ public static class S104DatasetReader
             DataCodingFormat = dataCodingFormat,
             MethodWaterLevelProduct = methodWaterLevelProduct,
             Coverages = coverages,
-        });
+        })
+        {
+            DeclaredProductSpecification = productSpecification,
+        };
     }
 
     /// <summary>

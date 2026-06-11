@@ -1,4 +1,5 @@
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Hdf5;
 using Spectre.Console;
@@ -34,7 +35,33 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             table.AddRow("Dataset", Markup.Escape(settings.DatasetPath));
             table.AddRow("Specification", Markup.Escape(processor.Spec.Name));
-            table.AddRow("Edition", Markup.Escape(processor.Spec.Edition.ToString()));
+            table.AddRow("Edition", Markup.Escape(DescribeDeclaredEdition(processor.Spec)));
+
+            var assessment = processor.VersionAssessment;
+            if (assessment is not null)
+            {
+                table.AddRow(
+                    "Supported edition",
+                    Markup.Escape(string.Join(", ", assessment.Supported)));
+
+                if (assessment.Catalogue is { } catalogue)
+                {
+                    table.AddRow(
+                        "Catalogue version",
+                        Markup.Escape($"{catalogue.Name} {catalogue.Version}"));
+                }
+
+                var (label, colour) = assessment.Kind switch
+                {
+                    SpecMatchKind.Exact => ("matches", "green"),
+                    SpecMatchKind.CatalogueNewerCompatible => ("application supports a newer, compatible edition", "green"),
+                    SpecMatchKind.CatalogueOlder => ("application supports an older edition — may be incomplete", "yellow"),
+                    SpecMatchKind.MajorDivergence => ("incompatible edition — may be incomplete or incorrect", "red"),
+                    _ => ("not declared", "grey"),
+                };
+                table.AddRow("Version match", $"[{colour}]{Markup.Escape(label)}[/]");
+            }
+
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
             if (processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0)
@@ -43,6 +70,14 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             AnsiConsole.Write(table);
+
+            // Non-blocking: surface a one-line warning on stderr when the
+            // declared edition diverges from what this build implements in a
+            // way that may degrade rendering (issue #248).
+            if (assessment?.IsWarning == true)
+            {
+                Console.Error.WriteLine(assessment.BuildMessage());
+            }
 
             if (processor is ITimeAwareDatasetProcessor ta && ta.AvailableTimes.Count > 0)
             {
@@ -97,4 +132,11 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             catalogueManager.Dispose();
         }
     }
+
+    /// <summary>
+    /// Formats the declared edition for display, substituting a placeholder
+    /// when the dataset declares no edition (<see cref="SpecVersion"/> default).
+    /// </summary>
+    private static string DescribeDeclaredEdition(SpecRef spec) =>
+        spec.Edition == default ? "(not declared)" : spec.Edition.ToString();
 }

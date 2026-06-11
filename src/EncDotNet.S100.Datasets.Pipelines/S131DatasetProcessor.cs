@@ -55,7 +55,10 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private bool _validationCached;
 
     /// <inheritdoc/>
-    public SpecRef Spec => new("S-131", default);
+    public SpecRef Spec { get; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
 
     /// <summary>
     /// Initializes a new <see cref="S131DatasetProcessor"/> from a file path.
@@ -107,7 +110,16 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         }
         _featureCatalogueManager = featureCatalogueManager;
 
+        // S-131 declares its edition in the GML DatasetIdentificationInformation
+        // (productEdition); surface it so the pipeline can warn on a mismatch
+        // with the edition this build implements. S-131 PC Ed 2.0.0.
+        Spec = !string.IsNullOrWhiteSpace(_dataset.DeclaredEdition)
+            && SpecVersion.TryParse(_dataset.DeclaredEdition, out var s131Edition)
+            ? new SpecRef("S-131", s131Edition)
+            : new SpecRef("S-131", default);
+
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
     }
 
     /// <inheritdoc/>

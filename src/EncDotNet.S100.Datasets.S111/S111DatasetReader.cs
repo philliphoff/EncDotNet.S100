@@ -75,6 +75,13 @@ public static class S111DatasetReader
             ? root.ReadStringAttribute("metadata")
             : null;
 
+        // S-100 Part 10c §10.2.1 — the root carries the productSpecification
+        // string (e.g. "INT.IHO.S-111.2.0.0"); surfaced so the pipeline can
+        // report the declared edition and warn on a version mismatch.
+        string? productSpecification = root.AttributeExists("productSpecification")
+            ? root.ReadStringAttribute("productSpecification")
+            : null;
+
         float? surfaceCurrentDepth = root.AttributeExists("surfaceCurrentDepth")
             ? (float)root.ReadDoubleAttribute("surfaceCurrentDepth")
             : null;
@@ -123,7 +130,10 @@ public static class S111DatasetReader
                 Stations = stations,
                 MinTime = minTime,
                 MaxTime = maxTime,
-            });
+            })
+            {
+                DeclaredProductSpecification = productSpecification,
+            };
         }
 
         var coverages = ReadCoverages(scGroup, dataCodingFormat);
@@ -139,7 +149,10 @@ public static class S111DatasetReader
             DataCodingFormat = dataCodingFormat,
             TypeOfCurrentData = typeOfCurrentData,
             Coverages = coverages,
-        });
+        })
+        {
+            DeclaredProductSpecification = productSpecification,
+        };
     }
 
     private static List<SurfaceCurrentCoverage> ReadCoverages(IHdf5Group scGroup, int dataCodingFormat)

@@ -16,8 +16,6 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     private readonly S124Dataset _dataset;
     private ValidationReport? _validationReport;
     private bool _validationCached;
-
-    public override SpecRef Spec => new("S-124", default);
     protected override string ProductDescription => "Navigational Warnings";
     protected override IReadOnlyList<S124Feature> Features => _dataset.Features;
 
@@ -60,12 +58,15 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             new S124PortrayalCatalogue(catalogueManager.GetProvider("S-124")),
             featureCatalogueManager?.GetDecoder("S-124"),
             fileName,
-            authorityProvider)
+            authorityProvider,
+            "S-124")
     {
         using (datasetStream)
         {
             _dataset = S124Dataset.Open(datasetStream);
         }
+
+        SetDeclaredEdition(_dataset.DeclaredEdition);
     }
 
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
