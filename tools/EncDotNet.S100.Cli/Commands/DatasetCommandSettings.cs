@@ -17,6 +17,11 @@ internal class DatasetCommandSettings : CommandSettings
     [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
     public bool Debug { get; init; }
 
+    [CommandOption("--no-updates")]
+    [Description("Do not apply sibling S-101 sequential updates (.001, .002, …) found alongside an .000 base cell. By default they are applied best-effort.")]
+    [DefaultValue(false)]
+    public bool NoUpdates { get; init; }
+
     public override Spectre.Console.ValidationResult Validate()
     {
         if (string.IsNullOrWhiteSpace(DatasetPath))

@@ -64,13 +64,19 @@ public sealed class ExchangeSetLoader
         ArgumentNullException.ThrowIfNull(exchangeSet);
 
         var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
-        var total = datasets.Count;
+
+        // Group S-101 base cells with their in-set sequential updates so each
+        // cell is loaded once at its up-to-date state (S-100 Part 10a). Non-S-101
+        // datasets pass through unchanged.
+        var plan = S101ExchangeSetUpdatePlan.Build(datasets);
+        var total = plan.Count;
 
         for (var i = 0; i < total; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var metadata = datasets[i];
+            var item = plan[i];
+            var metadata = item.Base;
             var relativePath = metadata.RelativePath;
             progress?.Report(new ExchangeSetProgress(i + 1, total, relativePath));
 
@@ -78,10 +84,28 @@ public sealed class ExchangeSetLoader
             Exception? error = null;
             try
             {
-                processor = _factory.CreateProcessor(
-                    exchangeSet.Source,
-                    relativePath,
-                    metadata.ProductSpecification?.ProductIdentifier);
+                switch (item.Kind)
+                {
+                    case S101LoadItemKind.BaseWithUpdates:
+                        var updatePaths = item.Updates.Select(u => u.RelativePath).ToList();
+                        processor = _factory.CreateS101ProcessorWithUpdates(
+                            exchangeSet.Source, relativePath, updatePaths);
+                        break;
+
+                    case S101LoadItemKind.OrphanUpdate:
+                        error = new InvalidOperationException(
+                            $"S-101 update '{relativePath}' has no base cell in this exchange set; " +
+                            "updates are only applied when bundled with their base.");
+                        break;
+
+                    case S101LoadItemKind.Single:
+                    default:
+                        processor = _factory.CreateProcessor(
+                            exchangeSet.Source,
+                            relativePath,
+                            metadata.ProductSpecification?.ProductIdentifier);
+                        break;
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

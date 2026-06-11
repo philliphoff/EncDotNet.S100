@@ -38,6 +38,12 @@ public class ExchangeSetServiceLoaderTests
     private static string AllUnsupportedFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-AllUnsupported");
 
+    private static string S101UpdatesFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S101Updates");
+
+    private static string S101OrphanFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S101Orphan");
+
     private sealed class StubStatus : IStatusPresenter
     {
         public string? StatusText { get; set; }
@@ -192,5 +198,66 @@ public class ExchangeSetServiceLoaderTests
         Assert.Equal(3, progress.Reports[^1].Total);
         Assert.Equal(3, progress.Reports[^1].Completed);
         Assert.Equal(1, progress.Reports[^1].Failed);
+    }
+
+    [Fact]
+    public async Task OpenAsync_S101Updates_CollapsesBaseAndUpdatesIntoOneEntry()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        var result = await service.OpenAsync(S101UpdatesFixture());
+
+        // The base cell plus its two updates form a single load item.
+        Assert.Equal(1, result.Total);
+        Assert.Equal(1, result.Loaded);
+        Assert.Equal(0, result.SkippedUnsupported);
+        Assert.False(result.Cancelled);
+
+        var entry = Assert.Single(datasets.Entries);
+        Assert.Equal("S-101", entry.ProductSpec);
+        // The base cell backs the entry; the two updates are carried as
+        // ordered relative paths for the loader to apply.
+        Assert.Equal("S-101/SYNTH101.000", entry.RelativePath);
+        Assert.True(entry.HasUpdates);
+        Assert.Equal(
+            new[] { "S-101/SYNTH101.001", "S-101/SYNTH101.002" },
+            entry.UpdateRelativePaths);
+    }
+
+    [Fact]
+    public async Task OpenAsync_S101Updates_HeaderCountsCollapsedCell()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        await service.OpenAsync(S101UpdatesFixture());
+
+        var header = Assert.Single(datasets.ExchangeSetHeaders);
+        // Three catalogue entries collapse to one renderable cell.
+        Assert.Equal(1, header.DatasetCount);
+        Assert.Equal(1, header.LoadedCount);
+        Assert.Equal(0, header.UnsupportedCount);
+    }
+
+    [Fact]
+    public async Task OpenAsync_S101Orphan_SkipsUpdateWithNoBase()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        var result = await service.OpenAsync(S101OrphanFixture());
+
+        // An orphan update cannot be applied on its own; it is skipped
+        // best-effort with a warning and dispatches no dataset entry.
+        Assert.Equal(1, result.Total);
+        Assert.Equal(0, result.Loaded);
+        Assert.Equal(1, result.SkippedUnsupported);
+        Assert.Single(result.SkipMessages);
+        Assert.Contains("SYNTH101.001", result.SkipMessages[0]);
+
+        // No entry dispatched, so the set is released immediately.
+        Assert.Empty(datasets.Entries);
+        Assert.Empty(datasets.ExchangeSetHeaders);
     }
 }

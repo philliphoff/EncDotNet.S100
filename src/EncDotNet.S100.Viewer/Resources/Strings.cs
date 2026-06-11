@@ -315,6 +315,9 @@ internal static class Strings
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
+    public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
+    public static string Status_ExchangeSetUpdatesApplied => Get(nameof(Status_ExchangeSetUpdatesApplied));
+    public static string Status_ExchangeSetUpdatesPartial => Get(nameof(Status_ExchangeSetUpdatesPartial));
 
     // Exchange-set progress overlay (es3-progress)
     public static string Progress_ExchangeSetTitle => Get(nameof(Progress_ExchangeSetTitle));
