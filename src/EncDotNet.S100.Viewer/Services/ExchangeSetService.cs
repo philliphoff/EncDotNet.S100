@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
@@ -60,6 +61,15 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         EnsureCollectionSubscription();
+
+        // An S-57 / S-63 exchange set (CATALOG.031) is structurally different
+        // from an S-100 one (CATALOG.XML) and is directory-rooted, so it has its
+        // own loader. S-100 sets fall through to the logic below.
+        if (ExchangeSetDetection.LooksLikeS57ExchangeSet(folderOrZipPath))
+        {
+            return await OpenS57Async(folderOrZipPath, progress, cancellationToken)
+                .ConfigureAwait(true);
+        }
 
         // s100.exchangeset.open child span sits under whatever
         // s100.viewer.command span the caller (MainWindow) opened.
@@ -131,12 +141,21 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             progress?.Report(new ExchangeSetProgress(folderOrZipPath, plan.Count, 0, 0, null));
 
-            var tracked = new TrackedExchangeSet(folderOrZipPath, exchangeSet);
+            var assetSource = exchangeSet.Source;
+            var catalogue = exchangeSet.Catalogue;
+            var tracked = new TrackedExchangeSet(
+                folderOrZipPath,
+                assetSource,
+                owner: exchangeSet,
+                verifier: ct => new ExchangeSetVerifier().VerifyAsync(
+                    assetSource,
+                    catalogue,
+                    new TrustAnchorOptions { AllowUntrustedCertificates = true },
+                    ct));
             _tracked.Add(tracked);
             // From this point on, lifetime ownership transfers to the tracked
             // entry — do not dispose `exchangeSet` / `source` directly below.
-            var assetSource = tracked.ExchangeSet.Source;
-            var producer = tracked.ExchangeSet.Catalogue.Contact?.Organization;
+            var producer = catalogue.Contact?.Organization;
             var issueDate = ResolveLatestIssueDate(datasets);
 
             tracked.Header = _datasets.RegisterExchangeSetHeader(
@@ -202,7 +221,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     : item.Updates.Select(u => u.RelativePath).ToList();
 
                 var entry = _datasets.AddFromExchangeSet(
-                    tracked.ExchangeSet.Source,
+                    tracked.Source,
                     relativePath,
                     spec,
                     displayName: Path.GetFileName(relativePath),
@@ -265,7 +284,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     _datasets.RemoveExchangeSetHeader(orphanHeader);
                     tracked.Header = null;
                 }
-                tracked.ExchangeSet.Dispose();
+                tracked.Owner.Dispose();
                 _tracked.Remove(tracked);
             }
             else
@@ -309,6 +328,168 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             return new ExchangeSetOpenResult
             {
                 SourcePath = folderOrZipPath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Opens an S-57 / S-63 exchange set (<c>CATALOG.031</c>). Unlike the S-100
+    /// path, the S-57 model is directory-rooted: cells are enumerated from the
+    /// catalogue via <see cref="S57ExchangeSetCatalog"/>, a
+    /// <see cref="FileSystemAssetSource"/> is rooted at the exchange-set
+    /// directory, and each base cell (with its in-set sequential updates) is
+    /// dispatched as an <c>"S-57"</c> entry — flowing through the same
+    /// <c>S57DatasetProcessor</c> as a single dropped <c>.000</c> file.
+    /// Integrity/signature status reuses the shared header badge, driven by the
+    /// PR #265 <see cref="S57ExchangeSetVerification"/> adapter.
+    /// </summary>
+    private async Task<ExchangeSetOpenResult> OpenS57Async(
+        string folderOrCataloguePath,
+        IProgress<ExchangeSetProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "s57.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        activity?.SetTag("s57.exchangeset.source.path", folderOrCataloguePath);
+
+        IAssetSource? source = null;
+        try
+        {
+            string root;
+            IReadOnlyList<S57ExchangeSetCell> cells;
+            try
+            {
+                root = ExchangeSetDetection.ResolveS57Root(folderOrCataloguePath);
+                cells = S57ExchangeSetCatalog.ReadBaseCells(root);
+            }
+            catch (FileNotFoundException)
+            {
+                var msg = string.Format(
+                    Strings.Status_ExchangeSetCatalogNotFound, folderOrCataloguePath);
+                _status.StatusText = msg;
+                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
+                activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    CatalogueNotFound = true,
+                    FailureMessage = msg,
+                };
+            }
+
+            activity?.SetTag("s57.exchangeset.cell.count", cells.Count);
+
+            if (cells.Count == 0)
+            {
+                var emptyMsg = string.Format(
+                    Strings.Status_S57ExchangeSetNoCells, folderOrCataloguePath);
+                _status.StatusText = emptyMsg;
+                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    CatalogueNotFound = true,
+                    FailureMessage = emptyMsg,
+                };
+            }
+
+            progress?.Report(new ExchangeSetProgress(folderOrCataloguePath, cells.Count, 0, 0, null));
+
+            source = FileSystemAssetSource.Create(root);
+            var tracked = new TrackedExchangeSet(
+                folderOrCataloguePath,
+                source,
+                owner: source,
+                verifier: ct => S57ExchangeSetVerification.VerifyAsync(
+                    root, allowUntrustedCertificates: true, ct));
+            _tracked.Add(tracked);
+            // Lifetime ownership has transferred to the tracked entry; do not
+            // dispose `source` directly below.
+            source = null;
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                tracked.Source,
+                // Use the resolved root directory (not a dropped CATALOG.031
+                // file path) so the header's display name is the set folder.
+                root,
+                producer: null,
+                issueDate: null,
+                cells.Count,
+                closeAction: CloseExchangeSetFromHeader);
+
+            var dispatched = 0;
+            foreach (var cell in cells)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.IsDefaultOrEmpty
+                    ? Array.Empty<string>()
+                    : cell.UpdateRelativePaths;
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    cell.RelativePath,
+                    "S-57",
+                    displayName: cell.CellName,
+                    updateRelativePaths: updateRelativePaths);
+                tracked.Entries.Add(entry);
+                _datasets.RequestLoad(entry);
+                dispatched++;
+                progress?.Report(new ExchangeSetProgress(
+                    folderOrCataloguePath, cells.Count, dispatched, 0, cell.RelativePath));
+            }
+
+            var loadedMsg = string.Format(
+                Strings.Status_ExchangeSetLoaded, dispatched, folderOrCataloguePath);
+            _status.StatusText = loadedMsg;
+            _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
+
+            activity?.SetTag("s57.exchangeset.dataset.loaded", dispatched);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = 0;
+            }
+
+            // Fire-and-forget integrity/signature verification — surfaced as a
+            // non-blocking header badge; we never refuse to load unsigned data.
+            _ = VerifySignaturesAsync(tracked);
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
+                Total = cells.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = 0,
+                Cancelled = false,
+                SkipMessages = Array.Empty<string>(),
+                UnionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells),
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrCataloguePath, ex.Message);
+            _status.StatusText = failedMsg;
+            _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
                 FailureMessage = ex.Message,
             };
         }
@@ -411,7 +592,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     _datasets.RemoveExchangeSetHeader(header);
                     tracked.Header = null;
                 }
-                tracked.ExchangeSet.Dispose();
+                tracked.Owner.Dispose();
                 _tracked.RemoveAt(i);
             }
         }
@@ -466,45 +647,50 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private async Task VerifySignaturesAsync(TrackedExchangeSet tracked)
     {
         if (tracked.Header is null) return;
+        if (tracked.Verifier is null) return;
 
         tracked.Header.SignatureStatus = SignatureStatus.Checking;
         tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureChecking;
 
         try
         {
-            var verifier = new ExchangeSetVerifier();
-            var result = await verifier.VerifyAsync(
-                tracked.ExchangeSet.Source,
-                tracked.ExchangeSet.Catalogue,
-                new TrustAnchorOptions { AllowUntrustedCertificates = true },
-                CancellationToken.None).ConfigureAwait(true);
-
-            if (result.IsUnsigned)
-            {
-                tracked.Header.SignatureStatus = SignatureStatus.Unsigned;
-                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureUnsigned;
-            }
-            else if (result.AllValid)
-            {
-                tracked.Header.SignatureStatus = SignatureStatus.Verified;
-                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureVerified;
-            }
-            else if (result.HasInvalidSignatures)
-            {
-                tracked.Header.SignatureStatus = SignatureStatus.Invalid;
-                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureInvalid;
-            }
-            else
-            {
-                // Some files ok, some not — e.g. certificate issues
-                tracked.Header.SignatureStatus = SignatureStatus.Mixed;
-                tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureMixed;
-            }
+            var result = await tracked.Verifier(CancellationToken.None).ConfigureAwait(true);
+            ApplySignatureResult(tracked.Header, result);
         }
         catch (Exception)
         {
             tracked.Header.SignatureStatus = SignatureStatus.Error;
             tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureError;
+        }
+    }
+
+    /// <summary>
+    /// Maps an <see cref="ExchangeSetVerificationResult"/> onto the header's
+    /// signature badge. Shared by the S-100 and S-57 exchange-set paths so both
+    /// surface identical integrity/signature semantics.
+    /// </summary>
+    private static void ApplySignatureResult(ExchangeSetHeader header, ExchangeSetVerificationResult result)
+    {
+        if (result.IsUnsigned)
+        {
+            header.SignatureStatus = SignatureStatus.Unsigned;
+            header.SignatureTooltip = Strings.Tooltip_SignatureUnsigned;
+        }
+        else if (result.AllValid)
+        {
+            header.SignatureStatus = SignatureStatus.Verified;
+            header.SignatureTooltip = Strings.Tooltip_SignatureVerified;
+        }
+        else if (result.HasInvalidSignatures)
+        {
+            header.SignatureStatus = SignatureStatus.Invalid;
+            header.SignatureTooltip = Strings.Tooltip_SignatureInvalid;
+        }
+        else
+        {
+            // Some files ok, some not — e.g. certificate issues
+            header.SignatureStatus = SignatureStatus.Mixed;
+            header.SignatureTooltip = Strings.Tooltip_SignatureMixed;
         }
     }
 
@@ -521,7 +707,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
         foreach (var tracked in _tracked)
         {
-            try { tracked.ExchangeSet.Dispose(); } catch { /* swallow on shutdown */ }
+            try { tracked.Owner.Dispose(); } catch { /* swallow on shutdown */ }
         }
         _tracked.Clear();
     }
@@ -529,14 +715,33 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private sealed class TrackedExchangeSet
     {
         public string SourcePath { get; }
-        public ExchangeSet ExchangeSet { get; }
+
+        /// <summary>The asset source backing the set; matched against
+        /// <see cref="DatasetEntry.Source"/> for lifetime tracking.</summary>
+        public IAssetSource Source { get; }
+
+        /// <summary>The object whose disposal releases the set's underlying
+        /// resources — the S-100 <see cref="ExchangeSet"/> for S-100 sets, or the
+        /// <see cref="IAssetSource"/> itself for S-57 sets.</summary>
+        public IDisposable Owner { get; }
+
+        /// <summary>Produces the integrity/signature verification result for the
+        /// header badge, or <c>null</c> when verification is not applicable.</summary>
+        public Func<CancellationToken, Task<ExchangeSetVerificationResult>>? Verifier { get; }
+
         public List<DatasetEntry> Entries { get; } = new();
         public ExchangeSetHeader? Header { get; set; }
 
-        public TrackedExchangeSet(string sourcePath, ExchangeSet exchangeSet)
+        public TrackedExchangeSet(
+            string sourcePath,
+            IAssetSource source,
+            IDisposable owner,
+            Func<CancellationToken, Task<ExchangeSetVerificationResult>>? verifier)
         {
             SourcePath = sourcePath;
-            ExchangeSet = exchangeSet;
+            Source = source;
+            Owner = owner;
+            Verifier = verifier;
         }
     }
 }

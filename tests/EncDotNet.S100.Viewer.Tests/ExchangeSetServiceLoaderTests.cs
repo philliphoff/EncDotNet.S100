@@ -260,4 +260,34 @@ public class ExchangeSetServiceLoaderTests
         Assert.Empty(datasets.Entries);
         Assert.Empty(datasets.ExchangeSetHeaders);
     }
+
+    /// <summary>
+    /// End-to-end S-57 exchange-set load against a real <c>CATALOG.031</c>
+    /// when one is available via the <c>ENCDOTNET_S57_EXCHANGE_SET</c>
+    /// environment variable (the folder containing <c>CATALOG.031</c>).
+    /// Skipped otherwise so CI never depends on (or commits) real ENC data.
+    /// </summary>
+    [SkippableFact]
+    public async Task OpenAsync_RealS57ExchangeSet_DispatchesCellsAsS57Entries()
+    {
+        var root = Environment.GetEnvironmentVariable("ENCDOTNET_S57_EXCHANGE_SET");
+        Skip.If(string.IsNullOrEmpty(root), "ENCDOTNET_S57_EXCHANGE_SET not set.");
+        Skip.IfNot(
+            File.Exists(Path.Combine(root!, "CATALOG.031")),
+            $"No CATALOG.031 in {root}.");
+
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        var result = await service.OpenAsync(root!);
+
+        Assert.True(result.Loaded > 0);
+        Assert.Equal(result.Total, result.Loaded);
+        Assert.Equal(0, result.SkippedUnsupported);
+        Assert.All(datasets.Entries, e => Assert.Equal("S-57", e.ProductSpec));
+
+        var header = Assert.Single(datasets.ExchangeSetHeaders);
+        Assert.Equal(ExchangeSetDetection.ResolveS57Root(root!), header.SourcePath);
+        Assert.Equal(result.Loaded, header.LoadedCount);
+    }
 }

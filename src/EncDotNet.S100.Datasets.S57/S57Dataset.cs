@@ -42,6 +42,37 @@ public sealed class S57Dataset
     }
 
     /// <summary>
+    /// Opens an S-57 base cell from <paramref name="baseStream"/> and applies the
+    /// sequential update datasets in <paramref name="updateStreams"/>, returning
+    /// the fully-updated dataset.
+    /// </summary>
+    /// <remarks>
+    /// The base (<c>.000</c>) and each update (<c>.001</c>, <c>.002</c>, …) are
+    /// read into <see cref="EncDotNet.S57.S57Document"/>s and folded with
+    /// <see cref="EncDotNet.S57.S57Document.ApplyChanges"/> in the order supplied
+    /// — which must be ascending update-number order (S-57 Part 3, dataset
+    /// updating). The merged document is what callers translate to S-101; the
+    /// base and intermediate records are never surfaced.
+    /// </remarks>
+    /// <param name="baseStream">The base cell (<c>.000</c>) stream.</param>
+    /// <param name="updateStreams">The update streams, in ascending update-number order.</param>
+    public static S57Dataset Open(Stream baseStream, IReadOnlyList<Stream> updateStreams)
+    {
+        ArgumentNullException.ThrowIfNull(baseStream);
+        ArgumentNullException.ThrowIfNull(updateStreams);
+
+        var doc = EncDotNet.S57.S57DocumentReader.Read(baseStream);
+        foreach (var updateStream in updateStreams)
+        {
+            ArgumentNullException.ThrowIfNull(updateStream);
+            var update = EncDotNet.S57.S57DocumentReader.Read(updateStream);
+            doc = doc.ApplyChanges(update);
+        }
+
+        return new S57Dataset(doc);
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when the file at <paramref name="path"/> appears to
     /// be an S-57 dataset (heuristic: the ISO 8211 DDR contains a <c>DSPM</c>
     /// field, which is unique to S-57 and not present in S-101). Returns

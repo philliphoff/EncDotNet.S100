@@ -313,6 +313,7 @@ internal static class Strings
     public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
+    public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));

@@ -77,6 +77,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Diagnostics.Export\EncDotNet.S100.Diagnostics.Export.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S122\EncDotNet.S100.Datasets.S122.csproj" />

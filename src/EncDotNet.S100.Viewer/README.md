@@ -85,6 +85,15 @@ The viewer accepts:
 - **S-100 Exchange Sets** — point it at a directory containing a
   `CATALOG.XML` or at a `.zip` exchange-set archive, and it will
   load every dataset entry the catalogue lists.
+- **S-57 / S-63 Exchange Sets** — point it at a directory containing a
+  `CATALOG.031` (or drop the `CATALOG.031` file itself) and it will
+  enumerate every base cell the catalogue lists, apply each cell's
+  in-set sequential updates (`.001`, `.002`, …), and render them
+  through the same S-101 translation path used for loose `.000` cells.
+  The exchange-set header surfaces the same signature/integrity badge
+  as S-100 sets, driven by the S-57 verifier. (Directory/`CATALOG.031`
+  only — zipped S-57 sets are not supported, matching the
+  directory-rooted S-57 verifier used by the `s100 validate` CLI.)
 - **Loose datasets** — drop an individual `.h5` (S-102 / S-104 /
   S-111), `.gml` (any of the GML-encoded products), `.000` S-101
   ENC cell, or `.000` S-57 ENC cell onto the window.
