@@ -795,14 +795,8 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_LoadingFile" xml:space="preserve">
     <value>Loading {0}...</value>
   </data>
-  <data name="Status_Error" xml:space="preserve">
-    <value>Error: {0}</value>
-  </data>
   <data name="Status_RenderingTimeStep" xml:space="preserve">
     <value>Rendering time step {0}/{1}...</value>
-  </data>
-  <data name="Status_RenderingAtTime" xml:space="preserve">
-    <value>Rendering at {0:u}...</value>
   </data>
   <data name="Status_FeatureNoDetails" xml:space="preserve">
     <value>Feature {0} (no details available)</value>
@@ -820,10 +814,6 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Status_FileNoLongerExists" xml:space="preserve">
     <value>File no longer exists: {0}</value>
-  </data>
-  <data name="Status_ExchangeSetLoading" xml:space="preserve">
-    <value>Loading exchange set {0}...</value>
-    <comment>Status text while reading an exchange set's CATALOG.XML and dispatching its datasets. {0} is the source path.</comment>
   </data>
   <data name="Status_ExchangeSetLoaded" xml:space="preserve">
     <value>Loaded {0} dataset(s) from {1}.</value>
@@ -870,15 +860,6 @@ Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Progress_ExchangeSetCancel" xml:space="preserve">
     <value>Cancel</value>
-  </data>
-  <data name="Banner_ExchangeSetPartial" xml:space="preserve">
-    <value>{0} of {1} datasets in {2} could not be loaded ({3} unsupported).</value>
-  </data>
-  <data name="Banner_ExchangeSetFailed" xml:space="preserve">
-    <value>Failed to open exchange set {0}: {1}</value>
-  </data>
-  <data name="Banner_Dismiss" xml:space="preserve">
-    <value>Dismiss</value>
   </data>
 
   <!-- Dataset entry -->

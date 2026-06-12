@@ -618,8 +618,6 @@ internal sealed class MainViewModel : ViewModelBase
     private string? _exchangeSetCurrentDataset;
     private string? _exchangeSetCounter;
     private string? _exchangeSetSourceLabel;
-    private bool _isExchangeSetBannerVisible;
-    private string? _exchangeSetBannerMessage;
     private System.Threading.CancellationTokenSource? _exchangeSetCts;
 
     /// <summary>
@@ -666,27 +664,10 @@ internal sealed class MainViewModel : ViewModelBase
     /// <summary>Cancels the in-flight exchange-set load. No-op if idle.</summary>
     public ICommand CancelExchangeSetCommand { get; }
 
-    /// <summary>True while a partial-failure / fatal-error banner is shown.</summary>
-    public bool IsExchangeSetBannerVisible
-    {
-        get => _isExchangeSetBannerVisible;
-        private set => SetProperty(ref _isExchangeSetBannerVisible, value);
-    }
-
-    /// <summary>Banner body text (already localised + formatted).</summary>
-    public string? ExchangeSetBannerMessage
-    {
-        get => _exchangeSetBannerMessage;
-        private set => SetProperty(ref _exchangeSetBannerMessage, value);
-    }
-
-    /// <summary>Hides the partial-failure banner.</summary>
-    public ICommand DismissExchangeSetBannerCommand { get; }
-
     /// <summary>
     /// Called by <see cref="MainWindow"/> when an exchange-set load is
-    /// about to start. Captures the cancellation source, resets progress
-    /// state, and clears any leftover banner.
+    /// about to start. Captures the cancellation source and resets
+    /// progress state.
     /// </summary>
     internal System.Threading.CancellationToken BeginExchangeSetLoad(string sourcePath)
     {
@@ -694,8 +675,6 @@ internal sealed class MainViewModel : ViewModelBase
         _exchangeSetCts?.Dispose();
         _exchangeSetCts = new System.Threading.CancellationTokenSource();
 
-        IsExchangeSetBannerVisible = false;
-        ExchangeSetBannerMessage = null;
         ExchangeSetSourceLabel = sourcePath;
         ExchangeSetCurrentDataset = null;
         ExchangeSetCounter = null;
@@ -718,28 +697,16 @@ internal sealed class MainViewModel : ViewModelBase
 
     /// <summary>
     /// Called by <see cref="MainWindow"/> when an exchange-set load
-    /// completes (or is cancelled / fatally fails). Hides the overlay
-    /// and surfaces a banner if there is anything worth flagging.
+    /// completes (or is cancelled / fatally fails). Hides the progress
+    /// overlay. Outcome notifications (success / partial / failure) are
+    /// surfaced by <see cref="Services.IExchangeSetService"/> through the
+    /// toast notification service.
     /// </summary>
     internal void EndExchangeSetLoad(ExchangeSetOpenResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         IsExchangeSetLoading = false;
         ExchangeSetCurrentDataset = null;
-
-        if (result.FailureMessage is { } message && !result.CatalogueNotFound)
-        {
-            ExchangeSetBannerMessage = string.Format(
-                Strings.Banner_ExchangeSetFailed, result.SourcePath, message);
-            IsExchangeSetBannerVisible = true;
-        }
-        else if (result.SkippedUnsupported > 0)
-        {
-            ExchangeSetBannerMessage = string.Format(
-                Strings.Banner_ExchangeSetPartial,
-                result.SkippedUnsupported, result.Total, result.SourcePath, result.SkippedUnsupported);
-            IsExchangeSetBannerVisible = true;
-        }
     }
 
     /// <summary>
@@ -1076,8 +1043,6 @@ internal sealed class MainViewModel : ViewModelBase
         CancelExchangeSetCommand = new RelayCommand(
             () => _exchangeSetCts?.Cancel(),
             () => IsExchangeSetLoading);
-        DismissExchangeSetBannerCommand = new RelayCommand(
-            () => IsExchangeSetBannerVisible = false);
 
         // Re-evaluate Cancel command when the loading flag changes so the
         // overlay button enables/disables correctly.
@@ -1199,9 +1164,9 @@ internal sealed class MainViewModel : ViewModelBase
 
         if (!File.Exists(path))
         {
-            var msg = string.Format(Strings.Status_FileNoLongerExists, path);
-            StatusText = msg;
-            _toasts.ShowWarning(Strings.Toast_Warning, msg);
+            _toasts.ShowWarning(
+                Strings.Toast_Warning,
+                string.Format(Strings.Status_FileNoLongerExists, path));
             // Drop the missing entry so the menu reflects reality.
             _recentFiles.Remove(path);
             return;

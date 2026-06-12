@@ -685,7 +685,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     /// <summary>
     /// Loads the supplied entry through the dataset loader. Fire-and-forget;
-    /// errors are surfaced via <see cref="IDatasetLoaderService.StatusChanged"/>.
+    /// errors are surfaced via the toast notification service.
     /// </summary>
     public void RequestLoad(DatasetEntry entry)
     {

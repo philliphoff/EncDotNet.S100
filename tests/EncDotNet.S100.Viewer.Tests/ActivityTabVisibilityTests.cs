@@ -116,3 +116,48 @@ public sealed class OwnShipTrackingVisibilitySourceTests
         Assert.Equal(true, last);
     }
 }
+
+public sealed class AisOverlayVisibilitySourceTests
+{
+    [Fact]
+    public void IsVisible_ReflectsAisEnabled()
+    {
+        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = true } };
+        var svm = new SettingsViewModel(settings);
+        using var source = new AisOverlayVisibilitySource(svm);
+
+        Assert.True(source.IsVisible);
+    }
+
+    [Fact]
+    public void VisibilityChanged_RaisedOnAisToggle()
+    {
+        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
+        var svm = new SettingsViewModel(settings);
+        using var source = new AisOverlayVisibilitySource(svm);
+
+        bool? last = null;
+        source.VisibilityChanged += v => last = v;
+
+        svm.AisEnabled = true;
+
+        Assert.True(source.IsVisible);
+        Assert.Equal(true, last);
+    }
+
+    [Fact]
+    public void Dispose_UnsubscribesFromSettings()
+    {
+        var settings = new ViewerSettings { AisOverlay = new AisOverlaySettings { Enabled = false } };
+        var svm = new SettingsViewModel(settings);
+        var source = new AisOverlayVisibilitySource(svm);
+        source.Dispose();
+
+        var raised = 0;
+        source.VisibilityChanged += _ => raised++;
+
+        svm.AisEnabled = true;
+
+        Assert.Equal(0, raised);
+    }
+}

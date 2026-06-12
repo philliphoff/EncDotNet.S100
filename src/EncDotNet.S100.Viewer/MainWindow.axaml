@@ -590,35 +590,6 @@
                                            Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
                 </StackPanel>
 
-                <!-- Partial-failure / failure banner (es3-progress).
-                     Anchored to the top of the map area; dismissable via the
-                     X button. Stays out of the way of the scale bar by
-                     reserving the top edge with a small offset. -->
-                <Border HorizontalAlignment="Stretch"
-                        VerticalAlignment="Top"
-                        Margin="48,4,180,0"
-                        Padding="12,8"
-                        CornerRadius="4"
-                        Background="{DynamicResource BackgroundColor}"
-                        BorderBrush="{DynamicResource AccentBrush}"
-                        BorderThickness="1"
-                        IsVisible="{Binding IsExchangeSetBannerVisible}">
-                    <DockPanel LastChildFill="True">
-                        <Button DockPanel.Dock="Right"
-                                Command="{Binding DismissExchangeSetBannerCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Banner_Dismiss}"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Padding="4"
-                                Margin="8,0,0,0">
-                            <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
-                        </Button>
-                        <TextBlock Text="{Binding ExchangeSetBannerMessage}"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="Wrap" />
-                    </DockPanel>
-                </Border>
-
                 <!-- Exchange-set progress overlay (es3-progress).
                      Centered card; non-modal — the user can still pan the
                      map underneath but cannot start a second exchange-set

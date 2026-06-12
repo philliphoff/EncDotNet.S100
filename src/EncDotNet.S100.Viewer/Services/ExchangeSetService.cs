@@ -36,19 +36,16 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 {
     private readonly DatasetsViewModel _datasets;
-    private readonly IStatusPresenter _status;
     private readonly IToastService _toasts;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
 
-    public ExchangeSetService(DatasetsViewModel datasets, IStatusPresenter status, IToastService toasts)
+    public ExchangeSetService(DatasetsViewModel datasets, IToastService toasts)
     {
         ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(toasts);
         _datasets = datasets;
-        _status = status;
         _toasts = toasts;
     }
 
@@ -92,7 +89,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             catch (FileNotFoundException)
             {
                 var msg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
-                _status.StatusText = msg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
                 source.Dispose();
                 activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
@@ -116,7 +112,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             if (datasets.Count == 0)
             {
                 var emptyMsg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
-                _status.StatusText = emptyMsg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
                 exchangeSet.Dispose();
                 exchangeSet = null;
@@ -128,8 +123,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     FailureMessage = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath),
                 };
             }
-
-            _status.StatusText = string.Format(Strings.Status_ExchangeSetLoading, folderOrZipPath);
 
             // Group S-101 base cells with their in-set sequential updates
             // (….001/.002/…) so each cell loads as a single up-to-date
@@ -190,7 +183,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 if (item.Kind == S101LoadItemKind.OrphanUpdate)
                 {
                     var orphanMsg = string.Format(Strings.Status_ExchangeSetOrphanUpdate, relativePath);
-                    _status.StatusText = orphanMsg;
                     _toasts.ShowWarning(Strings.Toast_Warning, orphanMsg);
                     skipMessages.Add(orphanMsg);
                     skipped++;
@@ -209,7 +201,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                         metadata.ProductSpecification?.ProductIdentifier
                             ?? metadata.ProductSpecification?.Name
                             ?? string.Empty);
-                    _status.StatusText = msg;
                     _toasts.ShowWarning(Strings.Toast_Warning, msg);
                     skipMessages.Add(msg);
                     skipped++;
@@ -240,14 +231,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 var cancelledMsg = string.Format(
                     Strings.Status_ExchangeSetCancelled,
                     dispatched, plan.Count, folderOrZipPath);
-                _status.StatusText = cancelledMsg;
                 _toasts.ShowInfo(Strings.Toast_Info, cancelledMsg);
             }
             else if (skipped == 0)
             {
                 var loadedMsg = string.Format(
                     Strings.Status_ExchangeSetLoaded, dispatched, folderOrZipPath);
-                _status.StatusText = loadedMsg;
                 _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
             }
             else
@@ -255,7 +244,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 var partialMsg = string.Format(
                     Strings.Status_ExchangeSetLoadedWithErrors,
                     dispatched, plan.Count, folderOrZipPath, skipped);
-                _status.StatusText = partialMsg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetLoaded, partialMsg);
             }
 
@@ -322,7 +310,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         catch (Exception ex)
         {
             var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
-            _status.StatusText = failedMsg;
             _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
             exchangeSet?.Dispose();
             source?.Dispose();
@@ -369,7 +356,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var msg = string.Format(
                     Strings.Status_ExchangeSetCatalogNotFound, folderOrCataloguePath);
-                _status.StatusText = msg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
                 activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
                 return new ExchangeSetOpenResult
@@ -386,7 +372,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var emptyMsg = string.Format(
                     Strings.Status_S57ExchangeSetNoCells, folderOrCataloguePath);
-                _status.StatusText = emptyMsg;
                 _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
                 activity?.SetStatus(ActivityStatusCode.Error, "no cells");
                 return new ExchangeSetOpenResult
@@ -445,7 +430,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             var loadedMsg = string.Format(
                 Strings.Status_ExchangeSetLoaded, dispatched, folderOrCataloguePath);
-            _status.StatusText = loadedMsg;
             _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
 
             activity?.SetTag("s57.exchangeset.dataset.loaded", dispatched);
@@ -485,7 +469,6 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         catch (Exception ex)
         {
             var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrCataloguePath, ex.Message);
-            _status.StatusText = failedMsg;
             _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
             source?.Dispose();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);

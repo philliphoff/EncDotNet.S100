@@ -180,8 +180,10 @@ corresponding feature, even when producer datasets reuse `gml:id`s
 across distinct features.
 
 A **Vessels** activity-bar panel lists the live AIS targets,
-nearest to the own ship first, in a master/detail layout. Each
-compact list row shows the vessel name, a ship-type pictogram
+nearest to the own ship first, in a master/detail layout. The
+panel's activity-bar icon is shown only while the AIS overlay is
+enabled (Settings → AIS); disabling the overlay hides the icon.
+Each compact list row shows the vessel name, a ship-type pictogram
 tinted by class, its navigation state, and the range and bearing
 from the own ship. Selecting a row recentres the map on that
 vessel while preserving the current zoom and reveals a properties

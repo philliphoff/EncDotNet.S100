@@ -175,8 +175,6 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost?.Dispose();
             _dynamicSourceOverlayHost = null;
         };
-        _loader.StatusChanged += text => _viewModel.StatusText = text;
-
         DataContext = _viewModel;
 
         // Build the native menu bar (File / View › Appearance) and keep its
@@ -211,7 +209,6 @@ public partial class MainWindow : ShadUI.Window
         // Surface DatasetsViewModel rejection of unknown file extensions.
         _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
         {
-            _viewModel.StatusText = string.Format(Strings.Status_UnrecognizedFileType, extension);
             App.Services.GetRequiredService<IToastService>().ShowWarning(
                 Strings.Toast_Warning,
                 string.Format(Strings.Status_UnrecognizedFileType, extension));
