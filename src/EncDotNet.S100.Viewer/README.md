@@ -289,6 +289,17 @@ gap shows nothing. This matters most for S-111 exchange sets that
 bundle many non-overlapping forecast files over the same grid: only
 the file covering the current clock draws.
 
+Some S-111 / S-104 exchange sets instead bundle several **product
+variants of the same cell** — for example the Rotterdam NL set, which
+publishes the same grid as separate neap / spring tidal-regime and
+depth-band products (`S111-neap 0-5`, `S111-neap 0-10`, …) under one
+dataset name. These variants cover the same area and the same time, so
+left unchecked their current arrows stack on identical locations and
+look like several timesteps drawn at once. The viewer keeps the first
+loaded variant visible and loads the rest **hidden** (the Datasets-list
+row dims and its eye icon shows the hidden state); re-enable any of them
+from the list to compare variants.
+
 ## Validation
 
 Every supported product ships a normative **validation rule pack**

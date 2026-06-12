@@ -359,6 +359,31 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }, token);
             _processors[entry] = processor;
 
+            // Collapse duplicate coverage products: S-111/S-104 exchange sets
+            // routinely bundle several variants of the same cell (e.g. neap /
+            // spring tidal regime, depth bands) under one dataset name across
+            // separate product folders. They cover the same area and time, so
+            // the purely-temporal gate lets them all draw and their arrows
+            // stack on the same locations — looking like several time-steps at
+            // once. Keep the first-loaded variant visible and default the rest
+            // to hidden; the user can re-enable any of them from the Datasets
+            // list (the row dims and the eye icon reflects the hidden state).
+            if (fromExchangeSet && DuplicateCoverageDetector.IsCollapsibleSpec(spec))
+            {
+                foreach (var other in _processors.Keys)
+                {
+                    if (ReferenceEquals(other, entry) || !other.IsFromExchangeSet)
+                        continue;
+                    if (DuplicateCoverageDetector.IsSameCoverage(
+                            entry.Source, entry.RelativePath,
+                            other.Source, other.RelativePath))
+                    {
+                        entry.IsVisible = false;
+                        break;
+                    }
+                }
+            }
+
             // Surface any S-101 update-application diagnostics. Updates are
             // applied best-effort: a partial/failed apply never blocks the
             // load, but the user is warned so stale or skipped updates are
