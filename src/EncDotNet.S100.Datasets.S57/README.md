@@ -121,6 +121,43 @@ Mapping notes:
 - Today the upstream S-57 verifier reports every file as `NotSigned`
   (S-63 signature verification is a seam); CRC checking is fully wired.
 
+## Exchange-set cell enumeration
+
+`S57ExchangeSetCatalog` is the loading-side companion to the verification
+adapter above. It reads a `CATALOG.031` (via `EncDotNet.S57`'s
+`S57CatalogReader`) and groups the catalogued `CATD` files into renderable
+**base cells**, each with its in-set sequential updates and (optionally) its
+extent:
+
+```csharp
+using EncDotNet.S100.Datasets.S57;
+
+IReadOnlyList<S57ExchangeSetCell> cells =
+    S57ExchangeSetCatalog.ReadBaseCells("/path/to/s57set");
+
+foreach (S57ExchangeSetCell cell in cells)
+{
+    // cell.RelativePath          → "…/US5MA1BO.000" (platform-normalised)
+    // cell.UpdateRelativePaths   → ["…/US5MA1BO.001", "…/US5MA1BO.002"]
+    // cell.BoundingBox           → EPSG:4326 extent, or null
+}
+
+BoundingBox? union = S57ExchangeSetCatalog.UnionBoundingBox(cells);
+```
+
+Files are grouped by their 8-character cell name; the `.000` file is the base
+and `.001`, `.002`, … are its updates in application order. Non-dataset
+entries (`.TXT`, certificates, the catalogue itself) are ignored, and update
+files with no matching base are skipped. The pure grouping logic is exposed as
+`SelectBaseCells(S57Catalog)` for unit testing without a real catalogue on
+disk. The viewer pairs this enumeration with a `FileSystemAssetSource` rooted
+at the exchange-set directory so each cell flows through the same
+`S57DatasetProcessor` code path as a single dropped `.000` file (with its
+in-set updates folded in via `S57Document.ApplyChanges` before translation to
+S-101).
+
+Like the verification adapter, this is a deliberately thin adapter over the
+directory-rooted S-57 model rather than a shared interface.
 ## Usage
 
 ```csharp

@@ -60,12 +60,18 @@ internal sealed class DatasetLoadGateway : IDatasetLoadGateway
         if (System.IO.Directory.Exists(path))
         {
             return ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path)
                 ? DatasetPathKind.ExchangeSet
                 : DatasetPathKind.File;
         }
 
         if (ExchangeSetDetection.IsZipPath(path)
             && ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+        {
+            return DatasetPathKind.ExchangeSet;
+        }
+
+        if (ExchangeSetDetection.IsS57CataloguePath(path))
         {
             return DatasetPathKind.ExchangeSet;
         }

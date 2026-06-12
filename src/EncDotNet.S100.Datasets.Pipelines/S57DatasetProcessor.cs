@@ -50,7 +50,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
+        : this(OpenFromFile(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
     {
     }
 
@@ -66,7 +66,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager)
         : this(
-            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            OpenFromSource(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
@@ -74,25 +74,50 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     {
     }
 
+    /// <summary>
+    /// Initializes a new <see cref="S57DatasetProcessor"/> by reading the base
+    /// cell <paramref name="baseRelativePath"/> from <paramref name="source"/>
+    /// and applying the in-set sequential update files at
+    /// <paramref name="updateRelativePaths"/> (in ascending update-number order)
+    /// before translation. Used by exchange-set bulk loading to collapse a cell
+    /// and its updates into a single up-to-date dataset (S-57 Part 3, dataset
+    /// updating).
+    /// </summary>
+    /// <remarks>
+    /// Updates are folded into the <see cref="EncDotNet.S57.S57Document"/>
+    /// <em>before</em> the S-57 → S-101 translation runs; the translator and
+    /// portrayal pipeline only ever see the fully-updated document.
+    /// </remarks>
+    public S57DatasetProcessor(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        FeatureCatalogueManager featureCatalogueManager)
+        : this(
+            OpenFromSource(source, baseRelativePath, updateRelativePaths),
+            AssetSourceHelpers.GetFileName(baseRelativePath),
+            catalogueManager,
+            luaEngine,
+            featureCatalogueManager)
+    {
+    }
+
     private S57DatasetProcessor(
-        Stream datasetStream,
+        S57Dataset s57,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager)
     {
-        ArgumentNullException.ThrowIfNull(datasetStream);
+        ArgumentNullException.ThrowIfNull(s57);
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         _featureCatalogueManager = featureCatalogueManager;
 
-        S57Dataset s57;
-        using (datasetStream)
-        {
-            s57 = S57Dataset.Open(datasetStream);
-        }
         // Retain the raw S-57 document so the pre-translation
         // validation pack (S57PreTranslationRules) can run against
         // fields that do not survive translation — see
@@ -104,6 +129,43 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         // S-57 datasets render through the S-101 portrayal catalogue.
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, new SpecRef("S-101", default), _catalogue.CatalogueRef, "portrayal");
+    }
+
+    private static S57Dataset OpenFromFile(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        using var stream = File.OpenRead(path);
+        return S57Dataset.Open(stream);
+    }
+
+    private static S57Dataset OpenFromSource(IAssetSource source, string relativePath)
+    {
+        using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
+        return S57Dataset.Open(stream);
+    }
+
+    private static S57Dataset OpenFromSource(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths)
+    {
+        ArgumentNullException.ThrowIfNull(updateRelativePaths);
+
+        var updateStreams = new List<Stream>(updateRelativePaths.Count);
+        var baseStream = AssetSourceHelpers.OpenSeekable(source, baseRelativePath);
+        try
+        {
+            foreach (var updatePath in updateRelativePaths)
+                updateStreams.Add(AssetSourceHelpers.OpenSeekable(source, updatePath));
+
+            return S57Dataset.Open(baseStream, updateStreams);
+        }
+        finally
+        {
+            baseStream.Dispose();
+            foreach (var stream in updateStreams)
+                stream.Dispose();
+        }
     }
 
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)

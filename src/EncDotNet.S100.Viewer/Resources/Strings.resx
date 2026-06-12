@@ -839,6 +839,9 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Status_ExchangeSetCatalogNotFound" xml:space="preserve">
     <value>No CATALOG.XML found in {0}.</value>
   </data>
+  <data name="Status_S57ExchangeSetNoCells" xml:space="preserve">
+    <value>No renderable cells found in the S-57 exchange set {0}.</value>
+  </data>
   <data name="Status_ExchangeSetUnsupportedSpec" xml:space="preserve">
     <value>Skipped {0}: unsupported product specification '{1}'.</value>
   </data>

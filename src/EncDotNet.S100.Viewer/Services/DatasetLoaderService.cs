@@ -337,13 +337,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 if (!fromExchangeSet)
                     return _pipelineFactory.CreateProcessor(entry.FilePath);
 
-                // Collapse an S-101 base cell and its in-set sequential
-                // updates into a single up-to-date dataset. S-101 / S-100
-                // Part 10a.
-                return entry.HasUpdates
-                    ? _pipelineFactory.CreateS101ProcessorWithUpdates(
-                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths)
-                    : _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
+                // Collapse a base cell and its in-set sequential updates into a
+                // single up-to-date dataset. S-101 / S-57 / S-100 Part 10a;
+                // S-57 Part 3. The update-application path differs per product,
+                // so dispatch on the declared spec.
+                if (!entry.HasUpdates)
+                    return _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
+
+                return spec switch
+                {
+                    "S-57" => _pipelineFactory.CreateS57ProcessorWithUpdates(
+                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
+                    _ => _pipelineFactory.CreateS101ProcessorWithUpdates(
+                        entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
+                };
             }, token);
             _processors[entry] = processor;
 

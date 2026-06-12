@@ -494,6 +494,36 @@ public sealed class DatasetPipelineFactory
     }
 
     /// <summary>
+    /// Creates an S-57 dataset processor for the base cell at
+    /// <paramref name="baseRelativePath"/> with the in-set sequential update
+    /// files at <paramref name="updateRelativePaths"/> applied before
+    /// translation. Used by exchange-set bulk loading to collapse an S-57 cell
+    /// and its updates into a single up-to-date dataset. The updates are folded
+    /// into the S-57 document <em>before</em> the S-57 → S-101 translation runs.
+    /// S-57 Part 3 (dataset updating).
+    /// </summary>
+    /// <param name="source">The asset source backing the exchange set.</param>
+    /// <param name="baseRelativePath">Source-relative path of the base cell (<c>….000</c>).</param>
+    /// <param name="updateRelativePaths">Source-relative paths of the update files, in ascending update-number order.</param>
+    public IDatasetProcessor CreateS57ProcessorWithUpdates(
+        IAssetSource source,
+        string baseRelativePath,
+        IReadOnlyList<string> updateRelativePaths)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
+        ArgumentNullException.ThrowIfNull(updateRelativePaths);
+
+        return new S57DatasetProcessor(
+            source,
+            baseRelativePath,
+            updateRelativePaths,
+            _catalogueManager,
+            _luaEngine,
+            _featureCatalogueManager);
+    }
+
+    /// <summary>
     /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
     /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
     /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).

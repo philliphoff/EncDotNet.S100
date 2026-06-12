@@ -142,4 +142,85 @@ public sealed class ExchangeSetDetectionTests : IDisposable
             Path.Combine(_tempRoot, "ghost.zip")));
         Assert.False(ExchangeSetDetection.LooksLikeExchangeSetZip(""));
     }
+
+    [Fact]
+    public void LooksLikeS57ExchangeSetFolder_TrueWhenCatalog031Present()
+    {
+        var folder = Path.Combine(_tempRoot, "s57set");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "CATALOG.031"), "binary");
+
+        Assert.True(ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(folder));
+        Assert.True(ExchangeSetDetection.LooksLikeS57ExchangeSet(folder));
+    }
+
+    [Fact]
+    public void LooksLikeS57ExchangeSetFolder_CaseInsensitive()
+    {
+        var folder = Path.Combine(_tempRoot, "s57ci");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalog.031"), "binary");
+
+        Assert.True(ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(folder));
+    }
+
+    [Fact]
+    public void IsS57CataloguePath_TrueForDroppedCatalogue031()
+    {
+        var folder = Path.Combine(_tempRoot, "s57drop");
+        Directory.CreateDirectory(folder);
+        var catalogue = Path.Combine(folder, "CATALOG.031");
+        File.WriteAllText(catalogue, "binary");
+
+        Assert.True(ExchangeSetDetection.IsS57CataloguePath(catalogue));
+        Assert.True(ExchangeSetDetection.LooksLikeS57ExchangeSet(catalogue));
+    }
+
+    [Fact]
+    public void S57Detection_FalseForS100Set()
+    {
+        var folder = Path.Combine(_tempRoot, "s100set");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.False(ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(folder));
+        Assert.False(ExchangeSetDetection.LooksLikeS57ExchangeSet(folder));
+        // The S-100 detector must still recognise it (regression guard).
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetFolder(folder));
+    }
+
+    [Fact]
+    public void S57Detection_FalseForEmptyOrMissing()
+    {
+        var folder = Path.Combine(_tempRoot, "s57empty");
+        Directory.CreateDirectory(folder);
+        Assert.False(ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(folder));
+        Assert.False(ExchangeSetDetection.LooksLikeS57ExchangeSet(
+            Path.Combine(_tempRoot, "missing")));
+        Assert.False(ExchangeSetDetection.IsS57CataloguePath(""));
+    }
+
+    [Fact]
+    public void ResolveS57Root_ResolvesFolderAndFile()
+    {
+        var folder = Path.Combine(_tempRoot, "s57resolve");
+        Directory.CreateDirectory(folder);
+        var catalogue = Path.Combine(folder, "CATALOG.031");
+        File.WriteAllText(catalogue, "binary");
+
+        Assert.Equal(
+            Path.GetFullPath(folder),
+            ExchangeSetDetection.ResolveS57Root(folder));
+        Assert.Equal(
+            Path.GetFullPath(folder),
+            ExchangeSetDetection.ResolveS57Root(catalogue));
+    }
+
+    [Fact]
+    public void ResolveS57Root_ThrowsWhenNotAnS57Set()
+    {
+        Assert.Throws<FileNotFoundException>(
+            () => ExchangeSetDetection.ResolveS57Root(
+                Path.Combine(_tempRoot, "nope.000")));
+    }
 }

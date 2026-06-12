@@ -980,11 +980,12 @@ public partial class MainWindow : ShadUI.Window
                 continue;
 
             // Folder drop: treat as an exchange set when CATALOG.XML
-            // is at the root, otherwise ignore (the dataset loader is
-            // single-file).
+            // (S-100) or CATALOG.031 (S-57) is at the root, otherwise
+            // ignore (the dataset loader is single-file).
             if (Directory.Exists(path))
             {
-                if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path))
+                if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path))
                 {
                     await RunExchangeSetAsync(path);
                 }
@@ -995,10 +996,17 @@ public partial class MainWindow : ShadUI.Window
                 continue;
 
             // File drop: a .zip with a root-level CATALOG.XML is an
-            // exchange-set ZIP; everything else falls through to the
+            // exchange-set ZIP, and a dropped CATALOG.031 is an S-57
+            // exchange set; everything else falls through to the
             // single-dataset loader.
             if (ExchangeSetDetection.IsZipPath(path) &&
                 ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+            {
+                await RunExchangeSetAsync(path);
+                continue;
+            }
+
+            if (ExchangeSetDetection.IsS57CataloguePath(path))
             {
                 await RunExchangeSetAsync(path);
                 continue;
