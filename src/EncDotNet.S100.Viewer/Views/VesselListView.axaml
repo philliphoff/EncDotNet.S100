@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:conv="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"

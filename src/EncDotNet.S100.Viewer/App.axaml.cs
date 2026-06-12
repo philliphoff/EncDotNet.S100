@@ -15,7 +15,7 @@ using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
-using FluentIcons.Avalonia.Fluent;
+using FluentIcons.Avalonia;
 using FluentIcons.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

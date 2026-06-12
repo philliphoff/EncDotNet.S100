@@ -59,13 +59,13 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
-    <PackageReference Include="Avalonia.Diagnostics">
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="FluentIcons.Avalonia.Fluent" />
+    <PackageReference Include="FluentIcons.Avalonia" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" />
-    <PackageReference Include="Mapsui.Avalonia" />
+    <PackageReference Include="Mapsui.Avalonia12" />
     <PackageReference Include="ShadUI" />
     <PackageReference Include="Spectre.Console.Cli" />
     <PackageReference Include="Tmds.DBus.Protocol" />

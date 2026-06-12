@@ -1,7 +1,7 @@
 # EncDotNet.S100.Viewer
 
 Cross-platform desktop viewer for IHO S-100 nautical chart data,
-built on Avalonia 11 + Mapsui 5. Runs on macOS (Apple Silicon),
+built on Avalonia 12 + Mapsui 5. Runs on macOS (Apple Silicon),
 Windows, and Linux out of the box, with no native HDF5 dependencies
 and no commercial S-52 assets.
 
