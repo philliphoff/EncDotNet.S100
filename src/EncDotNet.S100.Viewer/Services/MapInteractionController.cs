@@ -126,8 +126,8 @@ internal sealed class MapInteractionController
         _mapControl = mapControl;
 
         // Trackpad magnify / rotate gestures, double-tap zoom, single-tap pick.
-        mapControl.AddHandler(Gestures.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
-        mapControl.AddHandler(Gestures.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
+        mapControl.AddHandler(InputElement.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
+        mapControl.AddHandler(InputElement.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
         mapControl.DoubleTapped += OnMapDoubleTapped;
         mapControl.MapTapped += OnMapTapped;
 

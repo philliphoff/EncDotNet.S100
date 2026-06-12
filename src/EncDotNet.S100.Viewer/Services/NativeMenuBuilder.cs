@@ -131,7 +131,7 @@ internal sealed class NativeMenuBuilder
     {
         var item = new NativeMenuItem(label)
         {
-            ToggleType = NativeMenuItemToggleType.CheckBox,
+            ToggleType = MenuItemToggleType.CheckBox,
             IsChecked = initiallyChecked,
         };
         if (gesture is not null)

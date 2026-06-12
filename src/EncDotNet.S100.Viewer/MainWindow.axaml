@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
         xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
-        xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+        xmlns:ic="using:FluentIcons.Avalonia"
         xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
         xmlns:activities="using:EncDotNet.S100.Viewer.ViewModels.Activities"
         xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"

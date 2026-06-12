@@ -74,7 +74,7 @@ public class LayerStackViewModelTests
     }
 
     [Fact]
-    public void LayerStackChanged_TriggersRebuild()
+    public void LayerStackChanged_TriggersRebuild() => HeadlessTest.Run(() =>
     {
         var loader = new ControllableLoader();
         var vm = new LayerStackViewModel(loader);
@@ -85,10 +85,10 @@ public class LayerStackViewModelTests
 
         Assert.Single(vm.Planes);
         Assert.Equal(S98DisplayPlane.BaseChartUnder, vm.Planes[0].Plane);
-    }
+    });
 
     [Fact]
-    public void ExpansionState_PreservedAcrossRebuild()
+    public void ExpansionState_PreservedAcrossRebuild() => HeadlessTest.Run(() =>
     {
         var loader = new ControllableLoader();
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
@@ -106,7 +106,7 @@ public class LayerStackViewModelTests
         var rebuilt = Assert.Single(vm.Planes);
         Assert.False(rebuilt.IsExpanded);
         Assert.Equal(2, rebuilt.Children.Count);
-    }
+    });
 
     [Fact]
     public void IsActive_TogglesViaLoader()

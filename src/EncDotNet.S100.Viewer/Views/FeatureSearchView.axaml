@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ic="using:FluentIcons.Avalonia.Fluent"
+             xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
@@ -18,7 +18,7 @@
                 <TextBox Grid.Column="0"
                          x:Name="SearchBox"
                          Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         Watermark="{x:Static loc:Strings.Search_Placeholder}"
+                         PlaceholderText="{x:Static loc:Strings.Search_Placeholder}"
                          VerticalContentAlignment="Center"
                          Padding="8,4" />
                 <Button Grid.Column="1"
