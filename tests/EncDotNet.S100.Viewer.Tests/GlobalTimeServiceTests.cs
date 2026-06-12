@@ -105,8 +105,11 @@ public class GlobalTimeServiceTests
 
         Assert.Equal(3, vm.Ticks.Count);
         Assert.True(vm.IsSnapToTickEnabled);
-        Assert.Equal((double)t1.Ticks, vm.Ticks[0]);
-        Assert.Equal((double)t3.Ticks, vm.Ticks[2]);
+        // Ticks are normalized [0,1] positions on the gap-collapsing axis;
+        // a contiguous range maps linearly, so the samples land at 0, 0.5, 1.
+        Assert.Equal(0.0, vm.Ticks[0], 6);
+        Assert.Equal(0.5, vm.Ticks[1], 6);
+        Assert.Equal(1.0, vm.Ticks[2], 6);
     }
 
     [Fact]
@@ -122,7 +125,9 @@ public class GlobalTimeServiceTests
 
         Assert.Equal(11, vm.Ticks.Count); // EvenlySpacedTickCount + 1 endpoints
         Assert.False(vm.IsSnapToTickEnabled);
-        Assert.False(vm.AreStepButtonsVisible);
+        // Step buttons are available whenever there are samples (decoupled
+        // from snap-to-tick) so dense, clustered timelines can still nudge.
+        Assert.True(vm.AreStepButtonsVisible);
     }
 
     [Fact]

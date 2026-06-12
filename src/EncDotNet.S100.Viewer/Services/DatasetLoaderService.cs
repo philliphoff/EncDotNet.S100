@@ -170,6 +170,23 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _entryLayersView = new ReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>>(_entryLayers);
 
         _globalTime.CurrentTimeChanged += t => _ = ReRenderAtTimeAsync(t, CancellationToken.None);
+        _globalTime.RangeChanged += OnGlobalRangeChanged;
+    }
+
+    /// <summary>
+    /// Re-applies the time gate when the aggregate timeline shifts (a
+    /// dataset registered or unregistered). Datasets that finish loading
+    /// before the global clock exists are rendered in full; once
+    /// registration establishes (or moves) the clock this snaps every
+    /// registered dataset to it and hides those outside their covered
+    /// window. The work is delegated to <see cref="ReRenderAtTimeAsync"/>,
+    /// whose debounce collapses a bulk exchange-set load (many rapid
+    /// registrations) into a single gate pass.
+    /// </summary>
+    private void OnGlobalRangeChanged()
+    {
+        if (_globalTime.CurrentTime is { } now && _globalTime.Adapters.Count > 0)
+            _ = ReRenderAtTimeAsync(now, CancellationToken.None);
     }
 
     public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors => _processorsView;

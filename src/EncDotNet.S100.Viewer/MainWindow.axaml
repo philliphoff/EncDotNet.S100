@@ -349,10 +349,10 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" MinHeight="100" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="120" MinHeight="100"
+                    <RowDefinition Height="150" MinHeight="120"
                                    bh:CollapsibleRow.IsVisible="{Binding IsBottomDockOpen}"
-                                   bh:CollapsibleRow.ExpandedHeight="120"
-                                   bh:CollapsibleRow.MinHeightWhenVisible="100"
+                                   bh:CollapsibleRow.ExpandedHeight="150"
+                                   bh:CollapsibleRow.MinHeightWhenVisible="120"
                                    bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" DragDrop.AllowDrop="True">

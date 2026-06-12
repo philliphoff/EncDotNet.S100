@@ -28,13 +28,21 @@ internal sealed class CoverageBandControl : Control
     public static readonly StyledProperty<IBrush?> FillProperty =
         AvaloniaProperty.Register<CoverageBandControl, IBrush?>(nameof(Fill));
 
+    /// <summary>
+    /// Brush used to fill the full-width track behind the covered ranges,
+    /// representing "no data". Drawn first so gaps between coverage bands
+    /// remain visible. When <c>null</c>, no track is drawn.
+    /// </summary>
+    public static readonly StyledProperty<IBrush?> TrackBrushProperty =
+        AvaloniaProperty.Register<CoverageBandControl, IBrush?>(nameof(TrackBrush));
+
     /// <summary>Corner radius of each painted band, in device pixels.</summary>
     public static readonly StyledProperty<double> BandCornerRadiusProperty =
         AvaloniaProperty.Register<CoverageBandControl, double>(nameof(BandCornerRadius), 2d);
 
     static CoverageBandControl()
     {
-        AffectsRender<CoverageBandControl>(BandsProperty, FillProperty, BandCornerRadiusProperty);
+        AffectsRender<CoverageBandControl>(BandsProperty, FillProperty, TrackBrushProperty, BandCornerRadiusProperty);
     }
 
     public IReadOnlyList<NormalizedCoverageBand>? Bands
@@ -49,6 +57,12 @@ internal sealed class CoverageBandControl : Control
         set => SetValue(FillProperty, value);
     }
 
+    public IBrush? TrackBrush
+    {
+        get => GetValue(TrackBrushProperty);
+        set => SetValue(TrackBrushProperty, value);
+    }
+
     public double BandCornerRadius
     {
         get => GetValue(BandCornerRadiusProperty);
@@ -59,15 +73,19 @@ internal sealed class CoverageBandControl : Control
     {
         base.Render(context);
 
-        var bands = Bands;
-        if (bands is null || bands.Count == 0) return;
-        if (Fill is not { } brush) return;
-
         double width = Bounds.Width;
         double height = Bounds.Height;
         if (width <= 0 || height <= 0) return;
 
         double radius = Math.Min(BandCornerRadius, height / 2);
+
+        // "No data" track behind the coverage bands.
+        if (TrackBrush is { } track)
+            context.DrawRectangle(track, null, new Rect(0, 0, width, height), radius, radius);
+
+        var bands = Bands;
+        if (bands is null || bands.Count == 0) return;
+        if (Fill is not { } brush) return;
 
         foreach (var band in bands)
         {

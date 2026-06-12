@@ -21,6 +21,7 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 {
     private readonly GlobalTimeService _service;
     private readonly ITimeFormatProvider? _timeFormat;
+    private TimelineAxisMap? _axis;
 
     public TimelineViewModel(GlobalTimeService service)
         : this(service, timeFormat: null)
@@ -73,6 +74,12 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 
     private void OnRangeChanged()
     {
+        // Rebuild the gap-collapsing axis from the new aggregate range and
+        // coverage segments before notifying slider/band bindings.
+        _axis = _service.MinTime is { } min && _service.MaxTime is { } max
+            ? new TimelineAxisMap(min, max, _service.CoverageSegments)
+            : null;
+
         var nowActive = _service.IsActive;
         var becameActive = nowActive && !_wasActive;
         _wasActive = nowActive;
@@ -113,13 +120,13 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     public ICommand NextStepCommand { get; }
 
     /// <summary>
-    /// True when discrete sample stops are being painted on the
-    /// slider (i.e. the same condition that drives
-    /// <see cref="IsSnapToTickEnabled"/>). The view binds
-    /// prev/next button visibility to this so step controls only
-    /// surface when stepping has well-defined semantics.
+    /// True when discrete prev/next step controls should be shown — i.e.
+    /// whenever the timeline has at least one sample. Stepping is always
+    /// well-defined (it walks <see cref="GlobalTimeService.AllSamples"/>),
+    /// and is especially useful for dense, clustered datasets where the
+    /// gap-collapsing slider still benefits from exact per-sample nudging.
     /// </summary>
-    public bool AreStepButtonsVisible => IsSnapToTickEnabled;
+    public bool AreStepButtonsVisible => _service.AllSamples.Count > 0;
 
     private bool CanStepPrevious()
     {
@@ -173,9 +180,10 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     private const int EvenlySpacedTickCount = 10;
 
     /// <summary>
-    /// Tick stops painted along the slider. When all loaded
-    /// datasets share a small set of timestamps, ticks correspond
-    /// 1:1 to real sample times and the slider snaps to them.
+    /// Tick stops painted along the slider, in normalized <c>[0,1]</c>
+    /// axis positions. When all loaded datasets share a small set of
+    /// timestamps, ticks correspond 1:1 to real sample times (mapped
+    /// through the gap-collapsing axis) and the slider snaps to them.
     /// Otherwise, ticks are evenly spaced visual landmarks and the
     /// slider runs free (each adapter still snaps the value to its
     /// nearest real sample at render time).
@@ -190,21 +198,23 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 
             if (samples.Count <= SampleTickThreshold)
             {
-                foreach (var s in samples) list.Add(s.Ticks);
+                var axis = Axis;
+                if (axis is not null)
+                    foreach (var s in samples) list.Add(axis.ToPosition(s));
             }
-            else if (_service.MinTime is { } min && _service.MaxTime is { } max && max > min)
+            else
             {
-                var span = (max - min).Ticks;
                 for (var i = 0; i <= EvenlySpacedTickCount; i++)
-                    list.Add(min.Ticks + (long)(span * (i / (double)EvenlySpacedTickCount)));
+                    list.Add(i / (double)EvenlySpacedTickCount);
             }
             return list;
         }
     }
 
     /// <summary>
-    /// Spacing between minor ticks (currently mirrors the major
-    /// tick stride so the slider only paints the configured stops).
+    /// Spacing between minor ticks in normalized axis units. Mirrors the
+    /// even-spacing stride when the timeline is dense; <c>0</c> when the
+    /// slider snaps to the explicit per-sample <see cref="Ticks"/>.
     /// </summary>
     public double TickFrequency
     {
@@ -213,9 +223,7 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
             var samples = _service.AllSamples;
             if (samples.Count == 0) return 0;
             if (samples.Count <= SampleTickThreshold) return 0;
-            if (_service.MinTime is { } min && _service.MaxTime is { } max && max > min)
-                return (max - min).Ticks / (double)EvenlySpacedTickCount;
-            return 0;
+            return 1.0 / EvenlySpacedTickCount;
         }
     }
 
@@ -231,59 +239,51 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     public bool IsActive => _service.IsActive;
 
     /// <summary>
-    /// Data-coverage ranges expressed as fractions of the slider extent
-    /// (<see cref="SliderMinimum"/>..<see cref="SliderMaximum"/>). The
-    /// view paints each as a filled band so the user can see which parts
-    /// of the timeline have data and which are empty. Empty when the
-    /// range is degenerate or no dataset is loaded.
+    /// The gap-collapsing axis map for the current aggregate range, built
+    /// lazily so property getters invoked before the first
+    /// <see cref="OnRangeChanged"/> still resolve correctly.
     /// </summary>
-    public IReadOnlyList<NormalizedCoverageBand> CoverageBands
+    private TimelineAxisMap? Axis
     {
         get
         {
-            if (_service.MinTime is not { } min || _service.MaxTime is not { } max)
-                return Array.Empty<NormalizedCoverageBand>();
-
-            double span = (double)(max.Ticks - min.Ticks);
-            if (span <= 0) return Array.Empty<NormalizedCoverageBand>();
-
-            var bands = new List<NormalizedCoverageBand>();
-            foreach (var seg in _service.CoverageSegments)
-            {
-                double start = (seg.Start.Ticks - min.Ticks) / span;
-                double width = (seg.End.Ticks - seg.Start.Ticks) / span;
-                if (start < 0) { width += start; start = 0; }
-                if (start > 1) continue;
-                if (start + width > 1) width = 1 - start;
-                if (width < 0) width = 0;
-                bands.Add(new NormalizedCoverageBand(start, width));
-            }
-            return bands;
+            if (_axis is null && _service.MinTime is { } min && _service.MaxTime is { } max)
+                _axis = new TimelineAxisMap(min, max, _service.CoverageSegments);
+            return _axis;
         }
     }
 
-    public double SliderMinimum =>
-        _service.MinTime is { } t ? (double)t.Ticks : 0d;
+    /// <summary>
+    /// Data-coverage ranges expressed as fractions of the slider extent
+    /// (<c>[0,1]</c> on the gap-collapsing axis). The view paints each as a
+    /// filled band so the user can see which parts of the timeline have data
+    /// and which are empty (the compressed gaps). Empty when the range is
+    /// degenerate or no dataset is loaded.
+    /// </summary>
+    public IReadOnlyList<NormalizedCoverageBand> CoverageBands =>
+        Axis?.CoverageBands ?? Array.Empty<NormalizedCoverageBand>();
 
-    public double SliderMaximum =>
-        _service.MaxTime is { } t ? (double)t.Ticks : 1d;
+    /// <summary>Minimum slider value — the normalized axis always starts at 0.</summary>
+    public double SliderMinimum => 0d;
+
+    /// <summary>Maximum slider value — the normalized axis always ends at 1.</summary>
+    public double SliderMaximum => 1d;
 
     /// <summary>
-    /// Two-way slider value as <see cref="DateTime.Ticks"/>. Setter
-    /// pushes the new clock value through
-    /// <see cref="GlobalTimeService.SetCurrentTime"/>; the loader
-    /// debounces and then fans the change out to every registered
-    /// dataset.
+    /// Two-way slider value as a normalized <c>[0,1]</c> position on the
+    /// gap-collapsing axis. The getter maps <see cref="GlobalTimeService.CurrentTime"/>
+    /// through the axis; the setter maps the position back to a wall-clock
+    /// time and pushes it through <see cref="GlobalTimeService.SetCurrentTime"/>,
+    /// after which the loader debounces and fans the change out to every
+    /// registered dataset.
     /// </summary>
     public double SliderValue
     {
-        get => _service.CurrentTime is { } t ? (double)t.Ticks : SliderMinimum;
+        get => _service.CurrentTime is { } t && Axis is { } axis ? axis.ToPosition(t) : 0d;
         set
         {
-            var ticks = (long)value;
-            if (ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks) return;
-            var dt = new DateTime(ticks, DateTimeKind.Utc);
-            _service.SetCurrentTime(dt);
+            if (Axis is not { } axis) return;
+            _service.SetCurrentTime(axis.ToTime(value));
         }
     }
 

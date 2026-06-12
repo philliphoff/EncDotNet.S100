@@ -56,6 +56,8 @@
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
                                 Value="{Binding SliderValue, Mode=TwoWay}"
+                                SmallChange="0.01"
+                                LargeChange="0.1"
                                 Ticks="{Binding Ticks, Mode=OneWay}"
                                 TickFrequency="{Binding TickFrequency, Mode=OneWay}"
                                 IsSnapToTickEnabled="{Binding IsSnapToTickEnabled, Mode=OneWay}"
@@ -66,10 +68,10 @@
                              data (gaps). Aligned under the slider track. -->
                         <views:CoverageBandControl Grid.Column="0"
                                                    Grid.Row="1"
-                                                   Height="4"
-                                                   Margin="6,2,6,0"
+                                                   Height="6"
+                                                   Margin="6,3,6,0"
                                                    Fill="{DynamicResource AccentBrush}"
-                                                   Opacity="0.4"
+                                                   TrackBrush="#33808080"
                                                    Bands="{Binding CoverageBands, Mode=OneWay}"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
                         <StackPanel Grid.Column="1"
