@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:ic="using:FluentIcons.Avalonia.Fluent"
              x:Class="EncDotNet.S100.Viewer.Views.TimelineView"
@@ -47,8 +48,10 @@
                          Buttons surface only when ticks correspond to real
                          sample times (discrete-stop mode). -->
                     <Grid DockPanel.Dock="Top"
-                          ColumnDefinitions="*,Auto">
+                          ColumnDefinitions="*,Auto"
+                          RowDefinitions="Auto,Auto">
                         <Slider Grid.Column="0"
+                                Grid.Row="0"
                                 Foreground="{DynamicResource AccentBrush}"
                                 Minimum="{Binding SliderMinimum, Mode=OneWay}"
                                 Maximum="{Binding SliderMaximum, Mode=OneWay}"
@@ -58,7 +61,19 @@
                                 IsSnapToTickEnabled="{Binding IsSnapToTickEnabled, Mode=OneWay}"
                                 TickPlacement="BottomRight"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
+                        <!-- Data-coverage band: shows which parts of the
+                             aggregate timeline have data (filled) vs. no
+                             data (gaps). Aligned under the slider track. -->
+                        <views:CoverageBandControl Grid.Column="0"
+                                                   Grid.Row="1"
+                                                   Height="4"
+                                                   Margin="6,2,6,0"
+                                                   Fill="{DynamicResource AccentBrush}"
+                                                   Opacity="0.4"
+                                                   Bands="{Binding CoverageBands, Mode=OneWay}"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
                         <StackPanel Grid.Column="1"
+                                    Grid.Row="0"
                                     Orientation="Horizontal"
                                     Spacing="2"
                                     Margin="8,0,0,0"

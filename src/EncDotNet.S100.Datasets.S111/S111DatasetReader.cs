@@ -47,7 +47,26 @@ public static class S111DatasetReader
     /// (S-100 Part 10c §10.2.1). Other data coding formats raise
     /// <see cref="S100DatasetNotSupportedException"/>.
     /// </summary>
-    public static S111DatasetData ReadAny(IHdf5File file)
+    public static S111DatasetData ReadAny(IHdf5File file) => ReadAny(file, options: null);
+
+    /// <summary>
+    /// Reads either a dcf2 <see cref="S111Dataset"/> or a dcf8
+    /// <see cref="S111StationSeriesDataset"/> from the given HDF5 file,
+    /// dispatching on the <c>/SurfaceCurrent/dataCodingFormat</c> attribute
+    /// (S-100 Part 10c §10.2.1). Other data coding formats raise
+    /// <see cref="S100DatasetNotSupportedException"/>.
+    /// </summary>
+    /// <param name="file">The HDF5 file to read.</param>
+    /// <param name="options">
+    /// Optional read options. When
+    /// <see cref="S111ReadOptions.DeferValueReads"/> is set, dcf2
+    /// (regular-grid) per-time-step <c>values</c> datasets are read lazily
+    /// on first access rather than up front; the caller must keep
+    /// <paramref name="file"/> open for the lifetime of the returned
+    /// dataset. dcf3/dcf8 (station-series) datasets always materialize
+    /// fully and ignore this flag.
+    /// </param>
+    public static S111DatasetData ReadAny(IHdf5File file, S111ReadOptions? options)
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
         __activity?.SetTag("s100.product", "S-111");
@@ -136,7 +155,7 @@ public static class S111DatasetReader
             };
         }
 
-        var coverages = ReadCoverages(scGroup, dataCodingFormat);
+        var coverages = ReadCoverages(scGroup, dataCodingFormat, options);
 
         return new S111DatasetData.GriddedCoverage(new S111Dataset
         {
@@ -155,7 +174,7 @@ public static class S111DatasetReader
         };
     }
 
-    private static List<SurfaceCurrentCoverage> ReadCoverages(IHdf5Group scGroup, int dataCodingFormat)
+    private static List<SurfaceCurrentCoverage> ReadCoverages(IHdf5Group scGroup, int dataCodingFormat, S111ReadOptions? options)
     {
         if (dataCodingFormat != 2)
         {
@@ -178,7 +197,7 @@ public static class S111DatasetReader
                 continue;
 
             var instance = scGroup.OpenGroup(instanceName);
-            ReadInstance(instance, coverages, $"/SurfaceCurrent/{instanceName}");
+            ReadInstance(instance, coverages, $"/SurfaceCurrent/{instanceName}", options);
         }
 
         return coverages;
@@ -203,7 +222,7 @@ public static class S111DatasetReader
         _ => "unknown",
     };
 
-    private static void ReadInstance(IHdf5Group instance, List<SurfaceCurrentCoverage> coverages, string instancePath)
+    private static void ReadInstance(IHdf5Group instance, List<SurfaceCurrentCoverage> coverages, string instancePath, S111ReadOptions? options)
     {
         // S-100 Part 10c §10.2.1.2 — the grid-georef attributes are
         // required on every dcf2 SurfaceCurrent.NN instance group.
@@ -219,7 +238,59 @@ public static class S111DatasetReader
             ? instance.ReadStringAttribute("startSequence")
             : null;
 
-        // Each Group_NNN is a time step with its own timePoint attribute and values dataset.
+        // Deferred path (S-111 Edition 2.0.0 §10.2.6): when value reads are
+        // deferred we avoid opening every Group_NNN at load time — instead
+        // the per-step time points are derived arithmetically from
+        // dateTimeOfFirstRecord + i × timeRecordInterval (the regular
+        // time-series cadence; matches the s111-surface-currents skill's
+        // "times derived from dateTimeOfFirstRecord + timeRecordInterval"
+        // item), and each step's values compound is read lazily on first
+        // access. This keeps opening a 700+ time-step dataset cheap.
+        if (options?.DeferValueReads == true
+            && instance.AttributeExists("dateTimeOfFirstRecord")
+            && instance.AttributeExists("timeRecordInterval"))
+        {
+            DateTime first = ParseTimestamp(instance.ReadStringAttribute("dateTimeOfFirstRecord"));
+            double intervalSeconds = ReadIntervalSeconds(instance);
+
+            var groupNames = instance.GroupNames
+                .Where(n => n.StartsWith("Group_", StringComparison.Ordinal))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+
+            object gate = options.HdfSyncRoot ?? new object();
+
+            for (int i = 0; i < groupNames.Count; i++)
+            {
+                string groupName = groupNames[i];
+                DateTime timePoint = first.AddSeconds(intervalSeconds * i);
+
+                coverages.Add(new SurfaceCurrentCoverage
+                {
+                    OriginLatitude = originLat,
+                    OriginLongitude = originLon,
+                    SpacingLatitudinal = spacingLat,
+                    SpacingLongitudinal = spacingLon,
+                    NumPointsLatitudinal = numLat,
+                    NumPointsLongitudinal = numLon,
+                    StartSequence = startSequence,
+                    GroupPath = instancePath,
+                    TimePoint = timePoint,
+                    ValuesFactory = () =>
+                    {
+                        lock (gate)
+                        {
+                            return ReadValues(instance.OpenGroup(groupName));
+                        }
+                    },
+                });
+            }
+
+            return;
+        }
+
+        // Eager path — each Group_NNN is a time step with its own timePoint
+        // attribute and values dataset.
         foreach (var groupName in instance.GroupNames)
         {
             if (!groupName.StartsWith("Group_", StringComparison.Ordinal))
@@ -249,6 +320,23 @@ public static class S111DatasetReader
                 TimePoint = timePoint,
                 Values = values,
             });
+        }
+    }
+
+    /// <summary>
+    /// Reads the instance <c>timeRecordInterval</c> (seconds; S-111
+    /// Edition 2.0.0 §10.2.6) tolerating either an integer or floating
+    /// attribute encoding.
+    /// </summary>
+    private static double ReadIntervalSeconds(IHdf5Group instance)
+    {
+        try
+        {
+            return instance.ReadInt64Attribute("timeRecordInterval");
+        }
+        catch
+        {
+            return instance.ReadDoubleAttribute("timeRecordInterval");
         }
     }
 
@@ -718,7 +806,11 @@ public static class S111DatasetReader
     {
         return DateTime.ParseExact(
             s,
-            ["yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
+            [
+                "yyyyMMdd'T'HHmmss'Z'",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyyMMdd'T'HH:mm:ss'Z'",
+            ],
             CultureInfo.InvariantCulture,
             DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
     }

@@ -369,29 +369,46 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             // Pick the initial render time. If the global slider already
             // has a clock, snap this dataset to it; otherwise let the
             // processor pick its default (typically the first sample).
+            // A time-aware adapter that returns null for an existing clock
+            // means the dataset is outside its covered window and should
+            // load hidden (no arrows drawn) until the slider enters range.
             DateTime? initialTime = null;
+            bool gatedHidden = false;
             if (adapter is not null && _globalTime.CurrentTime is { } globalNow)
-                initialTime = adapter.SnapTo(globalNow);
-
-            var initialContext = CreateRenderContext(processor, initialTime);
-            var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
-
-            token.ThrowIfCancellationRequested();
-            ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
-            // Exchange-set entries opt out of the per-dataset auto-zoom so
-            // the union-extent zoom from `IExchangeSetService` (or the
-            // user's manual Zoom-to-Extent toolbar action) wins. Without
-            // this, the last-completed dataset would race with the bulk
-            // load and "win" the viewport.
-            if (!fromExchangeSet && !SuppressAutoZoom)
             {
-                _mapHost!.ZoomToExtent(result.Extent);
+                initialTime = adapter.SnapTo(globalNow);
+                gatedHidden = initialTime is null;
+            }
+
+            DatasetResult? result = null;
+            if (gatedHidden)
+            {
+                // Present but empty: registers in the panel / timeline and
+                // draws nothing until a scrub brings it into range.
+                ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+            }
+            else
+            {
+                var initialContext = CreateRenderContext(processor, initialTime);
+                result = await Task.Run(() => _mapsuiRenderer.RenderAsync(processor, initialContext, token), token).ConfigureAwait(true);
+
+                token.ThrowIfCancellationRequested();
+                ReplaceLayers(entry, result.Layers.ToList(), result.LayerNames, result.StackEntries);
+                // Exchange-set entries opt out of the per-dataset auto-zoom so
+                // the union-extent zoom from `IExchangeSetService` (or the
+                // user's manual Zoom-to-Extent toolbar action) wins. Without
+                // this, the last-completed dataset would race with the bulk
+                // load and "win" the viewport.
+                if (!fromExchangeSet && !SuppressAutoZoom)
+                {
+                    _mapHost!.ZoomToExtent(result.Extent);
+                }
             }
 
             entry.IsLoaded = true;
-            entry.Info = result.Info;
+            entry.Info = result?.Info;
             entry.SetVersionAssessment(processor.VersionAssessment);
-            entry.CurrentTime = initialTime ?? adapter?.AvailableTimes.FirstOrDefault();
+            entry.CurrentTime = gatedHidden ? null : (initialTime ?? adapter?.AvailableTimes.FirstOrDefault());
 
             // Run the spec's normative validation rule pack against
             // the parsed dataset. Validation is a pure function of the
@@ -411,7 +428,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             if (!fromExchangeSet)
             {
                 _toasts.DismissAll();
-                if (!string.IsNullOrWhiteSpace(result.Info))
+                if (!string.IsNullOrWhiteSpace(result?.Info))
                 {
                     _toasts.ShowSuccess(Strings.Toast_Success, result.Info);
                 }
@@ -525,6 +542,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             try
             {
+                if (snapped is null)
+                {
+                    // Out of covered range: hide the dataset (drop its
+                    // layers) rather than draw stale endpoint-clamped
+                    // arrows. Cheap when already hidden.
+                    if (_entryLayers.TryGetValue(entry, out var current) && current.Count > 0)
+                    {
+                        ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+                    }
+                    entry.CurrentTime = null;
+                    continue;
+                }
+
                 var context = CreateRenderContext(proc, snapped);
                 var result = await Task.Run(() => _mapsuiRenderer.RenderAsync(proc, context, token), token).ConfigureAwait(true);
 
@@ -550,6 +580,19 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         foreach (var (entry, proc) in _processors.ToArray())
         {
             if (!entry.IsLoaded) continue;
+
+            // Keep time-gated datasets hidden across palette / display
+            // re-renders: if the entry's adapter snaps the current global
+            // time to null it is outside its covered window and must not
+            // be re-materialized here.
+            if (_globalTime.Adapters.TryGetValue(entry, out var gateAdapter)
+                && _globalTime.CurrentTime is { } gateNow
+                && gateAdapter.SnapTo(gateNow) is null)
+            {
+                if (_entryLayers.TryGetValue(entry, out var cur) && cur.Count > 0)
+                    ReplaceLayers(entry, Array.Empty<ILayer>(), null, null);
+                continue;
+            }
 
             try
             {
@@ -580,7 +623,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _entryStackEntries.Remove(entry);
         if (_subscribedEntries.Remove(entry))
             entry.PropertyChanged -= OnEntryPropertyChanged;
-        _processors.Remove(entry);
+        if (_processors.Remove(entry, out var removedProcessor)
+            && removedProcessor is IDisposable disposableProcessor)
+        {
+            // Releases any file/stream a processor keeps open for lazy reads
+            // (e.g. S-111 dcf2 retains its HDF5 file for deferred time-step
+            // value decoding).
+            disposableProcessor.Dispose();
+        }
         _entryOrder.Remove(entry);
         _activeFlags.Remove(EntryId(entry));
         _globalTime.Unregister(entry);

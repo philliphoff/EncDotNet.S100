@@ -65,6 +65,20 @@ public sealed class MapsuiCoverageArrowRenderer
     public int MaxArrowsPerAxis { get; set; } = 80;
 
     /// <summary>
+    /// Minimum on-screen spacing, in pixels, between adjacent emitted
+    /// arrows. When the supplied <see cref="PipelineViewport"/> projects
+    /// grid cells closer together than this, the renderer increases the
+    /// subsampling stride so dense grids (or wide multi-dataset extents)
+    /// do not emit overlapping arrows that are illegible and costly to
+    /// draw on every pan frame. Set to 0 to disable viewport-aware
+    /// decimation (the grid-based <see cref="MaxArrowsPerAxis"/> cap still
+    /// applies). The SCAROW symbols rasterise to ~23×42 px at
+    /// <c>SymbolScale = 1.0</c>, so the default keeps roughly one arrow
+    /// per symbol footprint.
+    /// </summary>
+    public double MinArrowSpacingPixels { get; set; } = 14.0;
+
+    /// <summary>
     /// Multiplier applied to each band's scale factor to produce the
     /// Mapsui <see cref="ImageStyle.SymbolScale"/>.  The bundled SCAROW
     /// SVGs declare <c>width="6mm" height="11mm"</c> with viewBox
@@ -100,8 +114,6 @@ public sealed class MapsuiCoverageArrowRenderer
     /// </summary>
     public ILayer? Render(StyledCoverageLayer layer, PipelineViewport viewport)
     {
-        _ = viewport; // Per-feature rendering is zoom-agnostic by design.
-
         var symbolScheme = layer.SymbolScheme;
         if (symbolScheme is null)
             return null;
@@ -126,6 +138,13 @@ public sealed class MapsuiCoverageArrowRenderer
             int longestAxis = Math.Max(srcRows, srcCols);
             stride = Math.Max(1, (longestAxis + MaxArrowsPerAxis - 1) / MaxArrowsPerAxis);
         }
+
+        // Viewport-aware decimation: when adjacent cells project closer than
+        // MinArrowSpacingPixels on screen, widen the stride so arrows stay
+        // legible and the per-pan draw cost stays bounded.
+        int viewportStride = ComputeViewportStride(
+            viewport, georeferencer, nativeToWgs84, srcRows, srcCols);
+        stride = Math.Max(stride, viewportStride);
 
         var features = new List<IFeature>();
 
@@ -178,6 +197,75 @@ public sealed class MapsuiCoverageArrowRenderer
             Style = null,
             Opacity = Opacity,
         };
+    }
+
+    /// <summary>
+    /// Computes the additional subsampling stride needed so adjacent grid
+    /// cells project at least <see cref="MinArrowSpacingPixels"/> apart in
+    /// the supplied <paramref name="viewport"/>. Returns 1 (no extra
+    /// decimation) when spacing cannot be determined or decimation is
+    /// disabled.
+    /// </summary>
+    private int ComputeViewportStride(
+        PipelineViewport viewport,
+        GridGeoreferencer georeferencer,
+        ICrsTransform nativeToWgs84,
+        int srcRows,
+        int srcCols)
+    {
+        if (MinArrowSpacingPixels <= 0 || srcRows < 2 || srcCols < 2)
+            return 1;
+
+        (double Lon, double Lat) ToLonLat(int r, int c)
+        {
+            var (nx, ny) = georeferencer.ToNative(r, c);
+            if (nativeToWgs84.IsIdentity)
+                return (nx, ny);
+            var (lon, lat) = nativeToWgs84.Transform(nx, ny);
+            return (lon, lat);
+        }
+
+        var origin = ToLonLat(0, 0);
+        var alongCol = ToLonLat(0, 1);
+        var alongRow = ToLonLat(1, 0);
+
+        double cellLonStepDeg = Math.Abs(alongCol.Lon - origin.Lon);
+        double cellLatStepDeg = Math.Abs(alongRow.Lat - origin.Lat);
+
+        return ViewportStride(viewport, cellLonStepDeg, cellLatStepDeg, MinArrowSpacingPixels);
+    }
+
+    /// <summary>
+    /// Pure helper: given the per-cell longitude/latitude step (degrees)
+    /// and a target minimum on-screen arrow spacing in pixels, returns the
+    /// stride (≥ 1) that keeps adjacent emitted arrows at least that far
+    /// apart in <paramref name="viewport"/>.
+    /// </summary>
+    internal static int ViewportStride(
+        PipelineViewport viewport,
+        double cellLonStepDeg,
+        double cellLatStepDeg,
+        double minSpacingPixels)
+    {
+        if (minSpacingPixels <= 0)
+            return 1;
+
+        double lonSpan = viewport.LongitudeSpan;
+        double latSpan = viewport.LatitudeSpan;
+        if (lonSpan <= 0 || latSpan <= 0 || viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
+            return 1;
+
+        double pxPerLon = viewport.WidthPixels / lonSpan;
+        double pxPerLat = viewport.HeightPixels / latSpan;
+
+        double cellPx = Math.Sqrt(
+            (cellLonStepDeg * pxPerLon) * (cellLonStepDeg * pxPerLon) +
+            (cellLatStepDeg * pxPerLat) * (cellLatStepDeg * pxPerLat));
+
+        if (cellPx <= 0 || double.IsNaN(cellPx) || double.IsInfinity(cellPx))
+            return 1;
+
+        return Math.Max(1, (int)Math.Ceiling(minSpacingPixels / cellPx));
     }
 
     /// <summary>

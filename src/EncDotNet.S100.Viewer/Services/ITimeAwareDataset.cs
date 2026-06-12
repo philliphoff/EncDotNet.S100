@@ -40,4 +40,39 @@ internal interface ITimeAwareDataset
     /// issue date is after <paramref name="t"/>).
     /// </summary>
     DateTime? SnapTo(DateTime t);
+
+    /// <summary>
+    /// The closed global-clock interval(s) over which this dataset
+    /// renders something (i.e. <see cref="SnapTo"/> returns non-null).
+    /// Used by the timeline to paint a data-coverage band so the user
+    /// can see which parts of the aggregate range have data.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation reports a single interval spanning the
+    /// first and last entries of <see cref="AvailableTimes"/> (empty when
+    /// there are no samples). Adapters whose gating extends or truncates
+    /// that window (e.g. the range-gated S-111 adapter, or the
+    /// at-or-before S-411 snapshot adapter) override this to report their
+    /// true coverage. An open-ended upper bound is expressed as
+    /// <see cref="DateTime.MaxValue"/> and clamped to the aggregate range
+    /// by the consumer.
+    /// </remarks>
+    IReadOnlyList<(DateTime Start, DateTime End)> CoverageIntervals
+    {
+        get
+        {
+            var times = AvailableTimes;
+            if (times.Count == 0)
+                return Array.Empty<(DateTime, DateTime)>();
+
+            DateTime min = times[0];
+            DateTime max = times[0];
+            for (int i = 1; i < times.Count; i++)
+            {
+                if (times[i] < min) min = times[i];
+                if (times[i] > max) max = times[i];
+            }
+            return new[] { (min, max) };
+        }
+    }
 }

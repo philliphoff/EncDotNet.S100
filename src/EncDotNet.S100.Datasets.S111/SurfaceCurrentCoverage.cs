@@ -44,9 +44,51 @@ public sealed class SurfaceCurrentCoverage
     /// </summary>
     public required DateTime TimePoint { get; init; }
 
+    private readonly object _valuesGate = new();
+    private SurfaceCurrentValue[]? _values;
+    private Func<SurfaceCurrentValue[]>? _valuesFactory;
+
     /// <summary>
     /// Flat array of surface current values, ordered row-major.
     /// Index a cell at (row, col) as <c>Values[row * NumPointsLongitudinal + col]</c>.
     /// </summary>
-    public required SurfaceCurrentValue[] Values { get; init; }
+    /// <remarks>
+    /// May be supplied eagerly (the <c>init</c> setter, used by synthetic
+    /// fixtures and the file-independent <see cref="S111DatasetReader.ReadAny(EncDotNet.S100.Hdf5.IHdf5File)"/>
+    /// path) or lazily via <see cref="ValuesFactory"/>. When backed by a
+    /// factory the per-time-step <c>values</c> compound is read from the
+    /// underlying HDF5 file on first access and then cached, so opening a
+    /// dataset with hundreds of time steps does not decode every step up
+    /// front (S-111 Edition 2.0.0 §10.2.6; one <c>Group_NNN/values</c>
+    /// dataset per time step). Access is thread-safe.
+    /// </remarks>
+    public SurfaceCurrentValue[] Values
+    {
+        get
+        {
+            if (_values is not null)
+                return _values;
+
+            lock (_valuesGate)
+            {
+                return _values ??= (_valuesFactory
+                    ?? throw new InvalidOperationException(
+                        "SurfaceCurrentCoverage.Values was accessed but neither an eager " +
+                        "value array nor a lazy ValuesFactory was provided."))();
+            }
+        }
+        init => _values = value;
+    }
+
+    /// <summary>
+    /// Optional lazy provider for <see cref="Values"/>. Set by
+    /// <see cref="S111DatasetReader"/> when deferred value reads are
+    /// requested; the factory is invoked at most once (its result is
+    /// cached on <see cref="Values"/>). Mutually exclusive with the
+    /// eager <see cref="Values"/> initializer.
+    /// </summary>
+    internal Func<SurfaceCurrentValue[]>? ValuesFactory
+    {
+        init => _valuesFactory = value;
+    }
 }

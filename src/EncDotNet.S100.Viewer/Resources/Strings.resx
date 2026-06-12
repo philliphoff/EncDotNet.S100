@@ -315,6 +315,9 @@
   <data name="Tooltip_TimelineSlider" xml:space="preserve">
     <value>Drag to set the global time. All loaded time-varying datasets re-render at the timestep nearest to this value.</value>
   </data>
+  <data name="Tooltip_TimelineCoverageBand" xml:space="preserve">
+    <value>Highlighted ranges have data; gaps have no data at the current time.</value>
+  </data>
   <data name="Tooltip_TimelinePreviousStep" xml:space="preserve">
     <value>Step to the previous time sample</value>
   </data>

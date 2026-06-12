@@ -148,6 +148,7 @@ internal static class Strings
     public static string Menu_IsolateDataset => Get(nameof(Menu_IsolateDataset));
     public static string Tooltip_ResetDatasetOpacity => Get(nameof(Tooltip_ResetDatasetOpacity));
     public static string Tooltip_TimelineSlider => Get(nameof(Tooltip_TimelineSlider));
+    public static string Tooltip_TimelineCoverageBand => Get(nameof(Tooltip_TimelineCoverageBand));
     public static string Tooltip_TimelinePreviousStep => Get(nameof(Tooltip_TimelinePreviousStep));
     public static string Tooltip_TimelineNextStep => Get(nameof(Tooltip_TimelineNextStep));
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));

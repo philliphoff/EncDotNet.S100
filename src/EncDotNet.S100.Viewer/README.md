@@ -267,6 +267,15 @@ previous / next buttons; otherwise it shows evenly-spaced guide
 ticks across the aggregate range. The panel hides automatically
 when no time-varying dataset is loaded.
 
+Under the slider a thin **data-coverage band** highlights the time
+ranges that actually contain data — the merged union of every
+dataset's covered window (for S-111 this is its gated forecast
+window; for S-411 snapshots, from the issue time onward). Gaps in
+the band are stretches of the aggregate timeline where no dataset
+renders, so scrubbing there shows nothing. This matters most for
+S-111 exchange sets that bundle many non-overlapping forecast files
+over the same grid: only the file covering the current clock draws.
+
 ## Validation
 
 Every supported product ships a normative **validation rule pack**

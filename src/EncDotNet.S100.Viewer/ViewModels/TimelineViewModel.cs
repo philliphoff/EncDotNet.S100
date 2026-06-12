@@ -87,6 +87,7 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
         OnPropertyChanged(nameof(IsSnapToTickEnabled));
         OnPropertyChanged(nameof(TickFrequency));
         OnPropertyChanged(nameof(AreStepButtonsVisible));
+        OnPropertyChanged(nameof(CoverageBands));
         ((RelayCommand)PreviousStepCommand).NotifyCanExecuteChanged();
         ((RelayCommand)NextStepCommand).NotifyCanExecuteChanged();
 
@@ -229,6 +230,38 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
     /// <summary>True when the timeline panel should be visible.</summary>
     public bool IsActive => _service.IsActive;
 
+    /// <summary>
+    /// Data-coverage ranges expressed as fractions of the slider extent
+    /// (<see cref="SliderMinimum"/>..<see cref="SliderMaximum"/>). The
+    /// view paints each as a filled band so the user can see which parts
+    /// of the timeline have data and which are empty. Empty when the
+    /// range is degenerate or no dataset is loaded.
+    /// </summary>
+    public IReadOnlyList<NormalizedCoverageBand> CoverageBands
+    {
+        get
+        {
+            if (_service.MinTime is not { } min || _service.MaxTime is not { } max)
+                return Array.Empty<NormalizedCoverageBand>();
+
+            double span = (double)(max.Ticks - min.Ticks);
+            if (span <= 0) return Array.Empty<NormalizedCoverageBand>();
+
+            var bands = new List<NormalizedCoverageBand>();
+            foreach (var seg in _service.CoverageSegments)
+            {
+                double start = (seg.Start.Ticks - min.Ticks) / span;
+                double width = (seg.End.Ticks - seg.Start.Ticks) / span;
+                if (start < 0) { width += start; start = 0; }
+                if (start > 1) continue;
+                if (start + width > 1) width = 1 - start;
+                if (width < 0) width = 0;
+                bands.Add(new NormalizedCoverageBand(start, width));
+            }
+            return bands;
+        }
+    }
+
     public double SliderMinimum =>
         _service.MinTime is { } t ? (double)t.Ticks : 0d;
 
@@ -280,3 +313,10 @@ internal sealed class TimelineViewModel : ViewModelBase, EncDotNet.S100.Viewer.V
 
     private TimeFormat ActiveFormat => _timeFormat?.Current ?? TimeFormat.Local;
 }
+
+/// <summary>
+/// A data-coverage band normalized to the slider extent: <see cref="Start"/>
+/// and <see cref="Width"/> are fractions in <c>[0,1]</c> of
+/// <see cref="TimelineViewModel.SliderMinimum"/>..<see cref="TimelineViewModel.SliderMaximum"/>.
+/// </summary>
+internal readonly record struct NormalizedCoverageBand(double Start, double Width);
