@@ -1,6 +1,8 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Features;
+using System.Globalization;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector.Caching;
@@ -546,6 +548,28 @@ public sealed class DatasetPipelineFactory
                 or "S-129" or "S-131" or "S-201" or "S-411" or "S-421" => normalized,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Resolves the canonical spec string (<c>"S-101"</c>, etc.) for an
+    /// exchange-set <see cref="ProductSpecification"/> entry. Tries, in order,
+    /// the <see cref="ProductSpecification.ProductIdentifier"/>, the
+    /// <see cref="ProductSpecification.Name"/>, and finally the
+    /// <see cref="ProductSpecification.Number"/> (e.g. <c>101</c> → <c>"S-101"</c>).
+    /// Many real-world S-100 catalogues (e.g. IC-ENC S-101 sets) populate only
+    /// <c>name</c>/<c>number</c> and omit <c>productIdentifier</c>; this overload
+    /// keeps such datasets from being reported as an unsupported product
+    /// specification. Returns <c>null</c> when none of the fields resolve.
+    /// </summary>
+    public static string? MapProductSpecificationToSpec(ProductSpecification? productSpecification)
+    {
+        if (productSpecification is null) return null;
+
+        return MapProductIdentifierToSpec(productSpecification.ProductIdentifier)
+            ?? MapProductIdentifierToSpec(productSpecification.Name)
+            ?? (productSpecification.Number is int number
+                ? MapProductIdentifierToSpec(string.Create(CultureInfo.InvariantCulture, $"S-{number}"))
+                : null);
     }
 
     private static string? DetectProductSpecByExtension(string relativePath)

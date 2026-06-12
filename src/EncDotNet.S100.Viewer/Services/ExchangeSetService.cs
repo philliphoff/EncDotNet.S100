@@ -199,14 +199,16 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     continue;
                 }
 
-                var spec = DatasetPipelineFactory.MapProductIdentifierToSpec(
-                    metadata.ProductSpecification?.ProductIdentifier);
+                var spec = DatasetPipelineFactory.MapProductSpecificationToSpec(
+                    metadata.ProductSpecification);
                 if (spec is null)
                 {
                     var msg = string.Format(
                         Strings.Status_ExchangeSetUnsupportedSpec,
                         relativePath,
-                        metadata.ProductSpecification?.ProductIdentifier ?? string.Empty);
+                        metadata.ProductSpecification?.ProductIdentifier
+                            ?? metadata.ProductSpecification?.Name
+                            ?? string.Empty);
                     _status.StatusText = msg;
                     _toasts.ShowWarning(Strings.Toast_Warning, msg);
                     skipMessages.Add(msg);

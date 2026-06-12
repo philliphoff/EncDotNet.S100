@@ -122,7 +122,7 @@ public static class S101ExchangeSetUpdatePlan
     }
 
     private static bool IsS101(DatasetDiscoveryMetadata metadata) =>
-        DatasetPipelineFactory.MapProductIdentifierToSpec(metadata.ProductSpecification?.ProductIdentifier) == "S-101";
+        DatasetPipelineFactory.MapProductSpecificationToSpec(metadata.ProductSpecification) == "S-101";
 
     private static string GetCellName(DatasetDiscoveryMetadata metadata) =>
         Path.GetFileNameWithoutExtension(metadata.FileName);
