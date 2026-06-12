@@ -45,6 +45,16 @@ internal sealed class GlobalTimeService
     public IReadOnlyList<DateTime> AllSamples { get; private set; } = Array.Empty<DateTime>();
 
     /// <summary>
+    /// Merged, ascending list of time ranges over which at least one
+    /// registered dataset renders data — the union of every adapter's
+    /// <see cref="ITimeAwareDataset.CoverageIntervals"/>, clamped to
+    /// <see cref="MinTime"/>/<see cref="MaxTime"/> and coalesced where
+    /// adjacent ranges overlap or touch. Drives the timeline's
+    /// data-coverage band; the complement (gaps) is "no data".
+    /// </summary>
+    public IReadOnlyList<CoverageSegment> CoverageSegments { get; private set; } = Array.Empty<CoverageSegment>();
+
+    /// <summary>
     /// Snapshot of registered (entry, adapter) pairs — used by the loader
     /// when re-rendering all datasets at a new global time.
     /// </summary>
@@ -132,6 +142,8 @@ internal sealed class GlobalTimeService
         MinTime = samples.Count > 0 ? samples[0] : null;
         MaxTime = samples.Count > 0 ? samples[^1] : null;
 
+        CoverageSegments = ComputeCoverageSegments(MinTime, MaxTime);
+
         if (CurrentTime is null && MinTime is not null)
             CurrentTime = MinTime;
         else if (CurrentTime is { } cur && MinTime is not null && MaxTime is not null)
@@ -142,4 +154,60 @@ internal sealed class GlobalTimeService
 
         RangeChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Builds the merged coverage segments from the registered adapters'
+    /// <see cref="ITimeAwareDataset.CoverageIntervals"/>. Each interval is
+    /// clamped to <paramref name="min"/>/<paramref name="max"/> (so an
+    /// open-ended snapshot range stops at the aggregate maximum), then
+    /// intervals are sorted by start and coalesced where the next starts
+    /// at or before the running end (overlap or touch).
+    /// </summary>
+    private List<CoverageSegment> ComputeCoverageSegments(DateTime? min, DateTime? max)
+    {
+        var result = new List<CoverageSegment>();
+        if (min is not { } lo || max is not { } hi || hi < lo)
+            return result;
+
+        var intervals = new List<(DateTime Start, DateTime End)>();
+        foreach (var adapter in _adapters.Values)
+        {
+            foreach (var (start, end) in adapter.CoverageIntervals)
+            {
+                var s = start < lo ? lo : start;
+                var e = end > hi ? hi : end;
+                if (e >= s) intervals.Add((s, e));
+            }
+        }
+
+        if (intervals.Count == 0) return result;
+
+        intervals.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+        var curStart = intervals[0].Start;
+        var curEnd = intervals[0].End;
+        for (int i = 1; i < intervals.Count; i++)
+        {
+            var (s, e) = intervals[i];
+            if (s <= curEnd)
+            {
+                if (e > curEnd) curEnd = e;
+            }
+            else
+            {
+                result.Add(new CoverageSegment(curStart, curEnd));
+                curStart = s;
+                curEnd = e;
+            }
+        }
+        result.Add(new CoverageSegment(curStart, curEnd));
+        return result;
+    }
 }
+
+/// <summary>
+/// A single contiguous time range over which the timeline has data
+/// (at least one dataset renders). See
+/// <see cref="GlobalTimeService.CoverageSegments"/>.
+/// </summary>
+internal readonly record struct CoverageSegment(DateTime Start, DateTime End);

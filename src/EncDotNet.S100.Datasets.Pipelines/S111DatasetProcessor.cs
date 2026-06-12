@@ -29,7 +29,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// fixed stations → station-arrow point layer; see S-111 Edition 2.0.0
 /// §10.2.3 / §10.2.7).
 /// </summary>
-public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor
+public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable
 {
     // dcf2 only
     private readonly S111CoverageSource? _source;
@@ -65,6 +65,24 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private ValidationReport? _validationReport;
     private bool _validationCached;
+
+    /// <summary>
+    /// For dcf2 (regular grid) with deferred value reads, the underlying
+    /// HDF5 file and stream are retained for the lifetime of the processor
+    /// so per-time-step <c>values</c> datasets can be read lazily on first
+    /// access. <see langword="null"/> for dcf3/dcf8, whose values are read
+    /// eagerly and whose file is closed in the constructor.
+    /// </summary>
+    private readonly IHdf5File? _retainedHdf5;
+    private readonly Stream? _retainedStream;
+
+    /// <summary>
+    /// Guards reads against the shared, retained HDF5 stream. PureHDF reads
+    /// from a single stream are not concurrency-safe; lazy value factories
+    /// and any post-load access lock this object.
+    /// </summary>
+    private readonly object _hdfGate = new();
+    private bool _disposed;
 
     /// <inheritdoc/>
     public SpecRef Spec { get; }
@@ -112,12 +130,26 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _fileName = fileName;
         _crsTransformFactory = crsTransformFactory;
 
-        using (datasetStream)
-        using (var hdf5 = PureHdfFile.Open(datasetStream))
+        // Open the file and request deferred value reads. The reader only
+        // defers for dcf2 (regular grid); dcf3/dcf8 station series ignore
+        // the flag and materialize fully, so their file can be closed
+        // immediately. For dcf2 we retain the file so per-time-step values
+        // are decoded lazily on first access (S-111 Edition 2.0.0 §10.2.6).
+        Stream? stream = datasetStream;
+        IHdf5File? hdf5 = null;
+        bool retain = false;
+        try
         {
+            hdf5 = PureHdfFile.Open(stream);
             try
             {
-                _data = S111DatasetReader.ReadAny(hdf5);
+                _data = S111DatasetReader.ReadAny(
+                    hdf5,
+                    new S111ReadOptions
+                    {
+                        DeferValueReads = true,
+                        HdfSyncRoot = _hdfGate,
+                    });
             }
             catch (S100DatasetSchemaException ex) when (ex.File is null)
             {
@@ -126,6 +158,21 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             catch (S100DatasetNotSupportedException ex) when (ex.File is null)
             {
                 throw ex.WithFile(_fileName);
+            }
+
+            retain = _data is S111DatasetData.GriddedCoverage;
+            if (retain)
+            {
+                _retainedHdf5 = hdf5;
+                _retainedStream = stream;
+            }
+        }
+        finally
+        {
+            if (!retain)
+            {
+                hdf5?.Dispose();
+                stream?.Dispose();
             }
         }
 
@@ -166,6 +213,26 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         }
 
         VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue?.CatalogueRef);
+    }
+
+    /// <summary>
+    /// Disposes the retained HDF5 file and stream, if any. For dcf2
+    /// (regular grid) datasets the file is kept open so per-time-step
+    /// values can be read lazily; this releases it.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        lock (_hdfGate)
+        {
+            _retainedHdf5?.Dispose();
+            _retainedStream?.Dispose();
+        }
+
+        _renderGate.Dispose();
     }
 
     /// <inheritdoc/>

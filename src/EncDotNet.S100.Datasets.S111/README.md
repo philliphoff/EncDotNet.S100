@@ -7,7 +7,8 @@ Reader and coverage portrayal pipeline for S-111 Surface Current datasets.
 This library reads S-111 datasets from HDF5 files and provides time-series current speed and direction grids for the portrayal pipeline. Key types include:
 
 - **`S111Dataset`** — root model containing horizontal CRS, depth, data coding format, and time-step coverages.
-- **`S111DatasetReader`** — reads an S-111 dataset from an `IHdf5File` (regular grid format).
+- **`S111DatasetReader`** — reads an S-111 dataset from an `IHdf5File` (regular grid format). `ReadAny(file)` decodes every time step eagerly; `ReadAny(file, new S111ReadOptions { DeferValueReads = true })` reads only metadata up front and decodes each step's `values` compound lazily on first access (see *Lazy reads* below).
+- **`S111ReadOptions`** — opt-in read options; `DeferValueReads` enables lazy per-time-step value decoding for dcf2 (regular-grid) datasets.
 - **`S111CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
 - **`S111PortrayalCatalogue`** — coverage portrayal catalogue for current arrow rendering (see *Portrayal* below).
 - **`S111SpeedBandReader`** — parses the 9 surface-current speed bands and the three scale constants from the bundled `Rules/select_arrow.xsl`.
@@ -60,6 +61,33 @@ Those per-band factors multiply the renderer's `BaseSymbolScale` (default
 `1.0` — which `S111DatasetProcessor` overrides with the user's
 `RenderContext.SymbolScale` so the viewer's Symbol Scale slider tunes
 arrow size) to produce each feature's `ImageStyle.SymbolScale`.
+
+### Viewport-aware arrow decimation
+
+`MapsuiCoverageArrowRenderer` decimates arrows two ways: a grid cap
+(`MaxArrowsPerAxis`) and a screen-spacing floor (`MinArrowSpacingPixels`,
+default 14 px). When the render viewport projects adjacent cells closer
+than the floor, the subsampling stride widens so dense grids — or wide
+extents spanning many overlapping datasets — do not emit illegible,
+overlapping arrows that are also expensive to redraw on every pan frame.
+
+## Lazy reads
+
+`S111DatasetReader.ReadAny(file, new S111ReadOptions { DeferValueReads = true })`
+reads only instance metadata up front and defers each time step's
+`values` compound until first access. Per-step time points are derived
+arithmetically from `dateTimeOfFirstRecord` + i × `timeRecordInterval`
+(S-111 Edition 2.0.0 §10.2.6) instead of opening every `Group_NNN`, so
+opening a dataset with hundreds of steps is fast. `SurfaceCurrentCoverage.Values`
+caches the decoded array under a lock on first read.
+
+`S111DatasetProcessor` opts into deferral for dcf2 (regular-grid) datasets
+and therefore implements `IDisposable`: it retains the underlying HDF5
+file/stream for the processor's lifetime so deferred reads can resolve.
+Callers that create an `S111DatasetProcessor` (the viewer's
+`DatasetLoaderService` does this) must dispose it to release the file.
+dcf3/dcf8 station-series datasets are materialized fully and close their
+file immediately.
 
 ## Validation
 

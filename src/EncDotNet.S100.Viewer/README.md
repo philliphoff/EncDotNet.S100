@@ -262,10 +262,43 @@ into a single slider; scrubbing the slider re-renders every
 participating dataset at the timestep nearest the global clock
 (nearest-absolute for the time-series HDF5 products, last-known for
 S-411 snapshots). When all loaded datasets share the same set of
-timestamps the slider exposes discrete stops at each one, with
-previous / next buttons; otherwise it shows evenly-spaced guide
-ticks across the aggregate range. The panel hides automatically
-when no time-varying dataset is loaded.
+timestamps the slider exposes discrete stops at each one; otherwise
+it shows evenly-spaced guide ticks across the aggregate range.
+Previous / next buttons step exactly one sample at a time and are
+always available, which is handy for nudging within a dense cluster.
+The panel hides automatically when no time-varying dataset is loaded.
+
+To keep clusters selectable when data is sparse, the slider uses a
+**gap-collapsing (focus + context) axis**: ranges that contain data
+are laid out proportionally to their real duration, while empty gaps
+between them are compressed to a thin fixed width. A contiguous
+single-window dataset therefore maps linearly (unchanged), but an
+exchange set whose clusters are separated by long empty stretches —
+e.g. the Rotterdam NL S-111 set, which spans months but is dominated
+by two multi-month gaps — has each cluster expanded so it can be
+landed on with the pointer.
+
+Under the slider a thin **data-coverage band** highlights the time
+ranges that actually contain data — the merged union of every
+dataset's covered window (for S-111 this is its gated forecast
+window; for S-411 snapshots, from the issue time onward). It is
+painted on the same gap-collapsing axis as the slider, so filled
+bands line up with the slider's data clusters and the compressed
+gaps show through as the faint "no data" track. Scrubbing across a
+gap shows nothing. This matters most for S-111 exchange sets that
+bundle many non-overlapping forecast files over the same grid: only
+the file covering the current clock draws.
+
+Some S-111 / S-104 exchange sets instead bundle several **product
+variants of the same cell** — for example the Rotterdam NL set, which
+publishes the same grid as separate neap / spring tidal-regime and
+depth-band products (`S111-neap 0-5`, `S111-neap 0-10`, …) under one
+dataset name. These variants cover the same area and the same time, so
+left unchecked their current arrows stack on identical locations and
+look like several timesteps drawn at once. The viewer keeps the first
+loaded variant visible and loads the rest **hidden** (the Datasets-list
+row dims and its eye icon shows the hidden state); re-enable any of them
+from the list to compare variants.
 
 ## Validation
 

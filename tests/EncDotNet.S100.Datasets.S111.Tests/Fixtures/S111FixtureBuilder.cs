@@ -73,4 +73,82 @@ internal static class S111FixtureBuilder
         file.Write(path, options);
         return path;
     }
+
+    /// <summary>
+    /// Writes a dcf2 fixture with multiple <c>Group_NNN</c> time steps and
+    /// the <c>dateTimeOfFirstRecord</c> / <c>timeRecordInterval</c> instance
+    /// attributes that drive the reader's deferred (lazy) time-point
+    /// arithmetic. Each step's values are <paramref name="valuesPerStep"/>[i].
+    /// </summary>
+    public static string WriteMultiStepFile(
+        string path,
+        SpecRow[][] valuesPerStep,
+        int numLat,
+        int numLon,
+        string dateTimeOfFirstRecord = "20260101T00:00:00Z",
+        long timeRecordInterval = 1200)
+    {
+        var instance = new H5Group
+        {
+            Attributes = new()
+            {
+                ["gridOriginLatitude"] = 50.0,
+                ["gridOriginLongitude"] = -1.0,
+                ["gridSpacingLatitudinal"] = 0.01,
+                ["gridSpacingLongitudinal"] = 0.01,
+                ["numPointsLatitudinal"] = numLat,
+                ["numPointsLongitudinal"] = numLon,
+                ["numberOfTimes"] = valuesPerStep.Length,
+                ["dateTimeOfFirstRecord"] = dateTimeOfFirstRecord,
+                ["timeRecordInterval"] = timeRecordInterval,
+            },
+        };
+
+        for (int i = 0; i < valuesPerStep.Length; i++)
+        {
+            // Per-step timePoint is still written so the eager path (which
+            // does not consult dateTimeOfFirstRecord) can also read the file.
+            var stepStart = ParseFirstRecord(dateTimeOfFirstRecord).AddSeconds(timeRecordInterval * i);
+            instance[$"Group_{i + 1:000}"] = new H5Group
+            {
+                Attributes = new()
+                {
+                    ["timePoint"] = stepStart.ToString("yyyyMMdd'T'HHmmss'Z'"),
+                },
+                ["values"] = valuesPerStep[i],
+            };
+        }
+
+        var file = new H5File
+        {
+            Attributes = new()
+            {
+                ["horizontalDatumValue"] = 4326,
+                ["geographicIdentifier"] = "Test",
+                ["issueDate"] = "2026-01-01",
+            },
+            ["SurfaceCurrent"] = new H5Group
+            {
+                Attributes = new()
+                {
+                    ["dataCodingFormat"] = (byte)2,
+                    ["typeOfCurrentData"] = (byte)6,
+                },
+                ["SurfaceCurrent.01"] = instance,
+            },
+        };
+
+        var options = new H5WriteOptions(
+            FieldNameMapper: f => f.GetCustomAttribute<H5NameAttribute>()?.Name);
+
+        file.Write(path, options);
+        return path;
+    }
+
+    private static DateTime ParseFirstRecord(string s) =>
+        DateTime.ParseExact(
+            s,
+            ["yyyyMMdd'T'HH:mm:ss'Z'", "yyyyMMdd'T'HHmmss'Z'", "yyyy-MM-dd'T'HH:mm:ss'Z'"],
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
 }
