@@ -12,8 +12,11 @@ namespace EncDotNet.S100.Viewer.Views;
 /// per <see cref="NormalizedCoverageBand"/>, positioned by its
 /// <see cref="NormalizedCoverageBand.Start"/>/<see cref="NormalizedCoverageBand.Width"/>
 /// fractions across the control's width. Ranges without a band are
-/// "no data". The control is width-responsive (it re-renders on bounds
-/// changes) so it stays aligned with the slider above it.
+/// "no data". A short vertical <b>boundary tick</b> rises above each
+/// segment's start and end edge, so contiguous data sections are clearly
+/// distinguished from the compressed gaps between them. The control is
+/// width-responsive (it re-renders on bounds changes) so it stays aligned
+/// with the slider above it.
 /// </summary>
 internal sealed class CoverageBandControl : Control
 {
@@ -40,9 +43,30 @@ internal sealed class CoverageBandControl : Control
     public static readonly StyledProperty<double> BandCornerRadiusProperty =
         AvaloniaProperty.Register<CoverageBandControl, double>(nameof(BandCornerRadius), 2d);
 
+    /// <summary>
+    /// Brush used for the boundary ticks at each segment's start/end. When
+    /// <c>null</c>, <see cref="Fill"/> is used.
+    /// </summary>
+    public static readonly StyledProperty<IBrush?> TickBrushProperty =
+        AvaloniaProperty.Register<CoverageBandControl, IBrush?>(nameof(TickBrush));
+
+    /// <summary>Width of each boundary tick, in device pixels.</summary>
+    public static readonly StyledProperty<double> TickThicknessProperty =
+        AvaloniaProperty.Register<CoverageBandControl, double>(nameof(TickThickness), 1.5d);
+
+    /// <summary>
+    /// How far (in device pixels) the boundary ticks rise above the top of
+    /// the band fill. The band fill is inset from the top by this amount so
+    /// the ticks have room to show.
+    /// </summary>
+    public static readonly StyledProperty<double> TickRiseProperty =
+        AvaloniaProperty.Register<CoverageBandControl, double>(nameof(TickRise), 4d);
+
     static CoverageBandControl()
     {
-        AffectsRender<CoverageBandControl>(BandsProperty, FillProperty, TrackBrushProperty, BandCornerRadiusProperty);
+        AffectsRender<CoverageBandControl>(
+            BandsProperty, FillProperty, TrackBrushProperty, BandCornerRadiusProperty,
+            TickBrushProperty, TickThicknessProperty, TickRiseProperty);
     }
 
     public IReadOnlyList<NormalizedCoverageBand>? Bands
@@ -69,6 +93,24 @@ internal sealed class CoverageBandControl : Control
         set => SetValue(BandCornerRadiusProperty, value);
     }
 
+    public IBrush? TickBrush
+    {
+        get => GetValue(TickBrushProperty);
+        set => SetValue(TickBrushProperty, value);
+    }
+
+    public double TickThickness
+    {
+        get => GetValue(TickThicknessProperty);
+        set => SetValue(TickThicknessProperty, value);
+    }
+
+    public double TickRise
+    {
+        get => GetValue(TickRiseProperty);
+        set => SetValue(TickRiseProperty, value);
+    }
+
     public override void Render(DrawingContext context)
     {
         base.Render(context);
@@ -77,15 +119,23 @@ internal sealed class CoverageBandControl : Control
         double height = Bounds.Height;
         if (width <= 0 || height <= 0) return;
 
-        double radius = Math.Min(BandCornerRadius, height / 2);
+        // Reserve room at the top for the boundary ticks to rise above the
+        // band fill; the fill (and "no data" track) occupy the remainder.
+        double rise = Math.Clamp(TickRise, 0d, height);
+        double bandTop = rise;
+        double bandHeight = Math.Max(height - rise, 1d);
+        double radius = Math.Min(BandCornerRadius, bandHeight / 2);
 
         // "No data" track behind the coverage bands.
         if (TrackBrush is { } track)
-            context.DrawRectangle(track, null, new Rect(0, 0, width, height), radius, radius);
+            context.DrawRectangle(track, null, new Rect(0, bandTop, width, bandHeight), radius, radius);
 
         var bands = Bands;
         if (bands is null || bands.Count == 0) return;
         if (Fill is not { } brush) return;
+
+        var tickBrush = TickBrush ?? brush;
+        double thickness = Math.Max(TickThickness, 0.5);
 
         foreach (var band in bands)
         {
@@ -95,8 +145,19 @@ internal sealed class CoverageBandControl : Control
 
             double x = start * width;
             double pixelWidth = Math.Max(w * width, 1d);
-            var rect = new Rect(x, 0, pixelWidth, height);
-            context.DrawRectangle(brush, null, rect, radius, radius);
+            context.DrawRectangle(brush, null, new Rect(x, bandTop, pixelWidth, bandHeight), radius, radius);
+
+            // Boundary ticks at the segment's start and end, rising the full
+            // control height so they extend above the band fill. Clamped so
+            // ticks at the extremes stay fully visible.
+            DrawTick(context, tickBrush, x, thickness, width, height);
+            DrawTick(context, tickBrush, x + pixelWidth, thickness, width, height);
         }
+    }
+
+    private static void DrawTick(DrawingContext context, IBrush brush, double centerX, double thickness, double width, double height)
+    {
+        double left = Math.Clamp(centerX - thickness / 2, 0d, Math.Max(width - thickness, 0d));
+        context.DrawRectangle(brush, null, new Rect(left, 0, thickness, height));
     }
 }

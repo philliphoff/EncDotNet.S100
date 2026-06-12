@@ -65,13 +65,20 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineSlider}" />
                         <!-- Data-coverage band: shows which parts of the
                              aggregate timeline have data (filled) vs. no
-                             data (gaps). Aligned under the slider track. -->
+                             data (the compressed gaps). Inset by 2px to line
+                             up left/right with the slider's colored track
+                             (ShadUI insets it by a 1px border + 1px track
+                             button margin). Boundary ticks rise above each
+                             filled section to set it apart from the gaps. -->
                         <views:CoverageBandControl Grid.Column="0"
                                                    Grid.Row="1"
-                                                   Height="6"
-                                                   Margin="6,3,6,0"
+                                                   Height="12"
+                                                   Margin="2,2,2,0"
                                                    Fill="{DynamicResource AccentBrush}"
                                                    TrackBrush="#33808080"
+                                                   TickBrush="{DynamicResource AccentBrush}"
+                                                   TickThickness="1.5"
+                                                   TickRise="4"
                                                    Bands="{Binding CoverageBands, Mode=OneWay}"
                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCoverageBand}" />
                         <StackPanel Grid.Column="1"

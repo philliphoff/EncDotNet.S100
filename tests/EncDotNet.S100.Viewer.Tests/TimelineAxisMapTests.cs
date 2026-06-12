@@ -59,7 +59,7 @@ public sealed class TimelineAxisMapTests
         double gap = map.CoverageBands[1].Start - (map.CoverageBands[0].Start + map.CoverageBands[0].Width);
 
         Assert.True(clusterWidth > 0.4, $"cluster width was {clusterWidth}");
-        Assert.True(gap is > 0.0 and < 0.1, $"gap was {gap}");
+        Assert.True(gap is > 0.0 and < 0.2, $"gap was {gap}");
     }
 
     [Fact]

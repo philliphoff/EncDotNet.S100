@@ -106,16 +106,16 @@ public sealed class CoverageBandTests
 
         // Two equal 2h data clusters separated by a 6h gap. On a linear axis
         // each cluster would be 0.2 wide; the gap-collapsing axis compresses
-        // the gap (to 5% of data width) so each cluster expands to ~0.476 and
-        // they stay selectable.
+        // the gap (to 12% of data width) so each cluster expands to ~0.446
+        // and they stay selectable.
         Assert.Equal(2, bands.Count);
         Assert.Equal(0.0, bands[0].Start, 3);
-        Assert.Equal(0.476, bands[0].Width, 3);
-        Assert.Equal(0.524, bands[1].Start, 3);
-        Assert.Equal(0.476, bands[1].Width, 3);
+        Assert.Equal(0.446, bands[0].Width, 3);
+        Assert.Equal(0.554, bands[1].Start, 3);
+        Assert.Equal(0.446, bands[1].Width, 3);
         // The compressed gap between the clusters is thin but non-zero.
         double gap = bands[1].Start - (bands[0].Start + bands[0].Width);
-        Assert.True(gap is > 0.0 and < 0.1, $"gap was {gap}");
+        Assert.True(gap is > 0.0 and < 0.2, $"gap was {gap}");
     }
 
     [Fact]

@@ -30,7 +30,7 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class TimelineAxisMap
 {
     /// <summary>Per-gap warped width, as a fraction of total data duration.</summary>
-    private const double GapWidthFraction = 0.05;
+    private const double GapWidthFraction = 0.12;
 
     /// <summary>Cap on the combined warped width of all gaps (× data duration).</summary>
     private const double GapBudget = 0.5;
