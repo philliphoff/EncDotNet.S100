@@ -156,14 +156,6 @@ internal interface IDatasetLoaderService
     event Action<DatasetEntry>? DatasetLoaded;
 
     /// <summary>
-    /// Raised whenever the loader produces a user-visible status message
-    /// (load progress, errors, time-step changes, palette switches).
-    /// Subscribers (typically <see cref="MainWindow"/>) forward to
-    /// <see cref="MainViewModel.StatusText"/>.
-    /// </summary>
-    event Action<string?>? StatusChanged;
-
-    /// <summary>
     /// Raised after <see cref="RemoveEntry"/> has dropped the entry from
     /// the loader's processor cache. Consumers can use this to release
     /// any per-entry state they kept alongside the loader (e.g. an

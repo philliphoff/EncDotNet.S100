@@ -206,19 +206,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
     public event Action<DatasetEntry>? DatasetLoaded;
 
-    /// <summary>
-    /// Raised whenever the loader wants to surface a status message
-    /// (loading, errors, time-step progress, etc.). The window forwards
-    /// these to <see cref="MainViewModel.StatusText"/>.
-    /// </summary>
-    public event Action<string?>? StatusChanged;
-
     public event Action<DatasetEntry>? DatasetRemoved;
 
     /// <inheritdoc />
     public bool SuppressAutoZoom { get; set; }
-
-    private void SetStatus(string? text) => StatusChanged?.Invoke(text);
 
     /// <summary>
     /// Surfaces the outcome of S-101 sequential update application as a
@@ -238,13 +229,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var msg = string.Format(
                 Strings.Status_ExchangeSetUpdatesPartial,
                 appliedCount, entry.DisplayName, problem.Text);
-            SetStatus(msg);
             _toasts.ShowWarning(Strings.Toast_Warning, msg);
         }
         else if (appliedCount > 0)
         {
-            SetStatus(string.Format(
-                Strings.Status_ExchangeSetUpdatesApplied, appliedCount, entry.DisplayName));
+            _toasts.ShowInfo(
+                Strings.Toast_Info,
+                string.Format(
+                    Strings.Status_ExchangeSetUpdatesApplied, appliedCount, entry.DisplayName));
         }
     }
 
@@ -297,7 +289,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
             if (spec is null)
             {
-                SetStatus(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
                 _toasts.ShowWarning(Strings.Toast_Warning,
                     string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
                 return;
@@ -309,13 +300,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
-            SetStatus(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
             _toasts.ShowWarning(Strings.Toast_Warning,
                 string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
             return;
         }
-
-        SetStatus(string.Format(Strings.Status_LoadingFile, entry.DisplayName));
 
         // Show a loading toast with a Cancel action for standalone
         // dataset loads. Exchange-set entries are covered by the
@@ -416,13 +404,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var validation = await Task.Run(() => SafeValidate(processor), token);
             entry.SetValidationReport(validation);
 
-            // Dismiss the loading toast before showing the result.
-            // Exchange-set entries don't show per-dataset toasts.
+            // Dismiss the loading toast and surface the per-dataset
+            // load summary as a success toast. Exchange-set entries are
+            // covered by the aggregate exchange-set toast instead, so
+            // they skip the per-dataset toast to avoid churn.
             if (!fromExchangeSet)
             {
                 _toasts.DismissAll();
+                if (!string.IsNullOrWhiteSpace(result.Info))
+                {
+                    _toasts.ShowSuccess(Strings.Toast_Success, result.Info);
+                }
             }
-            SetStatus(result.Info);
 
             // Recent files only makes sense for plain file loads. An
             // exchange-set entry's FilePath is a relative path inside
@@ -449,7 +442,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 _toasts.DismissAll();
                 _toasts.ShowInfo(Strings.Toast_DatasetCancelled, entry.DisplayName);
             }
-            SetStatus(null);
         }
         catch (Exception ex)
         {
@@ -466,7 +458,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             // explicitly dismissed.
             var failure = LoadFailureViewModel.FromException(
                 entry.DisplayName, entry.FilePath, ex);
-            SetStatus(string.Format(Strings.Status_Error, ex.Message));
             _toasts.ShowError(
                 title: string.Format(Strings.Toast_DatasetErrorTitle, entry.DisplayName),
                 content: failure.PrimaryMessage,
@@ -523,8 +514,6 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         }
 
         if (token.IsCancellationRequested) return;
-
-        SetStatus(string.Format(Strings.Status_RenderingAtTime, t));
 
         foreach (var (entry, adapter) in _globalTime.Adapters.ToArray())
         {

@@ -52,7 +52,6 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
         new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
 
     public event Action<DatasetEntry>? DatasetLoaded;
-    public event Action<string?>? StatusChanged;
     public event Action<DatasetEntry>? DatasetRemoved;
     public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();

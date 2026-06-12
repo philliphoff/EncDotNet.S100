@@ -56,7 +56,6 @@ public class MainViewModelOpenRecentTests : IDisposable
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) { Loaded.Add(entry); return Task.CompletedTask; }
         public Task ReRenderAtTimeAsync(System.DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
@@ -71,14 +70,32 @@ public class MainViewModelOpenRecentTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
+    private sealed class RecordingToastService : IToastService
+    {
+        public int WarningCount { get; private set; }
+        public void ShowInfo(string title, string? content = null) { }
+        public void ShowSuccess(string title, string? content = null) { }
+        public void ShowWarning(string title, string? content = null) => WarningCount++;
+        public void ShowError(string title, string? content = null, string? actionLabel = null, Action? action = null, bool sticky = false) { }
+        public void ShowLoading(string title, string? content = null, string? actionLabel = null, Action? action = null) { }
+        public void DismissAll() { }
+    }
+
     private MainViewModel CreateViewModel(
         out RecordingLoaderService loader,
         out StubRecentFilesService recent)
+        => CreateViewModel(out loader, out recent, out _);
+
+    private MainViewModel CreateViewModel(
+        out RecordingLoaderService loader,
+        out StubRecentFilesService recent,
+        out RecordingToastService toasts)
     {
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         loader = new RecordingLoaderService();
         recent = new StubRecentFilesService();
+        toasts = new RecordingToastService();
         var datasets = new DatasetsViewModel(loader);
         return new MainViewModel(
             settings,
@@ -97,20 +114,20 @@ public class MainViewModelOpenRecentTests : IDisposable
             themeService: new StubThemeService(),
             recentFiles: recent,
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            toasts: new StubToastService());
+            toasts: toasts);
     }
 
     [Fact]
-    public async Task OpenRecent_MissingFile_RemovesFromRecentAndSetsStatus()
+    public async Task OpenRecent_MissingFile_RemovesFromRecentAndNotifies()
     {
-        var vm = CreateViewModel(out var loader, out var recent);
+        var vm = CreateViewModel(out var loader, out var recent, out var toasts);
         var ghost = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}");
         recent.Add(ghost);
 
         await vm.OpenRecentCommand.ExecuteAsync(ghost);
 
         Assert.DoesNotContain(ghost, recent.Items);
-        Assert.False(string.IsNullOrEmpty(vm.StatusText));
+        Assert.Equal(1, toasts.WarningCount);
         Assert.Empty(loader.Loaded);
     }
 

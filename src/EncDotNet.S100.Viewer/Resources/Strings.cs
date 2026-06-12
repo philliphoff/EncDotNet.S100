@@ -300,15 +300,12 @@ internal static class Strings
     public static string Status_UnrecognizedFileType => Get(nameof(Status_UnrecognizedFileType));
     public static string Status_SelectPortrayalCatalogue => Get(nameof(Status_SelectPortrayalCatalogue));
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
-    public static string Status_Error => Get(nameof(Status_Error));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));
-    public static string Status_RenderingAtTime => Get(nameof(Status_RenderingAtTime));
     public static string Status_FeatureNoDetails => Get(nameof(Status_FeatureNoDetails));
     public static string Status_FeatureSummary => Get(nameof(Status_FeatureSummary));
     public static string Status_FeatureSummaryWithMore => Get(nameof(Status_FeatureSummaryWithMore));
     public static string Status_FeatureRefNotFound => Get(nameof(Status_FeatureRefNotFound));
     public static string Status_FileNoLongerExists => Get(nameof(Status_FileNoLongerExists));
-    public static string Status_ExchangeSetLoading => Get(nameof(Status_ExchangeSetLoading));
     public static string Status_ExchangeSetLoaded => Get(nameof(Status_ExchangeSetLoaded));
     public static string Status_ExchangeSetLoadedWithErrors => Get(nameof(Status_ExchangeSetLoadedWithErrors));
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
@@ -324,9 +321,6 @@ internal static class Strings
     public static string Progress_ExchangeSetTitle => Get(nameof(Progress_ExchangeSetTitle));
     public static string Progress_ExchangeSetCounter => Get(nameof(Progress_ExchangeSetCounter));
     public static string Progress_ExchangeSetCancel => Get(nameof(Progress_ExchangeSetCancel));
-    public static string Banner_ExchangeSetPartial => Get(nameof(Banner_ExchangeSetPartial));
-    public static string Banner_ExchangeSetFailed => Get(nameof(Banner_ExchangeSetFailed));
-    public static string Banner_Dismiss => Get(nameof(Banner_Dismiss));
 
     // Dataset entry
     public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));

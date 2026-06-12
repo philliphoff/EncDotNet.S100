@@ -758,6 +758,14 @@ internal sealed class SettingsViewModel : ViewModelBase
         _settings.AisOverlay ??= new AisOverlaySettings();
     }
 
+    /// <summary>
+    /// Raised when <see cref="AisEnabled"/> changes. The activity bar
+    /// wires this (via <see cref="Activities.AisOverlayVisibilitySource"/>)
+    /// so the Vessels tab appears / disappears live with the overlay
+    /// opt-in.
+    /// </summary>
+    public event Action<bool>? AisEnabledChanged;
+
     private bool _aisEnabled;
     /// <summary>
     /// User opt-in for the AIS overlay. Persisted to
@@ -774,6 +782,7 @@ internal sealed class SettingsViewModel : ViewModelBase
                 EnsureAisOverlaySettings();
                 _settings.AisOverlay!.Enabled = value;
                 _settings.Save();
+                AisEnabledChanged?.Invoke(value);
             }
         }
     }

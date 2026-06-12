@@ -44,12 +44,6 @@ public class ExchangeSetServiceLoaderTests
     private static string S101OrphanFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-S101Orphan");
 
-    private sealed class StubStatus : IStatusPresenter
-    {
-        public string? StatusText { get; set; }
-        public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
-    }
-
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -58,7 +52,6 @@ public class ExchangeSetServiceLoaderTests
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(DateTime t, CancellationToken ct) => Task.CompletedTask;
@@ -76,7 +69,7 @@ public class ExchangeSetServiceLoaderTests
     private static (DatasetsViewModel datasets, ExchangeSetService service) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopLoader());
-        var service = new ExchangeSetService(datasets, new StubStatus(), new StubToastService());
+        var service = new ExchangeSetService(datasets, new StubToastService());
         return (datasets, service);
     }
 

@@ -525,54 +525,60 @@ public partial class App : Application
         // edits to MainWindow.axaml. Ids match the legacy ActivityKind enum
         // names so existing ViewerSettings.LastSelectedActivity values
         // round-trip unchanged.
-        services.AddActivityTab<FeatureCataloguesViewModel, FeatureCataloguesView>(
-            id: "FeatureCatalogues",
-            order: 10,
-            title: Strings.Pane_FeatureCatalogues,
-            tooltip: Strings.Tooltip_FeatureCatalogues,
-            iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
-        services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
-            id: "PortrayalCatalogues",
-            order: 20,
-            title: Strings.Pane_PortrayalCatalogues,
-            tooltip: Strings.Tooltip_PortrayalCatalogues,
-            iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Activity tabs are ordered by importance via IActivityTab.Order
+        // (ascending top-to-bottom). Data sources come first, then the
+        // display / interaction tools, then the live overlays, then the
+        // reference catalogues; Settings is pinned to the bottom
+        // (order >= 1000). Tabs that can be hidden (Vessels, Helm) are
+        // never persisted as last-selected so they can't be restored
+        // while hidden.
         services.AddActivityTab<DatasetsViewModel, DatasetsView>(
             id: "Datasets",
-            order: 30,
+            order: 10,
             title: Strings.Pane_Datasets,
             tooltip: Strings.Tooltip_Datasets,
             iconFactory: static () => new FluentIcon { Icon = Icon.Layer, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<CatalogPanelViewModel, CatalogPanelView>(
             id: "Catalog",
-            order: 40,
+            order: 20,
             title: Strings.Pane_Catalog,
             tooltip: Strings.Tooltip_Catalog,
             iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
+            id: "EcdisDisplay",
+            order: 30,
+            title: Strings.Pane_EcdisDisplay,
+            tooltip: Strings.Tooltip_EcdisDisplay,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Eye, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<LayerStackViewModel, LayerStackView>(
             id: "LayerStack",
-            order: 50,
+            order: 40,
             title: Strings.Pane_LayerStack,
             tooltip: Strings.Tooltip_LayerStack,
             iconFactory: static () => new FluentIcon { Icon = Icon.Stack, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<FeatureSearchViewModel, FeatureSearchView>(
             id: "Search",
-            order: 60,
+            order: 50,
             title: Strings.Pane_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Vessels tab — shown only while the AIS overlay is enabled
+        // (its visibility source bridges SettingsViewModel.AisEnabled).
         services.AddActivityTab<VesselListViewModel, VesselListView>(
             id: "Vessels",
-            order: 65,
+            order: 60,
             title: Strings.Pane_Vessels,
             tooltip: Strings.Tooltip_Vessels,
-            iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 });
+            iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            visibilitySourceFactory: static sp =>
+                new EncDotNet.S100.Viewer.ViewModels.Activities.AisOverlayVisibilitySource(
+                    sp.GetRequiredService<SettingsViewModel>()));
         // Helm tab — shown only while own-vessel tracking is enabled
         // (its visibility source bridges SettingsViewModel.OwnShipOverlayEnabled).
-        // Never persisted as last-selected so it can't be restored while hidden.
         services.AddActivityTab<HelmViewModel, HelmView>(
             id: "Helm",
-            order: 67,
+            order: 70,
             title: Strings.Pane_Helm,
             tooltip: Strings.Tooltip_Helm,
             iconFactory: static () => new FluentIcon { Icon = Icon.TopSpeed, IconVariant = IconVariant.Regular, FontSize = 22 },
@@ -580,12 +586,18 @@ public partial class App : Application
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.OwnShipTrackingVisibilitySource(
                     sp.GetRequiredService<SettingsViewModel>()));
-        services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
-            id: "EcdisDisplay",
-            order: 70,
-            title: Strings.Pane_EcdisDisplay,
-            tooltip: Strings.Tooltip_EcdisDisplay,
-            iconFactory: static () => new FluentIcon { Icon = Icon.Eye, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<FeatureCataloguesViewModel, FeatureCataloguesView>(
+            id: "FeatureCatalogues",
+            order: 80,
+            title: Strings.Pane_FeatureCatalogues,
+            tooltip: Strings.Tooltip_FeatureCatalogues,
+            iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
+            id: "PortrayalCatalogues",
+            order: 90,
+            title: Strings.Pane_PortrayalCatalogues,
+            tooltip: Strings.Tooltip_PortrayalCatalogues,
+            iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<SettingsViewModel, SettingsView>(
             id: "Settings",
             order: 1000,

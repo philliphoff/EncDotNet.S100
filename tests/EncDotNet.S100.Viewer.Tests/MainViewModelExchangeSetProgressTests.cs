@@ -50,7 +50,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
             = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public event Action<string?>? StatusChanged { add { } remove { } }
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ReRenderAtTimeAsync(DateTime t, System.Threading.CancellationToken ct) => Task.CompletedTask;
@@ -139,7 +138,7 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
     }
 
     [Fact]
-    public void EndExchangeSetLoad_FullSuccess_ClearsBanner()
+    public void EndExchangeSetLoad_FullSuccess_ClearsLoadingState()
     {
         var vm = CreateViewModel();
         vm.BeginExchangeSetLoad("/some/folder");
@@ -152,11 +151,11 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         });
 
         Assert.False(vm.IsExchangeSetLoading);
-        Assert.False(vm.IsExchangeSetBannerVisible);
+        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 
     [Fact]
-    public void EndExchangeSetLoad_PartialFailure_ShowsBanner()
+    public void EndExchangeSetLoad_PartialFailure_ClearsLoadingState()
     {
         var vm = CreateViewModel();
         vm.BeginExchangeSetLoad("/some/folder");
@@ -170,12 +169,11 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         });
 
         Assert.False(vm.IsExchangeSetLoading);
-        Assert.True(vm.IsExchangeSetBannerVisible);
-        Assert.False(string.IsNullOrEmpty(vm.ExchangeSetBannerMessage));
+        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 
     [Fact]
-    public void EndExchangeSetLoad_FatalFailure_ShowsBanner()
+    public void EndExchangeSetLoad_FatalFailure_ClearsLoadingState()
     {
         var vm = CreateViewModel();
         vm.BeginExchangeSetLoad("/missing");
@@ -186,24 +184,7 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
             FailureMessage = "boom",
         });
 
-        Assert.True(vm.IsExchangeSetBannerVisible);
-        Assert.Contains("boom", vm.ExchangeSetBannerMessage);
-    }
-
-    [Fact]
-    public void DismissBannerCommand_HidesBanner()
-    {
-        var vm = CreateViewModel();
-        vm.BeginExchangeSetLoad("/some/folder");
-        vm.EndExchangeSetLoad(new ExchangeSetOpenResult
-        {
-            SourcePath = "/some/folder",
-            Total = 2, Loaded = 1, SkippedUnsupported = 1,
-        });
-        Assert.True(vm.IsExchangeSetBannerVisible);
-
-        vm.DismissExchangeSetBannerCommand.Execute(null);
-
-        Assert.False(vm.IsExchangeSetBannerVisible);
+        Assert.False(vm.IsExchangeSetLoading);
+        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 }

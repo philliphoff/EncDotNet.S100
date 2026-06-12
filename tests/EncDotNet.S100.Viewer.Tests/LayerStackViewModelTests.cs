@@ -162,7 +162,6 @@ public class LayerStackViewModelTests
 
         public event Action<DatasetEntry>? DatasetLoaded { add { } remove { } }
         public event Action<DatasetEntry>? DatasetRemoved { add { } remove { } }
-        public event Action<string?>? StatusChanged { add { } remove { } }
 
         public void Initialize(IMapHost host, ViewerCommandSettings? options) { }
         public Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
