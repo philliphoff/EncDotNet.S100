@@ -21,12 +21,13 @@ namespace EncDotNet.S100.Viewer.Services;
 /// stack on the same locations and the map looks like several time-steps
 /// are rendered simultaneously.
 ///
-/// Identical base file name within the same exchange-set source is a strong,
-/// producer-independent signal that two entries describe the <em>same</em>
-/// cell (distinct cells never share a dataset name). We keep the first such
-/// entry visible and load the remaining duplicates hidden; the user can
-/// re-enable any of them from the Datasets list. S-111 §10 / §12 (dataset
-/// naming and packaging).
+/// Identical base file name is a strong, producer-independent signal that
+/// two entries describe the <em>same</em> cell (distinct cells never share a
+/// dataset name) — even when the variants are shipped as separate exchange
+/// sets, each with its own <c>CATALOG.XML</c> and asset source, as the
+/// Rotterdam NL set is. We keep the first such entry visible and load the
+/// remaining duplicates hidden; the user can re-enable any of them from the
+/// Datasets list. S-111 §10 / §12 (dataset naming and packaging).
 /// </remarks>
 internal static class DuplicateCoverageDetector
 {
@@ -40,23 +41,24 @@ internal static class DuplicateCoverageDetector
         spec is "S-111" or "S-104";
 
     /// <summary>
-    /// True when two exchange-set entries describe the same cell coverage:
-    /// they originate from the <em>same</em> asset source (reference
-    /// identity, i.e. the same loaded exchange set) and share an identical
-    /// base file name (case-insensitive), regardless of the product
-    /// sub-folder they live in.
+    /// True when two entries describe the same cell coverage: they share an
+    /// identical base file name (case-insensitive), regardless of which
+    /// product sub-folder or exchange set they came from.
     /// </summary>
-    /// <param name="sourceA">Asset source of the first entry (an opaque identity token).</param>
+    /// <remarks>
+    /// The product variants are frequently published as <em>separate</em>
+    /// exchange sets (each with its own <c>CATALOG.XML</c> and asset source),
+    /// so source identity cannot be relied upon. For the collapsible coverage
+    /// specs an identical dataset name is itself a strong same-cell signal:
+    /// the S-111 / S-104 dataset name encodes producer, agency, area and
+    /// reference time, so two distinct cells never share a name. Callers must
+    /// gate this on <see cref="IsCollapsibleSpec"/> and on the two entries
+    /// sharing the same product spec.
+    /// </remarks>
     /// <param name="relativePathA">Source-relative path of the first entry.</param>
-    /// <param name="sourceB">Asset source of the second entry.</param>
     /// <param name="relativePathB">Source-relative path of the second entry.</param>
-    public static bool IsSameCoverage(
-        object? sourceA, string? relativePathA,
-        object? sourceB, string? relativePathB)
+    public static bool IsSameCoverage(string? relativePathA, string? relativePathB)
     {
-        if (sourceA is null || !ReferenceEquals(sourceA, sourceB))
-            return false;
-
         var fileA = SafeFileName(relativePathA);
         var fileB = SafeFileName(relativePathB);
         return fileA.Length > 0 &&
