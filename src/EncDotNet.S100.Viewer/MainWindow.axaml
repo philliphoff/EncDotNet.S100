@@ -355,7 +355,14 @@
                                    bh:CollapsibleRow.MinHeightWhenVisible="120"
                                    bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
-                <Grid Grid.Row="0" DragDrop.AllowDrop="True">
+                <!--
+                    ClipToBounds keeps the map overlays (scale bar, pick/
+                    measure/zoom buttons, compass rose) confined to the map
+                    row. Without it, the top-anchored overlay stack overflows
+                    downward into the timeline / bottom dock when the map row
+                    shrinks.
+                -->
+                <Grid Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
                 <diag:InstrumentedMapControl x:Name="MapControl" />
                 <diag:GpuAccelerationProbe />
                 <views:ScaleBarView x:Name="ScaleBar"
