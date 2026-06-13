@@ -66,6 +66,13 @@ public partial class App : Application
         // of rebuilding and re-stroking them every frame.
         EncDotNet.S100.Renderers.Mapsui.CachedVectorStyleRenderer.Register();
 
+        // Register the picture-snapshot custom layer renderer (env-gated, off by
+        // default). It resolves Mapsui's style renderers by reflection, so it
+        // must register after the cached vector renderer is in place; it reads
+        // the renderer dictionary lazily on first paint, by which time
+        // instrumentation (below) has also wrapped it.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.Register();
+
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 
         // The viewer uses a plain ServiceCollection (no generic IHost),
