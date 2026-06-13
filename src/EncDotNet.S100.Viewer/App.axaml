@@ -88,6 +88,9 @@
     <Application.Styles>
         <themes:ShadTheme />
 
+        <!-- Generic ApplicationPanel control template (title bar + content). -->
+        <StyleInclude Source="avares://EncDotNet.S100.Viewer/Views/ApplicationPanel.axaml" />
+
         <!--
           App-wide Slider accent colour. ShadUI's Slider template sets
           PART_DecreaseButton.Background and Thumb.Background as local

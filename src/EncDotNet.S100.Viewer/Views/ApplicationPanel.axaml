@@ -1,0 +1,70 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ic="using:FluentIcons.Avalonia"
+        xmlns:views="using:EncDotNet.S100.Viewer.Views"
+        xmlns:conv="using:EncDotNet.S100.Viewer">
+
+    <!--
+      Template for the generic ApplicationPanel control. Lays out a title bar
+      (upper-cased title + optional close button) above a ContentPresenter that
+      fills the remaining area. Centralizes the chrome that the left/right/bottom
+      docks used to hand-roll inline in MainWindow.axaml.
+    -->
+    <Style Selector="views|ApplicationPanel">
+        <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}">
+                    <DockPanel LastChildFill="True">
+                        <!-- Title bar. Fixed height so panels with and without a
+                             close button line up; title and close button are
+                             vertically centered within it. -->
+                        <Border DockPanel.Dock="Top" Height="28" Padding="12,0,6,0">
+                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Stretch">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding Title,
+                                                  RelativeSource={RelativeSource TemplatedParent},
+                                                  Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                           FontSize="11"
+                                           FontWeight="Normal"
+                                           LetterSpacing="1"
+                                           VerticalAlignment="Center" />
+                                <!-- Close button modeled on the title-bar theme
+                                     toggle: a plain Button (default ShadUI template,
+                                     so hover/pressed come for free) with Padding=0
+                                     and a transparent background, sized to a small
+                                     glyph. -->
+                                <Button Grid.Column="1"
+                                        Width="24"
+                                        Height="24"
+                                        MinWidth="0"
+                                        MinHeight="0"
+                                        Padding="0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{TemplateBinding ShowCloseButton}"
+                                        Command="{TemplateBinding CloseCommand}"
+                                        CommandParameter="{TemplateBinding CloseCommandParameter}"
+                                        ToolTip.Tip="{TemplateBinding CloseButtonToolTip}">
+                                    <ic:FluentIcon Icon="Dismiss"
+                                                   IconVariant="Regular"
+                                                   FontSize="14"
+                                                   Foreground="{DynamicResource ForegroundColor}" />
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- Panel body fills the remaining area -->
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch" />
+                    </DockPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+</Styles>
