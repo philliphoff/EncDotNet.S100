@@ -315,26 +315,12 @@
                                   bh:CollapsibleColumn.SavedWidth="{Binding RightDockSavedWidth, Mode=TwoWay}" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.) -->
-            <Border Grid.Column="0"
-                    Background="{DynamicResource BackgroundColor}"
-                    IsVisible="{Binding IsLeftDockOpen}">
-                <DockPanel>
-                    <!-- Pane header -->
-                    <Border DockPanel.Dock="Top"
-                            Padding="12,8">
-                        <TextBlock Text="{Binding LeftDockTitle}"
-                                   FontSize="11"
-                                   FontWeight="Normal"
-                                   LetterSpacing="1" />
-                    </Border>
-
-                    <!-- Pane content: resolved by ActivityTabViewTemplate from the selected tab. -->
-                    <ContentControl Content="{Binding SelectedLeftTab}"
-                                    HorizontalContentAlignment="Stretch"
-                                    VerticalContentAlignment="Stretch" />
-                </DockPanel>
-            </Border>
+            <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.).
+                 No close button — content swaps via the activity bar. -->
+            <views:ApplicationPanel Grid.Column="0"
+                                    Title="{Binding LeftDockTitle}"
+                                    Content="{Binding SelectedLeftTab}"
+                                    IsVisible="{Binding IsLeftDockOpen}" />
 
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
@@ -656,44 +642,18 @@
                 <!--
                     Bottom dock (PR-M4). Hosts whichever activity tab is
                     registered with Dock=Bottom (currently Timeline only).
-                    The chrome bar owns the title + close button; the
-                    ContentControl resolves to the tab's View via
-                    ActivityTabViewTemplate.
+                    ApplicationPanel owns the title + close button; its content
+                    resolves to the tab's View via ActivityTabViewTemplate.
                 -->
-                <Border Grid.Row="2"
-                        x:Name="TimelinePanel"
-                        Background="{DynamicResource BackgroundColor}"
-                        IsVisible="{Binding IsBottomDockOpen}">
-                    <DockPanel>
-                        <Border DockPanel.Dock="Top"
-                                Padding="12,3,8,3">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding BottomDockTitle}"
-                                           FontSize="11"
-                                           FontWeight="Normal"
-                                           LetterSpacing="1"
-                                           VerticalAlignment="Center" />
-                                <Button Grid.Column="1"
-                                        Classes="Icon"
-                                        Width="20"
-                                        Height="20"
-                                        MinWidth="0"
-                                        MinHeight="0"
-                                        Padding="0"
-                                        VerticalAlignment="Center"
-                                        Command="{Binding CloseDockCommand}"
-                                        CommandParameter="Bottom"
-                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}">
-                                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
-                                </Button>
-                            </Grid>
-                        </Border>
-                        <ContentControl Content="{Binding SelectedBottomTab}"
-                                        HorizontalContentAlignment="Stretch"
-                                        VerticalContentAlignment="Stretch" />
-                    </DockPanel>
-                </Border>
+                <views:ApplicationPanel Grid.Row="2"
+                                        x:Name="TimelinePanel"
+                                        Title="{Binding BottomDockTitle}"
+                                        Content="{Binding SelectedBottomTab}"
+                                        ShowCloseButton="True"
+                                        CloseCommand="{Binding CloseDockCommand}"
+                                        CloseCommandParameter="Bottom"
+                                        CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
+                                        IsVisible="{Binding IsBottomDockOpen}" />
             </Grid>
             <GridSplitter Grid.Column="3"
                           Classes="PaneSplitter"
@@ -706,44 +666,19 @@
             <!--
                 Right dock (PR-M4). Hosts whichever activity tab is
                 registered with Dock=Right (currently Pick Report only).
-                The chrome bar owns the title + close button; the
-                ContentControl resolves to the tab's View via
-                ActivityTabViewTemplate. Pick Report stays open with an
-                empty-state watermark when there is no active pick.
+                ApplicationPanel owns the title + close button; its content
+                resolves to the tab's View via ActivityTabViewTemplate. Pick
+                Report stays open with an empty-state watermark when there is
+                no active pick.
             -->
-            <Border Grid.Column="4"
-                    Background="{DynamicResource BackgroundColor}"
-                    IsVisible="{Binding IsRightDockOpen}">
-                <DockPanel>
-                    <Border DockPanel.Dock="Top"
-                            Padding="12,3,8,3">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding RightDockTitle}"
-                                       FontSize="11"
-                                       FontWeight="Normal"
-                                       LetterSpacing="1"
-                                       VerticalAlignment="Center" />
-                            <Button Grid.Column="1"
-                                    Classes="Icon"
-                                    Width="20"
-                                    Height="20"
-                                    MinWidth="0"
-                                    MinHeight="0"
-                                    Padding="0"
-                                    VerticalAlignment="Center"
-                                    Command="{Binding CloseDockCommand}"
-                                    CommandParameter="Right"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}">
-                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
-                            </Button>
-                        </Grid>
-                    </Border>
-                    <ContentControl Content="{Binding SelectedRightTab}"
-                                    HorizontalContentAlignment="Stretch"
-                                    VerticalContentAlignment="Stretch" />
-                </DockPanel>
-            </Border>
+            <views:ApplicationPanel Grid.Column="4"
+                                    Title="{Binding RightDockTitle}"
+                                    Content="{Binding SelectedRightTab}"
+                                    ShowCloseButton="True"
+                                    CloseCommand="{Binding CloseDockCommand}"
+                                    CloseCommandParameter="Right"
+                                    CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
+                                    IsVisible="{Binding IsRightDockOpen}" />
         </Grid>
     </DockPanel>
     <shadui:ToastHost x:Name="ToastHost"

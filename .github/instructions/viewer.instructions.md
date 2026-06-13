@@ -65,8 +65,26 @@ When modifying viewer code:
   `bh:HoverDelay.DelayMilliseconds="500"` — do not introduce a
   per-splitter style block.
 
-## Pick mode button
+## Application panels
 
+- The generic `Views.ApplicationPanel` control provides the standard
+  panel chrome: a title bar with an **upper-cased** `Title` and an
+  optional close button, above a content area that fills the remaining
+  space. It derives from `ContentControl`, so its `Content` is the panel
+  body; the title bar comes from the control template in
+  `Views/ApplicationPanel.axaml` (registered app-wide via a
+  `StyleInclude` in `App.axaml`).
+- Use it for any docked/standalone panel rather than hand-rolling a
+  header `Border` + `TextBlock` + close `Button`. The left/right/bottom
+  docks in `MainWindow.axaml` are built from it.
+- Set `Title` (natural-cased is fine — the control upper-cases it via
+  `ToUpperConverter`). For a dismissable panel set `ShowCloseButton`,
+  `CloseCommand`, `CloseCommandParameter`, and a localized
+  `CloseButtonToolTip` (`Tooltip_*`). Panels that swap content another
+  way (e.g. the left activity pane) leave `ShowCloseButton` at its
+  `false` default.
+
+## Pick mode button
 - The toggled pick-mode button uses `.pickActive` class plus a child
   selector `Button#PickModeButton.pickActive ic|FluentIcon` to push
   `Foreground=White` down to the icon (FluentIcon does not inherit
