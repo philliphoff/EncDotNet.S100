@@ -288,16 +288,28 @@ internal sealed class VesselListViewModel : ViewModelBase
         private set => SetProperty(ref _isEmpty, value);
     }
 
-    private string _emptyMessage = string.Empty;
+    private string _emptyTitle = string.Empty;
     /// <summary>
-    /// Placeholder text shown while <see cref="IsEmpty"/> is
-    /// <see langword="true"/>. Distinguishes the AIS overlay being
-    /// switched off from it being on but not yet populated.
+    /// Bold primary placeholder text shown while <see cref="IsEmpty"/> is
+    /// <see langword="true"/>. Distinguishes the AIS overlay being switched
+    /// off from it being on but not yet populated.
     /// </summary>
-    public string EmptyMessage
+    public string EmptyTitle
     {
-        get => _emptyMessage;
-        private set => SetProperty(ref _emptyMessage, value);
+        get => _emptyTitle;
+        private set => SetProperty(ref _emptyTitle, value);
+    }
+
+    private string _emptyDescription = string.Empty;
+    /// <summary>
+    /// Secondary descriptive placeholder text shown beneath
+    /// <see cref="EmptyTitle"/> while <see cref="IsEmpty"/> is
+    /// <see langword="true"/>.
+    /// </summary>
+    public string EmptyDescription
+    {
+        get => _emptyDescription;
+        private set => SetProperty(ref _emptyDescription, value);
     }
 
     /// <summary>
@@ -816,9 +828,12 @@ internal sealed class VesselListViewModel : ViewModelBase
         IsEmpty = empty;
         if (empty)
         {
-            EmptyMessage = IsAisActive
-                ? Strings.Vessels_Empty_NoData
-                : Strings.Vessels_Empty_Disabled;
+            EmptyTitle = IsAisActive
+                ? Strings.Vessels_Empty_NoDataTitle
+                : Strings.Vessels_Empty_DisabledTitle;
+            EmptyDescription = IsAisActive
+                ? Strings.Vessels_Empty_NoDataDescription
+                : Strings.Vessels_Empty_DisabledDescription;
         }
     }
 

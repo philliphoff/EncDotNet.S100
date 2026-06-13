@@ -16,33 +16,35 @@
     </UserControl.Styles>
 
     <Border Background="{DynamicResource BackgroundColor}"
-            Padding="12,8"
+            Padding="12,2"
             VerticalAlignment="Stretch">
-        <DockPanel LastChildFill="True"
-                   VerticalAlignment="Top">
+        <Panel>
+            <!-- Active state: timeline has at least one registered dataset.
+                 The title-row readout and the slider/range body are grouped
+                 so they only reserve layout space when active. When inactive,
+                 the placeholder below fills (and centers within) the entire
+                 timeline area rather than the leftover space under a docked
+                 title row. -->
+            <DockPanel LastChildFill="True"
+                       IsVisible="{Binding IsActive}">
 
-            <!-- Title row — PR-M4: the title + close button are owned by
-                 the bottom-dock chrome bar in MainWindow. We keep the
-                 current-time readout, aligned right, when active. -->
-            <Grid DockPanel.Dock="Top"
-                  ColumnDefinitions="*,Auto"
-                  Margin="0,0,0,4">
-                <TextBlock Grid.Column="1"
-                           Text="{Binding CurrentTimeLabel}"
-                           FontSize="12"
-                           FontFamily="Menlo, Consolas, monospace"
-                           VerticalAlignment="Center"
-                           Margin="0,0,8,0"
-                           IsVisible="{Binding IsActive}" />
-            </Grid>
+                <!-- Title row — PR-M4: the title + close button are owned by
+                     the bottom-dock chrome bar in MainWindow. We keep the
+                     current-time readout, aligned right, when active. -->
+                <Grid DockPanel.Dock="Top"
+                      ColumnDefinitions="*,Auto"
+                      Margin="0,0,0,4">
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding CurrentTimeLabel}"
+                               FontSize="12"
+                               FontFamily="Menlo, Consolas, monospace"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                </Grid>
 
-            <!-- Body: either the slider/range (when active) or the
-                 empty-state message (when no dataset registered). -->
-            <Panel>
-                <!-- Active state: timeline has at least one registered dataset. -->
+                <!-- Body: the slider/range readout. -->
                 <DockPanel LastChildFill="False"
-                           VerticalAlignment="Top"
-                           IsVisible="{Binding IsActive}">
+                           VerticalAlignment="Top">
 
                     <!-- Slider plus prev/next step buttons grouped at the right.
                          Buttons surface only when ticks correspond to real
@@ -108,31 +110,16 @@
                                Opacity="0.6"
                                Margin="0,4,0,0" />
                 </DockPanel>
+            </DockPanel>
 
-                <!-- Empty state: timeline pane is open but no time-varying
-                     dataset is loaded. -->
-                <StackPanel HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="6"
-                            IsVisible="{Binding !IsActive}">
-                    <ic:FluentIcon Icon="Clock"
-                                   IconVariant="Regular"
-                                   FontSize="28"
-                                   Opacity="0.45"
-                                   HorizontalAlignment="Center" />
-                    <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyTitle}"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center"
-                               Opacity="0.7" />
-                    <TextBlock Text="{x:Static loc:Strings.TimelinePanel_EmptyDescription}"
-                               FontSize="11"
-                               Opacity="0.55"
-                               HorizontalAlignment="Center"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Panel>
-        </DockPanel>
+            <!-- Empty state: timeline pane is open but no time-varying
+                 dataset is loaded. Fills the whole timeline area so its
+                 content is centered, not offset below the title row. -->
+            <views:PlaceholderView IsVisible="{Binding !IsActive}"
+                                   Icon="Clock"
+                                   Header="{x:Static loc:Strings.TimelinePanel_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.TimelinePanel_EmptyDescription}" />
+        </Panel>
     </Border>
 </UserControl>
 

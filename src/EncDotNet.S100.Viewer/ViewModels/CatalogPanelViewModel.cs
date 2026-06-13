@@ -159,8 +159,6 @@ internal sealed class CatalogPanelViewModel : ViewModelBase
 
     public bool IsEmpty => Entries.Count == 0;
 
-    public string EmptyMessage => Strings.Catalog_EmptyMessage;
-
     public CatalogPanelViewModel(IDatasetCatalogSource source)
     {
         ArgumentNullException.ThrowIfNull(source);

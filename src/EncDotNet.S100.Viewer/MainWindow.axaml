@@ -330,7 +330,9 @@
                     </Border>
 
                     <!-- Pane content: resolved by ActivityTabViewTemplate from the selected tab. -->
-                    <ContentControl Content="{Binding SelectedLeftTab}" />
+                    <ContentControl Content="{Binding SelectedLeftTab}"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch" />
                 </DockPanel>
             </Border>
 
@@ -664,7 +666,7 @@
                         IsVisible="{Binding IsBottomDockOpen}">
                     <DockPanel>
                         <Border DockPanel.Dock="Top"
-                                Padding="12,6,8,6">
+                                Padding="12,3,8,3">
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Grid.Column="0"
                                            Text="{Binding BottomDockTitle}"
@@ -674,6 +676,12 @@
                                            VerticalAlignment="Center" />
                                 <Button Grid.Column="1"
                                         Classes="Icon"
+                                        Width="20"
+                                        Height="20"
+                                        MinWidth="0"
+                                        MinHeight="0"
+                                        Padding="0"
+                                        VerticalAlignment="Center"
                                         Command="{Binding CloseDockCommand}"
                                         CommandParameter="Bottom"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}">
@@ -681,7 +689,9 @@
                                 </Button>
                             </Grid>
                         </Border>
-                        <ContentControl Content="{Binding SelectedBottomTab}" />
+                        <ContentControl Content="{Binding SelectedBottomTab}"
+                                        HorizontalContentAlignment="Stretch"
+                                        VerticalContentAlignment="Stretch" />
                     </DockPanel>
                 </Border>
             </Grid>
@@ -706,7 +716,7 @@
                     IsVisible="{Binding IsRightDockOpen}">
                 <DockPanel>
                     <Border DockPanel.Dock="Top"
-                            Padding="12,6,8,6">
+                            Padding="12,3,8,3">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding RightDockTitle}"
@@ -716,6 +726,12 @@
                                        VerticalAlignment="Center" />
                             <Button Grid.Column="1"
                                     Classes="Icon"
+                                    Width="20"
+                                    Height="20"
+                                    MinWidth="0"
+                                    MinHeight="0"
+                                    Padding="0"
+                                    VerticalAlignment="Center"
                                     Command="{Binding CloseDockCommand}"
                                     CommandParameter="Right"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClosePickPanel}">
@@ -723,7 +739,9 @@
                             </Button>
                         </Grid>
                     </Border>
-                    <ContentControl Content="{Binding SelectedRightTab}" />
+                    <ContentControl Content="{Binding SelectedRightTab}"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch" />
                 </DockPanel>
             </Border>
         </Grid>

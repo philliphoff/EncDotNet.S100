@@ -75,6 +75,29 @@ public class DatasetsViewModelTests
     }
 
     [Fact]
+    public void IsEmpty_TogglesWithEntries_AndRaisesPropertyChanged()
+    {
+        var loader = new RecordingLoader();
+        var vm = new DatasetsViewModel(loader);
+
+        Assert.True(vm.IsEmpty);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        var entry = vm.Add("/tmp/sample.000", "S-101");
+
+        Assert.False(vm.IsEmpty);
+        Assert.Contains(nameof(DatasetsViewModel.IsEmpty), raised);
+
+        raised.Clear();
+        vm.Entries.Remove(entry);
+
+        Assert.True(vm.IsEmpty);
+        Assert.Contains(nameof(DatasetsViewModel.IsEmpty), raised);
+    }
+
+    [Fact]
     public void Add_InsertsAtTopOfList()
     {
         // Photoshop/QGIS convention: newest layer goes to the top of

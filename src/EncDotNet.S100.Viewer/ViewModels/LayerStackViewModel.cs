@@ -83,9 +83,6 @@ internal sealed class LayerStackViewModel : ViewModelBase
     /// <summary>True when no plane row is currently displayed.</summary>
     public bool IsEmpty => Planes.Count == 0;
 
-    /// <summary>Empty-state body text (S-128 PdC picker arrives in PR-L4).</summary>
-    public string EmptyMessage => Strings.LayerStack_EmptyPlane_Placeholder;
-
     /// <summary>"Active vs. Visibility" help text for the panel footer.</summary>
     public string ActiveVsVisibilityHelp => Strings.LayerStack_VisibilityVsActive_HelpText;
 

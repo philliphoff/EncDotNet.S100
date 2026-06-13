@@ -5,6 +5,7 @@
              xmlns:conv="using:EncDotNet.S100.Viewer"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.VesselListView"
              x:DataType="vm:VesselListViewModel">
@@ -36,23 +37,10 @@
 
             <!-- Empty state: distinguishes the AIS overlay being off from
                  it being on but not yet populated. -->
-            <Border IsVisible="{Binding IsEmpty}"
-                    Padding="16"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-                <StackPanel Spacing="8" HorizontalAlignment="Center" MaxWidth="260">
-                    <ic:FluentIcon Icon="VehicleShip"
-                                   IconVariant="Regular"
-                                   FontSize="32"
-                                   Opacity="0.4"
-                                   HorizontalAlignment="Center" />
-                    <TextBlock Text="{Binding EmptyMessage}"
-                               TextWrapping="Wrap"
-                               TextAlignment="Center"
-                               Opacity="0.6"
-                               FontSize="12" />
-                </StackPanel>
-            </Border>
+            <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                                   Icon="VehicleShip"
+                                   Header="{Binding EmptyTitle}"
+                                   Description="{Binding EmptyDescription}" />
 
             <!-- Master/detail: a compact vessel list (master) over a
                  properties sub-pane (detail) for the selected vessel. -->
