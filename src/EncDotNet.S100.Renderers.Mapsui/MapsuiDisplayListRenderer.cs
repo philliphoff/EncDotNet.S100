@@ -175,6 +175,15 @@ public sealed class MapsuiDisplayListRenderer
         // encounters any AnchoredPatternFillStyle instances.
         AnchoredPatternFillRenderer.Register();
 
+        // Ensure the vector snapshot custom layer renderer is registered before a
+        // layer tagged with its CustomLayerRendererName reaches Mapsui. Without
+        // this, any consumer of the Mapsui renderer that does not call
+        // S100VectorSnapshotRenderer.Register() at startup (e.g. the headless
+        // visual-regression harness) would have the tagged vector layer silently
+        // skipped, producing a blank chart. Idempotent and a no-op when the
+        // snapshot is disabled.
+        S100VectorSnapshotRenderer.Register();
+
         // 1. Sort instructions by rendering order: areas first, then lines, then points/text
         //    Within same type, sort by DrawingPriority
         var sorted = instructions
