@@ -89,6 +89,17 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <para>Enabled by default; set <c>S100_VECTOR_PICTURE_SNAPSHOT=0</c> (or
 /// <c>false</c>) to opt out for A/B comparison, mirroring
 /// <c>S100_VECTOR_PATH_CACHE</c> / <c>S100_VECTOR_SIMPLIFY_PX</c>.</para>
+/// <para>
+/// <b>Off-thread prebuild.</b> The record frame (first frame at a new
+/// resolution) re-rasterises the whole layer at device scale and costs
+/// <i>more</i> than a single live frame (~650&#160;ms on PDB01) — a one-time
+/// stall per zoom level. Setting <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> (opt-in)
+/// hides it: the renderer keeps a small per-resolution image cache, blits the
+/// nearest existing image <i>scaled</i> for a frame or two on a zoom while the
+/// exact-resolution image is rasterised on a background thread (dedicated
+/// <see cref="RenderService"/>), and speculatively prebuilds the predicted
+/// next zoom bucket(s) after the view settles. See <see cref="PrebuildEnabled"/>.
+/// </para>
 /// </remarks>
 public static class S100VectorSnapshotRenderer
 {
@@ -110,6 +121,38 @@ public static class S100VectorSnapshotRenderer
             is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
 
     /// <summary>
+    /// True when the <b>off-thread snapshot prebuild</b> is enabled. Opt-in and
+    /// <b>off by default</b>; set <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> to a truthy
+    /// value (<c>1</c> / <c>true</c> / <c>on</c>) to turn it on. When off, the
+    /// renderer behaves exactly as the shipped single-image snapshot: one cached
+    /// image, re-recorded <i>synchronously</i> on the render thread whenever the
+    /// resolution or feature-set changes.
+    /// </summary>
+    /// <remarks>
+    /// When on, the renderer keeps a small per-resolution cache of recorded
+    /// images and, on a resolution change (zoom), either (a) blits an
+    /// already-prebuilt image for the new resolution, or (b) blits the nearest
+    /// existing image <i>scaled</i> for a frame or two while the real image for
+    /// the new resolution is rasterized on a background thread — so the
+    /// ~650&#160;ms on-thread record stall (<i>cost B</i>) never blocks the UI.
+    /// After the view settles, the predicted next zoom bucket(s) are rasterized
+    /// in the background so a subsequent zoom lands on a ready, crisp image.
+    /// </remarks>
+    public static bool PrebuildEnabled { get; } =
+        (Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_PREBUILD") ?? string.Empty)
+            is "1" or "true" or "TRUE" or "True" or "on" or "ON";
+
+    /// <summary>
+    /// Optional callback invoked (on a background thread) when an off-thread
+    /// prebuild publishes a freshly recorded image, so the host can request a
+    /// single repaint that swaps the transient scaled-stale blit for the crisp
+    /// image. When <c>null</c> the renderer falls back to
+    /// <c>BaseLayer.DataHasChanged()</c> on the recorded layer. The viewer may
+    /// set this to marshal a <c>RefreshGraphics()</c> onto the UI thread.
+    /// </summary>
+    public static Action? RequestRedraw { get; set; }
+
+    /// <summary>
     /// Margin, in screen pixels, recorded around the viewport on every edge. A
     /// pan can move up to this many pixels in any direction before the picture
     /// must be re-recorded, so a larger margin trades memory / record cost for
@@ -128,6 +171,21 @@ public static class S100VectorSnapshotRenderer
 
     private static IDictionary<Type, IStyleRenderer>? s_styleRenderers;
     private static long s_iteration;
+
+    /// <summary>Maximum number of per-resolution images retained per layer (LRU).</summary>
+    private const int MaxEntries = 6;
+
+    /// <summary>Serialises background rasterisation so prebuilds never oversubscribe the CPU.</summary>
+    private static readonly System.Threading.SemaphoreSlim s_backgroundGate = new(1, 1);
+
+    /// <summary>
+    /// A dedicated <see cref="RenderService"/> for off-thread records so the live
+    /// render thread's service caches are never mutated concurrently.
+    /// </summary>
+    private static readonly Lazy<RenderService> s_backgroundRenderService = new(() => new RenderService());
+
+    /// <summary>Monotonic counter used as the LRU recency stamp on cache entries.</summary>
+    private static long s_tick;
 
     private static double ReadMargin()
     {
@@ -186,6 +244,12 @@ public static class S100VectorSnapshotRenderer
             return;
         }
 
+        if (PrebuildEnabled)
+        {
+            RenderPrebuild(canvas, viewport, layer, renderService, resolution);
+            return;
+        }
+
         var state = s_states.GetValue(layer, static _ => new SnapshotState());
         lock (state.Sync)
         {
@@ -224,6 +288,86 @@ public static class S100VectorSnapshotRenderer
                 (float)(ty + state.RecordHeight));
 
             canvas.DrawImage(image, dest, s_sampling);
+        }
+    }
+
+    /// <summary>
+    /// The <see cref="PrebuildEnabled"/> render path: a per-resolution image cache
+    /// with off-thread record of new resolutions (scaled-stale blit until ready)
+    /// and speculative prebuild of the predicted next zoom bucket(s) after settle.
+    /// </summary>
+    private static void RenderPrebuild(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService, double resolution)
+    {
+        var state = s_states.GetValue(layer, static _ => new SnapshotState());
+        var featureCount = TotalFeatureCount(layer);
+
+        var scale = canvas.TotalMatrix.ScaleX;
+        if (scale <= 0 || float.IsNaN(scale))
+        {
+            scale = 1f;
+        }
+
+        SKImage? toBlit;
+        SKRect dest;
+
+        lock (state.Sync)
+        {
+            state.LastDeviceScale = scale;
+            UpdateResolutionHistory(state, resolution);
+
+            var exact = FindUsableEntry(state, viewport, resolution, featureCount);
+            if (exact is not null)
+            {
+                exact.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                (toBlit, dest) = BlitOf(exact, viewport, resolution);
+
+                if (s_diag)
+                {
+                    var (dx, dy) = PanOffsetPixels(exact.ToAnchor(), viewport.CenterX, viewport.CenterY, resolution);
+                    Console.Error.WriteLine($"[VecSnapshot] replay res={resolution:G6} dxPx={Math.Abs(dx):F0} dyPx={Math.Abs(dy):F0} feats={featureCount} entries={state.Entries.Count}");
+                }
+
+                SchedulePrebuilds(state, layer, viewport, resolution, featureCount, scale);
+            }
+            else
+            {
+                var staleIndex = SelectStaleAnchor(state.AnchorsSnapshot(), viewport.CenterX, viewport.CenterY, viewport.Width, viewport.Height, resolution);
+                if (staleIndex >= 0)
+                {
+                    var stale = state.Entries[staleIndex];
+                    stale.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                    (toBlit, dest) = BlitOf(stale, viewport, resolution);
+
+                    if (s_diag)
+                    {
+                        Console.Error.WriteLine($"[VecSnapshot] STALE blit res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
+                    }
+
+                    EnsureAsyncRecord(state, layer, viewport, resolution, featureCount, scale);
+                }
+                else
+                {
+                    // Cold: no usable image at all. Record synchronously on the
+                    // render thread (the unavoidable first-ever record) so the
+                    // first frame is correct rather than blank.
+                    var entry = BuildSnapshotEntry(viewport, layer, scale, renderService, featureCount);
+                    AddEntry(state, entry);
+                    entry.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                    (toBlit, dest) = BlitOf(entry, viewport, resolution);
+
+                    if (s_diag)
+                    {
+                        Console.Error.WriteLine($"[VecSnapshot] COLD record res={resolution:G6} feats={featureCount}");
+                    }
+
+                    SchedulePrebuilds(state, layer, viewport, resolution, featureCount, scale);
+                }
+            }
+        }
+
+        if (toBlit is not null)
+        {
+            canvas.DrawImage(toBlit, dest, s_sampling);
         }
     }
 
@@ -281,6 +425,132 @@ public static class S100VectorSnapshotRenderer
         return (tx, ty);
     }
 
+    /// <summary>
+    /// Relative-tolerance equality for two resolutions, so floating jitter in an
+    /// otherwise-identical zoom level (and a predicted resolution computed as
+    /// <c>current*ratio</c>) map to the same cache bucket.
+    /// </summary>
+    internal static bool ResolutionsMatch(double a, double b)
+    {
+        if (a == b)
+        {
+            return true;
+        }
+
+        var scale = Math.Max(Math.Abs(a), Math.Abs(b));
+        return scale > 0 && Math.Abs(a - b) <= scale * 1e-9;
+    }
+
+    /// <summary>
+    /// Generalises <see cref="ComputeTranslate"/> to the case where the recorded
+    /// image's resolution differs from the current viewport resolution: the image
+    /// is blitted scaled by <c>anchor.Resolution / resolution</c> so a recorded
+    /// zoom bucket can be shown (slightly resampled) at a neighbouring zoom while
+    /// the crisp image for the current resolution is rasterised. At equal
+    /// resolution the scale is 1 and the result matches <see cref="ComputeTranslate"/>.
+    /// </summary>
+    internal static (double tx, double ty, double destWidth, double destHeight) ComputeBlit(
+        SnapshotAnchor anchor, double centerX, double centerY, double width, double height, double resolution)
+    {
+        var scale = anchor.Resolution / resolution;
+        var destWidth = anchor.RecordWidth * scale;
+        var destHeight = anchor.RecordHeight * scale;
+        var tx = (anchor.RecordCenterX - centerX) / resolution + width / 2.0 - destWidth / 2.0;
+        var ty = (centerY - anchor.RecordCenterY) / resolution + height / 2.0 - destHeight / 2.0;
+        return (tx, ty, destWidth, destHeight);
+    }
+
+    /// <summary>
+    /// <c>true</c> when an entry recorded at <paramref name="anchor"/> may be
+    /// blitted directly (no resample) for the current viewport: matching feature
+    /// count, resolution within <see cref="ResolutionsMatch"/> tolerance, and the
+    /// view centre still inside the recorded margin.
+    /// </summary>
+    internal static bool IsEntryUsable(SnapshotAnchor anchor, double centerX, double centerY, double width, double height, double resolution, int featureCount)
+    {
+        if (anchor.FeatureCount != featureCount || !ResolutionsMatch(anchor.Resolution, resolution))
+        {
+            return false;
+        }
+
+        var marginX = (anchor.RecordWidth - width) / 2.0;
+        var marginY = (anchor.RecordHeight - height) / 2.0;
+        if (marginX < 0 || marginY < 0)
+        {
+            return false;
+        }
+
+        var (dx, dy) = PanOffsetPixels(anchor, centerX, centerY, resolution);
+        return Math.Abs(dx) <= marginX && Math.Abs(dy) <= marginY;
+    }
+
+    /// <summary>
+    /// <c>true</c> when the (possibly scaled) blit of <paramref name="anchor"/>
+    /// fully covers the current viewport rectangle, i.e. the recorded content
+    /// fills the screen with no uncovered margin — the precondition for using it
+    /// as a scaled-stale source while the exact-resolution image is built.
+    /// </summary>
+    internal static bool SnapshotCoversViewport(SnapshotAnchor anchor, double centerX, double centerY, double width, double height, double resolution)
+    {
+        var (tx, ty, dw, dh) = ComputeBlit(anchor, centerX, centerY, width, height, resolution);
+        const double eps = 0.5;
+        return tx <= eps && ty <= eps && tx + dw >= width - eps && ty + dh >= height - eps;
+    }
+
+    /// <summary>
+    /// Selects the index of the best scaled-stale source among
+    /// <paramref name="anchors"/>: the covering entry whose resolution is closest
+    /// (by ratio) to the current resolution, or <c>-1</c> when none covers the
+    /// viewport.
+    /// </summary>
+    internal static int SelectStaleAnchor(IReadOnlyList<SnapshotAnchor> anchors, double centerX, double centerY, double width, double height, double resolution)
+    {
+        var best = -1;
+        var bestRatio = double.PositiveInfinity;
+        for (var i = 0; i < anchors.Count; i++)
+        {
+            var a = anchors[i];
+            if (a.Resolution <= 0 || !SnapshotCoversViewport(a, centerX, centerY, width, height, resolution))
+            {
+                continue;
+            }
+
+            var ratio = a.Resolution >= resolution ? a.Resolution / resolution : resolution / a.Resolution;
+            if (ratio < bestRatio)
+            {
+                bestRatio = ratio;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Predicts the resolution(s) of the next likely zoom bucket(s) from the last
+    /// two distinct resolutions observed. Returns the resolution one step further
+    /// in the observed direction <i>and</i> one step back, so a settle can
+    /// prebuild both the continue-zooming and reverse-zoom targets. Empty when no
+    /// zoom direction has been observed yet.
+    /// </summary>
+    internal static IReadOnlyList<double> PredictNeighborResolutions(double current, double previous)
+    {
+        if (current <= 0 || previous <= 0 || ResolutionsMatch(current, previous))
+        {
+            return Array.Empty<double>();
+        }
+
+        var ratio = current / previous;
+        var forward = current * ratio;
+        var backward = current / ratio;
+        if (ResolutionsMatch(forward, backward))
+        {
+            return new[] { forward };
+        }
+
+        return new[] { forward, backward };
+    }
+
     private static void Record(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService, SnapshotState state, int featureCount)
     {
         var recordWidth = viewport.Width + 2.0 * MarginPx;
@@ -323,6 +593,232 @@ public static class S100VectorSnapshotRenderer
         {
             Console.Error.WriteLine($"[VecSnapshot] RECORD res={viewport.Resolution:G6} feats={featureCount} rW={recordWidth:F0} rH={recordHeight:F0} scale={scale:F2} px={pixelWidth}x{pixelHeight}");
         }
+    }
+
+    /// <summary>
+    /// Rasterises the layer's settled drawing for <paramref name="viewport"/> into
+    /// a margin-enlarged, device-scaled <see cref="SKImage"/> and returns it as a
+    /// self-contained <see cref="SnapshotEntry"/>. Holds no lock and touches no
+    /// shared state, so it is safe to call on a background thread (with a
+    /// dedicated <paramref name="renderService"/>) as well as synchronously on the
+    /// render thread. The produced raster <see cref="SKImage"/> is CPU-backed and
+    /// may be blitted on any thread.
+    /// </summary>
+    private static SnapshotEntry BuildSnapshotEntry(Viewport viewport, ILayer layer, float scale, RenderService renderService, int featureCount)
+    {
+        var recordWidth = viewport.Width + 2.0 * MarginPx;
+        var recordHeight = viewport.Height + 2.0 * MarginPx;
+        var recordViewport = viewport with { Width = recordWidth, Height = recordHeight };
+
+        if (scale <= 0 || float.IsNaN(scale))
+        {
+            scale = 1f;
+        }
+
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(recordWidth * scale));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(recordHeight * scale));
+
+        var info = new SKImageInfo(pixelWidth, pixelHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info);
+        var recordCanvas = surface.Canvas;
+        recordCanvas.Clear(SKColors.Transparent);
+        recordCanvas.Scale(scale);
+
+        var queryExtent = recordViewport.ToExtent();
+        DrawLayerLive(recordCanvas, recordViewport, layer, queryExtent, renderService);
+
+        return new SnapshotEntry
+        {
+            Image = surface.Snapshot(),
+            Resolution = viewport.Resolution,
+            RecordCenterX = viewport.CenterX,
+            RecordCenterY = viewport.CenterY,
+            RecordWidth = recordWidth,
+            RecordHeight = recordHeight,
+            FeatureCount = featureCount,
+            DeviceScale = scale,
+        };
+    }
+
+    /// <summary>Records the two most recent <i>distinct</i> resolutions for prediction.</summary>
+    private static void UpdateResolutionHistory(SnapshotState state, double resolution)
+    {
+        if (resolution <= 0 || ResolutionsMatch(state.LastResolution, resolution))
+        {
+            return;
+        }
+
+        state.PrevResolution = state.LastResolution;
+        state.LastResolution = resolution;
+    }
+
+    /// <summary>Finds a cache entry that may be blitted directly for the current viewport.</summary>
+    private static SnapshotEntry? FindUsableEntry(SnapshotState state, Viewport viewport, double resolution, int featureCount)
+    {
+        foreach (var entry in state.Entries)
+        {
+            if (IsEntryUsable(entry.ToAnchor(), viewport.CenterX, viewport.CenterY, viewport.Width, viewport.Height, resolution, featureCount))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Computes the destination rectangle for blitting <paramref name="entry"/>.</summary>
+    private static (SKImage image, SKRect dest) BlitOf(SnapshotEntry entry, Viewport viewport, double resolution)
+    {
+        var (tx, ty, dw, dh) = ComputeBlit(entry.ToAnchor(), viewport.CenterX, viewport.CenterY, viewport.Width, viewport.Height, resolution);
+        var dest = new SKRect((float)tx, (float)ty, (float)(tx + dw), (float)(ty + dh));
+        return (entry.Image, dest);
+    }
+
+    /// <summary>
+    /// Inserts <paramref name="entry"/> into the per-layer cache, replacing any
+    /// existing entry at the same resolution and evicting the least-recently-used
+    /// entry (disposing its image) when over <see cref="MaxEntries"/>. Caller must
+    /// hold <c>state.Sync</c>.
+    /// </summary>
+    private static void AddEntry(SnapshotState state, SnapshotEntry entry)
+    {
+        // Stamp the inserted entry as most-recently-touched so a freshly
+        // (pre)built image is never the immediate LRU eviction victim — otherwise
+        // a just-prebuilt entry could be evicted before the next frame sees it,
+        // causing SchedulePrebuilds to re-request it endlessly (a repaint loop
+        // that never reaches idle).
+        entry.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+
+        for (var i = state.Entries.Count - 1; i >= 0; i--)
+        {
+            if (ResolutionsMatch(state.Entries[i].Resolution, entry.Resolution))
+            {
+                state.Entries[i].Dispose();
+                state.Entries.RemoveAt(i);
+            }
+        }
+
+        state.Entries.Add(entry);
+
+        while (state.Entries.Count > MaxEntries)
+        {
+            var lru = 0;
+            for (var i = 1; i < state.Entries.Count; i++)
+            {
+                if (state.Entries[i].LastUsedTick < state.Entries[lru].LastUsedTick)
+                {
+                    lru = i;
+                }
+            }
+
+            state.Entries[lru].Dispose();
+            state.Entries.RemoveAt(lru);
+        }
+    }
+
+    /// <summary>
+    /// Kicks off (if not already present or in flight) a background rasterisation
+    /// of <paramref name="layer"/> at <paramref name="viewport"/>'s resolution,
+    /// publishing the result into the cache and requesting a repaint. Caller must
+    /// hold <c>state.Sync</c>.
+    /// </summary>
+    private static void EnsureAsyncRecord(SnapshotState state, ILayer layer, Viewport viewport, double resolution, int featureCount, float scale)
+    {
+        if (state.InFlight.Contains(resolution))
+        {
+            return;
+        }
+
+        foreach (var entry in state.Entries)
+        {
+            if (entry.FeatureCount == featureCount && ResolutionsMatch(entry.Resolution, resolution))
+            {
+                return;
+            }
+        }
+
+        state.InFlight.Add(resolution);
+        var captured = viewport;
+
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            SnapshotEntry? built = null;
+            try
+            {
+                s_backgroundGate.Wait();
+                try
+                {
+                    built = BuildSnapshotEntry(captured, layer, scale, s_backgroundRenderService.Value, featureCount);
+                }
+                finally
+                {
+                    s_backgroundGate.Release();
+                }
+
+                lock (state.Sync)
+                {
+                    AddEntry(state, built);
+                    built = null;
+                    state.InFlight.Remove(resolution);
+                }
+
+                if (s_diag)
+                {
+                    Console.Error.WriteLine($"[VecSnapshot] PUBLISH res={resolution:G6} feats={featureCount}");
+                }
+
+                RequestRepaint(layer);
+            }
+            catch (Exception ex)
+            {
+                built?.Dispose();
+                lock (state.Sync)
+                {
+                    state.InFlight.Remove(resolution);
+                }
+
+                if (s_diag)
+                {
+                    Console.Error.WriteLine($"[VecSnapshot] PREBUILD FAILED res={resolution:G6}: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// After a settled (exact) frame, speculatively prebuilds the predicted next
+    /// zoom bucket(s) so a subsequent zoom lands on a ready, crisp image. Caller
+    /// must hold <c>state.Sync</c>.
+    /// </summary>
+    private static void SchedulePrebuilds(SnapshotState state, ILayer layer, Viewport viewport, double resolution, int featureCount, float scale)
+    {
+        var predicted = PredictNeighborResolutions(state.LastResolution, state.PrevResolution);
+        foreach (var nextResolution in predicted)
+        {
+            if (nextResolution <= 0 || double.IsInfinity(nextResolution) || double.IsNaN(nextResolution))
+            {
+                continue;
+            }
+
+            EnsureAsyncRecord(state, layer, viewport with { Resolution = nextResolution }, nextResolution, featureCount, scale);
+        }
+    }
+
+    /// <summary>
+    /// Requests a single repaint after a background publish. Uses the host-supplied
+    /// <see cref="RequestRedraw"/> when set (so the viewer can marshal onto the UI
+    /// thread), otherwise falls back to <c>BaseLayer.DataHasChanged()</c>.
+    /// </summary>
+    private static void RequestRepaint(ILayer layer)
+    {
+        var redraw = RequestRedraw;
+        if (redraw is not null)
+        {
+            redraw();
+            return;
+        }
+
+        (layer as BaseLayer)?.DataHasChanged();
     }
 
     /// <summary>
@@ -435,9 +931,34 @@ public static class S100VectorSnapshotRenderer
         }
     }
 
+    /// <summary>
+    /// A single recorded raster image plus the geometry needed to blit it. Held in
+    /// the per-layer <see cref="SnapshotState.Entries"/> cache.
+    /// </summary>
+    private sealed class SnapshotEntry : IDisposable
+    {
+        public required SKImage Image { get; init; }
+        public double Resolution { get; init; }
+        public double RecordCenterX { get; init; }
+        public double RecordCenterY { get; init; }
+        public double RecordWidth { get; init; }
+        public double RecordHeight { get; init; }
+        public int FeatureCount { get; init; }
+        public float DeviceScale { get; init; }
+        public long LastUsedTick;
+
+        public SnapshotAnchor ToAnchor() =>
+            new(RecordCenterX, RecordCenterY, RecordWidth, RecordHeight, Resolution, FeatureCount);
+
+        public void Dispose() => Image.Dispose();
+    }
+
     private sealed class SnapshotState
     {
         public readonly object Sync = new();
+
+        // Legacy single-image path (used when PrebuildEnabled is false). Behaviour
+        // is byte-for-byte identical to the shipped renderer.
         public SKImage? Image;
         public double Resolution;
         public double RecordCenterX;
@@ -446,7 +967,26 @@ public static class S100VectorSnapshotRenderer
         public double RecordHeight;
         public int FeatureCount = -1;
 
+        // Prebuild path: a small per-resolution LRU plus zoom-prediction history
+        // and the set of resolutions currently being rasterised off-thread.
+        public readonly List<SnapshotEntry> Entries = new();
+        public float LastDeviceScale = 1f;
+        public double PrevResolution;
+        public double LastResolution;
+        public readonly HashSet<double> InFlight = new();
+
         public SnapshotAnchor ToAnchor() =>
             new(RecordCenterX, RecordCenterY, RecordWidth, RecordHeight, Resolution, FeatureCount);
+
+        public IReadOnlyList<SnapshotAnchor> AnchorsSnapshot()
+        {
+            var anchors = new SnapshotAnchor[Entries.Count];
+            for (var i = 0; i < Entries.Count; i++)
+            {
+                anchors[i] = Entries[i].ToAnchor();
+            }
+
+            return anchors;
+        }
     }
 }
