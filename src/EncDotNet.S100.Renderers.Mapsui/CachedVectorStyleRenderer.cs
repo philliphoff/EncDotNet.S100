@@ -1,0 +1,590 @@
+using System;
+using System.Collections.Generic;
+using Mapsui;
+using Mapsui.Layers;
+using Mapsui.Nts;
+using Mapsui.Rendering;
+using Mapsui.Rendering.Skia;
+using Mapsui.Rendering.Skia.SkiaStyles;
+using Mapsui.Rendering.Skia.Extensions;
+using Mapsui.Styles;
+using NetTopologySuite.Geometries;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Renderers.Mapsui;
+
+/// <summary>
+/// A drop-in replacement for Mapsui's <see cref="VectorStyleRenderer"/> that
+/// caches the projected <see cref="SKPath"/> for solid-filled / solid-outlined
+/// polygons <b>and</b> solid-stroked lines in a <b>translation-invariant</b>
+/// coordinate frame, so that a pan (which changes only the viewport centre, not
+/// its resolution) re-uses the cached path and pays only a canvas translate plus
+/// the fill/stroke, instead of re-projecting and rebuilding the path every frame.
+/// Lines are additionally <b>simplified at the build resolution</b> (see
+/// <see cref="CachedVectorStyleRenderer(ISkiaStyleRenderer, int, double)"/>) so
+/// the Skia stroker rasterises far fewer sub-pixel segments.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why this exists.</b> Mapsui's <c>PolygonRenderer</c> / <c>LineStringRenderer</c>
+/// cache the built path in an LRU keyed on <c>(featureId, position, extent,
+/// rotation, lineWidth)</c> — and <c>extent</c> is the full viewport extent, which
+/// changes on every pan, forcing a rebuild. Profiling the AU S-101 set showed
+/// that on dense approach cells the cost is dominated by thousands of
+/// <c>LineString</c> features (bathymetry contours); path construction is
+/// redundant during a pan, and — more importantly — the Skia stroker spends the
+/// bulk of its time on the dense run of <i>sub-pixel</i> segments. See the perf
+/// investigation in the session notes (issue #274 context).
+/// </para>
+/// <para>
+/// <b>Coordinate frame.</b> Mapsui projects world → screen as
+/// <c>screenX = (worldX − CenterX)/Res + Width/2</c> and
+/// <c>screenY = (CenterY − worldY)/Res + Height/2</c>. This renderer builds the
+/// path in <i>anchor-relative pixels at the current resolution</i>:
+/// <c>px = (worldX − Ax)/Res</c>, <c>py = (Ay − worldY)/Res</c>, where the
+/// anchor <c>(Ax, Ay)</c> is the geometry's envelope minimum. The anchor
+/// subtraction (done in <see langword="double"/>) keeps the float
+/// <see cref="SKPoint"/> coordinates small and precise even at high zoom. On
+/// paint the path is drawn under a translate of
+/// <c>Tx = Width/2 + (Ax − CenterX)/Res</c>,
+/// <c>Ty = Height/2 + (CenterY − Ay)/Res</c>, which reproduces Mapsui's
+/// transform exactly. Both the path and the anchor depend only on the
+/// resolution, so they survive any pan; a zoom changes the resolution and
+/// therefore the cache key, forcing a rebuild (crisp, and far rarer than
+/// pans).
+/// </para>
+/// <para>
+/// <b>Scope.</b> Only un-rotated viewports are fast-pathed. Polygons whose
+/// <see cref="VectorStyle"/> has a solid fill and/or solid outline, and lines
+/// whose <see cref="VectorStyle.Line"/> is a solid pen with no separate visible
+/// <see cref="VectorStyle.Outline"/> casing, are cached. Points, patterned/hatched
+/// fills, dashed/casing-outlined lines, rotated viewports and any geometry that is
+/// not a polygon, multi-polygon, line or multi-line are delegated unchanged to the
+/// wrapped Mapsui renderer, so visuals are identical outside the fast path.
+/// </para>
+/// <para>
+/// <b>Thread-safety.</b> The cache is guarded by a lock because the offscreen
+/// <c>render_to_image</c> / rasterising-tile paths can invoke the shared static
+/// renderer concurrently with the on-screen compositor thread. Path
+/// construction happens outside the lock; only the dictionary mutation is
+/// serialised.
+/// </para>
+/// </remarks>
+public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
+{
+    /// <summary>
+    /// Singleton wrapping a fresh, stateless Mapsui <see cref="VectorStyleRenderer"/>
+    /// used for delegation of everything outside the fast path.
+    /// </summary>
+    public static CachedVectorStyleRenderer Instance { get; } = new(new VectorStyleRenderer());
+
+    private readonly ISkiaStyleRenderer _inner;
+    private readonly bool _enabled;
+    private readonly double _simplifyPx;
+    private readonly object _sync = new();
+    private readonly PathCache _cache;
+
+    /// <summary>
+    /// Default pixel tolerance for resolution-aware line simplification, read
+    /// once from the <c>S100_VECTOR_SIMPLIFY_PX</c> environment variable (or
+    /// 0.6 when unset/invalid). See <see cref="CachedVectorStyleRenderer(ISkiaStyleRenderer, int, double)"/>.
+    /// </summary>
+    private static readonly double s_defaultSimplifyPx = ReadSimplifyTolerance();
+
+    private static double ReadSimplifyTolerance()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SIMPLIFY_PX");
+        if (!string.IsNullOrEmpty(raw)
+            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            return v;
+        }
+
+        return 0.6;
+    }
+
+    /// <summary>
+    /// Creates a renderer wrapping <paramref name="inner"/> (the real Mapsui
+    /// <see cref="VectorStyleRenderer"/>) for delegation.
+    /// </summary>
+    /// <param name="inner">The renderer to delegate non-fast-path draws to.</param>
+    /// <param name="capacity">Maximum number of cached paths before LRU eviction.</param>
+    /// <param name="simplifyTolerancePx">
+    /// Pixel tolerance for resolution-aware line simplification applied at
+    /// cache-build time. Consecutive line vertices that project to within this
+    /// many pixels of the last emitted vertex are dropped, collapsing the dense
+    /// sub-pixel vertex runs of S-101 bathymetry contours so the Skia stroker
+    /// rasterises far fewer segments. Because simplification happens in the
+    /// anchored pixel frame at the build resolution and the result is cached,
+    /// the cost is paid once per (feature, zoom) and reused across all pans, and
+    /// dropped vertices are by construction sub-pixel <i>on screen</i> at that
+    /// zoom — so the result is visually indistinguishable at every zoom level.
+    /// A value &lt;= 0 disables simplification (paths are vertex-exact). When
+    /// negative, the default (env <c>S100_VECTOR_SIMPLIFY_PX</c> or 0.6) is used.
+    /// </param>
+    public CachedVectorStyleRenderer(ISkiaStyleRenderer inner, int capacity = 8192, double simplifyTolerancePx = -1)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+        _cache = new PathCache(Math.Max(1, capacity));
+        _simplifyPx = simplifyTolerancePx < 0 ? s_defaultSimplifyPx : simplifyTolerancePx;
+        // Default on; allow disabling for A/B perf comparison.
+        _enabled = (Environment.GetEnvironmentVariable("S100_VECTOR_PATH_CACHE") ?? string.Empty)
+            is not ("0" or "false" or "FALSE" or "False");
+    }
+
+    /// <summary>
+    /// The number of distinct geometry paths currently held in the cache. Each
+    /// pan re-uses existing entries (constant resolution → cache hit); a zoom
+    /// changes the resolution and adds new entries. Exposed for testing the
+    /// build-once-per-(feature, zoom) behaviour.
+    /// </summary>
+    public int CachedPathCount
+    {
+        get { lock (_sync) { return _cache.Count; } }
+    }
+
+    /// <summary>
+    /// Registers <see cref="Instance"/> as the renderer for
+    /// <see cref="VectorStyle"/>. Must be called <b>before</b> any
+    /// instrumentation wraps the renderer dictionary and never again
+    /// afterwards (so the wrapper is preserved). No-op when the path cache is
+    /// disabled or when the build/fill split measurement is active (so that
+    /// measurement characterises Mapsui's un-cached cost).
+    /// </summary>
+    public static void Register()
+    {
+        var measuring = (Environment.GetEnvironmentVariable("S100_MEASURE_VECTOR_SPLIT") ?? string.Empty)
+            is "1" or "true" or "TRUE" or "True";
+        var disabled = (Environment.GetEnvironmentVariable("S100_VECTOR_PATH_CACHE") ?? string.Empty)
+            is "0" or "false" or "FALSE" or "False";
+        if (measuring || disabled)
+        {
+            return;
+        }
+
+        global::Mapsui.Rendering.Skia.MapRenderer.RegisterStyleRenderer(typeof(VectorStyle), Instance);
+    }
+
+    /// <inheritdoc />
+    public bool Draw(SKCanvas canvas, Viewport viewport, ILayer layer,
+        IFeature feature, IStyle style, RenderService renderService, long iteration)
+    {
+        if (!_enabled
+            || viewport.Rotation != 0
+            || style is not VectorStyle vectorStyle
+            || feature is not GeometryFeature geometryFeature
+            || geometryFeature.Geometry is not { } geometry)
+        {
+            return _inner.Draw(canvas, viewport, layer, feature, style, renderService, iteration);
+        }
+
+        var opacity = (float)(layer.Opacity * style.Opacity);
+        switch (geometry)
+        {
+        case Polygon polygon when CanFastPolygon(vectorStyle):
+        {
+            DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, 0, polygon, opacity);
+            return true;
+        }
+        case MultiPolygon multiPolygon when CanFastPolygon(vectorStyle):
+        {
+            for (var i = 0; i < multiPolygon.Count; i++)
+            {
+                if (multiPolygon[i] is Polygon part)
+                {
+                    DrawPolygon(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                }
+            }
+            return true;
+        }
+        case LineString lineString when CanFastLine(vectorStyle):
+        {
+            DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, 0, lineString, opacity);
+            return true;
+        }
+        case MultiLineString multiLineString when CanFastLine(vectorStyle):
+        {
+            for (var i = 0; i < multiLineString.Count; i++)
+            {
+                if (multiLineString[i] is LineString part)
+                {
+                    DrawLine(canvas, viewport, vectorStyle, geometryFeature.Id, i, part, opacity);
+                }
+            }
+            return true;
+        }
+        default:
+        {
+            // GeometryCollections, points, casing-outlined lines, patterned
+            // fills, and any unsupported style: leave to Mapsui.
+            return _inner.Draw(canvas, viewport, layer, feature, style, renderService, iteration);
+        }
+        }
+    }
+
+    /// <summary>
+    /// True when a polygon's fill and outline are solid (the only cases this
+    /// renderer reproduces pixel-for-pixel). Patterned fills and dashed/styled
+    /// outlines fall back to Mapsui.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="VectorStyle.Line"/> is deliberately <b>not</b> consulted: it
+    /// applies only to line geometries, and Mapsui initialises it to a non-null
+    /// default pen that is ignored when filling/stroking a polygon.
+    /// </remarks>
+    private static bool CanFastPolygon(VectorStyle style)
+    {
+        if (style.Fill is { FillStyle: not FillStyle.Solid })
+        {
+            return false;
+        }
+        if (style.Outline is { PenStyle: not PenStyle.Solid })
+        {
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// True when a line's stroke can be reproduced exactly: the
+    /// <see cref="VectorStyle.Line"/> pen is visible and there is no separate
+    /// visible <see cref="VectorStyle.Outline"/> casing (Mapsui draws a wider
+    /// outline pass under the line when an outline is set; that rarer case is
+    /// delegated to keep this fast path simple and pixel-identical).
+    /// </summary>
+    private static bool CanFastLine(VectorStyle style)
+    {
+        if (style.Line is not { } line || line.Color.A <= 0 || line.Width <= 0)
+        {
+            return false;
+        }
+        if (style.Outline is { } outline && outline.Color.A > 0 && outline.Width > 0)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private void DrawLine(SKCanvas canvas, Viewport viewport, VectorStyle style,
+        long featureId, int position, LineString lineString, float opacity)
+    {
+        var resolution = viewport.Resolution;
+        if (resolution <= 0 || lineString.IsEmpty || lineString.NumPoints < 2)
+        {
+            return;
+        }
+
+        var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
+
+        PathEntry? entry;
+        lock (_sync)
+        {
+            entry = _cache.Get(key);
+        }
+
+        if (entry is null)
+        {
+            var built = BuildLineEntry(lineString, resolution, _simplifyPx);
+            lock (_sync)
+            {
+                var again = _cache.Get(key);
+                if (again is not null)
+                {
+                    built.Dispose();
+                    entry = again;
+                }
+                else
+                {
+                    _cache.Add(key, built);
+                    entry = built;
+                }
+            }
+        }
+
+        var tx = viewport.Width / 2.0 + (entry.AnchorX - viewport.CenterX) / resolution;
+        var ty = viewport.Height / 2.0 + (viewport.CenterY - entry.AnchorY) / resolution;
+
+        var restore = canvas.Save();
+        try
+        {
+            canvas.Translate((float)tx, (float)ty);
+            using var strokePaint = CreateLineStrokePaint(style.Line!, opacity);
+            canvas.DrawPath(entry.Path, strokePaint);
+        }
+        finally
+        {
+            canvas.RestoreToCount(restore);
+        }
+    }
+
+    /// <summary>
+    /// Builds the translation-invariant <see cref="SKPath"/> for a line at a
+    /// given resolution, anchored at the line's envelope minimum. The full
+    /// (unclipped) line is built; Skia clips it to the canvas at draw time.
+    /// Mapsui instead re-projects and Liang-Barsky-clips every frame, which is
+    /// exactly the per-pan cost this cache removes.
+    /// </summary>
+    private static PathEntry BuildLineEntry(LineString lineString, double resolution, double tol)
+    {
+        var envelope = lineString.EnvelopeInternal;
+        var anchorX = envelope.MinX;
+        var anchorY = envelope.MinY;
+
+        var path = new SKPath();
+        var coordinates = lineString.Coordinates;
+
+        var px0 = (float)((coordinates[0].X - anchorX) / resolution);
+        var py0 = (float)((anchorY - coordinates[0].Y) / resolution);
+        path.MoveTo(px0, py0);
+
+        var lastX = px0;
+        var lastY = py0;
+        var lastIndex = coordinates.Length - 1;
+        for (var i = 1; i < coordinates.Length; i++)
+        {
+            var px = (float)((coordinates[i].X - anchorX) / resolution);
+            var py = (float)((anchorY - coordinates[i].Y) / resolution);
+
+            // Drop sub-pixel vertices, but always keep the final vertex so the
+            // line's endpoint (and overall length) is preserved exactly.
+            if (tol > 0 && i != lastIndex)
+            {
+                var dx = px - lastX;
+                var dy = py - lastY;
+                if ((dx * dx) + (dy * dy) < tol * tol)
+                {
+                    continue;
+                }
+            }
+
+            path.LineTo(px, py);
+            lastX = px;
+            lastY = py;
+        }
+
+        return new PathEntry(path, anchorX, anchorY);
+    }
+
+    /// <summary>
+    /// Reproduces Mapsui's <c>LineStringRenderer</c> stroke paint exactly,
+    /// reusing the public Mapsui Skia extension helpers for the colour, stroke
+    /// cap/join and pen-style dash effect so the rendered stroke is identical.
+    /// </summary>
+    private static SKPaint CreateLineStrokePaint(Pen line, float opacity)
+    {
+        var width = (float)line.Width;
+        return new SKPaint
+        {
+            IsAntialias = true,
+            IsStroke = true,
+            StrokeWidth = width,
+            Color = line.Color.ToSkia(opacity),
+            StrokeCap = line.PenStrokeCap.ToSkia(),
+            StrokeJoin = line.StrokeJoin.ToSkia(),
+            StrokeMiter = line.StrokeMiterLimit,
+            PathEffect = line.PenStyle != PenStyle.Solid
+                ? line.PenStyle.ToSkia(width, line.DashArray, line.DashOffset)
+                : null,
+        };
+    }
+
+    private void DrawPolygon(SKCanvas canvas, Viewport viewport, VectorStyle style,
+        long featureId, int position, Polygon polygon, float opacity)
+    {
+        var resolution = viewport.Resolution;
+        if (resolution <= 0 || polygon.ExteriorRing is null || polygon.IsEmpty)
+        {
+            return;
+        }
+
+        var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
+
+        PathEntry? entry;
+        lock (_sync)
+        {
+            entry = _cache.Get(key);
+        }
+
+        if (entry is null)
+        {
+            var built = BuildEntry(polygon, resolution);
+            lock (_sync)
+            {
+                var again = _cache.Get(key);
+                if (again is not null)
+                {
+                    built.Dispose();
+                    entry = again;
+                }
+                else
+                {
+                    _cache.Add(key, built);
+                    entry = built;
+                }
+            }
+        }
+
+        var tx = viewport.Width / 2.0 + (entry.AnchorX - viewport.CenterX) / resolution;
+        var ty = viewport.Height / 2.0 + (viewport.CenterY - entry.AnchorY) / resolution;
+
+        var restore = canvas.Save();
+        try
+        {
+            canvas.Translate((float)tx, (float)ty);
+
+            if (style.Fill is { } fill && IsVisible(fill))
+            {
+                using var fillPaint = CreateFillPaint(fill, opacity);
+                canvas.DrawPath(entry.Path, fillPaint);
+            }
+
+            if (style.Outline is { } outline && IsVisible(outline))
+            {
+                using var strokePaint = CreateStrokePaint(outline, opacity);
+                canvas.DrawPath(entry.Path, strokePaint);
+            }
+        }
+        finally
+        {
+            canvas.RestoreToCount(restore);
+        }
+    }
+
+    /// <summary>
+    /// Builds the translation-invariant <see cref="SKPath"/> for a polygon at a
+    /// given resolution, anchored at the polygon's envelope minimum. Uses
+    /// even-odd fill so interior rings (holes) are subtracted regardless of
+    /// ring orientation, avoiding the orientation normalisation Mapsui performs.
+    /// </summary>
+    private static PathEntry BuildEntry(Polygon polygon, double resolution)
+    {
+        var envelope = polygon.EnvelopeInternal;
+        var anchorX = envelope.MinX;
+        var anchorY = envelope.MinY;
+
+        var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        AddRing(path, polygon.ExteriorRing!, resolution, anchorX, anchorY);
+        for (var i = 0; i < polygon.NumInteriorRings; i++)
+        {
+            AddRing(path, polygon.GetInteriorRingN(i), resolution, anchorX, anchorY);
+        }
+
+        return new PathEntry(path, anchorX, anchorY);
+    }
+
+    private static void AddRing(SKPath path, LineString ring, double resolution, double anchorX, double anchorY)
+    {
+        var coordinates = ring.Coordinates;
+        if (coordinates.Length < 2)
+        {
+            return;
+        }
+
+        path.MoveTo(
+            (float)((coordinates[0].X - anchorX) / resolution),
+            (float)((anchorY - coordinates[0].Y) / resolution));
+        for (var i = 1; i < coordinates.Length; i++)
+        {
+            path.LineTo(
+                (float)((coordinates[i].X - anchorX) / resolution),
+                (float)((anchorY - coordinates[i].Y) / resolution));
+        }
+        path.Close();
+    }
+
+    private static bool IsVisible(Brush fill) => fill.Color is { A: > 0 };
+
+    private static bool IsVisible(Pen outline) => outline.Color.A > 0 && outline.Width > 0;
+
+    private static SKPaint CreateFillPaint(Brush fill, float opacity) => new()
+    {
+        IsAntialias = true,
+        Style = SKPaintStyle.Fill,
+        Color = ToSkia(fill.Color!.Value, opacity),
+    };
+
+    private static SKPaint CreateStrokePaint(Pen outline, float opacity) => new()
+    {
+        IsAntialias = true,
+        Style = SKPaintStyle.Stroke,
+        StrokeWidth = (float)outline.Width,
+        Color = ToSkia(outline.Color, opacity),
+        StrokeCap = SKStrokeCap.Butt,
+        StrokeJoin = SKStrokeJoin.Miter,
+        StrokeMiter = 4f,
+    };
+
+    private static SKColor ToSkia(Color color, float opacity)
+    {
+        var alpha = (byte)Math.Clamp(color.A * opacity, 0, 255);
+        return new SKColor((byte)color.R, (byte)color.G, (byte)color.B, alpha);
+    }
+
+    /// <summary>Cache key: a feature/part identity paired with the exact resolution bits.</summary>
+    private readonly record struct PathKey(long FeatureId, int Position, long ResolutionBits);
+
+    /// <summary>A cached path plus the world-space anchor it was built relative to.</summary>
+    private sealed class PathEntry : IDisposable
+    {
+        public PathEntry(SKPath path, double anchorX, double anchorY)
+        {
+            Path = path;
+            AnchorX = anchorX;
+            AnchorY = anchorY;
+        }
+
+        public SKPath Path { get; }
+        public double AnchorX { get; }
+        public double AnchorY { get; }
+
+        public void Dispose() => Path.Dispose();
+    }
+
+    /// <summary>
+    /// A small single-threaded LRU of <see cref="PathEntry"/> values. Callers
+    /// must serialise access (this renderer holds a lock around all calls).
+    /// Evicted and replaced entries are disposed so their <see cref="SKPath"/>
+    /// native memory is released promptly.
+    /// </summary>
+    private sealed class PathCache
+    {
+        private readonly int _capacity;
+        private readonly Dictionary<PathKey, LinkedListNode<Node>> _map;
+        private readonly LinkedList<Node> _lru = new();
+
+        public PathCache(int capacity)
+        {
+            _capacity = capacity;
+            _map = new Dictionary<PathKey, LinkedListNode<Node>>(capacity);
+        }
+
+        public int Count => _map.Count;
+
+        public PathEntry? Get(in PathKey key)
+        {
+            if (_map.TryGetValue(key, out var node))
+            {
+                _lru.Remove(node);
+                _lru.AddFirst(node);
+                return node.Value.Entry;
+            }
+            return null;
+        }
+
+        public void Add(in PathKey key, PathEntry entry)
+        {
+            var node = _lru.AddFirst(new Node(key, entry));
+            _map[key] = node;
+            while (_map.Count > _capacity)
+            {
+                var last = _lru.Last!;
+                _lru.RemoveLast();
+                _map.Remove(last.Value.Key);
+                last.Value.Entry.Dispose();
+            }
+        }
+
+        private readonly record struct Node(PathKey Key, PathEntry Entry);
+    }
+}

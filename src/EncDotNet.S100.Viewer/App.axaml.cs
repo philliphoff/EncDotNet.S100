@@ -59,6 +59,13 @@ public partial class App : Application
 
         s_services = ConfigureServices();
 
+        // Interpose the translation-invariant vector path cache (solid
+        // polygons + solid-stroked, resolution-simplified lines) before
+        // instrumentation wraps the renderer dictionary, so the cache sits
+        // inside the counting wrapper and pans reuse projected paths instead
+        // of rebuilding and re-stroking them every frame.
+        EncDotNet.S100.Renderers.Mapsui.CachedVectorStyleRenderer.Register();
+
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 
         // The viewer uses a plain ServiceCollection (no generic IHost),
