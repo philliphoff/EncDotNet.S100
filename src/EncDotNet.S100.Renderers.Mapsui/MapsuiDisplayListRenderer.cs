@@ -344,6 +344,14 @@ public sealed class MapsuiDisplayListRenderer
             Name = LayerName,
             Features = mapFeatures,
             Style = null,
+            // Route the settled vector layer through the picture-snapshot
+            // custom layer renderer when enabled, so pans replay a recorded
+            // SKPicture instead of re-iterating every feature. No-op (null)
+            // when the snapshot is disabled, leaving the normal per-feature
+            // path (with the translation-invariant path cache) in place.
+            CustomLayerRendererName = S100VectorSnapshotRenderer.Enabled
+                ? S100VectorSnapshotRenderer.RendererName
+                : null,
         };
     }
 
