@@ -382,7 +382,8 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 | `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). |
 | `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. |
 | `S100_VECTOR_SNAPSHOT_MARGIN` | `256` | Pixels of off-screen margin recorded around the viewport, so a pan can travel this far before the snapshot is re-recorded. |
-| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record vs replay decisions to stderr. |
+| `S100_VECTOR_SNAPSHOT_PREBUILD` | off | `1`/`true`/`on` enables off-thread pre-build of new/predicted zoom buckets (see below), hiding the record-frame zoom stall. Opt-in until proven. |
+| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / prebuild-publish decisions to stderr. |
 
 ### Raster vector snapshot
 
@@ -399,9 +400,30 @@ anti-aliasing only).
 
 The trade-off is the *record* frame: the first frame at each new resolution
 (or after a pan past the recorded margin) re-rasterizes the whole layer at
-device scale, costing more than a single live frame. These one-time
-per-zoom stalls are addressed separately (off-thread pre-build). Rotated
-viewports fall back to live per-feature drawing.
+device scale, costing more than a single live frame (~650 ms on PDB01).
+
+**Off-thread pre-build (`S100_VECTOR_SNAPSHOT_PREBUILD`, opt-in).** When
+enabled, the renderer keeps a small per-resolution LRU of recorded images
+instead of a single image, and hides the record-frame stall in three ways:
+
+1. **Speculative pre-build after settle** — once a frame replays cleanly, the
+   predicted next zoom bucket(s) (inferred from the last two observed
+   resolutions) are rasterized on a background thread, so a subsequent zoom
+   lands on a ready, crisp image.
+2. **Scaled-stale blit** — on a zoom whose image is not yet built, the nearest
+   existing image is blitted *scaled* (one linear resample, slightly blurry)
+   for a frame or two while the exact-resolution image is built off-thread.
+   This also smooths continuous / pinch zoom.
+3. **Async record + repaint** — the new resolution's image is rasterized on a
+   background thread (with a dedicated `RenderService`, CPU-backed raster so
+   the image is safe to blit on the render thread) and, on publish, requests a
+   single repaint via `S100VectorSnapshotRenderer.RequestRedraw` (the viewer
+   marshals a `RefreshGraphics()` onto the UI thread) so the crisp image
+   replaces the stale blit.
+
+When the flag is off the renderer is byte-for-byte the shipped single-image
+snapshot (one image, synchronous re-record on zoom). Rotated viewports fall
+back to live per-feature drawing.
 
 The tolerance is also a constructor parameter
 (`new CachedVectorStyleRenderer(inner, capacity, simplifyTolerancePx)`),
