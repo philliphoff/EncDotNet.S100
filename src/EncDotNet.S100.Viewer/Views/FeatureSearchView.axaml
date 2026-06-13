@@ -3,6 +3,7 @@
              xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
              x:DataType="vm:FeatureSearchViewModel">
 
@@ -42,8 +43,23 @@
                        TextWrapping="Wrap" />
         </Border>
 
-        <!-- Results list -->
-        <ListBox ItemsSource="{Binding Results}"
+        <!-- Results list (with empty-state placeholders sharing the fill
+             slot so they centre in the available space). -->
+        <Grid>
+            <!-- Initial prompt: no query entered yet. -->
+            <views:PlaceholderView IsVisible="{Binding ShowEmptyPrompt}"
+                                   Icon="Search"
+                                   Header="{x:Static loc:Strings.Search_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.Search_EmptyDescription}" />
+
+            <!-- No matches for a non-empty query. -->
+            <views:PlaceholderView IsVisible="{Binding ShowNoResults}"
+                                   Icon="SearchInfo"
+                                   Header="{x:Static loc:Strings.Search_NoResultsTitle}"
+                                   Description="{x:Static loc:Strings.Search_NoResultsDescription}" />
+
+            <!-- Results list -->
+            <ListBox ItemsSource="{Binding Results}"
                  SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                  SelectionMode="Single"
                  BorderThickness="0"
@@ -115,6 +131,7 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+        </Grid>
     </DockPanel>
 
 </UserControl>

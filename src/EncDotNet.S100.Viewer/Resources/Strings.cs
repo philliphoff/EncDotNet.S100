@@ -73,6 +73,8 @@ internal static class Strings
     public static string LayerStack_PanelTitle => Get(nameof(LayerStack_PanelTitle));
     public static string LayerStack_ShowEmptyPlanes => Get(nameof(LayerStack_ShowEmptyPlanes));
     public static string LayerStack_EmptyPlane_Placeholder => Get(nameof(LayerStack_EmptyPlane_Placeholder));
+    public static string LayerStack_EmptyTitle => Get(nameof(LayerStack_EmptyTitle));
+    public static string LayerStack_EmptyDescription => Get(nameof(LayerStack_EmptyDescription));
     public static string LayerStack_ActiveTooltip => Get(nameof(LayerStack_ActiveTooltip));
     public static string LayerStack_DynamicEntry_VisibilityTooltip => Get(nameof(LayerStack_DynamicEntry_VisibilityTooltip));
     public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
@@ -90,7 +92,10 @@ internal static class Strings
 
     // Search
     public static string Search_Placeholder => Get(nameof(Search_Placeholder));
-    public static string Search_NoResults => Get(nameof(Search_NoResults));
+    public static string Search_EmptyTitle => Get(nameof(Search_EmptyTitle));
+    public static string Search_EmptyDescription => Get(nameof(Search_EmptyDescription));
+    public static string Search_NoResultsTitle => Get(nameof(Search_NoResultsTitle));
+    public static string Search_NoResultsDescription => Get(nameof(Search_NoResultsDescription));
     public static string Search_ResultsFooter => Get(nameof(Search_ResultsFooter));
     public static string Search_TruncatedFooter => Get(nameof(Search_TruncatedFooter));
 
@@ -155,6 +160,9 @@ internal static class Strings
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));
+    public static string Datasets_EmptyTitle => Get(nameof(Datasets_EmptyTitle));
+    public static string Datasets_EmptyDescription => Get(nameof(Datasets_EmptyDescription));
+    public static string Tooltip_AddDataset => Get(nameof(Tooltip_AddDataset));
     public static string Button_AddFeatureCatalogue => Get(nameof(Button_AddFeatureCatalogue));
     public static string Button_AddPortrayalCatalogue => Get(nameof(Button_AddPortrayalCatalogue));
 
@@ -185,7 +193,8 @@ internal static class Strings
     public static string Catalogue_BuiltInLabel => Get(nameof(Catalogue_BuiltInLabel));
 
     // Catalog (S-128) panel
-    public static string Catalog_EmptyMessage => Get(nameof(Catalog_EmptyMessage));
+    public static string Catalog_EmptyTitle => Get(nameof(Catalog_EmptyTitle));
+    public static string Catalog_EmptyDescription => Get(nameof(Catalog_EmptyDescription));
     public static string Catalog_SelectEntryPlaceholder => Get(nameof(Catalog_SelectEntryPlaceholder));
     public static string Catalog_NotForNavigation => Get(nameof(Catalog_NotForNavigation));
     public static string Catalog_Field_Spec => Get(nameof(Catalog_Field_Spec));
@@ -200,7 +209,8 @@ internal static class Strings
 
     // Pick (Object Information) panel
     public static string Pick_PanelTitle => Get(nameof(Pick_PanelTitle));
-    public static string PickReport_EmptyState => Get(nameof(PickReport_EmptyState));
+    public static string PickReport_EmptyTitle => Get(nameof(PickReport_EmptyTitle));
+    public static string PickReport_EmptyDescription => Get(nameof(PickReport_EmptyDescription));
     public static string Pick_IdLabel => Get(nameof(Pick_IdLabel));
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
@@ -349,7 +359,8 @@ internal static class Strings
     public static string Tooltip_ResetOverrides => Get(nameof(Tooltip_ResetOverrides));
     public static string Button_ResetAllOverrides => Get(nameof(Button_ResetAllOverrides));
     public static string Tooltip_ResetAllOverrides => Get(nameof(Tooltip_ResetAllOverrides));
-    public static string EcdisPanel_NoSpecs => Get(nameof(EcdisPanel_NoSpecs));
+    public static string EcdisPanel_NoSpecsTitle => Get(nameof(EcdisPanel_NoSpecsTitle));
+    public static string EcdisPanel_NoSpecsDescription => Get(nameof(EcdisPanel_NoSpecsDescription));
     public static string EcdisPanel_OverrideCountFormat => Get(nameof(EcdisPanel_OverrideCountFormat));
     public static string EcdisPanel_CategoryHeader => Get(nameof(EcdisPanel_CategoryHeader));
     public static string EcdisPanel_SynthesizedLabelFormat => Get(nameof(EcdisPanel_SynthesizedLabelFormat));
@@ -473,8 +484,10 @@ internal static class Strings
     public static string Tooltip_Vessels => Get(nameof(Tooltip_Vessels));
     public static string Tooltip_VesselRow => Get(nameof(Tooltip_VesselRow));
     public static string Tooltip_OwnShipRow => Get(nameof(Tooltip_OwnShipRow));
-    public static string Vessels_Empty_Disabled => Get(nameof(Vessels_Empty_Disabled));
-    public static string Vessels_Empty_NoData => Get(nameof(Vessels_Empty_NoData));
+    public static string Vessels_Empty_DisabledTitle => Get(nameof(Vessels_Empty_DisabledTitle));
+    public static string Vessels_Empty_DisabledDescription => Get(nameof(Vessels_Empty_DisabledDescription));
+    public static string Vessels_Empty_NoDataTitle => Get(nameof(Vessels_Empty_NoDataTitle));
+    public static string Vessels_Empty_NoDataDescription => Get(nameof(Vessels_Empty_NoDataDescription));
     public static string Vessels_Unnamed => Get(nameof(Vessels_Unnamed));
     public static string Vessels_OwnShip_Name => Get(nameof(Vessels_OwnShip_Name));
     public static string Vessels_OwnShip_HelmingFormat => Get(nameof(Vessels_OwnShip_HelmingFormat));

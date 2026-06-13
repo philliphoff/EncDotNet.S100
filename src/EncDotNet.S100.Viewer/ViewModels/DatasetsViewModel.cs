@@ -496,6 +496,13 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// of the Properties sub-panel.</summary>
     public bool HasSelection => _selectedEntry is not null;
 
+    /// <summary>
+    /// True when no datasets are loaded. Drives the Datasets panel's
+    /// empty-state placeholder and the inline "Open Dataset" prompt,
+    /// both of which are hidden once at least one dataset is present.
+    /// </summary>
+    public bool IsEmpty => Entries.Count == 0;
+
     private Action<Mapsui.MRect>? _zoomDispatcher;
     /// <summary>
     /// Routes <see cref="ValidationFindingViewModel.ZoomToFindingCommand"/>
@@ -584,6 +591,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
         // for the host-side reorder logic.
         Entries.CollectionChanged += (_, e) =>
         {
+            OnPropertyChanged(nameof(IsEmpty));
+
             if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Move)
                 _loader.SetEntryOrder(Entries.ToArray());
 

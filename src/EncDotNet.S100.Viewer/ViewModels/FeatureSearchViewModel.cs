@@ -91,6 +91,18 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
     public ObservableCollection<FeatureSearchResultItem> Results { get; }
 
+    /// <summary>
+    /// True when the query is empty/whitespace, so the panel shows the
+    /// initial "type to search" placeholder rather than an empty list.
+    /// </summary>
+    public bool ShowEmptyPrompt => string.IsNullOrWhiteSpace(_query);
+
+    /// <summary>
+    /// True when a non-empty query returned no matches, so the panel shows
+    /// the "no matching features" placeholder.
+    /// </summary>
+    public bool ShowNoResults => !ShowEmptyPrompt && Results.Count == 0;
+
     private FeatureSearchResultItem? _selectedResult;
     /// <summary>
     /// Currently-selected row in the results list. Setter routes to
@@ -146,6 +158,8 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
         {
             Summary = null;
             __cmd.SetTag("s100.viewer.search.query_length", 0);
+            OnPropertyChanged(nameof(ShowEmptyPrompt));
+            OnPropertyChanged(nameof(ShowNoResults));
             return;
         }
 
@@ -161,11 +175,16 @@ internal sealed class FeatureSearchViewModel : ViewModelBase
 
         Summary = total switch
         {
-            0 => Strings.Search_NoResults,
+            // No-results is conveyed by the centered placeholder, so the
+            // footer stays empty to avoid duplicating the message.
+            0 => null,
             _ when total > hits.Count => string.Format(
                 Strings.Search_TruncatedFooter, hits.Count, total),
             _ => string.Format(Strings.Search_ResultsFooter, total),
         };
+
+        OnPropertyChanged(nameof(ShowEmptyPrompt));
+        OnPropertyChanged(nameof(ShowNoResults));
     }
 
     private void OpenResult(FeatureSearchResultItem? item)

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
@@ -164,14 +165,6 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <Button DockPanel.Dock="Bottom"
-                Classes="Outline"
-                Content="{x:Static loc:Strings.Button_OpenDataset}"
-                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
-                HorizontalAlignment="Stretch"
-                Margin="8"
-                x:Name="AddButton" />
-
         <!-- Exchange-set header rows: one per loaded exchange set,
              stacked above the bulk-action toolbar. Each row exposes a
              Close button that removes every dataset contributed by
@@ -260,7 +253,13 @@
         <StackPanel DockPanel.Dock="Top"
                     Orientation="Horizontal"
                     Spacing="4"
-                    Margin="8,4,8,0">
+                    Margin="8,4,8,0"
+                    IsVisible="{Binding !IsEmpty}">
+            <Button Classes="Icon"
+                    x:Name="ToolbarAddButton"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataset}">
+                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
+            </Button>
             <Button Classes="Icon"
                     Command="{Binding ShowAllCommand}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
@@ -673,6 +672,29 @@
                     </TabControl>
                 </Panel>
             </Border>
+
+            <!-- Empty-state placeholder: shown in the master (list) row
+                 when no datasets are loaded, centered within that area so
+                 it doesn't drift over the Properties sub-panel below.
+                 Declared after the list so it sits above the (otherwise
+                 transparent) ListBox, keeping the inline "Open Dataset"
+                 button hit-testable. The button sits directly below the
+                 placeholder and disappears once a dataset is present (the
+                 menu, the toolbar "+" and drag-and-drop remain available). -->
+            <StackPanel Grid.Row="0"
+                        IsVisible="{Binding IsEmpty}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                <views:PlaceholderView Icon="Layer"
+                                       Header="{x:Static loc:Strings.Datasets_EmptyTitle}"
+                                       Description="{x:Static loc:Strings.Datasets_EmptyDescription}" />
+                <Button x:Name="EmptyAddButton"
+                        Classes="Outline"
+                        Content="{x:Static loc:Strings.Button_OpenDataset}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
+                        HorizontalAlignment="Center" />
+            </StackPanel>
         </Grid>
     </DockPanel>
 </UserControl>

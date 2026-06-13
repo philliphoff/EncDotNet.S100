@@ -4,6 +4,7 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogPanelView"
              x:DataType="vm:CatalogPanelViewModel">
@@ -30,22 +31,10 @@
         <!-- Empty state — a completely separate tree from the populated
              state so it cannot interact with the grid star-sizing of the
              master/detail layout. -->
-        <Border IsVisible="{Binding IsEmpty}"
-                Padding="16"
-                VerticalAlignment="Center">
-            <StackPanel Spacing="8" HorizontalAlignment="Center">
-                <ic:FluentIcon Icon="Library"
-                               IconVariant="Regular"
-                               FontSize="32"
-                               Opacity="0.4"
-                               HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding EmptyMessage}"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Opacity="0.6"
-                           FontSize="12" />
-            </StackPanel>
-        </Border>
+        <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                               Icon="Library"
+                               Header="{x:Static loc:Strings.Catalog_EmptyTitle}"
+                               Description="{x:Static loc:Strings.Catalog_EmptyDescription}" />
 
         <!-- Populated state — master/detail with resizable splitter. -->
         <Grid IsVisible="{Binding !IsEmpty}">

@@ -3,17 +3,16 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.EcdisDisplayPanelView"
              x:DataType="vm:EcdisDisplayPanelViewModel">
 
-    <DockPanel>
-        <!-- Empty state message -->
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{x:Static loc:Strings.EcdisPanel_NoSpecs}"
-                   IsVisible="{Binding IsEmpty}"
-                   Opacity="0.5"
-                   TextWrapping="Wrap"
-                   Margin="12,8" />
+    <Grid>
+        <!-- Empty state -->
+        <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                               Icon="Eye"
+                               Header="{x:Static loc:Strings.EcdisPanel_NoSpecsTitle}"
+                               Description="{x:Static loc:Strings.EcdisPanel_NoSpecsDescription}" />
 
         <ScrollViewer IsVisible="{Binding !IsEmpty}">
             <StackPanel Spacing="12" Margin="12,4,12,12">
@@ -116,5 +115,5 @@
                 </ItemsControl>
             </StackPanel>
         </ScrollViewer>
-    </DockPanel>
+    </Grid>
 </UserControl>

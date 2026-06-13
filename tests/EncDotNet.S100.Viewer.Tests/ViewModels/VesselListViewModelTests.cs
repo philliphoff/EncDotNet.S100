@@ -526,7 +526,8 @@ public class VesselListViewModelTests
         var vm = new VesselListViewModel(new IDynamicFeatureSource[] { disabled }, accessor);
 
         Assert.True(vm.IsEmpty);
-        Assert.Equal(Strings.Vessels_Empty_Disabled, vm.EmptyMessage);
+        Assert.Equal(Strings.Vessels_Empty_DisabledTitle, vm.EmptyTitle);
+        Assert.Equal(Strings.Vessels_Empty_DisabledDescription, vm.EmptyDescription);
     }
 
     [Fact]
@@ -537,7 +538,8 @@ public class VesselListViewModelTests
         var (vm, _, _, _) = Make(ownShipEnabled: false);
 
         Assert.True(vm.IsEmpty);
-        Assert.Equal(Strings.Vessels_Empty_NoData, vm.EmptyMessage);
+        Assert.Equal(Strings.Vessels_Empty_NoDataTitle, vm.EmptyTitle);
+        Assert.Equal(Strings.Vessels_Empty_NoDataDescription, vm.EmptyDescription);
     }
 
     [Fact]
@@ -552,7 +554,8 @@ public class VesselListViewModelTests
         var vm = new VesselListViewModel(new IDynamicFeatureSource[] { misc }, accessor);
 
         Assert.True(vm.IsEmpty);
-        Assert.Equal(Strings.Vessels_Empty_Disabled, vm.EmptyMessage);
+        Assert.Equal(Strings.Vessels_Empty_DisabledTitle, vm.EmptyTitle);
+        Assert.Equal(Strings.Vessels_Empty_DisabledDescription, vm.EmptyDescription);
     }
 
     [Fact]

@@ -56,6 +56,12 @@
   <data name="LayerStack_EmptyPlane_Placeholder" xml:space="preserve">
     <value>No datasets loaded.</value>
   </data>
+  <data name="LayerStack_EmptyTitle" xml:space="preserve">
+    <value>No datasets loaded</value>
+  </data>
+  <data name="LayerStack_EmptyDescription" xml:space="preserve">
+    <value>Open a dataset to populate the layer stack here.</value>
+  </data>
   <data name="LayerStack_ActiveTooltip" xml:space="preserve">
     <value>Active — when off, this dataset is removed from the cross-product paint stack and no longer influences S-98 interoperability rules or pick. Distinct from the per-dataset Visibility toggle on the Datasets panel.</value>
   </data>
@@ -106,8 +112,17 @@
   <data name="Search_Placeholder" xml:space="preserve">
     <value>Search features by ID, type, or dataset…</value>
   </data>
-  <data name="Search_NoResults" xml:space="preserve">
-    <value>No matching features.</value>
+  <data name="Search_EmptyTitle" xml:space="preserve">
+    <value>Search features</value>
+  </data>
+  <data name="Search_EmptyDescription" xml:space="preserve">
+    <value>Find features by ID, type, or dataset across the loaded datasets.</value>
+  </data>
+  <data name="Search_NoResultsTitle" xml:space="preserve">
+    <value>No matching features</value>
+  </data>
+  <data name="Search_NoResultsDescription" xml:space="preserve">
+    <value>Try a different ID, feature type, or dataset name.</value>
   </data>
   <data name="Search_ResultsFooter" xml:space="preserve">
     <value>{0} matching features.</value>
@@ -329,6 +344,15 @@
   <data name="Button_OpenDataset" xml:space="preserve">
     <value>Open Dataset...</value>
   </data>
+  <data name="Datasets_EmptyTitle" xml:space="preserve">
+    <value>No datasets loaded</value>
+  </data>
+  <data name="Datasets_EmptyDescription" xml:space="preserve">
+    <value>Open an S-100 dataset or exchange set, or drag one onto the window, to get started.</value>
+  </data>
+  <data name="Tooltip_AddDataset" xml:space="preserve">
+    <value>Open a dataset</value>
+  </data>
   <data name="Button_AddFeatureCatalogue" xml:space="preserve">
     <value>Add Feature Catalogue...</value>
   </data>
@@ -451,9 +475,11 @@
   </data>
 
   <!-- Catalog (S-128) panel -->
-  <data name="Catalog_EmptyMessage" xml:space="preserve">
-    <value>No catalogues found.
-Open an S-128 dataset to populate this panel.</value>
+  <data name="Catalog_EmptyTitle" xml:space="preserve">
+    <value>No catalogues found</value>
+  </data>
+  <data name="Catalog_EmptyDescription" xml:space="preserve">
+    <value>Open an S-128 dataset to populate this panel.</value>
   </data>
   <data name="Catalog_SelectEntryPlaceholder" xml:space="preserve">
     <value>Select a catalogue entry to view its properties.</value>
@@ -493,8 +519,11 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Pick_PanelTitle" xml:space="preserve">
     <value>OBJECT INFORMATION</value>
   </data>
-  <data name="PickReport_EmptyState" xml:space="preserve">
-    <value>No feature picked. Use Pick mode and click a feature on the map.</value>
+  <data name="PickReport_EmptyTitle" xml:space="preserve">
+    <value>No feature picked</value>
+  </data>
+  <data name="PickReport_EmptyDescription" xml:space="preserve">
+    <value>Use Pick mode and click a feature on the map.</value>
   </data>
   <data name="Pick_IdLabel" xml:space="preserve">
     <value>ID:</value>
@@ -884,7 +913,7 @@ Open an S-128 dataset to populate this panel.</value>
     <value>No time-varying datasets</value>
   </data>
   <data name="TimelinePanel_EmptyDescription" xml:space="preserve">
-    <value>Open an S-104 (water level), S-111 (surface currents) or S-411 (sea ice) dataset to see its timeline here.</value>
+    <value>Open an S-104, S-111 or S-411 dataset to see its timeline.</value>
   </data>
 
   <!-- Tooltips for status bar elements -->
@@ -930,9 +959,11 @@ Open an S-128 dataset to populate this panel.</value>
   <data name="Tooltip_ResetAllOverrides" xml:space="preserve">
     <value>Clear all viewing-group overrides across every spec</value>
   </data>
-  <data name="EcdisPanel_NoSpecs" xml:space="preserve">
-    <value>No vector datasets loaded.
-Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls here.</value>
+  <data name="EcdisPanel_NoSpecsTitle" xml:space="preserve">
+    <value>No vector datasets loaded</value>
+  </data>
+  <data name="EcdisPanel_NoSpecsDescription" xml:space="preserve">
+    <value>Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls here.</value>
   </data>
   <data name="EcdisPanel_OverrideCountFormat" xml:space="preserve">
     <value>{0} overrides</value>
@@ -1281,10 +1312,16 @@ Open an S-101, S-124, S-125, S-201, or S-421 dataset to see display controls her
   <data name="Tooltip_VesselRow" xml:space="preserve">
     <value>Select to centre the map on this vessel.</value>
   </data>
-  <data name="Vessels_Empty_Disabled" xml:space="preserve">
-    <value>The AIS overlay is turned off. Enable it under Settings → AIS to list nearby vessels.</value>
+  <data name="Vessels_Empty_DisabledTitle" xml:space="preserve">
+    <value>AIS overlay is off</value>
   </data>
-  <data name="Vessels_Empty_NoData" xml:space="preserve">
+  <data name="Vessels_Empty_DisabledDescription" xml:space="preserve">
+    <value>Enable it under Settings → AIS to list nearby vessels.</value>
+  </data>
+  <data name="Vessels_Empty_NoDataTitle" xml:space="preserve">
+    <value>No vessels yet</value>
+  </data>
+  <data name="Vessels_Empty_NoDataDescription" xml:space="preserve">
     <value>The AIS overlay is on but hasn't received any vessels yet. Zoom in to an area with traffic to populate the list.</value>
   </data>
   <data name="Vessels_Unnamed" xml:space="preserve">

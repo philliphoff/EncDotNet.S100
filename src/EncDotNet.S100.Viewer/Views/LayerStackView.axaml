@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.LayerStackView"
              x:DataType="vm:LayerStackViewModel">
 
@@ -35,24 +35,10 @@
         <Grid>
 
         <!-- Empty state -->
-        <Border IsVisible="{Binding IsEmpty}"
-                Padding="16"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <StackPanel Spacing="8" HorizontalAlignment="Center">
-                <ic:FluentIcon Icon="Stack"
-                               IconVariant="Regular"
-                               FontSize="32"
-                               Opacity="0.4"
-                               HorizontalAlignment="Center" />
-                <TextBlock Text="{Binding EmptyMessage}"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Opacity="0.6"
-                           FontSize="12" />
-                <!-- TODO PR-L4 (TBD-7): PdC picker UX -->
-            </StackPanel>
-        </Border>
+        <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                               Icon="Stack"
+                               Header="{x:Static loc:Strings.LayerStack_EmptyTitle}"
+                               Description="{x:Static loc:Strings.LayerStack_EmptyDescription}" />
 
         <!-- Populated state: tree of planes, each with a list of entries. -->
         <ScrollViewer IsVisible="{Binding !IsEmpty}"
