@@ -86,8 +86,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// serialised per layer so the off-screen <c>render_to_image</c> path can share
 /// the renderer with the on-screen compositor safely.
 /// </para>
-/// <para>Gated by the <c>S100_VECTOR_PICTURE_SNAPSHOT</c> environment variable
-/// (default off) for A/B comparison, mirroring
+/// <para>Enabled by default; set <c>S100_VECTOR_PICTURE_SNAPSHOT=0</c> (or
+/// <c>false</c>) to opt out for A/B comparison, mirroring
 /// <c>S100_VECTOR_PATH_CACHE</c> / <c>S100_VECTOR_SIMPLIFY_PX</c>.</para>
 /// </remarks>
 public static class S100VectorSnapshotRenderer
@@ -100,14 +100,14 @@ public static class S100VectorSnapshotRenderer
     public const string RendererName = "s100.vector.snapshot";
 
     /// <summary>
-    /// True when the picture-snapshot fast path is enabled (env
-    /// <c>S100_VECTOR_PICTURE_SNAPSHOT</c> is set to a truthy value). Default
-    /// off until proven, so the renderer can be A/B'd against the path-cache
-    /// baseline with the perf harness.
+    /// True when the raster-snapshot fast path is enabled. Enabled by default;
+    /// set the env var <c>S100_VECTOR_PICTURE_SNAPSHOT</c> to a falsy value
+    /// (<c>0</c> / <c>false</c>) to opt out so the renderer can be A/B'd against
+    /// the path-cache baseline with the perf harness.
     /// </summary>
     public static bool Enabled { get; } =
         (Environment.GetEnvironmentVariable("S100_VECTOR_PICTURE_SNAPSHOT") ?? string.Empty)
-            is "1" or "true" or "TRUE" or "True";
+            is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
 
     /// <summary>
     /// Margin, in screen pixels, recorded around the viewport on every edge. A
