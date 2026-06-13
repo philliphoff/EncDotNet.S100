@@ -380,6 +380,28 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 |---|---|---|
 | `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. |
 | `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). |
+| `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. |
+| `S100_VECTOR_SNAPSHOT_MARGIN` | `256` | Pixels of off-screen margin recorded around the viewport, so a pan can travel this far before the snapshot is re-recorded. |
+| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record vs replay decisions to stderr. |
+
+### Raster vector snapshot
+
+`S100VectorSnapshotRenderer` is a Mapsui *custom layer renderer* that
+rasterizes a settled S-101 vector layer into a single device-resolution
+`SKImage` once per (resolution, feature-set) and, on subsequent pans at the
+same resolution, blits it under a translation instead of re-iterating and
+re-stroking every feature. Because a raster blit is O(pixels) rather than
+O(features), pure pans become independent of feature count — on the AU
+IC-ENC harbour cell `101AU005PDB01` (~1,600 area/line features) pure-pan
+frame time drops from ~90 ms to ~2 ms, and the vector-heavy cell `444147`
+from ~270 ms to ~2 ms, with a pixel-faithful result (sub-pixel edge
+anti-aliasing only).
+
+The trade-off is the *record* frame: the first frame at each new resolution
+(or after a pan past the recorded margin) re-rasterizes the whole layer at
+device scale, costing more than a single live frame. These one-time
+per-zoom stalls are addressed separately (off-thread pre-build). Rotated
+viewports fall back to live per-feature drawing.
 
 The tolerance is also a constructor parameter
 (`new CachedVectorStyleRenderer(inner, capacity, simplifyTolerancePx)`),
