@@ -382,8 +382,10 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 | `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). |
 | `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. |
 | `S100_VECTOR_SNAPSHOT_MARGIN` | `256` | Pixels of off-screen margin recorded around the viewport, so a pan can travel this far before the snapshot is re-recorded. |
-| `S100_VECTOR_SNAPSHOT_PREBUILD` | off | `1`/`true`/`on` enables off-thread pre-build of new/predicted zoom buckets (see below), hiding the record-frame zoom stall. Opt-in until proven. |
-| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / prebuild-publish decisions to stderr. |
+| `S100_VECTOR_SNAPSHOT_PREBUILD` | on | `0`/`false` disables the off-thread pre-build (see below) and falls back to the single-image snapshot (synchronous re-record on zoom and on a pan past the margin). |
+| `S100_VECTOR_SNAPSHOT_PAN_MARGIN` | `512` | Pixels of margin used for off-thread *pan* re-records (the sustained-pan look-ahead). Larger than `…_MARGIN` so one recentred-ahead background record covers roughly a full viewport of travel. Only used when the pre-build is on. |
+| `S100_VECTOR_SNAPSHOT_PAN_REFRESH` | `0.5` | Fraction (0–1) of the active snapshot's margin at which the off-thread pan re-record is triggered (while the image still fully covers the view). Smaller = earlier/more frequent; larger = more deferred. Only used when the pre-build is on. |
+| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / prebuild-publish / pan-refresh decisions to stderr. |
 
 ### Raster vector snapshot
 
@@ -400,11 +402,12 @@ anti-aliasing only).
 
 The trade-off is the *record* frame: the first frame at each new resolution
 (or after a pan past the recorded margin) re-rasterizes the whole layer at
-device scale, costing more than a single live frame (~650 ms on PDB01).
+device scale, costing more than a single live frame (~650 ms on PDB01). The
+off-thread pre-build below hides that cost for both zoom and sustained pan.
 
-**Off-thread pre-build (`S100_VECTOR_SNAPSHOT_PREBUILD`, opt-in).** When
+**Off-thread pre-build (`S100_VECTOR_SNAPSHOT_PREBUILD`, default on).** When
 enabled, the renderer keeps a small per-resolution LRU of recorded images
-instead of a single image, and hides the record-frame stall in three ways:
+instead of a single image, and hides the record-frame stall in four ways:
 
 1. **Speculative pre-build after settle** — once a frame replays cleanly, the
    predicted next zoom bucket(s) (inferred from the last two observed
@@ -414,16 +417,55 @@ instead of a single image, and hides the record-frame stall in three ways:
    existing image is blitted *scaled* (one linear resample, slightly blurry)
    for a frame or two while the exact-resolution image is built off-thread.
    This also smooths continuous / pinch zoom.
-3. **Async record + repaint** — the new resolution's image is rasterized on a
-   background thread (with a dedicated `RenderService`, CPU-backed raster so
-   the image is safe to blit on the render thread) and, on publish, requests a
-   single repaint via `S100VectorSnapshotRenderer.RequestRedraw` (the viewer
-   marshals a `RefreshGraphics()` onto the UI thread) so the crisp image
-   replaces the stale blit.
+3. **Sustained-pan look-ahead** — the original snapshot only buys
+   `…_MARGIN` (256 px) of pan before a re-record, and that re-record used to
+   run *synchronously* on the render thread (~250–650 ms), so a sustained drag
+   went jittery once it passed ~1/3 of the viewport. Now, once a pan crosses
+   `…_PAN_REFRESH` of the active image's margin (while it still fully covers
+   the view), the renderer records a **recentred-ahead** image at the *same*
+   resolution with the larger `…_PAN_MARGIN` (512 px) on a background thread,
+   blitting the existing (translated) image until it publishes, then swapping
+   in the crisp one. Leading the record into the direction of travel means one
+   background record covers roughly a full viewport of continued pan, so a
+   sustained drag stays smooth with no render-thread stall. A fast flick that
+   briefly outruns the look-ahead blits the nearest same-resolution image
+   translated (a transient uncovered leading strip over the basemap) rather
+   than freezing.
+4. **Async record + repaint** — every off-thread record uses a dedicated
+   `RenderService` (CPU-backed raster, safe to blit on the render thread) and,
+   on publish, requests a single repaint via
+   `S100VectorSnapshotRenderer.RequestRedraw` (the viewer marshals a
+   `RefreshGraphics()` onto the UI thread) so the crisp image replaces the
+   stale/translated blit.
 
-When the flag is off the renderer is byte-for-byte the shipped single-image
-snapshot (one image, synchronous re-record on zoom). Rotated viewports fall
-back to live per-feature drawing.
+Pan re-records are at the *same* resolution (scale 1), so once a pan settles
+the displayed image is an exact, in-margin, scale-1 blit — pixel-identical to a
+live render. Disable with `S100_VECTOR_SNAPSHOT_PREBUILD=0` for A/B against the
+single-image snapshot (one image, synchronous re-record on zoom and pan).
+Rotated viewports fall back to live per-feature drawing.
+
+**Measured sustained-pan A/B (PDB01, `101AU005PDB01`).** The viewer was
+driven over its embedded MCP server (`set_viewport` pan sweep +
+`await_render_idle` + `get_render_stats`) with `S100_VECTOR_SNAPSHOT_DIAG=1`,
+panning 28 steps (~3–4 viewport widths) at five zoom levels in a 1400×1000
+window (retina scale 2, warm portrayal-instruction cache so absolute records
+sit well below the cold 250–650 ms — the periodic hitch pattern is the
+point). Per-paint frame duration (ms), pre-build off vs default-on:
+
+| zoom | res m/px | OFF — pan-time records | OFF p95 / max | ON — pan-time records | ON p95 / max |
+|---|---|---|---|---|---|
+| 11.14 | 69.4 | 8 synchronous RECORD | 35.8 / 36.5 | 0 (off-thread PAN-PUBLISH) | 9.1 / 9.6 |
+| 12 | 38.2 | 8 synchronous RECORD | 104.4 / 105.6 | 0 (off-thread PAN-PUBLISH) | 10.5 / 11.9 |
+| 13 | 19.1 | 8 synchronous RECORD | 8.1 / 10.7 | 0 (off-thread PAN-PUBLISH) | 11.6 / 12.0 |
+| 14 | 9.55 | 8 synchronous RECORD | 12.0 / 264.4 | 0 (off-thread) | 9.7 / 11.5 |
+| 15 | 4.78 | 8 synchronous RECORD | 219.5 / 225.8 | 0 (off-thread PAN-PUBLISH) | 11.1 / 12.4 |
+
+Pre-build off fires a synchronous render-thread record on every margin
+crossing (8 per sweep at every zoom) with worst-case frames of 105–264 ms at
+the zoom levels users actually navigate. Default-on fires zero pan-time
+records (only off-thread refresh/publish, plus one cold first-ever record)
+and holds p95 ≤ 11.6 ms / max ≤ 12.4 ms across the whole zoom range and the
+whole sweep, with settled output staying pixel-identical.
 
 The tolerance is also a constructor parameter
 (`new CachedVectorStyleRenderer(inner, capacity, simplifyTolerancePx)`),

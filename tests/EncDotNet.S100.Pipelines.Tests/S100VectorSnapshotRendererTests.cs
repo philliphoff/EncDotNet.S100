@@ -268,4 +268,157 @@ public sealed class S100VectorSnapshotRendererTests
         Assert.False(S100VectorSnapshotRenderer.IsEntryUsable(
             anchor, centerX: 1000, centerY: 2000, width: 512, height: 512, resolution: 10, featureCount: 43));
     }
+
+    // ---- Sustained-pan look-ahead: direction, recenter-ahead, refresh band ----
+
+    [Fact]
+    public void PredictPanDirection_NullForNegligibleOffset()
+    {
+        Assert.Null(S100VectorSnapshotRenderer.PredictPanDirection(0, 0));
+        Assert.Null(S100VectorSnapshotRenderer.PredictPanDirection(1e-9, -1e-9));
+    }
+
+    [Fact]
+    public void PredictPanDirection_ReturnsUnitVectorInPanDirection()
+    {
+        var east = S100VectorSnapshotRenderer.PredictPanDirection(120, 0);
+        Assert.NotNull(east);
+        Assert.Equal(1, east!.Value.ux, 6);
+        Assert.Equal(0, east.Value.uy, 6);
+
+        var diag = S100VectorSnapshotRenderer.PredictPanDirection(30, -40);
+        Assert.NotNull(diag);
+        // 3-4-5 triangle => unit (0.6, -0.8).
+        Assert.Equal(0.6, diag!.Value.ux, 6);
+        Assert.Equal(-0.8, diag.Value.uy, 6);
+        Assert.Equal(1.0, Math.Sqrt(diag.Value.ux * diag.Value.ux + diag.Value.uy * diag.Value.uy), 6);
+    }
+
+    [Fact]
+    public void ComputeRecenterAhead_LeadsAheadByLeadTimesResolution()
+    {
+        // Heading east at res 8, lead 256 px => +2048 world units in X, X only.
+        var (cx, cy) = S100VectorSnapshotRenderer.ComputeRecenterAhead(
+            centerX: 1000, centerY: 2000, dirX: 1, dirY: 0, leadPx: 256, resolution: 8);
+
+        Assert.Equal(1000 + 256 * 8, cx, 6);
+        Assert.Equal(2000, cy, 6);
+    }
+
+    [Fact]
+    public void ShouldRefreshForPan_FalseWhenUnmovedTrueInsideBand()
+    {
+        // 1024 record around a 512 viewport => 256 px margin; refresh at 0.5 => 128 px.
+        var anchor = Anchor(centerX: 1000, centerY: 2000, recordWidth: 1024, recordHeight: 1024, resolution: 10);
+
+        // Unmoved: well inside, no refresh.
+        Assert.False(S100VectorSnapshotRenderer.ShouldRefreshForPan(
+            anchor, centerX: 1000, centerY: 2000, width: 512, height: 512, resolution: 10, refreshFraction: 0.5));
+
+        // Panned 200 px east (> 128 px band, still <= 256 px margin) => refresh.
+        Assert.True(S100VectorSnapshotRenderer.ShouldRefreshForPan(
+            anchor, centerX: 1000 + 2000, centerY: 2000, width: 512, height: 512, resolution: 10, refreshFraction: 0.5));
+    }
+
+    [Fact]
+    public void ShouldRefreshForPan_FalseOnceBeyondMargin()
+    {
+        // Past the 256 px margin (300 px east) the entry no longer fully covers,
+        // so a pre-emptive refresh is moot (the uncovered fallback handles it).
+        var anchor = Anchor(centerX: 1000, centerY: 2000, recordWidth: 1024, recordHeight: 1024, resolution: 10);
+
+        Assert.False(S100VectorSnapshotRenderer.ShouldRefreshForPan(
+            anchor, centerX: 1000 + 3000, centerY: 2000, width: 512, height: 512, resolution: 10, refreshFraction: 0.5));
+    }
+
+    [Fact]
+    public void ShouldRefreshForPan_FalseWhenRecordHasNoMargin()
+    {
+        // Record exactly the size of the viewport => zero margin, never refreshable.
+        var anchor = Anchor(centerX: 1000, centerY: 2000, recordWidth: 512, recordHeight: 512, resolution: 10);
+
+        Assert.False(S100VectorSnapshotRenderer.ShouldRefreshForPan(
+            anchor, centerX: 1000, centerY: 2000, width: 512, height: 512, resolution: 10, refreshFraction: 0.5));
+    }
+
+    [Fact]
+    public void RecenterAheadEntry_StillCoversTriggerViewportAndBlitsAtScaleOne()
+    {
+        // Active cold entry: 256 px margin around a 512 viewport at res 10.
+        const double res = 10;
+        const double w = 512, h = 512;
+        var active = Anchor(centerX: 1000, centerY: 2000, recordWidth: w + 2 * 256, recordHeight: h + 2 * 256, resolution: res);
+
+        // Pan east to the refresh band (200 px past the anchor centre).
+        var viewX = 1000 + 200 * res;
+        var dir = S100VectorSnapshotRenderer.PredictPanDirection(200, 0)!.Value;
+
+        // Recenter ahead by one active margin (256 px), record with the larger pan
+        // margin (512 px) at the same resolution.
+        var (rcx, rcy) = S100VectorSnapshotRenderer.ComputeRecenterAhead(viewX, 2000, dir.ux, dir.uy, leadPx: 256, resolution: res);
+        var panEntry = new S100VectorSnapshotRenderer.SnapshotAnchor(
+            rcx, rcy, w + 2 * 512, h + 2 * 512, res, active.FeatureCount);
+
+        // The recentred-ahead, same-resolution entry covers the trigger viewport
+        // (its trailing margin reaches back over it) and any nearer position.
+        Assert.True(S100VectorSnapshotRenderer.IsEntryUsable(
+            panEntry, centerX: viewX, centerY: 2000, width: w, height: h, resolution: res, featureCount: active.FeatureCount));
+
+        // Same resolution => scale 1 => destination size equals the record size
+        // (settled output is pixel-identical to a live render).
+        var (_, _, dw, dh) = S100VectorSnapshotRenderer.ComputeBlit(
+            panEntry, centerX: viewX, centerY: 2000, width: w, height: h, resolution: res);
+        Assert.Equal(panEntry.RecordWidth, dw, 6);
+        Assert.Equal(panEntry.RecordHeight, dh, 6);
+    }
+
+    [Fact]
+    public void SustainedPanWalk_StaysCoveredAcrossAFullViewportWithNoResync()
+    {
+        // Simulate a sustained eastward pan across more than a full viewport width
+        // and assert the recenter-ahead look-ahead keeps a same-resolution entry
+        // covering the view at every step (i.e. no synchronous re-record needed),
+        // using the default knob values (margin 256, pan margin 512, refresh 0.5).
+        const double res = 10;
+        const double w = 512, h = 512;
+        const double coldMarginPx = 256, panMarginPx = 512, refresh = 0.5;
+
+        var anchorCenterX = 1000.0;
+        var current = new S100VectorSnapshotRenderer.SnapshotAnchor(
+            anchorCenterX, 2000, w + 2 * coldMarginPx, h + 2 * coldMarginPx, res, 42);
+
+        var stepPx = 32.0; // a smooth drag step in screen pixels
+        var totalPx = w + 2 * stepPx; // more than a full viewport width
+        var resynced = false;
+
+        for (double travelled = 0; travelled <= totalPx; travelled += stepPx)
+        {
+            var viewX = anchorCenterX + travelled * res;
+
+            var covered = S100VectorSnapshotRenderer.IsEntryUsable(
+                current, viewX, 2000, w, h, res, 42);
+            if (!covered)
+            {
+                resynced = true;
+                break;
+            }
+
+            // When in the refresh band, the look-ahead produces a recentred-ahead
+            // pan-margin entry; adopt it as the active entry (as the renderer does
+            // on publish) so coverage extends into the direction of travel.
+            if (S100VectorSnapshotRenderer.ShouldRefreshForPan(current, viewX, 2000, w, h, res, refresh))
+            {
+                var dir = S100VectorSnapshotRenderer.PredictPanDirection(
+                    (viewX - current.RecordCenterX) / res, 0)!.Value;
+                var leadPx = Math.Min(
+                    (current.RecordWidth - w) / 2.0, (current.RecordHeight - h) / 2.0);
+                var (rcx, rcy) = S100VectorSnapshotRenderer.ComputeRecenterAhead(
+                    viewX, 2000, dir.ux, dir.uy, leadPx, res);
+                current = new S100VectorSnapshotRenderer.SnapshotAnchor(
+                    rcx, rcy, w + 2 * panMarginPx, h + 2 * panMarginPx, res, 42);
+            }
+        }
+
+        Assert.False(resynced);
+    }
 }
