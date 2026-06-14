@@ -135,6 +135,9 @@
   <data name="Tooltip_ToggleTheme" xml:space="preserve">
     <value>Toggle Light/Dark Theme</value>
   </data>
+  <data name="Tooltip_ReportFeedback" xml:space="preserve">
+    <value>Report Feedback</value>
+  </data>
   <data name="Tooltip_Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
@@ -404,6 +407,59 @@
   </data>
   <data name="Menu_PickMode" xml:space="preserve">
     <value>Pick Mode</value>
+  </data>
+  <data name="Menu_Help" xml:space="preserve">
+    <value>Help</value>
+  </data>
+  <data name="Menu_ReportFeedback" xml:space="preserve">
+    <value>Report Feedback…</value>
+  </data>
+
+  <!-- Feedback dialog -->
+  <data name="Feedback_DialogTitle" xml:space="preserve">
+    <value>Report Feedback</value>
+  </data>
+  <data name="Feedback_DataDescription" xml:space="preserve">
+    <value>This report includes the technical details below plus your optional screenshot and feedback. No file contents or personal data are collected. Expand “Show data that will be sent” to review everything first.</value>
+  </data>
+  <data name="Feedback_YourFeedbackLabel" xml:space="preserve">
+    <value>Your feedback</value>
+  </data>
+  <data name="Feedback_FeedbackWatermark" xml:space="preserve">
+    <value>Describe what happened or what could be improved…</value>
+  </data>
+  <data name="Feedback_IncludeScreenshot" xml:space="preserve">
+    <value>Include this screenshot of the application</value>
+  </data>
+  <data name="Feedback_ScreenshotPreviewTooltip" xml:space="preserve">
+    <value>This is exactly the screenshot that will be included.</value>
+  </data>
+  <data name="Feedback_RawDataHeader" xml:space="preserve">
+    <value>Show data that will be sent</value>
+  </data>
+  <data name="Feedback_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Feedback_CancelTooltip" xml:space="preserve">
+    <value>Dismiss without sending feedback</value>
+  </data>
+  <data name="Feedback_Submit" xml:space="preserve">
+    <value>Submit Feedback</value>
+  </data>
+  <data name="Feedback_SubmitTooltip" xml:space="preserve">
+    <value>Save a feedback bundle and open a prefilled GitHub issue</value>
+  </data>
+  <data name="Feedback_SubmittedTitle" xml:space="preserve">
+    <value>Feedback ready</value>
+  </data>
+  <data name="Feedback_SubmittedBody" xml:space="preserve">
+    <value>A prefilled GitHub issue was opened in your browser. The feedback bundle was saved to {0}.</value>
+  </data>
+  <data name="Feedback_SubmittedBodyClipboard" xml:space="preserve">
+    <value>A prefilled GitHub issue was opened in your browser. Paste your screenshot into it with ⌘V / Ctrl+V. The feedback bundle was also saved to {0}.</value>
+  </data>
+  <data name="Feedback_SubmitFailedTitle" xml:space="preserve">
+    <value>Could not prepare feedback</value>
   </data>
 
   <!-- File picker -->

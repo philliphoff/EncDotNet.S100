@@ -114,7 +114,14 @@ internal sealed class NativeMenuBuilder
 
         var fileMenu = BuildFileMenu();
 
-        var nativeMenu = new NativeMenu { fileMenu, viewMenu };
+        var reportFeedbackItem = new NativeMenuItem(Strings.Menu_ReportFeedback);
+        reportFeedbackItem.Click += (_, _) => _viewModel.ShowFeedbackCommand.Execute(null);
+        var helpMenu = new NativeMenuItem(Strings.Menu_Help)
+        {
+            Menu = new NativeMenu { reportFeedbackItem },
+        };
+
+        var nativeMenu = new NativeMenu { fileMenu, viewMenu, helpMenu };
         NativeMenu.SetMenu(window, nativeMenu);
 
         RebuildOpenRecentMenu();

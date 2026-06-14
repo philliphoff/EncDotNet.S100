@@ -123,26 +123,44 @@
     </shadui:Window.Styles>
 
     <shadui:Window.RightWindowTitleBarContent>
-        <Button Command="{Binding ToggleThemeCommand}"
-                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
-                Width="32" Height="28"
-                Padding="0"
-                HorizontalContentAlignment="Center"
-                VerticalContentAlignment="Center"
-                Background="Transparent"
-                BorderThickness="0">
-            <Panel>
-                <!-- Sun icon (shown in dark mode, click to go light) -->
-                <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
-                               Foreground="{DynamicResource ForegroundColor}"
-                               IsVisible="{Binding IsDarkTheme}" />
-                <!-- Moon icon (shown in light mode, click to go dark) -->
-                <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
-                               Foreground="{DynamicResource ForegroundColor}"
-                               IsVisible="{Binding !IsDarkTheme}" />
-            </Panel>
-        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="0">
+            <Button Command="{Binding ShowFeedbackCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReportFeedback}"
+                    Width="32" Height="28"
+                    Padding="0"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0">
+                <ic:FluentIcon Icon="PersonFeedback" IconVariant="Regular" FontSize="16"
+                               Foreground="{DynamicResource ForegroundColor}" />
+            </Button>
+            <Button Command="{Binding ToggleThemeCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
+                    Width="32" Height="28"
+                    Padding="0"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0">
+                <Panel>
+                    <!-- Sun icon (shown in dark mode, click to go light) -->
+                    <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   IsVisible="{Binding IsDarkTheme}" />
+                    <!-- Moon icon (shown in light mode, click to go dark) -->
+                    <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   IsVisible="{Binding !IsDarkTheme}" />
+                </Panel>
+            </Button>
+        </StackPanel>
     </shadui:Window.RightWindowTitleBarContent>
+
+    <shadui:Window.Hosts>
+        <!-- Hosts ShadUI modal dialogs (e.g. Report Feedback). -->
+        <shadui:DialogHost Manager="{Binding DialogManager}" x:Name="PART_DialogHost" />
+    </shadui:Window.Hosts>
 
     <Panel>
     <DockPanel>
