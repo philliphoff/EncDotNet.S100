@@ -24,7 +24,10 @@ body:
       label: Screenshot
       description: |
         If the viewer copied a screenshot to your clipboard, paste it here with
-        **⌘V / Ctrl+V**. You can leave this empty.
+        **⌘V / Ctrl+V**. If that paste fails with "failed to upload", the viewer
+        also revealed a `screenshot.png` file in your file manager — drag that
+        file into this field instead (file uploads are more reliable than
+        pasting). You can leave this empty.
 
   - type: textarea
     id: diagnostics

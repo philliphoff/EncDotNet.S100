@@ -54,7 +54,12 @@ internal sealed record FeedbackSubmitRequest(
 /// <param name="IssueUrl">The GitHub new-issue URL that was opened.</param>
 /// <param name="ScreenshotOnClipboard">Whether the screenshot PNG was
 /// successfully placed on the system clipboard for pasting into the issue.</param>
+/// <param name="ScreenshotPath">Absolute path of the standalone
+/// <c>screenshot.png</c> written alongside the bundle and revealed in the
+/// file manager for drag-and-drop, or <see langword="null"/> when no
+/// screenshot was included.</param>
 internal sealed record FeedbackSubmitResult(
     string BundlePath,
     string IssueUrl,
-    bool ScreenshotOnClipboard);
+    bool ScreenshotOnClipboard,
+    string? ScreenshotPath);
