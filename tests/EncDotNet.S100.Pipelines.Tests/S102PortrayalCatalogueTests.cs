@@ -163,6 +163,22 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
+    public void NoDataColor_IsNull_WhenRenderNoDataFillDisabled()
+    {
+        var catalogue = new S102PortrayalCatalogue(_engine, _provider) { RenderNoDataFill = false };
+        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+
+        var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
+
+        // With NODATA fill disabled (layered/overlay rendering) the renderer
+        // must leave fill cells transparent so the underlying layer shows.
+        Assert.Null(scheme.NoDataColor);
+
+        // Depth bands are unaffected by the fill toggle.
+        Assert.NotEmpty(scheme.Bands);
+    }
+
+    [Fact]
     public void InvariantClamp_ShallowGreaterThanSafety_DoesNotThrow_AndProducesMonotonicBands()
     {
         var catalogue = CreateCatalogue();
