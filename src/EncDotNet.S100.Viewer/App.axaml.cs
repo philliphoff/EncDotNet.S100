@@ -29,6 +29,14 @@ public partial class App : Application
     private static IServiceProvider? s_services;
 
     /// <summary>
+    /// Records the most recent unhandled error so the feedback reporter
+    /// can include it. Assigned once the service container is built; the
+    /// global exception handlers funnel through <see cref="LogCrash"/>
+    /// which forwards here.
+    /// </summary>
+    private static EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker? s_lastErrorTracker;
+
+    /// <summary>
     /// Application-wide service container. Populated during
     /// <see cref="OnFrameworkInitializationCompleted"/>; throws if accessed
     /// before the framework is initialized.
@@ -58,6 +66,19 @@ public partial class App : Application
         };
 
         s_services = ConfigureServices();
+
+        // Now that the container exists, route recorded crashes into the
+        // feedback reporter's last-error tracker (the global handlers above
+        // funnel through LogCrash).
+        s_lastErrorTracker = s_services.GetRequiredService<
+            EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker>();
+
+        // ShadUI resolves custom dialog content by an explicit
+        // view/context-view-model registration on the DialogManager (a
+        // DataTemplate alone is not sufficient). Register the feedback
+        // dialog now that the singleton manager exists.
+        s_services.GetRequiredService<ShadUI.DialogManager>()
+            .Register<Views.FeedbackDialogView, ViewModels.FeedbackDialogViewModel>();
 
         // Interpose the translation-invariant vector path cache (solid
         // polygons + solid-stroked, resolution-simplified lines) before
@@ -375,6 +396,17 @@ public partial class App : Application
         services.AddSingleton<IStatusPresenter, StatusPresenter>();
         services.AddSingleton<ShadUI.ToastManager>();
         services.AddSingleton<IToastService, ToastService>();
+
+        // Feedback reporting: diagnostics capture + modal dialog plumbing.
+        services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker,
+            EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>();
+        services.AddSingleton<IAppScreenshotProvider, AppScreenshotProvider>();
+        services.AddSingleton<ShadUI.DialogManager>();
+        services.AddSingleton<IFeedbackService, FeedbackService>();
+        services.AddTransient<FeedbackDialogViewModel>();
+        services.AddSingleton<Func<FeedbackDialogViewModel>>(sp =>
+            sp.GetRequiredService<FeedbackDialogViewModel>);
+
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
@@ -666,5 +698,6 @@ public partial class App : Application
     {
         Console.Error.WriteLine($"[{label}] {message}");
         CrashLog.Append(label, message);
+        s_lastErrorTracker?.Record(label, message);
     }
 }

@@ -322,7 +322,34 @@ from the second pass are rebadged `S101-as-S57/<rule-id>` so the
 user can tell whether a problem originated in the raw S-57 input or
 in the translated projection.
 
-## Own-ship and dynamic overlays
+## Reporting feedback
+
+To make it easy to file consistent, well-formed bug reports, the
+viewer has a built-in **Report Feedback** experience:
+
+- A feedback button sits in the application title bar next to the
+  theme toggle; there is also a **Help → Report Feedback…** menu entry.
+- Both open a modal dialog that explains exactly what is collected,
+  lets you type a free-form description, and previews an optional
+  screenshot of the application window (falling back to a render of
+  the current map view). Untick the screenshot checkbox to exclude it.
+- Automatically-collected diagnostics include app/build and runtime
+  info, the current viewport (centre, zoom, CRS, rotation), per-dataset
+  stats (product, visibility, validation error/warning counts), and the
+  most recently encountered error (type, message, stack trace) captured
+  by the global exception handlers.
+- An **expandable raw-data section** shows the full JSON payload, so
+  you always see precisely what will be sent before submitting.
+- On submit the viewer writes a local **bundle** — a zip containing
+  `diagnostics.json`, your `feedback.txt`, and (if included) the
+  `screenshot.png` — under your temp folder, reveals it in the file
+  manager, and opens a **prefilled GitHub new-issue page** in your
+  browser. Attach the bundle to the issue (the screenshot can't be
+  embedded automatically) and submit.
+
+No data leaves your machine until you choose to create the GitHub
+issue, and nothing is uploaded by the viewer itself.
+
 
 A live "own ship" overlay sits alongside the static datasets,
 publishing a single moving point through the

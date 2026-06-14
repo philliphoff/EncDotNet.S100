@@ -101,6 +101,7 @@ internal static class Strings
 
     // Tooltips
     public static string Tooltip_ToggleTheme => Get(nameof(Tooltip_ToggleTheme));
+    public static string Tooltip_ReportFeedback => Get(nameof(Tooltip_ReportFeedback));
     public static string Tooltip_Settings => Get(nameof(Tooltip_Settings));
     public static string Tooltip_FeatureCatalogues => Get(nameof(Tooltip_FeatureCatalogues));
     public static string Tooltip_PortrayalCatalogues => Get(nameof(Tooltip_PortrayalCatalogues));
@@ -181,6 +182,25 @@ internal static class Strings
     public static string Menu_Timeline => Get(nameof(Menu_Timeline));
     public static string Menu_PickReport => Get(nameof(Menu_PickReport));
     public static string Menu_PickMode => Get(nameof(Menu_PickMode));
+    public static string Menu_Help => Get(nameof(Menu_Help));
+    public static string Menu_ReportFeedback => Get(nameof(Menu_ReportFeedback));
+
+    // Feedback dialog
+    public static string Feedback_DialogTitle => Get(nameof(Feedback_DialogTitle));
+    public static string Feedback_DataDescription => Get(nameof(Feedback_DataDescription));
+    public static string Feedback_YourFeedbackLabel => Get(nameof(Feedback_YourFeedbackLabel));
+    public static string Feedback_FeedbackWatermark => Get(nameof(Feedback_FeedbackWatermark));
+    public static string Feedback_IncludeScreenshot => Get(nameof(Feedback_IncludeScreenshot));
+    public static string Feedback_ScreenshotPreviewTooltip => Get(nameof(Feedback_ScreenshotPreviewTooltip));
+    public static string Feedback_RawDataHeader => Get(nameof(Feedback_RawDataHeader));
+    public static string Feedback_Cancel => Get(nameof(Feedback_Cancel));
+    public static string Feedback_CancelTooltip => Get(nameof(Feedback_CancelTooltip));
+    public static string Feedback_Submit => Get(nameof(Feedback_Submit));
+    public static string Feedback_SubmitTooltip => Get(nameof(Feedback_SubmitTooltip));
+    public static string Feedback_SubmittedTitle => Get(nameof(Feedback_SubmittedTitle));
+    public static string Feedback_SubmittedBody => Get(nameof(Feedback_SubmittedBody));
+    public static string Feedback_SubmittedBodyClipboard => Get(nameof(Feedback_SubmittedBodyClipboard));
+    public static string Feedback_SubmitFailedTitle => Get(nameof(Feedback_SubmitFailedTitle));
 
     // File picker
     public static string FilePicker_OpenDatasetTitle => Get(nameof(FilePicker_OpenDatasetTitle));

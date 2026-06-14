@@ -11,6 +11,7 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
+using ShadUI;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class MainViewModel : ViewModelBase
@@ -19,6 +20,8 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly IThemeService _theme;
     private readonly IRecentFilesService _recentFiles;
     private readonly IToastService _toasts;
+    private readonly ShadUI.DialogManager _dialogManager;
+    private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -611,6 +614,19 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleThemeCommand { get; }
 
+    /// <summary>
+    /// ShadUI dialog manager bound by the main window's
+    /// <c>DialogHost</c>; used to present the feedback dialog and any
+    /// future modal dialogs.
+    /// </summary>
+    public ShadUI.DialogManager DialogManager { get; }
+
+    /// <summary>
+    /// Opens the "Report Feedback" modal dialog. Triggered from the
+    /// app-bar button and the Help menu.
+    /// </summary>
+    public ICommand ShowFeedbackCommand { get; }
+
     // ─── Exchange-set progress + banner (es3-progress) ────────────────────
 
     private bool _isExchangeSetLoading;
@@ -846,6 +862,8 @@ internal sealed class MainViewModel : ViewModelBase
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
         IToastService toasts,
+        ShadUI.DialogManager? dialogManager = null,
+        Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
         IStatusPresenter? statusPresenter = null)
@@ -872,6 +890,12 @@ internal sealed class MainViewModel : ViewModelBase
         _theme = themeService;
         _recentFiles = recentFiles;
         _toasts = toasts;
+        // The dialog manager is supplied by DI in the running app; tests
+        // that construct the view-model directly omit it, so fall back to
+        // an unhosted manager to keep the DialogManager property non-null.
+        _dialogManager = dialogManager ?? new ShadUI.DialogManager();
+        _feedbackDialogFactory = feedbackDialogFactory;
+        DialogManager = _dialogManager;
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
         _mcpServerHost = mcpServerHost;
@@ -1035,6 +1059,8 @@ internal sealed class MainViewModel : ViewModelBase
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
+        ShowFeedbackCommand = new AsyncRelayCommand(ShowFeedbackAsync);
+
         // Keep IsDarkTheme in sync when the theme is changed via paths
         // other than ToggleThemeCommand (e.g. the SettingsView chrome
         // selector, which routes through IThemeService.SetTheme).
@@ -1174,5 +1200,24 @@ internal sealed class MainViewModel : ViewModelBase
 
         SelectDefaultTab();
         await Datasets.LoadFromPathAsync(path);
+    }
+
+    /// <summary>
+    /// Collects diagnostics + an optional screenshot, then presents the
+    /// feedback dialog via the ShadUI dialog manager.
+    /// </summary>
+    private async Task ShowFeedbackAsync()
+    {
+        if (_feedbackDialogFactory is null)
+        {
+            return;
+        }
+
+        var dialog = _feedbackDialogFactory();
+        await dialog.InitializeAsync();
+        _dialogManager.CreateDialog(dialog)
+            .Dismissible()
+            .WithMaxWidth(620)
+            .Show();
     }
 }

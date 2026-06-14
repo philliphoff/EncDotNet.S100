@@ -129,6 +129,8 @@ public partial class MainWindow : ShadUI.Window
         // loader subscribes to its own settings dependencies internally.
         var mapHost = new MapsuiMapHost(MapControl);
         App.Services.GetRequiredService<IMapHostAccessor>().Current = mapHost;
+        // Let the feedback reporter capture the whole application window.
+        App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
         // Render-state controller bridges MCP / scripted callers to the
         // viewer's palette and ECDIS display category without exposing
         // SettingsViewModel / EcdisDisplayState directly.

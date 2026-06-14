@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.FeedbackDialogView"
+             x:DataType="vm:FeedbackDialogViewModel"
+             Width="560"
+             Height="600">
+
+    <Grid Margin="24" RowDefinitions="Auto,*,Auto">
+
+        <!-- Fixed header + description -->
+        <StackPanel Grid.Row="0" Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <ic:FluentIcon Icon="PersonFeedback" IconVariant="Regular" FontSize="22"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource ForegroundColor}" />
+                <TextBlock Text="{x:Static loc:Strings.Feedback_DialogTitle}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Text="{x:Static loc:Strings.Feedback_DataDescription}"
+                       FontSize="12"
+                       Opacity="0.75"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Scrollable content -->
+        <ScrollViewer Grid.Row="1"
+                      Margin="0,16,0,0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <!-- Right gutter keeps the overlay scrollbar off the content. -->
+            <StackPanel Spacing="16" Margin="0,0,14,0">
+
+                <!-- User message -->
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{x:Static loc:Strings.Feedback_YourFeedbackLabel}"
+                               FontSize="12"
+                               FontWeight="SemiBold" />
+                    <TextBox Text="{Binding UserMessage, Mode=TwoWay}"
+                             PlaceholderText="{x:Static loc:Strings.Feedback_FeedbackWatermark}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MinHeight="96"
+                             MaxHeight="160"
+                             VerticalContentAlignment="Top" />
+                </StackPanel>
+
+                <!-- Screenshot -->
+                <StackPanel Spacing="8" IsVisible="{Binding HasScreenshot}">
+                    <CheckBox IsChecked="{Binding IncludeScreenshot, Mode=TwoWay}"
+                              Content="{x:Static loc:Strings.Feedback_IncludeScreenshot}" />
+                    <Border BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="2"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding IncludeScreenshot}">
+                        <Image Source="{Binding ScreenshotImage}"
+                               MaxHeight="200"
+                               Stretch="Uniform"
+                               ToolTip.Tip="{x:Static loc:Strings.Feedback_ScreenshotPreviewTooltip}" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Raw data disclosure (custom toggle for precise alignment) -->
+                <StackPanel Spacing="0">
+                    <ToggleButton Classes="Ghost"
+                                  Padding="4,2"
+                                  HorizontalAlignment="Left"
+                                  IsChecked="{Binding IsRawDataExpanded, Mode=TwoWay}"
+                                  ToolTip.Tip="{x:Static loc:Strings.Feedback_RawDataHeader}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsRawDataExpanded}" />
+                            <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsRawDataExpanded}" />
+                            <TextBlock Text="{x:Static loc:Strings.Feedback_RawDataHeader}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <SelectableTextBlock Text="{Binding RawDiagnostics}"
+                                         IsVisible="{Binding IsRawDataExpanded}"
+                                         Margin="2,8,0,0"
+                                         FontSize="11"
+                                         TextWrapping="Wrap"
+                                         FontFamily="Menlo,Consolas,Courier New,monospace" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Fixed actions -->
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8"
+                    Margin="0,16,0,0">
+            <Button Classes="Outline"
+                    Content="{x:Static loc:Strings.Feedback_Cancel}"
+                    Command="{Binding CancelCommand}"
+                    IsEnabled="{Binding !IsBusy}"
+                    ToolTip.Tip="{x:Static loc:Strings.Feedback_CancelTooltip}" />
+            <Button Classes="Primary"
+                    Content="{x:Static loc:Strings.Feedback_Submit}"
+                    Command="{Binding SubmitCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Feedback_SubmitTooltip}" />
+        </StackPanel>
+    </Grid>
+</UserControl>
