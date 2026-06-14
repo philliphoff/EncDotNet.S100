@@ -100,6 +100,18 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <see cref="RenderService"/>), and speculatively prebuilds the predicted
 /// next zoom bucket(s) after the view settles. See <see cref="PrebuildEnabled"/>.
 /// </para>
+/// <para>
+/// <b>Sustained-pan look-ahead.</b> Under <see cref="PrebuildEnabled"/>, a pan
+/// that approaches the recorded margin no longer re-records synchronously on
+/// the render thread. Once the pan crosses <see cref="PanRefreshFraction"/> of
+/// the active snapshot's margin (while it still fully covers the view), the
+/// renderer records a recentred-ahead, <see cref="PanMarginPx"/>-margin image
+/// at the same resolution on a background thread and blits the existing
+/// (translated) image until it publishes, then swaps in the crisp one. A pan
+/// that briefly outruns the look-ahead blits the nearest same-resolution image
+/// translated (a transient uncovered leading strip) rather than stalling. See
+/// <see cref="PanMarginPx"/> and <see cref="PanRefreshFraction"/>.
+/// </para>
 /// </remarks>
 public static class S100VectorSnapshotRenderer
 {
@@ -121,26 +133,30 @@ public static class S100VectorSnapshotRenderer
             is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
 
     /// <summary>
-    /// True when the <b>off-thread snapshot prebuild</b> is enabled. Opt-in and
-    /// <b>off by default</b>; set <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> to a truthy
-    /// value (<c>1</c> / <c>true</c> / <c>on</c>) to turn it on. When off, the
-    /// renderer behaves exactly as the shipped single-image snapshot: one cached
-    /// image, re-recorded <i>synchronously</i> on the render thread whenever the
-    /// resolution or feature-set changes.
+    /// True when the <b>off-thread snapshot prebuild</b> is enabled. <b>Enabled by
+    /// default</b>; set <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> to a falsy value
+    /// (<c>0</c> / <c>false</c>) to opt out and fall back to the single-image
+    /// snapshot (one cached image, re-recorded <i>synchronously</i> on the render
+    /// thread whenever the resolution or feature-set changes, and on a pan past
+    /// the recorded margin). Opt out for A/B comparison against the prebuild path.
     /// </summary>
     /// <remarks>
     /// When on, the renderer keeps a small per-resolution cache of recorded
-    /// images and, on a resolution change (zoom), either (a) blits an
+    /// images and hides both the zoom record stall and the sustained-pan record
+    /// stall off-thread: on a resolution change (zoom) it either (a) blits an
     /// already-prebuilt image for the new resolution, or (b) blits the nearest
     /// existing image <i>scaled</i> for a frame or two while the real image for
-    /// the new resolution is rasterized on a background thread — so the
-    /// ~650&#160;ms on-thread record stall (<i>cost B</i>) never blocks the UI.
-    /// After the view settles, the predicted next zoom bucket(s) are rasterized
-    /// in the background so a subsequent zoom lands on a ready, crisp image.
+    /// the new resolution is rasterized on a background thread; on a pan it
+    /// records a recentred-ahead image at the same resolution off-thread before
+    /// the pan reaches the margin edge (see <see cref="PanMarginPx"/> /
+    /// <see cref="PanRefreshFraction"/>) — so the ~650&#160;ms on-thread record
+    /// stall never blocks the UI. After the view settles, the predicted next zoom
+    /// bucket(s) are rasterized in the background so a subsequent zoom lands on a
+    /// ready, crisp image.
     /// </remarks>
     public static bool PrebuildEnabled { get; } =
         (Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_PREBUILD") ?? string.Empty)
-            is "1" or "true" or "TRUE" or "True" or "on" or "ON";
+            is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
 
     /// <summary>
     /// Optional callback invoked (on a background thread) when an off-thread
@@ -160,6 +176,29 @@ public static class S100VectorSnapshotRenderer
     /// <c>S100_VECTOR_SNAPSHOT_MARGIN</c> (default 256).
     /// </summary>
     public static double MarginPx { get; } = ReadMargin();
+
+    /// <summary>
+    /// Margin, in screen pixels, used for <b>off-thread pan re-records</b> (the
+    /// prebuild path's sustained-pan look-ahead). Larger than <see cref="MarginPx"/>
+    /// so a single recentred-ahead background record covers roughly a full
+    /// viewport of travel before the next re-record is needed, trading memory /
+    /// record cost for fewer re-records during a sustained drag. Read once from
+    /// <c>S100_VECTOR_SNAPSHOT_PAN_MARGIN</c> (default 512). Only consulted when
+    /// <see cref="PrebuildEnabled"/> is true; the cold/settled record still uses
+    /// <see cref="MarginPx"/>.
+    /// </summary>
+    public static double PanMarginPx { get; } = ReadPanMargin();
+
+    /// <summary>
+    /// Fraction (0..1) of the active snapshot's recorded margin at which an
+    /// off-thread pan re-record is triggered while the entry still fully covers
+    /// the viewport. A smaller fraction starts the background re-record earlier
+    /// (more lead time, more frequent records); a larger fraction defers it
+    /// (risking that a fast pan reaches the margin edge before the recentred
+    /// image is ready). Read once from <c>S100_VECTOR_SNAPSHOT_PAN_REFRESH</c>
+    /// (default 0.5). Only consulted when <see cref="PrebuildEnabled"/> is true.
+    /// </summary>
+    public static double PanRefreshFraction { get; } = ReadPanRefresh();
 
     private static readonly bool s_diag =
         (Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_DIAG") ?? string.Empty)
@@ -198,6 +237,32 @@ public static class S100VectorSnapshotRenderer
         }
 
         return 256.0;
+    }
+
+    private static double ReadPanMargin()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_PAN_MARGIN");
+        if (!string.IsNullOrEmpty(raw)
+            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)
+            && v >= 0)
+        {
+            return v;
+        }
+
+        return 512.0;
+    }
+
+    private static double ReadPanRefresh()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_PAN_REFRESH");
+        if (!string.IsNullOrEmpty(raw)
+            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)
+            && v > 0 && v <= 1.0)
+        {
+            return v;
+        }
+
+        return 0.5;
     }
 
     /// <summary>
@@ -315,6 +380,15 @@ public static class S100VectorSnapshotRenderer
             state.LastDeviceScale = scale;
             UpdateResolutionHistory(state, resolution);
 
+            // Gate the pan look-ahead on actual view motion: a settled view (and
+            // the repaint a background publish requests) must not trigger a pan
+            // re-record, or the look-ahead could loop while idle.
+            var moved = state.HasLastView
+                && (Math.Abs(viewport.CenterX - state.LastViewCenterX) + Math.Abs(viewport.CenterY - state.LastViewCenterY)) > resolution * 0.5;
+            state.LastViewCenterX = viewport.CenterX;
+            state.LastViewCenterY = viewport.CenterY;
+            state.HasLastView = true;
+
             var exact = FindUsableEntry(state, viewport, resolution, featureCount);
             if (exact is not null)
             {
@@ -328,6 +402,10 @@ public static class S100VectorSnapshotRenderer
                 }
 
                 SchedulePrebuilds(state, layer, viewport, resolution, featureCount, scale);
+                if (moved)
+                {
+                    MaybeSchedulePanRecord(state, layer, viewport, resolution, featureCount, scale, exact.ToAnchor());
+                }
             }
             else
             {
@@ -344,6 +422,25 @@ public static class S100VectorSnapshotRenderer
                     }
 
                     EnsureAsyncRecord(state, layer, viewport, resolution, featureCount, scale);
+                }
+                else if (FindNearestSameResolutionEntry(state, viewport, resolution, featureCount) is { } nearest)
+                {
+                    // A pan outran the look-ahead before the recentred image was
+                    // ready. Blit the nearest same-resolution entry translated —
+                    // it may leave a transient uncovered leading strip over the
+                    // basemap — and ensure a recentred pan record is in flight,
+                    // rather than freezing the render thread on a synchronous
+                    // re-record (the old jitter source).
+                    nearest.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                    (toBlit, dest) = BlitOf(nearest, viewport, resolution);
+
+                    if (s_diag)
+                    {
+                        var (dx, dy) = PanOffsetPixels(nearest.ToAnchor(), viewport.CenterX, viewport.CenterY, resolution);
+                        Console.Error.WriteLine($"[VecSnapshot] PAN-UNCOVERED blit res={resolution:G6} dxPx={Math.Abs(dx):F0} dyPx={Math.Abs(dy):F0} feats={featureCount} entries={state.Entries.Count}");
+                    }
+
+                    EnsurePanRecord(state, layer, viewport, resolution, featureCount, scale);
                 }
                 else
                 {
@@ -551,6 +648,74 @@ public static class S100VectorSnapshotRenderer
         return new[] { forward, backward };
     }
 
+    /// <summary>
+    /// Returns the unit pan direction implied by a pixel pan offset
+    /// <paramref name="dxPx"/>/<paramref name="dyPx"/> (typically the offset of
+    /// the current view centre from the active snapshot's record centre, from
+    /// <see cref="PanOffsetPixels"/>), or <c>null</c> when the offset is too small
+    /// to imply a direction. Pure and side-effect-free for unit testing.
+    /// </summary>
+    internal static (double ux, double uy)? PredictPanDirection(double dxPx, double dyPx)
+    {
+        var mag = Math.Sqrt(dxPx * dxPx + dyPx * dyPx);
+        if (mag < 1e-6)
+        {
+            return null;
+        }
+
+        return (dxPx / mag, dyPx / mag);
+    }
+
+    /// <summary>
+    /// Computes the world-space centre for an off-thread pan re-record placed
+    /// <paramref name="leadPx"/> screen pixels <i>ahead</i> of the current view
+    /// centre in the pan direction
+    /// (<paramref name="dirX"/>/<paramref name="dirY"/>, a unit vector in screen
+    /// space). Leading the record into the direction of travel means the new
+    /// snapshot's margin extends maximally where the pan is heading, so it stays
+    /// valid for the longest possible continued drag. Pure and testable.
+    /// </summary>
+    internal static (double centerX, double centerY) ComputeRecenterAhead(
+        double centerX, double centerY, double dirX, double dirY, double leadPx, double resolution)
+    {
+        var leadWorld = leadPx * resolution;
+        return (centerX + dirX * leadWorld, centerY + dirY * leadWorld);
+    }
+
+    /// <summary>
+    /// <c>true</c> when the active snapshot still fully covers the viewport
+    /// (the view centre is within the recorded margin) <i>but</i> the pan has
+    /// progressed past <paramref name="refreshFraction"/> of that margin on
+    /// either axis — the hysteresis band in which an off-thread pan re-record
+    /// should be started so a recentred, crisp image is ready before the pan
+    /// reaches the margin edge. Returns <c>false</c> once the view has already
+    /// left the margin (too late to pre-empt) or while still well inside it.
+    /// Pure and testable.
+    /// </summary>
+    internal static bool ShouldRefreshForPan(
+        SnapshotAnchor anchor, double centerX, double centerY, double width, double height, double resolution, double refreshFraction)
+    {
+        var marginX = (anchor.RecordWidth - width) / 2.0;
+        var marginY = (anchor.RecordHeight - height) / 2.0;
+        if (marginX <= 0 || marginY <= 0)
+        {
+            return false;
+        }
+
+        var (dx, dy) = PanOffsetPixels(anchor, centerX, centerY, resolution);
+        var ax = Math.Abs(dx);
+        var ay = Math.Abs(dy);
+
+        // Already outside the margin: the entry no longer fully covers, so a
+        // pre-emptive refresh is moot (handled by the uncovered-fallback path).
+        if (ax > marginX || ay > marginY)
+        {
+            return false;
+        }
+
+        return ax > refreshFraction * marginX || ay > refreshFraction * marginY;
+    }
+
     private static void Record(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService, SnapshotState state, int featureCount)
     {
         var recordWidth = viewport.Width + 2.0 * MarginPx;
@@ -605,9 +770,19 @@ public static class S100VectorSnapshotRenderer
     /// may be blitted on any thread.
     /// </summary>
     private static SnapshotEntry BuildSnapshotEntry(Viewport viewport, ILayer layer, float scale, RenderService renderService, int featureCount)
+        => BuildSnapshotEntry(viewport, layer, scale, renderService, featureCount, MarginPx);
+
+    /// <summary>
+    /// Overload of <see cref="BuildSnapshotEntry(Viewport,ILayer,float,RenderService,int)"/>
+    /// that records with an explicit <paramref name="marginPx"/> (e.g.
+    /// <see cref="PanMarginPx"/> for a sustained-pan look-ahead record) instead of
+    /// the default <see cref="MarginPx"/>. The supplied <paramref name="viewport"/>
+    /// centre is honoured as-is, so callers may pass a recentred-ahead viewport.
+    /// </summary>
+    private static SnapshotEntry BuildSnapshotEntry(Viewport viewport, ILayer layer, float scale, RenderService renderService, int featureCount, double marginPx)
     {
-        var recordWidth = viewport.Width + 2.0 * MarginPx;
-        var recordHeight = viewport.Height + 2.0 * MarginPx;
+        var recordWidth = viewport.Width + 2.0 * marginPx;
+        var recordHeight = viewport.Height + 2.0 * marginPx;
         var recordViewport = viewport with { Width = recordWidth, Height = recordHeight };
 
         if (scale <= 0 || float.IsNaN(scale))
@@ -666,12 +841,58 @@ public static class S100VectorSnapshotRenderer
         return null;
     }
 
+    /// <summary>
+    /// Finds the same-resolution (and same-feature-count) entry whose record
+    /// centre is closest to the current view centre, regardless of whether it
+    /// still fully covers the viewport. Used as the uncovered-pan fallback so a
+    /// pan that briefly outran the off-thread look-ahead blits existing content
+    /// (translated, possibly with an uncovered leading strip) instead of forcing
+    /// a synchronous re-record.
+    /// </summary>
+    private static SnapshotEntry? FindNearestSameResolutionEntry(SnapshotState state, Viewport viewport, double resolution, int featureCount)
+    {
+        SnapshotEntry? best = null;
+        var bestDistSq = double.PositiveInfinity;
+        foreach (var entry in state.Entries)
+        {
+            if (entry.FeatureCount != featureCount || !ResolutionsMatch(entry.Resolution, resolution))
+            {
+                continue;
+            }
+
+            var dx = entry.RecordCenterX - viewport.CenterX;
+            var dy = entry.RecordCenterY - viewport.CenterY;
+            var distSq = dx * dx + dy * dy;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                best = entry;
+            }
+        }
+
+        return best;
+    }
+
     /// <summary>Computes the destination rectangle for blitting <paramref name="entry"/>.</summary>
     private static (SKImage image, SKRect dest) BlitOf(SnapshotEntry entry, Viewport viewport, double resolution)
     {
         var (tx, ty, dw, dh) = ComputeBlit(entry.ToAnchor(), viewport.CenterX, viewport.CenterY, viewport.Width, viewport.Height, resolution);
         var dest = new SKRect((float)tx, (float)ty, (float)(tx + dw), (float)(ty + dh));
         return (entry.Image, dest);
+    }
+
+    private static bool CentersCoincident(SnapshotEntry a, SnapshotEntry b)
+    {
+        var res = b.Resolution > 0 ? b.Resolution : a.Resolution;
+        if (res <= 0)
+        {
+            return true;
+        }
+
+        var dxPx = (a.RecordCenterX - b.RecordCenterX) / res;
+        var dyPx = (a.RecordCenterY - b.RecordCenterY) / res;
+        var threshold = 0.25 * MarginPx;
+        return Math.Abs(dxPx) <= threshold && Math.Abs(dyPx) <= threshold;
     }
 
     /// <summary>
@@ -691,7 +912,14 @@ public static class S100VectorSnapshotRenderer
 
         for (var i = state.Entries.Count - 1; i >= 0; i--)
         {
-            if (ResolutionsMatch(state.Entries[i].Resolution, entry.Resolution))
+            // Replace an existing entry only when it is at the same resolution
+            // AND its record centre is (near-)coincident with the new one — i.e.
+            // a re-record of the same view (zoom bucket, or a pan re-record that
+            // barely moved). Spatially distinct same-resolution entries (the
+            // recentred-ahead pan look-ahead records) are kept so a pan reversal
+            // still finds a covering entry; the LRU below bounds the total.
+            if (ResolutionsMatch(state.Entries[i].Resolution, entry.Resolution)
+                && CentersCoincident(state.Entries[i], entry))
             {
                 state.Entries[i].Dispose();
                 state.Entries.RemoveAt(i);
@@ -780,6 +1008,107 @@ public static class S100VectorSnapshotRenderer
                 if (s_diag)
                 {
                     Console.Error.WriteLine($"[VecSnapshot] PREBUILD FAILED res={resolution:G6}: {ex.Message}");
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Sustained-pan look-ahead: while the active entry still covers the viewport
+    /// but the pan has crossed <see cref="PanRefreshFraction"/> of its margin,
+    /// records a recentred-ahead, <see cref="PanMarginPx"/>-margin snapshot at the
+    /// <i>same</i> resolution on a background thread so a crisp image is ready
+    /// before the pan reaches the margin edge — turning the previously
+    /// synchronous on-thread re-record into an off-thread one. At most one pan
+    /// record is in flight at a time. Caller must hold <c>state.Sync</c>.
+    /// </summary>
+    private static void MaybeSchedulePanRecord(
+        SnapshotState state, ILayer layer, Viewport viewport, double resolution, int featureCount, float scale, SnapshotAnchor active)
+    {
+        if (!ShouldRefreshForPan(active, viewport.CenterX, viewport.CenterY, viewport.Width, viewport.Height, resolution, PanRefreshFraction))
+        {
+            return;
+        }
+
+        var (dx, dy) = PanOffsetPixels(active, viewport.CenterX, viewport.CenterY, resolution);
+        var dir = PredictPanDirection(dx, dy);
+        if (dir is not { } d)
+        {
+            return;
+        }
+
+        // Lead the new record into the direction of travel by (about) one of the
+        // active entry's margins, so the recentred snapshot still covers the
+        // current view (its trailing margin reaches back over it) while extending
+        // farthest where the pan is heading.
+        var leadPx = Math.Min((active.RecordWidth - viewport.Width) / 2.0, (active.RecordHeight - viewport.Height) / 2.0);
+        var (cx, cy) = ComputeRecenterAhead(viewport.CenterX, viewport.CenterY, d.ux, d.uy, leadPx, resolution);
+
+        EnsurePanRecord(state, layer, viewport with { CenterX = cx, CenterY = cy }, resolution, featureCount, scale);
+    }
+
+    /// <summary>
+    /// Kicks off (unless one is already in flight) a background rasterisation of
+    /// <paramref name="layer"/> at the recentred <paramref name="viewport"/>'s
+    /// centre and resolution, using <see cref="PanMarginPx"/>, publishing the
+    /// result into the cache and requesting a single repaint. Caller must hold
+    /// <c>state.Sync</c>.
+    /// </summary>
+    private static void EnsurePanRecord(SnapshotState state, ILayer layer, Viewport viewport, double resolution, int featureCount, float scale)
+    {
+        if (state.PanRecordInFlight)
+        {
+            return;
+        }
+
+        state.PanRecordInFlight = true;
+        var captured = viewport;
+
+        if (s_diag)
+        {
+            Console.Error.WriteLine($"[VecSnapshot] PAN-REFRESH res={resolution:G6} cx={captured.CenterX:F1} cy={captured.CenterY:F1} margin={PanMarginPx:F0} feats={featureCount}");
+        }
+
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            SnapshotEntry? built = null;
+            try
+            {
+                s_backgroundGate.Wait();
+                try
+                {
+                    built = BuildSnapshotEntry(captured, layer, scale, s_backgroundRenderService.Value, featureCount, PanMarginPx);
+                }
+                finally
+                {
+                    s_backgroundGate.Release();
+                }
+
+                lock (state.Sync)
+                {
+                    AddEntry(state, built);
+                    built = null;
+                    state.PanRecordInFlight = false;
+                }
+
+                if (s_diag)
+                {
+                    Console.Error.WriteLine($"[VecSnapshot] PAN-PUBLISH res={resolution:G6} feats={featureCount}");
+                }
+
+                RequestRepaint(layer);
+            }
+            catch (Exception ex)
+            {
+                built?.Dispose();
+                lock (state.Sync)
+                {
+                    state.PanRecordInFlight = false;
+                }
+
+                if (s_diag)
+                {
+                    Console.Error.WriteLine($"[VecSnapshot] PAN-RECORD FAILED res={resolution:G6}: {ex.Message}");
                 }
             }
         });
@@ -974,6 +1303,17 @@ public static class S100VectorSnapshotRenderer
         public double PrevResolution;
         public double LastResolution;
         public readonly HashSet<double> InFlight = new();
+
+        // Sustained-pan look-ahead: at most one off-thread same-resolution
+        // recentred re-record is in flight at a time.
+        public bool PanRecordInFlight;
+
+        // Previous frame's view centre, used to gate the pan look-ahead on actual
+        // motion so a settled view (including the repaint that a background
+        // publish requests) never re-triggers a pan record — which would loop.
+        public double LastViewCenterX;
+        public double LastViewCenterY;
+        public bool HasLastView;
 
         public SnapshotAnchor ToAnchor() =>
             new(RecordCenterX, RecordCenterY, RecordWidth, RecordHeight, Resolution, FeatureCount);
