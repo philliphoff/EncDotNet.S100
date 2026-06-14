@@ -40,7 +40,12 @@ values must not crash the render pipeline.
 
 Cells whose depth equals `S102CoverageSource.FillValue` (1,000,000f)
 are painted with the active palette's `NODTA` colour via
-`CoverageColorScheme.NoDataColor`.
+`CoverageColorScheme.NoDataColor` by default. Set
+`S102PortrayalCatalogue.RenderNoDataFill = false` to leave NODATA cells
+transparent instead — the correct behaviour when S-102 is overlaid on
+another layer (e.g. an S-101 ENC in the viewer), so the un-surveyed
+remainder of the rectangular coverage extent does not obscure the chart
+beneath.
 
 ## Validation
 

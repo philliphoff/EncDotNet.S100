@@ -101,7 +101,12 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         Spec = HdfDeclaredSpec.Resolve(_dataset.DeclaredProductSpecification, "S-102");
 
         var provider = catalogueManager.GetProvider("S-102");
-        _catalogue = new S102PortrayalCatalogue(luaEngine, provider);
+        // The viewer overlays S-102 bathymetry on other layers (e.g. an
+        // S-101 ENC), so NODATA cells must be transparent rather than
+        // painted with the opaque NODTA grey; otherwise the un-surveyed
+        // remainder of the rectangular coverage extent obscures the chart
+        // beneath. (Standalone S-102 portrayal keeps the default fill.)
+        _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { RenderNoDataFill = false };
 
         // Hoist pipeline to a field: BuildCoveragePortrayalAsync is invoked
         // many times (each redraw) but the pipeline holds no per-render state,

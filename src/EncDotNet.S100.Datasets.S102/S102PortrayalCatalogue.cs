@@ -77,6 +77,28 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
 
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
+    /// <summary>
+    /// Controls whether NODATA cells (depth equal to
+    /// <see cref="S102CoverageSource.FillValue"/>) are painted with the
+    /// active palette's <c>NODTA</c> token.
+    /// <para>
+    /// When <c>true</c> (the default), <see cref="ResolveColorScheme"/>
+    /// surfaces the resolved <c>NODTA</c> colour via
+    /// <see cref="CoverageColorScheme.NoDataColor"/> so the renderer fills
+    /// fill cells with an opaque grey — the correct behaviour for a
+    /// standalone S-102 portrayal (S-102 Edition 3.0.0 Annex B).
+    /// </para>
+    /// <para>
+    /// When <c>false</c>, <see cref="CoverageColorScheme.NoDataColor"/> is
+    /// left <c>null</c> so the renderer leaves NODATA cells transparent.
+    /// This is the correct behaviour when S-102 is overlaid on another
+    /// layer (e.g. an S-101 ENC in the layered viewer): the un-surveyed
+    /// remainder of the rectangular coverage extent must not obscure the
+    /// underlying chart.
+    /// </para>
+    /// </summary>
+    public bool RenderNoDataFill { get; init; } = true;
+
     public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
@@ -406,7 +428,10 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
         // Resolve NODTA via the active palette (Day-palette grey by
         // default in the bundled colour profile). If the palette has
         // not loaded for any reason, fall back to the S-102 Day NODTA.
-        var noDataColor = ResolveColorToken("NODTA");
+        // When NODATA fill is disabled (layered/overlay rendering) leave
+        // the no-data colour null so the renderer keeps fill cells
+        // transparent and the underlying layer shows through.
+        var noDataColor = RenderNoDataFill ? ResolveColorToken("NODTA") : null;
 
         return new CoverageColorScheme
         {
