@@ -63,7 +63,8 @@ public class FeedbackReportingTests
         var report = SampleReport();
         var json = report.ToJson();
         var url = FeedbackService.BuildIssueUrl(
-            report, "Depth labels overlap", json, "/tmp/S100ViewerFeedback/feedback-x.zip",
+            report, "Depth labels overlap", json,
+            "/tmp/S100ViewerFeedback/feedback-x-screenshot.png",
             hasScreenshot: true, screenshotOnClipboard: true);
 
         Assert.StartsWith("https://github.com/philliphoff/EncDotNet.S100/issues/new?", url);
@@ -80,16 +81,33 @@ public class FeedbackReportingTests
     }
 
     [Fact]
-    public void BuildIssueUrl_PointsToBundleWhenScreenshotNotOnClipboard()
+    public void BuildIssueUrl_OffersClipboardPasteAndDragFallback()
     {
         var report = SampleReport();
         var json = report.ToJson();
         var url = FeedbackService.BuildIssueUrl(
-            report, "hi", json, "/tmp/S100ViewerFeedback/feedback-y.zip",
+            report, "hi", json, "/tmp/S100ViewerFeedback/feedback-y-screenshot.png",
+            hasScreenshot: true, screenshotOnClipboard: true);
+
+        Assert.Contains("screenshot=", url);
+        // Mentions paste (clipboard succeeded) and the drag-drop fallback file.
+        Assert.Contains(Uri.EscapeDataString("pasting"), url);
+        Assert.Contains(Uri.EscapeDataString("feedback-y-screenshot.png"), url);
+    }
+
+    [Fact]
+    public void BuildIssueUrl_PointsToFileWhenScreenshotNotOnClipboard()
+    {
+        var report = SampleReport();
+        var json = report.ToJson();
+        var url = FeedbackService.BuildIssueUrl(
+            report, "hi", json, "/tmp/S100ViewerFeedback/feedback-z-screenshot.png",
             hasScreenshot: true, screenshotOnClipboard: false);
 
         Assert.Contains("screenshot=", url);
-        Assert.Contains(Uri.EscapeDataString("screenshot.png"), url);
+        Assert.Contains(Uri.EscapeDataString("feedback-z-screenshot.png"), url);
+        // Always steers the user to the reliable drag-and-drop path.
+        Assert.Contains(Uri.EscapeDataString("drag"), url);
     }
 
     [Fact]
@@ -103,6 +121,45 @@ public class FeedbackReportingTests
         Assert.Contains(Uri.EscapeDataString("truncated"), url);
         // Even with a huge report, the URL stays within a sane bound.
         Assert.True(url.Length < 16_000, $"URL unexpectedly long: {url.Length}");
+    }
+
+    [Fact]
+    public void WriteArtifacts_WritesBundleAndStandaloneScreenshot()
+    {
+        var json = SampleReport().ToJson();
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+
+        var (bundlePath, screenshotPath) = FeedbackService.WriteArtifacts(json, "please fix", png);
+        try
+        {
+            Assert.True(File.Exists(bundlePath));
+            Assert.NotNull(screenshotPath);
+            Assert.True(File.Exists(screenshotPath));
+            // The loose PNG carries the raw bytes (the reliable drag source).
+            Assert.Equal(png, File.ReadAllBytes(screenshotPath!));
+            Assert.EndsWith("-screenshot.png", screenshotPath);
+        }
+        finally
+        {
+            File.Delete(bundlePath);
+            if (screenshotPath is not null)
+                File.Delete(screenshotPath);
+        }
+    }
+
+    [Fact]
+    public void WriteArtifacts_OmitsStandaloneScreenshotWhenNull()
+    {
+        var (bundlePath, screenshotPath) = FeedbackService.WriteArtifacts("{}", "", screenshotPng: null);
+        try
+        {
+            Assert.True(File.Exists(bundlePath));
+            Assert.Null(screenshotPath);
+        }
+        finally
+        {
+            File.Delete(bundlePath);
+        }
     }
 
     [Fact]

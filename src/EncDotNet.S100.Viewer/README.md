@@ -342,10 +342,17 @@ viewer has a built-in **Report Feedback** experience:
   you always see precisely what will be sent before submitting.
 - On submit the viewer writes a local **bundle** — a zip containing
   `diagnostics.json`, your `feedback.txt`, and (if included) the
-  `screenshot.png` — under your temp folder, reveals it in the file
-  manager, and opens a **prefilled GitHub new-issue page** in your
-  browser. Attach the bundle to the issue (the screenshot can't be
-  embedded automatically) and submit.
+  `screenshot.png` — under your temp folder. When a screenshot is
+  included it also writes a **standalone `…-screenshot.png`** next to
+  the bundle and reveals *that* file in the file manager, then opens a
+  **prefilled GitHub new-issue page** in your browser.
+- The screenshot is copied to your clipboard so you can paste it into
+  the issue with ⌘V / Ctrl+V. GitHub's clipboard paste-to-upload is
+  unreliable, though — it often reports *"failed to upload image.png"*
+  even for a valid PNG. If that happens, **drag the revealed
+  `…-screenshot.png` file into the form's Screenshot field instead**;
+  file uploads succeed where pasting fails. The prefilled form and the
+  confirmation toast both spell this out.
 
 No data leaves your machine until you choose to create the GitHub
 issue, and nothing is uploaded by the viewer itself.

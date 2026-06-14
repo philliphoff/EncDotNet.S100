@@ -192,27 +192,63 @@ internal sealed class FeedbackService : IFeedbackService
         var json = request.Report.ToJson();
         var userMessage = request.UserMessage?.Trim() ?? string.Empty;
 
-        var bundlePath = await Task.Run(
-            () => WriteBundle(json, userMessage, request.ScreenshotPng),
+        var hasScreenshot = request.ScreenshotPng is { Length: > 0 };
+
+        var (bundlePath, screenshotPath) = await Task.Run(
+            () => WriteArtifacts(json, userMessage, request.ScreenshotPng),
             cancellationToken).ConfigureAwait(false);
 
         // Place the screenshot on the clipboard so the user can paste it
         // straight into the GitHub issue (a URL cannot embed an image).
+        // Pasting is convenient but flaky: GitHub's browser paste-to-upload
+        // frequently reports "failed to upload image.png" even for a valid
+        // PNG, whereas dragging the standalone file in is reliable. The
+        // revealed screenshot.png below is the dependable fallback.
         var screenshotOnClipboard = false;
-        if (request.ScreenshotPng is { Length: > 0 })
+        if (hasScreenshot)
         {
             screenshotOnClipboard = await TryCopyImageToClipboardAsync(
-                request.ScreenshotPng, cancellationToken).ConfigureAwait(false);
+                request.ScreenshotPng!, cancellationToken).ConfigureAwait(false);
         }
 
         var issueUrl = BuildIssueUrl(
-            request.Report, userMessage, json, bundlePath,
-            request.ScreenshotPng is { Length: > 0 }, screenshotOnClipboard);
+            request.Report, userMessage, json, screenshotPath,
+            hasScreenshot, screenshotOnClipboard);
 
         OpenInBrowser(issueUrl);
-        RevealInFileManager(bundlePath);
 
-        return new FeedbackSubmitResult(bundlePath, issueUrl, screenshotOnClipboard);
+        // Reveal the standalone screenshot so it is ready to drag into the
+        // issue; fall back to the bundle when there is no screenshot.
+        RevealInFileManager(screenshotPath ?? bundlePath);
+
+        return new FeedbackSubmitResult(bundlePath, issueUrl, screenshotOnClipboard, screenshotPath);
+    }
+
+    /// <summary>
+    /// Writes the on-disk feedback artifacts: the diagnostics/message/image
+    /// zip bundle and, when a screenshot is included, a standalone
+    /// <c>screenshot.png</c> next to it. The standalone file exists because
+    /// GitHub's clipboard paste upload is unreliable; a loose PNG can be
+    /// dragged straight into the issue form, which always succeeds.
+    /// </summary>
+    /// <returns>The bundle path and the standalone screenshot path (or
+    /// <see langword="null"/> when no screenshot was provided).</returns>
+    internal static (string BundlePath, string? ScreenshotPath) WriteArtifacts(
+        string json, string userMessage, byte[]? screenshotPng)
+    {
+        var bundlePath = WriteBundle(json, userMessage, screenshotPng);
+
+        string? screenshotPath = null;
+        if (screenshotPng is { Length: > 0 })
+        {
+            // Mirror the bundle's stamp so the two files sort together.
+            var fileName = Path.GetFileNameWithoutExtension(bundlePath);
+            screenshotPath = Path.Combine(
+                Path.GetDirectoryName(bundlePath)!, $"{fileName}-screenshot.png");
+            File.WriteAllBytes(screenshotPath, screenshotPng);
+        }
+
+        return (bundlePath, screenshotPath);
     }
 
     internal static string WriteBundle(string json, string userMessage, byte[]? screenshotPng)
@@ -258,7 +294,7 @@ internal sealed class FeedbackService : IFeedbackService
         FeedbackReport report,
         string userMessage,
         string json,
-        string bundlePath,
+        string? screenshotPath,
         bool hasScreenshot,
         bool screenshotOnClipboard)
     {
@@ -269,15 +305,28 @@ internal sealed class FeedbackService : IFeedbackService
             : json;
         var diagnostics = "```json\n" + inlineJson + "\n```";
 
-        // The "Screenshot" field is left empty when the image is on the
-        // clipboard (the form's own description prompts the paste); when the
-        // clipboard copy was unavailable, point the user at the saved bundle.
+        // GitHub's clipboard paste-to-upload is flaky ("failed to upload
+        // image.png") even for a valid PNG, so the prefilled prompt always
+        // points the user at the standalone file revealed in their file
+        // manager — dragging it in is the reliable path. When the clipboard
+        // copy succeeded we still offer paste first as the quicker option.
         var screenshot = string.Empty;
-        if (hasScreenshot && !screenshotOnClipboard)
+        if (hasScreenshot)
         {
-            screenshot =
-                $"A screenshot was saved with this report at:\n{bundlePath}\n" +
-                "Open that file and drag screenshot.png here.";
+            var fileName = screenshotPath is null
+                ? "screenshot.png"
+                : Path.GetFileName(screenshotPath);
+
+            var builder = new StringBuilder();
+            if (screenshotOnClipboard)
+                builder.Append("A screenshot is on your clipboard — try pasting it here with ⌘V / Ctrl+V. ");
+            builder.Append("If the upload fails, drag ")
+                .Append(fileName)
+                .Append(" into this field instead");
+            if (screenshotPath is not null)
+                builder.Append(" (it was just revealed in your file manager: ").Append(screenshotPath).Append(')');
+            builder.Append(" — uploading the file is more reliable than pasting.");
+            screenshot = builder.ToString();
         }
 
         var fields = new Dictionary<string, string>

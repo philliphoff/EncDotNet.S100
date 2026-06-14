@@ -152,6 +152,10 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
                 .SubmitAsync(new FeedbackSubmitRequest(_report, UserMessage, screenshot))
                 .ConfigureAwait(true);
 
+            // Surface the loose screenshot.png (the reliable drag-and-drop
+            // source) when one was written; otherwise point at the bundle.
+            var revealedPath = result.ScreenshotPath ?? result.BundlePath;
+
             _toasts.ShowSuccess(
                 Strings.Feedback_SubmittedTitle,
                 string.Format(
@@ -159,7 +163,7 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
                     result.ScreenshotOnClipboard
                         ? Strings.Feedback_SubmittedBodyClipboard
                         : Strings.Feedback_SubmittedBody,
-                    result.BundlePath));
+                    revealedPath));
 
             _dialogManager.Close(this, new CloseDialogOptions { Success = true });
         }

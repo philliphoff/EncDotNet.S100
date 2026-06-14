@@ -453,10 +453,10 @@
     <value>Feedback ready</value>
   </data>
   <data name="Feedback_SubmittedBody" xml:space="preserve">
-    <value>A prefilled GitHub issue was opened in your browser. The feedback bundle was saved to {0}.</value>
+    <value>A prefilled GitHub issue was opened in your browser. Your screenshot was saved to {0} — drag it into the form's Screenshot field.</value>
   </data>
   <data name="Feedback_SubmittedBodyClipboard" xml:space="preserve">
-    <value>A prefilled GitHub issue was opened in your browser. Paste your screenshot into it with ⌘V / Ctrl+V. The feedback bundle was also saved to {0}.</value>
+    <value>A prefilled GitHub issue was opened in your browser. Paste your screenshot with ⌘V / Ctrl+V; if the upload fails, drag the file we revealed at {0} into the form instead.</value>
   </data>
   <data name="Feedback_SubmitFailedTitle" xml:space="preserve">
     <value>Could not prepare feedback</value>
