@@ -31,6 +31,7 @@ public sealed class S101FeatureGeometryProvider : IFeatureGeometryProvider
             {
                 Type = f.GeometryType,
                 Coordinates = f.Coordinates,
+                InteriorRings = f.InteriorRings,
             };
         }
     }

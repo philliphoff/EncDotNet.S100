@@ -42,6 +42,39 @@ public class CachedVectorStyleRendererTests
     private static Mapsui.Viewport ViewportFor(double centerX, double centerY, double resolution) =>
         new(centerX, centerY, resolution, rotation: 0, width: CanvasSize, height: CanvasSize);
 
+    private static Mapsui.Viewport ViewportFor(double centerX, double centerY, double resolution, double rotation) =>
+        new(centerX, centerY, resolution, rotation, width: CanvasSize, height: CanvasSize);
+
+    /// <summary>
+    /// A solid-filled square <paramref name="shell"/> with a single square hole
+    /// centred on the world origin of rotation. The shell deliberately overflows
+    /// the viewport (the case Mapsui's per-frame clipper used to mangle), so the
+    /// only way the hole stays transparent is if the cached even-odd path is
+    /// drawn whole and clipped at raster time.
+    /// </summary>
+    private static GeometryFeature MakeHoledPolygonFeature(long id)
+    {
+        _ = id;
+        var shell = new LinearRing(new[]
+        {
+            new Coordinate(0, 0), new Coordinate(1000, 0),
+            new Coordinate(1000, 1000), new Coordinate(0, 1000), new Coordinate(0, 0),
+        });
+        var hole = new LinearRing(new[]
+        {
+            new Coordinate(450, 450), new Coordinate(550, 450),
+            new Coordinate(550, 550), new Coordinate(450, 550), new Coordinate(450, 450),
+        });
+        var feature = new GeometryFeature(new Polygon(shell, new[] { hole }));
+        feature.Styles.Add(new VectorStyle
+        {
+            Fill = new Brush(Color.Black),
+            Outline = null,
+            Line = null,
+        });
+        return feature;
+    }
+
     private static byte[] RenderToPng(Action<SKCanvas> draw)
     {
         using var surface = SKSurface.Create(new SKImageInfo(CanvasSize, CanvasSize, SKColorType.Rgba8888, SKAlphaType.Premul));
@@ -172,6 +205,58 @@ public class CachedVectorStyleRendererTests
 
         var handled = false;
         RenderToPng(c => handled = renderer.Draw(c, ViewportFor(500, 500, 1.0), layer, feature, style, Service, 0));
+
+        Assert.True(handled);
+        Assert.Equal(0, inner.DrawCalls);
+        Assert.Equal(1, renderer.CachedPathCount);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(30.0)]
+    [InlineData(45.0)]
+    [InlineData(90.0)]
+    public void Polygon_WithHole_KeepsHoleTransparent_UnderRotation(double rotation)
+    {
+        // Regression: rotated S-101 land areas (skin-of-the-earth polygons with
+        // island/lake holes) must keep their holes cut. The cached even-odd path
+        // is rotation-independent; only the per-frame draw matrix changes, so the
+        // hole at the centre of rotation must stay background at every angle.
+        var renderer = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
+        var feature = MakeHoledPolygonFeature(id: 5);
+        var style = (VectorStyle)feature.Styles.First();
+        var layer = new MemoryLayer("l") { Opacity = 1.0 };
+
+        // Rotation pivots about the viewport centre, which is the world point
+        // (500,500) — the hole's centre — so the hole stays at the screen centre.
+        var viewport = ViewportFor(500, 500, 1.0, rotation);
+
+        using var bmp = SKBitmap.Decode(
+            RenderToPng(c => renderer.Draw(c, viewport, layer, feature, style, Service, 0)));
+
+        var centre = bmp.GetPixel(CanvasSize / 2, CanvasSize / 2);
+        Assert.True(
+            centre.Red > 200 && centre.Green > 200 && centre.Blue > 200,
+            $"hole should be background at rotation {rotation}, was {centre}");
+
+        // A point well inside the shell but outside the hole must be filled.
+        var filled = bmp.GetPixel(CanvasSize / 2, CanvasSize / 2 - 90);
+        Assert.True(
+            filled.Red < 80 && filled.Green < 80 && filled.Blue < 80,
+            $"shell should be filled at rotation {rotation}, was {filled}");
+    }
+
+    [Fact]
+    public void Polygon_IsFastPathed_UnderRotation()
+    {
+        var inner = new CountingRenderer();
+        var renderer = new CachedVectorStyleRenderer(inner, simplifyTolerancePx: 0);
+        var feature = MakeHoledPolygonFeature(id: 6);
+        var style = (VectorStyle)feature.Styles.First();
+        var layer = new MemoryLayer("l") { Opacity = 1.0 };
+
+        var handled = false;
+        RenderToPng(c => handled = renderer.Draw(c, ViewportFor(500, 500, 1.0, 30.0), layer, feature, style, Service, 0));
 
         Assert.True(handled);
         Assert.Equal(0, inner.DrawCalls);
