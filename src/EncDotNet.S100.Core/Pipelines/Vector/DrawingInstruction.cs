@@ -134,6 +134,21 @@ public sealed class PointInstruction : DrawingInstruction
 /// </summary>
 public sealed class LineInstruction : DrawingInstruction
 {
+    /// <summary>
+    /// Sentinel <see cref="LineStyleReference"/> (and
+    /// <see cref="AreaInstruction.OutlineStyleReference"/>) value emitted by
+    /// the S-100 Part 9A Lua portrayal model (<c>PortrayalModel.lua</c>'s
+    /// <c>SimpleLineStyle</c>) to denote an inline "simple" line style whose
+    /// colour, width, and dash pattern are carried directly on the
+    /// instruction (<see cref="LineColor"/> / <see cref="LineWidth"/> /
+    /// <see cref="Dashes"/>) rather than by a named complex line style in the
+    /// portrayal catalogue. Renderers and the catalogue pre-warm must treat
+    /// this value as "no catalogue lookup" — attempting to resolve it would
+    /// always miss (and historically threw a <see cref="KeyNotFoundException"/>
+    /// on every dataset load).
+    /// </summary>
+    public const string SimpleLineStyleReference = "_simple_";
+
     /// <summary>Reference (by name) to a line style in the portrayal catalogue.</summary>
     public string? LineStyleReference { get; init; }
 
