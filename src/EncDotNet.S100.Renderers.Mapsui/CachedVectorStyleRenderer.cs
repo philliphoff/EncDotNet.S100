@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Mapsui;
+using Mapsui.Extensions;
 using Mapsui.Layers;
 using Mapsui.Nts;
 using Mapsui.Rendering;
@@ -45,22 +46,27 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// anchor <c>(Ax, Ay)</c> is the geometry's envelope minimum. The anchor
 /// subtraction (done in <see langword="double"/>) keeps the float
 /// <see cref="SKPoint"/> coordinates small and precise even at high zoom. On
-/// paint the path is drawn under a translate of
+/// paint the path is drawn under an affine matrix sampled from Mapsui's own
+/// <c>WorldToScreenXY</c> at the anchor and one resolution step along each world
+/// axis (see <c>BuildAnchorMatrix</c>), which reproduces Mapsui's transform
+/// exactly for any rotation, zoom and centre. For an un-rotated viewport this
+/// reduces to the pure translation
 /// <c>Tx = Width/2 + (Ax − CenterX)/Res</c>,
-/// <c>Ty = Height/2 + (CenterY − Ay)/Res</c>, which reproduces Mapsui's
-/// transform exactly. Both the path and the anchor depend only on the
-/// resolution, so they survive any pan; a zoom changes the resolution and
-/// therefore the cache key, forcing a rebuild (crisp, and far rarer than
-/// pans).
+/// <c>Ty = Height/2 + (CenterY − Ay)/Res</c>. Both the path and the anchor
+/// depend only on the resolution, so they survive any pan <i>and any rotation</i>;
+/// a zoom changes the resolution and therefore the cache key, forcing a rebuild
+/// (crisp, and far rarer than pans).
 /// </para>
 /// <para>
-/// <b>Scope.</b> Only un-rotated viewports are fast-pathed. Polygons whose
+/// <b>Scope.</b> Polygons whose
 /// <see cref="VectorStyle"/> has a solid fill and/or solid outline, and lines
 /// whose <see cref="VectorStyle.Line"/> is a solid pen with no separate visible
-/// <see cref="VectorStyle.Outline"/> casing, are cached. Points, patterned/hatched
-/// fills, dashed/casing-outlined lines, rotated viewports and any geometry that is
-/// not a polygon, multi-polygon, line or multi-line are delegated unchanged to the
-/// wrapped Mapsui renderer, so visuals are identical outside the fast path.
+/// <see cref="VectorStyle.Outline"/> casing, are cached. The cached path is
+/// reused under rotation via an affine draw matrix (see <c>BuildAnchorMatrix</c>).
+/// Points, patterned/hatched fills, dashed/casing-outlined lines and any geometry
+/// that is not a polygon, multi-polygon, line or multi-line are delegated
+/// unchanged to the wrapped Mapsui renderer, so visuals are identical outside the
+/// fast path.
 /// </para>
 /// <para>
 /// <b>Thread-safety.</b> The cache is guarded by a lock because the offscreen
@@ -171,7 +177,6 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         IFeature feature, IStyle style, RenderService renderService, long iteration)
     {
         if (!_enabled
-            || viewport.Rotation != 0
             || style is not VectorStyle vectorStyle
             || feature is not GeometryFeature geometryFeature
             || geometryFeature.Geometry is not { } geometry)
@@ -302,13 +307,12 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             }
         }
 
-        var tx = viewport.Width / 2.0 + (entry.AnchorX - viewport.CenterX) / resolution;
-        var ty = viewport.Height / 2.0 + (viewport.CenterY - entry.AnchorY) / resolution;
+        var matrix = BuildAnchorMatrix(viewport, entry.AnchorX, entry.AnchorY, resolution);
 
         var restore = canvas.Save();
         try
         {
-            canvas.Translate((float)tx, (float)ty);
+            canvas.Concat(in matrix);
             using var strokePaint = CreateLineStrokePaint(style.Line!, opacity);
             canvas.DrawPath(entry.Path, strokePaint);
         }
@@ -425,13 +429,12 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             }
         }
 
-        var tx = viewport.Width / 2.0 + (entry.AnchorX - viewport.CenterX) / resolution;
-        var ty = viewport.Height / 2.0 + (viewport.CenterY - entry.AnchorY) / resolution;
+        var matrix = BuildAnchorMatrix(viewport, entry.AnchorX, entry.AnchorY, resolution);
 
         var restore = canvas.Save();
         try
         {
-            canvas.Translate((float)tx, (float)ty);
+            canvas.Concat(in matrix);
 
             if (style.Fill is { } fill && IsVisible(fill))
             {
@@ -449,6 +452,32 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         {
             canvas.RestoreToCount(restore);
         }
+    }
+
+    /// <summary>
+    /// Builds the exact affine transform that maps a cached, anchor-relative path
+    /// (built as <c>px = (worldX − Ax)/Res</c>, <c>py = (Ay − worldY)/Res</c>) onto
+    /// Mapsui screen pixels for the current <paramref name="viewport"/>. It is
+    /// sampled directly from <see cref="Viewport.WorldToScreenXY(double, double)"/>
+    /// at the anchor and one resolution-sized step along each world axis, so it
+    /// reproduces Mapsui's world→screen projection exactly for any rotation, zoom
+    /// and centre — including the rotated case the old per-pan translate bailed on.
+    /// Because the path is built at the same resolution that keys the cache, the
+    /// two basis vectors have unit length, so the matrix is a pure
+    /// rotation + translation (isometry): stroke widths and even-odd fills are
+    /// undistorted. When the viewport is un-rotated this reduces exactly to the
+    /// previous <c>Tx/Ty</c> translation.
+    /// </summary>
+    private static SKMatrix BuildAnchorMatrix(Viewport viewport, double anchorX, double anchorY, double resolution)
+    {
+        var (ox, oy) = viewport.WorldToScreenXY(anchorX, anchorY);
+        var (ux, uy) = viewport.WorldToScreenXY(anchorX + resolution, anchorY);
+        var (vx, vy) = viewport.WorldToScreenXY(anchorX, anchorY - resolution);
+
+        return new SKMatrix(
+            (float)(ux - ox), (float)(vx - ox), (float)ox,
+            (float)(uy - oy), (float)(vy - oy), (float)oy,
+            0f, 0f, 1f);
     }
 
     /// <summary>
@@ -538,14 +567,29 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         public double AnchorX { get; }
         public double AnchorY { get; }
 
+        /// <summary>
+        /// Releases the native <see cref="SKPath"/>. Only safe to call for a path
+        /// that has never been published to the cache (e.g. a duplicate built by a
+        /// losing thread in the double-checked build race). Cache eviction must
+        /// <b>not</b> dispose entries: another thread may be mid-<c>DrawPath</c> on
+        /// a just-evicted entry, so eviction relies on the finalizer instead (see
+        /// <see cref="PathCache"/>).
+        /// </summary>
         public void Dispose() => Path.Dispose();
     }
 
     /// <summary>
-    /// A small single-threaded LRU of <see cref="PathEntry"/> values. Callers
-    /// must serialise access (this renderer holds a lock around all calls).
-    /// Evicted and replaced entries are disposed so their <see cref="SKPath"/>
-    /// native memory is released promptly.
+    /// A small LRU of <see cref="PathEntry"/> values. Callers must serialise
+    /// access (this renderer holds a lock around all <see cref="Get"/>/<see cref="Add"/>
+    /// calls). Evicted entries are <b>not</b> disposed: rendering reads
+    /// <c>entry.Path</c> under the lock but draws it (and the snapshot-prebuild
+    /// thread may draw a different cached path) <i>outside</i> the lock, so a
+    /// disposed-on-eviction path could be freed natively while another thread is
+    /// still rasterising it — a use-after-free that hangs the render thread inside
+    /// Skia. Dropping the managed reference instead lets the GC finalise the
+    /// <see cref="SKPath"/> only once no thread can still hold it (a live
+    /// <c>entry.Path</c> local keeps it reachable for the duration of the draw).
+    /// The cache is bounded, so the evicted-but-not-yet-finalised backlog is small.
     /// </summary>
     private sealed class PathCache
     {
@@ -581,7 +625,9 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
                 var last = _lru.Last!;
                 _lru.RemoveLast();
                 _map.Remove(last.Value.Key);
-                last.Value.Entry.Dispose();
+                // Deliberately not disposed: another thread may be drawing this
+                // path outside the lock. The GC finalises the SKPath once it is
+                // unreachable (see PathCache remarks).
             }
         }
 

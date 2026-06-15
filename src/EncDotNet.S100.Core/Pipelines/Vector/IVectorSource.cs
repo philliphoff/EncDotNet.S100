@@ -47,8 +47,18 @@ public sealed class Feature
     /// <summary>
     /// Geometry coordinates.
     /// Points: single coordinate. Lines/Areas: ordered list of (lat, lon) pairs.
+    /// For surfaces this is the exterior ring; holes are carried in <see cref="InteriorRings"/>.
     /// </summary>
     public required IReadOnlyList<(double Latitude, double Longitude)> Coordinates { get; init; }
+
+    /// <summary>
+    /// Interior (hole) rings for surface geometries, each an ordered list of
+    /// (lat, lon) pairs. Empty for non-surface geometries or surfaces without holes.
+    /// Renderers subtract these from the exterior ring (<see cref="Coordinates"/>)
+    /// when filling, so that, for example, a sea/depth area encoded around islands
+    /// does not paint over the land cut out as holes.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
 
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }

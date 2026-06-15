@@ -60,12 +60,17 @@ public sealed class S101VectorSource : IVectorSource
             if (coords.Count == 0) continue;
             if (extent is not null && !IntersectsExtent(coords, extent)) continue;
 
+            var interiorRings = geomType == GeometryType.Surface
+                ? ResolveSurfaceInteriorRings(feat, doc)
+                : [];
+
             features.Add(new Feature
             {
                 Id = (int)feat.RecordId,
                 FeatureType = featureType,
                 GeometryType = geomType,
                 Coordinates = coords,
+                InteriorRings = interiorRings,
                 Attributes = ExtractAttributes(feat, doc),
             });
         }
@@ -169,6 +174,37 @@ public sealed class S101VectorSource : IVectorSource
         }
 
         return coords;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<(double, double)>> ResolveSurfaceInteriorRings(
+        S101FeatureRecord feature, S101Document doc)
+    {
+        // S-100 Part 10a surface topology: each RIAS association with USAG = 2
+        // (interior) bounds one hole. Resolve each independently into its own
+        // closed ring so renderers can subtract it from the exterior fill
+        // (e.g. a sea/depth area encoded around islands cut out as holes).
+        List<IReadOnlyList<(double, double)>>? rings = null;
+
+        foreach (var spa in feature.SpatialAssociations)
+        {
+            if (spa.RecordName != RcnmSurface) continue;
+            if (!doc.Surfaces.TryGetValue(spa.RecordId, out var surface)) continue;
+
+            foreach (var ring in surface.RingAssociations)
+            {
+                if (ring.Usage == UsageExterior) continue;
+
+                var ringCoords = new List<(double, double)>();
+                ResolveCurveCoords(ring.RecordName, ring.RecordId, ring.Orientation, doc, ringCoords);
+                if (ringCoords.Count >= 3)
+                {
+                    rings ??= [];
+                    rings.Add(ringCoords);
+                }
+            }
+        }
+
+        return rings ?? (IReadOnlyList<IReadOnlyList<(double, double)>>)[];
     }
 
     private static void ResolveCurveCoords(
