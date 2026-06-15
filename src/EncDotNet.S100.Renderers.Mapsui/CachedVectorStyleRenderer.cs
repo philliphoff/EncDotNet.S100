@@ -567,14 +567,29 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         public double AnchorX { get; }
         public double AnchorY { get; }
 
+        /// <summary>
+        /// Releases the native <see cref="SKPath"/>. Only safe to call for a path
+        /// that has never been published to the cache (e.g. a duplicate built by a
+        /// losing thread in the double-checked build race). Cache eviction must
+        /// <b>not</b> dispose entries: another thread may be mid-<c>DrawPath</c> on
+        /// a just-evicted entry, so eviction relies on the finalizer instead (see
+        /// <see cref="PathCache"/>).
+        /// </summary>
         public void Dispose() => Path.Dispose();
     }
 
     /// <summary>
-    /// A small single-threaded LRU of <see cref="PathEntry"/> values. Callers
-    /// must serialise access (this renderer holds a lock around all calls).
-    /// Evicted and replaced entries are disposed so their <see cref="SKPath"/>
-    /// native memory is released promptly.
+    /// A small LRU of <see cref="PathEntry"/> values. Callers must serialise
+    /// access (this renderer holds a lock around all <see cref="Get"/>/<see cref="Add"/>
+    /// calls). Evicted entries are <b>not</b> disposed: rendering reads
+    /// <c>entry.Path</c> under the lock but draws it (and the snapshot-prebuild
+    /// thread may draw a different cached path) <i>outside</i> the lock, so a
+    /// disposed-on-eviction path could be freed natively while another thread is
+    /// still rasterising it — a use-after-free that hangs the render thread inside
+    /// Skia. Dropping the managed reference instead lets the GC finalise the
+    /// <see cref="SKPath"/> only once no thread can still hold it (a live
+    /// <c>entry.Path</c> local keeps it reachable for the duration of the draw).
+    /// The cache is bounded, so the evicted-but-not-yet-finalised backlog is small.
     /// </summary>
     private sealed class PathCache
     {
@@ -610,7 +625,9 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
                 var last = _lru.Last!;
                 _lru.RemoveLast();
                 _map.Remove(last.Value.Key);
-                last.Value.Entry.Dispose();
+                // Deliberately not disposed: another thread may be drawing this
+                // path outside the lock. The GC finalises the SKPath once it is
+                // unreachable (see PathCache remarks).
             }
         }
 

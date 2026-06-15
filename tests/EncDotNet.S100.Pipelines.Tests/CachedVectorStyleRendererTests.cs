@@ -8,6 +8,7 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
+using System.Threading;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -261,6 +262,60 @@ public class CachedVectorStyleRendererTests
         Assert.True(handled);
         Assert.Equal(0, inner.DrawCalls);
         Assert.Equal(1, renderer.CachedPathCount);
+    }
+
+    [Fact]
+    public void ConcurrentDraw_WithEviction_DoesNotCrash()
+    {
+        // Regression: rendering reads a cached entry under the lock but draws it
+        // outside the lock, while another thread (e.g. the off-thread snapshot
+        // prebuild) may evict that same entry. Eviction must not dispose the
+        // SKPath or the drawing thread faults inside Skia (use-after-free) and
+        // wedges the render thread, hanging the viewer. A tiny cache forces
+        // constant eviction churn; eight threads draw the shared features
+        // concurrently. Before the fix this aborts the process; after it, it
+        // completes cleanly.
+        var renderer = new CachedVectorStyleRenderer(new VectorStyleRenderer(), capacity: 2, simplifyTolerancePx: 0);
+        var layer = new MemoryLayer("l") { Opacity = 1.0 };
+        var features = Enumerable.Range(0, 8).Select(i => MakeHoledPolygonFeature(i)).ToArray();
+        var styles = features.Select(f => (VectorStyle)f.Styles.First()).ToArray();
+        var resolutions = new[] { 1.0, 2.0, 4.0, 8.0 };
+
+        Exception? error = null;
+        var threads = Enumerable.Range(0, 8).Select(_ => new Thread(() =>
+        {
+            try
+            {
+                for (var iter = 0; iter < 200; iter++)
+                {
+                    using var surface = SKSurface.Create(
+                        new SKImageInfo(CanvasSize, CanvasSize, SKColorType.Rgba8888, SKAlphaType.Premul));
+                    surface.Canvas.Clear(SKColors.White);
+                    for (var i = 0; i < features.Length; i++)
+                    {
+                        var res = resolutions[(iter + i) % resolutions.Length];
+                        renderer.Draw(surface.Canvas, ViewportFor(500, 500, res, (iter * 13) % 360),
+                            layer, features[i], styles[i], Service, 0);
+                    }
+                    surface.Canvas.Flush();
+                }
+            }
+            catch (Exception ex)
+            {
+                Interlocked.CompareExchange(ref error, ex, null);
+            }
+        })).ToArray();
+
+        foreach (var th in threads)
+        {
+            th.Start();
+        }
+        foreach (var th in threads)
+        {
+            th.Join();
+        }
+
+        Assert.Null(error);
     }
 
     private sealed class CountingRenderer : ISkiaStyleRenderer
