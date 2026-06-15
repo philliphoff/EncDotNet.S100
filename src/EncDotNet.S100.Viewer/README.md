@@ -241,7 +241,15 @@ and from a pair of compact pill buttons on the map toolbar:
   power users can hide or reveal specific symbol families. Labels
   come from the IHO-authored portrayal catalogues, supplemented by
   the viewer's curated label overrides where the upstream names
-  are inconsistent (e.g. bare numeric IDs in S-127 and S-421).
+  are inconsistent (e.g. bare numeric IDs in S-127 and S-421). For
+  S-101 the curated overrides also group the checkboxes into readable
+  subsections (Depths, Aids to navigation, Alert highlights, Mariner
+  selectors, …); any viewing group without a curated section falls
+  into a trailing **Other** subsection. The noisy S-101 mariner
+  selectors — shallow water pattern (90000), survey accuracy /
+  quality (90010), and the low-accuracy marker (90011) — are hidden
+  by default (including in **All**) for readability and pan/zoom
+  performance, and can be switched back on from this panel.
 - **Day / Dusk / Night** palettes — switch between the three S-100
   Part 9 mariner moods; coverage products (S-102, S-104, S-111)
   switch their palette in lockstep.

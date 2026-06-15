@@ -1032,6 +1032,10 @@
     <value>Viewing group {0}</value>
     <comment>Fallback label when neither a curated override nor a usable Portrayal Catalogue name/description is available. {0} is the numeric viewing-group id.</comment>
   </data>
+  <data name="EcdisPanel_SectionOther" xml:space="preserve">
+    <value>Other</value>
+    <comment>Heading for the trailing ECDIS display-controls subsection that collects viewing groups without a curated section.</comment>
+  </data>
 
   <!-- Measure Mode -->
   <data name="Tooltip_MeasureMode" xml:space="preserve">
