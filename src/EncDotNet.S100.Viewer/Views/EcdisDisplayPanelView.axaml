@@ -95,16 +95,31 @@
                                         </StackPanel>
                                     </DockPanel>
 
-                                    <!-- Viewing group checkboxes -->
-                                    <ItemsControl ItemsSource="{Binding ViewingGroups}">
+                                    <!-- Viewing group checkboxes, grouped into sections -->
+                                    <ItemsControl ItemsSource="{Binding Sections}">
                                         <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:EcdisViewingGroupViewModel">
-                                                <CheckBox IsChecked="{Binding IsVisible}"
-                                                          ToolTip.Tip="{Binding Tooltip}"
-                                                          Margin="0,1">
-                                                    <TextBlock Text="{Binding DisplayLabel}"
-                                                               TextTrimming="CharacterEllipsis" />
-                                                </CheckBox>
+                                            <DataTemplate x:DataType="vm:EcdisViewingGroupSectionViewModel">
+                                                <StackPanel Spacing="2" Margin="0,4,0,0">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               IsVisible="{Binding HasTitle}"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               LetterSpacing="0.5"
+                                                               Opacity="0.6"
+                                                               Margin="0,2,0,0" />
+                                                    <ItemsControl ItemsSource="{Binding ViewingGroups}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:EcdisViewingGroupViewModel">
+                                                                <CheckBox IsChecked="{Binding IsVisible}"
+                                                                          ToolTip.Tip="{Binding Tooltip}"
+                                                                          Margin="0,1">
+                                                                    <TextBlock Text="{Binding DisplayLabel}"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </CheckBox>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

@@ -41,7 +41,7 @@ internal sealed class EcdisLabelOverrideProvider
     };
 
     private readonly Assembly _assembly;
-    private readonly ConcurrentDictionary<string, IReadOnlyDictionary<int, string>> _cache =
+    private readonly ConcurrentDictionary<string, SpecLabelData> _cache =
         new(StringComparer.OrdinalIgnoreCase);
 
     public EcdisLabelOverrideProvider()
@@ -67,10 +67,11 @@ internal sealed class EcdisLabelOverrideProvider
     {
         ArgumentNullException.ThrowIfNull(specCode);
 
-        var map = GetMap(specCode);
-        if (map.TryGetValue(viewingGroupId, out var value))
+        var data = GetData(specCode);
+        if (data.Groups.TryGetValue(viewingGroupId, out var entry) &&
+            !string.IsNullOrWhiteSpace(entry.Label))
         {
-            label = value;
+            label = entry.Label;
             return true;
         }
 
@@ -78,43 +79,97 @@ internal sealed class EcdisLabelOverrideProvider
         return false;
     }
 
-    private IReadOnlyDictionary<int, string> GetMap(string specCode)
+    /// <summary>
+    /// Attempts to resolve the curated section id a viewing group
+    /// belongs to (e.g. <c>"depths"</c>). Groups without a declared
+    /// section, and specs that declare no sections at all, return
+    /// <see langword="false"/>.
+    /// </summary>
+    /// <param name="specCode">Spec code (e.g. <c>"S-101"</c>).</param>
+    /// <param name="viewingGroupId">Viewing-group integer id.</param>
+    /// <param name="sectionId">Curated section id when present.</param>
+    /// <returns><see langword="true"/> when a section is declared.</returns>
+    public bool TryGetSectionId(string specCode, int viewingGroupId, out string sectionId)
     {
-        return _cache.GetOrAdd(specCode, LoadMap);
+        ArgumentNullException.ThrowIfNull(specCode);
+
+        var data = GetData(specCode);
+        if (data.Groups.TryGetValue(viewingGroupId, out var entry) &&
+            !string.IsNullOrWhiteSpace(entry.SectionId))
+        {
+            sectionId = entry.SectionId;
+            return true;
+        }
+
+        sectionId = string.Empty;
+        return false;
     }
 
-    private IReadOnlyDictionary<int, string> LoadMap(string specCode)
+    /// <summary>
+    /// Returns the curated, ordered sections declared for the spec, or
+    /// an empty list when the spec declares none (in which case the
+    /// ECDIS panel renders a single flat, unsectioned list).
+    /// </summary>
+    /// <param name="specCode">Spec code (e.g. <c>"S-101"</c>).</param>
+    public IReadOnlyList<EcdisLabelSection> GetSections(string specCode)
+    {
+        ArgumentNullException.ThrowIfNull(specCode);
+        return GetData(specCode).Sections;
+    }
+
+    private SpecLabelData GetData(string specCode)
+    {
+        return _cache.GetOrAdd(specCode, LoadData);
+    }
+
+    private SpecLabelData LoadData(string specCode)
     {
         var resourceName = ResolveResourceName(specCode);
         if (resourceName is null)
         {
-            return new Dictionary<int, string>();
+            return SpecLabelData.Empty;
         }
 
         try
         {
             using var stream = _assembly.GetManifestResourceStream(resourceName);
-            if (stream is null) return new Dictionary<int, string>();
+            if (stream is null) return SpecLabelData.Empty;
 
             var doc = JsonSerializer.Deserialize<EcdisLabelOverrideFile>(stream, JsonOptions);
-            if (doc?.Groups is null) return new Dictionary<int, string>();
+            if (doc is null) return SpecLabelData.Empty;
 
-            var map = new Dictionary<int, string>(doc.Groups.Count);
-            foreach (var (key, value) in doc.Groups)
+            var groups = new Dictionary<int, EntryInfo>(doc.Groups?.Count ?? 0);
+            if (doc.Groups is not null)
             {
-                if (value is null || string.IsNullOrWhiteSpace(value.Label)) continue;
-                if (!int.TryParse(key, out var id)) continue;
-                map[id] = value.Label.Trim();
+                foreach (var (key, value) in doc.Groups)
+                {
+                    if (value is null || string.IsNullOrWhiteSpace(value.Label)) continue;
+                    if (!int.TryParse(key, out var id)) continue;
+                    var section = string.IsNullOrWhiteSpace(value.Section) ? null : value.Section.Trim();
+                    groups[id] = new EntryInfo(value.Label.Trim(), section);
+                }
             }
-            return map;
+
+            var sections = new List<EcdisLabelSection>();
+            if (doc.Sections is not null)
+            {
+                foreach (var s in doc.Sections)
+                {
+                    if (s is null || string.IsNullOrWhiteSpace(s.Id) || string.IsNullOrWhiteSpace(s.Label))
+                        continue;
+                    sections.Add(new EcdisLabelSection(s.Id.Trim(), s.Label.Trim()));
+                }
+            }
+
+            return new SpecLabelData(groups, sections);
         }
         catch (JsonException)
         {
-            return new Dictionary<int, string>();
+            return SpecLabelData.Empty;
         }
         catch (IOException)
         {
-            return new Dictionary<int, string>();
+            return SpecLabelData.Empty;
         }
     }
 
@@ -152,13 +207,46 @@ internal sealed class EcdisLabelOverrideProvider
         [JsonPropertyName("specCode")]
         public string? SpecCode { get; set; }
 
+        [JsonPropertyName("sections")]
+        public List<EcdisLabelSectionEntry>? Sections { get; set; }
+
         [JsonPropertyName("groups")]
         public Dictionary<string, EcdisLabelOverrideEntry>? Groups { get; set; }
+    }
+
+    private sealed class EcdisLabelSectionEntry
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
     }
 
     private sealed class EcdisLabelOverrideEntry
     {
         [JsonPropertyName("label")]
         public string? Label { get; set; }
+
+        [JsonPropertyName("section")]
+        public string? Section { get; set; }
+    }
+
+    private readonly record struct EntryInfo(string Label, string? SectionId);
+
+    private sealed record SpecLabelData(
+        IReadOnlyDictionary<int, EntryInfo> Groups,
+        IReadOnlyList<EcdisLabelSection> Sections)
+    {
+        public static SpecLabelData Empty { get; } =
+            new(new Dictionary<int, EntryInfo>(), Array.Empty<EcdisLabelSection>());
     }
 }
+
+/// <summary>
+/// A curated, ordered section heading under which ECDIS viewing-group
+/// checkboxes are grouped in the display-controls panel.
+/// </summary>
+/// <param name="Id">Stable section id referenced by group entries.</param>
+/// <param name="Label">Human-friendly section heading.</param>
+internal readonly record struct EcdisLabelSection(string Id, string Label);

@@ -193,6 +193,18 @@ internal sealed class ViewerSettings
     /// </summary>
     public string EcdisHiddenDisplayPlanes { get; set; } = "";
 
+    /// <summary>
+    /// Whether the viewer's default ECDIS viewing-group visibility has
+    /// been seeded into <see cref="EcdisHiddenViewingGroups"/>. Applied
+    /// once per profile (see
+    /// <see cref="Services.EcdisDisplayDefaults.Apply"/>) so the noisy
+    /// S-101 "Independent Mariner Selector" patterns (shallow water
+    /// pattern, survey accuracy/quality, low-accuracy marker) start off
+    /// — including in the "All" category — while the mariner's later
+    /// choices are never overridden on subsequent launches.
+    /// </summary>
+    public bool EcdisDefaultsApplied { get; set; }
+
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>

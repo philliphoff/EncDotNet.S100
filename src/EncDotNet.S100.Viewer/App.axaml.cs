@@ -350,6 +350,17 @@ public partial class App : Application
         {
             var settings = sp.GetRequiredService<ViewerSettings>();
             var state = new EcdisDisplayState();
+
+            // Seed the viewer's default viewing-group visibility once so
+            // the noisy S-101 mariner-selector patterns (shallow water
+            // pattern, survey accuracy/quality, low-accuracy marker)
+            // start off even in the "All" category. Mariner choices made
+            // afterwards persist and are never re-forced.
+            if (EcdisDisplayDefaults.Apply(settings))
+            {
+                try { settings.Save(); } catch { /* best-effort */ }
+            }
+
             var category = Enum.TryParse<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(
                 settings.EcdisDisplayCategory, ignoreCase: true, out var c)
                 ? c

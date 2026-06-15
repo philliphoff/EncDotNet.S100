@@ -26,8 +26,10 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
         _state = state;
         SpecCode = specCode;
 
-        // Build flat VG list from the catalogue's ViewingGroups collection.
+        // Build the flat VG list from the catalogue, capturing each
+        // group's curated section id (when any) for grouping below.
         var items = new List<EcdisViewingGroupViewModel>();
+        var sectionById = new Dictionary<int, string?>();
         foreach (var vg in catalogue.ViewingGroups)
         {
             if (int.TryParse(vg.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
@@ -37,6 +39,13 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
                 {
                     overrideLabel = resolved;
                 }
+
+                string? sectionId = null;
+                if (labels is not null && labels.TryGetSectionId(specCode, id, out var resolvedSection))
+                {
+                    sectionId = resolvedSection;
+                }
+
                 items.Add(new EcdisViewingGroupViewModel(
                     state,
                     specCode,
@@ -44,9 +53,11 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
                     vg.Description.Name,
                     vg.Description.DescriptionText,
                     overrideLabel));
+                sectionById[id] = sectionId;
             }
         }
         ViewingGroups = items;
+        Sections = BuildSections(items, sectionById, labels?.GetSections(specCode));
 
         ResetOverridesCommand = new RelayCommand(() => _state.ClearOverridesForSpec(specCode));
     }
@@ -56,6 +67,79 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
 
     /// <summary>Flat list of viewing-group checkboxes.</summary>
     public IReadOnlyList<EcdisViewingGroupViewModel> ViewingGroups { get; }
+
+    /// <summary>
+    /// Viewing-group checkboxes grouped into curated, ordered
+    /// subsections. Specs that declare no sections produce a single
+    /// untitled section preserving the catalogue order.
+    /// </summary>
+    public IReadOnlyList<EcdisViewingGroupSectionViewModel> Sections { get; }
+
+    /// <summary>
+    /// Groups <paramref name="items"/> into ordered, titled sections.
+    /// When <paramref name="declaredSections"/> is null or empty the
+    /// result is a single untitled section in catalogue order (the
+    /// historical flat behaviour for specs without curated sections).
+    /// Otherwise sections are emitted in declared order (skipping
+    /// empty ones), groups within each section are sorted by label,
+    /// and any group without a known section is collected into a
+    /// trailing "Other" section.
+    /// </summary>
+    private static IReadOnlyList<EcdisViewingGroupSectionViewModel> BuildSections(
+        IReadOnlyList<EcdisViewingGroupViewModel> items,
+        IReadOnlyDictionary<int, string?> sectionById,
+        IReadOnlyList<EcdisLabelSection>? declaredSections)
+    {
+        if (declaredSections is null || declaredSections.Count == 0)
+        {
+            return new[] { new EcdisViewingGroupSectionViewModel(null, items) };
+        }
+
+        var bySection = new Dictionary<string, List<EcdisViewingGroupViewModel>>(StringComparer.OrdinalIgnoreCase);
+        var leftovers = new List<EcdisViewingGroupViewModel>();
+        var declaredIds = new HashSet<string>(
+            declaredSections.Select(s => s.Id), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in items)
+        {
+            var sectionId = sectionById.GetValueOrDefault(item.Id);
+            if (sectionId is not null && declaredIds.Contains(sectionId))
+            {
+                if (!bySection.TryGetValue(sectionId, out var list))
+                {
+                    list = new List<EcdisViewingGroupViewModel>();
+                    bySection[sectionId] = list;
+                }
+                list.Add(item);
+            }
+            else
+            {
+                leftovers.Add(item);
+            }
+        }
+
+        var result = new List<EcdisViewingGroupSectionViewModel>();
+        foreach (var section in declaredSections)
+        {
+            if (!bySection.TryGetValue(section.Id, out var list) || list.Count == 0)
+                continue;
+
+            var ordered = list
+                .OrderBy(v => v.DisplayLabel, System.StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            result.Add(new EcdisViewingGroupSectionViewModel(section.Label, ordered));
+        }
+
+        if (leftovers.Count > 0)
+        {
+            var ordered = leftovers
+                .OrderBy(v => v.DisplayLabel, System.StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+            result.Add(new EcdisViewingGroupSectionViewModel(Strings.EcdisPanel_SectionOther, ordered));
+        }
+
+        return result;
+    }
 
     /// <summary>Number of user-hidden viewing groups for this spec.</summary>
     public int OverrideCount => _state.GetHidden(SpecCode).Count;

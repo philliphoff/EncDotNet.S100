@@ -384,6 +384,7 @@ internal static class Strings
     public static string EcdisPanel_OverrideCountFormat => Get(nameof(EcdisPanel_OverrideCountFormat));
     public static string EcdisPanel_CategoryHeader => Get(nameof(EcdisPanel_CategoryHeader));
     public static string EcdisPanel_SynthesizedLabelFormat => Get(nameof(EcdisPanel_SynthesizedLabelFormat));
+    public static string EcdisPanel_SectionOther => Get(nameof(EcdisPanel_SectionOther));
     public static string Menu_MeasureMode => Get(nameof(Menu_MeasureMode));
     public static string Status_MeasureLeg => Get(nameof(Status_MeasureLeg));
     public static string Status_MeasureTotal => Get(nameof(Status_MeasureTotal));
