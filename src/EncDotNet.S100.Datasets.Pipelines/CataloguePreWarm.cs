@@ -41,12 +41,14 @@ internal static class CataloguePreWarm
                     symbolNames.Add(p.SymbolReference);
                     break;
                 case LineInstruction l when !string.IsNullOrEmpty(l.LineStyleReference):
-                    lineNames.Add(l.LineStyleReference);
+                    if (!IsSimpleLineStyle(l.LineStyleReference))
+                        lineNames.Add(l.LineStyleReference);
                     break;
                 case AreaInstruction a:
                     if (!string.IsNullOrEmpty(a.AreaFillReference))
                         areaNames.Add(a.AreaFillReference);
-                    if (!string.IsNullOrEmpty(a.OutlineStyleReference))
+                    if (!string.IsNullOrEmpty(a.OutlineStyleReference) &&
+                        !IsSimpleLineStyle(a.OutlineStyleReference))
                         lineNames.Add(a.OutlineStyleReference);
                     break;
             }
@@ -95,6 +97,15 @@ internal static class CataloguePreWarm
 
         return new PreWarmResult(symbols, lineStyles, areaFills);
     }
+
+    // The S-100 Part 9A Lua portrayal model emits LineInstruction /
+    // AreaInstruction outline references with the inline "simple" line-style
+    // sentinel (see LineInstruction.SimpleLineStyleReference). It is never a
+    // named catalogue line style — its colour, width, and dash pattern travel
+    // on the instruction itself — so resolving it always missed and threw a
+    // KeyNotFoundException on every dataset load (#286). Skip it up front.
+    private static bool IsSimpleLineStyle(string reference) =>
+        string.Equals(reference, LineInstruction.SimpleLineStyleReference, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The outcome of a pre-warm pass: lookup-by-name dicts for symbols,
