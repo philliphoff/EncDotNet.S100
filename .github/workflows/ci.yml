@@ -149,7 +149,11 @@ jobs:
     permissions:
       contents: read
     env:
-      HAS_SIGNING_SECRETS: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 != '' }}
+      # macOS signing/notarization is expensive (notary upload + polling) and is
+      # not needed for PR validation — developers can clear the quarantine
+      # attribute on unsigned PR artifacts if they need to run them. Gate it to
+      # main CI runs (pushes to main and v* tags), i.e. skip on pull_request.
+      MACOS_SIGNING_ENABLED: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 != '' && github.event_name != 'pull_request' }}
 
     steps:
       - uses: actions/checkout@v5
@@ -229,7 +233,7 @@ jobs:
           find "$APP" -name '*.pdb' -delete
 
       - name: Import signing certificate
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           P12_BASE64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 }}
           P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
@@ -242,7 +246,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
 
       - name: Sign macOS .app bundle
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -274,7 +278,7 @@ jobs:
           codesign --verify --strict --verbose=2 "$APP/Contents/MacOS/cli/s100"
 
       - name: Notarize macOS .app bundle
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -301,7 +305,7 @@ jobs:
           fi
 
       - name: Staple notarization ticket
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         continue-on-error: true
         run: |
           # The notarization ticket may not be immediately available in
@@ -321,7 +325,7 @@ jobs:
         # The bundled CLI inside the .app is signed by the recursive loop above,
         # but the standalone copy at .../publish/cli is a separate set of files
         # and must be signed independently for its own release archive.
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -346,7 +350,7 @@ jobs:
           codesign --verify --strict --verbose=2 "$CLI/s100"
 
       - name: Notarize standalone macOS s100 CLI
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -426,14 +430,14 @@ jobs:
           echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
 
       - name: Sign macOS DMG
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$DMG_NAME"
 
       - name: Notarize macOS DMG
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -457,7 +461,7 @@ jobs:
           fi
 
       - name: Staple notarization ticket to DMG
-        if: matrix.rid == 'osx-arm64' && env.HAS_SIGNING_SECRETS == 'true'
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
         continue-on-error: true
         run: |
           # Same retry shape as the .app stapler step: the notarization
