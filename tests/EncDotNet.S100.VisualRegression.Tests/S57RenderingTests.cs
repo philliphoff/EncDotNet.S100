@@ -1,4 +1,5 @@
 using EncDotNet.S100.VisualRegression;
+using VerifyTests;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
 
@@ -67,6 +68,23 @@ public sealed class S57RenderingTests
         // (issues #177, #224, #228).
         var relax = !OperatingSystem.IsMacOS();
         var maxDifferentPixelFraction = relax ? 0.08 : 0.05;
-        return TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction);
+        var settings = TestHelpers.VerifyBitmap(bitmap, maxDifferentPixelFraction);
+        return UsePlatformBaseline(settings);
+    }
+
+    private static SettingsTask UsePlatformBaseline(SettingsTask settings)
+    {
+        // PR #292 intentionally moves multipoint sounding glyphs from a shared
+        // anchor to their distinct sounding positions. The non-macOS arm64 Skia
+        // raster path now legitimately diverges from the default baseline by
+        // more than the documented anti-aliasing tolerance, so keep a dedicated
+        // baseline for that platform variant instead of weakening the check.
+        if (!OperatingSystem.IsMacOS()
+            && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+        {
+            return settings.UseFileName("S57RenderingTests.EncCell_DayPalette.non-macos-arm64");
+        }
+
+        return settings;
     }
 }
