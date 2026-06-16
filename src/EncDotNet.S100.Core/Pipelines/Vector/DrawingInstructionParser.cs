@@ -232,12 +232,19 @@ public static class DrawingInstructionParser
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                     });
-                    // Reset per-instruction state
+                    // Reset per-instruction style state. The augmented anchor is
+                    // a spatial-geometry context (S-100 Part 9 §11.5), not a
+                    // per-instruction style: it persists across every following
+                    // point/text instruction until the next AugmentedPoint
+                    // overwrites it or ClearGeometry clears it. Multipoint
+                    // features (e.g. an S-101 multi-digit sounding array) emit a
+                    // single AugmentedPoint followed by several PointInstructions
+                    // for that point's glyphs, so resetting it here would strand
+                    // every glyph but the first on the feature's primary geometry.
                     rotation = null;
                     scaleFactor = 1.0;
                     localOffsetX = 0;
                     localOffsetY = 0;
-                    augmentedAnchor = null;
                     break;
 
                 case "LineInstruction":
@@ -327,12 +334,13 @@ public static class DrawingInstructionParser
                         ScaleMaximum = scaleMaximum,
                     });
                     // Reset per-instruction text state so the next label
-                    // doesn't inherit alignment / offset from this one.
+                    // doesn't inherit alignment / offset from this one. The
+                    // augmented anchor is a spatial-geometry context (see the
+                    // PointInstruction case) and intentionally persists.
                     textHAlign = TextHorizontalAlignment.Center;
                     textVAlign = TextVerticalAlignment.Center;
                     localOffsetX = 0;
                     localOffsetY = 0;
-                    augmentedAnchor = null;
                     break;
 
                 case "NullInstruction":
