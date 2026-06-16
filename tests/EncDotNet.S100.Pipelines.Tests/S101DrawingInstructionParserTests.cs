@@ -140,20 +140,40 @@ public class S101DrawingInstructionParserTests
     }
 
     [Fact]
-    public void PointInstruction_AugmentedPointResetsBetweenInstructions()
+    public void PointInstruction_AugmentedPointPersistsAcrossGlyphsUntilNextAugmentedPoint()
     {
-        // SOUNDG03 emits AugmentedPoint per sounding so each PointInstruction
-        // gets its own anchor; without a fresh AugmentedPoint, the next
-        // emit must NOT inherit the previous override.
+        // S-101 multipoint soundings (S-100 Part 9 §11.5) emit ONE AugmentedPoint
+        // per sounding followed by SEVERAL PointInstructions — one per digit
+        // glyph (e.g. SOUNDG21, SOUNDG13, SOUNDG08 for a three-digit depth). The
+        // augmented anchor is a spatial-geometry context, so it must apply to
+        // every glyph of that point, not just the first. The next AugmentedPoint
+        // moves to the following sounding. Regression test for multi-digit
+        // soundings collapsing onto the feature's primary geometry point.
         const string s =
-            "AugmentedPoint:GeographicCRS,1,2;PointInstruction:A;" +
-            "PointInstruction:B";
+            "AugmentedPoint:GeographicCRS,24.5,60.25;" +
+            "PointInstruction:SOUNDG21;PointInstruction:SOUNDG13;PointInstruction:SOUNDG08;" +
+            "AugmentedPoint:GeographicCRS,25.5,61.25;" +
+            "PointInstruction:SOUNDG11;PointInstruction:SOUNDG00";
 
         var parsed = DrawingInstructionParser.Parse("F1", s).OfType<PointInstruction>().ToList();
 
-        Assert.Equal(2, parsed.Count);
-        Assert.NotNull(parsed[0].CoordinateOverride);
-        Assert.Null(parsed[1].CoordinateOverride);
+        Assert.Equal(5, parsed.Count);
+
+        // All three glyphs of the first sounding share the first anchor.
+        foreach (var pt in parsed.Take(3))
+        {
+            Assert.NotNull(pt.CoordinateOverride);
+            Assert.Equal(60.25, pt.CoordinateOverride!.Value.Latitude);
+            Assert.Equal(24.5, pt.CoordinateOverride!.Value.Longitude);
+        }
+
+        // Both glyphs of the second sounding pick up the second anchor.
+        foreach (var pt in parsed.Skip(3))
+        {
+            Assert.NotNull(pt.CoordinateOverride);
+            Assert.Equal(61.25, pt.CoordinateOverride!.Value.Latitude);
+            Assert.Equal(25.5, pt.CoordinateOverride!.Value.Longitude);
+        }
     }
 
     [Fact]

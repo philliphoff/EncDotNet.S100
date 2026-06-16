@@ -219,6 +219,10 @@ public sealed class MapsuiDisplayListRenderer
         var scene = builder.Build(instructions, geometryProvider);
 
         var mapFeatures = new List<IFeature>(scene.Ops.Count);
+        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
+        // already been given a pick-target rectangle, so composite point
+        // symbology emits exactly one rectangle per anchor (see the build loop).
+        var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
         var patternEntries = new List<(string PatternRef, int Priority, List<Polygon> Polygons)>();
         int lastColorFillIndex = -1;
 
@@ -301,7 +305,18 @@ public sealed class MapsuiDisplayListRenderer
         //     legacy single-pass loop produced.
         foreach (var op in scene.Ops)
         {
-            var mapFeature = CreateMapFeature(op);
+            // A composite point symbol (e.g. a multi-digit sounding) emits one
+            // PointPaintOp per glyph, all sharing the same feature reference and
+            // EPSG:3857 anchor. Each op would otherwise carry its own faint
+            // pick-target rectangle; stacked, those rectangles darken into a
+            // visible box. Emit the rectangle only for the first symbol at each
+            // (feature, anchor) so picking still works without the artifact.
+            var includePointHitRect = true;
+            if (op is Scene.PointPaintOp { Symbol: not null } point)
+                includePointHitRect = pointHitRectKeys.Add(
+                    (point.FeatureReference, point.World.X, point.World.Y));
+
+            var mapFeature = CreateMapFeature(op, includePointHitRect);
             if (mapFeature is null)
                 continue;
 
@@ -394,13 +409,21 @@ public sealed class MapsuiDisplayListRenderer
     /// feature reference and applying scale-visibility limits. Geometry in the
     /// op is already projected to EPSG:3857; sizes are already in display pixels.
     /// </summary>
-    private IFeature? CreateMapFeature(Scene.PaintOp op)
+    /// <param name="includePointHitRect">
+    /// When the op is a <see cref="Scene.PointPaintOp"/>, controls whether the
+    /// near-invisible pick-target rectangle is emitted. The caller suppresses it
+    /// for every symbol after the first at a given feature/anchor so that
+    /// composite point symbology (e.g. multi-digit soundings, where one anchor
+    /// spawns several stacked symbols) does not accumulate the rectangle's
+    /// faint fill into a visible box.
+    /// </param>
+    private IFeature? CreateMapFeature(Scene.PaintOp op, bool includePointHitRect = true)
     {
         IFeature? feature = op switch
         {
             Scene.AreaPaintOp area => CreateAreaFeature(area),
             Scene.LinePaintOp line => CreateLineFeature(line),
-            Scene.PointPaintOp point => CreatePointFeature(point),
+            Scene.PointPaintOp point => CreatePointFeature(point, includePointHitRect),
             Scene.TextPaintOp text => CreateTextFeature(text),
             _ => null,
         };
@@ -502,7 +525,7 @@ public sealed class MapsuiDisplayListRenderer
         return feature;
     }
 
-    private static IFeature CreatePointFeature(Scene.PointPaintOp op)
+    private static IFeature CreatePointFeature(Scene.PointPaintOp op, bool includeHitRect = true)
     {
         var feature = new PointFeature(op.World.X, op.World.Y);
 
@@ -525,22 +548,32 @@ public sealed class MapsuiDisplayListRenderer
             // Add a nearly-invisible rectangle as a hit-test area so that
             // tapping on a transparent portion of the SVG still picks this
             // feature.  The rectangle is slightly larger than the SVG to
-            // provide a comfortable tap target.
-            var hitStyle = new SymbolStyle
+            // provide a comfortable tap target.  Mapsui's pick is pixel-based,
+            // so the fill must paint at least one alpha step; that means every
+            // emitted rectangle contributes a faint darkening.  Composite point
+            // symbology (e.g. a multi-digit sounding) places several symbols on
+            // the same anchor, so the caller emits the rectangle for only the
+            // first symbol at each feature/anchor (see the render loop's
+            // dedupe).  Without that, the stacked rectangles accumulate into a
+            // visible box around the sounding.
+            if (includeHitRect)
             {
-                SymbolType = SymbolType.Rectangle,
-                SymbolScale = svgScale * 1.2,
-                Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
-                Line = null,
-                Outline = null,
-            };
-            if (op.Rotation.HasValue)
-                hitStyle.SymbolRotation = op.Rotation.Value;
-            if (hasSymbolOffset)
-                hitStyle.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
-            if (hasPivotRelative)
-                hitStyle.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
-            feature.Styles.Add(hitStyle);
+                var hitStyle = new SymbolStyle
+                {
+                    SymbolType = SymbolType.Rectangle,
+                    SymbolScale = svgScale * 1.2,
+                    Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+                    Line = null,
+                    Outline = null,
+                };
+                if (op.Rotation.HasValue)
+                    hitStyle.SymbolRotation = op.Rotation.Value;
+                if (hasSymbolOffset)
+                    hitStyle.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
+                if (hasPivotRelative)
+                    hitStyle.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
+                feature.Styles.Add(hitStyle);
+            }
 
             var style = new ImageStyle
             {
