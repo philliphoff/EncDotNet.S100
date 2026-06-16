@@ -74,15 +74,14 @@ public sealed class S57RenderingTests
 
     private static SettingsTask UsePlatformBaseline(SettingsTask settings)
     {
-        // PR #292 intentionally moves multipoint sounding glyphs from a shared
-        // anchor to their distinct sounding positions. The non-macOS arm64 Skia
-        // raster path now legitimately diverges from the default baseline by
-        // more than the documented anti-aliasing tolerance, so keep a dedicated
-        // baseline for that platform variant instead of weakening the check.
-        if (!OperatingSystem.IsMacOS()
+        // win-arm64, win-x64, osx-arm64, and linux-x64 produce the faithful
+        // render and use the default baseline. Only linux-arm64 takes the SIMD
+        // raster path variant tracked by #177/#224/#228, so it uses its own
+        // baseline instead of weakening the check.
+        if (OperatingSystem.IsLinux()
             && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
         {
-            return settings.UseFileName("S57RenderingTests.EncCell_DayPalette.non-macos-arm64");
+            return settings.UseFileName("S57RenderingTests.EncCell_DayPalette.linux-arm64");
         }
 
         return settings;
