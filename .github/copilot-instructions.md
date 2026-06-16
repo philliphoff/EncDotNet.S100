@@ -152,6 +152,24 @@ This repository includes per-spec **skills** under `.github/skills/<spec>/SKILL.
 - When delegating exploration via `search_subagent`, prefer one subagent per affected `src/EncDotNet.S100.Datasets.Sxxx/` project so each runs with its spec context isolated.
 - Cite the relevant spec section number(s) in PR descriptions and in XML doc comments for spec-derived constants, enums, attribute names, and group paths.
 
+### Cross-cutting skills (not tied to one product)
+
+These skills carry knowledge that spans products and/or backends. Load
+them by task signal regardless of which spec you are touching:
+
+| Signal in task | Load skill |
+|---|---|
+| Verifying a rendering/portrayal change in the viewer, designing or reproducing integration/regression scenarios, capturing reference images, measuring load/render performance, deriving fixtures from real datasets — driving the viewer headlessly via its CLI + MCP server | `viewer-evaluation` |
+| Chart composition independent of a single spec: layer/draw-order & display priority, scale-dependent generalization & declutter, label placement, day/dusk/night palette & contrast, CRS/projection pitfalls, rendering-performance strategy (geometry simplification, caching, vertex-bound cost reasoning) | `chart-cartography` |
+
+- `viewer-evaluation` applies even when you are **not** editing the
+  Viewer project — renderer, Core pipeline, and `Datasets.SXXX` work
+  often needs end-to-end visual verification. The MCP tool catalogue
+  reference lives in `docs/mcp-server.md`.
+- `chart-cartography` complements the per-spec skills: load the spec
+  skill for *what to draw*, the cartography skill for *how charts
+  should be composed and made fast*.
+
 ## Viewer UI
 
 When editing `src/EncDotNet.S100.Viewer/**`, follow the rules in

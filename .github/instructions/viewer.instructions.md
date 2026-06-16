@@ -90,14 +90,22 @@ When modifying viewer code:
   `Foreground=White` down to the icon (FluentIcon does not inherit
   Foreground automatically).
 
-## E2E performance testing via the MCP server
+## E2E evaluation & performance testing via the MCP server
 
-The viewer hosts an MCP server that lets an agent drive it headlessly
-for **automated load/render performance testing**. Use this whenever
-profiling dataset load or render hot paths, or validating that a
-rendering optimization actually moves a real-world scenario. The full
-tool catalogue lives in `docs/mcp-server.md`; the workflow below is the
-performance-testing recipe.
+The viewer hosts an MCP server that lets an agent drive it headlessly —
+for **visual/behavioural verification of a change** *and* for
+**automated load/render performance testing**. Reach for it whenever a
+change needs *seeing* or *exercising end-to-end*, when profiling load /
+render hot paths, or when validating that a rendering optimization
+actually moves a real-world scenario.
+
+> The general, reusable procedure (both visual-eval and performance
+> loops, launch/teardown, MCP client quirks, turning a finding into a
+> test) is the **`viewer-evaluation`** skill — load it for the full
+> recipe; it applies even from renderer / Core / `Datasets.SXXX` work,
+> not only when editing the Viewer project. The full MCP tool catalogue
+> lives in `docs/mcp-server.md`. The performance-testing specifics
+> below remain here as the viewer-local quick reference.
 
 ### 1. Launch an ephemeral instance with a dynamic MCP port
 
