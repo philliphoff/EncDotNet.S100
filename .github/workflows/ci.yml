@@ -136,7 +136,14 @@ jobs:
           - os: windows-latest
             rid: win-x64
             artifact: Viewer-win-x64
-          - os: windows-11-arm
+          # win-arm64 is cross-published on the x64 runner (not windows-11-arm)
+          # because azure/trusted-signing-action does not support ARM64 runners
+          # — its x64 signing dlib fails under emulation with "SignTool failed
+          # with exit code 3" (Azure/trusted-signing-action#92). signtool on x64
+          # signs arm64 PE binaries fine, and a RID-targeted dotnet publish
+          # produces identical win-arm64 output regardless of host arch. Native
+          # arm64 build/test coverage is retained by the separate test-arm64 job.
+          - os: windows-latest
             rid: win-arm64
             artifact: Viewer-win-arm64
           - os: ubuntu-latest
