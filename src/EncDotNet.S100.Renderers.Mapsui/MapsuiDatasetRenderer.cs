@@ -162,7 +162,14 @@ public sealed class MapsuiDatasetRenderer
                 && result.OutOfBandMinDisplayScale is int denom
                 && layer is MemoryLayer memoryLayer)
             {
-                var cap = denom * MapsuiDisplayListRenderer.DenomToResolutionMetres;
+                // Convert the cell-wide out-of-band denominator at the layer's
+                // centre latitude so the cutoff matches the cell's true scale in
+                // EPSG:3857 (web-mercator inflates ground distance by 1/cos φ).
+                var layerExtent = memoryLayer.Extent;
+                var latitudeRadians = layerExtent is null
+                    ? 0.0
+                    : MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians((layerExtent.MinY + layerExtent.MaxY) / 2.0);
+                var cap = MapsuiDisplayListRenderer.DenominatorToResolution(denom, latitudeRadians);
                 ApplyOutOfScaleBandCap(memoryLayer.Features, cap);
             }
 

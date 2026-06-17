@@ -41,6 +41,7 @@ collection / priority-clip / insert phase here.
 - `<foreground>` / `<background>` colours accept either a palette token or a literal `#RRGGBB` / `RRGGBBAA` hex value, with the optional `transparency` attribute applied as alpha attenuation.
 - Text alignment, mm offsets, and `textLine` start/end offsets (Relative or Absolute) are honoured per S-100 Part 9 §11.4.
 - `LineStyleProvider`, `SymbolProvider`, and `AreaFillProvider` callbacks let the host project plug in a portrayal catalogue without coupling the renderer to a specific dataset library.
+- **Scale-visibility limits are latitude-corrected.** S-100 Part 9 §11.1 scale denominators (per-feature `ScaleMinimum`/`ScaleMaximum`, and the cell-wide out-of-band cap derived from `DataCoverage.minimumDisplayScale`) are *true-scale* values, whereas a Mapsui `resolution` is metres/pixel at the EPSG:3857 equator. Because web-mercator inflates ground distance by `1/cos φ`, the equator-referenced resolution for a denominator is `denom × 0.00028 / cos φ` (`MapsuiDisplayListRenderer.DenominatorToResolution`). Per-feature limits convert at the feature's extent-centre latitude; the cell-wide cap converts at the layer's extent-centre latitude. Omitting the `cos φ` term (the prior behaviour) was only correct on the equator and suppressed detail roughly `1/cos φ` zoom levels too early — at φ ≈ 50.8° (≈ 1.58×) a cell's linework vanished about two-thirds of a zoom level before it should. This now matches the Skia headless backend, which already applies `cos(midLat)`.
 
 ### Sharing processed-SVG and pattern-tile work across renders
 
@@ -385,7 +386,7 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 | `S100_VECTOR_SNAPSHOT_PREBUILD` | on | `0`/`false` disables the off-thread pre-build (see below) and falls back to the single-image snapshot (synchronous re-record on zoom and on a pan past the margin). |
 | `S100_VECTOR_SNAPSHOT_PAN_MARGIN` | `512` | Pixels of margin used for off-thread *pan* re-records (the sustained-pan look-ahead). Larger than `…_MARGIN` so one recentred-ahead background record covers roughly a full viewport of travel. Only used when the pre-build is on. |
 | `S100_VECTOR_SNAPSHOT_PAN_REFRESH` | `0.5` | Fraction (0–1) of the active snapshot's margin at which the off-thread pan re-record is triggered (while the image still fully covers the view). Smaller = earlier/more frequent; larger = more deferred. Only used when the pre-build is on. |
-| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / prebuild-publish / pan-refresh decisions to stderr. |
+| `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / live-on-scale-band / prebuild-publish / pan-refresh decisions to stderr. |
 
 ### Raster vector snapshot
 
@@ -416,7 +417,18 @@ instead of a single image, and hides the record-frame stall in four ways:
 2. **Scaled-stale blit** — on a zoom whose image is not yet built, the nearest
    existing image is blitted *scaled* (one linear resample, slightly blurry)
    for a frame or two while the exact-resolution image is built off-thread.
-   This also smooths continuous / pinch zoom.
+   This also smooths continuous / pinch zoom. **A scaled-stale blit is only
+   used when no scale-visibility boundary (`MinVisible`/`MaxVisible`, e.g. the
+   S-101 out-of-band cap derived from `DataCoverage.minimumDisplayScale`) lies
+   between the recorded image's resolution and the current one.** When a zoom
+   crosses such a boundary the two resolutions have *different* visible feature
+   sets — a buoy shown at one zoom is capped-hidden at the other — so reusing
+   the wrong-resolution raster would briefly drop (or wrongly show) those
+   features. In that case the layer is drawn **live** for that single frame
+   (feature-correct, like the rotated-viewport fallback) while the
+   exact-resolution image records off-thread. This eliminated an intermittent
+   bug where point/text features (buoys, beacons, labels) flickered or vanished
+   when zooming across the cell's display-scale cutoff.
 3. **Sustained-pan look-ahead** — the original snapshot only buys
    `…_MARGIN` (256 px) of pan before a re-record, and that re-record used to
    run *synchronously* on the render thread (~250–650 ms), so a sustained drag

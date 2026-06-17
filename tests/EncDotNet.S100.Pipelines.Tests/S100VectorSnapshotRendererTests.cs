@@ -421,4 +421,67 @@ public sealed class S100VectorSnapshotRendererTests
 
         Assert.False(resynced);
     }
+
+    // --- VisibleSetMayDiffer: cross-resolution scale-visibility guard -------
+
+    // The S-101 out-of-band cap (this cell: minimumDisplayScale 22000 →
+    // capRes 6.16 m/px) is a single MaxVisible boundary on the linework layer.
+    private static readonly double[] CapThreshold = { 6.16 };
+
+    [Fact]
+    public void VisibleSetMayDiffer_FalseWhenNoThresholds()
+    {
+        Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(Array.Empty<double>(), 9.55, 4.78));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_FalseWhenResolutionsEqual()
+    {
+        Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 4.78, 4.78));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_TrueWhenThresholdBetween_ZoomCrossesCap()
+    {
+        // z14 (9.55, capped-hidden) -> z15 (4.78, visible): the 6.16 cap lies
+        // between them, so a stale blit would paint the wrong feature set.
+        Assert.True(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 9.55, 4.78));
+        // Direction-independent.
+        Assert.True(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 4.78, 9.55));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_FalseWhenBothInsideVisibleBand()
+    {
+        // z15 (4.78) -> z16 (2.39): both below the 6.16 cap (linework visible at
+        // both) — a scaled-stale blit is membership-safe.
+        Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 4.78, 2.39));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_FalseWhenBothInsideHiddenBand()
+    {
+        // z13 (19.11) -> z14 (9.55): both above the 6.16 cap (linework hidden at
+        // both) — the recorded raster is empty either way, so the blit is safe.
+        Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 19.11, 9.55));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_TrueWhenResolutionTouchesThreshold()
+    {
+        // Conservative: a resolution sitting exactly on the boundary counts as
+        // "may differ" so the blit is never used across the transition.
+        Assert.True(S100VectorSnapshotRenderer.VisibleSetMayDiffer(CapThreshold, 6.16, 4.78));
+    }
+
+    [Fact]
+    public void VisibleSetMayDiffer_HandlesMultipleThresholds()
+    {
+        double[] thresholds = { 2.0, 6.16, 30.0 };
+
+        // Spans only the 6.16 boundary.
+        Assert.True(S100VectorSnapshotRenderer.VisibleSetMayDiffer(thresholds, 9.55, 4.78));
+        // Spans none (between 6.16 and 30.0).
+        Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(thresholds, 9.55, 19.11));
+    }
 }

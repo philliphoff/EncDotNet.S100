@@ -438,29 +438,95 @@ public sealed class MapsuiDisplayListRenderer
     }
 
     /// <summary>
-    /// S-100 Part 9 scale denominator → Mapsui resolution (m/px in EPSG:3857)
-    /// at 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface,
-    /// so resolution ≈ scaleDenominator × 0.00028.
+    /// S-100 Part 9 scale denominator → ground metres per display pixel at
+    /// 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface, so
+    /// <i>ground</i> resolution ≈ scaleDenominator × 0.00028. To obtain the
+    /// Mapsui EPSG:3857 resolution (metres/pixel at the equator) this must be
+    /// divided by <c>cos(latitude)</c> to undo web-mercator scale distortion —
+    /// see <see cref="DenominatorToResolution"/>.
     /// </summary>
     public const double DenomToResolutionMetres = 0.00028;
+
+    /// <summary>Earth radius (m) of the EPSG:3857 web-mercator sphere, matching
+    /// <see cref="Scene.WebMercator.EarthRadius"/>.</summary>
+    private const double WebMercatorEarthRadius = 6378137.0;
+
+    /// <summary>
+    /// Converts an EPSG:3857 northing (metres) to its geodetic latitude in
+    /// radians, used to undo web-mercator scale distortion when mapping an
+    /// S-100 true-scale denominator to a Mapsui resolution.
+    /// </summary>
+    internal static double WebMercatorYToLatitudeRadians(double y)
+        => 2.0 * Math.Atan(Math.Exp(y / WebMercatorEarthRadius)) - Math.PI / 2.0;
+
+    /// <summary>
+    /// Converts an S-100 Part 9 §11.1 scale denominator (a <i>true-scale</i>
+    /// value, e.g. SCAMIN / <c>minimumDisplayScale</c>) to the equivalent Mapsui
+    /// EPSG:3857 resolution (metres/pixel at the equator) at
+    /// <paramref name="latitudeRadians"/>. Because web-mercator inflates ground
+    /// distances by <c>1/cos φ</c>, the equator-referenced resolution that
+    /// corresponds to a true-scale denominator is
+    /// <c>denom × 0.00028 / cos φ</c>. Omitting the <c>cos φ</c> term (the prior
+    /// behaviour) is only correct on the equator and biases scale-visibility
+    /// cutoffs toward hiding detail at finer zooms as latitude increases — at
+    /// φ ≈ 50.8° (≈ 1/cos φ = 1.58) a cell's detail was suppressed roughly
+    /// two-thirds of a zoom level too early. Matches the Skia headless backend,
+    /// which already applies <c>cos(midLat)</c> (see
+    /// <see cref="Scene.HeadlessVectorRenderer"/>).
+    /// </summary>
+    /// <param name="scaleDenominator">The S-100 true-scale denominator.</param>
+    /// <param name="latitudeRadians">
+    /// The representative latitude (radians) of the feature/cell the limit
+    /// applies to; <c>0</c> (the equator) yields the uncorrected conversion.
+    /// </param>
+    /// <returns>The Mapsui EPSG:3857 resolution (m/px at the equator).</returns>
+    internal static double DenominatorToResolution(double scaleDenominator, double latitudeRadians)
+    {
+        var cos = Math.Cos(latitudeRadians);
+        if (cos < 1e-6)
+        {
+            // Guard against the poles / invalid latitudes (EPSG:3857 is clamped
+            // to ±85.06°, where cos ≈ 0.087, so this only trips on bad input).
+            cos = 1e-6;
+        }
+
+        return scaleDenominator * DenomToResolutionMetres / cos;
+    }
+
+    /// <summary>
+    /// The representative latitude (radians) of a feature, taken from the centre
+    /// of its EPSG:3857 extent. Geometry-less features (no extent) fall back to
+    /// the equator, i.e. no web-mercator correction.
+    /// </summary>
+    private static double FeatureLatitudeRadians(IFeature feature)
+    {
+        var extent = feature.Extent;
+        return extent is null
+            ? 0.0
+            : WebMercatorYToLatitudeRadians((extent.MinY + extent.MaxY) / 2.0);
+    }
 
     /// <summary>
     /// Maps the S-100 Part 9 §11.1 scale denominators carried on a
     /// <see cref="Scene.PaintOp"/> onto each Mapsui style.  <c>ScaleMinimum</c>
     /// is the most zoomed-out limit (largest allowed denominator) and maps to
     /// Mapsui's <c>MaxVisible</c>; <c>ScaleMaximum</c> is the most zoomed-in
-    /// limit (smallest allowed denominator) and maps to <c>MinVisible</c>.
+    /// limit (smallest allowed denominator) and maps to <c>MinVisible</c>. Both
+    /// denominators are converted at the feature's latitude so the web-mercator
+    /// resolution cutoffs line up with the feature's true scale.
     /// </summary>
     private static void ApplyScaleVisibility(IFeature feature, double? scaleMinimum, double? scaleMaximum)
     {
         if (!scaleMinimum.HasValue && !scaleMaximum.HasValue)
             return;
 
+        var latitudeRadians = FeatureLatitudeRadians(feature);
+
         double? maxRes = scaleMinimum.HasValue
-            ? scaleMinimum.Value * DenomToResolutionMetres
+            ? DenominatorToResolution(scaleMinimum.Value, latitudeRadians)
             : (double?)null;
         double? minRes = scaleMaximum.HasValue
-            ? scaleMaximum.Value * DenomToResolutionMetres
+            ? DenominatorToResolution(scaleMaximum.Value, latitudeRadians)
             : (double?)null;
 
         foreach (var style in feature.Styles)
