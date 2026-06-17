@@ -464,6 +464,34 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _enableGeometrySimplification, value)) { _settings.EnableGeometrySimplification = value; RaiseMarinerChanged(); } }
     }
 
+    /// <summary>
+    /// Raised when <see cref="BasemapEnabled"/> changes so the host can
+    /// add or remove the basemap tile layer live without a restart.
+    /// </summary>
+    public event Action<bool>? BasemapEnabledChanged;
+
+    private bool _basemapEnabled;
+    /// <summary>
+    /// Whether the online OpenStreetMap basemap is shown beneath the
+    /// chart data (issue #295). Persisted to
+    /// <see cref="ViewerSettings.BasemapEnabled"/>; toggling raises
+    /// <see cref="BasemapEnabledChanged"/> so the map host adds/removes
+    /// the tile layer without a relaunch.
+    /// </summary>
+    public bool BasemapEnabled
+    {
+        get => _basemapEnabled;
+        set
+        {
+            if (SetProperty(ref _basemapEnabled, value))
+            {
+                _settings.BasemapEnabled = value;
+                _settings.Save();
+                BasemapEnabledChanged?.Invoke(value);
+            }
+        }
+    }
+
     private string _nationalLanguage = "";
     public string NationalLanguage
     {
@@ -549,6 +577,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
         _enableVectorRasterization = settings.EnableVectorRasterization ?? false;
         _enableGeometrySimplification = settings.EnableGeometrySimplification ?? false;
+        _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;

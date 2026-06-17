@@ -208,6 +208,17 @@ internal sealed class ViewerSettings
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether the online OpenStreetMap basemap tile layer is shown
+    /// beneath the chart data. Enabled by default. Disabling it removes
+    /// the remote tile fetch entirely — useful for offline operation
+    /// and for agent-driven performance runs that want to measure only
+    /// dataset-related rendering without basemap tile activity (issue
+    /// #295). Can be overridden per-run with the <c>--basemap</c>
+    /// command-line flag.
+    /// </summary>
+    public bool BasemapEnabled { get; set; } = true;
+
+    /// <summary>
     /// Whether the own-ship overlay (PR-D2) is visible. The synthetic
     /// driver is always running; this flag controls whether the
     /// source publishes the glyph to the dynamic-source overlay tier.

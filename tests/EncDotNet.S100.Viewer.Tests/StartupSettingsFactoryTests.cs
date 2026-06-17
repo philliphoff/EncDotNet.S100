@@ -81,6 +81,27 @@ public class StartupSettingsFactoryTests
     }
 
     [Fact]
+    public void Basemap_defaults_to_enabled_when_not_overridden()
+    {
+        var settings = StartupSettingsFactory.Create(new ViewerCommandSettings { SettingsPath = TempSettingsPath() });
+        Assert.True(settings.BasemapEnabled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Basemap_flag_overrides_persisted_setting(bool enabled)
+    {
+        var settings = StartupSettingsFactory.Create(new ViewerCommandSettings
+        {
+            SettingsPath = TempSettingsPath(),
+            Basemap = enabled,
+        });
+
+        Assert.Equal(enabled, settings.BasemapEnabled);
+    }
+
+    [Fact]
     public void Null_options_returns_default_profile()
     {
         var settings = StartupSettingsFactory.Create(null);

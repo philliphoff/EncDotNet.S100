@@ -834,6 +834,18 @@
   <data name="Tooltip_EnableGeometrySimplification" xml:space="preserve">
     <value>Apply resolution-aware Douglas-Peucker simplification to S-100 line features at render time, with a per-zoom cache (issue #164). Speeds up paint on dense ENC line data; polygons and short lines are unaffected.</value>
   </data>
+  <data name="Settings_MapSection" xml:space="preserve">
+    <value>Map</value>
+  </data>
+  <data name="Settings_MapSection_Help" xml:space="preserve">
+    <value>Background map shown beneath the chart data.</value>
+  </data>
+  <data name="Settings_BasemapEnabled" xml:space="preserve">
+    <value>Show online basemap</value>
+  </data>
+  <data name="Tooltip_BasemapEnabled" xml:space="preserve">
+    <value>Show the online OpenStreetMap basemap beneath the chart data. Disable for offline use or to exclude basemap tile activity from performance measurements.</value>
+  </data>
   <data name="Settings_NationalLanguage" xml:space="preserve">
     <value>National Language</value>
   </data>
