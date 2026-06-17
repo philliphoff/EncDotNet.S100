@@ -38,6 +38,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly DatasetsViewModel _datasets;
     private readonly IMapViewportNotifier _viewport;
     private readonly ILastErrorTracker _errors;
+    private readonly ICrashHistory _crashes;
     private readonly IThemeService _theme;
     private readonly SettingsViewModel _settings;
     private readonly IAppScreenshotProvider _screenshot;
@@ -47,6 +48,7 @@ internal sealed class FeedbackService : IFeedbackService
         DatasetsViewModel datasets,
         IMapViewportNotifier viewport,
         ILastErrorTracker errors,
+        ICrashHistory crashes,
         IThemeService theme,
         SettingsViewModel settings,
         IAppScreenshotProvider screenshot,
@@ -55,6 +57,7 @@ internal sealed class FeedbackService : IFeedbackService
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(errors);
+        ArgumentNullException.ThrowIfNull(crashes);
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(screenshot);
@@ -63,6 +66,7 @@ internal sealed class FeedbackService : IFeedbackService
         _datasets = datasets;
         _viewport = viewport;
         _errors = errors;
+        _crashes = crashes;
         _theme = theme;
         _settings = settings;
         _screenshot = screenshot;
@@ -134,6 +138,16 @@ internal sealed class FeedbackService : IFeedbackService
                 StackTrace: e.StackTrace);
         }
 
+        var previousCrashes = new List<FeedbackCrashInfo>();
+        foreach (var crash in _crashes.Crashes)
+        {
+            previousCrashes.Add(new FeedbackCrashInfo(
+                StartedUtc: new DateTimeOffset(
+                    DateTime.SpecifyKind(crash.StartedUtc, DateTimeKind.Utc)),
+                Pid: crash.Pid,
+                Version: crash.Version));
+        }
+
         return new FeedbackReport
         {
             GeneratedUtc = DateTimeOffset.UtcNow,
@@ -142,6 +156,8 @@ internal sealed class FeedbackService : IFeedbackService
             Viewport = viewport,
             Datasets = datasets,
             LastError = lastError,
+            PreviousCrashes = previousCrashes,
+            CrashLogTail = _crashes.HasCrashes ? _crashes.CrashLogTail : null,
         };
     }
 

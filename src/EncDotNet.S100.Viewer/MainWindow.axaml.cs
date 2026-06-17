@@ -169,6 +169,9 @@ public partial class MainWindow : ShadUI.Window
             // PR-M3: flush any pending debounced size writes so the last
             // splitter drag isn't lost on shutdown.
             _viewModel.OnShutdown();
+            // Record a clean shutdown so the next launch does not report
+            // this (graceful) exit as a crash.
+            EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.MarkCleanExit();
             foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
             _dynamicSourceRegistrations.Clear();
             App.Services.GetRequiredService<
@@ -436,6 +439,44 @@ public partial class MainWindow : ShadUI.Window
             // rather than leaving it at the whole-world default.
             Opened += async (_, _) => await FrameOnOwnShipAtStartupAsync();
         }
+
+        // Surface a recovery notification when the previous run terminated
+        // without a clean shutdown (a native crash, FailFast, kill, …).
+        Opened += (_, _) => ReportPreviousUncleanShutdown();
+    }
+
+    private bool _previousCrashReported;
+
+    /// <summary>
+    /// Shows a sticky warning toast when one or more previous sessions
+    /// ended unexpectedly (detected by
+    /// <see cref="App.PreviousUncleanShutdowns"/>), offering a one-click
+    /// action to open the feedback reporter — which already carries the
+    /// captured crash context via the last-error tracker. Shown at most
+    /// once per window.
+    /// </summary>
+    private void ReportPreviousUncleanShutdown()
+    {
+        if (_previousCrashReported)
+            return;
+        _previousCrashReported = true;
+
+        var crashed = App.PreviousUncleanShutdowns;
+        if (crashed.Count == 0)
+            return;
+
+        var mostRecent = crashed[^1];
+        var body = crashed.Count > 1
+            ? string.Format(Strings.Toast_PreviousCrashBodyMultiple, crashed.Count)
+            : string.Format(Strings.Toast_PreviousCrashBody, mostRecent.StartedUtc.ToLocalTime());
+
+        var toasts = App.Services.GetRequiredService<IToastService>();
+        toasts.ShowError(
+            title: Strings.Toast_PreviousCrashTitle,
+            content: body,
+            actionLabel: Strings.Toast_PreviousCrashAction,
+            action: () => _viewModel.ShowFeedbackCommand.Execute(null),
+            sticky: true);
     }
 
     /// <summary>

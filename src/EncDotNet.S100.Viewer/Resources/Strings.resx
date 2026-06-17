@@ -1136,6 +1136,20 @@
   <data name="Toast_SettingsApplied" xml:space="preserve">
     <value>Settings applied.</value>
   </data>
+  <data name="Toast_PreviousCrashTitle" xml:space="preserve">
+    <value>Viewer recovered from an unexpected shutdown</value>
+  </data>
+  <data name="Toast_PreviousCrashBody" xml:space="preserve">
+    <value>The previous session (started {0:g}) closed unexpectedly. Send a feedback report to help diagnose it.</value>
+    <comment>Crash-recovery toast body. {0} = local start time of the previous (crashed) session.</comment>
+  </data>
+  <data name="Toast_PreviousCrashBodyMultiple" xml:space="preserve">
+    <value>{0} previous sessions closed unexpectedly. Send a feedback report to help diagnose them.</value>
+    <comment>Crash-recovery toast body when multiple instances crashed. {0} = count of crashed sessions.</comment>
+  </data>
+  <data name="Toast_PreviousCrashAction" xml:space="preserve">
+    <value>Send feedback</value>
+  </data>
 
   <!-- MCP server -->
   <data name="Status_McpRunning" xml:space="preserve">

@@ -422,6 +422,10 @@ internal static class Strings
     public static string Toast_Cancel => Get(nameof(Toast_Cancel));
     public static string Toast_ExchangeSetLoading => Get(nameof(Toast_ExchangeSetLoading));
     public static string Toast_SettingsApplied => Get(nameof(Toast_SettingsApplied));
+    public static string Toast_PreviousCrashTitle => Get(nameof(Toast_PreviousCrashTitle));
+    public static string Toast_PreviousCrashBody => Get(nameof(Toast_PreviousCrashBody));
+    public static string Toast_PreviousCrashBodyMultiple => Get(nameof(Toast_PreviousCrashBodyMultiple));
+    public static string Toast_PreviousCrashAction => Get(nameof(Toast_PreviousCrashAction));
 
     // MCP server
     public static string Status_McpRunning => Get(nameof(Status_McpRunning));

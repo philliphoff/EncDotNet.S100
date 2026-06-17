@@ -38,6 +38,23 @@ internal sealed record FeedbackReport
     /// <see langword="null"/> when none was recorded.</summary>
     public FeedbackErrorInfo? LastError { get; init; }
 
+    /// <summary>
+    /// Unclean shutdowns detected from previous runs (oldest first), or an
+    /// empty list when the previous run(s) exited cleanly. A crash is a far
+    /// stronger signal than a recovered-from runtime error, so this channel
+    /// is captured once at startup and never evicted — it is always carried
+    /// in the bundle when present, independent of <see cref="LastError"/>.
+    /// </summary>
+    public IReadOnlyList<FeedbackCrashInfo> PreviousCrashes { get; init; } =
+        Array.Empty<FeedbackCrashInfo>();
+
+    /// <summary>
+    /// Best-effort tail of the shared crash log captured when the crashes in
+    /// <see cref="PreviousCrashes"/> were detected, or <see langword="null"/>
+    /// when none was available or no crash was detected.
+    /// </summary>
+    public string? CrashLogTail { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -109,3 +126,12 @@ internal sealed record FeedbackErrorInfo(
     string? ExceptionType,
     string Message,
     string? StackTrace);
+
+/// <summary>A previous session that terminated without a clean shutdown.</summary>
+/// <param name="StartedUtc">When the crashed session started (UTC).</param>
+/// <param name="Pid">Process id of the crashed session.</param>
+/// <param name="Version">Application version string of the crashed session.</param>
+internal sealed record FeedbackCrashInfo(
+    DateTimeOffset StartedUtc,
+    int Pid,
+    string? Version);
