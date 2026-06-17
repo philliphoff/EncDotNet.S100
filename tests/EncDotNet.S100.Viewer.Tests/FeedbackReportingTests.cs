@@ -49,6 +49,39 @@ public class FeedbackReportingTests
     }
 
     [Fact]
+    public void ToJson_IncludesPreviousCrashes()
+    {
+        var report = SampleReport() with
+        {
+            PreviousCrashes = new[]
+            {
+                new FeedbackCrashInfo(
+                    new DateTimeOffset(2026, 6, 14, 10, 0, 0, TimeSpan.Zero), 4242, "1.2.2"),
+                new FeedbackCrashInfo(
+                    new DateTimeOffset(2026, 6, 14, 11, 0, 0, TimeSpan.Zero), 4343, "1.2.3"),
+            },
+            CrashLogTail = "[UIThread.UnhandledException] kaboom",
+        };
+
+        var json = report.ToJson();
+
+        Assert.Contains("PreviousCrashes", json);
+        Assert.Contains("\"Pid\": 4242", json);
+        Assert.Contains("\"Pid\": 4343", json);
+        Assert.Contains("CrashLogTail", json);
+        Assert.Contains("kaboom", json);
+    }
+
+    [Fact]
+    public void ToJson_OmitsCrashLogTailWhenNoCrash()
+    {
+        // Default report has an empty crash list and a null tail.
+        var json = SampleReport().ToJson();
+
+        Assert.DoesNotContain("CrashLogTail", json);
+    }
+
+    [Fact]
     public void ToJson_OmitsNullSections()
     {
         var json = SampleReport(withViewport: false, withError: false).ToJson();

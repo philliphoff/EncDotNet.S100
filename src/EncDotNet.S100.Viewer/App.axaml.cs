@@ -37,6 +37,17 @@ public partial class App : Application
     private static EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker? s_lastErrorTracker;
 
     /// <summary>
+    /// Previous viewer sessions that terminated without a clean shutdown
+    /// (detected via <see cref="Diagnostics.UncleanShutdownSentinel"/>),
+    /// or empty when the last run(s) exited normally. Set once during
+    /// startup; the main window reads it to surface a crash-recovery
+    /// notification. May contain more than one entry when several
+    /// instances crashed since the last clean launch.
+    /// </summary>
+    internal static IReadOnlyList<EncDotNet.S100.Viewer.Diagnostics.PreviousSession> PreviousUncleanShutdowns { get; private set; } =
+        Array.Empty<EncDotNet.S100.Viewer.Diagnostics.PreviousSession>();
+
+    /// <summary>
     /// Application-wide service container. Populated during
     /// <see cref="OnFrameworkInitializationCompleted"/>; throws if accessed
     /// before the framework is initialized.
@@ -72,6 +83,14 @@ public partial class App : Application
         // funnel through LogCrash).
         s_lastErrorTracker = s_services.GetRequiredService<
             EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker>();
+
+        // Detect an unclean shutdown from the previous run (native crash,
+        // FailFast, kill, … — none of which the managed handlers above can
+        // catch) and route it into the last-error tracker so the feedback
+        // reporter and the startup notification can surface it. Disabled
+        // for ephemeral / one-shot screenshot runs so automation never
+        // writes a marker or reports a stale one.
+        DetectPreviousUncleanShutdown();
 
         // ShadUI resolves custom dialog content by an explicit
         // view/context-view-model registration on the DialogManager (a
@@ -411,6 +430,8 @@ public partial class App : Application
         // Feedback reporting: diagnostics capture + modal dialog plumbing.
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker,
             EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.ICrashHistory,
+            EncDotNet.S100.Viewer.Diagnostics.CrashHistory>();
         services.AddSingleton<IAppScreenshotProvider, AppScreenshotProvider>();
         services.AddSingleton<ShadUI.DialogManager>();
         services.AddSingleton<IFeedbackService, FeedbackService>();
@@ -710,5 +731,46 @@ public partial class App : Application
         Console.Error.WriteLine($"[{label}] {message}");
         CrashLog.Append(label, message);
         s_lastErrorTracker?.Record(label, message);
+    }
+
+    /// <summary>
+    /// Configures the unclean-shutdown sentinel for this run, then begins
+    /// a session. When a previous run's marker survived (an unclean
+    /// termination), captures every detected crash — with a tail of the
+    /// crash log — into the dedicated <see cref="Diagnostics.ICrashHistory"/>
+    /// so the feedback report always carries it, and stashes the list on
+    /// <see cref="PreviousUncleanShutdowns"/> for the main window to report.
+    /// </summary>
+    /// <remarks>
+    /// Crashes are deliberately routed to the sticky crash history rather
+    /// than the single-slot <see cref="Diagnostics.ILastErrorTracker"/>: a
+    /// crash is a stronger signal than an ordinary runtime exception and must
+    /// not be evicted by a later, non-fatal error before the user sends
+    /// feedback.
+    /// </remarks>
+    private static void DetectPreviousUncleanShutdown()
+    {
+        var options = StartupOptions;
+
+        // Skip ephemeral / one-shot screenshot automation runs: they must
+        // leave no marker behind and must not surface a stale crash.
+        var enabled = !(options?.Ephemeral == true || options?.ExitAfterScreenshot == true);
+
+        var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+
+        EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.Configure(enabled);
+        var crashed =
+            EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.BeginSession(version);
+        if (crashed.Count == 0)
+            return;
+
+        PreviousUncleanShutdowns = crashed;
+
+        // Capture every detected crash (with a tail of the crash log) into the
+        // sticky crash history so the feedback report always includes it,
+        // independent of any runtime errors recorded later this session.
+        var tail = CrashLog.ReadTail(8000);
+        s_services?.GetService<EncDotNet.S100.Viewer.Diagnostics.ICrashHistory>()
+            ?.Capture(crashed, tail);
     }
 }

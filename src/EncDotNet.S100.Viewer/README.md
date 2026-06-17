@@ -365,6 +365,42 @@ viewer has a built-in **Report Feedback** experience:
 No data leaves your machine until you choose to create the GitHub
 issue, and nothing is uploaded by the viewer itself.
 
+### Crash recovery (next-startup reporting)
+
+Some crashes — a native fault in the GPU/SkiaSharp stack, an
+`Environment.FailFast`, a stack overflow, an out-of-memory kill, or an
+external `kill -9` — terminate the process *before* the managed global
+exception handlers can run, so they leave no toast and no obvious trace.
+To catch these, the viewer drops a small **per-process session marker**
+file (`viewer-session-{pid}.lock`, in a `crash-markers` folder next to
+your settings) on startup and deletes its own marker on a clean
+shutdown. On the next launch, any marker whose owning process is no
+longer alive means that session terminated abnormally:
+
+- A **"Viewer recovered from an unexpected shutdown"** notification
+  appears, with a one-click **Send feedback** action.
+- The crash context — every detected session's start time, PID, and
+  version plus a tail of the `viewer-crash.log` — is attached to the
+  feedback report automatically in a dedicated **`PreviousCrashes`**
+  channel. This is deliberately separate from the single-slot
+  last-error tracker: a crash is a far stronger signal than an
+  exception the app recovered from, so it is captured once at startup
+  and **never evicted** by a later, non-fatal runtime error before you
+  send feedback. **All** detected crashes are reported, not just the
+  most recent.
+
+Because markers are **per process**, this is correct when several
+viewers run **side by side** (e.g. comparing charts in two windows): a
+live instance's marker is left untouched by the others, and one
+instance's clean exit never erases another's crash evidence. Liveness
+is decided the same way on **Windows, macOS, and Linux** — by process
+id *plus the OS process start time*, so a recycled PID is never
+mistaken for a still-running session.
+
+The markers are per-user and are **not** written for `--ephemeral` or
+one-shot `--exit-after-screenshot` automation runs, so agent harnesses
+never pollute them or surface a stale crash.
+
 
 A live "own ship" overlay sits alongside the static datasets,
 publishing a single moving point through the

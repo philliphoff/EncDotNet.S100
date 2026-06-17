@@ -64,4 +64,34 @@ internal static class CrashLog
             // Best-effort — diagnostics must never crash the process.
         }
     }
+
+    /// <summary>
+    /// Returns the trailing <paramref name="maxChars"/> characters of the
+    /// configured crash-log file, or <see langword="null"/> when the file
+    /// does not exist or cannot be read. Used to attach recent crash
+    /// context to a feedback report on the next startup. Never throws.
+    /// </summary>
+    /// <param name="maxChars">Maximum number of trailing characters to
+    /// return. Values &lt;= 0 yield <see langword="null"/>.</param>
+    public static string? ReadTail(int maxChars)
+    {
+        if (maxChars <= 0)
+            return null;
+
+        string path;
+        lock (Gate) path = s_path;
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+
+            var text = File.ReadAllText(path);
+            return text.Length <= maxChars ? text : text[^maxChars..];
+        }
+        catch
+        {
+            // Best-effort — diagnostics must never crash the process.
+            return null;
+        }
+    }
 }
