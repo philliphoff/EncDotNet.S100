@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -439,29 +440,82 @@ internal sealed class SettingsViewModel : ViewModelBase
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
     }
 
-    private bool _enableVectorRasterization;
+    private bool _vectorSnapshotEnabled;
     /// <summary>
-    /// Experimental: when true, S-100 vector layers are wrapped in a
-    /// rasterising tile cache for higher pan/zoom frame rate at the
-    /// cost of vector crispness during gestures. Toggling triggers a
-    /// full re-render via <c>MarinerChanged</c>.
+    /// Whether the raster vector-layer snapshot fast path is enabled. The "best"
+    /// default (on). Toggling pushes the value to
+    /// <see cref="RenderingOptimizations.VectorSnapshotEnabled"/> and triggers a
+    /// full re-render via <c>MarinerChanged</c> so layers are re-tagged.
     /// </summary>
-    public bool EnableVectorRasterization
+    public bool VectorSnapshotEnabled
     {
-        get => _enableVectorRasterization;
-        set { if (SetProperty(ref _enableVectorRasterization, value)) { _settings.EnableVectorRasterization = value; RaiseMarinerChanged(); } }
+        get => _vectorSnapshotEnabled;
+        set
+        {
+            if (SetProperty(ref _vectorSnapshotEnabled, value))
+            {
+                _settings.VectorSnapshotEnabled = value;
+                RenderingOptimizations.VectorSnapshotEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
     }
 
-    private bool _enableGeometrySimplification;
+    private bool _vectorSnapshotPrebuildEnabled;
     /// <summary>
-    /// When true, vector layers run their line geometries through a
-    /// resolution-aware Douglas-Peucker simplifier (issue #164).
-    /// Toggling triggers a full re-render via <c>MarinerChanged</c>.
+    /// Whether the off-thread snapshot prebuild is enabled. The "best" default
+    /// (on); only meaningful when <see cref="VectorSnapshotEnabled"/> is on.
     /// </summary>
-    public bool EnableGeometrySimplification
+    public bool VectorSnapshotPrebuildEnabled
     {
-        get => _enableGeometrySimplification;
-        set { if (SetProperty(ref _enableGeometrySimplification, value)) { _settings.EnableGeometrySimplification = value; RaiseMarinerChanged(); } }
+        get => _vectorSnapshotPrebuildEnabled;
+        set
+        {
+            if (SetProperty(ref _vectorSnapshotPrebuildEnabled, value))
+            {
+                _settings.VectorSnapshotPrebuildEnabled = value;
+                RenderingOptimizations.VectorSnapshotPrebuildEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    private bool _vectorPathCacheEnabled;
+    /// <summary>
+    /// Whether the translation-invariant vector path cache is enabled. The "best"
+    /// default (on).
+    /// </summary>
+    public bool VectorPathCacheEnabled
+    {
+        get => _vectorPathCacheEnabled;
+        set
+        {
+            if (SetProperty(ref _vectorPathCacheEnabled, value))
+            {
+                _settings.VectorPathCacheEnabled = value;
+                RenderingOptimizations.VectorPathCacheEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    private bool _lineSimplificationEnabled;
+    /// <summary>
+    /// Whether resolution-aware line simplification is enabled. The "best"
+    /// default (on); requires <see cref="VectorPathCacheEnabled"/>.
+    /// </summary>
+    public bool LineSimplificationEnabled
+    {
+        get => _lineSimplificationEnabled;
+        set
+        {
+            if (SetProperty(ref _lineSimplificationEnabled, value))
+            {
+                _settings.LineSimplificationEnabled = value;
+                RenderingOptimizations.LineSimplificationEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -575,8 +629,19 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
-        _enableVectorRasterization = settings.EnableVectorRasterization ?? false;
-        _enableGeometrySimplification = settings.EnableGeometrySimplification ?? false;
+        _vectorSnapshotEnabled = settings.VectorSnapshotEnabled ?? true;
+        _vectorSnapshotPrebuildEnabled = settings.VectorSnapshotPrebuildEnabled ?? true;
+        _vectorPathCacheEnabled = settings.VectorPathCacheEnabled ?? true;
+        _lineSimplificationEnabled = settings.LineSimplificationEnabled ?? true;
+
+        // Push the persisted render-optimization preferences into the renderer.
+        // Writes are ignored for any knob pinned by an explicit environment
+        // variable (the perf A/B harness), so harness runs stay faithful.
+        RenderingOptimizations.VectorSnapshotEnabled = _vectorSnapshotEnabled;
+        RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
+        RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
+        RenderingOptimizations.LineSimplificationEnabled = _lineSimplificationEnabled;
+
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 

@@ -377,13 +377,22 @@ geometry — is delegated unchanged to the wrapped Mapsui renderer.
 
 ### Tuning
 
+The four headline optimizations — the path cache, line simplification, the raster
+snapshot, and the off-thread snapshot prebuild — are surfaced as user-facing knobs
+in the viewer under **Settings → Map → Rendering optimizations**, backed by
+[`RenderingOptimizations`](RenderingOptimizations.cs). All four default **on** (the
+"best" set). The environment variables below seed those defaults and, when set
+*explicitly*, pin the value so the perf A/B harness stays faithful — an explicit
+env var always wins over the persisted viewer setting. The remaining variables
+(margins, refresh fraction, diagnostics) are advanced and env-only.
+
 | Environment variable | Default | Effect |
 |---|---|---|
-| `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. |
-| `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). |
-| `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. |
+| `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. Also bound by *Settings → Map → Cache projected vector paths*. |
+| `S100_VECTOR_SIMPLIFY_PX` | `0.6` | Line simplification tolerance in screen pixels; `0` disables simplification (vertex-exact paths). The on/off state is bound by *Settings → Map → Simplify dense line geometry*. |
+| `S100_VECTOR_PICTURE_SNAPSHOT` | on | `0`/`false` disables the raster vector-layer snapshot fast path (see below); falls back to per-feature drawing every frame. Also bound by *Settings → Map → Raster snapshot on pan*. |
 | `S100_VECTOR_SNAPSHOT_MARGIN` | `256` | Pixels of off-screen margin recorded around the viewport, so a pan can travel this far before the snapshot is re-recorded. |
-| `S100_VECTOR_SNAPSHOT_PREBUILD` | on | `0`/`false` disables the off-thread pre-build (see below) and falls back to the single-image snapshot (synchronous re-record on zoom and on a pan past the margin). |
+| `S100_VECTOR_SNAPSHOT_PREBUILD` | on | `0`/`false` disables the off-thread pre-build (see below) and falls back to the single-image snapshot (synchronous re-record on zoom and on a pan past the margin). Also bound by *Settings → Map → Off-thread snapshot prebuild*. |
 | `S100_VECTOR_SNAPSHOT_PAN_MARGIN` | `512` | Pixels of margin used for off-thread *pan* re-records (the sustained-pan look-ahead). Larger than `…_MARGIN` so one recentred-ahead background record covers roughly a full viewport of travel. Only used when the pre-build is on. |
 | `S100_VECTOR_SNAPSHOT_PAN_REFRESH` | `0.5` | Fraction (0–1) of the active snapshot's margin at which the off-thread pan re-record is triggered (while the image still fully covers the view). Smaller = earlier/more frequent; larger = more deferred. Only used when the pre-build is on. |
 | `S100_VECTOR_SNAPSHOT_DIAG` | off | `1`/`true` logs record / replay / stale / live-on-scale-band / prebuild-publish / pan-refresh decisions to stderr. |

@@ -95,21 +95,26 @@ A 3,000-vertex polyline (typical coastline / depth contour) costs
 ~2.8 ms per draw. Drawing 4,000 such polylines per paint = 11 seconds
 of paint wall-time over a ~60 s measurement window.
 
-### 5. RasterizingTileLayer prototype: workload-dependent
+### 5. RasterizingTileLayer prototype: removed
 
-`S100RasterizingTileLayer` (gated by the `EnableVectorRasterization`
-viewer setting) wraps a `MemoryLayer` in Mapsui's tile-cached vector
-layer. Picking is preserved by delegating `GetFeatures` to the
-underlying source layer.
+An earlier `S100RasterizingTileLayer` prototype (gated by a now-removed
+`EnableVectorRasterization` viewer setting) wrapped a `MemoryLayer` in
+Mapsui's tile-cached vector layer. Its measured behaviour was
+workload-dependent:
 
 | | OFF | ON | Δ |
 |---|---:|---:|---:|
 | Mean paint (moderate single dataset) | 30.3 ms | 36.1 ms | +19% |
 | Max paint (moderate single dataset) | 136 ms | 114 ms | −16% |
 
-Tail latency improves under heavy load when the cache warms; mean
-regresses on lighter loads. Right call to keep as an opt-in
-experimental setting, not safe to default-on.
+Tail latency improved under heavy load when the cache warmed, but mean
+regressed on lighter loads — never safe to default-on. It has since been
+**superseded** by the raster vector snapshot
+(`S100VectorSnapshotRenderer`), which delivers the same pan-time win
+without the mean-paint regression, so the prototype and its setting were
+removed. The four current optimizations (path cache, line simplification,
+raster snapshot, off-thread snapshot prebuild) are now exposed under
+**Settings → Map → Rendering optimizations** and all default on.
 
 ## What this rules out
 
@@ -214,7 +219,6 @@ Files added on this branch:
 - `src/EncDotNet.S100.Viewer/Diagnostics/MapPaintInstrumentation.cs`
 - `src/EncDotNet.S100.Viewer/Diagnostics/GpuAccelerationProbe.cs`
 - `src/EncDotNet.S100.Renderers.Mapsui/InstrumentedMemoryLayer.cs`
-- `src/EncDotNet.S100.Renderers.Mapsui/S100RasterizingTileLayer.cs`
 
 Files added by issue
 [#164](https://github.com/philliphoff/EncDotNet.S100/issues/164)

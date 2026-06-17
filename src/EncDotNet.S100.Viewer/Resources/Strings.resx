@@ -829,23 +829,41 @@
   <data name="Tooltip_IgnoreScaleMinimum" xml:space="preserve">
     <value>Always portray features regardless of cell scale-minimum attribute (S-101 PC IgnoreScaleMinimum).</value>
   </data>
-  <data name="Settings_EnableVectorRasterization" xml:space="preserve">
-    <value>Rasterize vector layers (experimental)</value>
+  <data name="Settings_VectorSnapshotEnabled" xml:space="preserve">
+    <value>Raster snapshot on pan</value>
   </data>
-  <data name="Tooltip_EnableVectorRasterization" xml:space="preserve">
-    <value>Cache S-100 vector layers as raster tiles for higher pan/zoom frame rate. Trades vector crispness during gestures for performance on large datasets.</value>
+  <data name="Tooltip_VectorSnapshotEnabled" xml:space="preserve">
+    <value>Record a settled vector layer to an image once and blit it under translation during pans, so a pan costs one textured blit instead of redrawing every feature. The biggest win on dense datasets; recommended on.</value>
   </data>
-  <data name="Settings_EnableGeometrySimplification" xml:space="preserve">
-    <value>Simplify line geometry (experimental)</value>
+  <data name="Settings_VectorSnapshotPrebuildEnabled" xml:space="preserve">
+    <value>Off-thread snapshot prebuild</value>
   </data>
-  <data name="Tooltip_EnableGeometrySimplification" xml:space="preserve">
-    <value>Apply resolution-aware Douglas-Peucker simplification to S-100 line features at render time, with a per-zoom cache (issue #164). Speeds up paint on dense ENC line data; polygons and short lines are unaffected.</value>
+  <data name="Tooltip_VectorSnapshotPrebuildEnabled" xml:space="preserve">
+    <value>Rasterize snapshots on a background thread to hide the one-time record stall on zoom and during sustained pans. Only applies when "Raster snapshot on pan" is on. Recommended on.</value>
+  </data>
+  <data name="Settings_VectorPathCacheEnabled" xml:space="preserve">
+    <value>Cache projected vector paths</value>
+  </data>
+  <data name="Tooltip_VectorPathCacheEnabled" xml:space="preserve">
+    <value>Build each geometry's projected path once per zoom level and reuse it across pans, instead of rebuilding and re-stroking it every frame. Recommended on.</value>
+  </data>
+  <data name="Settings_LineSimplificationEnabled" xml:space="preserve">
+    <value>Simplify dense line geometry</value>
+  </data>
+  <data name="Tooltip_LineSimplificationEnabled" xml:space="preserve">
+    <value>Drop on-screen sub-pixel vertices from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on.</value>
   </data>
   <data name="Settings_MapSection" xml:space="preserve">
     <value>Map</value>
   </data>
   <data name="Settings_MapSection_Help" xml:space="preserve">
-    <value>Background map shown beneath the chart data.</value>
+    <value>Background map and rendering performance options.</value>
+  </data>
+  <data name="Settings_MapOptimizationsSubsection" xml:space="preserve">
+    <value>Rendering optimizations</value>
+  </data>
+  <data name="Settings_MapOptimizationsSubsection_Help" xml:space="preserve">
+    <value>Speed up panning and zooming on dense charts. All are on by default; turn one off only to compare rendering behaviour.</value>
   </data>
   <data name="Settings_BasemapEnabled" xml:space="preserve">
     <value>Show online basemap</value>

@@ -669,6 +669,9 @@ application-data location. Persisted across sessions:
 - Per-spec viewing-group overrides and display-plane toggles.
 - Mariner depth / distance units and contour values.
 - Simulated own-ship overlay enable, visibility, and vessel geometry.
+- Map rendering optimizations (raster snapshot, off-thread snapshot
+  prebuild, vector path cache, line simplification) — all default on
+  (**Settings → Map → Rendering optimizations**).
 - MCP server enable / disable.
 
 Older settings shapes are migrated forward silently; missing values

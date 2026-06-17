@@ -39,8 +39,11 @@ public sealed record SimplificationOptions(
     long MaxCachedCoordinates = 5_000_000)
 {
     /// <summary>
-    /// Default options — what the viewer's
-    /// <c>EnableGeometrySimplification</c> setting enables.
+    /// Default options for the standalone <see cref="InstrumentedMemoryLayer"/>
+    /// simplifier (issue #164). The production line-simplification knob
+    /// (<c>Settings → Map</c>) is served by
+    /// <see cref="CachedVectorStyleRenderer"/> instead; see
+    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/>.
     /// </summary>
     public static SimplificationOptions Default { get; } = new();
 }
