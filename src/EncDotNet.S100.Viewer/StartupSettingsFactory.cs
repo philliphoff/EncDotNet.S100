@@ -69,6 +69,9 @@ internal static class StartupSettingsFactory
         if (options.DisplayCategory is { } category && !string.IsNullOrWhiteSpace(category))
             settings.EcdisDisplayCategory =
                 NormalizeEnum<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(category, settings.EcdisDisplayCategory);
+
+        if (options.Basemap is { } basemapEnabled)
+            settings.BasemapEnabled = basemapEnabled;
     }
 
     private static string NormalizeEnum<TEnum>(string value, string fallback) where TEnum : struct, Enum =>

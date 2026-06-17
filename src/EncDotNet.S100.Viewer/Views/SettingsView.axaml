@@ -161,6 +161,20 @@
                 </ComboBox>
             </StackPanel>
 
+            <!-- Map (issue #295) -->
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MapSection}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MapSection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_BasemapEnabled}"
+                      IsChecked="{Binding BasemapEnabled}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_BasemapEnabled}" />
+
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />
             <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection}"

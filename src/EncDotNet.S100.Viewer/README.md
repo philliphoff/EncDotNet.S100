@@ -575,6 +575,13 @@ zoom-to-extent so the framing is reproducible.
 capture before a screenshot. These override the persisted values for
 the run only.
 
+**Basemap.** `--basemap true|false` shows or hides the online
+OpenStreetMap basemap for the run, overriding the persisted setting
+(which is also exposed as a toggle in **Settings → Map**; default on).
+Disable it for offline operation, or for performance runs that want to
+measure only dataset rendering without basemap tile fetch / raster
+activity (issue #295).
+
 **Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course
 over ground (degrees true `[0, 360)`), and `--own-ship-sog <MS>` sets

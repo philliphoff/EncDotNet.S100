@@ -311,6 +311,10 @@ internal static class Strings
     public static string Tooltip_EnableVectorRasterization => Get(nameof(Tooltip_EnableVectorRasterization));
     public static string Settings_EnableGeometrySimplification => Get(nameof(Settings_EnableGeometrySimplification));
     public static string Tooltip_EnableGeometrySimplification => Get(nameof(Tooltip_EnableGeometrySimplification));
+    public static string Settings_MapSection => Get(nameof(Settings_MapSection));
+    public static string Settings_MapSection_Help => Get(nameof(Settings_MapSection_Help));
+    public static string Settings_BasemapEnabled => Get(nameof(Settings_BasemapEnabled));
+    public static string Tooltip_BasemapEnabled => Get(nameof(Tooltip_BasemapEnabled));
     public static string Settings_NationalLanguage => Get(nameof(Settings_NationalLanguage));
     public static string Tooltip_NationalLanguage => Get(nameof(Tooltip_NationalLanguage));
     public static string Settings_NationalLanguage_Default => Get(nameof(Settings_NationalLanguage_Default));
