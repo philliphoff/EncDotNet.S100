@@ -204,6 +204,18 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
 
+      - name: Disable NuGet source mapping for signing
+        # azure/trusted-signing-action installs its tooling (the `sign` CLI,
+        # Microsoft.Trusted.Signing.Client, SDK build tools) with
+        # `dotnet tool install --add-source`, which NuGet refuses to combine
+        # with package source mapping (our repo nuget.config maps all packages
+        # to nuget.org). Every project restore is already complete by this
+        # point, so move the config aside for the signing tool install; the
+        # "Restore NuGet config" step below puts it back.
+        if: startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: Move-Item nuget.config nuget.config.bak
+
       - name: Sign Windows binaries (Azure Trusted Signing)
         # Authenticode-sign the published Windows executables before they are
         # archived, so both the viewer zip and the standalone s100 CLI zip
@@ -227,6 +239,13 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+
+      - name: Restore NuGet config
+        # Counterpart to "Disable NuGet source mapping for signing". Runs even
+        # if signing failed so the workspace is left in a consistent state.
+        if: always() && startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: if (Test-Path nuget.config.bak) { Move-Item -Force nuget.config.bak nuget.config }
 
       - name: Verify Windows signatures
         if: startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
