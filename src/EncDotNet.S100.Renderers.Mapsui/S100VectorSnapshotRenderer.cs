@@ -64,9 +64,14 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// wrappers are all honoured — in the same draw order
 /// (<see cref="ILayer.SortFeatures"/> over <see cref="ILayer.GetFeatures"/>,
 /// layer style first then per-feature styles). The replayed pixels are therefore
-/// identical to a live frame (modulo a single linear resample during sub-pixel
-/// pans). Rotated viewports fall back to live per-feature drawing (no image),
-/// preserving correctness.
+/// identical to a live frame at the <i>same</i> resolution (modulo a single
+/// linear resample during sub-pixel pans). A raster recorded at one resolution
+/// is only reused (scaled) at another when no scale-visibility boundary
+/// (<c>MinVisible</c>/<c>MaxVisible</c>, e.g. the S-101 out-of-band cap) lies
+/// between the two resolutions; otherwise the layer is drawn live for that frame
+/// so a feature that is shown at one zoom but hidden at the other never blits
+/// from the wrong-resolution image. Rotated viewports likewise fall back to live
+/// per-feature drawing (no image), preserving correctness.
 /// </para>
 /// <para>
 /// <b>Lifetime.</b> Snapshot state is held per <see cref="ILayer"/> instance in
@@ -374,6 +379,7 @@ public static class S100VectorSnapshotRenderer
 
         SKImage? toBlit;
         SKRect dest;
+        var drawLive = false;
 
         lock (state.Sync)
         {
@@ -413,15 +419,41 @@ public static class S100VectorSnapshotRenderer
                 if (staleIndex >= 0)
                 {
                     var stale = state.Entries[staleIndex];
-                    stale.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
-                    (toBlit, dest) = BlitOf(stale, viewport, resolution);
 
-                    if (s_diag)
+                    // A scaled-stale blit reuses a raster recorded at a different
+                    // resolution. That is only sound when the set of styles passing
+                    // scale visibility cannot differ between the two resolutions;
+                    // across the S-101 out-of-band cap (or any MinVisible/MaxVisible
+                    // boundary) the recorded image would show the wrong feature set
+                    // (e.g. buoys present at one zoom but capped-hidden at the
+                    // other). When membership may differ, draw the layer live for
+                    // this frame (feature-correct, like the rotated-viewport path)
+                    // while the exact-resolution image records off-thread.
+                    if (VisibleSetMayDiffer(GetVisibilityThresholds(state, layer, featureCount), stale.Resolution, resolution))
                     {
-                        Console.Error.WriteLine($"[VecSnapshot] STALE blit res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
-                    }
+                        toBlit = null;
+                        dest = default;
+                        drawLive = true;
 
-                    EnsureAsyncRecord(state, layer, viewport, resolution, featureCount, scale);
+                        if (s_diag)
+                        {
+                            Console.Error.WriteLine($"[VecSnapshot] LIVE (scale-band) res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
+                        }
+
+                        EnsureAsyncRecord(state, layer, viewport, resolution, featureCount, scale);
+                    }
+                    else
+                    {
+                        stale.LastUsedTick = System.Threading.Interlocked.Increment(ref s_tick);
+                        (toBlit, dest) = BlitOf(stale, viewport, resolution);
+
+                        if (s_diag)
+                        {
+                            Console.Error.WriteLine($"[VecSnapshot] STALE blit res={resolution:G6} from={stale.Resolution:G6} feats={featureCount} entries={state.Entries.Count}");
+                        }
+
+                        EnsureAsyncRecord(state, layer, viewport, resolution, featureCount, scale);
+                    }
                 }
                 else if (FindNearestSameResolutionEntry(state, viewport, resolution, featureCount) is { } nearest)
                 {
@@ -462,7 +494,11 @@ public static class S100VectorSnapshotRenderer
             }
         }
 
-        if (toBlit is not null)
+        if (drawLive)
+        {
+            DrawLayerLive(canvas, viewport, layer, viewport.ToExtent(), renderService);
+        }
+        else if (toBlit is not null)
         {
             canvas.DrawImage(toBlit, dest, s_sampling);
         }
@@ -520,6 +556,122 @@ public static class S100VectorSnapshotRenderer
         var tx = (anchor.RecordCenterX - centerX) / resolution + (width - anchor.RecordWidth) / 2.0;
         var ty = (centerY - anchor.RecordCenterY) / resolution + (height - anchor.RecordHeight) / 2.0;
         return (tx, ty);
+    }
+
+    /// <summary>
+    /// <c>true</c> when the set of styles that pass scale visibility
+    /// (<c>MinVisible &lt;= resolution &lt;= MaxVisible</c>) <i>could</i> differ
+    /// between <paramref name="resolutionA"/> and <paramref name="resolutionB"/>,
+    /// i.e. a recorded raster at one resolution must not be reused (even scaled)
+    /// at the other because a feature/style that is hidden at one is shown at the
+    /// other. This is the case exactly when one of <paramref name="thresholds"/>
+    /// (the distinct <c>MinVisible</c>/<c>MaxVisible</c> boundaries present on the
+    /// layer) lies within the closed interval spanned by the two resolutions.
+    /// Conservative: boundary-touching thresholds count as "may differ" so a
+    /// scaled-stale blit is never used across a scale-visibility transition (the
+    /// S-101 out-of-band cap being the dominant case). Pure and testable.
+    /// </summary>
+    internal static bool VisibleSetMayDiffer(IReadOnlyList<double> thresholds, double resolutionA, double resolutionB)
+    {
+        if (thresholds is null || thresholds.Count == 0 || resolutionA == resolutionB)
+        {
+            return false;
+        }
+
+        var lo = Math.Min(resolutionA, resolutionB);
+        var hi = Math.Max(resolutionA, resolutionB);
+        for (var i = 0; i < thresholds.Count; i++)
+        {
+            var t = thresholds[i];
+            if (t >= lo && t <= hi)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Collects the distinct, finite scale-visibility boundaries
+    /// (<c>MinVisible</c> and <c>MaxVisible</c>) present across the layer's style
+    /// and its features' styles. Default-unbounded limits (<c>MinVisible == 0</c>,
+    /// <c>MaxVisible == double.MaxValue</c>) are excluded because they never flip
+    /// membership. Used by <see cref="VisibleSetMayDiffer"/> to decide whether a
+    /// cross-resolution stale blit is membership-safe. Only the in-memory feature
+    /// collection is consulted (the S-101 vector layers are <see cref="MemoryLayer"/>);
+    /// for any other layer kind an empty set is returned, preserving the prior
+    /// scaled-stale-blit behaviour.
+    /// </summary>
+    private static double[] CollectVisibilityThresholds(ILayer layer)
+    {
+        var set = new SortedSet<double>();
+
+        void Collect(IStyle? style)
+        {
+            if (style is null)
+            {
+                return;
+            }
+
+            var min = style.MinVisible;
+            if (min > 0 && !double.IsInfinity(min) && min < double.MaxValue)
+            {
+                set.Add(min);
+            }
+
+            var max = style.MaxVisible;
+            if (max > 0 && !double.IsInfinity(max) && max < double.MaxValue)
+            {
+                set.Add(max);
+            }
+
+            if (style is StyleCollection collection)
+            {
+                foreach (var child in collection.Styles)
+                {
+                    Collect(child);
+                }
+            }
+        }
+
+        Collect(layer.Style);
+
+        if (layer is MemoryLayer memoryLayer && memoryLayer.Features is { } features)
+        {
+            foreach (var feature in features)
+            {
+                if (feature.Styles is null)
+                {
+                    continue;
+                }
+
+                foreach (var style in feature.Styles)
+                {
+                    Collect(style);
+                }
+            }
+        }
+
+        var array = new double[set.Count];
+        set.CopyTo(array);
+        return array;
+    }
+
+    /// <summary>
+    /// Returns the layer's cached scale-visibility thresholds, recomputing them
+    /// when absent or when the visible feature count has changed (the same guard
+    /// that forces a re-record). Caller must hold <c>state.Sync</c>.
+    /// </summary>
+    private static IReadOnlyList<double> GetVisibilityThresholds(SnapshotState state, ILayer layer, int featureCount)
+    {
+        if (state.VisibilityThresholds is null || state.ThresholdsFeatureCount != featureCount)
+        {
+            state.VisibilityThresholds = CollectVisibilityThresholds(layer);
+            state.ThresholdsFeatureCount = featureCount;
+        }
+
+        return state.VisibilityThresholds;
     }
 
     /// <summary>
@@ -1303,6 +1455,13 @@ public static class S100VectorSnapshotRenderer
         public double PrevResolution;
         public double LastResolution;
         public readonly HashSet<double> InFlight = new();
+
+        // Cached scale-visibility boundaries (distinct MinVisible/MaxVisible) for
+        // the current feature set, used to decide whether a cross-resolution stale
+        // blit could paint a feature set inconsistent with the current resolution.
+        // Recomputed when the feature count changes (same guard as a re-record).
+        public double[]? VisibilityThresholds;
+        public int ThresholdsFeatureCount = int.MinValue;
 
         // Sustained-pan look-ahead: at most one off-thread same-resolution
         // recentred re-record is in flight at a time.
