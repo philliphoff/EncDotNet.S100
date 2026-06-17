@@ -26,6 +26,17 @@ internal static class LatLonFormatter
     public static string Format(double latitude, double longitude) =>
         $"{FormatDegMin(latitude, 'N', 'S', 2)}  {FormatDegMin(longitude, 'E', 'W', 3)}";
 
+    /// <summary>
+    /// Formats a (latitude, longitude) pair as signed decimal degrees,
+    /// e.g. <c>"47.601234, -122.334567"</c>. This machine-friendly form is
+    /// what the pick panel places on the clipboard so the coordinate can be
+    /// pasted straight into tools and scripts during debugging.
+    /// </summary>
+    public static string FormatDecimal(double latitude, double longitude) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{latitude:0.000000}, {longitude:0.000000}");
+
     private static string FormatDegMin(double value, char positive, char negative, int degWidth)
     {
         var hemi = value >= 0 ? positive : negative;

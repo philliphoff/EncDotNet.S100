@@ -131,7 +131,7 @@ internal sealed class PickService : IPickService
             // grid and returns a synthesised feature.
             if (TryCoveragePick(mapInfo, out var coverageHit))
             {
-                _pickReport.SetPicks(new[] { coverageHit });
+                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), TryGetLocation(mapInfo));
                 _status.StatusText = string.Format(
                     Strings.Status_FeatureSummary,
                     coverageHit.FeatureTypeName ?? coverageHit.FeatureType,
@@ -146,7 +146,7 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        _pickReport.SetPicks(hits, dynamic);
+        _pickReport.SetPicks(hits, dynamic, TryGetLocation(mapInfo));
 
         // Status text follows the first hit. Dataset hits take
         // precedence (their labels carry more dataset context); fall
@@ -355,6 +355,22 @@ internal sealed class PickService : IPickService
         owningEntry = null!;
         processor = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Projects the pick's world position to WGS84 and wraps it as a
+    /// <see cref="PickLocation"/>. Returns <c>null</c> when the
+    /// <see cref="MapInfo"/> carries no world position (e.g. a pick that
+    /// originated outside the map surface).
+    /// </summary>
+    private static PickLocation? TryGetLocation(MapInfo mapInfo)
+    {
+        if (mapInfo.WorldPosition is not { } world)
+            return null;
+
+        // SphericalMercator → WGS84. Mapsui returns (lon, lat).
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        return new PickLocation(lat, lon);
     }
 
     private bool TryCoveragePick(MapInfo mapInfo, out PickHit hit)

@@ -115,6 +115,7 @@ internal static class Strings
     public static string Tooltip_ClosePickPanel => Get(nameof(Tooltip_ClosePickPanel));
     public static string Tooltip_SelectHit => Get(nameof(Tooltip_SelectHit));
     public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
+    public static string Tooltip_CopyLocation => Get(nameof(Tooltip_CopyLocation));
     public static string Tooltip_Search => Get(nameof(Tooltip_Search));
     public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
     public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
@@ -240,6 +241,7 @@ internal static class Strings
     public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));
     public static string Pick_ReferencesHeader => Get(nameof(Pick_ReferencesHeader));
     public static string Pick_ReferenceItemFormat => Get(nameof(Pick_ReferenceItemFormat));
+    public static string Pick_LocationHeader => Get(nameof(Pick_LocationHeader));
 
     // Pick panel: station time-series chart
     public static string Pick_Chart_Title_WaterLevel => Get(nameof(Pick_Chart_Title_WaterLevel));
