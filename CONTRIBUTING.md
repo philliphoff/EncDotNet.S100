@@ -114,6 +114,61 @@ group paths.
   localization and UI rules in `.github/instructions/viewer.instructions.md`
   (every user-facing string lives in `Resources/Strings.resx`).
 
+## Release signing
+
+The `publish` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+code-signs the desktop viewer and the standalone `s100` CLI for macOS and
+Windows. Both are **gated to non-PR runs** (pushes to `main` and `v*` tags) and
+are skipped automatically when the required secrets are absent, so forks and
+pull requests build unsigned artifacts without failing.
+
+### macOS (Developer ID + notarization)
+
+Signing/notarization runs when `APPLE_DEVELOPER_CERTIFICATE_P12` is present.
+Required repository **secrets**: `APPLE_DEVELOPER_CERTIFICATE_P12`,
+`APPLE_DEVELOPER_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+`APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
+
+### Windows (Azure Trusted Signing)
+
+The Windows `.exe`s are Authenticode-signed with
+[Azure Trusted Signing](https://azure.microsoft.com/products/trusted-signing)
+via the [`azure/trusted-signing-action`](https://github.com/Azure/trusted-signing-action).
+Signing runs when `AZURE_CLIENT_ID` is present.
+
+One-time Azure setup:
+
+1. Create a **Trusted Signing Account** and a **Public Trust** certificate
+   profile, and complete Microsoft identity validation. ("Private Trust"
+   profiles do **not** clear SmartScreen warnings.)
+2. Register a single-tenant **App registration** (its service principal is the
+   CI identity) and add a **client secret**.
+3. On the Trusted Signing Account's **Access control (IAM)**, assign the app
+   the **Trusted Signing Certificate Profile Signer** role. Without this the
+   signing step fails with `403 Forbidden`.
+
+Required repository **secrets** (from the app registration):
+
+| Secret | Source |
+|---|---|
+| `AZURE_TENANT_ID` | App registration → Overview → Directory (tenant) ID |
+| `AZURE_CLIENT_ID` | App registration → Overview → Application (client) ID |
+| `AZURE_CLIENT_SECRET` | App registration → Certificates & secrets → secret **Value** |
+
+Required repository **variables** (non-secret, account-specific, case-sensitive):
+
+| Variable | Source |
+|---|---|
+| `AZURE_SIGNING_ENDPOINT` | Trusted Signing Account → Overview → Account URI (e.g. `https://wus2.codesigning.azure.net/`) |
+| `AZURE_SIGNING_ACCOUNT_NAME` | Trusted Signing Account name |
+| `AZURE_SIGNING_PROFILE_NAME` | Certificate profile name |
+
+The workflow signs every `.exe` under the viewer publish folder (covering both
+the viewer and the bundled `cli/s100.exe`) before archiving, then a "Verify
+Windows signatures" step asserts `Get-AuthenticodeSignature` returns `Valid`.
+The identity is OV-level, so SmartScreen reputation accrues over downloads
+rather than instantly.
+
 ## Branch & pull-request workflow
 
 1. Create a topic branch off `main` (e.g. `fix-s104-trend-flag` or

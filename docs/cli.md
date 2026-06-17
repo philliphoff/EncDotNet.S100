@@ -38,7 +38,8 @@ tar -xzf s100-<version>-<rid>.tar.gz
 
 The macOS archive is code-signed and notarized, so Gatekeeper verifies it
 online on first launch. If a copied binary is still quarantined, clear the
-attribute with `xattr -d com.apple.quarantine ./s100`.
+attribute with `xattr -d com.apple.quarantine ./s100`. The Windows `s100.exe`
+is Authenticode-signed via Azure Trusted Signing.
 
 The same `s100` executable also ships inside the S-100 Viewer application
 bundle (under `cli/`); see the project README for that layout.

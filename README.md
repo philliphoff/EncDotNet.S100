@@ -265,7 +265,8 @@ dotnet run --project src/EncDotNet.S100.Viewer
 
 Pre-built per-platform binaries are attached to every
 [release](https://github.com/philliphoff/EncDotNet.S100/releases).
-The macOS DMG is Developer-ID signed and Apple-notarized; Windows
+The macOS DMG is Developer-ID signed and Apple-notarized; the Windows
+`.exe` is Authenticode-signed via Azure Trusted Signing. Windows
 ships as architecture-tagged `zip` archives and Linux as
 architecture-tagged `tar.gz` archives. The standalone `s100`
 command-line tool is also attached per platform as
