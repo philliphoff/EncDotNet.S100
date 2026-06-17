@@ -33,6 +33,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private string? _productSpec;
     private bool _hasPick;
     private PickHit? _selectedHit;
+    private PickLocation? _location;
 
     public PickReportViewModel()
         : this(timeFormat: null, marinerSettings: null)
@@ -51,6 +52,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         _timeFormat = timeFormat;
         _marinerSettings = marinerSettings;
         ClearCommand = new RelayCommand(Clear);
+        CopyLocationCommand = new RelayCommand(
+            () => { if (_location is { } loc) CopyLocationRequested?.Invoke(this, LatLonFormatter.FormatDecimal(loc.Latitude, loc.Longitude)); },
+            () => _location is not null);
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
@@ -228,6 +232,38 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// </summary>
     public bool HasDatasetPick => Hits.Count > 0;
 
+    /// <summary>
+    /// Geographic location (WGS84) of the click that produced the current
+    /// pick, or <c>null</c> when the pick carries no location (e.g. a
+    /// programmatic open via feature search). Set by the pick service from
+    /// the map's world position.
+    /// </summary>
+    public PickLocation? Location
+    {
+        get => _location;
+        private set
+        {
+            if (Nullable.Equals(_location, value))
+                return;
+            _location = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasLocation));
+            OnPropertyChanged(nameof(LocationDisplay));
+            (CopyLocationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>True when a pick location is available to display and copy.</summary>
+    public bool HasLocation => _location is not null;
+
+    /// <summary>
+    /// Mariner-friendly degrees-decimal-minutes rendering of
+    /// <see cref="Location"/> for display in the panel, or <c>null</c> when
+    /// no location is available.
+    /// </summary>
+    public string? LocationDisplay =>
+        _location is { } loc ? LatLonFormatter.Format(loc.Latitude, loc.Longitude) : null;
+
     /// <inheritdoc />
     public event EventHandler? ContentBecameAvailable;
 
@@ -295,6 +331,21 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>Clears the panel.</summary>
     public ICommand ClearCommand { get; }
+
+    /// <summary>
+    /// Copies <see cref="Location"/> to the clipboard as signed decimal
+    /// degrees. Enabled only when <see cref="HasLocation"/> is true; raises
+    /// <see cref="CopyLocationRequested"/> with the clipboard text so the
+    /// view owns the actual clipboard access (keeping the view-model
+    /// unit-testable without a clipboard backend).
+    /// </summary>
+    public ICommand CopyLocationCommand { get; }
+
+    /// <summary>
+    /// Raised when the user invokes <see cref="CopyLocationCommand"/>. The
+    /// payload is the clipboard-ready coordinate text.
+    /// </summary>
+    public event EventHandler<string>? CopyLocationRequested;
 
     /// <summary>
     /// "Take the helm of this vessel" (pirate mode). Parameter is the
@@ -365,9 +416,17 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// behaviour); when only dynamic hits are present the detail view
     /// is left empty and only the dynamic section is shown.
     /// </summary>
+    /// <param name="hits">Dataset-owned feature hits.</param>
+    /// <param name="dynamicHits">Dynamic-source hits (AIS, own-ship, …).</param>
+    /// <param name="location">
+    /// Geographic location of the click that produced the pick, or
+    /// <c>null</c> when no location is available (e.g. a programmatic
+    /// open). Surfaced in the panel and copyable to the clipboard.
+    /// </param>
     public void SetPicks(
         IReadOnlyList<PickHit> hits,
-        IReadOnlyList<DynamicPickHit> dynamicHits)
+        IReadOnlyList<DynamicPickHit> dynamicHits,
+        PickLocation? location = null)
     {
         ArgumentNullException.ThrowIfNull(hits);
         ArgumentNullException.ThrowIfNull(dynamicHits);
@@ -387,6 +446,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             return;
         }
 
+        Location = location;
         HasPick = true;
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
@@ -454,6 +514,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ProductSpec = null;
         Attributes.Clear();
         References.Clear();
+        Location = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(HasReferences));

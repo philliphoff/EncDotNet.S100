@@ -108,6 +108,71 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPicks_WithLocation_PopulatesLocationFields()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(
+            new[]
+            {
+                new PickHit { FeatureType = "DepthArea", FeatureRef = "42" },
+            },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(47.601234, -122.334567));
+
+        Assert.True(vm.HasLocation);
+        Assert.Equal(new PickLocation(47.601234, -122.334567), vm.Location);
+        Assert.False(string.IsNullOrEmpty(vm.LocationDisplay));
+        Assert.True(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPicks_WithoutLocation_LeavesLocationEmpty()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
+
+        Assert.False(vm.HasLocation);
+        Assert.Null(vm.Location);
+        Assert.Null(vm.LocationDisplay);
+        Assert.False(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Clear_ResetsLocation()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(10.0, 20.0));
+
+        vm.Clear();
+
+        Assert.False(vm.HasLocation);
+        Assert.Null(vm.Location);
+        Assert.False(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void CopyLocationCommand_RaisesRequestWithDecimalDegrees()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(47.601234, -122.334567));
+
+        string? copied = null;
+        vm.CopyLocationRequested += (_, text) => copied = text;
+
+        vm.CopyLocationCommand.Execute(null);
+
+        Assert.Equal("47.601234, -122.334567", copied);
+    }
+
+    [Fact]
     public void HasPickPropertyChanged_FiresOnSetPickAndClear()
     {
         var vm = new PickReportViewModel();

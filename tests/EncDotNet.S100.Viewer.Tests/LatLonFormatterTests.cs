@@ -53,4 +53,18 @@ public class LatLonFormatterTests
     {
         Assert.Equal(string.Empty, LatLonFormatter.Placeholder);
     }
+
+    [Fact]
+    public void FormatDecimal_RendersSignedDecimalDegrees()
+    {
+        var text = LatLonFormatter.FormatDecimal(47.601234, -122.334567);
+        Assert.Equal("47.601234, -122.334567", text);
+    }
+
+    [Fact]
+    public void FormatDecimal_PadsToSixDecimalPlaces()
+    {
+        var text = LatLonFormatter.FormatDecimal(0.0, 5.5);
+        Assert.Equal("0.000000, 5.500000", text);
+    }
 }

@@ -618,6 +618,13 @@
   <data name="Tooltip_FollowReference" xml:space="preserve">
     <value>Show the referenced feature's details</value>
   </data>
+  <data name="Pick_LocationHeader" xml:space="preserve">
+    <value>LOCATION</value>
+    <comment>Header above the pick location (lat/lon of the click point) in the Object Information panel.</comment>
+  </data>
+  <data name="Tooltip_CopyLocation" xml:space="preserve">
+    <value>Copy this location (decimal degrees) to the clipboard</value>
+  </data>
   <!-- Pick panel: station time-series chart -->
   <data name="Pick_Chart_Title_WaterLevel" xml:space="preserve">
     <value>Water Level</value>

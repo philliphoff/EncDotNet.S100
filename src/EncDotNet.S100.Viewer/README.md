@@ -151,6 +151,10 @@ Toggle **Pick Mode** (the cross-hair toolbar button or the
 the **Object Information** panel on the right. Each pick report
 shows:
 
+- The **location** (latitude/longitude, in degrees-decimal-minutes)
+  of the click point, with a copy button that places the coordinate
+  on the clipboard as signed decimal degrees — handy when capturing a
+  point for debugging.
 - A **hit list** of every overlapping feature — select a row to
   switch the attribute view.
 - The selected feature's class, identifier, source dataset, and

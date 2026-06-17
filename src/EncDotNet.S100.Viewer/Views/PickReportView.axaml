@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
@@ -34,6 +35,37 @@
         <StackPanel DockPanel.Dock="Top"
                     Spacing="10"
                     Margin="12,4,12,8">
+            <!-- Pick location (lat/lon of the click point). Pinned to the very
+                 top so it is always visible regardless of which feature
+                 sections are shown; selectable text plus a copy button make
+                 the coordinate easy to grab for debugging. -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8"
+                    IsVisible="{Binding HasLocation}">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Pick_LocationHeader}"
+                               FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                    <SelectableTextBlock Grid.Row="1" Grid.Column="0"
+                                         Text="{Binding LocationDisplay}"
+                                         FontSize="13"
+                                         VerticalAlignment="Center"
+                                         TextWrapping="Wrap" />
+                    <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Padding="6"
+                            Background="Transparent"
+                            Command="{Binding CopyLocationCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyLocation}">
+                        <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                </Grid>
+            </Border>
+
             <!-- Hit list (visible only when more than one feature is at this point) -->
             <Border BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="0,0,0,1"
