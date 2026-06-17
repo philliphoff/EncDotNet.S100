@@ -31,7 +31,7 @@ attaches a pre-built, self-contained app per platform:
 | Platform | Asset | First launch |
 |---|---|---|
 | macOS (Apple silicon) | `.dmg` | Signed and Apple-notarized — open the DMG and drag the app to Applications. |
-| Windows | `.zip` | Extract and run the `.exe`. |
+| Windows | `.zip` | Extract and run the `.exe`. The executable is Authenticode-signed via Azure Trusted Signing. |
 | Linux | `.tar.gz` | Extract and run the executable. See [Linux prerequisites](#linux-prerequisites) below. |
 
 #### Linux prerequisites
