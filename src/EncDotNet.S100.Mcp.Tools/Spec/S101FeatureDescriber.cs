@@ -44,6 +44,11 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// Default Z (depth/height) multiplication factor used when the dataset's
     /// DSSI record leaves <c>CMFZ</c> at zero — the S-57 SOMF convention of 10
     /// (decimetre resolution), matching the S-101 portrayal data provider.
+    /// This is a defensive fallback only: well-formed S-101 datasets encode
+    /// CMFZ in the DSSI record (S-100 Part 10a §10a-6.1.2.2; typically 100 for
+    /// centimetre depth resolution), parsed correctly as of
+    /// EncDotNet.Iso8211 0.5.1 (which fixed the <c>b48</c> 8-byte binary-control
+    /// parse), so it is not expected to fire for valid data.
     /// </summary>
     private const double DefaultZMultiplicationFactor = 10.0;
 
