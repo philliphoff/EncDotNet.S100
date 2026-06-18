@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -304,6 +305,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
+                   [Description("Optional attribute-value predicates (logical AND). Either a code→value map for equality, e.g. {\"categoryOfLateralMark\":\"1\"}, or an array of explicit predicates, e.g. [{\"attribute\":\"valueOfDepth\",\"op\":\"ge\",\"value\":\"10\"},{\"attribute\":\"objectName\",\"op\":\"exists\"}]. Operators: exists, notExists, eq, ne, contains, startsWith, gt, ge, lt, le.")] string? attributes = null,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    CancellationToken ct = default) =>
@@ -314,6 +316,7 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec),
                         featureType,
                         ParseTimeQuery(times),
+                        ParseAttributePredicates(attributes),
                         page,
                         pageSize),
                     ct));
@@ -461,6 +464,11 @@ internal static class S100McpServerToolFactory
 
     private static TimeQuery? ParseTimeQuery(string? timesJson)
         => string.IsNullOrWhiteSpace(timesJson) ? null : TimeQueryJsonReader.Parse(timesJson);
+
+    private static ImmutableArray<AttributePredicate> ParseAttributePredicates(string? attributesJson)
+        => string.IsNullOrWhiteSpace(attributesJson)
+            ? ImmutableArray<AttributePredicate>.Empty
+            : AttributePredicateJsonReader.Parse(attributesJson);
 
     private static GeoPolyline ParsePolyline(string polylineJson)
     {

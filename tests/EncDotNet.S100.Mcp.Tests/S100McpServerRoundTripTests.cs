@@ -338,6 +338,104 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task QueryFeatures_round_trip_with_attributes_filters_on_attribute_value()
+    {
+        var matching = new S124Feature
+        {
+            Id = "match",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "1"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var other = new S124Feature
+        {
+            Id = "other",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "2"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(matching, other);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-attr", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["attributes"] = """{"navwarnTypeGeneral":"1"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("match", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_with_attribute_predicate_array()
+    {
+        var deep = new S124Feature
+        {
+            Id = "deep",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "20"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var shallow = new S124Feature
+        {
+            Id = "shallow",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "5"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(deep, shallow);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-depth", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["attributes"] = """[{"attribute":"valueOfDepth","op":"ge","value":"10"}]""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("deep", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task QueryFeatures_invalid_query_json_returns_error()
     {
         var catalog = McpTestHelpers.NewCatalog();

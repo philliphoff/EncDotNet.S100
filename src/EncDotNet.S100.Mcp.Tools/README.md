@@ -289,6 +289,21 @@ if (features.TryGetValue(out var page))
     }
 }
 
+// Filter on attribute values with the optional Attributes predicate set.
+// Predicates combine with logical AND and are evaluated against each
+// feature's simple attributes (case-insensitive key lookup). Operators:
+// Exists, NotExists, Eq, Ne, Contains, StartsWith, Gt, Ge, Lt, Le
+// (numeric operators parse both sides as invariant doubles). Over the
+// wire the `attributes` parameter accepts either a code→value map
+// (all equality) or an array of explicit {attribute, op, value} objects.
+var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
+    Spec: new SpecRef("S-101", default),
+    FeatureType: "LIGHTS",
+    Attributes: ImmutableArray.Create(
+        new AttributePredicate("categoryOfLight", AttributeOperator.Eq, "8"),
+        new AttributePredicate("objectName", AttributeOperator.Exists, null))));
+
 // What kinds of features, and how many, are in a cell? count_features
 // answers the discovery question describe_feature can't (it needs an id
 // you don't yet have). Works across every vector spec incl. S-101.
