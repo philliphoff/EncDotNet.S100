@@ -31,7 +31,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 public sealed record QueryFeaturesRequest(
     [property: Description("Spatial query envelope (point / box / polygon / polyline). Intersection is computed against each feature's bounding box.")] GeoQuery Query,
     [property: Description("Optional spec filter; null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
-    [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? FeatureType = null,
+    [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
@@ -41,8 +41,8 @@ public sealed record QueryFeaturesRequest(
 /// </summary>
 /// <param name="DatasetId">Dataset the feature belongs to.</param>
 /// <param name="Spec">Spec the dataset declares.</param>
-/// <param name="FeatureId">Stable feature identifier (<c>gml:id</c>).</param>
-/// <param name="FeatureType">Feature type code (the GML element local name).</param>
+/// <param name="FeatureId">Stable feature identifier (<c>gml:id</c>; for S-101 the decimal RCID).</param>
+/// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
 /// <param name="Bounds">Bounding box of the feature's geometry, or <c>null</c> if the feature carries no geometry.</param>
 public sealed record FeatureMatch(
     DatasetId DatasetId,
@@ -65,13 +65,16 @@ public sealed record QueryFeaturesResult(
 /// </summary>
 /// <remarks>
 /// <para>
-/// This tool works against every GML-encoded spec the codebase
+/// This tool works against every GML-encoded vector spec the codebase
 /// supports — S-122, S-124, S-125, S-127, S-128, S-129, S-131,
 /// S-201, S-411, S-421 — via the shared <see cref="IGmlFeature"/>
-/// abstraction. Coverage products (S-102, S-104, S-111) and the
-/// ISO 8211-encoded S-101 are not queried; use
-/// <see cref="SampleCoverageTool"/> or <see cref="FindAtTool"/>
-/// for those.
+/// abstraction, plus the ISO 8211-encoded S-101 (adapted to
+/// <see cref="IGmlFeature"/> through <c>S101GmlFeature</c>). For S-101
+/// the <see cref="QueryFeaturesRequest.FeatureType"/> filter matches the
+/// feature-type acronym (e.g. <c>LIGHTS</c>, <c>BOYLAT</c>) and each
+/// <see cref="FeatureMatch.FeatureId"/> is the feature record's decimal
+/// RCID. Coverage products (S-102, S-104, S-111) are not queried; use
+/// <see cref="SampleCoverageTool"/> for those.
 /// </para>
 /// <para>
 /// Intersection is computed at bounding-box precision per feature.

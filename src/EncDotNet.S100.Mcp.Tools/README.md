@@ -185,7 +185,7 @@ The registry currently wires six describers:
 
 | Spec   | Describer                  | Feature id convention                                                                                       |
 |--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
-| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`.                                                                        |
+| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`. Result carries a `geometry` block (primitive, bounding box, resolved coordinates). |
 | S-102  | `S102FeatureDescriber`     | Coverage path `BathymetryCoverage[.01]` (bare `BathymetryCoverage` accepted).                               |
 | S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
 | S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
@@ -249,11 +249,13 @@ if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
     Console.WriteLine($"Depth at point: {d.DepthMeters} m");
 }
 
-// What GML features overlap a bounding box? query_features works across
+// What features overlap a bounding box? query_features works across
 // every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
-// S-201/S-411/S-421) via the shared IGmlFeature abstraction. Pass any
-// GeoQuery variant — point, bbox, polygon, or polyline (with optional
-// corridor width). Results are paginated.
+// S-201/S-411/S-421) via the shared IGmlFeature abstraction, plus the
+// ISO 8211-encoded S-101 (adapted through S101GmlFeature — its
+// FeatureType filter matches the feature-type acronym and FeatureId is
+// the decimal RCID). Pass any GeoQuery variant — point, bbox, polygon,
+// or polyline (with optional corridor width). Results are paginated.
 var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
     new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
     Spec: new SpecRef("S-124", default),       // any S-124 edition

@@ -69,9 +69,10 @@ public class ListSpecsToolTests
         Assert.True(s124.Capabilities.CanDescribeFeature);
         Assert.False(s124.Capabilities.CanListTimeSteps);
 
-        // S-101 is neither coverage nor GML — describer only.
+        // S-101 is ISO 8211-encoded but its features are queryable via
+        // the S101GmlFeature adapter; it is not a coverage product.
         Assert.False(s101.Capabilities.CanSampleCoverage);
-        Assert.False(s101.Capabilities.CanQueryFeatures);
+        Assert.True(s101.Capabilities.CanQueryFeatures);
         Assert.True(s101.Capabilities.CanDescribeFeature);
         Assert.False(s101.Capabilities.CanListTimeSteps);
 

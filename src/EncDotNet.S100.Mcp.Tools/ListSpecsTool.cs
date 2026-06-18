@@ -94,9 +94,11 @@ public sealed class ListSpecsTool
 
     // Specs whose features are exposed via the shared IGmlFeature
     // interface and addressable by QueryFeaturesTool. Must match the
-    // switch arms in Spec.GmlFeatureAccessor.GetFeatures.
+    // switch arms in Spec.GmlFeatureAccessor.GetFeatures. S-101 is
+    // ISO 8211-encoded but exposed through the S101GmlFeature adapter.
     private static readonly HashSet<string> GmlVectorSpecs = new(StringComparer.Ordinal)
     {
+        "S-101",
         "S-122", "S-124", "S-125", "S-127", "S-128",
         "S-129", "S-131", "S-201", "S-411", "S-421",
     };

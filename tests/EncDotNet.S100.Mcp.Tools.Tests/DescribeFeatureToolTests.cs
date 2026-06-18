@@ -275,6 +275,58 @@ public class DescribeFeatureToolTests
     }
 
     [Fact]
+    public async Task S101_describe_feature_returns_resolved_geometry_with_bbox()
+    {
+        var featureTypes = new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToImmutableDictionary();
+        var ds = S101Synth.DatasetWithPointFeatures(
+            "enc-geom",
+            new (uint, ushort, double, double)[] { (4242u, 75, 50.76, -1.29) },
+            featureTypes);
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-geom", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-geom"), "4242"));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("LIGHTS", value.FeatureTypeName);
+
+        var geometry = value.Attributes.GetProperty("geometry");
+        Assert.Equal(JsonValueKind.Object, geometry.ValueKind);
+        Assert.Equal("Point", geometry.GetProperty("primitive").GetString());
+
+        var bbox = geometry.GetProperty("boundingBox");
+        Assert.Equal(50.76, bbox.GetProperty("southLatitude").GetDouble(), 6);
+        Assert.Equal(50.76, bbox.GetProperty("northLatitude").GetDouble(), 6);
+        Assert.Equal(-1.29, bbox.GetProperty("westLongitude").GetDouble(), 6);
+        Assert.Equal(-1.29, bbox.GetProperty("eastLongitude").GetDouble(), 6);
+
+        var coords = geometry.GetProperty("coordinates");
+        Assert.Equal(JsonValueKind.Array, coords.ValueKind);
+        var first = coords[0];
+        Assert.Equal(50.76, first[0].GetDouble(), 6);
+        Assert.Equal(-1.29, first[1].GetDouble(), 6);
+    }
+
+    [Fact]
+    public async Task S101_describe_feature_geometry_is_null_when_unresolvable()
+    {
+        // No matching point record → geometry cannot be resolved.
+        var feature = S101Synth.Feature(rcid: 5, featureTypeCode: 30);
+        var ds = S101Synth.Dataset("enc-nogeom", ImmutableArray.Create(feature));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc-nogeom", ds));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-nogeom"), "5"));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(JsonValueKind.Null, value.Attributes.GetProperty("geometry").ValueKind);
+    }
+
+    [Fact]
     public async Task Empty_references_collection_returns_no_references()
     {
         var catalog = new FakeDatasetCatalog();

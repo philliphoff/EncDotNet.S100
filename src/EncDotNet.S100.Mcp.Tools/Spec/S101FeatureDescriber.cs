@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Mcp.Tools.Catalog;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;
 
@@ -12,8 +13,9 @@ namespace EncDotNet.S100.Mcp.Tools.Spec;
 /// by an FRID composite of the form <c>100:RCID</c> /
 /// <c>100:RCID:RVER</c>, and serialises its attributes (resolved
 /// against <see cref="S101Document.AttributeTypeCatalogue"/> when
-/// available), spatial primitives, and cross-record associations as
-/// JSON.
+/// available), spatial primitives, resolved geometry (coordinates and
+/// a bounding box, via <see cref="S101VectorSource"/>), and
+/// cross-record associations as JSON.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -74,12 +76,33 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             ? ac
             : feature.FeatureTypeCode.ToString(CultureInfo.InvariantCulture);
 
-        var attributes = SerializeAttributes(feature, document);
+        var geometry = ResolveGeometry(s101.Dataset, feature.RecordId);
+        var attributes = SerializeAttributes(feature, document, geometry);
         return ToolResult<DescribeFeatureResult>.Ok(new DescribeFeatureResult(
             context.Dataset.Spec,
             acronym,
             attributes,
             ImmutableArray<FeatureReference>.Empty));
+    }
+
+    /// <summary>
+    /// Resolves the coordinates of the feature with the supplied
+    /// <paramref name="recordId"/> via <see cref="S101VectorSource"/>
+    /// (the same geometry-resolution path the render pipeline uses), or
+    /// <c>null</c> when the feature carries no resolvable geometry.
+    /// </summary>
+    private static Feature? ResolveGeometry(S101Dataset dataset, uint recordId)
+    {
+        var source = new S101VectorSource(dataset);
+        foreach (var f in source.GetFeatures())
+        {
+            if (f.Id == recordId)
+            {
+                return f;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -105,7 +128,8 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
         return uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out rcid);
     }
 
-    private static JsonElement SerializeAttributes(S101FeatureRecord feature, S101Document document)
+    private static JsonElement SerializeAttributes(
+        S101FeatureRecord feature, S101Document document, Feature? geometry)
     {
         var attributeList = new List<Dictionary<string, object?>>();
         foreach (var attr in feature.Attributes)
@@ -185,6 +209,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
                 ? fac0
                 : null,
             ["geometryPrimitive"] = ClassifyGeometry(feature, document),
+            ["geometry"] = BuildGeometry(geometry),
             ["spatialAssociations"] = spatial,
             ["attributes"] = attributeList,
             ["featureAssociations"] = featureAssoc,
@@ -193,6 +218,65 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
 
         var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
         return JsonSerializer.Deserialize<JsonElement>(bytes);
+    }
+
+    /// <summary>
+    /// Builds the resolved-geometry block for the serialised payload from
+    /// the coordinates resolved by <see cref="S101VectorSource"/>. Returns
+    /// <c>null</c> when the feature has no resolvable geometry (e.g.
+    /// attribute-only meta features). The block carries the primitive kind,
+    /// a bounding box (south/west/north/east), the exterior coordinates as
+    /// <c>[latitude, longitude]</c> pairs, and any interior (hole) rings —
+    /// enough for an agent to compute distance / bearing or drive
+    /// <c>set_viewport</c>.
+    /// </summary>
+    private static Dictionary<string, object?>? BuildGeometry(Feature? geometry)
+    {
+        if (geometry is null || geometry.Coordinates.Count == 0)
+        {
+            return null;
+        }
+
+        double south = double.PositiveInfinity, north = double.NegativeInfinity;
+        double west = double.PositiveInfinity, east = double.NegativeInfinity;
+
+        static double[] Pair((double Latitude, double Longitude) c) => [c.Latitude, c.Longitude];
+
+        var coordinates = new List<double[]>(geometry.Coordinates.Count);
+        foreach (var c in geometry.Coordinates)
+        {
+            coordinates.Add(Pair(c));
+            if (c.Latitude < south) south = c.Latitude;
+            if (c.Latitude > north) north = c.Latitude;
+            if (c.Longitude < west) west = c.Longitude;
+            if (c.Longitude > east) east = c.Longitude;
+        }
+
+        List<List<double[]>>? interiorRings = null;
+        if (geometry.InteriorRings.Count > 0)
+        {
+            interiorRings = new List<List<double[]>>(geometry.InteriorRings.Count);
+            foreach (var ring in geometry.InteriorRings)
+            {
+                var ringCoords = new List<double[]>(ring.Count);
+                foreach (var c in ring) ringCoords.Add(Pair(c));
+                interiorRings.Add(ringCoords);
+            }
+        }
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["primitive"] = geometry.GeometryType.ToString(),
+            ["boundingBox"] = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["southLatitude"] = south,
+                ["westLongitude"] = west,
+                ["northLatitude"] = north,
+                ["eastLongitude"] = east,
+            },
+            ["coordinates"] = coordinates,
+            ["interiorRings"] = interiorRings,
+        };
     }
 
     /// <summary>
