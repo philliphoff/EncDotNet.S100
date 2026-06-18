@@ -345,6 +345,47 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task QueryFeatures_precise_drops_bounding_box_false_positive()
+    {
+        // A triangle whose bounding box covers (1.5, 1.5) but whose body
+        // does not — the coarse query matches, the precise query does not.
+        var triangle = new S124Feature
+        {
+            Id = "tri-1",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (0, 0), (2, 0), (0, 2), (0, 0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(triangle);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-4", bounds: LoadedDatasetFactory.Box(-1, -1, 3, 3), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var pointQuery = "{\"kind\":\"point\",\"latitude\":1.5,\"longitude\":1.5}";
+
+        var coarse = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = pointQuery,
+        });
+        Assert.False(coarse.IsError ?? false, $"query_features returned an error: {DumpText(coarse)}");
+        Assert.Equal(1, ParseSingleJson(coarse)["totalCount"]!.GetValue<int>());
+
+        var precise = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = pointQuery,
+            ["precise"] = true,
+        });
+        Assert.False(precise.IsError ?? false, $"query_features returned an error: {DumpText(precise)}");
+        Assert.Equal(0, ParseSingleJson(precise)["totalCount"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task DescribeFeatureType_round_trip_introspects_bundled_catalogue()
     {
         var catalog = McpTestHelpers.NewCatalog();

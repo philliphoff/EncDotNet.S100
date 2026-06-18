@@ -352,6 +352,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
                    [Description("Optional attribute-value predicates (logical AND). Either a code→value map for equality, e.g. {\"categoryOfLateralMark\":\"1\"}, or an array of explicit predicates, e.g. [{\"attribute\":\"valueOfDepth\",\"op\":\"ge\",\"value\":\"10\"},{\"attribute\":\"objectName\",\"op\":\"exists\"}]. Operators: exists, notExists, eq, ne, contains, startsWith, gt, ge, lt, le.")] string? attributes = null,
+                   [Description("When true, replaces the default bounding-box test with true full-geometry intersection: point-in-polygon containment for areas (holes honoured) and genuine segment crossing (e.g. which features a route leg actually crosses). Default false.")] bool precise = false,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
                    CancellationToken ct = default) =>
@@ -363,6 +364,7 @@ internal static class S100McpServerToolFactory
                         featureType,
                         ParseTimeQuery(times),
                         ParseAttributePredicates(attributes),
+                        precise,
                         page,
                         pageSize),
                     ct));

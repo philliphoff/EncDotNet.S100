@@ -34,6 +34,7 @@ public sealed record QueryFeaturesRequest(
     [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
     [property: Description("Optional attribute-value predicates; a feature must satisfy all of them (logical AND). Discover valid attributes and enumerated values with describe_feature_type.")] ImmutableArray<AttributePredicate> Attributes = default,
+    [property: Description("When true, replaces the default bounding-box intersection test with true full-geometry intersection: point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing — e.g. \"which features does this route leg actually cross?\". Slightly more expensive; default false.")] bool Precise = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
 
@@ -173,6 +174,11 @@ public sealed class QueryFeaturesTool
                 }
 
                 if (!FeatureGeometryQuery.Intersects(feature, request.Query))
+                {
+                    continue;
+                }
+
+                if (request.Precise && !GeometryIntersection.Intersects(feature, request.Query))
                 {
                     continue;
                 }

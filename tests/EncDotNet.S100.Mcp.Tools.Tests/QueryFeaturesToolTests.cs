@@ -286,4 +286,63 @@ public class QueryFeaturesToolTests
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
     }
+
+    [Fact]
+    public async Task Precise_mode_drops_bounding_box_false_positives()
+    {
+        // A triangle whose bounding box covers (1.5, 1.5) but whose body
+        // does not.
+        var triangle = new S124Feature
+        {
+            Id = "tri",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (0, 0), (2, 0), (0, 2), (0, 0)),
+            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        };
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(triangle),
+            bounds: LoadedDatasetFactory.Box(-1, -1, 3, 3)));
+        var tool = new QueryFeaturesTool(catalog);
+
+        var query = new GeoQuery.Point(new GeoPoint(1.5, 1.5));
+
+        var coarse = await tool.InvokeAsync(new QueryFeaturesRequest(query));
+        Assert.True(coarse.TryGetValue(out var coarseValue));
+        Assert.Single(coarseValue.Features);
+
+        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(query, Precise: true));
+        Assert.True(precise.TryGetValue(out var preciseValue));
+        Assert.Empty(preciseValue.Features);
+    }
+
+    [Fact]
+    public async Task Precise_mode_keeps_a_route_leg_that_truly_crosses_an_area()
+    {
+        var area = new S124Feature
+        {
+            Id = "area",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)),
+            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        };
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(area),
+            bounds: LoadedDatasetFactory.Box(-5, -5, 5, 5)));
+        var tool = new QueryFeaturesTool(catalog);
+
+        var leg = new GeoQuery.Polyline(new GeoPolyline(ImmutableArray.Create(
+            new GeoPoint(0, -5), new GeoPoint(0, 5))));
+
+        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(leg, Precise: true));
+        Assert.True(precise.TryGetValue(out var value));
+        Assert.Equal("area", Assert.Single(value.Features).FeatureId);
+    }
 }

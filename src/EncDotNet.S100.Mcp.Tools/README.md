@@ -325,6 +325,17 @@ var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
         new AttributePredicate("categoryOfLight", AttributeOperator.Eq, "8"),
         new AttributePredicate("objectName", AttributeOperator.Exists, null))));
 
+// Set Precise for true full-geometry intersection instead of the default
+// bounding-box test: point-in-polygon containment for areas (interior-ring
+// holes honoured) and genuine segment crossing — e.g. "which features does
+// this route leg actually cross?". A leg endpoint inside an area, or a leg
+// that crosses an area boundary or a curve, counts.
+var crossed = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Polyline(new GeoPolyline(ImmutableArray.Create(
+        new GeoPoint(47.60, -122.40),
+        new GeoPoint(47.62, -122.30)))),
+    Precise: true));
+
 // What kinds of features, and how many, are in a cell? count_features
 // answers the discovery question describe_feature can't (it needs an id
 // you don't yet have). Works across every vector spec incl. S-101.
