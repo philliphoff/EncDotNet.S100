@@ -36,6 +36,7 @@ public class S100McpServerRoundTripTests
                 "list_datasets",
                 "list_specs",
                 "list_time_steps",
+                "nearest_features",
                 "query_features",
                 "sample_coverage",
                 "sample_coverage_along",
@@ -277,6 +278,70 @@ public class S100McpServerRoundTripTests
         Assert.Equal("point", features[0]!["geometry"]!.GetValue<string>());
         Assert.Equal("surface", features[1]!["geometry"]!.GetValue<string>());
         Assert.Equal("inside", features[1]!["containment"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task NearestFeatures_round_trip_ranks_by_true_distance()
+    {
+        var near = new S124Feature
+        {
+            Id = "near-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.1)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var far = new S124Feature
+        {
+            Id = "far-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 6.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(far, near);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-3", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 5.0,
+            ["longitude"] = 5.0,
+        });
+
+        Assert.False(result.IsError ?? false, $"nearest_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(2, payload["totalMatched"]!.GetValue<int>());
+        var features = payload["features"]!.AsArray();
+        Assert.Equal("near-1", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("far-1", features[1]!["featureId"]!.GetValue<string>());
+        Assert.True(
+            features[0]!["distanceMeters"]!.GetValue<double>() < features[1]!["distanceMeters"]!.GetValue<double>());
+        Assert.NotNull(features[0]!["bearingDegrees"]);
+    }
+
+    [Fact]
+    public async Task NearestFeatures_invalid_latitude_returns_structured_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 120.0,
+            ["longitude"] = 0.0,
+        });
+
+        Assert.True(result.IsError ?? false);
+        Assert.Contains("latitude", DumpText(result), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

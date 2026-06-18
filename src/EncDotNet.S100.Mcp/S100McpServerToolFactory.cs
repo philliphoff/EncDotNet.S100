@@ -75,6 +75,7 @@ internal static class S100McpServerToolFactory
         SampleCoverageTool sampleCoverage,
         FindAtTool findAt,
         IdentifyFeaturesTool identifyFeatures,
+        NearestFeaturesTool nearestFeatures,
         QueryFeaturesTool queryFeatures,
         CountFeaturesTool countFeatures,
         SearchFeaturesTool searchFeatures,
@@ -88,6 +89,7 @@ internal static class S100McpServerToolFactory
         yield return CreateSampleCoverageTool(sampleCoverage);
         yield return CreateFindAtTool(findAt);
         yield return CreateIdentifyFeaturesTool(identifyFeatures);
+        yield return CreateNearestFeaturesTool(nearestFeatures);
         yield return CreateQueryFeaturesTool(queryFeatures);
         yield return CreateCountFeaturesTool(countFeatures);
         yield return CreateSearchFeaturesTool(searchFeatures);
@@ -289,6 +291,48 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = IdentifyFeaturesTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateNearestFeaturesTool(NearestFeaturesTool inner)
+    {
+        var description =
+            "Ranks the vector features nearest to a geographic point by TRUE geometric distance — " +
+            "the distance-ranking and containment query that find_at (dataset-bbox membership) and " +
+            "query_features (feature-bbox intersection) can't answer. Answers \"nearest light/buoy/" +
+            "berth to my position?\" and \"is this point inside any restricted area?\" in one call: " +
+            "an area feature containing the point is returned at distanceMeters 0 with " +
+            "containment 'inside'; every other feature reports the true distance to the nearest point " +
+            "on its geometry (nearest point on a segment, not just the nearest vertex) plus the " +
+            "bearing toward it. Works across every vector spec (S-101, S-122, S-124, S-125, S-127, " +
+            "S-128, S-129, S-131, S-201, S-411, S-421). Optional spec / datasetId / featureType / " +
+            "maxDistanceMeters filters; results are nearest-first. Read-only.";
+
+        var del = ([Description("Query latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
+                   [Description("Query longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec.")] string? spec = null,
+                   [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
+                   [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"LightAllAround\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null matches every feature type.")] string? featureType = null,
+                   [Description("Optional maximum distance in metres; features farther than this are excluded. null imposes no limit.")] double? maxDistanceMeters = null,
+                   [Description("Maximum ranked features to return; clamped to [1, 200]. Default 10.")] int limit = 10,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new NearestFeaturesRequest(
+                        latitude,
+                        longitude,
+                        ParseSpec(spec),
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
+                        featureType,
+                        maxDistanceMeters,
+                        limit),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = NearestFeaturesTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

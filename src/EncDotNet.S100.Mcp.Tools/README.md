@@ -216,6 +216,7 @@ var sample = new SampleCoverageTool(catalog);
 var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
 var identifyFeatures = new IdentifyFeaturesTool(catalog);
+var nearestFeatures = new NearestFeaturesTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
 var countFeatures = new CountFeaturesTool(catalog);
 var searchFeatures = new SearchFeaturesTool(catalog);
@@ -256,6 +257,25 @@ if (picked.TryGetValue(out var pick))
     foreach (var m in pick.Features)
     {
         Console.WriteLine($"{m.Spec} {m.FeatureType} {m.FeatureId} ({m.Geometry}, {m.Containment}).");
+    }
+}
+
+// What is the nearest feature to my position, and am I inside any area?
+// nearest_features ranks by TRUE geometric distance (nearest point on a
+// segment, not just the nearest vertex). An area containing the point is
+// returned at distance 0 with containment "inside"; everything else
+// reports the distance and the bearing toward its nearest point.
+var nearest = await nearestFeatures.InvokeAsync(new NearestFeaturesRequest(
+    Latitude: 50.77,
+    Longitude: -1.30,
+    FeatureType: null,
+    MaxDistanceMeters: 5000,
+    Limit: 5));
+if (nearest.TryGetValue(out var near))
+{
+    foreach (var m in near.Features)
+    {
+        Console.WriteLine($"{m.FeatureType} {m.FeatureId}: {m.DistanceMeters:F0} m ({m.Containment}).");
     }
 }
 
