@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
@@ -56,6 +57,7 @@ public class ViewerDatasetCatalogTests
         var loaded = Assert.Single(catalog.Datasets);
         Assert.Equal("S-101", loaded.Spec.Name);
         Assert.IsType<S101DatasetData>(loaded.Data);
+        AssertBoundsAreNotWorld(loaded.Bounds);
     }
 
     [SkippableFact]
@@ -185,6 +187,72 @@ public class ViewerDatasetCatalogTests
 
         loader.RaiseRemoved(entry);
         Assert.Empty(catalog.Datasets);
+    }
+
+    [Fact]
+    public void ComputeS101Bounds_returns_cell_extent_from_point_geometry()
+    {
+        var dataset = SynthS101WithPoints(
+            (Rcid: 1u, Lat: 50.5, Lon: -1.2),
+            (Rcid: 2u, Lat: 50.9, Lon: -0.8));
+
+        var bounds = ViewerDatasetCatalog.ComputeS101Bounds(dataset);
+
+        Assert.NotNull(bounds);
+        Assert.Equal(50.5, bounds!.SouthLatitude, 6);
+        Assert.Equal(-1.2, bounds.WestLongitude, 6);
+        Assert.Equal(50.9, bounds.NorthLatitude, 6);
+        Assert.Equal(-0.8, bounds.EastLongitude, 6);
+    }
+
+    [Fact]
+    public void ComputeS101Bounds_returns_null_for_coordinate_free_cell()
+    {
+        var dataset = SynthS101WithPoints();
+
+        Assert.Null(ViewerDatasetCatalog.ComputeS101Bounds(dataset));
+    }
+
+    private static S101Dataset SynthS101WithPoints(
+        params (uint Rcid, double Lat, double Lon)[] points)
+    {
+        const int cmf = 10_000_000;
+        var pointRecords = System.Collections.Immutable.ImmutableDictionary
+            .CreateBuilder<uint, S101PointRecord>();
+        foreach (var (rcid, lat, lon) in points)
+        {
+            pointRecords[rcid] = new S101PointRecord
+            {
+                RecordId = rcid,
+                Y = (int)System.Math.Round(lat * cmf),
+                X = (int)System.Math.Round(lon * cmf),
+            };
+        }
+
+        var document = new S101Document
+        {
+            Identification = new S101DatasetIdentification { DatasetName = "synth" },
+            StructureInfo = new S101DatasetStructureInfo
+            {
+                CoordinateMultiplicationFactorX = cmf,
+                CoordinateMultiplicationFactorY = cmf,
+                CoordinateMultiplicationFactorZ = 10,
+            },
+            FeatureTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            Points = pointRecords.ToImmutable(),
+            MultiPoints = System.Collections.Immutable.ImmutableDictionary<uint, S101MultiPointRecord>.Empty,
+            CurveSegments = System.Collections.Immutable.ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = System.Collections.Immutable.ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = System.Collections.Immutable.ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = System.Collections.Immutable.ImmutableArray<S101FeatureRecord>.Empty,
+            InformationTypes = System.Collections.Immutable.ImmutableDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            RoleCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+        };
+        return S101Dataset.FromDocument(document);
     }
 
     private static void AssertBoundsAreNotWorld(BoundingBox bounds)
