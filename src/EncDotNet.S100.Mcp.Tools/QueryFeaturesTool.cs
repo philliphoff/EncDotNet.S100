@@ -51,13 +51,26 @@ public sealed record FeatureMatch(
     string FeatureType,
     BoundingBox? Bounds);
 
+/// <summary>
+/// A per-feature-type tally of the full (all-pages) match set, returned
+/// by <see cref="QueryFeaturesTool"/> so callers can gauge a result's
+/// shape before paging through it.
+/// </summary>
+/// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
+/// <param name="Count">Number of matching features of this type across all pages.</param>
+public sealed record FeatureTypeBreakdown(
+    [property: Description("Feature type code (GML element local name; for S-101 the feature-type acronym).")] string FeatureType,
+    [property: Description("Number of matching features of this type across all pages.")] int Count);
+
 /// <summary>Result of <see cref="QueryFeaturesTool"/>.</summary>
 public sealed record QueryFeaturesResult(
     [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] ImmutableArray<FeatureMatch> Features,
     [property: Description("Echoed (and floored) zero-based page index.")] int Page,
     [property: Description("Echoed (and clamped) page size.")] int PageSize,
     [property: Description("Total number of matching features across all pages.")] int TotalCount,
-    [property: Description("True if additional pages remain after the current one.")] bool HasMore);
+    [property: Description("True if additional pages remain after the current one.")] bool HasMore,
+    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] ImmutableArray<FeatureTypeBreakdown> TypeBreakdown);
+
 
 /// <summary>
 /// Returns features from loaded S-100 vector datasets whose
@@ -188,13 +201,36 @@ public sealed class QueryFeaturesTool
         }
 
         var hasMore = skip + take < totalCount;
+
+        // Per-type breakdown of the full match set (all pages), so a caller
+        // can gauge the result's shape before paging through it.
+        var byType = new Dictionary<string, int>(StringComparer.Ordinal);
+        var typeOrder = new List<string>();
+        foreach (var match in matched)
+        {
+            if (!byType.TryGetValue(match.FeatureType, out var n))
+            {
+                typeOrder.Add(match.FeatureType);
+            }
+            byType[match.FeatureType] = n + 1;
+        }
+
+        var breakdown = ImmutableArray.CreateBuilder<FeatureTypeBreakdown>(typeOrder.Count);
+        foreach (var type in typeOrder
+                     .OrderByDescending(t => byType[t])
+                     .ThenBy(t => t, StringComparer.Ordinal))
+        {
+            breakdown.Add(new FeatureTypeBreakdown(type, byType[type]));
+        }
+
         return Task.FromResult(ToolResult<QueryFeaturesResult>.Ok(
             new QueryFeaturesResult(
                 pageBuilder.MoveToImmutable(),
                 page,
                 pageSize,
                 totalCount,
-                hasMore)));
+                hasMore,
+                breakdown.MoveToImmutable())));
     }
 
     private static bool SpecMatches(SpecRef actual, SpecRef filter)

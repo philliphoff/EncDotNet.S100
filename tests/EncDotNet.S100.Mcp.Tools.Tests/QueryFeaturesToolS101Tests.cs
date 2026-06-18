@@ -115,4 +115,45 @@ public class QueryFeaturesToolS101Tests
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
     }
+
+    [Fact]
+    public async Task Result_includes_per_type_breakdown_across_all_pages()
+    {
+        // Three LIGHTS + one BOYLAT; page size 1 so the breakdown must
+        // reflect the whole match set, not just the returned page.
+        var featureTypes = new Dictionary<ushort, string>
+        {
+            [75] = "LIGHTS",
+            [17] = "BOYLAT",
+        }.ToImmutableDictionary();
+
+        var ds = S101Synth.DatasetWithPointFeatures(
+            "enc",
+            new (uint, ushort, double, double)[]
+            {
+                (100u, 75, 0.10, 0.10),
+                (101u, 75, 0.20, 0.20),
+                (102u, 75, 0.30, 0.30),
+                (200u, 17, 0.40, 0.40),
+            },
+            featureTypes);
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc", ds));
+        var tool = new QueryFeaturesTool(catalog);
+
+        var result = await tool.InvokeAsync(new QueryFeaturesRequest(
+            new GeoQuery.Box(new GeoBoundingBox(-1, -1, 1, 1)),
+            PageSize: 1));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Single(value.Features);
+        Assert.Equal(4, value.TotalCount);
+        Assert.True(value.HasMore);
+
+        Assert.Equal(2, value.TypeBreakdown.Length);
+        Assert.Equal("LIGHTS", value.TypeBreakdown[0].FeatureType);
+        Assert.Equal(3, value.TypeBreakdown[0].Count);
+        Assert.Equal("BOYLAT", value.TypeBreakdown[1].FeatureType);
+        Assert.Equal(1, value.TypeBreakdown[1].Count);
+    }
 }

@@ -261,6 +261,11 @@ public class S100McpServerRoundTripTests
         Assert.NotEmpty(features);
         Assert.Equal("feat-1", features[0]!["featureId"]!.GetValue<string>());
         Assert.Equal("NavwarnPart", features[0]!["featureType"]!.GetValue<string>());
+
+        var breakdown = payload["typeBreakdown"]!.AsArray();
+        var tally = Assert.Single(breakdown);
+        Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
+        Assert.Equal(1, tally["count"]!.GetValue<int>());
     }
 
     [Fact]
