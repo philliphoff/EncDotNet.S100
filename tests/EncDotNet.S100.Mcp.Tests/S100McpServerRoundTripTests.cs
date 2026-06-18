@@ -73,7 +73,7 @@ public class S100McpServerRoundTripTests
         var datasets = payload["datasets"]!.AsArray();
         Assert.Equal(2, datasets.Count);
         var ids = datasets
-            .Select(d => d!["id"]!["value"]!.GetValue<string>())
+            .Select(d => d!["id"]!.GetValue<string>())
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(new[] { "synth-bathy-1", "synth-warn-1" }, ids);
@@ -172,7 +172,7 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);
-        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
+        Assert.Equal("warn-here", datasets[0]!["id"]!.GetValue<string>());
         Assert.Equal(1, payload["totalCount"]!.GetValue<int>());
     }
 
@@ -815,7 +815,7 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);
-        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
+        Assert.Equal("warn-here", datasets[0]!["id"]!.GetValue<string>());
     }
 
     private static JsonObject ParseSingleJson(CallToolResult result)

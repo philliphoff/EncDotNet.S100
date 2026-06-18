@@ -63,6 +63,18 @@ internal sealed class FakeMapHost : IMapHost
     public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx)
         => ScreenToWgs84(xPx, yPx);
 
+    /// <summary>
+    /// Projection used by <see cref="TryImagePixelToWgs84"/>. Default returns
+    /// <see langword="null"/> for every pixel, mimicking an unlaid-out map.
+    /// Receives the pixel and the capture's logical dimensions.
+    /// </summary>
+    public Func<double, double, int, int, (double Latitude, double Longitude)?> ImagePixelToWgs84 { get; set; }
+        = static (_, _, _, _) => null;
+
+    public (double Latitude, double Longitude)? TryImagePixelToWgs84(
+        double xPx, double yPx, int imageWidthPx, int imageHeightPx)
+        => ImagePixelToWgs84(xPx, yPx, imageWidthPx, imageHeightPx);
+
     public Task<byte[]?> RenderCurrentViewToPngAsync(
         int widthPx, int heightPx, double pixelDensity, CancellationToken cancellationToken = default)
         => Task.FromResult<byte[]?>(null);

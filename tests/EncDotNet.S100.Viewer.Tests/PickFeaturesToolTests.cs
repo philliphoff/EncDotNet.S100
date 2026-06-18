@@ -169,6 +169,100 @@ public class PickFeaturesToolTests
     }
 
     [Fact]
+    public async Task Image_form_resolves_through_image_pixel_projection()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = (800, 600);
+        // Live ScreenToWgs84 would give a different answer; the image-fit
+        // path must use the image projection instead.
+        host.ScreenToWgs84 = (_, _) => (10, 20);
+        host.ImagePixelToWgs84 = (x, y, w, h) =>
+        {
+            Assert.Equal(512, x);
+            Assert.Equal(384, y);
+            Assert.Equal(1024, w);
+            Assert.Equal(768, h);
+            return (47.6, -122.3);
+        };
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 512, Y: 384, ImageWidth: 1024, ImageHeight: 768));
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("pixel", value!.Source);
+        Assert.Equal(47.6, value.Latitude, 6);
+        Assert.Equal(-122.3, value.Longitude, 6);
+    }
+
+    [Fact]
+    public async Task Image_form_requires_both_dimensions()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = (800, 600);
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<InvalidArgument>(error);
+    }
+
+    [Fact]
+    public async Task Image_form_rejects_pixel_outside_image_bounds()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = (800, 600);
+        host.ImagePixelToWgs84 = (_, _, _, _) => (1, 2);
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 2000, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<InvalidArgument>(error);
+    }
+
+    [Fact]
+    public async Task Image_form_with_unlaid_out_viewport_is_map_not_ready()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = null;
+        host.ImagePixelToWgs84 = (_, _, _, _) => (1, 2);
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<MapNotReady>(error);
+    }
+
+    [Fact]
+    public async Task Image_form_rejects_non_positive_dimensions()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = (800, 600);
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 0, ImageHeight: 768));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<InvalidArgument>(error);
+    }
+
+    [Fact]
+    public async Task Image_form_pixel_that_does_not_project_is_rejected()
+    {
+        var (tool, host, _) = Make();
+        host.ViewportSizePx = (800, 600);
+        host.ImagePixelToWgs84 = (_, _, _, _) => null;
+
+        var result = await tool.InvokeAsync(
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<InvalidArgument>(error);
+    }
+
+    [Fact]
     public void Adapter_creates_tool_with_expected_name()
     {
         var (tool, _, _) = Make();

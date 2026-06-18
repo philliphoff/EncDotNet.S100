@@ -25,6 +25,13 @@ A reflection-based test (`AnnotationContractTests` in
 `tests/EncDotNet.S100.Mcp.Tools.Tests`) enforces that every newly
 added wire-crossing property carries a non-empty `[Description]`.
 
+A `DatasetId` serialises as a **bare JSON string** in both directions
+(via `DatasetIdJsonConverter`): tools accept it as a plain-string
+argument and emit it as a plain string in results, so an id read off
+one tool's output feeds straight back into another's input. Legacy
+`{"value":"…"}` wrapped ids are still accepted on input for backward
+compatibility.
+
 ## Architecture
 
 ```
@@ -180,11 +187,15 @@ runtime via `S100McpServerOptions.AdditionalTools` in
 `render_to_image`, which captures the live map as a PNG — that tool
 necessarily depends on Mapsui / Skia and therefore deliberately does
 not live here. The viewer also injects `pick_features`, the
-feature-aware inverse of `render_to_image`: it projects a screen pixel
+feature-aware inverse of `render_to_image`: it projects a pixel
 through the live navigator's web-mercator viewport to a geographic
 point and then delegates to the same ranking as `identify_features`.
-Because it needs the live navigator, it too lives in the viewer rather
-than here. See `docs/mcp-server.md` for details.
+When the pixel comes from a `render_to_image` capture, the caller
+passes that capture's `imageWidth`/`imageHeight` so the pick uses the
+snapshot's exact fit geometry rather than the live viewport's, making
+it a faithful inverse at any image size. Because it needs the live
+navigator, it too lives in the viewer rather than here. See
+`docs/mcp-server.md` for details.
 
 The registry currently wires six describers:
 

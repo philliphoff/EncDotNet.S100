@@ -22,10 +22,12 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// </remarks>
 [Description("Request for pick_features: supply EITHER a screen pixel (x/y, device-independent pixels from the live viewport's top-left) OR a WGS-84 geographic point (latitude/longitude). The pixel form is the inverse of render_to_image — it resolves the pixel through the live map's projection and returns the vector features under it.")]
 internal sealed record PickFeaturesRequest(
-    [property: Description("Screen X in device-independent pixels from the live viewport's left edge. Must be paired with y; mutually exclusive with latitude/longitude.")] double? X = null,
-    [property: Description("Screen Y in device-independent pixels from the live viewport's top edge. Must be paired with x; mutually exclusive with latitude/longitude.")] double? Y = null,
+    [property: Description("Screen X in pixels from the left edge. Must be paired with y; mutually exclusive with latitude/longitude.")] double? X = null,
+    [property: Description("Screen Y in pixels from the top edge. Must be paired with x; mutually exclusive with latitude/longitude.")] double? Y = null,
     [property: Description("Pick latitude in decimal degrees (WGS-84). Must be paired with longitude; mutually exclusive with the x/y form.")] double? Latitude = null,
     [property: Description("Pick longitude in decimal degrees (WGS-84). Must be paired with latitude; mutually exclusive with the x/y form.")] double? Longitude = null,
+    [property: Description("Width the pixel's source image was rendered at — pass the 'width' echoed by render_to_image when the pixel comes from a capture. Must be paired with imageHeight. When omitted, x/y are interpreted in the live on-screen viewport's pixel space.")] int? ImageWidth = null,
+    [property: Description("Height the pixel's source image was rendered at — pass the 'height' echoed by render_to_image when the pixel comes from a capture. Must be paired with imageWidth.")] int? ImageHeight = null,
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
     [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20);
@@ -49,12 +51,22 @@ internal sealed record PickFeaturesResult(
 /// </summary>
 /// <remarks>
 /// <para>
-/// The pixel form projects the requested screen coordinate through the
-/// live map's navigator (the same Web-Mercator projection used to render
-/// it) to a WGS-84 point, then delegates to the shared
-/// <see cref="IdentifyFeaturesTool"/> ranking so a pick and a geographic
-/// identify return an identical feature shape. The geographic form skips
-/// the projection step and is available even before the map is laid out.
+/// The pixel form projects the requested coordinate through the live
+/// map's Web-Mercator projection to a WGS-84 point, then delegates to the
+/// shared <see cref="IdentifyFeaturesTool"/> ranking so a pick and a
+/// geographic identify return an identical feature shape. The geographic
+/// form skips the projection step and is available even before the map is
+/// laid out.
+/// </para>
+/// <para>
+/// A pixel can be interpreted in two coordinate spaces. When
+/// <see cref="PickFeaturesRequest.ImageWidth"/> /
+/// <see cref="PickFeaturesRequest.ImageHeight"/> are supplied, the pixel
+/// is treated as coming from a <c>render_to_image</c> capture of that size
+/// and is resolved with the <em>same</em> fit geometry that tool uses —
+/// making this a faithful inverse of <c>render_to_image</c> at any capture
+/// size or aspect ratio. When they are omitted, the pixel is interpreted
+/// in the live on-screen viewport's pixel space.
 /// </para>
 /// <para>
 /// This is a read-only tool: it observes the live viewport and the loaded
@@ -166,6 +178,23 @@ internal sealed class PickFeaturesTool
             return new InvalidArgument("y", $"value {y} is not a finite number");
         }
 
+        var hasImageWidth = request.ImageWidth.HasValue;
+        var hasImageHeight = request.ImageHeight.HasValue;
+        if (hasImageWidth != hasImageHeight)
+        {
+            return new InvalidArgument(
+                "request",
+                "imageWidth and imageHeight must be supplied together (pass the width and height echoed by render_to_image), or both omitted to use the live viewport");
+        }
+        if (hasImageWidth && request.ImageWidth!.Value <= 0)
+        {
+            return new InvalidArgument("imageWidth", $"value {request.ImageWidth!.Value} must be positive");
+        }
+        if (hasImageHeight && request.ImageHeight!.Value <= 0)
+        {
+            return new InvalidArgument("imageHeight", $"value {request.ImageHeight!.Value} must be positive");
+        }
+
         return null;
     }
 
@@ -188,6 +217,37 @@ internal sealed class PickFeaturesTool
 
         var x = request.X!.Value;
         var y = request.Y!.Value;
+
+        // Image-space form: the pixel comes from a render_to_image capture of
+        // a known size — resolve it with that tool's fit geometry so the pick
+        // is a faithful inverse regardless of the capture's aspect ratio.
+        if (request.ImageWidth is { } imageWidth && request.ImageHeight is { } imageHeight)
+        {
+            if (host.TryGetViewportSizePx() is null)
+            {
+                error = new MapNotReady("the viewer's map viewport has not been laid out yet");
+                return null;
+            }
+
+            if (x < 0 || x > imageWidth || y < 0 || y > imageHeight)
+            {
+                error = new InvalidArgument(
+                    "request",
+                    $"pixel ({x}, {y}) is outside the {imageWidth} x {imageHeight} image [0, {imageWidth}] x [0, {imageHeight}]");
+                return null;
+            }
+
+            if (host.TryImagePixelToWgs84(x, y, imageWidth, imageHeight) is not { } imagePoint)
+            {
+                error = new InvalidArgument(
+                    "request",
+                    $"pixel ({x}, {y}) does not project to a valid WGS-84 coordinate");
+                return null;
+            }
+
+            error = null;
+            return imagePoint;
+        }
 
         if (host.TryGetViewportSizePx() is not { } size)
         {

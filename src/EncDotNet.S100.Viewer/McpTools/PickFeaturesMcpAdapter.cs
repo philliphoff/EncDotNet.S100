@@ -30,12 +30,14 @@ internal static class PickFeaturesMcpAdapter
 
     private const string Description =
         "Resolves the vector features under a point on the live viewer map — the feature-aware inverse " +
-        "of render_to_image. Supply EITHER a screen pixel (x/y in device-independent pixels from the " +
-        "live viewport's top-left, the same coordinate space render_to_image captures) OR a WGS-84 " +
-        "geographic point (latitude/longitude); mixing or omitting both is rejected. The pixel form " +
-        "projects through the live navigator's web-mercator viewport to a geographic point, then ranks " +
-        "matches most-specific first (point before curve before area), identical in shape to " +
-        "identify_features. Read-only. Viewer-injected tool — not available from a headless MCP host.";
+        "of render_to_image. Supply EITHER a screen pixel (x/y) OR a WGS-84 geographic point " +
+        "(latitude/longitude); mixing or omitting both is rejected. For a pixel read off a render_to_image " +
+        "capture, ALSO pass imageWidth/imageHeight set to the width/height that tool echoed back — the pick " +
+        "is then resolved with the capture's exact fit geometry, so it is a faithful inverse at any image " +
+        "size or aspect ratio. Omit imageWidth/imageHeight to interpret x/y in the live on-screen viewport's " +
+        "pixel space instead. Matches are ranked most-specific first (point before curve before area), " +
+        "identical in shape to identify_features. Read-only. Viewer-injected tool — not available from a " +
+        "headless MCP host.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(PickFeaturesTool inner)
@@ -43,16 +45,18 @@ internal static class PickFeaturesMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
 
         var del = (
-            [Description("Screen X in device-independent pixels from the live viewport's left edge. Must be paired with y; mutually exclusive with latitude/longitude.")] double? x = null,
-            [Description("Screen Y in device-independent pixels from the live viewport's top edge. Must be paired with x; mutually exclusive with latitude/longitude.")] double? y = null,
+            [Description("Pixel X from the left edge. In live-viewport pixels when imageWidth/imageHeight are omitted, or in the captured image's pixel space when they are supplied. Must be paired with y; mutually exclusive with latitude/longitude.")] double? x = null,
+            [Description("Pixel Y from the top edge. In live-viewport pixels when imageWidth/imageHeight are omitted, or in the captured image's pixel space when they are supplied. Must be paired with x; mutually exclusive with latitude/longitude.")] double? y = null,
             [Description("Pick latitude in decimal degrees (WGS-84). Must be paired with longitude; mutually exclusive with the x/y form.")] double? latitude = null,
             [Description("Pick longitude in decimal degrees (WGS-84). Must be paired with latitude; mutually exclusive with the x/y form.")] double? longitude = null,
+            [Description("Width the pixel's source image was rendered at — pass the 'width' render_to_image echoed. Must be paired with imageHeight. Omit to use the live viewport's pixel space.")] int? imageWidth = null,
+            [Description("Height the pixel's source image was rendered at — pass the 'height' render_to_image echoed. Must be paired with imageWidth.")] int? imageHeight = null,
             [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec.")] string? spec = null,
             [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
             [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
-                new PickFeaturesRequest(x, y, latitude, longitude, ParseSpec(spec), radiusMeters, maxResults),
+                new PickFeaturesRequest(x, y, latitude, longitude, imageWidth, imageHeight, ParseSpec(spec), radiusMeters, maxResults),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

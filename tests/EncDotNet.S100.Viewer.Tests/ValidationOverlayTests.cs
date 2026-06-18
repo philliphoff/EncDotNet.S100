@@ -40,6 +40,7 @@ public class ValidationOverlayTests
         public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
         public (double Width, double Height)? TryGetViewportSizePx() => null;
         public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx) => null;
+        public (double Latitude, double Longitude)? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
         public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)
