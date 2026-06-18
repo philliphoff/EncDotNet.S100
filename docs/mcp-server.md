@@ -109,7 +109,8 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `list_datasets` | Summarises every dataset currently loaded in the viewer. |
 | `list_specs` | Lists S-100 product specifications the host can read. |
 | `list_time_steps` | Lists time steps for a time-varying dataset (S-104, S-111, S-421). |
-| `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. |
+| `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. For the *features* under a point (not just which datasets cover it), use `identify_features`. |
+| `identify_features` | Identifies the vector features at a lat/lon point — the ECDIS cursor-pick — ranked most-specific first (point features before curves before areas; within a primitive the smaller / nearer feature wins). The feature-aware complement to `find_at`. Area features use exact point-in-polygon containment (interior-ring holes honoured); point / curve features match within `radiusMeters` (default 50, area features ignore it). Works across every vector spec (incl. S-101). Each match reports the dataset id, spec, feature id and type, geometry primitive, bounds, `containment` (`inside`/`near`), and approximate `distanceMeters`; `maxResults` (default 20) caps the list and sets `truncated`. |
 | `describe_feature` | Returns spec, feature type, attributes, and (for S-101) resolved geometry for a feature id in a given dataset. Supported specs: S-101 (RCID; result carries a `geometry` block with primitive, bounding box, and coordinates), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
 | `query_features` | Returns features whose geometry intersects a spatial query (bbox precision) from loaded vector datasets — every GML vector spec plus S-101 (ISO 8211), adapted through the shared feature interface. For S-101 the `featureType` filter matches the feature-type acronym (e.g. `LIGHTS`, `BOYLAT`) and each `featureId` is the feature record's decimal RCID. The result also carries a `typeBreakdown` (per-feature-type counts of the full all-pages match set) so an agent can gauge a result before paging. |
 | `count_features` | Enumerates the feature types present in loaded vector datasets and counts how many features of each type they contain — the "what kinds of features, and how many, are in this cell?" discovery question that `describe_feature` can't answer (it needs an id you don't yet have). Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, and spatial `query` filters. Each tally reports `count` and `withGeometry` (how many are spatially addressable). |
@@ -133,7 +134,8 @@ Tools fall into two groups:
 
 * **Read-only** — never mutate viewer state. Safe to call from any
   agent at any time. Examples: `list_datasets`, `find_at`,
-  `query_features`, `count_features`, `sample_coverage`, `render_to_image` (which
+  `identify_features`, `query_features`, `count_features`,
+  `sample_coverage`, `render_to_image` (which
   snapshots from a clone of the live `Map`), `await_render_idle`, and
   `get_render_stats` (which observe the live render loop without
   changing it).

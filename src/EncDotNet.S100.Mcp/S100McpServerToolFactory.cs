@@ -72,6 +72,7 @@ internal static class S100McpServerToolFactory
         DescribeFeatureTool describeFeature,
         SampleCoverageTool sampleCoverage,
         FindAtTool findAt,
+        IdentifyFeaturesTool identifyFeatures,
         QueryFeaturesTool queryFeatures,
         CountFeaturesTool countFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
@@ -82,6 +83,7 @@ internal static class S100McpServerToolFactory
         yield return CreateDescribeFeatureTool(describeFeature);
         yield return CreateSampleCoverageTool(sampleCoverage);
         yield return CreateFindAtTool(findAt);
+        yield return CreateIdentifyFeaturesTool(identifyFeatures);
         yield return CreateQueryFeaturesTool(queryFeatures);
         yield return CreateCountFeaturesTool(countFeatures);
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
@@ -213,6 +215,43 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = "find_at",
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateIdentifyFeaturesTool(IdentifyFeaturesTool inner)
+    {
+        var description =
+            "Identifies the vector features at a geographic point — the ECDIS cursor-pick — ranked " +
+            "most-specific first (point features before curves before areas; within a primitive the " +
+            "smaller/nearer feature wins). The feature-aware complement to find_at (which only " +
+            "answers which datasets' bounds cover the point). Area features use exact point-in-" +
+            "polygon containment (interior-ring holes honoured); point and curve features match " +
+            "within radiusMeters. Works across every vector spec (S-101, S-122, S-124, S-125, " +
+            "S-127, S-128, S-129, S-131, S-201, S-411, S-421). Each match reports the dataset ID, " +
+            "spec, feature ID and type, geometry primitive, bounds, containment ('inside'/'near'), " +
+            "and approximate distance — follow up with describe_feature for full attributes.";
+
+        var del = ([Description("Pick latitude in decimal degrees, WGS-84. Must be in [-90, 90].")] double latitude,
+                   [Description("Pick longitude in decimal degrees, WGS-84. Must be in [-180, 180].")] double longitude,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec.")] string? spec = null,
+                   [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
+                   [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new IdentifyFeaturesRequest(
+                        latitude,
+                        longitude,
+                        ParseSpec(spec),
+                        radiusMeters,
+                        maxResults),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = IdentifyFeaturesTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

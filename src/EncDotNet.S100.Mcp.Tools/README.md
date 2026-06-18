@@ -173,7 +173,7 @@ implements an internal `ISpecFeatureDescriber` strategy.
 
 ## Host-injected tools
 
-The eight tools above are catalog-only and live in this assembly. A
+The catalog tools above are catalog-only and live in this assembly. A
 host (e.g. the Avalonia viewer) may inject additional tools at
 runtime via `S100McpServerOptions.AdditionalTools` in
 `EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
@@ -215,6 +215,7 @@ var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
 var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
+var identifyFeatures = new IdentifyFeaturesTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
 var countFeatures = new CountFeaturesTool(catalog);
 
@@ -237,6 +238,23 @@ if (hits.TryGetValue(out var hit))
     foreach (var ds in hit.Datasets)
     {
         Console.WriteLine($"{ds.Id} ({ds.Spec}) covers the point.");
+    }
+}
+
+// Which *features* are under this point? identify_features is the
+// feature-aware cursor-pick: it ranks matches most-specific first
+// (point before curve before area; smaller / nearer wins), uses exact
+// point-in-polygon containment for areas, and a metre radius for
+// point / curve features. Works across every vector spec incl. S-101.
+var picked = await identifyFeatures.InvokeAsync(new IdentifyFeaturesRequest(
+    Latitude: 50.77,
+    Longitude: -1.30,
+    RadiusMeters: 50));
+if (picked.TryGetValue(out var pick))
+{
+    foreach (var m in pick.Features)
+    {
+        Console.WriteLine($"{m.Spec} {m.FeatureType} {m.FeatureId} ({m.Geometry}, {m.Containment}).");
     }
 }
 

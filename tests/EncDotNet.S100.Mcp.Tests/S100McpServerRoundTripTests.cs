@@ -31,6 +31,7 @@ public class S100McpServerRoundTripTests
                 "count_features",
                 "describe_feature",
                 "find_at",
+                "identify_features",
                 "list_datasets",
                 "list_specs",
                 "list_time_steps",
@@ -225,6 +226,55 @@ public class S100McpServerRoundTripTests
         Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
         Assert.Equal(1, tally["count"]!.GetValue<int>());
         Assert.Equal(1, tally["withGeometry"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task IdentifyFeatures_round_trip_returns_ranked_matches()
+    {
+        var area = new S124Feature
+        {
+            Id = "area-1",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (4.0, 4.0), (4.0, 6.0), (6.0, 6.0), (6.0, 4.0), (4.0, 4.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var point = new S124Feature
+        {
+            Id = "light-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(area, point);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-2", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 5.0,
+            ["longitude"] = 5.0,
+        });
+
+        Assert.False(result.IsError ?? false, $"identify_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(2, payload["totalMatched"]!.GetValue<int>());
+        var features = payload["features"]!.AsArray();
+        Assert.Equal(2, features.Count);
+        // The point ranks above the area.
+        Assert.Equal("light-1", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("point", features[0]!["geometry"]!.GetValue<string>());
+        Assert.Equal("surface", features[1]!["geometry"]!.GetValue<string>());
+        Assert.Equal("inside", features[1]!["containment"]!.GetValue<string>());
     }
 
     [Fact]
