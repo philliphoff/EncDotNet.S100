@@ -284,12 +284,11 @@ public partial class MainWindow : ShadUI.Window
         // When the off-thread vector-snapshot prebuild publishes a freshly
         // recorded image on a background thread, marshal a single graphics
         // refresh onto the UI thread so the transient scaled-stale blit is
-        // replaced by the crisp image. No-op unless the prebuild is enabled.
-        if (EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.PrebuildEnabled)
-        {
-            EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
-        }
+        // replaced by the crisp image. Wired unconditionally (no-op unless the
+        // prebuild is enabled) so toggling the prebuild on at runtime works
+        // without a relaunch.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
 
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via

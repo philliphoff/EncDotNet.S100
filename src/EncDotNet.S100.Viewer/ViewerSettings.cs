@@ -156,24 +156,41 @@ internal sealed class ViewerSettings
     public bool? IgnoreScaleMinimum { get; set; }
 
     /// <summary>
-    /// Experimental: when true, S-100 vector layers are wrapped in a
-    /// Mapsui <c>RasterizingTileLayer</c> so each visible region is
-    /// rasterised once into a tile cache and re-used during pan/zoom.
-    /// Trades vector crispness during gestures for higher frame rate
-    /// on large datasets. Defaults to false (un-cached vector path).
+    /// Whether the raster vector-layer snapshot fast path is enabled
+    /// (<c>RenderingOptimizations.VectorSnapshotEnabled</c>). Records a settled
+    /// S-100 vector layer once per (resolution, feature-set) and blits it under
+    /// translation during pans, so a pan costs one textured blit instead of
+    /// re-drawing every feature. <see langword="null"/> in legacy settings files;
+    /// treated as the best default (on) by <see cref="SettingsViewModel"/>.
     /// </summary>
-    public bool? EnableVectorRasterization { get; set; }
+    public bool? VectorSnapshotEnabled { get; set; }
 
     /// <summary>
-    /// When true, S-100 vector layers run incoming line geometries
-    /// through a resolution-aware Douglas-Peucker simplifier (issue
-    /// #164) before passing them to Mapsui's vector style renderer.
-    /// Each <c>(feature, zoom-bucket)</c> pair is cached, so steady
-    /// pans/zooms re-use the simplified geometry. Polygons and short
-    /// lines pass through unchanged. Defaults to false (full
-    /// geometry — preserves the historical pixel-perfect output).
+    /// Whether the off-thread snapshot prebuild is enabled
+    /// (<c>RenderingOptimizations.VectorSnapshotPrebuildEnabled</c>). Hides the
+    /// one-time record stall on zoom and the sustained-pan record stall by
+    /// rasterising on a background thread. Only meaningful when
+    /// <see cref="VectorSnapshotEnabled"/> is on. <see langword="null"/> → best
+    /// default (on).
     /// </summary>
-    public bool? EnableGeometrySimplification { get; set; }
+    public bool? VectorSnapshotPrebuildEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the translation-invariant vector path cache is enabled
+    /// (<c>RenderingOptimizations.VectorPathCacheEnabled</c>). Builds each
+    /// geometry's projected path once per (feature, resolution) and re-uses it
+    /// across pans. <see langword="null"/> → best default (on).
+    /// </summary>
+    public bool? VectorPathCacheEnabled { get; set; }
+
+    /// <summary>
+    /// Whether resolution-aware line simplification is enabled
+    /// (<c>RenderingOptimizations.LineSimplificationEnabled</c>). Drops on-screen
+    /// sub-pixel vertices from dense S-100 line geometries at path-build time.
+    /// Requires <see cref="VectorPathCacheEnabled"/>. <see langword="null"/> →
+    /// best default (on).
+    /// </summary>
+    public bool? LineSimplificationEnabled { get; set; }
 
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }

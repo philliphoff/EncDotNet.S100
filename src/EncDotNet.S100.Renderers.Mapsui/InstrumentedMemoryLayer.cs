@@ -73,10 +73,12 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
     /// passthrough.
     /// </summary>
     /// <remarks>
-    /// Introduced for issue #164. The viewer's
-    /// <c>EnableGeometrySimplification</c> setting calls this in
-    /// <c>DatasetLoaderService</c> after the dataset processor
-    /// returns its layers.
+    /// Introduced for issue #164. Superseded for production use by the
+    /// path-build-time line simplification in
+    /// <see cref="CachedVectorStyleRenderer"/> (surfaced as the
+    /// <c>Settings → Map → Simplify dense line geometry</c> knob via
+    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/>); retained
+    /// as a standalone, unit-tested layer capability.
     /// </remarks>
     public void EnableSimplification(
         IFeatureSimplifier simplifier,

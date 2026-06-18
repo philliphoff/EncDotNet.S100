@@ -85,29 +85,25 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     public static CachedVectorStyleRenderer Instance { get; } = new(new VectorStyleRenderer());
 
     private readonly ISkiaStyleRenderer _inner;
-    private readonly bool _enabled;
-    private readonly double _simplifyPx;
+    private readonly double _simplifyOverridePx;
+    private double _lastSimplifyPx = double.NaN;
     private readonly object _sync = new();
     private readonly PathCache _cache;
 
     /// <summary>
-    /// Default pixel tolerance for resolution-aware line simplification, read
-    /// once from the <c>S100_VECTOR_SIMPLIFY_PX</c> environment variable (or
-    /// 0.6 when unset/invalid). See <see cref="CachedVectorStyleRenderer(ISkiaStyleRenderer, int, double)"/>.
+    /// Effective line-simplification tolerance, in screen pixels. When an
+    /// explicit tolerance was supplied to the constructor (≥ 0) it is honoured
+    /// verbatim; otherwise the value tracks the live
+    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/> knob (its
+    /// tolerance when on, <c>0</c> — vertex-exact — when off). A change clears the
+    /// path cache so re-built paths reflect the new tolerance.
     /// </summary>
-    private static readonly double s_defaultSimplifyPx = ReadSimplifyTolerance();
-
-    private static double ReadSimplifyTolerance()
-    {
-        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SIMPLIFY_PX");
-        if (!string.IsNullOrEmpty(raw)
-            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
-        {
-            return v;
-        }
-
-        return 0.6;
-    }
+    private double EffectiveSimplifyPx =>
+        _simplifyOverridePx >= 0
+            ? _simplifyOverridePx
+            : (RenderingOptimizations.LineSimplificationEnabled
+                ? RenderingOptimizations.LineSimplificationTolerancePx
+                : 0.0);
 
     /// <summary>
     /// Creates a renderer wrapping <paramref name="inner"/> (the real Mapsui
@@ -125,18 +121,17 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// the cost is paid once per (feature, zoom) and reused across all pans, and
     /// dropped vertices are by construction sub-pixel <i>on screen</i> at that
     /// zoom — so the result is visually indistinguishable at every zoom level.
-    /// A value &lt;= 0 disables simplification (paths are vertex-exact). When
-    /// negative, the default (env <c>S100_VECTOR_SIMPLIFY_PX</c> or 0.6) is used.
+    /// A value <c>0</c> disables simplification (paths are vertex-exact). When
+    /// negative (the default), the tolerance follows the live
+    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/> knob, which
+    /// the viewer's <c>Settings → Map</c> section binds.
     /// </param>
     public CachedVectorStyleRenderer(ISkiaStyleRenderer inner, int capacity = 8192, double simplifyTolerancePx = -1)
     {
         ArgumentNullException.ThrowIfNull(inner);
         _inner = inner;
         _cache = new PathCache(Math.Max(1, capacity));
-        _simplifyPx = simplifyTolerancePx < 0 ? s_defaultSimplifyPx : simplifyTolerancePx;
-        // Default on; allow disabling for A/B perf comparison.
-        _enabled = (Environment.GetEnvironmentVariable("S100_VECTOR_PATH_CACHE") ?? string.Empty)
-            is not ("0" or "false" or "FALSE" or "False");
+        _simplifyOverridePx = simplifyTolerancePx;
     }
 
     /// <summary>
@@ -162,9 +157,15 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     {
         var measuring = (Environment.GetEnvironmentVariable("S100_MEASURE_VECTOR_SPLIT") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
-        var disabled = (Environment.GetEnvironmentVariable("S100_VECTOR_PATH_CACHE") ?? string.Empty)
-            is "0" or "false" or "FALSE" or "False";
-        if (measuring || disabled)
+        // Skip registration only when the build/fill split measurement is active
+        // (it must characterise Mapsui's un-cached cost) or when the path cache
+        // is pinned off by an explicit environment variable (faithful A/B). When
+        // the cache is merely toggled off via the Map setting we still register
+        // Instance — it delegates to the inner renderer per draw — so the knob
+        // can be flipped back on live.
+        var pinnedOff = RenderingOptimizations.VectorPathCacheEnvExplicit
+            && !RenderingOptimizations.VectorPathCacheEnabled;
+        if (measuring || pinnedOff)
         {
             return;
         }
@@ -176,7 +177,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     public bool Draw(SKCanvas canvas, Viewport viewport, ILayer layer,
         IFeature feature, IStyle style, RenderService renderService, long iteration)
     {
-        if (!_enabled
+        if (!RenderingOptimizations.VectorPathCacheEnabled
             || style is not VectorStyle vectorStyle
             || feature is not GeometryFeature geometryFeature
             || geometryFeature.Geometry is not { } geometry)
@@ -282,15 +283,26 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
 
         var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
 
+        var tol = EffectiveSimplifyPx;
+
         PathEntry? entry;
         lock (_sync)
         {
+            // A live change to the simplification tolerance (Settings → Map)
+            // invalidates every cached path, which was built at the old
+            // tolerance. Clear once on change so re-builds use the new value.
+            if (!_lastSimplifyPx.Equals(tol))
+            {
+                _cache.Clear();
+                _lastSimplifyPx = tol;
+            }
+
             entry = _cache.Get(key);
         }
 
         if (entry is null)
         {
-            var built = BuildLineEntry(lineString, resolution, _simplifyPx);
+            var built = BuildLineEntry(lineString, resolution, tol);
             lock (_sync)
             {
                 var again = _cache.Get(key);
@@ -604,6 +616,14 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         }
 
         public int Count => _map.Count;
+
+        public void Clear()
+        {
+            _map.Clear();
+            _lru.Clear();
+            // Entries are not disposed: another thread may be drawing a path
+            // outside the lock. The GC finalises each SKPath once unreachable.
+        }
 
         public PathEntry? Get(in PathKey key)
         {

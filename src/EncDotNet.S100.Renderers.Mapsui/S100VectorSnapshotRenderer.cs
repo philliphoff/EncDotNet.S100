@@ -129,21 +129,23 @@ public static class S100VectorSnapshotRenderer
 
     /// <summary>
     /// True when the raster-snapshot fast path is enabled. Enabled by default;
-    /// set the env var <c>S100_VECTOR_PICTURE_SNAPSHOT</c> to a falsy value
-    /// (<c>0</c> / <c>false</c>) to opt out so the renderer can be A/B'd against
-    /// the path-cache baseline with the perf harness.
+    /// driven by <see cref="RenderingOptimizations.VectorSnapshotEnabled"/> (which
+    /// the viewer's <c>Settings → Map</c> section binds, seeded from the legacy
+    /// <c>S100_VECTOR_PICTURE_SNAPSHOT</c> env var). Set the env var to a falsy
+    /// value (<c>0</c> / <c>false</c>) to pin it off for an A/B run against the
+    /// path-cache baseline.
     /// </summary>
-    public static bool Enabled { get; } =
-        (Environment.GetEnvironmentVariable("S100_VECTOR_PICTURE_SNAPSHOT") ?? string.Empty)
-            is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
+    public static bool Enabled => RenderingOptimizations.VectorSnapshotEnabled;
 
     /// <summary>
     /// True when the <b>off-thread snapshot prebuild</b> is enabled. <b>Enabled by
-    /// default</b>; set <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> to a falsy value
-    /// (<c>0</c> / <c>false</c>) to opt out and fall back to the single-image
-    /// snapshot (one cached image, re-recorded <i>synchronously</i> on the render
-    /// thread whenever the resolution or feature-set changes, and on a pan past
-    /// the recorded margin). Opt out for A/B comparison against the prebuild path.
+    /// default</b>; driven by
+    /// <see cref="RenderingOptimizations.VectorSnapshotPrebuildEnabled"/> (which
+    /// the viewer's <c>Settings → Map</c> section binds, seeded from the legacy
+    /// <c>S100_VECTOR_SNAPSHOT_PREBUILD</c> env var). When off the renderer falls
+    /// back to the single-image snapshot (one cached image, re-recorded
+    /// <i>synchronously</i> on the render thread whenever the resolution or
+    /// feature-set changes, and on a pan past the recorded margin).
     /// </summary>
     /// <remarks>
     /// When on, the renderer keeps a small per-resolution cache of recorded
@@ -159,9 +161,7 @@ public static class S100VectorSnapshotRenderer
     /// bucket(s) are rasterized in the background so a subsequent zoom lands on a
     /// ready, crisp image.
     /// </remarks>
-    public static bool PrebuildEnabled { get; } =
-        (Environment.GetEnvironmentVariable("S100_VECTOR_SNAPSHOT_PREBUILD") ?? string.Empty)
-            is not ("0" or "false" or "FALSE" or "False" or "off" or "OFF");
+    public static bool PrebuildEnabled => RenderingOptimizations.VectorSnapshotPrebuildEnabled;
 
     /// <summary>
     /// Optional callback invoked (on a background thread) when an off-thread
@@ -272,16 +272,15 @@ public static class S100VectorSnapshotRenderer
 
     /// <summary>
     /// Registers this renderer under <see cref="RendererName"/> with Mapsui's
-    /// <c>MapRenderer</c>. Idempotent and a no-op when <see cref="Enabled"/> is
-    /// false. Call once at startup (after the style renderers are registered).
+    /// <c>MapRenderer</c>. Idempotent. Registration is unconditional so the
+    /// renderer can be toggled live via <see cref="Enabled"/> (a fresh layer is
+    /// tagged with <see cref="RendererName"/> only while <see cref="Enabled"/> is
+    /// true, and a tagged layer falls back to live per-feature drawing when the
+    /// flag is turned off — see <see cref="Render"/>). Call once at startup
+    /// (after the style renderers are registered).
     /// </summary>
     public static void Register()
     {
-        if (!Enabled)
-        {
-            return;
-        }
-
         MapRenderer.RegisterLayerRenderer(RendererName, Render);
     }
 
@@ -303,6 +302,15 @@ public static class S100VectorSnapshotRenderer
         var resolution = viewport.Resolution;
         if (resolution <= 0)
         {
+            return;
+        }
+
+        // The snapshot fast path can be turned off live (Settings → Map). A
+        // layer tagged while it was on may still reach here after a runtime
+        // disable; draw it live so the toggle takes effect without a reload.
+        if (!Enabled)
+        {
+            DrawLayerLive(canvas, viewport, layer, viewport.ToExtent(), renderService);
             return;
         }
 

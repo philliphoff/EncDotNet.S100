@@ -175,6 +175,32 @@
                       IsChecked="{Binding BasemapEnabled}"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_BasemapEnabled}" />
 
+            <!-- Rendering optimizations (Settings → Map) -->
+            <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}"
+                      IsChecked="{Binding VectorSnapshotEnabled}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}"
+                      IsChecked="{Binding VectorSnapshotPrebuildEnabled}"
+                      IsEnabled="{Binding VectorSnapshotEnabled}"
+                      Margin="16,0,0,0"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}"
+                      IsChecked="{Binding VectorPathCacheEnabled}"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_LineSimplificationEnabled}"
+                      IsChecked="{Binding LineSimplificationEnabled}"
+                      IsEnabled="{Binding VectorPathCacheEnabled}"
+                      Margin="16,0,0,0"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_LineSimplificationEnabled}" />
+
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />
             <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection}"
@@ -274,12 +300,6 @@
             <CheckBox Content="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"
                       IsChecked="{Binding IgnoreScaleMinimum}"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_EnableVectorRasterization}"
-                      IsChecked="{Binding EnableVectorRasterization}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EnableVectorRasterization}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_EnableGeometrySimplification}"
-                      IsChecked="{Binding EnableGeometrySimplification}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_EnableGeometrySimplification}" />
 
             <!-- National Language -->
             <StackPanel Spacing="6">
