@@ -37,6 +37,21 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
 {
     private const byte FeatureRecordRcnm = 100;
 
+    /// <summary>RCNM of a MultiPoint spatial record (S-100 Part 10a §3).</summary>
+    private const byte MultiPointRcnm = 115;
+
+    /// <summary>
+    /// Default Z (depth/height) multiplication factor used when the dataset's
+    /// DSSI record leaves <c>CMFZ</c> at zero — the S-57 SOMF convention of 10
+    /// (decimetre resolution), matching the S-101 portrayal data provider.
+    /// This is a defensive fallback only: well-formed S-101 datasets encode
+    /// CMFZ in the DSSI record (S-100 Part 10a §10a-6.1.2.2; typically 100 for
+    /// centimetre depth resolution), parsed correctly as of
+    /// EncDotNet.Iso8211 0.5.1 (which fixed the <c>b48</c> 8-byte binary-control
+    /// parse), so it is not expected to fire for valid data.
+    /// </summary>
+    private const double DefaultZMultiplicationFactor = 10.0;
+
     public string SpecName => "S-101";
 
     public ToolResult<DescribeFeatureResult> Describe(FeatureDescriberContext context)
@@ -77,7 +92,8 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             : feature.FeatureTypeCode.ToString(CultureInfo.InvariantCulture);
 
         var geometry = ResolveGeometry(s101.Dataset, feature.RecordId);
-        var attributes = SerializeAttributes(feature, document, geometry);
+        var depths = ResolveMultiPointDepths(feature, document);
+        var attributes = SerializeAttributes(feature, document, geometry, depths);
         return ToolResult<DescribeFeatureResult>.Ok(new DescribeFeatureResult(
             context.Dataset.Spec,
             acronym,
@@ -128,8 +144,49 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
         return uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out rcid);
     }
 
+    /// <summary>
+    /// Resolves the per-point depth (Z ordinate) of a MultiPoint feature
+    /// such as an S-101 <c>Sounding</c>. In S-101 a sounding's charted depth
+    /// is encoded as the third ordinate of each point in its MultiPoint
+    /// spatial record (S-100 Part 10a §8), scaled by the dataset's Z
+    /// multiplication factor (DSSI <c>CMFZ</c>, defaulting to the S-57 SOMF
+    /// value of 10 when zero). Returns the depths in the same order as the
+    /// coordinates produced by <see cref="S101VectorSource"/> (spatial
+    /// associations in order, then each record's points in order), or
+    /// <see langword="null"/> when the feature references no MultiPoint
+    /// record so non-sounding geometry is unaffected.
+    /// </summary>
+    private static IReadOnlyList<double>? ResolveMultiPointDepths(
+        S101FeatureRecord feature, S101Document document)
+    {
+        if (feature.SpatialAssociations.IsDefaultOrEmpty)
+        {
+            return null;
+        }
+
+        var cmfz = document.StructureInfo.CoordinateMultiplicationFactorZ == 0
+            ? DefaultZMultiplicationFactor
+            : document.StructureInfo.CoordinateMultiplicationFactorZ;
+
+        List<double>? depths = null;
+        foreach (var spa in feature.SpatialAssociations)
+        {
+            if (spa.RecordName != MultiPointRcnm) continue;
+            if (!document.MultiPoints.TryGetValue(spa.RecordId, out var mp)) continue;
+
+            depths ??= new List<double>(mp.Points.Length);
+            foreach (var (_, _, z) in mp.Points)
+            {
+                depths.Add(z / cmfz);
+            }
+        }
+
+        return depths;
+    }
+
     private static JsonElement SerializeAttributes(
-        S101FeatureRecord feature, S101Document document, Feature? geometry)
+        S101FeatureRecord feature, S101Document document, Feature? geometry,
+        IReadOnlyList<double>? depths)
     {
         var attributeList = new List<Dictionary<string, object?>>();
         foreach (var attr in feature.Attributes)
@@ -188,6 +245,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
                 ["roleAcronym"] = document.RoleCatalogue.TryGetValue(ia.RoleCode, out var rac)
                     ? rac
                     : null,
+                ["target"] = ResolveInformationTarget(ia.RecordId, document),
             });
         }
 
@@ -209,7 +267,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
                 ? fac0
                 : null,
             ["geometryPrimitive"] = ClassifyGeometry(feature, document),
-            ["geometry"] = BuildGeometry(geometry),
+            ["geometry"] = BuildGeometry(geometry, depths),
             ["spatialAssociations"] = spatial,
             ["attributes"] = attributeList,
             ["featureAssociations"] = featureAssoc,
@@ -221,6 +279,52 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     }
 
     /// <summary>
+    /// Dereferences an information association's target record id against
+    /// <see cref="S101Document.InformationTypes"/> and inlines the
+    /// associated information record's type and attributes so an agent can
+    /// read the linked text (e.g. an <c>information</c> / <c>text</c>
+    /// attribute on a linked information type) directly from the
+    /// <c>describe_feature</c> payload, without a second lookup. This is a
+    /// single, non-recursive dereference — the target's own information
+    /// associations are not followed — so the payload stays bounded
+    /// (S-101, INAS field; S-100 Part 10a). Returns <see langword="null"/>
+    /// when the target record is not present in the dataset (e.g. a
+    /// dangling pointer or a record carried by a companion cell).
+    /// </summary>
+    private static Dictionary<string, object?>? ResolveInformationTarget(
+        uint targetRecordId, S101Document document)
+    {
+        if (!document.InformationTypes.TryGetValue(targetRecordId, out var info))
+        {
+            return null;
+        }
+
+        var attributeList = new List<Dictionary<string, object?>>();
+        foreach (var attr in info.Attributes)
+        {
+            attributeList.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["code"] = attr.NumericCode,
+                ["acronym"] = document.AttributeTypeCatalogue.TryGetValue(attr.NumericCode, out var ac)
+                    ? ac
+                    : null,
+                ["index"] = attr.Index,
+                ["value"] = attr.Value,
+            });
+        }
+
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["recordId"] = info.RecordId,
+            ["informationTypeCode"] = info.InformationTypeCode,
+            ["informationTypeAcronym"] = document.InformationTypeCatalogue.TryGetValue(info.InformationTypeCode, out var itac)
+                ? itac
+                : null,
+            ["attributes"] = attributeList,
+        };
+    }
+
+    /// <summary>
     /// Builds the resolved-geometry block for the serialised payload from
     /// the coordinates resolved by <see cref="S101VectorSource"/>. Returns
     /// <c>null</c> when the feature has no resolvable geometry (e.g.
@@ -228,9 +332,13 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// a bounding box (south/west/north/east), the exterior coordinates as
     /// <c>[latitude, longitude]</c> pairs, and any interior (hole) rings —
     /// enough for an agent to compute distance / bearing or drive
-    /// <c>set_viewport</c>.
+    /// <c>set_viewport</c>. For MultiPoint soundings a parallel
+    /// <c>depths</c> array (metres, positive down) is included, aligned
+    /// one-to-one with <c>coordinates</c>, so an agent can read the charted
+    /// depth at each sounding (e.g. for under-keel-clearance reasoning).
     /// </summary>
-    private static Dictionary<string, object?>? BuildGeometry(Feature? geometry)
+    private static Dictionary<string, object?>? BuildGeometry(
+        Feature? geometry, IReadOnlyList<double>? depths)
     {
         if (geometry is null || geometry.Coordinates.Count == 0)
         {
@@ -264,6 +372,14 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             }
         }
 
+        // Only surface depths when they align one-to-one with the resolved
+        // coordinates; a mismatch means the geometry projection and the raw
+        // MultiPoint records diverged, in which case omitting the array is
+        // safer than emitting misaligned depths.
+        var alignedDepths = depths is not null && depths.Count == coordinates.Count
+            ? depths
+            : null;
+
         return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["primitive"] = geometry.GeometryType.ToString(),
@@ -275,6 +391,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
                 ["eastLongitude"] = east,
             },
             ["coordinates"] = coordinates,
+            ["depths"] = alignedDepths,
             ["interiorRings"] = interiorRings,
         };
     }

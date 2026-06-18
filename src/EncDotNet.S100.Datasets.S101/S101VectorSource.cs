@@ -105,6 +105,8 @@ public sealed class S101VectorSource : IVectorSource
         var results = new List<(double, double)>();
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
+        // Defensive divide-by-zero guards only; valid datasets supply COMF (typically
+        // 1e7) in the DSSI record. See HostGetSpatialData in S101LuaDataProvider.
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
 
@@ -125,6 +127,8 @@ public sealed class S101VectorSource : IVectorSource
         var results = new List<(double, double)>();
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
+        // Defensive divide-by-zero guards only; valid datasets supply COMF (typically
+        // 1e7) in the DSSI record. See HostGetSpatialData in S101LuaDataProvider.
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
 
@@ -212,6 +216,8 @@ public sealed class S101VectorSource : IVectorSource
     {
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
+        // Defensive divide-by-zero guards only; valid datasets supply COMF (typically
+        // 1e7) in the DSSI record. See HostGetSpatialData in S101LuaDataProvider.
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
 

@@ -623,7 +623,10 @@ public class S100McpServerRoundTripTests
 
         Assert.True(result.IsError ?? false, "Expected isError=true for unknown query kind.");
         var payload = ParseSingleJson(result);
-        Assert.Equal("internal_error", payload["code"]!.GetValue<string>());
+        // Malformed query envelopes now map to a structured invalid_argument
+        // error (naming the offending parameter) rather than an opaque
+        // internal_error — see issue #312.
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
     }
 
     [Fact]
@@ -817,6 +820,112 @@ public class S100McpServerRoundTripTests
         Assert.Single(datasets);
         Assert.Equal("warn-here", datasets[0]!["id"]!.GetValue<string>());
     }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_accepts_structured_object_query()
+    {
+        var feature = MakeNavwarn("feat-struct", 5.0, 5.0);
+        var dataset = S124Synth.Dataset(feature);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-struct", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        // Pass the query envelope as a structured JSON object (the ergonomic
+        // form an agent intuitively reaches for) rather than a stringified
+        // JSON envelope — see issue #312.
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = new JsonObject
+            {
+                ["kind"] = "box",
+                ["south"] = -5,
+                ["west"] = -5,
+                ["north"] = 15,
+                ["east"] = 15,
+            },
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("feat-struct", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_scopes_to_datasetId()
+    {
+        var a = S124Synth.Dataset(MakeNavwarn("in-a", 5.0, 5.0));
+        var b = S124Synth.Dataset(MakeNavwarn("in-b", 6.0, 6.0));
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("ds-a", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: a),
+            LoadedDatasetFactory.S124("ds-b", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: b));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["datasetId"] = "ds-b",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        var feature = Assert.Single(features);
+        Assert.Equal("in-b", feature!["featureId"]!.GetValue<string>());
+        Assert.Equal("ds-b", feature["datasetId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_malformed_query_returns_invalid_argument()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("ds", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10),
+                model: S124Synth.Dataset(MakeNavwarn("f", 5.0, 5.0))));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        // A query object missing the required "kind" discriminator should
+        // surface a structured invalid_argument error, not an opaque
+        // internal_error — see issue #312.
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = new JsonObject
+            {
+                ["boundingBox"] = new JsonObject
+                {
+                    ["south"] = -5,
+                    ["west"] = -5,
+                    ["north"] = 15,
+                    ["east"] = 15,
+                },
+            },
+        });
+
+        Assert.True(result.IsError ?? false, "expected an error for a malformed query.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
+    }
+
+    private static S124Feature MakeNavwarn(string id, double lat, double lon) =>
+        new()
+        {
+            Id = id,
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((lat, lon)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
 
     private static JsonObject ParseSingleJson(CallToolResult result)
     {

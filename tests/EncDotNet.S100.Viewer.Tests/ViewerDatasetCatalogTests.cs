@@ -60,6 +60,67 @@ public class ViewerDatasetCatalogTests
         AssertBoundsAreNotWorld(loaded.Bounds);
     }
 
+    [Fact]
+    public void ResolveS101Edition_parses_declared_product_specification_edition()
+    {
+        var dataset = S101Dataset.FromDocument(SyntheticDocument("1.0.2"));
+
+        var edition = ViewerDatasetCatalog.ResolveS101Edition(dataset);
+
+        Assert.Equal(new SpecVersion(1, 0, 2), edition);
+    }
+
+    [Fact]
+    public void ResolveS101Edition_defaults_when_edition_absent()
+    {
+        var dataset = S101Dataset.FromDocument(SyntheticDocument(""));
+
+        var edition = ViewerDatasetCatalog.ResolveS101Edition(dataset);
+
+        Assert.Equal(default, edition);
+    }
+
+    [SkippableFact]
+    public void S101_entry_surfaces_declared_edition()
+    {
+        var path = Path("S101", System.IO.Path.Combine("DATASET_FILES", "101AA00DS0003.000"));
+        Skip.IfNot(File.Exists(path), $"Missing fixture {path}");
+
+        var loader = new FakeDatasetLoaderService();
+        using var catalog = new ViewerDatasetCatalog(loader);
+        var entry = new DatasetEntry(path, "S-101");
+
+        loader.RaiseLoaded(entry);
+
+        var loaded = Assert.Single(catalog.Datasets);
+        Assert.NotEqual(default, loaded.Spec.Edition);
+        Assert.Equal(new SpecVersion(1, 0, 2), loaded.Spec.Edition);
+    }
+
+    private static S101Document SyntheticDocument(string productSpecificationEdition) =>
+        new()
+        {
+            Identification = new S101DatasetIdentification
+            {
+                DatasetName = "synthetic",
+                ProductSpecification = "INT.IHO.S-101.1.0",
+                ProductSpecificationEdition = productSpecificationEdition,
+            },
+            StructureInfo = new S101DatasetStructureInfo(),
+            FeatureTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            Points = System.Collections.Immutable.ImmutableDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = System.Collections.Immutable.ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = System.Collections.Immutable.ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = System.Collections.Immutable.ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = System.Collections.Immutable.ImmutableArray<S101FeatureRecord>.Empty,
+            InformationTypes = System.Collections.Immutable.ImmutableDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+            RoleCatalogue = System.Collections.Immutable.ImmutableDictionary<ushort, string>.Empty,
+        };
+
     [SkippableFact]
     public void S104_entry_is_projected_with_real_bounds()
     {

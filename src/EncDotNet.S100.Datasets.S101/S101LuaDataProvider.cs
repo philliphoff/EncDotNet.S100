@@ -752,10 +752,15 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         double cmfx = _doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = _doc.StructureInfo.CoordinateMultiplicationFactorY;
         double cmfz = _doc.StructureInfo.CoordinateMultiplicationFactorZ;
+        // Defensive divide-by-zero guards only. Valid S-101 datasets populate the
+        // coordinate multiplication factors in the DSSI record (S-100 Part 10a
+        // §10a-6.1.2.2) — typically COMF=1e7 for lat/lon and SOMF=100 for depth — so
+        // these fallbacks do not fire for well-formed data. They protect against a
+        // missing/partial DSSI yielding an Infinity coordinate. (The factors are
+        // parsed correctly as of EncDotNet.Iso8211 0.5.1, which fixed the b48
+        // 8-byte binary-control parse; the SOMF=10 default is an S-57 holdover.)
         if (cmfx == 0) cmfx = 10_000_000;
         if (cmfy == 0) cmfy = 10_000_000;
-        // CMFZ defaults to S-57 SOMF (10) when zero; S-101 datasets that encode Z
-        // explicitly should populate this via the DSSI record.
         if (cmfz == 0) cmfz = 10;
 
         if (rcnm == RcnmPoint && _doc.Points.TryGetValue(rcid, out var pt))

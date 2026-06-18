@@ -356,7 +356,7 @@ internal static class S100McpServerToolFactory
             "describe_feature for full attributes. The result also carries a typeBreakdown " +
             "(per-feature-type counts of the full match set). Pagination is server-side.";
 
-        var del = ([Description("Spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] string query,
+        var del = ([Description("Spatial query envelope, supplied either as a JSON object (preferred) or a JSON string containing one. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] JsonElement query,
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
                    [Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? featureType = null,
                    [Description("Optional temporal filter JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T12:00:00Z\"}, {\"kind\":\"range\",\"from\":\"...\",\"to\":\"...\"}, {\"kind\":\"series\",\"from\":\"...\",\"to\":\"...\",\"stepSeconds\":N}. Excludes features whose fixedDateRange/periodicDateRange is disjoint from the window; features without validity metadata are always included.")] string? times = null,
@@ -364,6 +364,7 @@ internal static class S100McpServerToolFactory
                    [Description("When true, replaces the default bounding-box test with true full-geometry intersection: point-in-polygon containment for areas (holes honoured) and genuine segment crossing (e.g. which features a route leg actually crosses). Default false.")] bool precise = false,
                    [Description("Zero-based page index.")] int page = 0,
                    [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   [Description("Optional dataset identifier (typically from list_datasets); null queries across every matching dataset.")] string? datasetId = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -375,7 +376,8 @@ internal static class S100McpServerToolFactory
                         ParseAttributePredicates(attributes),
                         precise,
                         page,
-                        pageSize),
+                        pageSize,
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -399,7 +401,7 @@ internal static class S100McpServerToolFactory
 
         var del = ([Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null counts across every matching dataset.")] string? datasetId = null,
-                   [Description("Optional spatial query JSON envelope (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are counted; geometry-less features are excluded.")] string? query = null,
+                   [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are counted; geometry-less features are excluded.")] JsonElement? query = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -433,7 +435,7 @@ internal static class S100McpServerToolFactory
         var del = ([Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName). Required.")] string text,
                    [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
                    [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
-                   [Description("Optional spatial query JSON envelope (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] string? query = null,
+                   [Description("Optional spatial query envelope, supplied as a JSON object (preferred) or a JSON string (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] JsonElement? query = null,
                    [Description("When true the match is case-sensitive; default false.")] bool caseSensitive = false,
                    [Description("When true a name must equal the search text exactly; when false (default) any name containing the text matches.")] bool exact = false,
                    [Description("Zero-based page index.")] int page = 0,
@@ -562,6 +564,35 @@ internal static class S100McpServerToolFactory
     private static GeoQuery? ParseGeoQuery(string? queryJson)
         => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);
 
+    /// <summary>
+    /// Parses a spatial query supplied either as a structured JSON object
+    /// (e.g. <c>{"kind":"box",...}</c>) — the ergonomic form an agent
+    /// intuitively reaches for — or, for backward compatibility, as a JSON
+    /// string containing that same envelope. Returns <see langword="null"/>
+    /// when the argument is absent/null, and throws
+    /// <see cref="ArgumentException"/> (mapped to a structured
+    /// <c>invalid_argument</c> error) for any other shape.
+    /// </summary>
+    private static GeoQuery? ParseGeoQuery(JsonElement? query)
+    {
+        if (query is not { } element)
+        {
+            return null;
+        }
+
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.String => ParseGeoQuery(element.GetString()),
+            JsonValueKind.Object => GeoQueryJsonReader.Parse(element.GetRawText()),
+            _ => throw new ArgumentException(
+                "query must be a JSON envelope object with a \"kind\" of point|box|polygon|polyline "
+                + "(e.g. {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}), "
+                + "or a JSON string containing one.",
+                nameof(query)),
+        };
+    }
+
     private static TimeQuery? ParseTimeQuery(string? timesJson)
         => string.IsNullOrWhiteSpace(timesJson) ? null : TimeQueryJsonReader.Parse(timesJson);
 
@@ -645,10 +676,31 @@ internal static class S100McpServerToolFactory
         {
             throw;
         }
+        catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException)
+        {
+            // Malformed caller input (bad query/time/attribute/spec JSON or
+            // an out-of-range value) surfaces as a structured invalid_argument
+            // error naming the offending parameter where known, rather than an
+            // opaque internal_error — see issue #312.
+            return ArgumentFailure(ex);
+        }
         catch (Exception ex)
         {
             return InternalError(ex);
         }
+    }
+
+    /// <summary>
+    /// Maps a caller-input exception (<see cref="ArgumentException"/>,
+    /// <see cref="FormatException"/>, or <see cref="JsonException"/>) to a
+    /// structured <c>invalid_argument</c> error envelope, carrying the
+    /// offending parameter name when the exception is an
+    /// <see cref="ArgumentException"/> that supplies one.
+    /// </summary>
+    private static CallToolResult ArgumentFailure(Exception ex)
+    {
+        var argument = ex is ArgumentException { ParamName: { Length: > 0 } name } ? name : null;
+        return Failure(new InvalidArgument(argument ?? string.Empty, ex.Message));
     }
 
     private static CallToolResult Success<T>(T value)
