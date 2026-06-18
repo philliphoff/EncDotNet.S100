@@ -135,12 +135,13 @@ internal static class S100McpServerToolFactory
     {
         var description =
             "Returns spec, feature-type code, attributes (as a JSON object), and xlink-resolved cross-references " +
-            "for a single feature in a loaded vector dataset. Supports S-122, S-124, S-125, S-127, S-128, S-129, " +
-            "S-131, S-201, S-411, and S-421. References for backfilled GML specs are currently returned empty " +
-            "(spec-specific reference resolution is staged). Read-only and side-effect free.";
+            "for a single feature in a loaded vector dataset. Works across every vector spec — S-101 (ISO 8211 " +
+            "ENC; featureId is the record's decimal RCID) plus the GML specs S-122, S-124, S-125, S-127, S-128, " +
+            "S-129, S-131, S-201, S-411, and S-421. References for backfilled GML specs are currently returned " +
+            "empty (spec-specific reference resolution is staged). Read-only and side-effect free.";
 
         var del = ([Description("Stable dataset identifier returned by list_datasets.")] string datasetId,
-                   [Description("GML id of the feature within the dataset.")] string featureId,
+                   [Description("Identifier of the feature within the dataset: the GML id for GML specs, or the decimal record id (RCID) for S-101.")] string featureId,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -341,11 +342,19 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateQueryFeaturesTool(QueryFeaturesTool inner)
     {
         var description =
-            "Returns features from loaded GML-encoded vector datasets whose geometry intersects a " +
-            "geographic query (point / bounding box / polygon / polyline). Supports S-122, S-124, " +
-            "S-125, S-127, S-128, S-129, S-131, S-201, S-411, and S-421. Each result includes the " +
+            "Returns features from loaded vector datasets whose geometry intersects a geographic " +
+            "query (point / bounding box / polygon / polyline). Works across every vector spec — " +
+            "S-101 (ISO 8211 ENC) plus the GML specs S-122, S-124, S-125, S-127, S-128, S-129, " +
+            "S-131, S-201, S-411, and S-421 — adapted through the shared feature interface. By " +
+            "default intersection is bounding-box precision; set precise=true for true " +
+            "full-geometry intersection (point-in-polygon containment for areas, holes honoured, " +
+            "and genuine segment crossing). An optional attributes predicate set filters on " +
+            "attribute values (equality map or explicit operator predicates, combined with AND). " +
+            "For S-101 the featureType filter matches the feature-type acronym (e.g. LIGHTS, " +
+            "BOYLAT) and each featureId is the record's decimal RCID. Each result includes the " +
             "dataset ID, spec, feature ID, feature type, and bounding box — follow up with " +
-            "describe_feature for full attributes. Pagination is server-side.";
+            "describe_feature for full attributes. The result also carries a typeBreakdown " +
+            "(per-feature-type counts of the full match set). Pagination is server-side.";
 
         var del = ([Description("Spatial query JSON envelope. Shapes: {\"kind\":\"point\",\"latitude\":lat,\"longitude\":lon}, {\"kind\":\"box\",\"south\":s,\"west\":w,\"north\":n,\"east\":e}, {\"kind\":\"polygon\",\"ring\":[[lat,lon],...]}, {\"kind\":\"polyline\",\"vertices\":[[lat,lon],...],\"corridorWidthMeters\":w}.")] string query,
                    [Description("Optional spec filter (e.g. \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
