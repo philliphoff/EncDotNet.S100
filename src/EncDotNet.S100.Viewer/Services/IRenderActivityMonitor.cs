@@ -41,6 +41,40 @@ internal sealed record RenderStatsSnapshot(
     long PaintSequence,
     DateTimeOffset CapturedAtUtc);
 
+/// <summary>
+/// Aggregate cost statistics over a rolling window of recently completed
+/// paints. Where <see cref="RenderStatsSnapshot"/> reports only the
+/// single most recent paint — which, after a view settles, is a cheap
+/// cached repaint — these aggregates retain the worst frames seen during
+/// a burst of activity (e.g. a continuous pan/zoom stress run), so a
+/// transient expensive paint is never missed between polls.
+/// </summary>
+/// <param name="Count">Number of paints currently retained in the window.</param>
+/// <param name="FirstSequence">Paint sequence of the oldest retained paint, or 0 when empty.</param>
+/// <param name="LastSequence">Paint sequence of the newest retained paint, or 0 when empty.</param>
+/// <param name="FrameMaxMs">Maximum whole-frame paint duration over the window, in milliseconds.</param>
+/// <param name="FrameMeanMs">Mean whole-frame paint duration over the window, in milliseconds.</param>
+/// <param name="FrameP95Ms">95th-percentile whole-frame paint duration over the window, in milliseconds.</param>
+/// <param name="VectorMaxMs">Maximum cumulative <c>VectorStyle</c> draw duration in a single paint over the window, in milliseconds.</param>
+/// <param name="VectorMeanMs">Mean per-paint cumulative <c>VectorStyle</c> draw duration over the window, in milliseconds.</param>
+/// <param name="VectorP95Ms">95th-percentile per-paint cumulative <c>VectorStyle</c> draw duration over the window, in milliseconds.</param>
+/// <param name="MaxTotalDrawCalls">Maximum total style draw calls in a single paint over the window.</param>
+internal sealed record RenderWindowStats(
+    long Count,
+    long FirstSequence,
+    long LastSequence,
+    double FrameMaxMs,
+    double FrameMeanMs,
+    double FrameP95Ms,
+    double VectorMaxMs,
+    double VectorMeanMs,
+    double VectorP95Ms,
+    long MaxTotalDrawCalls)
+{
+    /// <summary>An empty window (no paints retained).</summary>
+    public static RenderWindowStats Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
 /// <summary>Outcome of <see cref="IRenderActivityMonitor.WaitForIdleAsync"/>.</summary>
 /// <param name="WentIdle">
 /// <see langword="true"/> when the map quiesced (no paint or refresh
@@ -117,6 +151,21 @@ internal interface IRenderActivityMonitor
         TimeSpan quietPeriod,
         TimeSpan timeout,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns aggregate cost statistics over the rolling window of
+    /// recently observed paints. Implementations that do not track a
+    /// window return <see cref="RenderWindowStats.Empty"/>.
+    /// </summary>
+    RenderWindowStats GetWindowStats() => RenderWindowStats.Empty;
+
+    /// <summary>
+    /// Clears the rolling paint window so a subsequent
+    /// <see cref="GetWindowStats"/> reflects only paints observed after
+    /// this call. Lets a caller isolate a measurement phase. No-op for
+    /// implementations that do not track a window.
+    /// </summary>
+    void ResetWindow() { }
 }
 
 /// <summary>

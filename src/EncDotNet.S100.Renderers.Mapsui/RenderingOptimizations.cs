@@ -54,7 +54,7 @@ public static class RenderingOptimizations
             SeedSimplification();
 
         (s_polygonSimplificationEnabled, PolygonSimplificationEnvExplicit) =
-            SeedBool("S100_VECTOR_POLYGON_SIMPLIFY", defaultValue: true);
+            SeedBool("S100_VECTOR_POLYGON_SIMPLIFY", defaultValue: false);
     }
 
     /// <summary>
@@ -131,9 +131,20 @@ public static class RenderingOptimizations
     /// Whether <b>polygon</b> simplification specifically is enabled. Gated in
     /// addition to <see cref="GeometrySimplificationEnabled"/> (polygons are
     /// simplified only when both are on), so polygon simplification can be
-    /// disabled in isolation — e.g. via <c>S100_VECTOR_POLYGON_SIMPLIFY=0</c> — for
-    /// A/B measurement without turning off line simplification. Default on.
+    /// toggled in isolation — e.g. via <c>S100_VECTOR_POLYGON_SIMPLIFY=1</c> — for
+    /// A/B measurement without affecting line simplification.
     /// </summary>
+    /// <remarks>
+    /// Default <b>off</b>. Multi-dataset stress measurement (15 S-101 cells,
+    /// pan/zoom across boundaries) showed topology-preserving polygon
+    /// simplification is net-negative for paint on the GPU path: the
+    /// <c>TopologyPreservingSimplifier</c> cost is paid on every path-build and is
+    /// not recovered by reduced fill (Metal fill is area-bound, not vertex-bound),
+    /// and under cache pressure the cost is re-paid on every rebuild. It is kept
+    /// as an opt-in knob for future evaluation (e.g. other data, CPU-bound paths,
+    /// or memory-pressure scenarios). See
+    /// <c>docs/design/mapsui-performance.md</c>.
+    /// </remarks>
     public static bool PolygonSimplificationEnabled
     {
         get => s_polygonSimplificationEnabled;

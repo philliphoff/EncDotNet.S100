@@ -137,27 +137,54 @@ tolerance ≈ 1 screen pixel at the current zoom. Polylines with
 thousands of vertices typically reduce 10–100× without visible quality
 loss.
 
-**Status:** implemented for both lines and polygons. Simplification
+**Status:** lines simplified and **on by default**; polygons implemented
+but **opt-in / off by default** after measurement showed no paint benefit
+(see "Polygons" below). Simplification
 lives in `CachedVectorStyleRenderer` (the registered `VectorStyle`
 renderer) at `SKPath`-build time, keyed by build resolution and cached
 per `(feature, position, resolution)`, so the cost is paid once per
 `(feature, zoom)` and inherited by the vector-snapshot record/prebuild.
-Gated behind the viewer's **Simplify dense geometry** setting (default
-**on**). See the renderer
+Lines are gated behind the viewer's **Simplify dense geometry** setting
+(default **on**); polygons behind the nested **Also simplify polygon
+areas (experimental)** setting (default **off**). See the renderer
 [README → Resolution-aware geometry simplification](../../src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification)
 for the implementation, gating, telemetry, and known limits.
 
 **Lines.** `LineString` / `MultiLineString` are simplified inline with a
 radial-distance pixel filter while building the path.
 
-**Polygons.** `Polygon` / `MultiPolygon` (land/depth/sea areas — the
-highest-vertex S-101 features) are generalized with
-`TopologyPreservingSimplifier` at `pixelTolerance × resolution` metres,
-then validated (`IsValid`, `Buffer(0)` repair) with a **safe
+**Polygons (opt-in, off by default).** `Polygon` / `MultiPolygon`
+(land/depth/sea areas — the highest-vertex S-101 features) are generalized
+with `TopologyPreservingSimplifier` at `pixelTolerance × resolution`
+metres, then validated (`IsValid`, `Buffer(0)` repair) with a **safe
 pass-through to the exact geometry** on any invalid/degenerate/throwing
 result, so a self-intersecting simplification can never reach the
-rasteriser. `MultiPolygon` parts are simplified independently;
-polygons below 32 vertices skip the NTS pass.
+rasteriser. `MultiPolygon` parts are simplified independently; polygons
+below 32 vertices skip the NTS pass.
+
+> **Measured: polygon simplification does *not* speed up paint — kept as
+> an opt-in knob, default off.** A multi-dataset stress test (basemap off,
+> all 15 AU IC-ENC S-101 cells loaded, pan/zoom across dataset boundaries
+> over Tasmania, rolling-window render telemetry, 4 reps cold+warm, each
+> arm run solo) A/B'd via `S100_VECTOR_POLYGON_SIMPLIFY`:
+>
+> | metric (warm avg) | OFF | ON (polygon simplify) |
+> |---|---|---|
+> | frame max | ~480 ms | ~800 ms |
+> | vector max | ~570 ms | ~1240 ms |
+> | vector mean | ~62 ms | ~78 ms |
+> | settle mean | ~675 ms | ~715 ms |
+>
+> ON is **reproducibly ~1.6× worse frame / ~2.2× worse vector** across
+> both cold and warm reps. Why the 1 µs/vertex projection below did not
+> hold: the `TopologyPreservingSimplifier` cost is paid on the
+> render/path-build path on every (re)build; under multi-dataset cache
+> pressure the path cache thrashes so the cost is re-paid and never
+> amortized; and **GPU (Metal) fill is area-bound, not vertex-bound**, so
+> dropping vertices does not reduce fill cost. The earlier 1 µs/vertex
+> figure was a CPU-build model that does not reflect cached GPU paint.
+> The knob is retained for future evaluation (other data, CPU-bound
+> render paths, or memory-pressure scenarios).
 
 **Earlier deferral, now resolved.** The original line-only version
 deferred polygons because naive per-ring Douglas-Peucker can produce
@@ -181,7 +208,9 @@ already covered by the vector snapshot); unifying line simplification
 onto NTS Douglas-Peucker (currently a radial-distance filter — visually
 negligible at sub-pixel tolerance).
 
-Projected impact based on the measured cost model:
+The 1 µs/vertex projection below predates the GPU-path measurement and
+**held for lines but not polygons** — treat it as a CPU-build upper bound,
+not a GPU-paint prediction:
 - 1k-10k bucket → 100-999 bucket: ~5× cheaper draws (saves ~18 s of
   paint over the measurement window).
 - 100-999 bucket → 10-99 bucket: similar magnitude (saves ~20 s).

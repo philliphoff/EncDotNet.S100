@@ -194,16 +194,28 @@ independently (each part keyed by its position). Polygons below
 
 ### Gating
 
-A single **Simplify dense geometry** setting
+A **Simplify dense geometry** setting
 (`RenderingOptimizations.GeometrySimplificationEnabled`, default on) with a
 shared pixel tolerance (`SimplificationTolerancePx`, default 0.6,
-seeded from `S100_VECTOR_SIMPLIFY_PX`) governs both lines and polygons.
-Polygon simplification has an additional escape hatch,
-`S100_VECTOR_POLYGON_SIMPLIFY=0`, that disables *polygons only* for A/B
-isolation without touching line behaviour
-(`RenderingOptimizations.PolygonSimplificationEnabled`). Simplification
-requires the path cache (`S100_VECTOR_PATH_CACHE`); changing either
-effective tolerance clears the cache so rebuilt paths reflect the new
+seeded from `S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification.
+
+**Polygon** simplification is a separate, **opt-in** knob
+(`RenderingOptimizations.PolygonSimplificationEnabled`, **default off**,
+seeded from `S100_VECTOR_POLYGON_SIMPLIFY`). It is gated *in addition* to
+`GeometrySimplificationEnabled` — both must be on for polygons to be
+simplified — and is surfaced in the viewer as the nested **Also simplify
+polygon areas (experimental)** checkbox. It defaults off because
+multi-dataset stress measurement (15 S-101 cells, pan/zoom across
+boundaries) showed topology-preserving polygon simplification is
+net-negative for paint on the GPU path: the `TopologyPreservingSimplifier`
+cost is paid on every path build and is not recovered by reduced fill
+(Metal fill is area-bound, not vertex-bound), and under cache pressure the
+cost is re-paid on every rebuild. The knob is retained for future
+evaluation (other data, CPU-bound paths, memory-pressure scenarios). See
+`docs/design/mapsui-performance.md`.
+
+Simplification requires the path cache (`S100_VECTOR_PATH_CACHE`); changing
+either effective tolerance clears the cache so rebuilt paths reflect the new
 tolerance.
 
 ### Cache (coordinate-budget eviction)

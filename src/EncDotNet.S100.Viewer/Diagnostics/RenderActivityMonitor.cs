@@ -41,6 +41,15 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
     private TaskCompletionSource _pulse =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>Capacity of the rolling paint window.</summary>
+    private const int WindowCapacity = 4096;
+    private readonly double[] _winFrameMs = new double[WindowCapacity];
+    private readonly double[] _winVectorMs = new double[WindowCapacity];
+    private readonly long[] _winDrawCalls = new long[WindowCapacity];
+    private readonly long[] _winSequence = new long[WindowCapacity];
+    private int _winHead;
+    private int _winCount;
+
     /// <inheritdoc />
     public long PaintCount
     {
@@ -62,7 +71,15 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
         ArgumentNullException.ThrowIfNull(styles);
 
         long total = 0;
-        foreach (var s in styles) total += s.Calls;
+        double vectorMs = 0;
+        foreach (var s in styles)
+        {
+            total += s.Calls;
+            if (string.Equals(s.Style, "VectorStyle", StringComparison.Ordinal))
+            {
+                vectorMs += s.DurationMs;
+            }
+        }
 
         TaskCompletionSource toSignal;
         lock (_gate)
@@ -82,10 +99,102 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
                 PaintSequence: _paintCount,
                 CapturedAtUtc: DateTimeOffset.UtcNow);
 
+            var slot = (_winHead + _winCount) % WindowCapacity;
+            if (_winCount == WindowCapacity)
+            {
+                _winHead = (_winHead + 1) % WindowCapacity;
+                slot = (_winHead + _winCount - 1 + WindowCapacity) % WindowCapacity;
+            }
+            else
+            {
+                _winCount++;
+            }
+            _winFrameMs[slot] = frameDurationMs;
+            _winVectorMs[slot] = vectorMs;
+            _winDrawCalls[slot] = total;
+            _winSequence[slot] = _paintCount;
+
             toSignal = _pulse;
             _pulse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         toSignal.TrySetResult();
+    }
+
+    /// <inheritdoc />
+    public RenderWindowStats GetWindowStats()
+    {
+        double[] frames;
+        double[] vectors;
+        long maxCalls = 0;
+        long firstSeq, lastSeq;
+        int n;
+        lock (_gate)
+        {
+            n = _winCount;
+            if (n == 0) return RenderWindowStats.Empty;
+            frames = new double[n];
+            vectors = new double[n];
+            firstSeq = _winSequence[_winHead];
+            lastSeq = _winSequence[(_winHead + n - 1) % WindowCapacity];
+            for (var i = 0; i < n; i++)
+            {
+                var idx = (_winHead + i) % WindowCapacity;
+                frames[i] = _winFrameMs[idx];
+                vectors[i] = _winVectorMs[idx];
+                if (_winDrawCalls[idx] > maxCalls) maxCalls = _winDrawCalls[idx];
+            }
+        }
+
+        return new RenderWindowStats(
+            Count: n,
+            FirstSequence: firstSeq,
+            LastSequence: lastSeq,
+            FrameMaxMs: Max(frames),
+            FrameMeanMs: Mean(frames),
+            FrameP95Ms: Percentile(frames, 0.95),
+            VectorMaxMs: Max(vectors),
+            VectorMeanMs: Mean(vectors),
+            VectorP95Ms: Percentile(vectors, 0.95),
+            MaxTotalDrawCalls: maxCalls);
+    }
+
+    /// <inheritdoc />
+    public void ResetWindow()
+    {
+        lock (_gate)
+        {
+            _winHead = 0;
+            _winCount = 0;
+        }
+    }
+
+    private static double Max(double[] values)
+    {
+        var m = 0.0;
+        foreach (var v in values) if (v > m) m = v;
+        return m;
+    }
+
+    private static double Mean(double[] values)
+    {
+        if (values.Length == 0) return 0;
+        var sum = 0.0;
+        foreach (var v in values) sum += v;
+        return sum / values.Length;
+    }
+
+    /// <summary>
+    /// Nearest-rank percentile over an unsorted copy. The input array is
+    /// sorted in place, so callers must pass a throwaway copy.
+    /// </summary>
+    private static double Percentile(double[] values, double p)
+    {
+        if (values.Length == 0) return 0;
+        Array.Sort(values);
+        var rank = (int)Math.Ceiling(p * values.Length) - 1;
+        if (rank < 0) rank = 0;
+        if (rank >= values.Length) rank = values.Length - 1;
+        return values[rank];
     }
 
     /// <inheritdoc />

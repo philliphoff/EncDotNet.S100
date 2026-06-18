@@ -200,6 +200,11 @@
                       IsEnabled="{Binding VectorPathCacheEnabled}"
                       Margin="16,0,0,0"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}" />
+            <CheckBox Content="{x:Static loc:Strings.Settings_PolygonSimplificationEnabled}"
+                      IsChecked="{Binding PolygonSimplificationEnabled}"
+                      IsEnabled="{Binding GeometrySimplificationEnabled}"
+                      Margin="32,0,0,0"
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PolygonSimplificationEnabled}" />
 
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />

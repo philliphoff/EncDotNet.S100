@@ -851,7 +851,13 @@
     <value>Simplify dense geometry</value>
   </data>
   <data name="Tooltip_GeometrySimplificationEnabled" xml:space="preserve">
-    <value>Drop on-screen sub-pixel detail from dense S-100 line and polygon features when building cached paths, so the renderer strokes and fills far fewer segments. Polygons use topology-preserving simplification (holes and shared edges stay valid). Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on.</value>
+    <value>Drop on-screen sub-pixel detail from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on. (Polygon area features are controlled separately below.)</value>
+  </data>
+  <data name="Settings_PolygonSimplificationEnabled" xml:space="preserve">
+    <value>Also simplify polygon areas (experimental)</value>
+  </data>
+  <data name="Tooltip_PolygonSimplificationEnabled" xml:space="preserve">
+    <value>Also apply topology-preserving simplification to dense polygon area features (land, depth and sea areas), keeping holes and shared edges valid. Off by default: multi-dataset measurement showed it does not speed up painting on the GPU and can make it slower, because the simplifier cost is paid on every path build. Kept as an opt-in for future evaluation. Requires "Simplify dense geometry".</value>
   </data>
   <data name="Settings_MapSection" xml:space="preserve">
     <value>Map</value>
