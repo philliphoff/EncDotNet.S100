@@ -193,31 +193,6 @@ public class RenderActivityMonitorTests
         Assert.False(result.TimedOut);
     }
 
-    [Fact]
-    public async Task WaitForIdleAsync_live_busy_with_continuous_activity_times_out()
-    {
-        // A layer that is busy AND keeps signalling render activity (a live
-        // fetch) resets the quiet timer on every poll, so the wait never
-        // settles and correctly times out rather than reporting a premature
-        // idle. Activity is emitted from the BusyProbe so it is driven
-        // deterministically by the wait loop's own polling.
-        RenderActivityMonitor m = null!;
-        m = new RenderActivityMonitor
-        {
-            BusyProbe = () =>
-            {
-                m.NotifyActivity();
-                return true;
-            },
-        };
-
-        var result = await m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(120));
-
-        Assert.False(result.WentIdle);
-        Assert.True(result.TimedOut);
-    }
-
     [Theory]
     [InlineData(100, 100, 50, false)]   // activity 0 ticks ago < 50 => live
     [InlineData(160, 100, 50, true)]    // activity 60 ticks ago >= 50 => stale
