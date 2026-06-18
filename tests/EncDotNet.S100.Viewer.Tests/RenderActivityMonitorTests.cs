@@ -179,14 +179,53 @@ public class RenderActivityMonitorTests
     }
 
     [Fact]
-    public async Task WaitForIdleAsync_times_out_while_busy()
+    public async Task WaitForIdleAsync_stale_busy_flag_reports_idle_after_quiet_period()
     {
+        // A layer whose Busy flag is stuck on but emits no further render
+        // activity must not hold the wait open until the timeout: once the
+        // map has been quiet for the full quiet period the call reports
+        // idle (recency-gated busy veto).
         var m = new RenderActivityMonitor { BusyProbe = () => true };
         var result = await m.WaitForIdleAsync(
             TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(150));
 
+        Assert.True(result.WentIdle);
+        Assert.False(result.TimedOut);
+    }
+
+    [Fact]
+    public async Task WaitForIdleAsync_live_busy_with_continuous_activity_times_out()
+    {
+        // A layer that is busy AND keeps signalling render activity (a live
+        // fetch) resets the quiet timer on every poll, so the wait never
+        // settles and correctly times out rather than reporting a premature
+        // idle. Activity is emitted from the BusyProbe so it is driven
+        // deterministically by the wait loop's own polling.
+        RenderActivityMonitor m = null!;
+        m = new RenderActivityMonitor
+        {
+            BusyProbe = () =>
+            {
+                m.NotifyActivity();
+                return true;
+            },
+        };
+
+        var result = await m.WaitForIdleAsync(
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(120));
+
         Assert.False(result.WentIdle);
         Assert.True(result.TimedOut);
+    }
+
+    [Theory]
+    [InlineData(100, 100, 50, false)]   // activity 0 ticks ago < 50 => live
+    [InlineData(160, 100, 50, true)]    // activity 60 ticks ago >= 50 => stale
+    [InlineData(150, 100, 50, true)]    // activity exactly 50 ticks ago => stale (boundary)
+    public void IsBusyStale_gates_on_recency(
+        long now, long lastActivity, long quiet, bool expectedStale)
+    {
+        Assert.Equal(expectedStale, RenderActivityMonitor.IsBusyStale(now, lastActivity, quiet));
     }
 
     [Fact]
