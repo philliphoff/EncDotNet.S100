@@ -27,7 +27,7 @@ Key types include:
 - **`S421InformationType`** — a non-spatial information type instance (e.g. `RouteInfo`).
 - **`S421Reference`** — an `xlink:href` reference from one object to another.
 - **`S421ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`GmlGeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature (`None`, `Point`, `Curve`, `Surface`).
+- **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature (`None`, `Point`, `Curve`, `Surface`).
 - **`S421FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S421Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
 - **`S421PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 

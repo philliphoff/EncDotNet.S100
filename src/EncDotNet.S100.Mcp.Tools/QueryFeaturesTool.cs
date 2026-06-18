@@ -60,16 +60,17 @@ public sealed record QueryFeaturesResult(
     [property: Description("True if additional pages remain after the current one.")] bool HasMore);
 
 /// <summary>
-/// Returns features from loaded GML-encoded vector datasets whose
+/// Returns features from loaded S-100 vector datasets whose
 /// geometry intersects the supplied geographic query.
 /// </summary>
 /// <remarks>
 /// <para>
 /// This tool works against every GML-encoded vector spec the codebase
 /// supports — S-122, S-124, S-125, S-127, S-128, S-129, S-131,
-/// S-201, S-411, S-421 — via the shared <see cref="IGmlFeature"/>
-/// abstraction, plus the ISO 8211-encoded S-101 (adapted to
-/// <see cref="IGmlFeature"/> through <c>S101GmlFeature</c>). For S-101
+/// S-201, S-411, S-421 — via the shared <see cref="IS100Feature"/>
+/// abstraction, plus the ISO 8211-encoded S-101 (whose pipeline
+/// <see cref="EncDotNet.S100.Pipelines.Vector.Feature"/> records
+/// implement <see cref="IS100Feature"/> directly). For S-101
 /// the <see cref="QueryFeaturesRequest.FeatureType"/> filter matches the
 /// feature-type acronym (e.g. <c>LIGHTS</c>, <c>BOYLAT</c>) and each
 /// <see cref="FeatureMatch.FeatureId"/> is the feature record's decimal
@@ -143,7 +144,7 @@ public sealed class QueryFeaturesTool
                 continue;
             }
 
-            var features = GmlFeatureAccessor.GetFeatures(dataset);
+            var features = FeatureAccessor.GetFeatures(dataset);
             if (features is null)
             {
                 continue;
@@ -157,7 +158,7 @@ public sealed class QueryFeaturesTool
                     continue;
                 }
 
-                if (!GmlFeatureGeometry.Intersects(feature, request.Query))
+                if (!FeatureGeometryQuery.Intersects(feature, request.Query))
                 {
                     continue;
                 }
@@ -173,7 +174,7 @@ public sealed class QueryFeaturesTool
                     dataset.Spec,
                     feature.Id,
                     feature.FeatureType,
-                    GmlFeatureGeometry.TryGetBoundingBox(feature)));
+                    FeatureGeometryQuery.TryGetBoundingBox(feature)));
             }
         }
 

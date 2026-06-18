@@ -10,7 +10,6 @@ using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S131.DataModel;
 using EncDotNet.S100.Datasets.S131.Validation;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Gml;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -171,7 +170,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(_catalogue, prepared, cancellationToken).ConfigureAwait(false);
 
-        var geometryProvider = new GmlFeatureGeometryProvider<S131Feature>(_dataset.Features);
+        var geometryProvider = new FeatureGeometryProvider<S131Feature>(_dataset.Features);
         Console.WriteLine($"[S131] Prepared {prepared.Count} instructions");
 
         var info = $"{_fileName} — {_dataset.Features.Length} features, " +

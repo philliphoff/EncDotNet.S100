@@ -251,11 +251,12 @@ if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
 
 // What features overlap a bounding box? query_features works across
 // every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
-// S-201/S-411/S-421) via the shared IGmlFeature abstraction, plus the
-// ISO 8211-encoded S-101 (adapted through S101GmlFeature — its
-// FeatureType filter matches the feature-type acronym and FeatureId is
-// the decimal RCID). Pass any GeoQuery variant — point, bbox, polygon,
-// or polyline (with optional corridor width). Results are paginated.
+// S-201/S-411/S-421) via the shared IS100Feature abstraction, plus the
+// ISO 8211-encoded S-101 (whose pipeline Feature records implement
+// IS100Feature directly — its FeatureType filter matches the
+// feature-type acronym and FeatureId is the decimal RCID). Pass any
+// GeoQuery variant — point, bbox, polygon, or polyline (with optional
+// corridor width). Results are paginated.
 var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
     new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
     Spec: new SpecRef("S-124", default),       // any S-124 edition

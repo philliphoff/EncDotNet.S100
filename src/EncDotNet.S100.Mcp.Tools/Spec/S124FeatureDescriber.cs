@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;

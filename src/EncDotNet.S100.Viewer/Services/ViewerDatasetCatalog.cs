@@ -17,7 +17,7 @@ using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -461,7 +461,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     /// callers fall back to <see cref="WorldBounds"/>.
     /// </summary>
     private static BoundingBox? ComputeGmlBounds<TFeature>(IEnumerable<TFeature> features)
-        where TFeature : IGmlFeature
+        where TFeature : IS100Feature
     {
         if (features is null) return null;
 

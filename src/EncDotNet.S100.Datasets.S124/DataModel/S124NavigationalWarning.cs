@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S124.DataModel;
 
@@ -297,15 +297,15 @@ public sealed class S124NavigationalWarning
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 return (S124GeometryKind.Point, f.Points.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 return (S124GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 return (S124GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());

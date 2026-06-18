@@ -3,7 +3,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S201.DataModel;
 using EncDotNet.S100.Datasets.S201.Validation;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S201.Tests.Validation;
@@ -27,7 +27,7 @@ public class S201AtonRulesTests
     {
         Id = id,
         FeatureType = featureType,
-        GeometryType = GmlGeometryType.Point,
+        GeometryType = S100GeometryType.Point,
         Points = ImmutableArray<(double, double)>.Empty,
         Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
         ExteriorRing = ImmutableArray<(double, double)>.Empty,

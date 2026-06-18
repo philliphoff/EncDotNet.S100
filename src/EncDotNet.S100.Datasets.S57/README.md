@@ -168,7 +168,7 @@ var s57 = S57Dataset.Open("US5NY16M.000");
 var s101Document = new S57ToS101Translator().Translate(s57);
 var dataset = S101Dataset.FromDocument(s101Document);
 // Use the existing S-101 pipeline from here:
-// S101LuaRuleExecutor, S101FeatureGeometryProvider, etc.
+// S101LuaRuleExecutor, FeatureGeometryProvider&lt;Feature&gt;, etc.
 ```
 
 ## Installation

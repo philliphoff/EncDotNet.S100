@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S131;
 
@@ -59,7 +59,7 @@ public sealed class S131Dataset
 /// <c>Authority</c>. See the S-131 Edition 1.0.0 Feature Catalogue for the
 /// full set of 31 feature types.
 /// </summary>
-public sealed class S131Feature : IGmlFeature
+public sealed class S131Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -68,7 +68,7 @@ public sealed class S131Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -89,7 +89,7 @@ public sealed class S131Feature : IGmlFeature
     public required ImmutableArray<S131ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Information-type and feature-type association references resolved from
@@ -105,7 +105,7 @@ public sealed class S131Feature : IGmlFeature
 /// (e.g. <c>ContactDetails</c>, <c>NauticalInformation</c>,
 /// <c>Applicability</c>, <c>ServiceHours</c>).
 /// </summary>
-public sealed class S131InformationType : IGmlInformationType
+public sealed class S131InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -133,7 +133,7 @@ public sealed class S131InformationType : IGmlInformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S131ComplexAttribute : IGmlComplexAttribute
+public sealed class S131ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

@@ -3,7 +3,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S131;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -22,7 +22,7 @@ public class QueryFeaturesToolTests
         {
             Id = id,
             FeatureType = featureType,
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((lat, lon)),
             Curves = default,
             ExteriorRing = default,
@@ -38,7 +38,7 @@ public class QueryFeaturesToolTests
         {
             Id = id,
             FeatureType = "MarineProtectedArea",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((lat, lon)),
             Curves = default,
             ExteriorRing = default,
@@ -54,7 +54,7 @@ public class QueryFeaturesToolTests
         {
             Id = id,
             FeatureType = featureType,
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = default,
             Curves = default,
             ExteriorRing = default,

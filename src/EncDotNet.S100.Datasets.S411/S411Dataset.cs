@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Xml.Linq;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S411;
 
@@ -81,7 +81,7 @@ public sealed class S411Dataset
 /// <summary>
 /// A geographic feature parsed from an S-411 GML dataset.
 /// </summary>
-public sealed class S411Feature : IGmlFeature
+public sealed class S411Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -93,7 +93,7 @@ public sealed class S411Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -114,13 +114,13 @@ public sealed class S411Feature : IGmlFeature
     public required ImmutableArray<S411ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 }
 
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S411ComplexAttribute : IGmlComplexAttribute
+public sealed class S411ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

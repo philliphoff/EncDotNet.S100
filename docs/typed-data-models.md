@@ -50,7 +50,7 @@ All in `EncDotNet.S100.Core.DataModel` (namespace
 - **`ExtraAttributes.ExcludeKnown(...)`** — preserves any source
   attributes the typed model did not consume.
 
-The `GmlReference` type (in `EncDotNet.S100.Gml`) is the shared
+The `GmlReference` type (in `EncDotNet.S100.Features`) is the shared
 representation of an `xlink:href` cross-reference, replacing the
 per-spec `SxxxReference` types from earlier iterations.
 

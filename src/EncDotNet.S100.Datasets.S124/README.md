@@ -19,7 +19,7 @@ Key types include:
 - **`S124Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references (`GmlReference`).
 - **`S124InformationType`** — a non-geographic information type instance (e.g. `NavwarnPreamble`).
 - **`S124ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S124GeometryType`** — type alias for `GmlGeometryType` (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
+- **`S124GeometryType`** — type alias for `S100GeometryType` (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
 - **`S124FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S124Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
 - **`S124PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 

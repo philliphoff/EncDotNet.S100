@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S122.DataModel;
 using EncDotNet.S100.Datasets.S122.Validation;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S122.Tests.Validation;

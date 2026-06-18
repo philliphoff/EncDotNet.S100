@@ -133,7 +133,7 @@ public class DataModelTests
             {
                 Id = "buoyX",
                 FeatureType = "LateralBuoy",
-                GeometryType = EncDotNet.S100.Gml.GmlGeometryType.None,
+                GeometryType = EncDotNet.S100.Features.S100GeometryType.None,
                 Attributes = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty,
                 ComplexAttributes = System.Collections.Immutable.ImmutableArray<S125ComplexAttribute>.Empty,
                 InformationReferences = System.Collections.Immutable.ImmutableArray.Create(

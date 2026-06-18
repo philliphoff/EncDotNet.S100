@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S131.DataModel;
 
@@ -162,7 +162,7 @@ public enum S131RxNKind
 
 /// <summary>
 /// Geometric primitive of an <see cref="S131Geometry"/> instance.
-/// Mirrors <see cref="GmlGeometryType"/> but is re-exported here so
+/// Mirrors <see cref="S100GeometryType"/> but is re-exported here so
 /// callers can stay within the S-131 typed namespace.
 /// </summary>
 public enum S131GeometryType
@@ -182,7 +182,7 @@ public enum S131GeometryType
 /// Strongly-typed geometry payload of an <see cref="IS131Feature"/>.
 /// Wraps the four parallel coordinate collections on
 /// <see cref="S131Feature"/> into a single record so typed consumers do
-/// not have to inspect <see cref="GmlGeometryType"/> separately.
+/// not have to inspect <see cref="S100GeometryType"/> separately.
 /// </summary>
 /// <remarks>
 /// Coordinates are <c>(lat, lon)</c> in decimal degrees per

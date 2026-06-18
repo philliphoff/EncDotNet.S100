@@ -84,7 +84,7 @@ public class S421RendererIntegrationTests
         };
 
         var instructions = Part9DisplayListReader.Read(displayList);
-        var geometryProvider = new GmlFeatureGeometryProvider<S421Feature>(dataset.Features);
+        var geometryProvider = new FeatureGeometryProvider<S421Feature>(dataset.Features);
         var layer = renderer.Render(instructions, geometryProvider);
         var memLayer = Assert.IsAssignableFrom<MemoryLayer>(layer);
         var features = memLayer.Features.ToList();
@@ -105,7 +105,7 @@ public class S421RendererIntegrationTests
 
         var renderer = new MapsuiDisplayListRenderer { Palette = catalogue.ActivePalette };
         var instructions = Part9DisplayListReader.Read(displayList);
-        var geometryProvider = new GmlFeatureGeometryProvider<S421Feature>(dataset.Features);
+        var geometryProvider = new FeatureGeometryProvider<S421Feature>(dataset.Features);
         var layer = (MemoryLayer)renderer.Render(instructions, geometryProvider);
 
         var features = layer.Features.OfType<GeometryFeature>().ToList();

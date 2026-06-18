@@ -1,4 +1,4 @@
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S129.Tests;
 
@@ -44,7 +44,7 @@ public class S129DatasetReaderTests
             .First(f => string.Equals(
                 f.FeatureType, "UnderKeelClearanceControlPoint", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal(GmlGeometryType.Point, firstCp.GeometryType);
+        Assert.Equal(S100GeometryType.Point, firstCp.GeometryType);
         Assert.Single(firstCp.Points);
         var (lat, lon) = firstCp.Points[0];
         Assert.InRange(lat, -11.0, -10.0);
@@ -58,7 +58,7 @@ public class S129DatasetReaderTests
         var planArea = dataset.Features.Single(f =>
             string.Equals(f.FeatureType, "UnderKeelClearancePlanArea", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal(GmlGeometryType.Surface, planArea.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, planArea.GeometryType);
         Assert.False(planArea.ExteriorRing.IsDefaultOrEmpty);
         Assert.True(planArea.ExteriorRing.Length >= 4);
         // Ring closure: first ≡ last coordinate.

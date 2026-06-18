@@ -60,18 +60,18 @@ Key types:
   helpers for walking xlinks by role name.
 - **`S201Feature`** — a geographic feature with type code, geometry,
   simple/complex attributes, information references, and feature
-  references. Implements `IGmlFeature`.
+  references. Implements `IS100Feature`.
 - **`S201InformationType`** — an information type instance (e.g.
   `AtonStatusInformation`, `PositioningInformation`,
   `AtoNFixingMethod`, `SpatialQuality`). Implements
-  `IGmlInformationType`.
+  `IS100InformationType`.
 - **`S201InformationReference`** — a feature → information-type
   binding captured from an `xlink:href` attribute.
 - **`S201FeatureReference`** — a feature → feature binding (e.g.
   equipment ↔ host structure) captured from an `xlink:href`
   attribute.
 - **`S201ComplexAttribute`** — a complex attribute group with
-  sub-attribute values. Implements `IGmlComplexAttribute`.
+  sub-attribute values. Implements `IS100ComplexAttribute`.
 - **`S201FeatureXmlSource`** — `IFeatureXmlSource` adapter that
   projects an `S201Dataset` into the synthesised
   `Dataset/Features/*` shape that the S-201 XSLT rules match against.

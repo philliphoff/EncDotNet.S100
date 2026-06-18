@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S125;
 
@@ -60,7 +60,7 @@ public sealed class S125Dataset
 /// <c>DataCoverage</c>. See the S-125 Edition 1.0.0 Feature Catalogue for
 /// the full set.
 /// </summary>
-public sealed class S125Feature : IGmlFeature
+public sealed class S125Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -69,7 +69,7 @@ public sealed class S125Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -90,7 +90,7 @@ public sealed class S125Feature : IGmlFeature
     public required ImmutableArray<S125ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Information-type association references (e.g. <c>AtoNStatus</c> bindings to
@@ -118,7 +118,7 @@ public sealed class S125Feature : IGmlFeature
 /// An information type instance parsed from an S-125 GML dataset
 /// (e.g. <c>AtonStatusInformation</c>, <c>SpatialQuality</c>).
 /// </summary>
-public sealed class S125InformationType : IGmlInformationType
+public sealed class S125InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -136,7 +136,7 @@ public sealed class S125InformationType : IGmlInformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S125ComplexAttribute : IGmlComplexAttribute
+public sealed class S125ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

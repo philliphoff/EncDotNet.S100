@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S127.DataModel;
 
@@ -153,18 +153,18 @@ public sealed class S127MarineServicesDataset
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 if (f.Points.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
                 var pts = f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
                 return (S127GeometryKind.Point, pts);
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 if (f.Curves.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
                 var curve = f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
                     .ToImmutableArray();
                 return (S127GeometryKind.Curve, curve);
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 if (f.ExteriorRing.IsDefaultOrEmpty) return (S127GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
                 var ring = f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
                 return (S127GeometryKind.Surface, ring);

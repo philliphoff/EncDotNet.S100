@@ -3,7 +3,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S411.Tests.Validation;

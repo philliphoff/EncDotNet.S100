@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -197,7 +197,7 @@ public class S100McpServerRoundTripTests
         {
             Id = "feat-1",
             FeatureType = "NavwarnPart",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((5.0, 5.0)),
             Curves = default,
             ExteriorRing = default,
@@ -286,7 +286,7 @@ public class S100McpServerRoundTripTests
         {
             Id = id,
             FeatureType = "MarineProtectedArea",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((5.0, 5.0)),
             Curves = default,
             ExteriorRing = default,

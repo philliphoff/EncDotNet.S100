@@ -1,7 +1,7 @@
 using System;
 using System.Xml.Linq;
 
-namespace EncDotNet.S100.Gml;
+namespace EncDotNet.S100.Features;
 
 /// <summary>
 /// Helpers for reading the declared product-specification edition from the

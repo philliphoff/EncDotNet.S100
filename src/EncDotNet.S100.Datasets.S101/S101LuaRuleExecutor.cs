@@ -83,15 +83,16 @@ internal sealed class S101LuaDataProviderFactory : ILuaDataProviderFactory
 /// <summary>
 /// Supplies the primary point anchor of an S-101 feature for augmented line
 /// tessellation during drawing-instruction parsing (sector lights, all-around
-/// lights). Wraps <see cref="S101FeatureGeometryProvider"/>.
+/// lights). Wraps a <see cref="FeatureGeometryProvider{TFeature}"/> over the
+/// dataset's resolved vector features.
 /// </summary>
 internal sealed class S101FeatureAnchorProvider : IFeatureAnchorProvider
 {
-    private readonly S101FeatureGeometryProvider _geometryProvider;
+    private readonly IFeatureGeometryProvider _geometryProvider;
 
     public S101FeatureAnchorProvider(S101Dataset dataset)
     {
-        _geometryProvider = new S101FeatureGeometryProvider(dataset);
+        _geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(dataset).GetFeatures());
     }
 
     public (double Latitude, double Longitude)? GetAnchor(string featureRef)

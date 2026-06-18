@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.DataModel;
 

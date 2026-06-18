@@ -1,27 +1,31 @@
 using System.Collections.Immutable;
 
-namespace EncDotNet.S100.Gml;
+namespace EncDotNet.S100.Features;
 
 /// <summary>
-/// Common shape shared by all GML-encoded S-100 feature types.
+/// Encoding-neutral shape shared by all S-100 feature instances,
+/// regardless of how they are encoded on disk.
 /// </summary>
 /// <remarks>
-/// Implemented by per-spec feature classes (e.g. <c>S124Feature</c>,
-/// <c>S421Feature</c>) so that generic pipeline components
-/// (<see cref="GmlFeatureGeometryProvider{TFeature}"/>, shared
-/// FeatureXML builders, extent calculators) can operate over any
-/// GML-encoded product without spec-specific coupling.
+/// Implemented by per-spec GML feature classes (e.g. <c>S124Feature</c>,
+/// <c>S421Feature</c>) and by the generic vector-pipeline
+/// <see cref="EncDotNet.S100.Pipelines.Vector.Feature"/> used by the
+/// ISO 8211-encoded S-101 / S-57 path, so that generic pipeline
+/// components (<see cref="EncDotNet.S100.Pipelines.Vector.FeatureGeometryProvider{TFeature}"/>,
+/// shared FeatureXML builders, extent calculators) and the MCP query
+/// tools can operate over any S-100 product without encoding-specific
+/// coupling.
 /// </remarks>
-public interface IGmlFeature
+public interface IS100Feature
 {
-    /// <summary>The GML identifier of the feature.</summary>
+    /// <summary>The identifier of the feature (GML id, or decimal RCID for S-101).</summary>
     string Id { get; }
 
-    /// <summary>The feature type code (the GML element local name).</summary>
+    /// <summary>The feature type code (the GML element local name, or the S-101 acronym).</summary>
     string FeatureType { get; }
 
     /// <summary>The geometry primitive type.</summary>
-    GmlGeometryType GeometryType { get; }
+    S100GeometryType GeometryType { get; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     ImmutableArray<(double Latitude, double Longitude)> Points { get; }
@@ -38,14 +42,15 @@ public interface IGmlFeature
     /// <summary>Simple attributes keyed by code.</summary>
     ImmutableDictionary<string, string> Attributes { get; }
 
-    /// <summary>Complex attributes associated with the feature.</summary>
-    IEnumerable<IGmlComplexAttribute> GmlComplexAttributes { get; }
+    /// <summary>Complex (nested) attributes associated with the feature.</summary>
+    IEnumerable<IS100ComplexAttribute> ComplexAttributes { get; }
 }
 
 /// <summary>
-/// Common shape shared by all GML-encoded S-100 complex attribute types.
+/// Encoding-neutral shape shared by all S-100 complex (nested) attribute
+/// instances.
 /// </summary>
-public interface IGmlComplexAttribute
+public interface IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     string Code { get; }
@@ -55,11 +60,11 @@ public interface IGmlComplexAttribute
 }
 
 /// <summary>
-/// Common shape shared by all GML-encoded S-100 information type instances.
+/// Encoding-neutral shape shared by all S-100 information type instances.
 /// </summary>
-public interface IGmlInformationType
+public interface IS100InformationType
 {
-    /// <summary>The GML identifier.</summary>
+    /// <summary>The identifier.</summary>
     string Id { get; }
 
     /// <summary>The information type code.</summary>

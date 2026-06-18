@@ -30,7 +30,7 @@ public sealed record SpecSummary(
 /// <c>true</c> when <see cref="QueryFeaturesTool"/> can enumerate
 /// features for this spec (i.e. the spec is a GML-encoded vector
 /// product whose <c>LoadedDatasetData</c> variant is wired into
-/// <c>GmlFeatureAccessor</c>).
+/// <c>FeatureAccessor</c>).
 /// </param>
 /// <param name="CanDescribeFeature">
 /// <c>true</c> when <see cref="DescribeFeatureTool"/> has a describer
@@ -92,10 +92,11 @@ public sealed class ListSpecsTool
         "S-421",
     ];
 
-    // Specs whose features are exposed via the shared IGmlFeature
+    // Specs whose features are exposed via the shared IS100Feature
     // interface and addressable by QueryFeaturesTool. Must match the
-    // switch arms in Spec.GmlFeatureAccessor.GetFeatures. S-101 is
-    // ISO 8211-encoded but exposed through the S101GmlFeature adapter.
+    // switch arms in Spec.FeatureAccessor.GetFeatures. S-101 is
+    // ISO 8211-encoded but its pipeline Feature records implement
+    // IS100Feature directly.
     private static readonly HashSet<string> GmlVectorSpecs = new(StringComparer.Ordinal)
     {
         "S-101",

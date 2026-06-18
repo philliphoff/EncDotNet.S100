@@ -8,7 +8,6 @@ using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -31,10 +30,10 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// enumeration, and extent computation.
 /// </remarks>
 /// <typeparam name="TFeature">
-/// The concrete feature type constrained to <see cref="IGmlFeature"/>.
+/// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
 public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
-    where TFeature : IGmlFeature
+    where TFeature : IS100Feature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
@@ -182,7 +181,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 {
                     SubLayers = Array.Empty<VectorSubLayer>(),
                     Palette = _catalogue.ActivePalette,
-                    GeometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features),
+                    GeometryProvider = new FeatureGeometryProvider<TFeature>(Features),
                     Product = Spec.Name,
                     Spec = Spec,
                     SourceDatasetId = _fileName,
@@ -230,7 +229,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             {
                 SubLayers = new[] { subLayer },
                 Palette = catalogue.ActivePalette,
-                GeometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features),
+                GeometryProvider = new FeatureGeometryProvider<TFeature>(Features),
                 Product = Spec.Name,
                 Spec = Spec,
                 SourceDatasetId = _fileName,
@@ -305,7 +304,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
 
-        var geometryProvider = new GmlFeatureGeometryProvider<TFeature>(Features);
+        var geometryProvider = new FeatureGeometryProvider<TFeature>(Features);
 
         return HeadlessVectorRenderer.Render(
             instructions,
@@ -376,7 +375,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     {
         var attributes = FeatureInfoBuilder.Build(
             feature.Attributes,
-            feature.GmlComplexAttributes.Select(c =>
+            feature.ComplexAttributes.Select(c =>
                 new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
             _decoder);
 

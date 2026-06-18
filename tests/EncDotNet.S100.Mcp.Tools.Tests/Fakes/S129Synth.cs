@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S129;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
@@ -60,7 +60,7 @@ internal static class S129Synth
         {
             Id = id,
             FeatureType = "UnderKeelClearancePlan",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = default,
             Curves = default,
             ExteriorRing = default,
@@ -80,7 +80,7 @@ internal static class S129Synth
         {
             Id = id,
             FeatureType = "UnderKeelClearancePlanArea",
-            GeometryType = GmlGeometryType.Surface,
+            GeometryType = S100GeometryType.Surface,
             Points = default,
             Curves = default,
             ExteriorRing = ext,
@@ -96,7 +96,7 @@ internal static class S129Synth
         {
             Id = id,
             FeatureType = "UnderKeelClearancePlanArea",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = default,
             Curves = default,
             ExteriorRing = default,
@@ -122,7 +122,7 @@ internal static class S129Synth
         {
             Id = id,
             FeatureType = "UnderKeelClearanceNonNavigableArea",
-            GeometryType = GmlGeometryType.Surface,
+            GeometryType = S100GeometryType.Surface,
             Points = default,
             Curves = default,
             ExteriorRing = ext,
@@ -151,7 +151,7 @@ internal static class S129Synth
         {
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create<(double, double)>((latitude, longitude)),
             Curves = default,
             ExteriorRing = default,

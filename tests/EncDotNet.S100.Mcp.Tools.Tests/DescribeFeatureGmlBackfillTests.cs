@@ -3,7 +3,7 @@ using System.Text.Json;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S131;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
@@ -18,7 +18,7 @@ public class DescribeFeatureGmlBackfillTests
         {
             Id = "mpa-1",
             FeatureType = "MarineProtectedArea",
-            GeometryType = GmlGeometryType.Surface,
+            GeometryType = S100GeometryType.Surface,
             Points = default,
             Curves = default,
             ExteriorRing = ImmutableArray.Create<(double, double)>((0, 0), (0, 1), (1, 1), (0, 0)),
@@ -63,7 +63,7 @@ public class DescribeFeatureGmlBackfillTests
         {
             Id = "auth-1",
             FeatureType = "Authority",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = default,
             Curves = default,
             ExteriorRing = default,
