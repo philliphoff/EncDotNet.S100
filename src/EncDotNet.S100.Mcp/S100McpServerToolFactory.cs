@@ -77,6 +77,7 @@ internal static class S100McpServerToolFactory
         IdentifyFeaturesTool identifyFeatures,
         QueryFeaturesTool queryFeatures,
         CountFeaturesTool countFeatures,
+        SearchFeaturesTool searchFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps)
@@ -89,6 +90,7 @@ internal static class S100McpServerToolFactory
         yield return CreateIdentifyFeaturesTool(identifyFeatures);
         yield return CreateQueryFeaturesTool(queryFeatures);
         yield return CreateCountFeaturesTool(countFeatures);
+        yield return CreateSearchFeaturesTool(searchFeatures);
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
@@ -355,6 +357,49 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = CountFeaturesTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateSearchFeaturesTool(SearchFeaturesTool inner)
+    {
+        var description =
+            "Finds vector features by name across loaded S-100 datasets — the \"where is the " +
+            "feature called X?\" question that query_features (geometry-first) and describe_feature " +
+            "(needs an id you don't have yet) cannot answer. Searches every place a name can live: " +
+            "the simple OBJNAM / NOBJNM / objectName attributes (incl. ISO 8211-encoded S-101) and " +
+            "the repeatable complex featureName compound's name / displayName sub-attributes (GML " +
+            "specs S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421). Matching " +
+            "is case-insensitive substring containment by default; set exact for whole-name " +
+            "equality or caseSensitive for an exact-case match. Optionally scope by spec, a single " +
+            "dataset, and/or a spatial envelope. Results are paginated and read-only.";
+
+        var del = ([Description("The text to search for in feature names (OBJNAM / NOBJNM / objectName / featureName). Required.")] string text,
+                   [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional dataset identifier (typically from list_datasets); null searches across every matching dataset.")] string? datasetId = null,
+                   [Description("Optional spatial query JSON envelope (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are searched; geometry-less features are excluded.")] string? query = null,
+                   [Description("When true the match is case-sensitive; default false.")] bool caseSensitive = false,
+                   [Description("When true a name must equal the search text exactly; when false (default) any name containing the text matches.")] bool exact = false,
+                   [Description("Zero-based page index.")] int page = 0,
+                   [Description("Page size (clamped to 1..500).")] int pageSize = 50,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new SearchFeaturesRequest(
+                        text,
+                        ParseSpec(spec),
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
+                        ParseGeoQuery(query),
+                        caseSensitive,
+                        exact,
+                        page,
+                        pageSize),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SearchFeaturesTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

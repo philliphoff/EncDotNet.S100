@@ -39,6 +39,7 @@ public class S100McpServerRoundTripTests
                 "query_features",
                 "sample_coverage",
                 "sample_coverage_along",
+                "search_features",
             },
             names);
         foreach (var tool in tools)
@@ -433,6 +434,73 @@ public class S100McpServerRoundTripTests
         var features = payload["features"]!.AsArray();
         Assert.Single(features);
         Assert.Equal("deep", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SearchFeatures_round_trip_finds_features_by_name()
+    {
+        var named = new S124Feature
+        {
+            Id = "warn-named",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Nab Tower Light"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var other = new S124Feature
+        {
+            Id = "warn-other",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Spit Sand Fort"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(named, other);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-named", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
+        {
+            ["text"] = "nab tower",
+        });
+
+        Assert.False(result.IsError ?? false, $"search_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("warn-named", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("Nab Tower Light", features[0]!["matchedName"]!.GetValue<string>());
+        Assert.Equal("objectName", features[0]!["matchedAttribute"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SearchFeatures_blank_text_returns_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
+        {
+            ["text"] = "   ",
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for blank search text.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
     }
 
     [Fact]

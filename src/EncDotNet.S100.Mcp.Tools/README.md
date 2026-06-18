@@ -218,6 +218,7 @@ var findAt = new FindAtTool(catalog);
 var identifyFeatures = new IdentifyFeaturesTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
 var countFeatures = new CountFeaturesTool(catalog);
+var searchFeatures = new SearchFeaturesTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -315,6 +316,25 @@ if (counts.TryGetValue(out var tally))
     foreach (var t in tally.Types)
     {
         Console.WriteLine($"{t.DatasetId} {t.FeatureType}: {t.Count} ({t.WithGeometry} located)");
+    }
+}
+
+// Where is the feature called "X"? search_features answers the
+// name-oriented question that query_features (geometry-first) and
+// describe_feature (needs an id) can't. It searches every place a name
+// can live — the simple OBJNAM / NOBJNM / objectName attributes (incl.
+// S-101) and the complex featureName.name / .displayName sub-attributes
+// (GML specs). Case-insensitive substring by default; set Exact for
+// whole-name equality, CaseSensitive for an exact-case match. Optional
+// spec / dataset / spatial scope.
+var byName = await searchFeatures.InvokeAsync(new SearchFeaturesRequest(
+    "Nab Tower",
+    Spec: new SpecRef("S-101", default)));
+if (byName.TryGetValue(out var hits))
+{
+    foreach (var hit in hits.Features)
+    {
+        Console.WriteLine($"{hit.FeatureType} {hit.FeatureId}: {hit.MatchedName} (via {hit.MatchedAttribute})");
     }
 }
 
