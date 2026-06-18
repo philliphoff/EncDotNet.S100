@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Validates <see cref="RenderingOptimizations"/>: the central, mutable config
 /// for the viewer's Settings → Map rendering-optimization knobs. The "best"
-/// default for every knob is on, and a programmatic write is honoured unless an
+/// default is on for every knob, and a programmatic write is honoured unless an
 /// explicit environment variable pins the value (the perf A/B harness).
 /// </summary>
 public class RenderingOptimizationsTests
@@ -47,9 +47,31 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
-    public void Default_LineSimplificationTolerance_IsSet()
+    public void Default_SimplificationTolerance_IsSet()
     {
-        Assert.True(RenderingOptimizations.LineSimplificationTolerancePx > 0);
+        Assert.True(RenderingOptimizations.SimplificationTolerancePx > 0);
+    }
+
+    [Fact]
+    public void GeometrySimplification_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.GeometrySimplificationEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_SIMPLIFY_PX; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.GeometrySimplificationEnabled;
+        try
+        {
+            RenderingOptimizations.GeometrySimplificationEnabled = false;
+            Assert.False(RenderingOptimizations.GeometrySimplificationEnabled);
+            RenderingOptimizations.GeometrySimplificationEnabled = true;
+            Assert.True(RenderingOptimizations.GeometrySimplificationEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.GeometrySimplificationEnabled = original;
+        }
     }
 
     [Fact]

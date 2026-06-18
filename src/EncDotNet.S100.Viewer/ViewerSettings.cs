@@ -184,11 +184,20 @@ internal sealed class ViewerSettings
     public bool? VectorPathCacheEnabled { get; set; }
 
     /// <summary>
-    /// Whether resolution-aware line simplification is enabled
-    /// (<c>RenderingOptimizations.LineSimplificationEnabled</c>). Drops on-screen
-    /// sub-pixel vertices from dense S-100 line geometries at path-build time.
-    /// Requires <see cref="VectorPathCacheEnabled"/>. <see langword="null"/> →
-    /// best default (on).
+    /// Whether resolution-aware geometry simplification is enabled
+    /// (<c>RenderingOptimizations.GeometrySimplificationEnabled</c>). Drops
+    /// on-screen sub-pixel detail from dense S-100 line <b>and polygon</b>
+    /// geometries at path-build time (polygons via topology-preserving
+    /// simplification). Requires <see cref="VectorPathCacheEnabled"/>.
+    /// <see langword="null"/> → best default (on).
+    /// </summary>
+    public bool? GeometrySimplificationEnabled { get; set; }
+
+    /// <summary>
+    /// Deprecated: prior name for <see cref="GeometrySimplificationEnabled"/>
+    /// (line-only simplification). Still deserialized so existing settings
+    /// migrate forward; read only as a fallback when
+    /// <see cref="GeometrySimplificationEnabled"/> is unset. Do not write.
     /// </summary>
     public bool? LineSimplificationEnabled { get; set; }
 

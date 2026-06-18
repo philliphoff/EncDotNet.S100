@@ -22,21 +22,21 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// live-toggleable knobs.
 /// </para>
 /// <para>
-/// The "best" default for every knob is <see langword="true"/> (line
-/// simplification at <see cref="DefaultLineSimplificationTolerancePx"/> px); see
-/// <c>docs/design/mapsui-performance.md</c> for the measurements behind that
-/// choice.
+/// The "best" default is <see langword="true"/> for every knob; line geometry
+/// simplification runs at <see cref="DefaultSimplificationTolerancePx"/> px. See
+/// <c>docs/design/mapsui-performance.md</c> for the measurements behind those
+/// choices.
 /// </para>
 /// </remarks>
 public static class RenderingOptimizations
 {
-    /// <summary>Default line-simplification tolerance, in screen pixels, used when the knob is on and no env override is present.</summary>
-    public const double DefaultLineSimplificationTolerancePx = 0.6;
+    /// <summary>Default geometry-simplification tolerance, in screen pixels, used when the knob is on and no env override is present.</summary>
+    public const double DefaultSimplificationTolerancePx = 0.6;
 
     private static bool s_vectorSnapshotEnabled;
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
-    private static bool s_lineSimplificationEnabled;
+    private static bool s_geometrySimplificationEnabled;
 
     static RenderingOptimizations()
     {
@@ -49,7 +49,7 @@ public static class RenderingOptimizations
         (s_vectorPathCacheEnabled, VectorPathCacheEnvExplicit) =
             SeedBool("S100_VECTOR_PATH_CACHE", defaultValue: true);
 
-        (s_lineSimplificationEnabled, LineSimplificationTolerancePx, LineSimplificationEnvExplicit) =
+        (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
     }
 
@@ -99,26 +99,28 @@ public static class RenderingOptimizations
     public static bool VectorPathCacheEnvExplicit { get; }
 
     /// <summary>
-    /// Whether resolution-aware line simplification (dropping on-screen sub-pixel
-    /// vertices from dense S-101 line geometries at path-build time) is enabled.
-    /// Applied inside <see cref="CachedVectorStyleRenderer"/> and therefore
-    /// requires <see cref="VectorPathCacheEnabled"/>. Default on.
+    /// Whether resolution-aware <b>line</b> simplification (dropping on-screen
+    /// sub-pixel detail from dense S-101 line geometries at path-build time) is
+    /// enabled. Applied inside <see cref="CachedVectorStyleRenderer"/> as inline
+    /// sub-pixel vertex dropping and therefore requires
+    /// <see cref="VectorPathCacheEnabled"/>. Polygons are always rendered
+    /// vertex-exact. Default on.
     /// </summary>
-    public static bool LineSimplificationEnabled
+    public static bool GeometrySimplificationEnabled
     {
-        get => s_lineSimplificationEnabled;
-        set { if (!LineSimplificationEnvExplicit) s_lineSimplificationEnabled = value; }
+        get => s_geometrySimplificationEnabled;
+        set { if (!GeometrySimplificationEnvExplicit) s_geometrySimplificationEnabled = value; }
     }
 
-    /// <summary>
-    /// Pixel tolerance applied when <see cref="LineSimplificationEnabled"/> is on.
-    /// Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
-    /// <see cref="DefaultLineSimplificationTolerancePx"/>.
-    /// </summary>
-    public static double LineSimplificationTolerancePx { get; }
+    /// <summary>True when geometry simplification is pinned by an explicit <c>S100_VECTOR_SIMPLIFY_PX</c>.</summary>
+    public static bool GeometrySimplificationEnvExplicit { get; }
 
-    /// <summary>True when line simplification is pinned by an explicit <c>S100_VECTOR_SIMPLIFY_PX</c>.</summary>
-    public static bool LineSimplificationEnvExplicit { get; }
+    /// <summary>
+    /// Pixel tolerance applied when <see cref="GeometrySimplificationEnabled"/> is
+    /// on. Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
+    /// <see cref="DefaultSimplificationTolerancePx"/>. Used by line simplification.
+    /// </summary>
+    public static double SimplificationTolerancePx { get; }
 
     private static (bool value, bool envExplicit) SeedBool(string envName, bool defaultValue)
     {
@@ -140,9 +142,9 @@ public static class RenderingOptimizations
         {
             // A tolerance of 0 (or negative) means "vertex-exact" — i.e. the
             // optimization is explicitly disabled.
-            return v > 0 ? (true, v, true) : (false, DefaultLineSimplificationTolerancePx, true);
+            return v > 0 ? (true, v, true) : (false, DefaultSimplificationTolerancePx, true);
         }
 
-        return (true, DefaultLineSimplificationTolerancePx, false);
+        return (true, DefaultSimplificationTolerancePx, false);
     }
 }

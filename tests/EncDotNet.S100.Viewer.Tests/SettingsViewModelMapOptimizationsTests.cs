@@ -28,7 +28,7 @@ public class SettingsViewModelMapOptimizationsTests
         Assert.True(vm.VectorSnapshotEnabled);
         Assert.True(vm.VectorSnapshotPrebuildEnabled);
         Assert.True(vm.VectorPathCacheEnabled);
-        Assert.True(vm.LineSimplificationEnabled);
+        Assert.True(vm.GeometrySimplificationEnabled);
     }
 
     [Fact]
@@ -38,14 +38,14 @@ public class SettingsViewModelMapOptimizationsTests
         s.VectorSnapshotEnabled = false;
         s.VectorSnapshotPrebuildEnabled = false;
         s.VectorPathCacheEnabled = false;
-        s.LineSimplificationEnabled = false;
+        s.GeometrySimplificationEnabled = false;
 
         var vm = new SettingsViewModel(s);
 
         Assert.False(vm.VectorSnapshotEnabled);
         Assert.False(vm.VectorSnapshotPrebuildEnabled);
         Assert.False(vm.VectorPathCacheEnabled);
-        Assert.False(vm.LineSimplificationEnabled);
+        Assert.False(vm.GeometrySimplificationEnabled);
     }
 
     [Fact]
@@ -57,10 +57,10 @@ public class SettingsViewModelMapOptimizationsTests
         vm.MarinerChanged += () => reloads++;
 
         vm.VectorSnapshotEnabled = false;
-        vm.LineSimplificationEnabled = false;
+        vm.GeometrySimplificationEnabled = false;
 
         Assert.False(s.VectorSnapshotEnabled);
-        Assert.False(s.LineSimplificationEnabled);
+        Assert.False(s.GeometrySimplificationEnabled);
         Assert.Equal(2, reloads);
         Assert.True(File.Exists(s.SettingsFilePath));
 
@@ -84,12 +84,12 @@ public class SettingsViewModelMapOptimizationsTests
             Assert.True(RenderingOptimizations.VectorPathCacheEnabled);
         }
 
-        if (!RenderingOptimizations.LineSimplificationEnvExplicit)
+        if (!RenderingOptimizations.GeometrySimplificationEnvExplicit)
         {
-            vm.LineSimplificationEnabled = false;
-            Assert.False(RenderingOptimizations.LineSimplificationEnabled);
-            vm.LineSimplificationEnabled = true;
-            Assert.True(RenderingOptimizations.LineSimplificationEnabled);
+            vm.GeometrySimplificationEnabled = false;
+            Assert.False(RenderingOptimizations.GeometrySimplificationEnabled);
+            vm.GeometrySimplificationEnabled = true;
+            Assert.True(RenderingOptimizations.GeometrySimplificationEnabled);
         }
 
         if (File.Exists(s.SettingsFilePath)) File.Delete(s.SettingsFilePath);

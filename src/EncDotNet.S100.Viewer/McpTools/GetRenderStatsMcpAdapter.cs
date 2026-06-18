@@ -31,8 +31,14 @@ internal static class GetRenderStatsMcpAdapter
     public static McpServerTool Create(GetRenderStatsTool inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        var del = (CancellationToken ct = default) =>
-            DispatchAsync(() => inner.InvokeAsync(new GetRenderStatsRequest(), ct));
+        var del = (
+            [System.ComponentModel.Description(
+                "When true, clears the rolling paint window after reading it, so the next " +
+                "call's window covers only paints observed afterwards. Use to bracket a " +
+                "measurement phase (reset before a pan/zoom burst, read after).")]
+            bool resetWindow = false,
+            CancellationToken ct = default) =>
+            DispatchAsync(() => inner.InvokeAsync(new GetRenderStatsRequest(resetWindow), ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -78,6 +84,19 @@ internal static class GetRenderStatsMcpAdapter
                 ["paintSequence"] = value.PaintSequence,
                 ["capturedAtUtc"] = value.CapturedAtUtc,
                 ["styles"] = styles,
+                ["window"] = new JsonObject
+                {
+                    ["count"] = value.Window.Count,
+                    ["firstSequence"] = value.Window.FirstSequence,
+                    ["lastSequence"] = value.Window.LastSequence,
+                    ["frameMaxMs"] = value.Window.FrameMaxMs,
+                    ["frameMeanMs"] = value.Window.FrameMeanMs,
+                    ["frameP95Ms"] = value.Window.FrameP95Ms,
+                    ["vectorMaxMs"] = value.Window.VectorMaxMs,
+                    ["vectorMeanMs"] = value.Window.VectorMeanMs,
+                    ["vectorP95Ms"] = value.Window.VectorP95Ms,
+                    ["maxTotalDrawCalls"] = value.Window.MaxTotalDrawCalls,
+                },
             };
             return new CallToolResult
             {

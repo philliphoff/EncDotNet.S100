@@ -499,20 +499,21 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
-    private bool _lineSimplificationEnabled;
+    private bool _geometrySimplificationEnabled;
     /// <summary>
-    /// Whether resolution-aware line simplification is enabled. The "best"
-    /// default (on); requires <see cref="VectorPathCacheEnabled"/>.
+    /// Whether resolution-aware <b>line</b> geometry simplification is enabled.
+    /// The "best" default (on); requires <see cref="VectorPathCacheEnabled"/>.
+    /// Polygons are always rendered vertex-exact.
     /// </summary>
-    public bool LineSimplificationEnabled
+    public bool GeometrySimplificationEnabled
     {
-        get => _lineSimplificationEnabled;
+        get => _geometrySimplificationEnabled;
         set
         {
-            if (SetProperty(ref _lineSimplificationEnabled, value))
+            if (SetProperty(ref _geometrySimplificationEnabled, value))
             {
-                _settings.LineSimplificationEnabled = value;
-                RenderingOptimizations.LineSimplificationEnabled = value;
+                _settings.GeometrySimplificationEnabled = value;
+                RenderingOptimizations.GeometrySimplificationEnabled = value;
                 RaiseMarinerChanged();
             }
         }
@@ -632,7 +633,9 @@ internal sealed class SettingsViewModel : ViewModelBase
         _vectorSnapshotEnabled = settings.VectorSnapshotEnabled ?? true;
         _vectorSnapshotPrebuildEnabled = settings.VectorSnapshotPrebuildEnabled ?? true;
         _vectorPathCacheEnabled = settings.VectorPathCacheEnabled ?? true;
-        _lineSimplificationEnabled = settings.LineSimplificationEnabled ?? true;
+        // Migrate the legacy line-only key forward to the unified geometry knob.
+        _geometrySimplificationEnabled =
+            settings.GeometrySimplificationEnabled ?? settings.LineSimplificationEnabled ?? true;
 
         // Push the persisted render-optimization preferences into the renderer.
         // Writes are ignored for any knob pinned by an explicit environment
@@ -640,7 +643,7 @@ internal sealed class SettingsViewModel : ViewModelBase
         RenderingOptimizations.VectorSnapshotEnabled = _vectorSnapshotEnabled;
         RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
         RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
-        RenderingOptimizations.LineSimplificationEnabled = _lineSimplificationEnabled;
+        RenderingOptimizations.GeometrySimplificationEnabled = _geometrySimplificationEnabled;
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;

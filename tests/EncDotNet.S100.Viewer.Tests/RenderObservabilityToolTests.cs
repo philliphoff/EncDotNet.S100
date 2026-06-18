@@ -140,7 +140,8 @@ public class RenderObservabilityToolTests
             TotalDrawCalls: 7,
             PaintSequence: 42,
             CapturedAtUtc: DateTimeOffset.UnixEpoch.ToString("O"),
-            Styles: new[] { new RenderStyleStatDto("VectorStyle", 5, 9.0) }));
+            Styles: new[] { new RenderStyleStatDto("VectorStyle", 5, 9.0) },
+            Window: new RenderWindowStatsDto(10, 33, 42, 51.0, 20.0, 48.0, 49.0, 18.0, 47.0, 7)));
         var call = GetRenderStatsMcpAdapter.TranslateResult(ok);
 
         Assert.False(call.IsError);
@@ -149,13 +150,18 @@ public class RenderObservabilityToolTests
         var styles = (JsonArray)json["styles"]!;
         Assert.Single(styles);
         Assert.Equal("VectorStyle", (string)styles[0]!["style"]!);
+        var window = (JsonObject)json["window"]!;
+        Assert.Equal(10, (long)window["count"]!);
+        Assert.Equal(51.0, (double)window["frameMaxMs"]!);
+        Assert.Equal(49.0, (double)window["vectorMaxMs"]!);
     }
 
     [Fact]
     public void GetRenderStats_adapter_serialises_no_data()
     {
         var ok = ToolResult<GetRenderStatsResult>.Ok(new GetRenderStatsResult(
-            HasData: false, null, null, null, null, null, Array.Empty<RenderStyleStatDto>()));
+            HasData: false, null, null, null, null, null, Array.Empty<RenderStyleStatDto>(),
+            Window: new RenderWindowStatsDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)));
         var call = GetRenderStatsMcpAdapter.TranslateResult(ok);
 
         Assert.False(call.IsError);

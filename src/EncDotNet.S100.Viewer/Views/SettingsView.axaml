@@ -195,11 +195,11 @@
             <CheckBox Content="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}"
                       IsChecked="{Binding VectorPathCacheEnabled}"
                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_LineSimplificationEnabled}"
-                      IsChecked="{Binding LineSimplificationEnabled}"
+            <CheckBox Content="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}"
+                      IsChecked="{Binding GeometrySimplificationEnabled}"
                       IsEnabled="{Binding VectorPathCacheEnabled}"
                       Margin="16,0,0,0"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_LineSimplificationEnabled}" />
+                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}" />
 
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />

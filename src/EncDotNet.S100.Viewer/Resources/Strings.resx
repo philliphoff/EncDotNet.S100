@@ -847,11 +847,11 @@
   <data name="Tooltip_VectorPathCacheEnabled" xml:space="preserve">
     <value>Build each geometry's projected path once per zoom level and reuse it across pans, instead of rebuilding and re-stroking it every frame. Recommended on.</value>
   </data>
-  <data name="Settings_LineSimplificationEnabled" xml:space="preserve">
-    <value>Simplify dense line geometry</value>
+  <data name="Settings_GeometrySimplificationEnabled" xml:space="preserve">
+    <value>Simplify dense geometry</value>
   </data>
-  <data name="Tooltip_LineSimplificationEnabled" xml:space="preserve">
-    <value>Drop on-screen sub-pixel vertices from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on.</value>
+  <data name="Tooltip_GeometrySimplificationEnabled" xml:space="preserve">
+    <value>Drop on-screen sub-pixel detail from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on. Applies to line features only; polygon areas are always rendered vertex-exact.</value>
   </data>
   <data name="Settings_MapSection" xml:space="preserve">
     <value>Map</value>

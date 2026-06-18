@@ -102,6 +102,33 @@ public class CachedVectorStyleRendererTests
         return count;
     }
 
+    /// <summary>
+    /// Builds the closed coordinate ring of an axis-aligned square whose edges
+    /// are subdivided into <paramref name="pointsPerEdge"/> <i>collinear</i>
+    /// vertices, yielding a deterministic dense-polygon fixture for the
+    /// vertex-exact path cache and coordinate-budget eviction tests.
+    /// </summary>
+    private static Coordinate[] DenseSquareCoords(double minX, double minY, double size, int pointsPerEdge)
+    {
+        var maxX = minX + size;
+        var maxY = minY + size;
+        var coords = new List<Coordinate>(pointsPerEdge * 4 + 1);
+        for (var i = 0; i < pointsPerEdge; i++) coords.Add(new Coordinate(minX + size * i / pointsPerEdge, minY));
+        for (var i = 0; i < pointsPerEdge; i++) coords.Add(new Coordinate(maxX, minY + size * i / pointsPerEdge));
+        for (var i = 0; i < pointsPerEdge; i++) coords.Add(new Coordinate(maxX - size * i / pointsPerEdge, maxY));
+        for (var i = 0; i < pointsPerEdge; i++) coords.Add(new Coordinate(minX, maxY - size * i / pointsPerEdge));
+        coords.Add(coords[0]);
+        return coords.ToArray();
+    }
+
+    private static GeometryFeature MakeDenseSquareFeature(int pointsPerEdge, double minX = 0, double minY = 0, double size = 1000)
+    {
+        var ring = new LinearRing(DenseSquareCoords(minX, minY, size, pointsPerEdge));
+        var feature = new GeometryFeature(new Polygon(ring));
+        feature.Styles.Add(new VectorStyle { Fill = new Brush(Color.Black), Outline = null, Line = null });
+        return feature;
+    }
+
     [Fact]
     public void Pan_AtConstantResolution_BuildsPathOnce()
     {
@@ -316,6 +343,47 @@ public class CachedVectorStyleRendererTests
         }
 
         Assert.Null(error);
+    }
+
+    [Fact]
+    public void MultiPolygon_CachesEachPart_KeyedByPosition()
+    {
+        var part1 = new Polygon(new LinearRing(DenseSquareCoords(0, 0, 400, 50)));
+        var part2 = new Polygon(new LinearRing(DenseSquareCoords(600, 600, 400, 50)));
+        var feature = new GeometryFeature(new MultiPolygon(new[] { part1, part2 }));
+        feature.Styles.Add(new VectorStyle { Fill = new Brush(Color.Black), Outline = null, Line = null });
+        var style = (VectorStyle)feature.Styles.First();
+        var layer = new MemoryLayer("l") { Opacity = 1.0 };
+        var viewport = ViewportFor(500, 500, 1.0);
+
+        var renderer = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
+
+        RenderToPng(c => renderer.Draw(c, viewport, layer, feature, style, Service, 0));
+
+        // One vertex-exact cache entry per part (keyed by position).
+        Assert.Equal(2, renderer.CachedPathCount);
+        Assert.Equal(part1.NumPoints + part2.NumPoints, renderer.CachedCoordinateCount);
+    }
+
+    [Fact]
+    public void Polygon_CoordinateBudget_EvictsLeastRecentlyUsed()
+    {
+        // A 201-coord polygon drawn at four resolutions yields four distinct keys;
+        // a 250-coord budget can hold only one, so LRU eviction keeps the cache at
+        // a single entry and the tracked-coordinate gauge bounded.
+        var renderer = new CachedVectorStyleRenderer(
+            new VectorStyleRenderer(), capacity: 100, simplifyTolerancePx: 0, maxCachedCoordinates: 250);
+        var feature = MakeDenseSquareFeature(pointsPerEdge: 50); // 201 coords
+        var style = (VectorStyle)feature.Styles.First();
+        var layer = new MemoryLayer("l") { Opacity = 1.0 };
+
+        foreach (var res in new[] { 1.0, 2.0, 4.0, 8.0 })
+        {
+            RenderToPng(c => renderer.Draw(c, ViewportFor(500, 500, res), layer, feature, style, Service, 0));
+        }
+
+        Assert.Equal(1, renderer.CachedPathCount);
+        Assert.Equal(201, renderer.CachedCoordinateCount);
     }
 
     private sealed class CountingRenderer : ISkiaStyleRenderer
