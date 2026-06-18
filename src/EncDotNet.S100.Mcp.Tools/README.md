@@ -303,6 +303,24 @@ if (counts.TryGetValue(out var tally))
     }
 }
 
+// What attributes is a feature type allowed to have, and what are the
+// legal values of its enumerations? describe_feature_type introspects a
+// spec's bundled Feature Catalogue (no loaded dataset required) — the
+// schema-discovery counterpart to count_features. Omit FeatureType to
+// list every type; supply one for full attribute detail.
+var schema = new DescribeFeatureTypeTool();
+var buoy = await schema.InvokeAsync(new DescribeFeatureTypeRequest(
+    new SpecRef("S-101", default),
+    FeatureType: "BuoyLateral"));
+if (buoy.TryGetValue(out var typeInfo))
+{
+    foreach (var attr in typeInfo.FeatureTypes[0].Attributes)
+    {
+        var card = attr.Mandatory ? "required" : "optional";
+        Console.WriteLine($"{attr.Code} ({attr.ValueType}, {card}): {attr.ListedValues.Length} listed values");
+    }
+}
+
 // Sample a coverage product at every vertex of a polyline. Useful for
 // route-level questions like "minimum depth along this leg" or "max
 // current speed along this transit". Per-vertex misses (OutOfBounds /

@@ -70,6 +70,7 @@ internal static class S100McpServerToolFactory
     public static IEnumerable<McpServerTool> CreateTools(
         ListDatasetsTool listDatasets,
         DescribeFeatureTool describeFeature,
+        DescribeFeatureTypeTool describeFeatureType,
         SampleCoverageTool sampleCoverage,
         FindAtTool findAt,
         IdentifyFeaturesTool identifyFeatures,
@@ -81,6 +82,7 @@ internal static class S100McpServerToolFactory
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
+        yield return CreateDescribeFeatureTypeTool(describeFeatureType);
         yield return CreateSampleCoverageTool(sampleCoverage);
         yield return CreateFindAtTool(findAt);
         yield return CreateIdentifyFeaturesTool(identifyFeatures);
@@ -143,6 +145,38 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = DescribeFeatureTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateDescribeFeatureTypeTool(DescribeFeatureTypeTool inner)
+    {
+        var description =
+            "Introspects a spec's bundled Feature Catalogue (ISO 19110 / S-100 Part 5): the " +
+            "schema-discovery counterpart to count_features / query_features. Call with just a spec " +
+            "(e.g. \"S-101\" or \"S-124/1.5.0\") to list every feature type with its attribute count; " +
+            "add a featureType (code, name, or alias) to get that type's attribute bindings — each " +
+            "attribute's value type, whether it is mandatory and/or repeatable, and its enumerated " +
+            "listed values. Use it to build valid attribute predicates without a loaded dataset. " +
+            "Specs without a bundled Feature Catalogue return feature_catalogue_not_available. " +
+            "Read-only and side-effect free.";
+
+        var del = ([Description("Product specification whose bundled Feature Catalogue to inspect (e.g. \"S-101\" or \"S-124/1.5.0\"). Edition is ignored.")] string spec,
+                   [Description("Optional feature-type code, name, or alias (case-insensitive). Null lists every feature type with attribute counts only; supplied returns full attribute detail.")] string? featureType = null,
+                   [Description("When true (default), enumerated attributes carry their full listed values; set false to omit them.")] bool includeListedValues = true,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new DescribeFeatureTypeRequest(
+                        ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
+                        featureType,
+                        includeListedValues),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = DescribeFeatureTypeTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });
@@ -399,7 +433,28 @@ internal static class S100McpServerToolFactory
     }
 
     private static SpecRef? ParseSpec(string? spec)
-        => string.IsNullOrWhiteSpace(spec) ? null : SpecRef.Parse(spec);
+    {
+        if (string.IsNullOrWhiteSpace(spec))
+        {
+            return null;
+        }
+
+        // Accept the editionless bare name (e.g. "S-124") that the tool
+        // descriptions promise — SpecRef.Parse requires a name/edition
+        // pair, so fall back to a default (edition-agnostic) SpecRef when
+        // no separator is present.
+        if (!SpecRef.TryParse(spec, out var parsed))
+        {
+            if (SpecName.TryNormalize(spec, out var name))
+            {
+                return new SpecRef(name, default);
+            }
+
+            throw new FormatException($"'{spec}' is not a valid spec.");
+        }
+
+        return parsed;
+    }
 
     private static GeoQuery? ParseGeoQuery(string? queryJson)
         => string.IsNullOrWhiteSpace(queryJson) ? null : GeoQueryJsonReader.Parse(queryJson);

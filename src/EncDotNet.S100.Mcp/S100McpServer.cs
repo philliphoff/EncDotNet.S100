@@ -110,6 +110,7 @@ public sealed class S100McpServer : IAsyncDisposable
         // Register the MCP-1 tools as in-process singletons.
         var listDatasets = new ListDatasetsTool(_catalog);
         var describeFeature = new DescribeFeatureTool(_catalog);
+        var describeFeatureType = new DescribeFeatureTypeTool();
         var sampleCoverage = new SampleCoverageTool(_catalog);
         var findAt = new FindAtTool(_catalog);
         var identifyFeatures = new IdentifyFeaturesTool(_catalog);
@@ -119,7 +120,7 @@ public sealed class S100McpServer : IAsyncDisposable
         var listSpecs = new ListSpecsTool(_catalog);
         var listTimeSteps = new ListTimeStepsTool(_catalog);
         var tools = S100McpServerToolFactory
-            .CreateTools(listDatasets, describeFeature, sampleCoverage, findAt, identifyFeatures, queryFeatures, countFeatures, sampleCoverageAlong, listSpecs, listTimeSteps)
+            .CreateTools(listDatasets, describeFeature, describeFeatureType, sampleCoverage, findAt, identifyFeatures, queryFeatures, countFeatures, sampleCoverageAlong, listSpecs, listTimeSteps)
             .ToList();
 
         if (_options.AdditionalTools is { Count: > 0 } extra)

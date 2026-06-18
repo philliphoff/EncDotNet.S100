@@ -30,6 +30,7 @@ public class S100McpServerRoundTripTests
             {
                 "count_features",
                 "describe_feature",
+                "describe_feature_type",
                 "find_at",
                 "identify_features",
                 "list_datasets",
@@ -275,6 +276,24 @@ public class S100McpServerRoundTripTests
         Assert.Equal("point", features[0]!["geometry"]!.GetValue<string>());
         Assert.Equal("surface", features[1]!["geometry"]!.GetValue<string>());
         Assert.Equal("inside", features[1]!["containment"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task DescribeFeatureType_round_trip_introspects_bundled_catalogue()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-124",
+        });
+
+        Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.True(payload["totalFeatureTypeCount"]!.GetValue<int>() > 0);
+        Assert.NotEmpty(payload["featureTypes"]!.AsArray());
     }
 
     [Fact]

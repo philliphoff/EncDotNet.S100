@@ -22,6 +22,8 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S201\EncDotNet.S100.Datasets.S201.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
   </ItemGroup>
 
 </Project>
