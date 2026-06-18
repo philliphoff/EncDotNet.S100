@@ -28,6 +28,7 @@ public class S100McpServerRoundTripTests
         Assert.Equal(
             new[]
             {
+                "count_features",
                 "describe_feature",
                 "find_at",
                 "list_datasets",
@@ -188,6 +189,42 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
         Assert.Equal("latitude", payload["details"]!["parameter"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task CountFeatures_round_trip_returns_type_tallies()
+    {
+        var feature = new S124Feature
+        {
+            Id = "feat-1",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(feature);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-1", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("count_features", new Dictionary<string, object?>());
+
+        Assert.False(result.IsError ?? false, $"count_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(1, payload["totalFeatures"]!.GetValue<int>());
+        Assert.Equal(1, payload["datasetCount"]!.GetValue<int>());
+        var types = payload["types"]!.AsArray();
+        var tally = Assert.Single(types);
+        Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
+        Assert.Equal(1, tally["count"]!.GetValue<int>());
+        Assert.Equal(1, tally["withGeometry"]!.GetValue<int>());
     }
 
     [Fact]

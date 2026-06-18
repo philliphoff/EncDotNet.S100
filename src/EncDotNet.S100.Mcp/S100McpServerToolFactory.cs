@@ -73,6 +73,7 @@ internal static class S100McpServerToolFactory
         SampleCoverageTool sampleCoverage,
         FindAtTool findAt,
         QueryFeaturesTool queryFeatures,
+        CountFeaturesTool countFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps)
@@ -82,6 +83,7 @@ internal static class S100McpServerToolFactory
         yield return CreateSampleCoverageTool(sampleCoverage);
         yield return CreateFindAtTool(findAt);
         yield return CreateQueryFeaturesTool(queryFeatures);
+        yield return CreateCountFeaturesTool(countFeatures);
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
@@ -246,6 +248,37 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = QueryFeaturesTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateCountFeaturesTool(CountFeaturesTool inner)
+    {
+        var description =
+            "Enumerates the feature types present in loaded vector datasets and counts how many " +
+            "features of each type they contain — the \"what kinds of features, and how many, are " +
+            "in this cell?\" discovery question. Works across every vector spec (S-101, S-122, " +
+            "S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421). Optionally filter by " +
+            "spec, by a single dataset, and/or by a spatial envelope. Each tally reports the total " +
+            "count and how many of those features have resolvable geometry. Read-only and " +
+            "side-effect free.";
+
+        var del = ([Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every spec.")] string? spec = null,
+                   [Description("Optional dataset identifier (typically from list_datasets); null counts across every matching dataset.")] string? datasetId = null,
+                   [Description("Optional spatial query JSON envelope (same shapes as query_features: point / box / polygon / polyline). When supplied, only features whose bounding box intersects are counted; geometry-less features are excluded.")] string? query = null,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new CountFeaturesRequest(
+                        ParseSpec(spec),
+                        string.IsNullOrWhiteSpace(datasetId) ? null : new DatasetId(datasetId),
+                        ParseGeoQuery(query)),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = CountFeaturesTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

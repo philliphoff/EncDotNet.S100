@@ -216,6 +216,7 @@ var sample = new SampleCoverageTool(catalog);
 var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
+var countFeatures = new CountFeaturesTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -267,6 +268,20 @@ if (features.TryGetValue(out var page))
     foreach (var match in page.Features)
     {
         Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
+    }
+}
+
+// What kinds of features, and how many, are in a cell? count_features
+// answers the discovery question describe_feature can't (it needs an id
+// you don't yet have). Works across every vector spec incl. S-101.
+// Optionally scope to one dataset / spec / spatial envelope.
+var counts = await countFeatures.InvokeAsync(new CountFeaturesRequest(
+    Spec: new SpecRef("S-101", default)));
+if (counts.TryGetValue(out var tally))
+{
+    foreach (var t in tally.Types)
+    {
+        Console.WriteLine($"{t.DatasetId} {t.FeatureType}: {t.Count} ({t.WithGeometry} located)");
     }
 }
 

@@ -112,6 +112,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. |
 | `describe_feature` | Returns spec, feature type, attributes, and (for S-101) resolved geometry for a feature id in a given dataset. Supported specs: S-101 (RCID; result carries a `geometry` block with primitive, bounding box, and coordinates), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
 | `query_features` | Returns features whose geometry intersects a spatial query (bbox precision) from loaded vector datasets — every GML vector spec plus S-101 (ISO 8211), adapted through the shared feature interface. For S-101 the `featureType` filter matches the feature-type acronym (e.g. `LIGHTS`, `BOYLAT`) and each `featureId` is the feature record's decimal RCID. |
+| `count_features` | Enumerates the feature types present in loaded vector datasets and counts how many features of each type they contain — the "what kinds of features, and how many, are in this cell?" discovery question that `describe_feature` can't answer (it needs an id you don't yet have). Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, and spatial `query` filters. Each tally reports `count` and `withGeometry` (how many are spatially addressable). |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
 | `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
@@ -132,7 +133,7 @@ Tools fall into two groups:
 
 * **Read-only** — never mutate viewer state. Safe to call from any
   agent at any time. Examples: `list_datasets`, `find_at`,
-  `query_features`, `sample_coverage`, `render_to_image` (which
+  `query_features`, `count_features`, `sample_coverage`, `render_to_image` (which
   snapshots from a clone of the live `Map`), `await_render_idle`, and
   `get_render_stats` (which observe the live render loop without
   changing it).
