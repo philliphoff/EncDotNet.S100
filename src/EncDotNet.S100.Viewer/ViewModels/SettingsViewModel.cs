@@ -518,27 +518,6 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
-    private bool _polygonSimplificationEnabled;
-    /// <summary>
-    /// Whether <b>polygon</b> simplification is enabled, in addition to
-    /// <see cref="GeometrySimplificationEnabled"/> (both must be on). Default
-    /// <b>off</b>: measurement showed it is net-negative for paint on the GPU
-    /// path. Kept as an opt-in knob for future evaluation.
-    /// </summary>
-    public bool PolygonSimplificationEnabled
-    {
-        get => _polygonSimplificationEnabled;
-        set
-        {
-            if (SetProperty(ref _polygonSimplificationEnabled, value))
-            {
-                _settings.PolygonSimplificationEnabled = value;
-                RenderingOptimizations.PolygonSimplificationEnabled = value;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
     /// <summary>
     /// Raised when <see cref="BasemapEnabled"/> changes so the host can
     /// add or remove the basemap tile layer live without a restart.
@@ -656,8 +635,6 @@ internal sealed class SettingsViewModel : ViewModelBase
         // Migrate the legacy line-only key forward to the unified geometry knob.
         _geometrySimplificationEnabled =
             settings.GeometrySimplificationEnabled ?? settings.LineSimplificationEnabled ?? true;
-        // Polygon simplification is opt-in (off by default); see mapsui-performance.md.
-        _polygonSimplificationEnabled = settings.PolygonSimplificationEnabled ?? false;
 
         // Push the persisted render-optimization preferences into the renderer.
         // Writes are ignored for any knob pinned by an explicit environment
@@ -666,7 +643,9 @@ internal sealed class SettingsViewModel : ViewModelBase
         RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
         RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
         RenderingOptimizations.GeometrySimplificationEnabled = _geometrySimplificationEnabled;
-        RenderingOptimizations.PolygonSimplificationEnabled = _polygonSimplificationEnabled;
+        // Polygon simplification is an env-only experimental opt-in
+        // (S100_VECTOR_POLYGON_SIMPLIFY=1); it has no persisted setting or UI
+        // knob and is never turned on by the line-simplification toggle.
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;

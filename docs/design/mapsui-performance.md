@@ -138,22 +138,24 @@ thousands of vertices typically reduce 10–100× without visible quality
 loss.
 
 **Status:** lines simplified and **on by default**; polygons implemented
-but **opt-in / off by default** after measurement showed no paint benefit
-(see "Polygons" below). Simplification
-lives in `CachedVectorStyleRenderer` (the registered `VectorStyle`
-renderer) at `SKPath`-build time, keyed by build resolution and cached
-per `(feature, position, resolution)`, so the cost is paid once per
-`(feature, zoom)` and inherited by the vector-snapshot record/prebuild.
+but **env-only / off by default** after a live measurement disproved the
+vertex-count → paint projection for polygons (see the callout below).
+Simplification lives in `CachedVectorStyleRenderer` (the registered
+`VectorStyle` renderer) at `SKPath`-build time, keyed by build resolution
+and cached per `(feature, position, resolution)`, so the cost is paid once
+per `(feature, zoom)` and inherited by the vector-snapshot record/prebuild.
 Lines are gated behind the viewer's **Simplify dense geometry** setting
-(default **on**); polygons behind the nested **Also simplify polygon
-areas (experimental)** setting (default **off**). See the renderer
+(default **on**, the only simplification knob in the UI); polygons behind
+an **env-only experimental flag** `S100_VECTOR_POLYGON_SIMPLIFY=1`
+(no persisted setting, no UI checkbox, never on the default hot path). See
+the renderer
 [README → Resolution-aware geometry simplification](../../src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification)
 for the implementation, gating, telemetry, and known limits.
 
 **Lines.** `LineString` / `MultiLineString` are simplified inline with a
 radial-distance pixel filter while building the path.
 
-**Polygons (opt-in, off by default).** `Polygon` / `MultiPolygon`
+**Polygons (env-only opt-in, off by default).** `Polygon` / `MultiPolygon`
 (land/depth/sea areas — the highest-vertex S-101 features) are generalized
 with `TopologyPreservingSimplifier` at `pixelTolerance × resolution`
 metres, then validated (`IsValid`, `Buffer(0)` repair) with a **safe
@@ -162,11 +164,25 @@ result, so a self-intersecting simplification can never reach the
 rasteriser. `MultiPolygon` parts are simplified independently; polygons
 below 32 vertices skip the NTS pass.
 
-> **Measured: polygon simplification does *not* speed up paint — kept as
-> an opt-in knob, default off.** A multi-dataset stress test (basemap off,
-> all 15 AU IC-ENC S-101 cells loaded, pan/zoom across dataset boundaries
-> over Tasmania, rolling-window render telemetry, 4 reps cold+warm, each
-> arm run solo) A/B'd via `S100_VECTOR_POLYGON_SIMPLIFY`:
+> **Important finding — the vertex-count → paint projection (below) was
+> disproved for polygons by live measurement. Polygon simplification is
+> retained as a *memory* lever, not a paint optimization.** The
+> translation-invariant path cache already neutralizes vertex count on
+> *warm* paints: once a path is built and cached, a pan re-uses it and the
+> paint is cache-served (~0 ms) regardless of how many vertices it has, so
+> dropping vertices cannot make warm paints cheaper. Meanwhile cold builds
+> pay the `TopologyPreservingSimplifier` cost. Two live A/B runs
+> (`S100_VECTOR_POLYGON_SIMPLIFY` off vs on) confirm there is **no paint
+> win**, and under multi-dataset pressure it is actually slower:
+>
+> *Single dense cell (`101GB00GB302045`), live viewer:* cold-pan
+> `VectorStyle` paint OFF mean **29.1 ms** vs ON **30.2 ms**; warm/cached
+> paints ~**0 ms** in both arms. The TPS cost offsets the reduced-vertex
+> fill; warm paints are cache-bound, so ON ≈ OFF.
+>
+> *Multi-dataset stress (all 15 AU IC-ENC S-101 cells, basemap off,
+> pan/zoom across boundaries, rolling-window telemetry, 4 reps cold+warm,
+> each arm solo):*
 >
 > | metric (warm avg) | OFF | ON (polygon simplify) |
 > |---|---|---|
@@ -176,15 +192,16 @@ below 32 vertices skip the NTS pass.
 > | settle mean | ~675 ms | ~715 ms |
 >
 > ON is **reproducibly ~1.6× worse frame / ~2.2× worse vector** across
-> both cold and warm reps. Why the 1 µs/vertex projection below did not
-> hold: the `TopologyPreservingSimplifier` cost is paid on the
-> render/path-build path on every (re)build; under multi-dataset cache
-> pressure the path cache thrashes so the cost is re-paid and never
-> amortized; and **GPU (Metal) fill is area-bound, not vertex-bound**, so
-> dropping vertices does not reduce fill cost. The earlier 1 µs/vertex
-> figure was a CPU-build model that does not reflect cached GPU paint.
-> The knob is retained for future evaluation (other data, CPU-bound
-> render paths, or memory-pressure scenarios).
+> both cold and warm reps. Under multi-dataset cache pressure the path
+> cache thrashes so the TPS cost is re-paid on every rebuild and never
+> amortized, and **GPU (Metal) fill is area-bound, not vertex-bound**, so
+> fewer vertices do not reduce fill cost. The earlier 1 µs/vertex figure
+> was a CPU-build model that does not reflect cached GPU paint. Polygon
+> simplification *does* reduce the coordinate count of cached paths
+> (composing with the coordinate-budget eviction), so it is retained as an
+> opt-in **memory** lever for future evaluation (other data, CPU-bound
+> render paths, memory-pressure scenarios) — **don't re-chase it as a
+> paint optimization.**
 
 **Earlier deferral, now resolved.** The original line-only version
 deferred polygons because naive per-ring Douglas-Peucker can produce
@@ -195,22 +212,30 @@ fallback. A separate, never-wired NTS Douglas-Peucker layer
 half-octave zoom buckets) has been **removed** and consolidated into this
 single live path; its two genuinely-better ideas — coordinate-budget
 cache eviction and simplification telemetry — were carried forward into
-the path cache.
+the path cache. This consolidation (plus the coordinate-budget eviction)
+is the real, proven win that landed; the dormant duplicate path the docs
+once described was never wired into production.
 
 **Defaults.** PixelTolerance = 0.6 (chosen so thicker strokes such as
 depth contours and fairway boundaries don't show visible kinks);
 polygon MinVertexCount = 32 bypass threshold; MaxCachedCoordinates =
 5_000_000 (≈ 80 MB), evicted LRU by both entry cap and coordinate budget.
 
-**Future work.** Async / off-thread miss path (the synchronous miss path
-can briefly stall the first paint after a zoom change; sustained pan is
-already covered by the vector snapshot); unifying line simplification
-onto NTS Douglas-Peucker (currently a radial-distance filter — visually
-negligible at sub-pixel tolerance).
+**Future work (the actual next paint lever).** Multi-dataset lag is
+**draw-call / feature-count bound**, not vertex-bound (frame max ~480 ms,
+~7k draw calls even with polygon simplification off). The synchronous
+cache-miss build can briefly stall the first paint after a zoom change
+(the `vectorMax` spikes), so an **off-thread cold path-build** is the most
+direct next lever; **draw-call batching** (shared `SKPath` per style) and
+**overlapping-cell coverage suppression** are the larger structural wins.
+Per-`(layer, style, vertex-bucket)` draw attribution is already collected
+in `MapPaintInstrumentation` and just needs surfacing to confirm the
+dominant feature class first.
 
 The 1 µs/vertex projection below predates the GPU-path measurement and
-**held for lines but not polygons** — treat it as a CPU-build upper bound,
-not a GPU-paint prediction:
+**held for lines but not polygons** (the path cache neutralizes vertex
+count on warm GPU paints) — treat it as a CPU-build upper bound, not a
+GPU-paint prediction:
 - 1k-10k bucket → 100-999 bucket: ~5× cheaper draws (saves ~18 s of
   paint over the measurement window).
 - 100-999 bucket → 10-99 bucket: similar magnitude (saves ~20 s).

@@ -194,17 +194,6 @@ internal sealed class ViewerSettings
     public bool? GeometrySimplificationEnabled { get; set; }
 
     /// <summary>
-    /// Whether <b>polygon</b> simplification is enabled
-    /// (<c>RenderingOptimizations.PolygonSimplificationEnabled</c>). Applies
-    /// topology-preserving simplification to area features at path-build time, in
-    /// addition to <see cref="GeometrySimplificationEnabled"/> (both must be on).
-    /// <see langword="null"/> → best default (<b>off</b>); see
-    /// <c>docs/design/mapsui-performance.md</c> for the measurement showing it is
-    /// net-negative for paint on the GPU path. Opt-in knob for future evaluation.
-    /// </summary>
-    public bool? PolygonSimplificationEnabled { get; set; }
-
-    /// <summary>
     /// Deprecated: prior name for <see cref="GeometrySimplificationEnabled"/>
     /// (line-only simplification). Still deserialized so existing settings
     /// migrate forward; read only as a fallback when

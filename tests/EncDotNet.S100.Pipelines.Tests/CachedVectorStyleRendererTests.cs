@@ -25,6 +25,23 @@ public class CachedVectorStyleRendererTests
 {
     private static readonly RenderService Service = new();
 
+    /// <summary>
+    /// Enables the env-only, default-off polygon simplification knob for the
+    /// duration of a test and restores it on dispose. Skips no-op when the env
+    /// var <c>S100_VECTOR_POLYGON_SIMPLIFY</c> pins the flag (the programmatic
+    /// setter is ignored when env-explicit).
+    /// </summary>
+    private sealed class PolygonSimplificationScope : IDisposable
+    {
+        private readonly bool _original = RenderingOptimizations.PolygonSimplificationEnabled;
+
+        public PolygonSimplificationScope() => RenderingOptimizations.PolygonSimplificationEnabled = true;
+
+        public bool Enabled => RenderingOptimizations.PolygonSimplificationEnabled;
+
+        public void Dispose() => RenderingOptimizations.PolygonSimplificationEnabled = _original;
+    }
+
     // World coordinates roughly span [0,1000] in both axes so a 1.0 resolution
     // maps them onto a 1000 px canvas with the centre at (500, 500).
     private const int CanvasSize = 256;
@@ -391,8 +408,14 @@ public class CachedVectorStyleRendererTests
         var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
         var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
 
+        using var scope = new PolygonSimplificationScope();
         RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
         RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
+
+        if (!scope.Enabled)
+        {
+            return; // env pins polygon simplification off; strict reduction not exercisable
+        }
 
         Assert.Equal(201, exact.CachedCoordinateCount);
         Assert.True(simplified.CachedCoordinateCount < exact.CachedCoordinateCount,
@@ -413,6 +436,7 @@ public class CachedVectorStyleRendererTests
         var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
         var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
 
+        using var scope = new PolygonSimplificationScope();
         RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
         RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
 
@@ -431,8 +455,14 @@ public class CachedVectorStyleRendererTests
         var small = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.5);
         var large = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 4.0);
 
+        using var scope = new PolygonSimplificationScope();
         RenderToPng(c => small.Draw(c, viewport, layer, feature, style, Service, 0));
         RenderToPng(c => large.Draw(c, viewport, layer, feature, style, Service, 0));
+
+        if (!scope.Enabled)
+        {
+            return; // env pins polygon simplification off; strict reduction not exercisable
+        }
 
         Assert.True(small.CachedCoordinateCount < 361, "some vertices should be dropped");
         Assert.True(large.CachedCoordinateCount <= small.CachedCoordinateCount,
@@ -453,6 +483,7 @@ public class CachedVectorStyleRendererTests
         var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
         var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
 
+        using var scope = new PolygonSimplificationScope();
         using var exactBmp = SKBitmap.Decode(RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0)));
         using var simplifiedBmp = SKBitmap.Decode(RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0)));
 
@@ -474,6 +505,7 @@ public class CachedVectorStyleRendererTests
         var viewport = ViewportFor(500, 500, 1.0);
 
         var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
+        using var scope = new PolygonSimplificationScope();
         using var bmp = SKBitmap.Decode(
             RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0)));
 
@@ -500,12 +532,18 @@ public class CachedVectorStyleRendererTests
         var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
         var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
 
+        using var scope = new PolygonSimplificationScope();
         RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
         RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
 
         // One cache entry per part (keyed by position) for both renderers.
         Assert.Equal(2, simplified.CachedPathCount);
         Assert.Equal(2, exact.CachedPathCount);
+        if (!scope.Enabled)
+        {
+            return; // env pins polygon simplification off; strict reduction not exercisable
+        }
+
         Assert.True(simplified.CachedCoordinateCount < exact.CachedCoordinateCount,
             "each part should be simplified independently");
     }

@@ -159,9 +159,11 @@ vector-snapshot record + off-thread prebuild draw through this same
 renderer — the cost is paid once per `(feature, zoom)` and inherited by
 all downstream consumers. Dropped detail is by construction sub-pixel *on
 screen* at that zoom, so the result is visually indistinguishable at every
-zoom level. On real S-101 datasets dense contours and coverage polygons
-typically simplify by 5–10× at common pan zooms with no visible regression
-at the default 0.6-pixel tolerance.
+zoom level. On real S-101 datasets dense **line** geometry (contours,
+coverage boundaries) typically simplifies by 5–10× at common pan zooms
+with no visible regression at the default 0.6-pixel tolerance. (Polygon
+*area* simplification is a separate env-only experimental opt-in — see
+[Gating](#gating) — and is **off by default**.)
 
 ### Lines
 
@@ -173,6 +175,11 @@ S-101 bathymetry contours so the Skia stroker rasterises far fewer
 segments.
 
 ### Polygons
+
+> Polygon simplification is **off by default** and **env-only**
+> (`S100_VECTOR_POLYGON_SIMPLIFY=1`); see [Gating](#gating) for why it is a
+> memory lever rather than a paint optimization. The mechanism below applies
+> only when that flag is set.
 
 `Polygon`/`MultiPolygon` (land areas, depth areas, sea areas — the
 highest-vertex S-101 features) are generalized with NetTopologySuite's
@@ -197,21 +204,24 @@ independently (each part keyed by its position). Polygons below
 A **Simplify dense geometry** setting
 (`RenderingOptimizations.GeometrySimplificationEnabled`, default on) with a
 shared pixel tolerance (`SimplificationTolerancePx`, default 0.6,
-seeded from `S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification.
+seeded from `S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification —
+the proven, default-on win — and is the only simplification knob surfaced
+in the viewer UI.
 
-**Polygon** simplification is a separate, **opt-in** knob
+**Polygon** simplification is a separate, **env-only experimental opt-in**
 (`RenderingOptimizations.PolygonSimplificationEnabled`, **default off**,
-seeded from `S100_VECTOR_POLYGON_SIMPLIFY`). It is gated *in addition* to
-`GeometrySimplificationEnabled` — both must be on for polygons to be
-simplified — and is surfaced in the viewer as the nested **Also simplify
-polygon areas (experimental)** checkbox. It defaults off because
-multi-dataset stress measurement (15 S-101 cells, pan/zoom across
-boundaries) showed topology-preserving polygon simplification is
-net-negative for paint on the GPU path: the `TopologyPreservingSimplifier`
-cost is paid on every path build and is not recovered by reduced fill
-(Metal fill is area-bound, not vertex-bound), and under cache pressure the
-cost is re-paid on every rebuild. The knob is retained for future
-evaluation (other data, CPU-bound paths, memory-pressure scenarios). See
+enabled only by `S100_VECTOR_POLYGON_SIMPLIFY=1`). It has no persisted
+viewer setting or UI checkbox, is gated *in addition* to
+`GeometrySimplificationEnabled` (both must be on), and never runs on the
+default hot path. It is retained as a **memory** lever, not a paint
+optimization: topology-preserving polygon simplification reduces the
+coordinate count of cached paths (composing with the path cache's
+coordinate-budget eviction), but a live viewer A/B showed **no paint
+improvement** on the GPU path — the translation-invariant path cache
+already neutralizes vertex count on warm paints (cache-served, ~0 ms), so
+dropping vertices does not make warm paints cheaper, while cold builds pay
+the `TopologyPreservingSimplifier` cost. Kept opt-in for future evaluation
+(other data, CPU-bound paths, memory-pressure scenarios). See
 `docs/design/mapsui-performance.md`.
 
 Simplification requires the path cache (`S100_VECTOR_PATH_CACHE`); changing

@@ -22,10 +22,12 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// live-toggleable knobs.
 /// </para>
 /// <para>
-/// The "best" default for every knob is <see langword="true"/> (geometry
-/// simplification at <see cref="DefaultSimplificationTolerancePx"/> px); see
-/// <c>docs/design/mapsui-performance.md</c> for the measurements behind that
-/// choice.
+/// The "best" default is <see langword="true"/> for every knob except
+/// <see cref="PolygonSimplificationEnabled"/>, which is an env-only experimental
+/// opt-in defaulting <see langword="false"/> (line geometry simplification runs
+/// at <see cref="DefaultSimplificationTolerancePx"/> px); see
+/// <c>docs/design/mapsui-performance.md</c> for the measurements behind those
+/// choices.
 /// </para>
 /// </remarks>
 public static class RenderingOptimizations
@@ -130,20 +132,21 @@ public static class RenderingOptimizations
     /// <summary>
     /// Whether <b>polygon</b> simplification specifically is enabled. Gated in
     /// addition to <see cref="GeometrySimplificationEnabled"/> (polygons are
-    /// simplified only when both are on), so polygon simplification can be
-    /// toggled in isolation — e.g. via <c>S100_VECTOR_POLYGON_SIMPLIFY=1</c> — for
-    /// A/B measurement without affecting line simplification.
+    /// simplified only when both are on). This is an <b>env-only, experimental
+    /// opt-in</b>: it has no persisted viewer setting or UI knob and is enabled
+    /// solely by <c>S100_VECTOR_POLYGON_SIMPLIFY=1</c>. Default <b>off</b>, so it
+    /// never runs on the default hot path.
     /// </summary>
     /// <remarks>
-    /// Default <b>off</b>. Multi-dataset stress measurement (15 S-101 cells,
-    /// pan/zoom across boundaries) showed topology-preserving polygon
-    /// simplification is net-negative for paint on the GPU path: the
-    /// <c>TopologyPreservingSimplifier</c> cost is paid on every path-build and is
-    /// not recovered by reduced fill (Metal fill is area-bound, not vertex-bound),
-    /// and under cache pressure the cost is re-paid on every rebuild. It is kept
-    /// as an opt-in knob for future evaluation (e.g. other data, CPU-bound paths,
-    /// or memory-pressure scenarios). See
-    /// <c>docs/design/mapsui-performance.md</c>.
+    /// Retained as a <b>memory</b> lever, not a paint optimization. Topology-
+    /// preserving polygon simplification reduces the coordinate count of cached
+    /// paths (composing with the path cache's coordinate-budget eviction), but a
+    /// live viewer A/B showed <b>no paint improvement</b> on the GPU path: the
+    /// translation-invariant path cache already neutralizes vertex count on warm
+    /// paints (cache-served, ~0 ms), so dropping vertices does not make warm
+    /// paints cheaper, while cold builds pay the <c>TopologyPreservingSimplifier</c>
+    /// cost. Kept opt-in for future evaluation (other data, CPU-bound paths,
+    /// memory-pressure scenarios). See <c>docs/design/mapsui-performance.md</c>.
     /// </remarks>
     public static bool PolygonSimplificationEnabled
     {
