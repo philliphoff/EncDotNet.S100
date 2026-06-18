@@ -179,7 +179,12 @@ runtime via `S100McpServerOptions.AdditionalTools` in
 `EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
 `render_to_image`, which captures the live map as a PNG — that tool
 necessarily depends on Mapsui / Skia and therefore deliberately does
-not live here. See `docs/mcp-server.md` for details.
+not live here. The viewer also injects `pick_features`, the
+feature-aware inverse of `render_to_image`: it projects a screen pixel
+through the live navigator's web-mercator viewport to a geographic
+point and then delegates to the same ranking as `identify_features`.
+Because it needs the live navigator, it too lives in the viewer rather
+than here. See `docs/mcp-server.md` for details.
 
 The registry currently wires six describers:
 

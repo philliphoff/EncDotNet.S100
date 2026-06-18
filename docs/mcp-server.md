@@ -121,6 +121,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
 | `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
 | `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+| `pick_features` *(viewer only, read-only)* | The feature-aware inverse of `render_to_image`: resolves the vector features under a point on the live map. Supply EITHER a screen pixel (`x`/`y` in device-independent pixels from the live viewport's top-left, the same coordinate space `render_to_image` captures) OR a WGS-84 geographic point (`latitude`/`longitude`); mixing or omitting both is rejected. The pixel form projects through the live navigator's web-mercator viewport to a geographic point, then delegates to the same ranking as `identify_features`, so the result shape is identical (matches plus `totalMatched`/`truncated`) with an added `source` (`pixel`/`geo`) and the resolved `latitude`/`longitude`. Pixels outside the live viewport, or before the map is laid out, are rejected. |
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
 | `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
@@ -141,7 +142,9 @@ Tools fall into two groups:
   `nearest_features`,
   `search_features`,
   `describe_feature_type`, `sample_coverage`, `render_to_image` (which
-  snapshots from a clone of the live `Map`), `await_render_idle`, and
+  snapshots from a clone of the live `Map`), `pick_features` (which
+  projects a pixel through the live viewport without changing it),
+  `await_render_idle`, and
   `get_render_stats` (which observe the live render loop without
   changing it).
 * **Mutating** — modify the live viewer's state (navigator, palette,
@@ -180,7 +183,9 @@ view exactly.
 MCP server by `EncDotNet.S100.Viewer` via the
 `S100McpServerOptions.AdditionalTools` extension point. The catalog-only
 `EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
-dependency, so a non-viewer host supplies its own equivalent.
+dependency, so a non-viewer host supplies its own equivalent. The same
+applies to its inverse, `pick_features`, which needs the live navigator
+to project a screen pixel back to a geographic point.
 
 ## Sample agent prompts
 

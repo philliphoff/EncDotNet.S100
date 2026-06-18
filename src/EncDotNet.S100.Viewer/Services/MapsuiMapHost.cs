@@ -181,6 +181,41 @@ internal sealed class MapsuiMapHost : IMapHost
         return (lat, lon);
     }
 
+    public (double Width, double Height)? TryGetViewportSizePx()
+    {
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        return (viewport.Width, viewport.Height);
+    }
+
+    public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx)
+    {
+        if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
+            return null;
+
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        var world = viewport.ScreenToWorld(xPx, yPx);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            return null;
+        }
+
+        return (lat, lon);
+    }
+
     public void AddOverlayLayer(ILayer layer)
     {
         ArgumentNullException.ThrowIfNull(layer);

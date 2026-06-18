@@ -115,6 +115,29 @@ internal interface IMapHost
     (double Latitude, double Longitude)? TryGetViewportCenterWgs84();
 
     /// <summary>
+    /// Returns the current on-screen viewport size in device-independent
+    /// pixels, or <see langword="null"/> when the map's navigator is
+    /// unavailable or the viewport has not yet been laid out. Used by the
+    /// inverse-pick MCP tool to validate a requested screen coordinate
+    /// against the live frame before converting it to a geographic point.
+    /// </summary>
+    (double Width, double Height)? TryGetViewportSizePx();
+
+    /// <summary>
+    /// Converts a screen pixel (relative to the live on-screen viewport's
+    /// top-left, in device-independent pixels) to a WGS-84 lat/lon, or
+    /// returns <see langword="null"/> when the map's navigator is
+    /// unavailable, the viewport has not been laid out, or the point
+    /// projects outside the valid Mercator domain. This is the inverse of
+    /// the projection used to render the live map and underpins the
+    /// <c>pick_features</c> MCP tool (the screen-xy → feature loop that
+    /// complements <c>render_to_image</c>).
+    /// </summary>
+    /// <param name="xPx">Screen X in device-independent pixels from the viewport's left edge.</param>
+    /// <param name="yPx">Screen Y in device-independent pixels from the viewport's top edge.</param>
+    (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx);
+
+    /// <summary>
     /// Captures the current map view as a PNG byte array.
     /// </summary>
     /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>
