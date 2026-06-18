@@ -120,7 +120,7 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `search_features` | Finds vector features by name — the "where is the feature called X?" question that `query_features` (geometry-first) and `describe_feature` (needs an id you don't have yet) can't answer. Searches every place a name can live: the simple `OBJNAM` / `NOBJNM` / `objectName` attributes (incl. ISO 8211-encoded S-101) and the repeatable complex `featureName` compound's `name` / `displayName` sub-attributes (GML specs). Case-insensitive substring containment by default; set `exact` for whole-name equality or `caseSensitive` for an exact-case match. Optional `spec`, `datasetId`, and spatial `query` scope. Each match reports `matchedName` and `matchedAttribute`. Paginated. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
-| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). When `width`/`height` are both omitted the capture is sized to the live on-screen viewport (when laid out) so the PNG matches the user's view pixel-for-pixel rather than letterboxing under the fixed 1024×768 default; the live viewport size is always echoed back as `viewportWidth`/`viewportHeight` so an agent can request a matching aspect ratio or pass those dimensions to `pick_features`. |
 | `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
 | `pick_features` *(viewer only, read-only)* | The feature-aware inverse of `render_to_image`: resolves the vector features under a point on the live map. Supply EITHER a screen pixel (`x`/`y`) OR a WGS-84 geographic point (`latitude`/`longitude`); mixing or omitting both is rejected. For a pixel measured off a `render_to_image` capture, **also** pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool echoed back — the pick is then resolved with the capture's exact fit geometry, making it a faithful inverse at any image size or aspect ratio. Omit `imageWidth`/`imageHeight` to interpret `x`/`y` in the live on-screen viewport's pixel space instead. The pixel is projected to a geographic point, then delegated to the same ranking as `identify_features`, so the result shape is identical (matches plus `totalMatched`/`truncated`) with an added `source` (`pixel`/`geo`) and the resolved `latitude`/`longitude`. Pixels outside the image/viewport bounds, or before the map is laid out, are rejected. |
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
@@ -170,8 +170,21 @@ MCP content. The response payload is a `CallToolResult` whose
    `mimeType: "image/png"` — MCP clients render this inline;
 2. a `TextContentBlock` carrying a small JSON metadata envelope
    (`width`, `height`, `pixelDensity`, `imageFormat`, `byteLength`,
-   optional `notes`) so agents still get structured echo of the
-   rendered dimensions.
+   optional `viewportWidth`/`viewportHeight`, optional `notes`) so
+   agents still get a structured echo of the rendered dimensions and
+   the live viewport size.
+
+When the caller omits both `width` and `height`, the capture is sized
+to the live on-screen viewport (when it has been laid out) so the PNG
+matches the user's view pixel-for-pixel — the fixed 1024×768 default
+otherwise letterboxes the content under `MBoxFit.Fit` against a
+differently shaped viewport. A partial request (only one dimension)
+keeps the static fallback for the omitted side to avoid an arbitrary
+aspect ratio. The live viewport size is reported as
+`viewportWidth`/`viewportHeight` on every successful capture (omitted
+only when the viewport is not yet laid out), so an agent can request a
+matching aspect ratio explicitly or pass those values as the
+`imageWidth`/`imageHeight` inputs to `pick_features`.
 
 The snapshot is captured from a **clone** of the live Mapsui `Map`
 that shares the layer collection but owns its own navigator. The

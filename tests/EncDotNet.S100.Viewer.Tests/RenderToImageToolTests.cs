@@ -31,6 +31,7 @@ public class RenderToImageToolTests
         public double ObservedDensity;
         public byte[]? Result = StubPng;
         public Exception? Throw;
+        public (double Width, double Height)? ViewportSize;
 
         public void AddLayer(ILayer layer) { }
         public void RemoveLayer(ILayer layer) { }
@@ -43,7 +44,7 @@ public class RenderToImageToolTests
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
         public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
-        public (double Width, double Height)? TryGetViewportSizePx() => null;
+        public (double Width, double Height)? TryGetViewportSizePx() => ViewportSize;
         public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx) => null;
         public (double Latitude, double Longitude)? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
 
@@ -81,6 +82,73 @@ public class RenderToImageToolTests
         Assert.Equal(768, host.ObservedHeight);
         Assert.Equal(1.0, host.ObservedDensity);
         Assert.NotNull(ok.Notes); // defaulted dimensions/density
+        Assert.Null(ok.ViewportWidth);
+        Assert.Null(ok.ViewportHeight);
+    }
+
+    [Fact]
+    public async Task Defaults_to_live_viewport_size_when_blank()
+    {
+        var host = new FakeMapHost { ViewportSize = (1226.4, 939.6) };
+        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+
+        var result = await tool.InvokeAsync(new RenderToImageRequest());
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(1226, ok!.Width);
+        Assert.Equal(940, ok.Height);
+        Assert.Equal(1226, host.ObservedWidth);
+        Assert.Equal(940, host.ObservedHeight);
+        Assert.Equal(1226, ok.ViewportWidth);
+        Assert.Equal(940, ok.ViewportHeight);
+        Assert.Contains("live viewport size", ok.Notes);
+    }
+
+    [Fact]
+    public async Task Echoes_viewport_size_even_with_explicit_dimensions()
+    {
+        var host = new FakeMapHost { ViewportSize = (1226, 939) };
+        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+
+        var result = await tool.InvokeAsync(new RenderToImageRequest(Width: 512, Height: 512));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(512, ok!.Width);
+        Assert.Equal(512, ok.Height);
+        Assert.Equal(512, host.ObservedWidth);
+        Assert.Equal(512, host.ObservedHeight);
+        Assert.Equal(1226, ok.ViewportWidth);
+        Assert.Equal(939, ok.ViewportHeight);
+    }
+
+    [Fact]
+    public async Task Partial_request_keeps_static_fallback_for_omitted_dimension()
+    {
+        var host = new FakeMapHost { ViewportSize = (1226, 939) };
+        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+
+        var result = await tool.InvokeAsync(new RenderToImageRequest(Width: 800));
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(800, ok!.Width);
+        Assert.Equal(768, ok.Height); // omitted side keeps the static default
+        Assert.Equal(1226, ok.ViewportWidth);
+        Assert.Equal(939, ok.ViewportHeight);
+    }
+
+    [Fact]
+    public async Task Degenerate_viewport_size_falls_back_to_static_default()
+    {
+        var host = new FakeMapHost { ViewportSize = (0, 0) };
+        var tool = new RenderToImageTool(new FakeAccessor { Current = host });
+
+        var result = await tool.InvokeAsync(new RenderToImageRequest());
+
+        Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal(1024, ok!.Width);
+        Assert.Equal(768, ok.Height);
+        Assert.Null(ok.ViewportWidth);
+        Assert.Null(ok.ViewportHeight);
     }
 
     [Theory]
@@ -172,6 +240,31 @@ public class RenderToImageToolTests
             c => Assert.IsType<TextContentBlock>(c));
         var img = (ImageContentBlock)call.Content[0];
         Assert.Equal("image/png", img.MimeType);
+    }
+
+    [Fact]
+    public void Adapter_success_metadata_includes_viewport_size()
+    {
+        var ok = ToolResult<RenderToImageResult>.Ok(new RenderToImageResult(
+            Width: 256, Height: 256, PixelDensity: 1.0,
+            ImageFormat: "png", ImageBytes: StubPng, Notes: null,
+            ViewportWidth: 1226, ViewportHeight: 939));
+        var call = RenderToImageMcpAdapter.TranslateResult(ok);
+        var text = (TextContentBlock)call.Content[1];
+        Assert.Contains("\"viewportWidth\":1226", text.Text);
+        Assert.Contains("\"viewportHeight\":939", text.Text);
+    }
+
+    [Fact]
+    public void Adapter_success_metadata_omits_viewport_size_when_absent()
+    {
+        var ok = ToolResult<RenderToImageResult>.Ok(new RenderToImageResult(
+            Width: 256, Height: 256, PixelDensity: 1.0,
+            ImageFormat: "png", ImageBytes: StubPng, Notes: null));
+        var call = RenderToImageMcpAdapter.TranslateResult(ok);
+        var text = (TextContentBlock)call.Content[1];
+        Assert.DoesNotContain("viewportWidth", text.Text);
+        Assert.DoesNotContain("viewportHeight", text.Text);
     }
 
     [Fact]

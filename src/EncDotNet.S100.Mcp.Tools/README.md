@@ -186,15 +186,19 @@ runtime via `S100McpServerOptions.AdditionalTools` in
 `EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
 `render_to_image`, which captures the live map as a PNG — that tool
 necessarily depends on Mapsui / Skia and therefore deliberately does
-not live here. The viewer also injects `pick_features`, the
+not live here. When `width`/`height` are omitted it sizes the capture
+to the live viewport (echoing `viewportWidth`/`viewportHeight` on every
+capture) so the snapshot matches the user's view without letterboxing.
+The viewer also injects `pick_features`, the
 feature-aware inverse of `render_to_image`: it projects a pixel
 through the live navigator's web-mercator viewport to a geographic
 point and then delegates to the same ranking as `identify_features`.
 When the pixel comes from a `render_to_image` capture, the caller
-passes that capture's `imageWidth`/`imageHeight` so the pick uses the
-snapshot's exact fit geometry rather than the live viewport's, making
-it a faithful inverse at any image size. Because it needs the live
-navigator, it too lives in the viewer rather than here. See
+passes that capture's `imageWidth`/`imageHeight` (conveniently, the
+`viewportWidth`/`viewportHeight` the capture echoed) so the pick uses
+the snapshot's exact fit geometry rather than the live viewport's,
+making it a faithful inverse at any image size. Because it needs the
+live navigator, it too lives in the viewer rather than here. See
 `docs/mcp-server.md` for details.
 
 The registry currently wires six describers:
