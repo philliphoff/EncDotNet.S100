@@ -271,10 +271,28 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var bounds = ComputeS101Bounds(dataset) ?? WorldBounds;
         return new LoadedDataset(
             id,
-            new SpecRef("S-101", default),
+            new SpecRef("S-101", ResolveS101Edition(dataset)),
             bounds,
             null,
             new S101DatasetData(dataset));
+    }
+
+    /// <summary>
+    /// Resolves the product-specification edition an S-101 cell declares in
+    /// its ISO 8211 dataset identification (DSID/PRED subfield; S-100
+    /// Part 10a §4.3.1) so <c>list_datasets</c> surfaces the real edition
+    /// instead of <c>0.0.0</c>. Returns the <see langword="default"/>
+    /// <see cref="SpecVersion"/> when the subfield is absent or not a
+    /// <c>major[.minor[.clarification]]</c> string.
+    /// </summary>
+    internal static SpecVersion ResolveS101Edition(S101Dataset dataset)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        var declaredEdition = dataset.Document.Identification?.ProductSpecificationEdition;
+        return !string.IsNullOrWhiteSpace(declaredEdition)
+            && SpecVersion.TryParse(declaredEdition, out var edition)
+            ? edition
+            : default;
     }
 
     /// <summary>

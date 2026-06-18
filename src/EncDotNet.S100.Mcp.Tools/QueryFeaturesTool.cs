@@ -36,7 +36,8 @@ public sealed record QueryFeaturesRequest(
     [property: Description("Optional attribute-value predicates; a feature must satisfy all of them (logical AND). Discover valid attributes and enumerated values with describe_feature_type.")] ImmutableArray<AttributePredicate> Attributes = default,
     [property: Description("When true, replaces the default bounding-box intersection test with true full-geometry intersection: point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing — e.g. \"which features does this route leg actually cross?\". Slightly more expensive; default false.")] bool Precise = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
-    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
+    [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
+    [property: Description("Optional single-dataset filter; when supplied only the dataset with this identifier (from list_datasets) is queried. Null queries every matching dataset.")] DatasetId? Dataset = null);
 
 /// <summary>
 /// Per-feature summary returned by <see cref="QueryFeaturesTool"/>.
@@ -146,6 +147,11 @@ public sealed class QueryFeaturesTool
         foreach (var dataset in snapshot)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (request.Dataset is { } datasetId && dataset.Id != datasetId)
+            {
+                continue;
+            }
 
             if (request.Spec is { } spec && !SpecMatches(dataset.Spec, spec))
             {

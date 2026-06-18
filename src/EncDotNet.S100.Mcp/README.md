@@ -55,7 +55,7 @@ The server exposes the read-only tools defined by
 | Tool name | Returns |
 |---|---|
 | `list_datasets` | Per-dataset summaries (id, spec, name, extent) |
-| `describe_feature` | Spec / feature type / attributes for a feature in a dataset |
+| `describe_feature` | Spec / feature type / attributes for a feature in a dataset. For S-101, each information association is dereferenced — the linked information type record's attributes (e.g. `information` / text) are inlined under a `target` block — and MultiPoint soundings carry a per-point `depths` array |
 | `sample_coverage` | Sampled value at a lat/lon for a coverage dataset (S-102 / S-104 / S-111); optional `times` JSON envelope (instant / range / series) populates a per-step `series` array for S-104 / S-111 |
 | `find_at` | Datasets whose declared bbox contains a point or intersects a `GeoQuery` envelope |
 | `query_features` | Features from loaded GML datasets that intersect a spatial query (point / box / polygon / polyline); optional `times` envelope filters out features whose `fixedDateRange`/`periodicDateRange` is disjoint from the window (features without validity metadata are always included) |
@@ -63,8 +63,9 @@ The server exposes the read-only tools defined by
 | `list_specs` | Spec catalogue with per-spec capability flags (query / describe / sample / list time-steps) |
 | `list_time_steps` | Available UTC time-step instants (+ cadence) for a time-varying coverage dataset (S-104 / S-111) |
 
-Spatial queries are passed as a JSON envelope on the `query` (or
-`polyline`) parameter:
+Spatial queries may be passed either as a structured JSON **object**
+(preferred) or, for backward compatibility, as a JSON **string**
+containing the same envelope, on the `query` (or `polyline`) parameter:
 
 ```json
 {"kind": "point",    "latitude": 47.6, "longitude": -122.3}
@@ -72,6 +73,12 @@ Spatial queries are passed as a JSON envelope on the `query` (or
 {"kind": "polygon",  "ring": [[47, -123], [48, -123], [48, -122], [47, -123]]}
 {"kind": "polyline", "vertices": [[47.6, -122.3], [47.7, -122.4]], "corridorWidthMeters": 1000}
 ```
+
+`query_features` also accepts an optional `datasetId` to scope the query
+to a single loaded cell (matching `count_features` / `search_features`).
+Malformed envelopes (missing `kind`, out-of-range coordinates, bad JSON)
+return a structured `invalid_argument` error naming the offending
+parameter rather than an opaque `internal_error`.
 
 See `src/EncDotNet.S100.Mcp.Tools/README.md` for the full tool
 contract, request/response schemas, and error codes.
