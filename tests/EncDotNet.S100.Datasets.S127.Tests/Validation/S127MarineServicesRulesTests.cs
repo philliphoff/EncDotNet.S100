@@ -3,7 +3,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S127;
 using EncDotNet.S100.Datasets.S127.DataModel;
 using EncDotNet.S100.Datasets.S127.Validation;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.S127.Tests.Validation;
@@ -21,7 +21,7 @@ public class S127MarineServicesRulesTests
     private static S127Feature SourceFeature(
         string id,
         string featureType,
-        GmlGeometryType geometryType = GmlGeometryType.None,
+        S100GeometryType geometryType = S100GeometryType.None,
         IDictionary<string, string>? attributes = null,
         IEnumerable<S127ComplexAttribute>? complex = null)
         => new()
@@ -90,7 +90,7 @@ public class S127MarineServicesRulesTests
             Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray(),
             Source = SourceFeature(
                 id, "VesselTrafficServiceArea",
-                geometryType: coords.Length > 0 ? GmlGeometryType.Surface : GmlGeometryType.None,
+                geometryType: coords.Length > 0 ? S100GeometryType.Surface : S100GeometryType.None,
                 attributes: attrs,
                 complex: complex),
         };

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S131.DataModel;
 
@@ -627,9 +627,9 @@ public sealed class S131HarbourInfrastructureDataset
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.None:
+            case S100GeometryType.None:
                 return S131Geometry.Empty;
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Point,
@@ -637,7 +637,7 @@ public sealed class S131HarbourInfrastructureDataset
                         ? ImmutableArray<GeoPosition>.Empty
                         : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray(),
                 };
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Curve,
@@ -649,7 +649,7 @@ public sealed class S131HarbourInfrastructureDataset
                                 : c.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray())
                             .ToImmutableArray(),
                 };
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Surface,

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S411.DataModel;
 
@@ -358,11 +358,11 @@ public sealed class S411SeaIceInventory
 
     // ── Geometry projection ───────────────────────────────────────────
 
-    private static S411GeometryKind ProjectGeometryKind(GmlGeometryType type) => type switch
+    private static S411GeometryKind ProjectGeometryKind(S100GeometryType type) => type switch
     {
-        GmlGeometryType.Point => S411GeometryKind.Point,
-        GmlGeometryType.Curve => S411GeometryKind.Curve,
-        GmlGeometryType.Surface => S411GeometryKind.Surface,
+        S100GeometryType.Point => S411GeometryKind.Point,
+        S100GeometryType.Curve => S411GeometryKind.Curve,
+        S100GeometryType.Surface => S411GeometryKind.Surface,
         _ => S411GeometryKind.None,
     };
 
@@ -370,19 +370,19 @@ public sealed class S411SeaIceInventory
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 return f.Points.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
 
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 if (f.Curves.IsDefaultOrEmpty) return ImmutableArray<GeoPosition>.Empty;
                 return f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
                     .ToImmutableArray();
 
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 return f.ExteriorRing.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();

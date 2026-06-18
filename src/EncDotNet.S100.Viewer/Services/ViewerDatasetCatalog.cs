@@ -17,7 +17,7 @@ using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
@@ -262,19 +262,36 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     {
         using var stream = OpenEntryStream(entry);
         var dataset = S101Dataset.Open(stream);
-        // S-101 features carry packed spatial coordinates that require
-        // the coordinate multiplication factors plus a join across the
-        // feature / spatial / coordinate records to recover lat/lon —
-        // see S-100 Part 10a §3. That work belongs with the S-101
-        // describe implementation, so we fall back to world bounds for
-        // now; the MCP tool surface still lists the dataset and other
-        // tools can dispatch on it.
+        // Recover the cell's geographic extent from the vector source,
+        // which joins feature/spatial/coordinate records and applies the
+        // S-100 Part 10a coordinate multiplication factors to yield
+        // decimal degrees (the same EPSG:4326 extent the renderer fits).
+        // Fall back to world bounds only when the cell carries no
+        // resolvable coordinates.
+        var bounds = ComputeS101Bounds(dataset) ?? WorldBounds;
         return new LoadedDataset(
             id,
             new SpecRef("S-101", default),
-            WorldBounds,
+            bounds,
             null,
             new S101DatasetData(dataset));
+    }
+
+    /// <summary>
+    /// Computes an S-101 cell's WGS-84 bounding box from its vector
+    /// source extent, returning <see langword="null"/> when the extent is
+    /// degenerate (no resolvable coordinates) so the caller can fall back
+    /// to world bounds.
+    /// </summary>
+    internal static BoundingBox? ComputeS101Bounds(S101Dataset dataset)
+    {
+        var extent = new S101VectorSource(dataset).Metadata.Extent;
+        if (extent.NorthLatitude <= extent.SouthLatitude
+            && extent.EastLongitude <= extent.WestLongitude)
+        {
+            return null;
+        }
+        return extent;
     }
 
     private static LoadedDataset ProjectS102(DatasetId id, DatasetEntry entry)
@@ -461,7 +478,7 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
     /// callers fall back to <see cref="WorldBounds"/>.
     /// </summary>
     private static BoundingBox? ComputeGmlBounds<TFeature>(IEnumerable<TFeature> features)
-        where TFeature : IGmlFeature
+        where TFeature : IS100Feature
     {
         if (features is null) return null;
 

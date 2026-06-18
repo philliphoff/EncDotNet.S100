@@ -1,4 +1,7 @@
+using System.Collections.Immutable;
+using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
@@ -33,7 +36,16 @@ public sealed class VectorMetadata
 /// <summary>
 /// A single geographic feature read from a vector dataset.
 /// </summary>
-public sealed class Feature
+/// <remarks>
+/// Implements the encoding-neutral <see cref="IS100Feature"/> shape so that
+/// generic pipeline components (e.g. <see cref="FeatureGeometryProvider{TFeature}"/>)
+/// and the MCP query tools can consume ISO 8211-encoded S-101 / S-57 features
+/// alongside the GML-encoded products without an intermediate adapter. The
+/// single <see cref="Coordinates"/> / <see cref="GeometryType"/> pair is mapped
+/// onto the interface's <c>Points</c> / <c>Curves</c> / <c>ExteriorRing</c>
+/// buckets on demand.
+/// </remarks>
+public sealed class Feature : IS100Feature
 {
     /// <summary>Feature type code (e.g. "DepthArea", "LandArea", "Buoy").</summary>
     public required string FeatureType { get; init; }
@@ -62,6 +74,71 @@ public sealed class Feature
 
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }
+
+    string IS100Feature.Id => Id.ToString(CultureInfo.InvariantCulture);
+
+    string IS100Feature.FeatureType => FeatureType;
+
+    S100GeometryType IS100Feature.GeometryType => GeometryType switch
+    {
+        GeometryType.Point => S100GeometryType.Point,
+        GeometryType.Curve => S100GeometryType.Curve,
+        GeometryType.Surface => S100GeometryType.Surface,
+        _ => S100GeometryType.None,
+    };
+
+    ImmutableArray<(double Latitude, double Longitude)> IS100Feature.Points =>
+        GeometryType == GeometryType.Point ? ToImmutable(Coordinates) : [];
+
+    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> IS100Feature.Curves =>
+        GeometryType == GeometryType.Curve && Coordinates.Count > 0
+            ? ImmutableArray.Create(ToImmutable(Coordinates))
+            : [];
+
+    ImmutableArray<(double Latitude, double Longitude)> IS100Feature.ExteriorRing =>
+        GeometryType == GeometryType.Surface ? ToImmutable(Coordinates) : [];
+
+    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> IS100Feature.InteriorRings =>
+        GeometryType == GeometryType.Surface ? ToImmutableRings(InteriorRings) : [];
+
+    ImmutableDictionary<string, string> IS100Feature.Attributes
+    {
+        get
+        {
+            if (Attributes.Count == 0) return ImmutableDictionary<string, string>.Empty;
+            var builder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+            foreach (var (key, value) in Attributes)
+            {
+                builder[key] = value switch
+                {
+                    null => string.Empty,
+                    IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+                    _ => value.ToString() ?? string.Empty,
+                };
+            }
+            return builder.ToImmutable();
+        }
+    }
+
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => [];
+
+    private static ImmutableArray<(double Latitude, double Longitude)> ToImmutable(
+        IReadOnlyList<(double Latitude, double Longitude)> coords)
+    {
+        if (coords.Count == 0) return [];
+        var builder = ImmutableArray.CreateBuilder<(double, double)>(coords.Count);
+        foreach (var c in coords) builder.Add(c);
+        return builder.MoveToImmutable();
+    }
+
+    private static ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> ToImmutableRings(
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> rings)
+    {
+        if (rings.Count == 0) return [];
+        var builder = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>(rings.Count);
+        foreach (var ring in rings) builder.Add(ToImmutable(ring));
+        return builder.MoveToImmutable();
+    }
 }
 
 public enum GeometryType

@@ -79,6 +79,24 @@ public sealed record SpecNotSupportedForTool(
     "spec_not_supported_for_tool",
     $"Spec '{Spec}' is not supported by tool '{Tool}'.");
 
+/// <summary>No bundled Feature Catalogue is available for the requested spec.</summary>
+/// <param name="Spec">The product specification whose Feature Catalogue could not be loaded.</param>
+[Description("Raised when no bundled Feature Catalogue is available for the requested spec.")]
+public sealed record FeatureCatalogueNotAvailable(
+    [property: Description("The product specification whose Feature Catalogue could not be loaded.")] SpecRef Spec) : ToolError(
+    "feature_catalogue_not_available",
+    $"No bundled Feature Catalogue is available for spec '{Spec}'.");
+
+/// <summary>The named feature type is not present in the spec's Feature Catalogue.</summary>
+/// <param name="Spec">The product specification whose Feature Catalogue was searched.</param>
+/// <param name="FeatureType">The feature-type code or name that could not be located.</param>
+[Description("Raised when the requested feature type is not present in the spec's Feature Catalogue.")]
+public sealed record FeatureTypeNotFound(
+    [property: Description("The product specification whose Feature Catalogue was searched.")] SpecRef Spec,
+    [property: Description("The feature-type code or name that could not be located.")] string FeatureType) : ToolError(
+    "feature_type_not_found",
+    $"Feature type '{FeatureType}' is not present in the Feature Catalogue for spec '{Spec}'.");
+
 /// <summary>
 /// The requested point falls outside the spatial bounds of every loaded
 /// dataset of the requested spec. Distinguished from

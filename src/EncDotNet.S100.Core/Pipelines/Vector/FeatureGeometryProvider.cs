@@ -1,27 +1,29 @@
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
-/// Generic geometry provider for GML-encoded S-100 datasets.
+/// Generic geometry provider for S-100 vector datasets.
 /// </summary>
 /// <remarks>
 /// Replaces the identical per-spec <c>S{NNN}FeatureGeometryProvider</c>
 /// classes that each implemented the same surface → curve → point preference
-/// logic. When a feature exposes multiple geometry kinds the provider
-/// prefers, in order: surface (with interior rings), the first curve, then
-/// points.
+/// logic. Serves both the GML-encoded products and the ISO 8211-encoded
+/// S-101 path (whose pipeline <see cref="Feature"/> records implement
+/// <see cref="IS100Feature"/>). When a feature exposes multiple geometry
+/// kinds the provider prefers, in order: surface (with interior rings), the
+/// first curve, then points.
 /// </remarks>
 /// <typeparam name="TFeature">
-/// The concrete feature type, constrained to <see cref="IGmlFeature"/>.
+/// The concrete feature type, constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
-public sealed class GmlFeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
-    where TFeature : IGmlFeature
+public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
+    where TFeature : IS100Feature
 {
     private readonly Dictionary<string, FeatureGeometry> _byId;
 
     /// <summary>Builds a provider over the supplied features.</summary>
-    public GmlFeatureGeometryProvider(IReadOnlyList<TFeature> features)
+    public FeatureGeometryProvider(IReadOnlyList<TFeature> features)
     {
         ArgumentNullException.ThrowIfNull(features);
         _byId = new Dictionary<string, FeatureGeometry>(StringComparer.OrdinalIgnoreCase);

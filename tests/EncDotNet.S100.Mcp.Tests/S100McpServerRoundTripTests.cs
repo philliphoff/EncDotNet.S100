@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -28,14 +28,19 @@ public class S100McpServerRoundTripTests
         Assert.Equal(
             new[]
             {
+                "count_features",
                 "describe_feature",
+                "describe_feature_type",
                 "find_at",
+                "identify_features",
                 "list_datasets",
                 "list_specs",
                 "list_time_steps",
+                "nearest_features",
                 "query_features",
                 "sample_coverage",
                 "sample_coverage_along",
+                "search_features",
             },
             names);
         foreach (var tool in tools)
@@ -68,7 +73,7 @@ public class S100McpServerRoundTripTests
         var datasets = payload["datasets"]!.AsArray();
         Assert.Equal(2, datasets.Count);
         var ids = datasets
-            .Select(d => d!["id"]!["value"]!.GetValue<string>())
+            .Select(d => d!["id"]!.GetValue<string>())
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(new[] { "synth-bathy-1", "synth-warn-1" }, ids);
@@ -167,7 +172,7 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);
-        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
+        Assert.Equal("warn-here", datasets[0]!["id"]!.GetValue<string>());
         Assert.Equal(1, payload["totalCount"]!.GetValue<int>());
     }
 
@@ -191,13 +196,221 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task CountFeatures_round_trip_returns_type_tallies()
+    {
+        var feature = new S124Feature
+        {
+            Id = "feat-1",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(feature);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-1", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("count_features", new Dictionary<string, object?>());
+
+        Assert.False(result.IsError ?? false, $"count_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(1, payload["totalFeatures"]!.GetValue<int>());
+        Assert.Equal(1, payload["datasetCount"]!.GetValue<int>());
+        var types = payload["types"]!.AsArray();
+        var tally = Assert.Single(types);
+        Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
+        Assert.Equal(1, tally["count"]!.GetValue<int>());
+        Assert.Equal(1, tally["withGeometry"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task IdentifyFeatures_round_trip_returns_ranked_matches()
+    {
+        var area = new S124Feature
+        {
+            Id = "area-1",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (4.0, 4.0), (4.0, 6.0), (6.0, 6.0), (6.0, 4.0), (4.0, 4.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var point = new S124Feature
+        {
+            Id = "light-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(area, point);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-2", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 5.0,
+            ["longitude"] = 5.0,
+        });
+
+        Assert.False(result.IsError ?? false, $"identify_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(2, payload["totalMatched"]!.GetValue<int>());
+        var features = payload["features"]!.AsArray();
+        Assert.Equal(2, features.Count);
+        // The point ranks above the area.
+        Assert.Equal("light-1", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("point", features[0]!["geometry"]!.GetValue<string>());
+        Assert.Equal("surface", features[1]!["geometry"]!.GetValue<string>());
+        Assert.Equal("inside", features[1]!["containment"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task NearestFeatures_round_trip_ranks_by_true_distance()
+    {
+        var near = new S124Feature
+        {
+            Id = "near-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.1)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var far = new S124Feature
+        {
+            Id = "far-1",
+            FeatureType = "Light",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 6.0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(far, near);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-3", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 5.0,
+            ["longitude"] = 5.0,
+        });
+
+        Assert.False(result.IsError ?? false, $"nearest_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.Equal(2, payload["totalMatched"]!.GetValue<int>());
+        var features = payload["features"]!.AsArray();
+        Assert.Equal("near-1", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("far-1", features[1]!["featureId"]!.GetValue<string>());
+        Assert.True(
+            features[0]!["distanceMeters"]!.GetValue<double>() < features[1]!["distanceMeters"]!.GetValue<double>());
+        Assert.NotNull(features[0]!["bearingDegrees"]);
+    }
+
+    [Fact]
+    public async Task NearestFeatures_invalid_latitude_returns_structured_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
+        {
+            ["latitude"] = 120.0,
+            ["longitude"] = 0.0,
+        });
+
+        Assert.True(result.IsError ?? false);
+        Assert.Contains("latitude", DumpText(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task QueryFeatures_precise_drops_bounding_box_false_positive()
+    {
+        // A triangle whose bounding box covers (1.5, 1.5) but whose body
+        // does not — the coarse query matches, the precise query does not.
+        var triangle = new S124Feature
+        {
+            Id = "tri-1",
+            FeatureType = "RestrictedArea",
+            GeometryType = S100GeometryType.Surface,
+            ExteriorRing = ImmutableArray.Create<(double, double)>(
+                (0, 0), (2, 0), (0, 2), (0, 0)),
+            Attributes = ImmutableDictionary<string, string>.Empty,
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(triangle);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-4", bounds: LoadedDatasetFactory.Box(-1, -1, 3, 3), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var pointQuery = "{\"kind\":\"point\",\"latitude\":1.5,\"longitude\":1.5}";
+
+        var coarse = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = pointQuery,
+        });
+        Assert.False(coarse.IsError ?? false, $"query_features returned an error: {DumpText(coarse)}");
+        Assert.Equal(1, ParseSingleJson(coarse)["totalCount"]!.GetValue<int>());
+
+        var precise = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = pointQuery,
+            ["precise"] = true,
+        });
+        Assert.False(precise.IsError ?? false, $"query_features returned an error: {DumpText(precise)}");
+        Assert.Equal(0, ParseSingleJson(precise)["totalCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task DescribeFeatureType_round_trip_introspects_bundled_catalogue()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-124",
+        });
+
+        Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.True(payload["totalFeatureTypeCount"]!.GetValue<int>() > 0);
+        Assert.NotEmpty(payload["featureTypes"]!.AsArray());
+    }
+
+    [Fact]
     public async Task QueryFeatures_round_trip_returns_matching_features()
     {
         var feature = new S124Feature
         {
             Id = "feat-1",
             FeatureType = "NavwarnPart",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((5.0, 5.0)),
             Curves = default,
             ExteriorRing = default,
@@ -224,6 +437,176 @@ public class S100McpServerRoundTripTests
         Assert.NotEmpty(features);
         Assert.Equal("feat-1", features[0]!["featureId"]!.GetValue<string>());
         Assert.Equal("NavwarnPart", features[0]!["featureType"]!.GetValue<string>());
+
+        var breakdown = payload["typeBreakdown"]!.AsArray();
+        var tally = Assert.Single(breakdown);
+        Assert.Equal("NavwarnPart", tally!["featureType"]!.GetValue<string>());
+        Assert.Equal(1, tally["count"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_with_attributes_filters_on_attribute_value()
+    {
+        var matching = new S124Feature
+        {
+            Id = "match",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "1"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var other = new S124Feature
+        {
+            Id = "other",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("navwarnTypeGeneral", "2"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(matching, other);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-attr", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["attributes"] = """{"navwarnTypeGeneral":"1"}""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("match", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task QueryFeatures_round_trip_with_attribute_predicate_array()
+    {
+        var deep = new S124Feature
+        {
+            Id = "deep",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "20"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var shallow = new S124Feature
+        {
+            Id = "shallow",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("valueOfDepth", "5"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(deep, shallow);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-depth", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
+        {
+            ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
+            ["attributes"] = """[{"attribute":"valueOfDepth","op":"ge","value":"10"}]""",
+        });
+
+        Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("deep", features[0]!["featureId"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SearchFeatures_round_trip_finds_features_by_name()
+    {
+        var named = new S124Feature
+        {
+            Id = "warn-named",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((5.0, 5.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Nab Tower Light"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var other = new S124Feature
+        {
+            Id = "warn-other",
+            FeatureType = "NavwarnPart",
+            GeometryType = S100GeometryType.Point,
+            Points = ImmutableArray.Create((6.0, 6.0)),
+            Curves = default,
+            ExteriorRing = default,
+            InteriorRings = default,
+            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Spit Sand Fort"),
+            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            References = ImmutableArray<GmlReference>.Empty,
+        };
+        var dataset = S124Synth.Dataset(named, other);
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S124("synth-warn-named", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
+        {
+            ["text"] = "nab tower",
+        });
+
+        Assert.False(result.IsError ?? false, $"search_features returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        var features = payload["features"]!.AsArray();
+        Assert.Single(features);
+        Assert.Equal("warn-named", features[0]!["featureId"]!.GetValue<string>());
+        Assert.Equal("Nab Tower Light", features[0]!["matchedName"]!.GetValue<string>());
+        Assert.Equal("objectName", features[0]!["matchedAttribute"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SearchFeatures_blank_text_returns_error()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
+        {
+            ["text"] = "   ",
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for blank search text.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
     }
 
     [Fact]
@@ -286,7 +669,7 @@ public class S100McpServerRoundTripTests
         {
             Id = id,
             FeatureType = "MarineProtectedArea",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((5.0, 5.0)),
             Curves = default,
             ExteriorRing = default,
@@ -432,7 +815,7 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
         var datasets = payload["datasets"]!.AsArray();
         Assert.Single(datasets);
-        Assert.Equal("warn-here", datasets[0]!["id"]!["value"]!.GetValue<string>());
+        Assert.Equal("warn-here", datasets[0]!["id"]!.GetValue<string>());
     }
 
     private static JsonObject ParseSingleJson(CallToolResult result)

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S128.DataModel;
 
@@ -407,18 +407,18 @@ public sealed class S128ProductCatalogue
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 if (f.Points.IsDefaultOrEmpty) return (S128GeometryKind.Point, ImmutableArray<GeoPosition>.Empty);
                 return (S128GeometryKind.Point, f.Points
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
                     .ToImmutableArray());
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 if (f.Curves.IsDefaultOrEmpty) return (S128GeometryKind.Curve, ImmutableArray<GeoPosition>.Empty);
                 return (S128GeometryKind.Curve, f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
                     .ToImmutableArray());
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 if (f.ExteriorRing.IsDefaultOrEmpty) return (S128GeometryKind.Surface, ImmutableArray<GeoPosition>.Empty);
                 return (S128GeometryKind.Surface, f.ExteriorRing
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))

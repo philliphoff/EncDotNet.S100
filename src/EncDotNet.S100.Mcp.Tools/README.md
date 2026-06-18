@@ -25,6 +25,13 @@ A reflection-based test (`AnnotationContractTests` in
 `tests/EncDotNet.S100.Mcp.Tools.Tests`) enforces that every newly
 added wire-crossing property carries a non-empty `[Description]`.
 
+A `DatasetId` serialises as a **bare JSON string** in both directions
+(via `DatasetIdJsonConverter`): tools accept it as a plain-string
+argument and emit it as a plain string in results, so an id read off
+one tool's output feeds straight back into another's input. Legacy
+`{"value":"…"}` wrapped ids are still accepted on input for backward
+compatibility.
+
 ## Architecture
 
 ```
@@ -173,19 +180,32 @@ implements an internal `ISpecFeatureDescriber` strategy.
 
 ## Host-injected tools
 
-The eight tools above are catalog-only and live in this assembly. A
+The catalog tools above are catalog-only and live in this assembly. A
 host (e.g. the Avalonia viewer) may inject additional tools at
 runtime via `S100McpServerOptions.AdditionalTools` in
 `EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
 `render_to_image`, which captures the live map as a PNG — that tool
 necessarily depends on Mapsui / Skia and therefore deliberately does
-not live here. See `docs/mcp-server.md` for details.
+not live here. When `width`/`height` are omitted it sizes the capture
+to the live viewport (echoing `viewportWidth`/`viewportHeight` on every
+capture) so the snapshot matches the user's view without letterboxing.
+The viewer also injects `pick_features`, the
+feature-aware inverse of `render_to_image`: it projects a pixel
+through the live navigator's web-mercator viewport to a geographic
+point and then delegates to the same ranking as `identify_features`.
+When the pixel comes from a `render_to_image` capture, the caller
+passes that capture's `imageWidth`/`imageHeight` (conveniently, the
+`viewportWidth`/`viewportHeight` the capture echoed) so the pick uses
+the snapshot's exact fit geometry rather than the live viewport's,
+making it a faithful inverse at any image size. Because it needs the
+live navigator, it too lives in the viewer rather than here. See
+`docs/mcp-server.md` for details.
 
 The registry currently wires six describers:
 
 | Spec   | Describer                  | Feature id convention                                                                                       |
 |--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
-| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`.                                                                        |
+| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`. Result carries a `geometry` block (primitive, bounding box, resolved coordinates). |
 | S-102  | `S102FeatureDescriber`     | Coverage path `BathymetryCoverage[.01]` (bare `BathymetryCoverage` accepted).                               |
 | S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
 | S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
@@ -215,7 +235,11 @@ var describe = new DescribeFeatureTool(catalog);
 var sample = new SampleCoverageTool(catalog);
 var sampleAlong = new SampleCoverageAlongTool(catalog);
 var findAt = new FindAtTool(catalog);
+var identifyFeatures = new IdentifyFeaturesTool(catalog);
+var nearestFeatures = new NearestFeaturesTool(catalog);
 var queryFeatures = new QueryFeaturesTool(catalog);
+var countFeatures = new CountFeaturesTool(catalog);
+var searchFeatures = new SearchFeaturesTool(catalog);
 
 var listed = await list.InvokeAsync(new ListDatasetsRequest());
 if (listed.TryGetValue(out var summary))
@@ -239,6 +263,42 @@ if (hits.TryGetValue(out var hit))
     }
 }
 
+// Which *features* are under this point? identify_features is the
+// feature-aware cursor-pick: it ranks matches most-specific first
+// (point before curve before area; smaller / nearer wins), uses exact
+// point-in-polygon containment for areas, and a metre radius for
+// point / curve features. Works across every vector spec incl. S-101.
+var picked = await identifyFeatures.InvokeAsync(new IdentifyFeaturesRequest(
+    Latitude: 50.77,
+    Longitude: -1.30,
+    RadiusMeters: 50));
+if (picked.TryGetValue(out var pick))
+{
+    foreach (var m in pick.Features)
+    {
+        Console.WriteLine($"{m.Spec} {m.FeatureType} {m.FeatureId} ({m.Geometry}, {m.Containment}).");
+    }
+}
+
+// What is the nearest feature to my position, and am I inside any area?
+// nearest_features ranks by TRUE geometric distance (nearest point on a
+// segment, not just the nearest vertex). An area containing the point is
+// returned at distance 0 with containment "inside"; everything else
+// reports the distance and the bearing toward its nearest point.
+var nearest = await nearestFeatures.InvokeAsync(new NearestFeaturesRequest(
+    Latitude: 50.77,
+    Longitude: -1.30,
+    FeatureType: null,
+    MaxDistanceMeters: 5000,
+    Limit: 5));
+if (nearest.TryGetValue(out var near))
+{
+    foreach (var m in near.Features)
+    {
+        Console.WriteLine($"{m.FeatureType} {m.FeatureId}: {m.DistanceMeters:F0} m ({m.Containment}).");
+    }
+}
+
 var depth = await sample.InvokeAsync(new SampleCoverageRequest(
     new SpecRef("S-102", new SpecVersion(2, 1, 0)),
     Latitude: 47.6,
@@ -249,9 +309,12 @@ if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
     Console.WriteLine($"Depth at point: {d.DepthMeters} m");
 }
 
-// What GML features overlap a bounding box? query_features works across
+// What features overlap a bounding box? query_features works across
 // every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
-// S-201/S-411/S-421) via the shared IGmlFeature abstraction. Pass any
+// S-201/S-411/S-421) via the shared IS100Feature abstraction, plus the
+// ISO 8211-encoded S-101 (whose pipeline Feature records implement
+// IS100Feature directly — its FeatureType filter matches the
+// feature-type acronym and FeatureId is the decimal RCID). Pass any
 // GeoQuery variant — point, bbox, polygon, or polyline (with optional
 // corridor width). Results are paginated.
 var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
@@ -264,6 +327,83 @@ if (features.TryGetValue(out var page))
     foreach (var match in page.Features)
     {
         Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
+    }
+}
+
+// Filter on attribute values with the optional Attributes predicate set.
+// Predicates combine with logical AND and are evaluated against each
+// feature's simple attributes (case-insensitive key lookup). Operators:
+// Exists, NotExists, Eq, Ne, Contains, StartsWith, Gt, Ge, Lt, Le
+// (numeric operators parse both sides as invariant doubles). Over the
+// wire the `attributes` parameter accepts either a code→value map
+// (all equality) or an array of explicit {attribute, op, value} objects.
+var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
+    Spec: new SpecRef("S-101", default),
+    FeatureType: "LIGHTS",
+    Attributes: ImmutableArray.Create(
+        new AttributePredicate("categoryOfLight", AttributeOperator.Eq, "8"),
+        new AttributePredicate("objectName", AttributeOperator.Exists, null))));
+
+// Set Precise for true full-geometry intersection instead of the default
+// bounding-box test: point-in-polygon containment for areas (interior-ring
+// holes honoured) and genuine segment crossing — e.g. "which features does
+// this route leg actually cross?". A leg endpoint inside an area, or a leg
+// that crosses an area boundary or a curve, counts.
+var crossed = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Polyline(new GeoPolyline(ImmutableArray.Create(
+        new GeoPoint(47.60, -122.40),
+        new GeoPoint(47.62, -122.30)))),
+    Precise: true));
+
+// What kinds of features, and how many, are in a cell? count_features
+// answers the discovery question describe_feature can't (it needs an id
+// you don't yet have). Works across every vector spec incl. S-101.
+// Optionally scope to one dataset / spec / spatial envelope.
+var counts = await countFeatures.InvokeAsync(new CountFeaturesRequest(
+    Spec: new SpecRef("S-101", default)));
+if (counts.TryGetValue(out var tally))
+{
+    foreach (var t in tally.Types)
+    {
+        Console.WriteLine($"{t.DatasetId} {t.FeatureType}: {t.Count} ({t.WithGeometry} located)");
+    }
+}
+
+// Where is the feature called "X"? search_features answers the
+// name-oriented question that query_features (geometry-first) and
+// describe_feature (needs an id) can't. It searches every place a name
+// can live — the simple OBJNAM / NOBJNM / objectName attributes (incl.
+// S-101) and the complex featureName.name / .displayName sub-attributes
+// (GML specs). Case-insensitive substring by default; set Exact for
+// whole-name equality, CaseSensitive for an exact-case match. Optional
+// spec / dataset / spatial scope.
+var byName = await searchFeatures.InvokeAsync(new SearchFeaturesRequest(
+    "Nab Tower",
+    Spec: new SpecRef("S-101", default)));
+if (byName.TryGetValue(out var hits))
+{
+    foreach (var hit in hits.Features)
+    {
+        Console.WriteLine($"{hit.FeatureType} {hit.FeatureId}: {hit.MatchedName} (via {hit.MatchedAttribute})");
+    }
+}
+
+// What attributes is a feature type allowed to have, and what are the
+// legal values of its enumerations? describe_feature_type introspects a
+// spec's bundled Feature Catalogue (no loaded dataset required) — the
+// schema-discovery counterpart to count_features. Omit FeatureType to
+// list every type; supply one for full attribute detail.
+var schema = new DescribeFeatureTypeTool();
+var buoy = await schema.InvokeAsync(new DescribeFeatureTypeRequest(
+    new SpecRef("S-101", default),
+    FeatureType: "BuoyLateral"));
+if (buoy.TryGetValue(out var typeInfo))
+{
+    foreach (var attr in typeInfo.FeatureTypes[0].Attributes)
+    {
+        var card = attr.Mandatory ? "required" : "optional";
+        Console.WriteLine($"{attr.Code} ({attr.ValueType}, {card}): {attr.ListedValues.Length} listed values");
     }
 }
 

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using System.Xml.Linq;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S421.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S421;
@@ -116,13 +116,13 @@ internal static class S421DatasetReader
         };
     }
 
-    private static (GmlGeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
         var points = ImmutableArray<(double, double)>.Empty;
         var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
         var exterior = ImmutableArray<(double, double)>.Empty;
         var interiors = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var geomType = GmlGeometryType.None;
+        var geomType = S100GeometryType.None;
 
         var geometry = featureElement.Element(featureElement.Name.Namespace + "geometry")
             ?? featureElement.Element("geometry");
@@ -136,7 +136,7 @@ internal static class S421DatasetReader
             var coord = GmlCoordinateParser.ParsePointElement(pointProp, s100Ns);
             if (coord is not null)
             {
-                geomType = GmlGeometryType.Point;
+                geomType = S100GeometryType.Point;
                 points = [coord.Value];
             }
         }
@@ -147,7 +147,7 @@ internal static class S421DatasetReader
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Length > 0)
             {
-                geomType = GmlGeometryType.Curve;
+                geomType = S100GeometryType.Curve;
                 curves = [coords];
             }
         }
@@ -158,7 +158,7 @@ internal static class S421DatasetReader
             var (ext, ints) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
             if (ext.Length > 0)
             {
-                geomType = GmlGeometryType.Surface;
+                geomType = S100GeometryType.Surface;
                 exterior = ext;
                 interiors = ints;
             }

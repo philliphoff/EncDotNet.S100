@@ -1,6 +1,6 @@
 using System.Xml.Linq;
 
-namespace EncDotNet.S100.Gml;
+namespace EncDotNet.S100.Features;
 
 /// <summary>
 /// Common GML and S-100 GML namespace constants used across all

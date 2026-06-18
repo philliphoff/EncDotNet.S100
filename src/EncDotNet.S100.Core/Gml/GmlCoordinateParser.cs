@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Xml.Linq;
 
-namespace EncDotNet.S100.Gml;
+namespace EncDotNet.S100.Features;
 
 /// <summary>
 /// Shared GML coordinate parsing utilities for S-100 Part 10b encoded datasets.

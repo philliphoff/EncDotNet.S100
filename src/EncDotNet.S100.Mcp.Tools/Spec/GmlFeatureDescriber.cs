@@ -1,13 +1,13 @@
 using System.Collections.Immutable;
 using System.Text.Json;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;
 
 /// <summary>
 /// Generic describer for GML-encoded specs that expose their features
-/// via <see cref="IGmlFeature"/> through <see cref="GmlFeatureAccessor"/>.
+/// via <see cref="IS100Feature"/> through <see cref="FeatureAccessor"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -40,14 +40,14 @@ internal sealed class GmlFeatureDescriber : ISpecFeatureDescriber
 
     public ToolResult<DescribeFeatureResult> Describe(FeatureDescriberContext context)
     {
-        var features = GmlFeatureAccessor.GetFeatures(context.Dataset);
+        var features = FeatureAccessor.GetFeatures(context.Dataset);
         if (features is null)
         {
             return ToolResult<DescribeFeatureResult>.Err(
                 new SpecNotSupportedForTool(context.Dataset.Spec, DescribeFeatureTool.Name));
         }
 
-        IGmlFeature? feature = null;
+        IS100Feature? feature = null;
         foreach (var f in features)
         {
             if (string.Equals(f.Id, context.FeatureId, StringComparison.Ordinal))
@@ -72,7 +72,7 @@ internal sealed class GmlFeatureDescriber : ISpecFeatureDescriber
                 ImmutableArray<FeatureReference>.Empty));
     }
 
-    private static JsonElement SerializeFeature(IGmlFeature feature)
+    private static JsonElement SerializeFeature(IS100Feature feature)
     {
         var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -80,7 +80,7 @@ internal sealed class GmlFeatureDescriber : ISpecFeatureDescriber
             ["featureType"] = feature.FeatureType,
             ["geometryType"] = feature.GeometryType.ToString(),
             ["attributes"] = feature.Attributes,
-            ["complexAttributes"] = feature.GmlComplexAttributes
+            ["complexAttributes"] = feature.ComplexAttributes
                 .Select(c => new
                 {
                     code = c.Code,

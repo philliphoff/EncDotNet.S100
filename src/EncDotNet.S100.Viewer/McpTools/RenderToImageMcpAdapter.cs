@@ -43,8 +43,8 @@ internal static class RenderToImageMcpAdapter
         ArgumentNullException.ThrowIfNull(inner);
 
         var del = (
-            [Description("Output image width in pixels; null defaults to 1024. Clamped to [64, 4096].")] int? width = null,
-            [Description("Output image height in pixels; null defaults to 768. Clamped to [64, 4096].")] int? height = null,
+            [Description("Output image width in pixels; null defaults to the live viewport width (or 1024 when the viewport is not yet laid out). Clamped to [64, 4096].")] int? width = null,
+            [Description("Output image height in pixels; null defaults to the live viewport height (or 768 when the viewport is not yet laid out). Clamped to [64, 4096].")] int? height = null,
             [Description("Display pixel-density multiplier (1.0 = device-independent pixels; 2.0 = HiDPI). Null defaults to 1.0. Clamped to [0.5, 3.0].")] double? pixelDensity = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
@@ -104,6 +104,8 @@ internal static class RenderToImageMcpAdapter
             ["imageFormat"] = value.ImageFormat,
             ["byteLength"] = value.ImageBytes.Length,
         };
+        if (value.ViewportWidth is { } vw) metadata["viewportWidth"] = vw;
+        if (value.ViewportHeight is { } vh) metadata["viewportHeight"] = vh;
         if (value.Notes is not null)
         {
             metadata["notes"] = value.Notes;

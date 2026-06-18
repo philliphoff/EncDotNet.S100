@@ -208,7 +208,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
-        var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
+        var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 
         var info = $"{_translatedDataset.DatasetName} (S-57 → S-101) — " +
                    $"{_translatedDataset.FeatureCount} features, {prepared.Count} instructions";
@@ -411,7 +411,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
 
-            var geometryProvider = new S101FeatureGeometryProvider(_translatedDataset);
+            var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 
             var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 

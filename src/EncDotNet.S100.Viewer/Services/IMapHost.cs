@@ -115,6 +115,52 @@ internal interface IMapHost
     (double Latitude, double Longitude)? TryGetViewportCenterWgs84();
 
     /// <summary>
+    /// Returns the current on-screen viewport size in device-independent
+    /// pixels, or <see langword="null"/> when the map's navigator is
+    /// unavailable or the viewport has not yet been laid out. Used by the
+    /// inverse-pick MCP tool to validate a requested screen coordinate
+    /// against the live frame before converting it to a geographic point.
+    /// </summary>
+    (double Width, double Height)? TryGetViewportSizePx();
+
+    /// <summary>
+    /// Converts a screen pixel (relative to the live on-screen viewport's
+    /// top-left, in device-independent pixels) to a WGS-84 lat/lon, or
+    /// returns <see langword="null"/> when the map's navigator is
+    /// unavailable, the viewport has not been laid out, or the point
+    /// projects outside the valid Mercator domain. This is the inverse of
+    /// the projection used to render the live map and underpins the
+    /// <c>pick_features</c> MCP tool (the screen-xy → feature loop that
+    /// complements <c>render_to_image</c>).
+    /// </summary>
+    /// <param name="xPx">Screen X in device-independent pixels from the viewport's left edge.</param>
+    /// <param name="yPx">Screen Y in device-independent pixels from the viewport's top edge.</param>
+    (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx);
+
+    /// <summary>
+    /// Converts a pixel from a <c>render_to_image</c> capture back to a
+    /// WGS-84 lat/lon — the faithful inverse of that tool at <em>any</em>
+    /// capture size. It reproduces the snapshot geometry
+    /// <see cref="RenderCurrentViewToPngAsync"/> uses (a navigator sized to
+    /// the supplied image dimensions, fit to the live viewport's extent
+    /// with <c>MBoxFit.Fit</c>), so a pixel measured on the returned PNG
+    /// maps to the same ground point regardless of how the capture's size
+    /// or aspect ratio differs from the live on-screen viewport.
+    /// </summary>
+    /// <param name="xPx">Pixel X from the capture's left edge, in the capture's logical pixel space.</param>
+    /// <param name="yPx">Pixel Y from the capture's top edge, in the capture's logical pixel space.</param>
+    /// <param name="imageWidthPx">Logical width the capture was rendered at (the <c>width</c> echoed by <c>render_to_image</c>).</param>
+    /// <param name="imageHeightPx">Logical height the capture was rendered at (the <c>height</c> echoed by <c>render_to_image</c>).</param>
+    /// <returns>
+    /// The WGS-84 lat/lon under the pixel, or <see langword="null"/> when
+    /// the navigator is unavailable, the live viewport has not been laid
+    /// out, the image dimensions are non-positive, or the point projects
+    /// outside the valid Mercator domain.
+    /// </returns>
+    (double Latitude, double Longitude)? TryImagePixelToWgs84(
+        double xPx, double yPx, int imageWidthPx, int imageHeightPx);
+
+    /// <summary>
     /// Captures the current map view as a PNG byte array.
     /// </summary>
     /// <param name="widthPx">Output image width in pixels (caller-clamped).</param>

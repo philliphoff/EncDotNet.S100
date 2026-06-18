@@ -1,5 +1,5 @@
 using System.Linq;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S131.Tests;
 
@@ -26,7 +26,7 @@ public class S131DatasetReaderTests
         // Verify Bollard feature
         var bollard = dataset.Features.Single(f => f.FeatureType == "Bollard");
         Assert.Equal("f1", bollard.Id);
-        Assert.Equal(GmlGeometryType.Point, bollard.GeometryType);
+        Assert.Equal(S100GeometryType.Point, bollard.GeometryType);
         Assert.Single(bollard.Points);
         Assert.Equal(44.6475, bollard.Points[0].Latitude, 4);
         Assert.Equal(-63.5713, bollard.Points[0].Longitude, 4);
@@ -36,7 +36,7 @@ public class S131DatasetReaderTests
         // Verify MooringBuoy feature
         var buoy = dataset.Features.Single(f => f.FeatureType == "MooringBuoy");
         Assert.Equal("f2", buoy.Id);
-        Assert.Equal(GmlGeometryType.Point, buoy.GeometryType);
+        Assert.Equal(S100GeometryType.Point, buoy.GeometryType);
 
         // Verify ContactDetails is recognized as information type
         var info = Assert.Single(dataset.InformationTypes);
@@ -63,7 +63,7 @@ public class S131DatasetReaderTests
 
         var berth = Assert.Single(dataset.Features);
         Assert.Equal("Berth", berth.FeatureType);
-        Assert.Equal(GmlGeometryType.Curve, berth.GeometryType);
+        Assert.Equal(S100GeometryType.Curve, berth.GeometryType);
         var curve = Assert.Single(berth.Curves);
         Assert.Equal(3, curve.Length);
         Assert.Equal(44.6475, curve[0].Latitude, 4);
@@ -82,7 +82,7 @@ public class S131DatasetReaderTests
 
         var area = Assert.Single(dataset.Features);
         Assert.Equal("AnchorageArea", area.FeatureType);
-        Assert.Equal(GmlGeometryType.Surface, area.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, area.GeometryType);
         Assert.Equal(5, area.ExteriorRing.Length);
         Assert.Empty(area.InteriorRings);
     }
@@ -102,7 +102,7 @@ public class S131DatasetReaderTests
         // Berth feature has geometry
         var berth = Assert.Single(dataset.Features);
         Assert.Equal("Berth", berth.FeatureType);
-        Assert.Equal(GmlGeometryType.Point, berth.GeometryType);
+        Assert.Equal(S100GeometryType.Point, berth.GeometryType);
         Assert.Single(berth.Points);
     }
 

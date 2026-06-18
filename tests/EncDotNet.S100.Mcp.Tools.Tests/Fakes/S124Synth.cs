@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
@@ -29,7 +29,7 @@ internal static class S124Synth
         {
             Id = id,
             FeatureType = featureType,
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Attributes = (attributes ?? new Dictionary<string, string>()).ToImmutableDictionary(),
             ComplexAttributes = (complex ?? []).ToImmutableArray(),
             References = (references ?? []).ToImmutableArray(),

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S125.DataModel;
 
@@ -579,7 +579,7 @@ public sealed class S125AtonDataset
 
     private static GeoPosition? ExtractPoint(S125Feature f)
     {
-        if (f.GeometryType != GmlGeometryType.Point || f.Points.IsDefaultOrEmpty)
+        if (f.GeometryType != S100GeometryType.Point || f.Points.IsDefaultOrEmpty)
             return null;
         var (lat, lon) = f.Points[0];
         return new GeoPosition(lat, lon);
@@ -589,15 +589,15 @@ public sealed class S125AtonDataset
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 return (S125GeometryKind.Point, f.Points.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
-            case GmlGeometryType.Curve:
+            case S100GeometryType.Curve:
                 return (S125GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 return (S125GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());

@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S129.DataModel;
 
@@ -364,7 +364,7 @@ public sealed class S129UnderKeelClearancePlan
     {
         switch (f.GeometryType)
         {
-            case GmlGeometryType.Point:
+            case S100GeometryType.Point:
                 return (
                     S129GeometryKind.Point,
                     f.Points.IsDefaultOrEmpty
@@ -372,7 +372,7 @@ public sealed class S129UnderKeelClearancePlan
                         : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray(),
                     ImmutableArray<ImmutableArray<GeoPosition>>.Empty);
 
-            case GmlGeometryType.Surface:
+            case S100GeometryType.Surface:
                 var ext = f.ExteriorRing.IsDefaultOrEmpty
                     ? ImmutableArray<GeoPosition>.Empty
                     : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();

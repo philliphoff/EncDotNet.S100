@@ -1,21 +1,21 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools.Spec;
 
 /// <summary>
-/// Geometry helpers for <see cref="IGmlFeature"/> instances.
+/// Geometry helpers for <see cref="IS100Feature"/> instances.
 /// </summary>
 /// <remarks>
 /// All operations work in planar lat/lon space and match the precision
 /// of the per-dataset bounding box. Surface geometry takes precedence
 /// over curve, which takes precedence over point — matching the
 /// preference order in
-/// <see cref="EncDotNet.S100.Pipelines.Vector.GmlFeatureGeometryProvider{TFeature}"/>.
+/// <see cref="EncDotNet.S100.Pipelines.Vector.FeatureGeometryProvider{TFeature}"/>.
 /// </remarks>
-public static class GmlFeatureGeometry
+public static class FeatureGeometryQuery
 {
     /// <summary>
     /// Computes the bounding box of <paramref name="feature"/>'s
@@ -23,7 +23,7 @@ public static class GmlFeatureGeometry
     /// at all (e.g. container-style features such as
     /// <c>S131:Authority</c>).
     /// </summary>
-    public static BoundingBox? TryGetBoundingBox(IGmlFeature feature)
+    public static BoundingBox? TryGetBoundingBox(IS100Feature feature)
     {
         ArgumentNullException.ThrowIfNull(feature);
 
@@ -71,7 +71,7 @@ public static class GmlFeatureGeometry
     /// box intersects (or touches) the supplied <paramref name="query"/>'s
     /// coarse bounding box. Features without geometry never match.
     /// </summary>
-    public static bool Intersects(IGmlFeature feature, GeoQuery query)
+    public static bool Intersects(IS100Feature feature, GeoQuery query)
     {
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentNullException.ThrowIfNull(query);

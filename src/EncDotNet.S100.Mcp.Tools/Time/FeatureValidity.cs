@@ -1,10 +1,10 @@
 using System.Globalization;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Time;
 
 /// <summary>
-/// Inspects an <see cref="IGmlFeature"/> for S-100 validity metadata
+/// Inspects an <see cref="IS100Feature"/> for S-100 validity metadata
 /// — the <c>fixedDateRange</c> and <c>periodicDateRange</c> complex
 /// attributes carried by specs such as S-122 (seasonal MPA
 /// restrictions), S-124 (warning in-force periods), S-201 (AtoN
@@ -44,7 +44,7 @@ internal static class FeatureValidity
     /// <paramref name="query"/>. Returns <see cref="Verdict.Unknown"/>
     /// when no validity metadata is present.
     /// </summary>
-    public static Verdict Check(IGmlFeature feature, TimeQuery query)
+    public static Verdict Check(IS100Feature feature, TimeQuery query)
     {
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentNullException.ThrowIfNull(query);
@@ -87,11 +87,11 @@ internal static class FeatureValidity
         return true;
     }
 
-    private static List<(DateTimeOffset? Start, DateTimeOffset? End)> ExtractRanges(IGmlFeature feature)
+    private static List<(DateTimeOffset? Start, DateTimeOffset? End)> ExtractRanges(IS100Feature feature)
     {
         var ranges = new List<(DateTimeOffset?, DateTimeOffset?)>();
 
-        foreach (var complex in feature.GmlComplexAttributes)
+        foreach (var complex in feature.ComplexAttributes)
         {
             if (!IsValidityRange(complex.Code))
             {

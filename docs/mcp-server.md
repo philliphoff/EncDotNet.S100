@@ -29,6 +29,7 @@ individual field's `[Description]`.
 | JSON property naming | lower camelCase across every tool (driven by `JsonSerializerDefaults.Web`). |
 | Discriminated unions | Variant carries a `$kind` discriminator string (e.g. `"depth"`, `"waterLevel"`, `"surfaceCurrent"`). |
 | Errors | `isError = true` with payload `{ code, message, details }` — `code` is the stable switch key, `message` is human-readable, `details` carries the typed members of the error. |
+| Dataset identifiers | A `datasetId` is an opaque **plain string** in both directions: tools accept it as a bare string argument and emit it as a bare string in results (e.g. `"id": "synth-warn-1"`), so an id read off one tool's output feeds straight back into another's input. (Legacy `{"value":"…"}` wrapped ids are still accepted on input for compatibility.) |
 
 Every public property on a tool request, tool result, or `ToolError`
 subtype carries a `[System.ComponentModel.Description]` attribute with
@@ -109,18 +110,24 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `list_datasets` | Summarises every dataset currently loaded in the viewer. |
 | `list_specs` | Lists S-100 product specifications the host can read. |
 | `list_time_steps` | Lists time steps for a time-varying dataset (S-104, S-111, S-421). |
-| `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. |
-| `describe_feature` | Returns spec, feature type, and attributes for a feature id in a given dataset. Supported specs: S-101 (RCID), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
-| `query_features` | Returns features from loaded GML vector datasets whose geometry intersects a spatial query. |
+| `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. For the *features* under a point (not just which datasets cover it), use `identify_features`. |
+| `identify_features` | Identifies the vector features at a lat/lon point — the ECDIS cursor-pick — ranked most-specific first (point features before curves before areas; within a primitive the smaller / nearer feature wins). The feature-aware complement to `find_at`. Area features use exact point-in-polygon containment (interior-ring holes honoured); point / curve features match within `radiusMeters` (default 50, area features ignore it). Works across every vector spec (incl. S-101). Each match reports the dataset id, spec, feature id and type, geometry primitive, bounds, `containment` (`inside`/`near`), and approximate `distanceMeters`; `maxResults` (default 20) caps the list and sets `truncated`. |
+| `describe_feature` | Returns spec, feature type, attributes, and (for S-101) resolved geometry for a feature id in a given dataset. Supported specs: S-101 (RCID; result carries a `geometry` block with primitive, bounding box, and coordinates), S-102 (`BathymetryCoverage[.01]`), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
+| `describe_feature_type` | Introspects a spec's bundled Feature Catalogue (ISO 19110 / S-100 Part 5) — the schema-discovery counterpart to `count_features` / `query_features`. Call with just a `spec` (e.g. `S-101` or `S-124/1.5.0`) to list every feature type with its attribute count; add a `featureType` (code, name, or alias) to get that type's attribute bindings — each attribute's value type, whether it is mandatory and/or repeatable, and its enumerated listed values (set `includeListedValues=false` to omit large enumerations). Lets an agent build valid attribute predicates without a loaded dataset. Specs with no bundled catalogue return `feature_catalogue_not_available`. |
+| `query_features` | Returns features whose geometry intersects a spatial query from loaded vector datasets — every GML vector spec plus S-101 (ISO 8211), adapted through the shared feature interface. By default intersection is bounding-box precision; set `precise=true` for **true full-geometry** intersection — point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing, e.g. "which features does this route leg actually cross?". For S-101 the `featureType` filter matches the feature-type acronym (e.g. `LIGHTS`, `BOYLAT`) and each `featureId` is the feature record's decimal RCID. An optional `attributes` predicate set filters on attribute values: pass a code→value map for equality (`{"categoryOfLateralMark":"1"}`) or an array of explicit predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`); operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt`, `le` and combine with logical AND. The result also carries a `typeBreakdown` (per-feature-type counts of the full all-pages match set, reflecting any attribute filter) so an agent can gauge a result before paging. |
+| `count_features` | Enumerates the feature types present in loaded vector datasets and counts how many features of each type they contain — the "what kinds of features, and how many, are in this cell?" discovery question that `describe_feature` can't answer (it needs an id you don't yet have). Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, and spatial `query` filters. Each tally reports `count` and `withGeometry` (how many are spatially addressable). |
+| `nearest_features` | Ranks the vector features nearest to a lat/lon point by **true geometric distance** — the distance-ranking and containment query that `find_at` (dataset-bbox membership) and `query_features` (feature-bbox intersection) can't answer. Answers "nearest light / buoy / berth to my position?" and "is this point inside any restricted area?" in one call: an area feature containing the point is returned at `distanceMeters` 0 with `containment` `inside`; every other feature reports the true distance to the nearest point on its geometry (nearest point on a segment, not just the nearest vertex) plus the `bearingDegrees` toward it. Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, `featureType`, and `maxDistanceMeters` filters; `limit` (default 10) caps the nearest-first list and sets `truncated`. |
+| `search_features` | Finds vector features by name — the "where is the feature called X?" question that `query_features` (geometry-first) and `describe_feature` (needs an id you don't have yet) can't answer. Searches every place a name can live: the simple `OBJNAM` / `NOBJNM` / `objectName` attributes (incl. ISO 8211-encoded S-101) and the repeatable complex `featureName` compound's `name` / `displayName` sub-attributes (GML specs). Case-insensitive substring containment by default; set `exact` for whole-name equality or `caseSensitive` for an exact-case match. Optional `spec`, `datasetId`, and spatial `query` scope. Each match reports `matchedName` and `matchedAttribute`. Paginated. |
 | `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. |
 | `sample_coverage_along` | Samples a coverage along a polyline / great-circle path. |
-| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). |
+| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). When `width`/`height` are both omitted the capture is sized to the live on-screen viewport (when laid out) so the PNG matches the user's view pixel-for-pixel rather than letterboxing under the fixed 1024×768 default; the live viewport size is always echoed back as `viewportWidth`/`viewportHeight` so an agent can request a matching aspect ratio or pass those dimensions to `pick_features`. |
 | `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — either a bbox (`south`/`west`/`north`/`east`) or a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`). Mixing the two forms is rejected. Antimeridian-crossing bboxes are not supported. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
+| `pick_features` *(viewer only, read-only)* | The feature-aware inverse of `render_to_image`: resolves the vector features under a point on the live map. Supply EITHER a screen pixel (`x`/`y`) OR a WGS-84 geographic point (`latitude`/`longitude`); mixing or omitting both is rejected. For a pixel measured off a `render_to_image` capture, **also** pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool echoed back — the pick is then resolved with the capture's exact fit geometry, making it a faithful inverse at any image size or aspect ratio. Omit `imageWidth`/`imageHeight` to interpret `x`/`y` in the live on-screen viewport's pixel space instead. The pixel is projected to a geographic point, then delegated to the same ranking as `identify_features`, so the result shape is identical (matches plus `totalMatched`/`truncated`) with an added `source` (`pixel`/`geo`) and the resolved `latitude`/`longitude`. Pixels outside the image/viewport bounds, or before the map is laid out, are rejected. |
 | `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
 | `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
 | `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
 | `set_own_ship` *(viewer only, **mutating**)* | Positions and steers the simulated own-ship. Any subset of `lat`+`lon` (WGS-84 decimal degrees, supplied together), `cog` (course over ground, degrees true `[0, 360)`), `sog` (speed over ground, m/s `>= 0`), `heading` (gyro heading, degrees true — only applied together with `lat`/`lon`), and `hold` (`true` stops the vessel, `false` resumes) may be supplied; at least one actionable field is required. Works independently of the own-ship overlay's visibility, so it can pre-position the vessel before enabling the overlay or capturing a screenshot. Counterpart to the `--own-ship-pos` / `--own-ship-cog` / `--own-ship-sog` CLI flags, but applicable mid-session. |
-| `await_render_idle` *(viewer only, read-only)* | Blocks until the live map settles — no completed paint, graphics-refresh request, or busy layer for a continuous quiet period — or until a timeout elapses (`quietPeriodMs` default 250, clamped `[0, 10000]`; `timeoutMs` default 5000, clamped `[50, 120000]`). Call it between `set_viewport` and `render_to_image` so the screenshot reflects a settled view instead of racing the render pass. Always waits at least the quiet period and measures the on-screen `InstrumentedMapControl` paint loop, not the offscreen `render_to_image` clone. Returns `wentIdle`, `timedOut`, `waitedMs`, and `paintsObserved`. |
+| `await_render_idle` *(viewer only, read-only)* | Blocks until the live map settles — no completed paint, graphics-refresh request, or active layer fetch for a continuous quiet period — or until a timeout elapses (`quietPeriodMs` default 250, clamped `[0, 10000]`; `timeoutMs` default 5000, clamped `[50, 120000]`). Call it between `set_viewport` and `render_to_image` so the screenshot reflects a settled view instead of racing the render pass. Always waits at least the quiet period and measures the on-screen `InstrumentedMapControl` paint loop, not the offscreen `render_to_image` clone. A layer's busy flag only holds the wait open while that layer keeps emitting render activity; a stale busy flag that never clears (with no paint/refresh for the quiet period) is ignored, so a settled map reports `wentIdle` rather than being forced to `timedOut`. Returns `wentIdle`, `timedOut`, `waitedMs`, and `paintsObserved`. |
 | `get_render_stats` *(viewer only, read-only)* | Reports the cost of the most recently completed on-screen map paint: wall-clock `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a per-style breakdown (`style`, `calls`, `durationMs`, ordered by descending duration). Use it to measure rendering performance across pan / zoom, palette, or time-step changes. Describes the live map paint, not the offscreen `render_to_image` clone; returns `hasData = false` when no paint has occurred yet. Pair with `await_render_idle` so the reported paint reflects a settled view. |
 | `open_dataset` *(viewer only, **mutating**)* | Loads a dataset into the live viewer using its existing open code path, so agents can measure the load hot path. `path` is a single file (S-101 `.000`, HDF5 `.h5`, GML, etc.) OR an exchange set (a folder containing `CATALOG.XML`, or a `.zip` of one); the kind is auto-detected. `spec` optionally forces a product-spec hint (e.g. `S-102`) for single-file loads. Returns the resulting catalog id(s), `spec`, bounding box (`southLatitude`/`westLongitude`/`northLatitude`/`eastLongitude`), `count`, `loadDurationMs`, and `timedOut` (exchange-set quiescence). |
 | `close_dataset` *(viewer only, **mutating**)* | Unloads a currently-loaded dataset from the live viewer by its catalog `id` (as returned by `list_datasets` / `open_dataset`), using the viewer's existing close code path so agents can measure the unload hot path. An unknown / already-removed id resolves gracefully as a non-error result with `removed = false`. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
@@ -132,8 +139,13 @@ Tools fall into two groups:
 
 * **Read-only** — never mutate viewer state. Safe to call from any
   agent at any time. Examples: `list_datasets`, `find_at`,
-  `query_features`, `sample_coverage`, `render_to_image` (which
-  snapshots from a clone of the live `Map`), `await_render_idle`, and
+  `identify_features`, `query_features`, `count_features`,
+  `nearest_features`,
+  `search_features`,
+  `describe_feature_type`, `sample_coverage`, `render_to_image` (which
+  snapshots from a clone of the live `Map`), `pick_features` (which
+  projects a pixel through the live viewport without changing it),
+  `await_render_idle`, and
   `get_render_stats` (which observe the live render loop without
   changing it).
 * **Mutating** — modify the live viewer's state (navigator, palette,
@@ -158,8 +170,21 @@ MCP content. The response payload is a `CallToolResult` whose
    `mimeType: "image/png"` — MCP clients render this inline;
 2. a `TextContentBlock` carrying a small JSON metadata envelope
    (`width`, `height`, `pixelDensity`, `imageFormat`, `byteLength`,
-   optional `notes`) so agents still get structured echo of the
-   rendered dimensions.
+   optional `viewportWidth`/`viewportHeight`, optional `notes`) so
+   agents still get a structured echo of the rendered dimensions and
+   the live viewport size.
+
+When the caller omits both `width` and `height`, the capture is sized
+to the live on-screen viewport (when it has been laid out) so the PNG
+matches the user's view pixel-for-pixel — the fixed 1024×768 default
+otherwise letterboxes the content under `MBoxFit.Fit` against a
+differently shaped viewport. A partial request (only one dimension)
+keeps the static fallback for the omitted side to avoid an arbitrary
+aspect ratio. The live viewport size is reported as
+`viewportWidth`/`viewportHeight` on every successful capture (omitted
+only when the viewport is not yet laid out), so an agent can request a
+matching aspect ratio explicitly or pass those values as the
+`imageWidth`/`imageHeight` inputs to `pick_features`.
 
 The snapshot is captured from a **clone** of the live Mapsui `Map`
 that shares the layer collection but owns its own navigator. The
@@ -172,7 +197,9 @@ view exactly.
 MCP server by `EncDotNet.S100.Viewer` via the
 `S100McpServerOptions.AdditionalTools` extension point. The catalog-only
 `EncDotNet.S100.Mcp.Tools` library deliberately has no rendering
-dependency, so a non-viewer host supplies its own equivalent.
+dependency, so a non-viewer host supplies its own equivalent. The same
+applies to its inverse, `pick_features`, which needs the live navigator
+to project a screen pixel back to a geographic point.
 
 ## Sample agent prompts
 

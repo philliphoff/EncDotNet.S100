@@ -12,7 +12,7 @@ This library reads S-129 datasets from GML files and provides an XSLT-based port
 - **`S129Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references.
 - **`S129ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
 - **`S129Reference`** — an `xlink:href` cross-reference carried on a feature's child element (S-100 Part 10b §7.2).
-- **`GmlGeometryType`** — enum describing the geometry primitive type of a feature.
+- **`S100GeometryType`** — enum describing the geometry primitive type of a feature.
 - **`S129PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
 
 ### Strongly-typed data model

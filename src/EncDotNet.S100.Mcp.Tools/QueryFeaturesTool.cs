@@ -31,8 +31,10 @@ namespace EncDotNet.S100.Mcp.Tools;
 public sealed record QueryFeaturesRequest(
     [property: Description("Spatial query envelope (point / box / polygon / polyline). Intersection is computed against each feature's bounding box.")] GeoQuery Query,
     [property: Description("Optional spec filter; null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
-    [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"); null returns every feature type.")] string? FeatureType = null,
+    [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
+    [property: Description("Optional attribute-value predicates; a feature must satisfy all of them (logical AND). Discover valid attributes and enumerated values with describe_feature_type.")] ImmutableArray<AttributePredicate> Attributes = default,
+    [property: Description("When true, replaces the default bounding-box intersection test with true full-geometry intersection: point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing — e.g. \"which features does this route leg actually cross?\". Slightly more expensive; default false.")] bool Precise = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50);
 
@@ -41,8 +43,8 @@ public sealed record QueryFeaturesRequest(
 /// </summary>
 /// <param name="DatasetId">Dataset the feature belongs to.</param>
 /// <param name="Spec">Spec the dataset declares.</param>
-/// <param name="FeatureId">Stable feature identifier (<c>gml:id</c>).</param>
-/// <param name="FeatureType">Feature type code (the GML element local name).</param>
+/// <param name="FeatureId">Stable feature identifier (<c>gml:id</c>; for S-101 the decimal RCID).</param>
+/// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
 /// <param name="Bounds">Bounding box of the feature's geometry, or <c>null</c> if the feature carries no geometry.</param>
 public sealed record FeatureMatch(
     DatasetId DatasetId,
@@ -51,27 +53,44 @@ public sealed record FeatureMatch(
     string FeatureType,
     BoundingBox? Bounds);
 
+/// <summary>
+/// A per-feature-type tally of the full (all-pages) match set, returned
+/// by <see cref="QueryFeaturesTool"/> so callers can gauge a result's
+/// shape before paging through it.
+/// </summary>
+/// <param name="FeatureType">Feature type code (the GML element local name; for S-101 the feature-type acronym).</param>
+/// <param name="Count">Number of matching features of this type across all pages.</param>
+public sealed record FeatureTypeBreakdown(
+    [property: Description("Feature type code (GML element local name; for S-101 the feature-type acronym).")] string FeatureType,
+    [property: Description("Number of matching features of this type across all pages.")] int Count);
+
 /// <summary>Result of <see cref="QueryFeaturesTool"/>.</summary>
 public sealed record QueryFeaturesResult(
     [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] ImmutableArray<FeatureMatch> Features,
     [property: Description("Echoed (and floored) zero-based page index.")] int Page,
     [property: Description("Echoed (and clamped) page size.")] int PageSize,
     [property: Description("Total number of matching features across all pages.")] int TotalCount,
-    [property: Description("True if additional pages remain after the current one.")] bool HasMore);
+    [property: Description("True if additional pages remain after the current one.")] bool HasMore,
+    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] ImmutableArray<FeatureTypeBreakdown> TypeBreakdown);
+
 
 /// <summary>
-/// Returns features from loaded GML-encoded vector datasets whose
+/// Returns features from loaded S-100 vector datasets whose
 /// geometry intersects the supplied geographic query.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This tool works against every GML-encoded spec the codebase
+/// This tool works against every GML-encoded vector spec the codebase
 /// supports — S-122, S-124, S-125, S-127, S-128, S-129, S-131,
-/// S-201, S-411, S-421 — via the shared <see cref="IGmlFeature"/>
-/// abstraction. Coverage products (S-102, S-104, S-111) and the
-/// ISO 8211-encoded S-101 are not queried; use
-/// <see cref="SampleCoverageTool"/> or <see cref="FindAtTool"/>
-/// for those.
+/// S-201, S-411, S-421 — via the shared <see cref="IS100Feature"/>
+/// abstraction, plus the ISO 8211-encoded S-101 (whose pipeline
+/// <see cref="EncDotNet.S100.Pipelines.Vector.Feature"/> records
+/// implement <see cref="IS100Feature"/> directly). For S-101
+/// the <see cref="QueryFeaturesRequest.FeatureType"/> filter matches the
+/// feature-type acronym (e.g. <c>LIGHTS</c>, <c>BOYLAT</c>) and each
+/// <see cref="FeatureMatch.FeatureId"/> is the feature record's decimal
+/// RCID. Coverage products (S-102, S-104, S-111) are not queried; use
+/// <see cref="SampleCoverageTool"/> for those.
 /// </para>
 /// <para>
 /// Intersection is computed at bounding-box precision per feature.
@@ -140,7 +159,7 @@ public sealed class QueryFeaturesTool
                 continue;
             }
 
-            var features = GmlFeatureAccessor.GetFeatures(dataset);
+            var features = FeatureAccessor.GetFeatures(dataset);
             if (features is null)
             {
                 continue;
@@ -154,7 +173,12 @@ public sealed class QueryFeaturesTool
                     continue;
                 }
 
-                if (!GmlFeatureGeometry.Intersects(feature, request.Query))
+                if (!FeatureGeometryQuery.Intersects(feature, request.Query))
+                {
+                    continue;
+                }
+
+                if (request.Precise && !GeometryIntersection.Intersects(feature, request.Query))
                 {
                     continue;
                 }
@@ -165,12 +189,17 @@ public sealed class QueryFeaturesTool
                     continue;
                 }
 
+                if (!AttributePredicateEvaluator.Matches(feature, request.Attributes))
+                {
+                    continue;
+                }
+
                 matched.Add(new FeatureMatch(
                     dataset.Id,
                     dataset.Spec,
                     feature.Id,
                     feature.FeatureType,
-                    GmlFeatureGeometry.TryGetBoundingBox(feature)));
+                    FeatureGeometryQuery.TryGetBoundingBox(feature)));
             }
         }
 
@@ -184,13 +213,36 @@ public sealed class QueryFeaturesTool
         }
 
         var hasMore = skip + take < totalCount;
+
+        // Per-type breakdown of the full match set (all pages), so a caller
+        // can gauge the result's shape before paging through it.
+        var byType = new Dictionary<string, int>(StringComparer.Ordinal);
+        var typeOrder = new List<string>();
+        foreach (var match in matched)
+        {
+            if (!byType.TryGetValue(match.FeatureType, out var n))
+            {
+                typeOrder.Add(match.FeatureType);
+            }
+            byType[match.FeatureType] = n + 1;
+        }
+
+        var breakdown = ImmutableArray.CreateBuilder<FeatureTypeBreakdown>(typeOrder.Count);
+        foreach (var type in typeOrder
+                     .OrderByDescending(t => byType[t])
+                     .ThenBy(t => t, StringComparer.Ordinal))
+        {
+            breakdown.Add(new FeatureTypeBreakdown(type, byType[type]));
+        }
+
         return Task.FromResult(ToolResult<QueryFeaturesResult>.Ok(
             new QueryFeaturesResult(
                 pageBuilder.MoveToImmutable(),
                 page,
                 pageSize,
                 totalCount,
-                hasMore)));
+                hasMore,
+                breakdown.MoveToImmutable())));
     }
 
     private static bool SpecMatches(SpecRef actual, SpecRef filter)

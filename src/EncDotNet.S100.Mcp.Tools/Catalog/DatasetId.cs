@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 namespace EncDotNet.S100.Mcp.Tools.Catalog;
 
@@ -11,6 +12,7 @@ namespace EncDotNet.S100.Mcp.Tools.Catalog;
 /// running) so that tool callers can hold onto an ID across multiple
 /// invocations.
 /// </remarks>
+[JsonConverter(typeof(DatasetIdJsonConverter))]
 public readonly record struct DatasetId
 {
     /// <summary>The underlying opaque identifier value.</summary>

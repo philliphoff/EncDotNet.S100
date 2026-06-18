@@ -1,5 +1,5 @@
 using EncDotNet.S100.Datasets.S122;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S122.Tests;
 
@@ -60,7 +60,7 @@ public class S122DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "FEATURE_ID_0003");
 
         Assert.Equal("MarineProtectedArea", f.FeatureType);
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.Equal(5, f.ExteriorRing.Length);
         // S-100 Part 10b convention: lat lon for EPSG:4326.
         Assert.Equal(-32.5215215, f.ExteriorRing[0].Latitude, 5);
@@ -74,7 +74,7 @@ public class S122DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "FEATURE_ID_0001");
 
         Assert.Equal("RestrictedArea", f.FeatureType);
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.Equal(5, f.ExteriorRing.Length);
     }
 
@@ -85,7 +85,7 @@ public class S122DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "FEATURE_ID_0004");
 
         Assert.Equal("MarineProtectedArea", f.FeatureType);
-        Assert.Equal(GmlGeometryType.Curve, f.GeometryType);
+        Assert.Equal(S100GeometryType.Curve, f.GeometryType);
         Assert.Single(f.Curves);
         Assert.Equal(4, f.Curves[0].Length);
     }
@@ -97,7 +97,7 @@ public class S122DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "FEATURE_ID_0002");
 
         Assert.Equal("VesselTrafficServiceArea", f.FeatureType);
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.Equal(5, f.ExteriorRing.Length);
     }
 
@@ -171,7 +171,7 @@ public class S122DatasetReaderTests
         // The sample's MPA at (lat≈-32.52, lon≈60.97) — the heuristic must
         // not corrupt this even though the values look unusual, because
         // there is no envelope to compare against in the sample file.
-        var ring = ds.Features.First(f => f.GeometryType == GmlGeometryType.Surface).ExteriorRing;
+        var ring = ds.Features.First(f => f.GeometryType == S100GeometryType.Surface).ExteriorRing;
         Assert.NotEmpty(ring);
         Assert.InRange(ring[0].Latitude, -33.0, -32.0);
         Assert.InRange(ring[0].Longitude, 60.0, 61.0);

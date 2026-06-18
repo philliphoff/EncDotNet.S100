@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S201;
 
@@ -122,7 +122,7 @@ public sealed class S201Dataset
 /// dataset metadata features such as <c>DataCoverage</c>. See the S-201
 /// Edition 2.0.0 Feature Catalogue for the full set.
 /// </summary>
-public sealed class S201Feature : IGmlFeature
+public sealed class S201Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -131,7 +131,7 @@ public sealed class S201Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -152,7 +152,7 @@ public sealed class S201Feature : IGmlFeature
     public required ImmutableArray<S201ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Information-type association references (e.g. <c>AtoNStatus</c>
@@ -178,7 +178,7 @@ public sealed class S201Feature : IGmlFeature
 /// (e.g. <c>AtonStatusInformation</c>, <c>PositioningInformation</c>,
 /// <c>SpatialQuality</c>, <c>AtoNFixingMethod</c>).
 /// </summary>
-public sealed class S201InformationType : IGmlInformationType
+public sealed class S201InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -196,7 +196,7 @@ public sealed class S201InformationType : IGmlInformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S201ComplexAttribute : IGmlComplexAttribute
+public sealed class S201ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

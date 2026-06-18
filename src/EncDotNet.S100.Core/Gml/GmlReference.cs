@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Gml;
+namespace EncDotNet.S100.Features;
 
 /// <summary>
 /// An xlink-style cross-reference from one GML-encoded S-100 object to

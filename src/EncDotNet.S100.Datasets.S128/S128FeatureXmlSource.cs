@@ -1,5 +1,5 @@
 using System.Xml.Linq;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.S128;
@@ -57,7 +57,7 @@ public sealed class S128FeatureXmlSource : GmlFeatureXmlSource<S128Feature>
     }
 
     /// <inheritdoc/>
-    protected override XElement BuildComplexAttributeElement(IGmlComplexAttribute complex)
+    protected override XElement BuildComplexAttributeElement(IS100ComplexAttribute complex)
     {
         if (complex is S128ComplexAttribute s128Complex)
             return BuildS128Complex(s128Complex);

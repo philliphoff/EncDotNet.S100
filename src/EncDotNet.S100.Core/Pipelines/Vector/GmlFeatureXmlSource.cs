@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Pipelines.Vector;
 
@@ -28,10 +28,10 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// of the original GML document.</para>
 /// </remarks>
 /// <typeparam name="TFeature">
-/// The concrete feature type constrained to <see cref="IGmlFeature"/>.
+/// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
 public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
-    where TFeature : IGmlFeature
+    where TFeature : IS100Feature
 {
     private readonly IReadOnlyList<TFeature> _features;
     private IReadOnlyList<string>? _featureTypes;
@@ -76,9 +76,9 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
         {
             var primitiveType = feature.GeometryType switch
             {
-                GmlGeometryType.Point => "Point",
-                GmlGeometryType.Curve => "Curve",
-                GmlGeometryType.Surface => "Surface",
+                S100GeometryType.Point => "Point",
+                S100GeometryType.Curve => "Curve",
+                S100GeometryType.Surface => "Surface",
                 _ => "NoGeometry",
             };
 
@@ -88,18 +88,18 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
 
             switch (feature.GeometryType)
             {
-                case GmlGeometryType.Point:
+                case S100GeometryType.Point:
                     foreach (var (lat, lon) in feature.Points)
                         EmitPointRef(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;
 
-                case GmlGeometryType.Curve:
+                case S100GeometryType.Curve:
                     foreach (var curve in feature.Curves)
                         foreach (var (lat, lon) in curve)
                             EmitPointRef(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;
 
-                case GmlGeometryType.Surface:
+                case S100GeometryType.Surface:
                     foreach (var (lat, lon) in feature.ExteriorRing)
                         EmitPointRef(pointsElement, featureElement, ref pointCounter, lat, lon);
                     break;
@@ -108,7 +108,7 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
             foreach (var (code, value) in feature.Attributes)
                 featureElement.Add(new XElement(code, TransformAttributeValue(code, value)));
 
-            foreach (var complex in feature.GmlComplexAttributes)
+            foreach (var complex in feature.ComplexAttributes)
                 featureElement.Add(BuildComplexAttributeElement(complex));
 
             WriteFeatureExtensions(feature, featureElement);
@@ -147,7 +147,7 @@ public class GmlFeatureXmlSource<TFeature> : IFeatureXmlSource
     /// Builds an XML element for a complex attribute. Override for specs
     /// that support nested complex attributes (e.g. S-128).
     /// </summary>
-    protected virtual XElement BuildComplexAttributeElement(IGmlComplexAttribute complex)
+    protected virtual XElement BuildComplexAttributeElement(IS100ComplexAttribute complex)
     {
         var el = new XElement(complex.Code);
         foreach (var (subCode, subValue) in complex.SubAttributes)

@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S421;
 
@@ -55,7 +55,7 @@ public sealed class S421Dataset
 /// <summary>
 /// A feature parsed from an S-421 GML dataset.
 /// </summary>
-public sealed class S421Feature : IGmlFeature
+public sealed class S421Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -63,8 +63,8 @@ public sealed class S421Feature : IGmlFeature
     /// <summary>The feature type code (local element name, e.g. "Route", "RouteWaypoint").</summary>
     public required string FeatureType { get; init; }
 
-    /// <summary>The geometry primitive type, or <see cref="GmlGeometryType.None"/> when absent.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    /// <summary>The geometry primitive type, or <see cref="S100GeometryType.None"/> when absent.</summary>
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -85,7 +85,7 @@ public sealed class S421Feature : IGmlFeature
     public required ImmutableArray<S421ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Cross-references (xlink:href values) for related objects, keyed by the
@@ -98,7 +98,7 @@ public sealed class S421Feature : IGmlFeature
 /// <summary>
 /// An information type instance parsed from an S-421 GML dataset.
 /// </summary>
-public sealed class S421InformationType : IGmlInformationType
+public sealed class S421InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -119,7 +119,7 @@ public sealed class S421InformationType : IGmlInformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S421ComplexAttribute : IGmlComplexAttribute
+public sealed class S421ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -90,7 +90,7 @@ public sealed class S128Dataset
 /// The reader is namespace-driven and does not gate on a hard-coded
 /// feature-type allow-list, so producer extensions are surfaced as well.
 /// </remarks>
-public sealed class S128Feature : IGmlFeature
+public sealed class S128Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -103,7 +103,7 @@ public sealed class S128Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type associated with the feature.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -124,7 +124,7 @@ public sealed class S128Feature : IGmlFeature
     public required ImmutableArray<S128ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 
     /// <summary>
     /// Outgoing <c>xlink:href</c> references carried directly on the feature
@@ -137,7 +137,7 @@ public sealed class S128Feature : IGmlFeature
 /// An information type instance parsed from an S-128 <c>&lt;imember&gt;</c>
 /// or <c>&lt;imembers&gt;</c> wrapper.
 /// </summary>
-public sealed class S128InformationType : IGmlInformationType
+public sealed class S128InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -155,7 +155,7 @@ public sealed class S128InformationType : IGmlInformationType
 /// <summary>
 /// A complex (nested) attribute instance containing sub-attribute values.
 /// </summary>
-public sealed class S128ComplexAttribute : IGmlComplexAttribute
+public sealed class S128ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code (the carrying element local name).</summary>
     public required string Code { get; init; }

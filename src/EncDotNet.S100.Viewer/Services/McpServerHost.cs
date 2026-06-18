@@ -273,6 +273,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
             tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
+            tools.Add(PickFeaturesMcpAdapter.Create(new PickFeaturesTool(_mapHostAccessor, _catalog)));
         }
         if (_renderStateAccessor is not null)
         {

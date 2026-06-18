@@ -181,6 +181,82 @@ internal sealed class MapsuiMapHost : IMapHost
         return (lat, lon);
     }
 
+    public (double Width, double Height)? TryGetViewportSizePx()
+    {
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        return (viewport.Width, viewport.Height);
+    }
+
+    public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx)
+    {
+        if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
+            return null;
+
+        if (_mapControl.Map?.Navigator is not { } nav)
+            return null;
+
+        var viewport = nav.Viewport;
+        if (viewport.Width <= 0 || viewport.Height <= 0)
+            return null;
+
+        var world = viewport.ScreenToWorld(xPx, yPx);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            return null;
+        }
+
+        return (lat, lon);
+    }
+
+    public (double Latitude, double Longitude)? TryImagePixelToWgs84(
+        double xPx, double yPx, int imageWidthPx, int imageHeightPx)
+    {
+        if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
+            return null;
+
+        if (imageWidthPx <= 0 || imageHeightPx <= 0)
+            return null;
+
+        if (_mapControl.Map?.Navigator is not { } liveNav)
+            return null;
+
+        var liveViewport = liveNav.Viewport;
+        if (liveViewport.Width <= 0 || liveViewport.Height <= 0)
+            return null;
+
+        // Reproduce the exact geometry render_to_image uses: a navigator
+        // sized to the requested image, zoomed to the live viewport's
+        // world extent with MBoxFit.Fit (aspect mismatches show slightly
+        // more area, never crop). This makes a pixel measured on the
+        // captured PNG resolve to the same ground point even when the
+        // capture's size / aspect differs from the live on-screen frame.
+        var extent = liveViewport.ToExtent();
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
+            return null;
+
+        using var probe = new Map();
+        probe.Navigator.SetSize(imageWidthPx, imageHeightPx);
+        probe.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+
+        var world = probe.Navigator.Viewport.ScreenToWorld(xPx, yPx);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon)
+            || lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0)
+        {
+            return null;
+        }
+
+        return (lat, lon);
+    }
+
     public void AddOverlayLayer(ILayer layer)
     {
         ArgumentNullException.ThrowIfNull(layer);

@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 
@@ -276,7 +276,7 @@ public class S421RoutePlanTests
         {
             Id = "RTE",
             FeatureType = "Route",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = ImmutableArray<(double, double)>.Empty,
             Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
             ExteriorRing = ImmutableArray<(double, double)>.Empty,
@@ -300,7 +300,7 @@ public class S421RoutePlanTests
         {
             Id = "RTE.WPTS",
             FeatureType = "RouteWaypoints",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = ImmutableArray<(double, double)>.Empty,
             Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
             ExteriorRing = ImmutableArray<(double, double)>.Empty,
@@ -330,7 +330,7 @@ public class S421RoutePlanTests
             {
                 Id = $"RTE.WPT.{i}",
                 FeatureType = "RouteWaypoint",
-                GeometryType = GmlGeometryType.Point,
+                GeometryType = S100GeometryType.Point,
                 Points = ImmutableArray.Create((60.0 + 0.01 * i, 25.0 + 0.01 * i)),
                 Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
                 ExteriorRing = ImmutableArray<(double, double)>.Empty,
@@ -347,7 +347,7 @@ public class S421RoutePlanTests
             {
                 Id = $"RTE.WPT.LEG.{i}",
                 FeatureType = "RouteWaypointLeg",
-                GeometryType = GmlGeometryType.Curve,
+                GeometryType = S100GeometryType.Curve,
                 Points = ImmutableArray<(double, double)>.Empty,
                 Curves = ImmutableArray.Create(
                     ImmutableArray.Create(

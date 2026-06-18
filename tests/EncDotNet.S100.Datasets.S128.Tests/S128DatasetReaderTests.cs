@@ -1,5 +1,5 @@
 using EncDotNet.S100.Datasets.S128;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S128.Tests;
 
@@ -58,7 +58,7 @@ public class S128DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "ID0002");
 
         Assert.Equal("ElectronicProduct", f.FeatureType);
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.True(f.ExteriorRing.Length > 2);
         // S-100 Part 10b convention: lat lon for EPSG:4326. Sample is Korean
         // waters, so latitude ≈ 32–40°, longitude ≈ 122–135°.
@@ -76,7 +76,7 @@ public class S128DatasetReaderTests
         var f = ds.Features.First(x => x.Id == "CNP00007");
 
         Assert.Equal("DistributorInformation", f.FeatureType);
-        Assert.Equal(GmlGeometryType.None, f.GeometryType);
+        Assert.Equal(S100GeometryType.None, f.GeometryType);
         Assert.True(f.ExteriorRing.IsDefaultOrEmpty);
     }
 
@@ -284,7 +284,7 @@ public class S128DatasetReaderTests
         var f = ds.Features.Single();
         Assert.Equal("ElectronicChart", f.FeatureType);
         Assert.Equal("GST.ElectronicChart.DK1", f.Id);
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.Equal(5, f.ExteriorRing.Length);
         Assert.All(f.ExteriorRing, p =>
         {
@@ -342,7 +342,7 @@ public class S128DatasetReaderTests
         var ds = S128Dataset.Open(stream);
 
         var f = ds.Features.Single();
-        Assert.Equal(GmlGeometryType.Surface, f.GeometryType);
+        Assert.Equal(S100GeometryType.Surface, f.GeometryType);
         Assert.Equal(5, f.ExteriorRing.Length);
         Assert.All(f.ExteriorRing, p =>
         {

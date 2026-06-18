@@ -56,7 +56,7 @@ public sealed class S101SurfaceInteriorRingTests
     {
         var dataset = S101Dataset.FromDocument(BuildDocumentWithHole());
 
-        var geometry = new S101FeatureGeometryProvider(dataset).GetGeometry("100");
+        var geometry = new FeatureGeometryProvider<Feature>(new S101VectorSource(dataset).GetFeatures()).GetGeometry("100");
 
         Assert.NotNull(geometry);
         Assert.Equal(GeometryType.Surface, geometry!.Type);

@@ -553,7 +553,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
 
-            var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+            var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
             var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
@@ -654,7 +654,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var areaInstructions = prepared.Where(i => i is AreaInstruction).ToList();
         var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
 
-        var geometryProvider = new S101FeatureGeometryProvider(_dataset);
+        var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
         // Mapsui-free pattern-clip cache identity: the per-dataset scope
         // (content hash + name + edition + CRS) qualified by the portrayal-

@@ -19,7 +19,8 @@ internal static class S101Synth
         string name,
         ImmutableArray<S101FeatureRecord> features,
         ImmutableDictionary<ushort, string>? featureTypes = null,
-        ImmutableDictionary<ushort, string>? attributeTypes = null)
+        ImmutableDictionary<ushort, string>? attributeTypes = null,
+        ImmutableDictionary<uint, S101PointRecord>? points = null)
     {
         var document = new S101Document
         {
@@ -35,7 +36,7 @@ internal static class S101Synth
             },
             FeatureTypeCatalogue = featureTypes ?? ImmutableDictionary<ushort, string>.Empty,
             AttributeTypeCatalogue = attributeTypes ?? ImmutableDictionary<ushort, string>.Empty,
-            Points = ImmutableDictionary<uint, S101PointRecord>.Empty,
+            Points = points ?? ImmutableDictionary<uint, S101PointRecord>.Empty,
             CurveSegments = ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
             CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
             Surfaces = ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
@@ -47,6 +48,36 @@ internal static class S101Synth
             RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
         };
         return S101Dataset.FromDocument(document);
+    }
+
+    private const int CoordinateMultiplicationFactor = 10_000_000;
+
+    /// <summary>
+    /// Builds an S-101 dataset whose features carry resolvable point
+    /// geometry. Each entry supplies a feature RCID, a feature-type code,
+    /// and a lat/lon; a matching <see cref="S101PointRecord"/> (RCID =
+    /// feature RCID, RCNM 110) is created so the vector source resolves the
+    /// coordinate.
+    /// </summary>
+    public static S101Dataset DatasetWithPointFeatures(
+        string name,
+        IEnumerable<(uint Rcid, ushort FeatureTypeCode, double Lat, double Lon)> features,
+        ImmutableDictionary<ushort, string>? featureTypes = null)
+    {
+        var featureRecords = ImmutableArray.CreateBuilder<S101FeatureRecord>();
+        var pointRecords = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
+        foreach (var (rcid, code, lat, lon) in features)
+        {
+            featureRecords.Add(Feature(rcid, code, spatialRcnm: 110));
+            pointRecords[rcid] = new S101PointRecord
+            {
+                RecordId = rcid,
+                Y = (int)Math.Round(lat * CoordinateMultiplicationFactor),
+                X = (int)Math.Round(lon * CoordinateMultiplicationFactor),
+            };
+        }
+
+        return Dataset(name, featureRecords.ToImmutable(), featureTypes, points: pointRecords.ToImmutable());
     }
 
     /// <summary>

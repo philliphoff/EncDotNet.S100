@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using EncDotNet.S100.Features;
-using EncDotNet.S100.Gml;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
 
@@ -355,14 +354,14 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
         if (!_featureById.TryGetValue(featureId, out var feat))
             return null;
 
-        if (feat.GeometryType == GmlGeometryType.None)
+        if (feat.GeometryType == S100GeometryType.None)
             return null;
 
         var spatialType = feat.GeometryType switch
         {
-            GmlGeometryType.Point => "Point",
-            GmlGeometryType.Curve => "Curve",
-            GmlGeometryType.Surface => "Surface",
+            S100GeometryType.Point => "Point",
+            S100GeometryType.Curve => "Curve",
+            S100GeometryType.Surface => "Surface",
             _ => "None",
         };
 
@@ -470,7 +469,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
         // Lua expects X=longitude, Y=latitude.
         return feat.GeometryType switch
         {
-            GmlGeometryType.Point when feat.Points.Length > 0 =>
+            S100GeometryType.Point when feat.Points.Length > 0 =>
                 new Dictionary<string, object?>
                 {
                     ["RecordType"] = "Point",
@@ -478,10 +477,10 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
                     ["Y"] = feat.Points[0].Latitude.ToString(CultureInfo.InvariantCulture),
                 },
 
-            GmlGeometryType.Curve when feat.Curves.Length > 0 =>
+            S100GeometryType.Curve when feat.Curves.Length > 0 =>
                 BuildCurveData(feat),
 
-            GmlGeometryType.Surface when feat.ExteriorRing.Length > 0 =>
+            S100GeometryType.Surface when feat.ExteriorRing.Length > 0 =>
                 BuildSurfaceData(feat),
 
             _ => null,
@@ -813,7 +812,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
 
             // For the last segment, look up the attribute code in the sub-attributes
             // For intermediate segments, we'd need nested complex attributes
-            // (S-131's single-level IGmlComplexAttribute handles the common case)
+            // (S-131's single-level IS100ComplexAttribute handles the common case)
             if (target.SubAttributes.TryGetValue(attributeCode, out var subValue))
                 return [(object)subValue];
         }

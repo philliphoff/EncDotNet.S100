@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S127;
 
@@ -58,7 +58,7 @@ public sealed class S127Dataset
 /// <summary>
 /// A geographic feature parsed from an S-127 GML dataset.
 /// </summary>
-public sealed class S127Feature : IGmlFeature
+public sealed class S127Feature : IS100Feature
 {
     /// <summary>The GML identifier of the feature.</summary>
     public required string Id { get; init; }
@@ -72,7 +72,7 @@ public sealed class S127Feature : IGmlFeature
     public required string FeatureType { get; init; }
 
     /// <summary>The geometry primitive type.</summary>
-    public GmlGeometryType GeometryType { get; init; }
+    public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
     public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
@@ -105,13 +105,13 @@ public sealed class S127Feature : IGmlFeature
         ImmutableArray<S127FeatureReference>.Empty;
 
     /// <inheritdoc/>
-    IEnumerable<IGmlComplexAttribute> IGmlFeature.GmlComplexAttributes => ComplexAttributes.Cast<IGmlComplexAttribute>();
+    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
 }
 
 /// <summary>
 /// An information type instance parsed from an S-127 GML dataset.
 /// </summary>
-public sealed class S127InformationType : IGmlInformationType
+public sealed class S127InformationType : IS100InformationType
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
@@ -129,7 +129,7 @@ public sealed class S127InformationType : IGmlInformationType
 /// <summary>
 /// A complex attribute instance containing sub-attributes.
 /// </summary>
-public sealed class S127ComplexAttribute : IGmlComplexAttribute
+public sealed class S127ComplexAttribute : IS100ComplexAttribute
 {
     /// <summary>The complex attribute code.</summary>
     public required string Code { get; init; }

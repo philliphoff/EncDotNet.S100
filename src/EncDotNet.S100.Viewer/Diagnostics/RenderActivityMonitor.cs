@@ -131,20 +131,25 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
 
             var now = Stopwatch.GetTimestamp();
             var busy = SafeBusy();
+            // Recency-gate the busy flag: a busy layer only vetoes idle
+            // while it is still producing render activity. A live fetch
+            // keeps firing graphics-refresh signals (NotifyActivity), which
+            // resets the quiet timer and keeps the map non-idle on its own;
+            // a *stale* busy flag (a layer whose Busy never clears though no
+            // paint or activity has occurred for the whole quiet period) is
+            // ignored, so a settled map is not held open until the timeout.
+            var busyVetoes = busy && !IsBusyStale(now, lastActivity, quietTicks);
             var decision = EvaluateIdle(now, callStart, lastActivity, quietTicks, timeoutTicks);
 
-            if (decision.Idle && !busy)
+            if (decision.Idle && !busyVetoes)
             {
                 return Done(wentIdle: true, callStart, now, startPaintCount, lastActivity);
             }
 
             // The timeout always wins once the deadline passes — including
-            // the case where the quiet timer elapsed (decision.Idle) but a
-            // layer is still busy. Without this guard a map that stays busy
-            // forever (an async fetch that never produces a paint) would
-            // spin here past the requested timeout, because EvaluateIdle
-            // reports Idle as soon as the quiet period elapses whenever the
-            // quiet period is shorter than the timeout.
+            // the case where a live-busy layer (one still emitting activity)
+            // never lets the quiet timer elapse. Without this guard such a
+            // map would spin here past the requested timeout.
             var deadlinePassed = (now - callStart) >= timeoutTicks;
             if (decision.TimedOut || deadlinePassed)
             {
@@ -152,12 +157,12 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
             }
 
             // Wait either for the next activity pulse or until the next
-            // decision boundary (idle-at or deadline). When the map is
-            // busy we cannot trust the quiet timer, so poll on a short
-            // cap so the busy flag is re-checked promptly.
+            // decision boundary (idle-at or deadline). While a live-busy
+            // layer is emitting activity we poll on a short cap so the busy
+            // flag is re-checked promptly.
             var waitTicks = decision.WaitTicks;
             var waitMs = waitTicks <= 0 ? 0.0 : TicksToMilliseconds(waitTicks);
-            if (busy)
+            if (busyVetoes)
             {
                 waitMs = waitMs <= 0 ? BusyPollMs : Math.Min(waitMs, BusyPollMs);
 
@@ -268,6 +273,18 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
         var nextBoundary = Math.Min(idleAt, deadline);
         return new IdleDecision(false, false, nextBoundary - nowTicks);
     }
+
+    /// <summary>
+    /// Pure recency gate for the layer-busy veto. Returns <see langword="true"/>
+    /// when the most recent render activity is at least the quiet period in
+    /// the past — i.e. the busy flag is <em>stale</em> (no paint or
+    /// graphics-refresh signal has arrived for the whole quiet window) and
+    /// must not veto idle. A live fetch keeps emitting activity, so its busy
+    /// flag never goes stale and continues to (indirectly) keep the map
+    /// non-idle via the quiet timer.
+    /// </summary>
+    internal static bool IsBusyStale(long nowTicks, long lastActivityTicks, long quietTicks)
+        => (nowTicks - lastActivityTicks) >= quietTicks;
 
     private static long ToStopwatchTicks(TimeSpan span)
     {

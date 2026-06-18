@@ -5,7 +5,7 @@ using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
-using EncDotNet.S100.Gml;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S129.Fusion.Tests.Helpers;
 
@@ -30,7 +30,7 @@ internal static class SyntheticDatasets
         {
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
-            GeometryType = GmlGeometryType.Point,
+            GeometryType = S100GeometryType.Point,
             Points = ImmutableArray.Create((lat, lon)),
             ExteriorRing = ImmutableArray<(double, double)>.Empty,
             InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
@@ -54,7 +54,7 @@ internal static class SyntheticDatasets
         {
             Id = id,
             FeatureType = "UnderKeelClearancePlan",
-            GeometryType = GmlGeometryType.None,
+            GeometryType = S100GeometryType.None,
             Points = ImmutableArray<(double, double)>.Empty,
             ExteriorRing = ImmutableArray<(double, double)>.Empty,
             InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,

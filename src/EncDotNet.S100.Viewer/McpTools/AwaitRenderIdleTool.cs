@@ -32,7 +32,12 @@ internal sealed record AwaitRenderIdleResult(
 /// graphics-refresh / layer-busy signals — not against the offscreen
 /// PNG clone produced by <c>render_to_image</c>. The call always waits
 /// at least the quiet period so a paint just scheduled by a preceding
-/// <c>set_viewport</c> has time to begin.
+/// <c>set_viewport</c> has time to begin. A layer's busy flag only
+/// holds the wait open while that layer keeps emitting render activity;
+/// a <em>stale</em> busy flag (one that never clears though no paint or
+/// graphics-refresh signal has arrived for the whole quiet period) is
+/// ignored, so a visually settled map reports idle instead of being
+/// forced to time out.
 /// </remarks>
 internal sealed class AwaitRenderIdleTool
 {
