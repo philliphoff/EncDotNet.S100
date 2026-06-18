@@ -47,9 +47,53 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
-    public void Default_LineSimplificationTolerance_IsSet()
+    public void Default_SimplificationTolerance_IsSet()
     {
-        Assert.True(RenderingOptimizations.LineSimplificationTolerancePx > 0);
+        Assert.True(RenderingOptimizations.SimplificationTolerancePx > 0);
+    }
+
+    [Fact]
+    public void GeometrySimplification_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.GeometrySimplificationEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_SIMPLIFY_PX; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.GeometrySimplificationEnabled;
+        try
+        {
+            RenderingOptimizations.GeometrySimplificationEnabled = false;
+            Assert.False(RenderingOptimizations.GeometrySimplificationEnabled);
+            RenderingOptimizations.GeometrySimplificationEnabled = true;
+            Assert.True(RenderingOptimizations.GeometrySimplificationEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.GeometrySimplificationEnabled = original;
+        }
+    }
+
+    [Fact]
+    public void PolygonSimplification_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.PolygonSimplificationEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_POLYGON_SIMPLIFY; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.PolygonSimplificationEnabled;
+        try
+        {
+            RenderingOptimizations.PolygonSimplificationEnabled = false;
+            Assert.False(RenderingOptimizations.PolygonSimplificationEnabled);
+            RenderingOptimizations.PolygonSimplificationEnabled = true;
+            Assert.True(RenderingOptimizations.PolygonSimplificationEnabled);
+        }
+        finally
+        {
+            RenderingOptimizations.PolygonSimplificationEnabled = original;
+        }
     }
 
     [Fact]

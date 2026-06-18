@@ -150,86 +150,95 @@ for the full investigation and optimization plan.
 
 ## Resolution-aware geometry simplification
 
-Issue [#164](https://github.com/philliphoff/EncDotNet.S100/issues/164)
-adds an opt-in resolution-aware Douglas-Peucker simplification path
-that reduces the vertex count Skia tessellates per frame. Polylines
-in the 1k–10k bucket on real S-101 datasets typically simplify by
-5–10× at typical pan zooms with no visible quality regression at the
-default 0.5-pixel tolerance.
+The cached vector-style renderer (`CachedVectorStyleRenderer`, the
+registered `VectorStyle` renderer) reduces the vertex count Skia
+tessellates per frame by generalizing geometry **at `SKPath`-build time**,
+keyed by the build resolution. Because the simplified path is cached per
+`(feature, position, resolution)` and reused across every pan — and the
+vector-snapshot record + off-thread prebuild draw through this same
+renderer — the cost is paid once per `(feature, zoom)` and inherited by
+all downstream consumers. Dropped detail is by construction sub-pixel *on
+screen* at that zoom, so the result is visually indistinguishable at every
+zoom level. On real S-101 datasets dense contours and coverage polygons
+typically simplify by 5–10× at common pan zooms with no visible regression
+at the default 0.6-pixel tolerance.
 
-### Pipeline placement
+### Lines
 
-Simplification lives on `InstrumentedMemoryLayer.GetFeatures`,
-because that is the only seam in the pipeline that has access to the
-current zoom (`resolution`, m/px in EPSG:3857). When a layer has
-simplification enabled, every visible feature is routed through a
-per-layer `SimplificationCache`:
+`LineString`/`MultiLineString` are simplified inline while building the
+path: consecutive vertices that project to within the pixel tolerance of
+the last emitted vertex are dropped (a radial-distance filter in the
+anchored pixel frame). This collapses the dense sub-pixel vertex runs of
+S-101 bathymetry contours so the Skia stroker rasterises far fewer
+segments.
 
-- Cache key: `(original-feature reference, half-octave bucket)`.
-- Bucket: `round(log2(resolution) × 2)`. Tolerance for a bucket is
-  `pixelTolerance × 2^(bucket / 2)` metres.
-- Algorithm: NTS' `DouglasPeuckerSimplifier`, lines and multi-lines
-  only in v1. Polygons, points, and other types pass through
-  unchanged. (Polygon support is deferred until topology
-  preservation + validation is wired in.)
-- Eviction: on bucket transition, drop entries from buckets outside
-  `[active − 1, active + 1]`. If the cache's tracked coordinate
-  count still exceeds `MaxCachedCoordinates` (default 5 M ≈ 80 MB),
-  the bucket farthest from the active one is dropped next, until
-  under budget.
-- Simplified clones share style instances by reference and copy all
-  fields (including `S100.FeatureRef`); they also carry an
-  `S100.OriginalFeature` back-reference. Use
-  `Simplification.GetOriginal(feature)` to recover the unsimplified
-  feature for picking / info-on-click.
+### Polygons
 
-### Wiring
+`Polygon`/`MultiPolygon` (land areas, depth areas, sea areas — the
+highest-vertex S-101 features) are generalized with NetTopologySuite's
+`TopologyPreservingSimplifier` at `pixelTolerance × resolution` metres
+before the `SKPath` is built. Topology-preserving simplification is
+required because naive per-ring point dropping can self-intersect; TPS
+keeps rings valid and holes well-formed. The result is validated:
 
-```csharp
-using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Renderers.Mapsui.Simplification;
+- `null`/empty result → original polygon (pass-through),
+- `!IsValid` → a `Buffer(0)` repair is attempted; if that is empty or
+  non-polygonal the original polygon is used,
+- any `TopologyException`/`ArgumentException`/`InvalidOperationException`
+  → original polygon.
 
-if (layer is InstrumentedMemoryLayer iml)
-{
-    iml.EnableSimplification(
-        DouglasPeuckerLineSimplifier.Instance,
-        SimplificationOptions.Default);
-}
-```
+So an invalid simplification can never reach the rasteriser — the safe
+fallback is always the exact geometry. `MultiPolygon` parts are simplified
+independently (each part keyed by its position). Polygons below
+`MinPolygonVertexCount` (32) skip the NTS pass entirely (already cheap).
 
-In the desktop viewer this is driven by the
-**Simplify line geometry (experimental)** setting, applied in
-`DatasetLoaderService` before the optional rasterization wrap.
+### Gating
+
+A single **Simplify dense geometry** setting
+(`RenderingOptimizations.GeometrySimplificationEnabled`, default on) with a
+shared pixel tolerance (`SimplificationTolerancePx`, default 0.6,
+seeded from `S100_VECTOR_SIMPLIFY_PX`) governs both lines and polygons.
+Polygon simplification has an additional escape hatch,
+`S100_VECTOR_POLYGON_SIMPLIFY=0`, that disables *polygons only* for A/B
+isolation without touching line behaviour
+(`RenderingOptimizations.PolygonSimplificationEnabled`). Simplification
+requires the path cache (`S100_VECTOR_PATH_CACHE`); changing either
+effective tolerance clears the cache so rebuilt paths reflect the new
+tolerance.
+
+### Cache (coordinate-budget eviction)
+
+The path cache evicts least-recently-used entries until under **both** an
+entry cap (default 8192) and a coordinate budget (`MaxCachedCoordinates`,
+default 5 M coords ≈ 80 MB). Bounding by coordinate count — not entry
+count — keeps memory predictable now that dense polygon paths (tens of
+thousands of vertices) share the cache with tiny features. Evicted
+`SKPath`s are deliberately **not** disposed (a drawing thread may still
+hold a reference outside the lock); they are reclaimed by GC finalization.
 
 ### Telemetry
 
-| Instrument | Unit | Tags | Purpose |
-|---|---|---|---|
-| `s100.simplify.cache.hit.count` | count | `s100.product` | Simplified clone served from cache |
-| `s100.simplify.cache.miss.count` | count | `s100.product` | DP invocation triggered |
-| `s100.simplify.duration` | ms | `s100.product` | Per-feature DP cost (miss only) |
-| `s100.simplify.coords.in` | count | `s100.product` | Original-geometry vertex count (miss) |
-| `s100.simplify.coords.out` | count | `s100.product` | Simplified-geometry vertex count (miss) |
-| `s100.simplify.cache.coords.tracked` | count | `s100.product` | Live coords in cache across all buckets |
-
-The acceptance bar from issue #164 is steady-state hit rate ≥ 95%
-and ≥ 50% reduction in `s100.map.paint.duration` mean on the
-multi-S-101 workload from the perf review.
+| Instrument | Unit | Purpose |
+|---|---|---|
+| `s100.simplify.cache.hit.count` | count | Built path served from cache |
+| `s100.simplify.cache.miss.count` | count | Path (re)built — simplification ran |
+| `s100.simplify.cache.coords.tracked` | count | Live coords across all cached paths (drives budget eviction) |
+| `s100.simplify.polygon.duration` | ms | Per-polygon TPS cost (miss only) |
+| `s100.simplify.polygon.coords.in` | count | Original polygon vertex count (miss) |
+| `s100.simplify.polygon.coords.out` | count | Simplified polygon vertex count (miss) |
+| `s100.simplify.polygon.invalid.count` | count | Simplifications that fell back to the exact polygon |
 
 ### Known limits
 
-- v1 simplifies only line geometry; polygons (e.g. depth areas) and
-  points are unaffected. The perf review shows lines dominate the
-  paint cost in real datasets, so this still hits the projected
-  budget.
-- The miss path runs synchronously on the render thread. After a
-  zoom-band transition, the first paint at the new bucket may stall
-  briefly while the visible set is simplified; subsequent frames hit
-  the cache. An async / pre-warm path is documented as future work
-  in `docs/design/mapsui-performance.md`.
-- The cache is sized by coordinate count, not entry count, so a
-  handful of very dense polylines and many small features have
-  comparable budget cost.
+- The miss path runs synchronously on the render (or prebuild) thread.
+  After a zoom change the first paint at the new resolution may stall
+  briefly while visible paths are rebuilt/simplified; subsequent frames at
+  that zoom hit the cache, and sustained pan is served by the vector
+  snapshot.
+- Lines use a radial-distance filter rather than true Douglas-Peucker;
+  the difference is visually negligible at sub-pixel tolerance. Unifying
+  lines onto NTS DP is documented as a possible future micro-opt in
+  `docs/design/mapsui-performance.md`.
 
 ### Pattern-fill clip generalization
 

@@ -315,8 +315,8 @@ internal static class Strings
     public static string Tooltip_VectorSnapshotPrebuildEnabled => Get(nameof(Tooltip_VectorSnapshotPrebuildEnabled));
     public static string Settings_VectorPathCacheEnabled => Get(nameof(Settings_VectorPathCacheEnabled));
     public static string Tooltip_VectorPathCacheEnabled => Get(nameof(Tooltip_VectorPathCacheEnabled));
-    public static string Settings_LineSimplificationEnabled => Get(nameof(Settings_LineSimplificationEnabled));
-    public static string Tooltip_LineSimplificationEnabled => Get(nameof(Tooltip_LineSimplificationEnabled));
+    public static string Settings_GeometrySimplificationEnabled => Get(nameof(Settings_GeometrySimplificationEnabled));
+    public static string Tooltip_GeometrySimplificationEnabled => Get(nameof(Tooltip_GeometrySimplificationEnabled));
     public static string Settings_MapSection => Get(nameof(Settings_MapSection));
     public static string Settings_MapSection_Help => Get(nameof(Settings_MapSection_Help));
     public static string Settings_MapOptimizationsSubsection => Get(nameof(Settings_MapOptimizationsSubsection));

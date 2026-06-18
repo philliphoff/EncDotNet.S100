@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -10,7 +11,9 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Rendering.Skia.Extensions;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Simplify;
 using SkiaSharp;
+using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -87,23 +90,46 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     private readonly ISkiaStyleRenderer _inner;
     private readonly double _simplifyOverridePx;
     private double _lastSimplifyPx = double.NaN;
+    private double _lastPolySimplifyPx = double.NaN;
     private readonly object _sync = new();
     private readonly PathCache _cache;
+
+    /// <summary>
+    /// Minimum vertex count below which a polygon is rendered without invoking
+    /// the topology-preserving simplifier. Polygons this small already paint
+    /// cheaply, so the per-call NTS cost is not worth paying. See S-101 perf
+    /// review (<c>docs/design/mapsui-performance.md</c>).
+    /// </summary>
+    public const int MinPolygonVertexCount = 32;
 
     /// <summary>
     /// Effective line-simplification tolerance, in screen pixels. When an
     /// explicit tolerance was supplied to the constructor (≥ 0) it is honoured
     /// verbatim; otherwise the value tracks the live
-    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/> knob (its
+    /// <see cref="RenderingOptimizations.GeometrySimplificationEnabled"/> knob (its
     /// tolerance when on, <c>0</c> — vertex-exact — when off). A change clears the
     /// path cache so re-built paths reflect the new tolerance.
     /// </summary>
     private double EffectiveSimplifyPx =>
         _simplifyOverridePx >= 0
             ? _simplifyOverridePx
-            : (RenderingOptimizations.LineSimplificationEnabled
-                ? RenderingOptimizations.LineSimplificationTolerancePx
+            : (RenderingOptimizations.GeometrySimplificationEnabled
+                ? RenderingOptimizations.SimplificationTolerancePx
                 : 0.0);
+
+    /// <summary>
+    /// Effective polygon-simplification tolerance, in screen pixels. Polygons are
+    /// simplified only when both the master geometry-simplification knob and the
+    /// polygon-specific knob are on; otherwise <c>0</c> (vertex-exact). When an
+    /// explicit constructor tolerance was supplied it is honoured (gated only by
+    /// the polygon knob) so unit tests can force a tolerance.
+    /// </summary>
+    private double EffectivePolygonSimplifyPx =>
+        !RenderingOptimizations.PolygonSimplificationEnabled
+            ? 0.0
+            : (_simplifyOverridePx >= 0
+                ? _simplifyOverridePx
+                : EffectiveSimplifyPx);
 
     /// <summary>
     /// Creates a renderer wrapping <paramref name="inner"/> (the real Mapsui
@@ -123,14 +149,27 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// zoom — so the result is visually indistinguishable at every zoom level.
     /// A value <c>0</c> disables simplification (paths are vertex-exact). When
     /// negative (the default), the tolerance follows the live
-    /// <see cref="RenderingOptimizations.LineSimplificationEnabled"/> knob, which
+    /// <see cref="RenderingOptimizations.GeometrySimplificationEnabled"/> knob, which
     /// the viewer's <c>Settings → Map</c> section binds.
     /// </param>
-    public CachedVectorStyleRenderer(ISkiaStyleRenderer inner, int capacity = 8192, double simplifyTolerancePx = -1)
+    /// <param name="maxCachedCoordinates">
+    /// Soft upper bound on the total number of geometry coordinates retained
+    /// across all cached paths. When exceeded, least-recently-used entries are
+    /// evicted until back under budget (in addition to the
+    /// <paramref name="capacity"/> entry cap). Bounding by coordinate count —
+    /// not entry count — keeps memory predictable now that dense polygon paths
+    /// (tens of thousands of vertices) share the cache with tiny features.
+    /// Defaults to <c>5_000_000</c> coords (≈ 80&#160;MB of points).
+    /// </param>
+    public CachedVectorStyleRenderer(
+        ISkiaStyleRenderer inner,
+        int capacity = 8192,
+        double simplifyTolerancePx = -1,
+        long maxCachedCoordinates = 5_000_000)
     {
         ArgumentNullException.ThrowIfNull(inner);
         _inner = inner;
-        _cache = new PathCache(Math.Max(1, capacity));
+        _cache = new PathCache(Math.Max(1, capacity), Math.Max(1, maxCachedCoordinates));
         _simplifyOverridePx = simplifyTolerancePx;
     }
 
@@ -143,6 +182,16 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     public int CachedPathCount
     {
         get { lock (_sync) { return _cache.Count; } }
+    }
+
+    /// <summary>
+    /// Total geometry coordinates currently retained across all cached paths.
+    /// Bounded by the renderer's coordinate budget; exposed for testing the
+    /// coordinate-budget eviction.
+    /// </summary>
+    public long CachedCoordinateCount
+    {
+        get { lock (_sync) { return _cache.CoordinateCount; } }
     }
 
     /// <summary>
@@ -288,20 +337,17 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         PathEntry? entry;
         lock (_sync)
         {
-            // A live change to the simplification tolerance (Settings → Map)
-            // invalidates every cached path, which was built at the old
-            // tolerance. Clear once on change so re-builds use the new value.
-            if (!_lastSimplifyPx.Equals(tol))
-            {
-                _cache.Clear();
-                _lastSimplifyPx = tol;
-            }
-
+            EnsureToleranceCurrent(tol, EffectivePolygonSimplifyPx);
             entry = _cache.Get(key);
         }
 
-        if (entry is null)
+        if (entry is not null)
         {
+            S100Diag.Telemetry.SimplifyCacheHit.Add(1);
+        }
+        else
+        {
+            S100Diag.Telemetry.SimplifyCacheMiss.Add(1);
             var built = BuildLineEntry(lineString, resolution, tol);
             lock (_sync)
             {
@@ -357,6 +403,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         var lastX = px0;
         var lastY = py0;
         var lastIndex = coordinates.Length - 1;
+        var emitted = 1;
         for (var i = 1; i < coordinates.Length; i++)
         {
             var px = (float)((coordinates[i].X - anchorX) / resolution);
@@ -377,9 +424,28 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             path.LineTo(px, py);
             lastX = px;
             lastY = py;
+            emitted++;
         }
 
-        return new PathEntry(path, anchorX, anchorY);
+        return new PathEntry(path, anchorX, anchorY, emitted);
+    }
+
+    /// <summary>
+    /// Clears the shared path cache when either the line or polygon
+    /// simplification tolerance changes (e.g. a live Settings → Map toggle):
+    /// cached paths were built at the previous tolerance and must be rebuilt.
+    /// Callers must hold <see cref="_sync"/>.
+    /// </summary>
+    private void EnsureToleranceCurrent(double lineTol, double polyTol)
+    {
+        if (_lastSimplifyPx.Equals(lineTol) && _lastPolySimplifyPx.Equals(polyTol))
+        {
+            return;
+        }
+
+        _cache.Clear();
+        _lastSimplifyPx = lineTol;
+        _lastPolySimplifyPx = polyTol;
     }
 
     /// <summary>
@@ -416,15 +482,26 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
 
         var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
 
+        var polyTol = EffectivePolygonSimplifyPx;
+
         PathEntry? entry;
         lock (_sync)
         {
+            EnsureToleranceCurrent(EffectiveSimplifyPx, polyTol);
             entry = _cache.Get(key);
         }
 
-        if (entry is null)
+        if (entry is not null)
         {
-            var built = BuildEntry(polygon, resolution);
+            S100Diag.Telemetry.SimplifyCacheHit.Add(1);
+        }
+        else
+        {
+            S100Diag.Telemetry.SimplifyCacheMiss.Add(1);
+            var simplified = polyTol > 0
+                ? SimplifyPolygon(polygon, polyTol * resolution)
+                : polygon;
+            var built = BuildEntry(simplified, resolution);
             lock (_sync)
             {
                 var again = _cache.Get(key);
@@ -493,6 +570,71 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     /// <summary>
+    /// Generalizes a polygon for rendering at the build resolution using NTS
+    /// <see cref="TopologyPreservingSimplifier"/> at the supplied metric
+    /// tolerance, preserving topological validity so fills and holes stay
+    /// well-formed (naive per-ring point dropping can self-intersect). Polygons
+    /// below <see cref="MinPolygonVertexCount"/> are returned unchanged. On any
+    /// degenerate, invalid (after a <c>Buffer(0)</c> repair attempt), or
+    /// throwing result the original polygon is returned — a safe pass-through —
+    /// and <c>s100.simplify.polygon.invalid.count</c> is incremented.
+    /// </summary>
+    private static Polygon SimplifyPolygon(Polygon polygon, double toleranceMetres)
+    {
+        var origCount = polygon.NumPoints;
+        if (origCount < MinPolygonVertexCount || !(toleranceMetres > 0))
+        {
+            return polygon;
+        }
+
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var simplified = TopologyPreservingSimplifier.Simplify(polygon, toleranceMetres);
+            sw.Stop();
+            S100Diag.Telemetry.SimplifyPolygonDuration.Record(sw.Elapsed.TotalMilliseconds);
+
+            Polygon? result = simplified as Polygon;
+            if (result is null || result.IsEmpty)
+            {
+                S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
+                return polygon;
+            }
+
+            if (!result.IsValid)
+            {
+                if (result.Buffer(0) is Polygon repaired && !repaired.IsEmpty && repaired.IsValid)
+                {
+                    result = repaired;
+                }
+                else
+                {
+                    S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
+                    return polygon;
+                }
+            }
+
+            // No reduction: keep the original (avoids caching an equal-size copy).
+            if (result.NumPoints >= origCount)
+            {
+                return polygon;
+            }
+
+            S100Diag.Telemetry.SimplifyPolygonCoordsIn.Record(origCount);
+            S100Diag.Telemetry.SimplifyPolygonCoordsOut.Record(result.NumPoints);
+            return result;
+        }
+        catch (Exception ex) when (ex is TopologyException or ArgumentException or InvalidOperationException)
+        {
+            // Never let a malformed geometry crash the render thread; render the
+            // original, unsimplified polygon.
+            Debug.WriteLine($"[Simplification] polygon TPS threw for {origCount}-coord geom: {ex.Message}");
+            S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
+            return polygon;
+        }
+    }
+
+    /// <summary>
     /// Builds the translation-invariant <see cref="SKPath"/> for a polygon at a
     /// given resolution, anchored at the polygon's envelope minimum. Uses
     /// even-odd fill so interior rings (holes) are subtracted regardless of
@@ -505,21 +647,21 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         var anchorY = envelope.MinY;
 
         var path = new SKPath { FillType = SKPathFillType.EvenOdd };
-        AddRing(path, polygon.ExteriorRing!, resolution, anchorX, anchorY);
+        var coords = AddRing(path, polygon.ExteriorRing!, resolution, anchorX, anchorY);
         for (var i = 0; i < polygon.NumInteriorRings; i++)
         {
-            AddRing(path, polygon.GetInteriorRingN(i), resolution, anchorX, anchorY);
+            coords += AddRing(path, polygon.GetInteriorRingN(i), resolution, anchorX, anchorY);
         }
 
-        return new PathEntry(path, anchorX, anchorY);
+        return new PathEntry(path, anchorX, anchorY, coords);
     }
 
-    private static void AddRing(SKPath path, LineString ring, double resolution, double anchorX, double anchorY)
+    private static int AddRing(SKPath path, LineString ring, double resolution, double anchorX, double anchorY)
     {
         var coordinates = ring.Coordinates;
         if (coordinates.Length < 2)
         {
-            return;
+            return 0;
         }
 
         path.MoveTo(
@@ -532,6 +674,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
                 (float)((anchorY - coordinates[i].Y) / resolution));
         }
         path.Close();
+        return coordinates.Length;
     }
 
     private static bool IsVisible(Brush fill) => fill.Color is { A: > 0 };
@@ -568,16 +711,20 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// <summary>A cached path plus the world-space anchor it was built relative to.</summary>
     private sealed class PathEntry : IDisposable
     {
-        public PathEntry(SKPath path, double anchorX, double anchorY)
+        public PathEntry(SKPath path, double anchorX, double anchorY, int coordCount)
         {
             Path = path;
             AnchorX = anchorX;
             AnchorY = anchorY;
+            CoordCount = coordCount;
         }
 
         public SKPath Path { get; }
         public double AnchorX { get; }
         public double AnchorY { get; }
+
+        /// <summary>Number of geometry coordinates emitted into <see cref="Path"/>; drives the cache's coordinate budget.</summary>
+        public int CoordCount { get; }
 
         /// <summary>
         /// Releases the native <see cref="SKPath"/>. Only safe to call for a path
@@ -591,8 +738,9 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     /// <summary>
-    /// A small LRU of <see cref="PathEntry"/> values. Callers must serialise
-    /// access (this renderer holds a lock around all <see cref="Get"/>/<see cref="Add"/>
+    /// A small LRU of <see cref="PathEntry"/> values, bounded by <b>both</b> an
+    /// entry cap and a total-coordinate budget. Callers must serialise access
+    /// (this renderer holds a lock around all <see cref="Get"/>/<see cref="Add"/>
     /// calls). Evicted entries are <b>not</b> disposed: rendering reads
     /// <c>entry.Path</c> under the lock but draws it (and the snapshot-prebuild
     /// thread may draw a different cached path) <i>outside</i> the lock, so a
@@ -603,24 +751,40 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     /// <c>entry.Path</c> local keeps it reachable for the duration of the draw).
     /// The cache is bounded, so the evicted-but-not-yet-finalised backlog is small.
     /// </summary>
+    /// <remarks>
+    /// The coordinate budget complements the entry cap because a handful of dense
+    /// polygon paths (tens of thousands of vertices each) cost far more memory
+    /// than the same number of tiny features — entry-count bounding alone is
+    /// memory-naive for the S-101 workload.
+    /// </remarks>
     private sealed class PathCache
     {
         private readonly int _capacity;
+        private readonly long _maxCoordinates;
         private readonly Dictionary<PathKey, LinkedListNode<Node>> _map;
         private readonly LinkedList<Node> _lru = new();
+        private long _coordinates;
 
-        public PathCache(int capacity)
+        public PathCache(int capacity, long maxCoordinates)
         {
             _capacity = capacity;
+            _maxCoordinates = maxCoordinates;
             _map = new Dictionary<PathKey, LinkedListNode<Node>>(capacity);
         }
 
         public int Count => _map.Count;
 
+        public long CoordinateCount => _coordinates;
+
         public void Clear()
         {
             _map.Clear();
             _lru.Clear();
+            if (_coordinates > 0)
+            {
+                S100Diag.Telemetry.SimplifyCacheCoordsTracked.Add(-_coordinates);
+            }
+            _coordinates = 0;
             // Entries are not disposed: another thread may be drawing a path
             // outside the lock. The GC finalises each SKPath once unreachable.
         }
@@ -640,11 +804,18 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         {
             var node = _lru.AddFirst(new Node(key, entry));
             _map[key] = node;
-            while (_map.Count > _capacity)
+            _coordinates += entry.CoordCount;
+            S100Diag.Telemetry.SimplifyCacheCoordsTracked.Add(entry.CoordCount);
+
+            // Evict LRU until under both the entry cap and the coordinate budget,
+            // always keeping at least the just-added entry.
+            while (_map.Count > 1 && (_map.Count > _capacity || _coordinates > _maxCoordinates))
             {
                 var last = _lru.Last!;
                 _lru.RemoveLast();
                 _map.Remove(last.Value.Key);
+                _coordinates -= last.Value.Entry.CoordCount;
+                S100Diag.Telemetry.SimplifyCacheCoordsTracked.Add(-last.Value.Entry.CoordCount);
                 // Deliberately not disposed: another thread may be drawing this
                 // path outside the lock. The GC finalises the SKPath once it is
                 // unreachable (see PathCache remarks).

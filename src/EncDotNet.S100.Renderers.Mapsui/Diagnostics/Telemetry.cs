@@ -104,71 +104,77 @@ internal static class Telemetry
             description: "Pattern-tile cache misses during area-fill resolution (tile rasterisation triggered). Tagged with s100.product when the renderer is configured by a dataset processor.");
 
     /// <summary>
-    /// Hits in the resolution-aware geometry simplification cache
-    /// (<see cref="Simplification.SimplificationCache"/>). Recorded
-    /// per visible feature per rendered frame; the hit-rate
-    /// (hits / (hits + misses)) measures steady-state cache
-    /// effectiveness. Issue #164 acceptance criterion targets ≥ 95%
-    /// on steady-state pan. Tagged with <c>s100.product</c>.
+    /// Hits in the <see cref="CachedVectorStyleRenderer"/> path cache. Recorded
+    /// per cached geometry per rendered frame; the hit-rate
+    /// (hits / (hits + misses)) measures steady-state pan effectiveness — a pan
+    /// at constant resolution should be all hits. Tagged with <c>s100.product</c>.
     /// </summary>
     public static readonly Counter<long> SimplifyCacheHit =
         Meter.CreateCounter<long>(
             name: "s100.simplify.cache.hit.count",
             unit: "{hits}",
-            description: "Hits in the resolution-aware geometry simplification cache. Tagged with s100.product.");
+            description: "Hits in the CachedVectorStyleRenderer path cache. Tagged with s100.product.");
 
     /// <inheritdoc cref="SimplifyCacheHit"/>
     public static readonly Counter<long> SimplifyCacheMiss =
         Meter.CreateCounter<long>(
             name: "s100.simplify.cache.miss.count",
             unit: "{misses}",
-            description: "Misses in the resolution-aware geometry simplification cache (Douglas-Peucker invocation triggered). Tagged with s100.product.");
+            description: "Misses in the CachedVectorStyleRenderer path cache (path build + simplification triggered). Tagged with s100.product.");
 
     /// <summary>
-    /// Wall-clock time spent inside a single
-    /// <c>IFeatureSimplifier.Simplify</c> call (Douglas-Peucker over
-    /// one feature's geometry). Recorded only on cache misses.
-    /// Useful for diagnosing render-thread jank: the issue #164
-    /// design accepts a synchronous miss path on the assumption that
-    /// per-feature simplification is bounded; this histogram lets us
-    /// validate that.
+    /// Wall-clock time spent inside a single polygon
+    /// <c>TopologyPreservingSimplifier.Simplify</c> call. Recorded only on a
+    /// cache miss for a polygon above the min-vertex bypass. Useful for
+    /// diagnosing render-thread jank from the synchronous miss path.
     /// </summary>
-    public static readonly Histogram<double> SimplifyDuration =
+    public static readonly Histogram<double> SimplifyPolygonDuration =
         Meter.CreateHistogram<double>(
-            name: "s100.simplify.duration",
+            name: "s100.simplify.polygon.duration",
             unit: "ms",
-            description: "Per-feature Douglas-Peucker simplification duration on a cache miss. Tagged with s100.product.");
+            description: "Per-polygon topology-preserving simplification duration on a path-cache miss. Tagged with s100.product.");
 
     /// <summary>
-    /// Coordinate count of the original geometry going into
-    /// simplification. Combined with <see cref="SimplifyCoordsOut"/>
-    /// gives the achieved reduction ratio per feature.
+    /// Coordinate count of the original polygon going into simplification.
+    /// Combined with <see cref="SimplifyPolygonCoordsOut"/> gives the achieved
+    /// reduction ratio per polygon.
     /// </summary>
-    public static readonly Histogram<long> SimplifyCoordsIn =
+    public static readonly Histogram<long> SimplifyPolygonCoordsIn =
         Meter.CreateHistogram<long>(
-            name: "s100.simplify.coords.in",
+            name: "s100.simplify.polygon.coords.in",
             unit: "{coordinates}",
-            description: "Coordinate count entering simplification (cache miss). Tagged with s100.product.");
+            description: "Coordinate count entering polygon simplification (cache miss). Tagged with s100.product.");
 
-    /// <inheritdoc cref="SimplifyCoordsIn"/>
-    public static readonly Histogram<long> SimplifyCoordsOut =
+    /// <inheritdoc cref="SimplifyPolygonCoordsIn"/>
+    public static readonly Histogram<long> SimplifyPolygonCoordsOut =
         Meter.CreateHistogram<long>(
-            name: "s100.simplify.coords.out",
+            name: "s100.simplify.polygon.coords.out",
             unit: "{coordinates}",
-            description: "Coordinate count leaving simplification (cache miss). Tagged with s100.product.");
+            description: "Coordinate count leaving polygon simplification (cache miss). Tagged with s100.product.");
 
     /// <summary>
-    /// Running total of simplified coordinates retained in the
-    /// simplification cache, summed across all buckets. Bounded by
-    /// <c>SimplificationOptions.MaxCachedCoordinates</c>; this is
-    /// the signal to watch for cache-pressure tuning. Increments on
-    /// cache adds, decrements on bucket / budget eviction.
+    /// Count of polygons whose topology-preserving simplification produced an
+    /// invalid / empty result and were rendered unsimplified (safe pass-through
+    /// fallback). A persistently high count signals tolerance or data issues.
+    /// Tagged with <c>s100.product</c>.
+    /// </summary>
+    public static readonly Counter<long> SimplifyPolygonInvalid =
+        Meter.CreateCounter<long>(
+            name: "s100.simplify.polygon.invalid.count",
+            unit: "{polygons}",
+            description: "Polygons rendered unsimplified after simplification yielded an invalid/empty result. Tagged with s100.product.");
+
+    /// <summary>
+    /// Running total of coordinates retained in the
+    /// <see cref="CachedVectorStyleRenderer"/> path cache. Bounded by the
+    /// renderer's coordinate budget; this is the signal to watch for
+    /// cache-pressure tuning. Increments on cache adds, decrements on eviction.
     /// </summary>
     public static readonly UpDownCounter<long> SimplifyCacheCoordsTracked =
         Meter.CreateUpDownCounter<long>(
             name: "s100.simplify.cache.coords.tracked",
             unit: "{coordinates}",
-            description: "Total simplified coordinates currently retained in the simplification cache. Tagged with s100.product.");
+            description: "Total coordinates currently retained in the CachedVectorStyleRenderer path cache. Tagged with s100.product.");
 
     /// <summary>
     /// Wall-clock duration of a single Mapsui <c>GetFeatures(rect,resolution)</c>

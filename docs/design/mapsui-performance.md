@@ -137,32 +137,49 @@ tolerance ≈ 1 screen pixel at the current zoom. Polylines with
 thousands of vertices typically reduce 10–100× without visible quality
 loss.
 
-**Status:** v1 implemented for issue
-[#164](https://github.com/philliphoff/EncDotNet.S100/issues/164).
-Lives on `InstrumentedMemoryLayer.GetFeatures`, keyed by half-octave
-zoom bucket, gated behind the viewer's
-**Simplify line geometry (experimental)** setting (default off).
-See the renderer
+**Status:** implemented for both lines and polygons. Simplification
+lives in `CachedVectorStyleRenderer` (the registered `VectorStyle`
+renderer) at `SKPath`-build time, keyed by build resolution and cached
+per `(feature, position, resolution)`, so the cost is paid once per
+`(feature, zoom)` and inherited by the vector-snapshot record/prebuild.
+Gated behind the viewer's **Simplify dense geometry** setting (default
+**on**). See the renderer
 [README → Resolution-aware geometry simplification](../../src/EncDotNet.S100.Renderers.Mapsui/README.md#resolution-aware-geometry-simplification)
-for the implementation, options, telemetry, and known limits.
+for the implementation, gating, telemetry, and known limits.
 
-**v1 scope (lines only).** v1 simplifies `LineString` /
-`MultiLineString` only; polygons, points, and other types pass
-through unchanged. Per-ring Douglas-Peucker can produce invalid or
-self-intersecting polygons, so polygon support is deferred until a
-follow-up wires in `TopologyPreservingSimplifier` + `IsValid`
-validation.
+**Lines.** `LineString` / `MultiLineString` are simplified inline with a
+radial-distance pixel filter while building the path.
 
-**Defaults.** PixelTolerance = 0.5 (a half pixel — chosen so thicker
-strokes such as depth contours and fairway boundaries don't show
-visible kinks); MinVertexCount = 64 bypass threshold;
-MaxCachedCoordinates = 5_000_000 (≈ 80 MB). Eviction triggers on
-zoom-band transition, then by coordinate budget.
+**Polygons.** `Polygon` / `MultiPolygon` (land/depth/sea areas — the
+highest-vertex S-101 features) are generalized with
+`TopologyPreservingSimplifier` at `pixelTolerance × resolution` metres,
+then validated (`IsValid`, `Buffer(0)` repair) with a **safe
+pass-through to the exact geometry** on any invalid/degenerate/throwing
+result, so a self-intersecting simplification can never reach the
+rasteriser. `MultiPolygon` parts are simplified independently;
+polygons below 32 vertices skip the NTS pass.
 
-**Future work.** Polygon simplification, async / off-thread miss
-path (the synchronous miss path can briefly stall the first paint
-after a zoom-band transition), and `(layer × bucket)`-aware
-pre-warming on dataset load.
+**Earlier deferral, now resolved.** The original line-only version
+deferred polygons because naive per-ring Douglas-Peucker can produce
+invalid/self-intersecting polygons; that is exactly why the polygon path
+uses `TopologyPreservingSimplifier` + `IsValid` validation with a
+fallback. A separate, never-wired NTS Douglas-Peucker layer
+(`Simplification/` + `InstrumentedMemoryLayer.EnableSimplification`,
+half-octave zoom buckets) has been **removed** and consolidated into this
+single live path; its two genuinely-better ideas — coordinate-budget
+cache eviction and simplification telemetry — were carried forward into
+the path cache.
+
+**Defaults.** PixelTolerance = 0.6 (chosen so thicker strokes such as
+depth contours and fairway boundaries don't show visible kinks);
+polygon MinVertexCount = 32 bypass threshold; MaxCachedCoordinates =
+5_000_000 (≈ 80 MB), evicted LRU by both entry cap and coordinate budget.
+
+**Future work.** Async / off-thread miss path (the synchronous miss path
+can briefly stall the first paint after a zoom change; sustained pan is
+already covered by the vector snapshot); unifying line simplification
+onto NTS Douglas-Peucker (currently a radial-distance filter — visually
+negligible at sub-pixel tolerance).
 
 Projected impact based on the measured cost model:
 - 1k-10k bucket → 100-999 bucket: ~5× cheaper draws (saves ~18 s of
@@ -170,14 +187,6 @@ Projected impact based on the measured cost model:
 - 100-999 bucket → 10-99 bucket: similar magnitude (saves ~20 s).
 - Combined: mean paint drops from ~98 ms → ~30–40 ms on the heaviest
   workload measured.
-
-Open design questions:
-- Where in the pipeline does simplification live? Almost certainly
-  inside `MapsuiDisplayListRenderer` when geometry is materialized
-  from `IDisplayList.GetGeometry`, gated by a resolution bucket.
-- Cache shape: keyed by `(feature-ref, zoom-bucket)`; values are
-  pre-simplified NTS geometries (or pre-built `SKPath`s).
-- Eviction policy: on zoom-band change, not per-paint.
 
 ### 2. Verify SCAMIN / scale-visibility filtering is effective
 
