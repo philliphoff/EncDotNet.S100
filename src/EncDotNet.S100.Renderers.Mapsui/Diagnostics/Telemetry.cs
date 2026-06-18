@@ -120,49 +120,7 @@ internal static class Telemetry
         Meter.CreateCounter<long>(
             name: "s100.simplify.cache.miss.count",
             unit: "{misses}",
-            description: "Misses in the CachedVectorStyleRenderer path cache (path build + simplification triggered). Tagged with s100.product.");
-
-    /// <summary>
-    /// Wall-clock time spent inside a single polygon
-    /// <c>TopologyPreservingSimplifier.Simplify</c> call. Recorded only on a
-    /// cache miss for a polygon above the min-vertex bypass. Useful for
-    /// diagnosing render-thread jank from the synchronous miss path.
-    /// </summary>
-    public static readonly Histogram<double> SimplifyPolygonDuration =
-        Meter.CreateHistogram<double>(
-            name: "s100.simplify.polygon.duration",
-            unit: "ms",
-            description: "Per-polygon topology-preserving simplification duration on a path-cache miss. Tagged with s100.product.");
-
-    /// <summary>
-    /// Coordinate count of the original polygon going into simplification.
-    /// Combined with <see cref="SimplifyPolygonCoordsOut"/> gives the achieved
-    /// reduction ratio per polygon.
-    /// </summary>
-    public static readonly Histogram<long> SimplifyPolygonCoordsIn =
-        Meter.CreateHistogram<long>(
-            name: "s100.simplify.polygon.coords.in",
-            unit: "{coordinates}",
-            description: "Coordinate count entering polygon simplification (cache miss). Tagged with s100.product.");
-
-    /// <inheritdoc cref="SimplifyPolygonCoordsIn"/>
-    public static readonly Histogram<long> SimplifyPolygonCoordsOut =
-        Meter.CreateHistogram<long>(
-            name: "s100.simplify.polygon.coords.out",
-            unit: "{coordinates}",
-            description: "Coordinate count leaving polygon simplification (cache miss). Tagged with s100.product.");
-
-    /// <summary>
-    /// Count of polygons whose topology-preserving simplification produced an
-    /// invalid / empty result and were rendered unsimplified (safe pass-through
-    /// fallback). A persistently high count signals tolerance or data issues.
-    /// Tagged with <c>s100.product</c>.
-    /// </summary>
-    public static readonly Counter<long> SimplifyPolygonInvalid =
-        Meter.CreateCounter<long>(
-            name: "s100.simplify.polygon.invalid.count",
-            unit: "{polygons}",
-            description: "Polygons rendered unsimplified after simplification yielded an invalid/empty result. Tagged with s100.product.");
+            description: "Misses in the CachedVectorStyleRenderer path cache (path build triggered). Tagged with s100.product.");
 
     /// <summary>
     /// Running total of coordinates retained in the

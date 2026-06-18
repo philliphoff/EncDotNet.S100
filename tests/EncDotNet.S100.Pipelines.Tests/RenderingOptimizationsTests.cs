@@ -6,8 +6,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Validates <see cref="RenderingOptimizations"/>: the central, mutable config
 /// for the viewer's Settings → Map rendering-optimization knobs. The "best"
-/// default is on for every knob except polygon simplification (opt-in, off by
-/// default), and a programmatic write is honoured unless an
+/// default is on for every knob, and a programmatic write is honoured unless an
 /// explicit environment variable pins the value (the perf A/B harness).
 /// </summary>
 public class RenderingOptimizationsTests
@@ -72,41 +71,6 @@ public class RenderingOptimizationsTests
         finally
         {
             RenderingOptimizations.GeometrySimplificationEnabled = original;
-        }
-    }
-
-    [Fact]
-    public void PolygonSimplification_DefaultsOff_WhenNotEnvPinned()
-    {
-        if (RenderingOptimizations.PolygonSimplificationEnvExplicit)
-        {
-            return; // pinned by S100_VECTOR_POLYGON_SIMPLIFY; default not observable
-        }
-
-        // Polygon simplification is opt-in: multi-dataset measurement showed it is
-        // net-negative for paint on the GPU path (see mapsui-performance.md).
-        Assert.False(RenderingOptimizations.PolygonSimplificationEnabled);
-    }
-
-    [Fact]
-    public void PolygonSimplification_RoundTrips_WhenNotEnvPinned()
-    {
-        if (RenderingOptimizations.PolygonSimplificationEnvExplicit)
-        {
-            return; // pinned by S100_VECTOR_POLYGON_SIMPLIFY; setter is a no-op
-        }
-
-        var original = RenderingOptimizations.PolygonSimplificationEnabled;
-        try
-        {
-            RenderingOptimizations.PolygonSimplificationEnabled = false;
-            Assert.False(RenderingOptimizations.PolygonSimplificationEnabled);
-            RenderingOptimizations.PolygonSimplificationEnabled = true;
-            Assert.True(RenderingOptimizations.PolygonSimplificationEnabled);
-        }
-        finally
-        {
-            RenderingOptimizations.PolygonSimplificationEnabled = original;
         }
     }
 

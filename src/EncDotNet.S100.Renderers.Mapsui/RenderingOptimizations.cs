@@ -22,10 +22,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// live-toggleable knobs.
 /// </para>
 /// <para>
-/// The "best" default is <see langword="true"/> for every knob except
-/// <see cref="PolygonSimplificationEnabled"/>, which is an env-only experimental
-/// opt-in defaulting <see langword="false"/> (line geometry simplification runs
-/// at <see cref="DefaultSimplificationTolerancePx"/> px); see
+/// The "best" default is <see langword="true"/> for every knob; line geometry
+/// simplification runs at <see cref="DefaultSimplificationTolerancePx"/> px. See
 /// <c>docs/design/mapsui-performance.md</c> for the measurements behind those
 /// choices.
 /// </para>
@@ -39,7 +37,6 @@ public static class RenderingOptimizations
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
     private static bool s_geometrySimplificationEnabled;
-    private static bool s_polygonSimplificationEnabled;
 
     static RenderingOptimizations()
     {
@@ -54,9 +51,6 @@ public static class RenderingOptimizations
 
         (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
-
-        (s_polygonSimplificationEnabled, PolygonSimplificationEnvExplicit) =
-            SeedBool("S100_VECTOR_POLYGON_SIMPLIFY", defaultValue: false);
     }
 
     /// <summary>
@@ -105,12 +99,12 @@ public static class RenderingOptimizations
     public static bool VectorPathCacheEnvExplicit { get; }
 
     /// <summary>
-    /// Whether resolution-aware geometry simplification (dropping on-screen
-    /// sub-pixel detail from dense S-101 geometries at path-build time) is
-    /// enabled. Applied inside <see cref="CachedVectorStyleRenderer"/> for both
-    /// lines (inline sub-pixel vertex dropping) and polygons (topology-preserving
-    /// simplification) and therefore requires <see cref="VectorPathCacheEnabled"/>.
-    /// Default on.
+    /// Whether resolution-aware <b>line</b> simplification (dropping on-screen
+    /// sub-pixel detail from dense S-101 line geometries at path-build time) is
+    /// enabled. Applied inside <see cref="CachedVectorStyleRenderer"/> as inline
+    /// sub-pixel vertex dropping and therefore requires
+    /// <see cref="VectorPathCacheEnabled"/>. Polygons are always rendered
+    /// vertex-exact. Default on.
     /// </summary>
     public static bool GeometrySimplificationEnabled
     {
@@ -124,38 +118,9 @@ public static class RenderingOptimizations
     /// <summary>
     /// Pixel tolerance applied when <see cref="GeometrySimplificationEnabled"/> is
     /// on. Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
-    /// <see cref="DefaultSimplificationTolerancePx"/>. Shared by line and polygon
-    /// simplification.
+    /// <see cref="DefaultSimplificationTolerancePx"/>. Used by line simplification.
     /// </summary>
     public static double SimplificationTolerancePx { get; }
-
-    /// <summary>
-    /// Whether <b>polygon</b> simplification specifically is enabled. Gated in
-    /// addition to <see cref="GeometrySimplificationEnabled"/> (polygons are
-    /// simplified only when both are on). This is an <b>env-only, experimental
-    /// opt-in</b>: it has no persisted viewer setting or UI knob and is enabled
-    /// solely by <c>S100_VECTOR_POLYGON_SIMPLIFY=1</c>. Default <b>off</b>, so it
-    /// never runs on the default hot path.
-    /// </summary>
-    /// <remarks>
-    /// Retained as a <b>memory</b> lever, not a paint optimization. Topology-
-    /// preserving polygon simplification reduces the coordinate count of cached
-    /// paths (composing with the path cache's coordinate-budget eviction), but a
-    /// live viewer A/B showed <b>no paint improvement</b> on the GPU path: the
-    /// translation-invariant path cache already neutralizes vertex count on warm
-    /// paints (cache-served, ~0 ms), so dropping vertices does not make warm
-    /// paints cheaper, while cold builds pay the <c>TopologyPreservingSimplifier</c>
-    /// cost. Kept opt-in for future evaluation (other data, CPU-bound paths,
-    /// memory-pressure scenarios). See <c>docs/design/mapsui-performance.md</c>.
-    /// </remarks>
-    public static bool PolygonSimplificationEnabled
-    {
-        get => s_polygonSimplificationEnabled;
-        set { if (!PolygonSimplificationEnvExplicit) s_polygonSimplificationEnabled = value; }
-    }
-
-    /// <summary>True when <see cref="PolygonSimplificationEnabled"/> is pinned by an explicit <c>S100_VECTOR_POLYGON_SIMPLIFY</c>.</summary>
-    public static bool PolygonSimplificationEnvExplicit { get; }
 
     private static (bool value, bool envExplicit) SeedBool(string envName, bool defaultValue)
     {

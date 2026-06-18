@@ -25,23 +25,6 @@ public class CachedVectorStyleRendererTests
 {
     private static readonly RenderService Service = new();
 
-    /// <summary>
-    /// Enables the env-only, default-off polygon simplification knob for the
-    /// duration of a test and restores it on dispose. Skips no-op when the env
-    /// var <c>S100_VECTOR_POLYGON_SIMPLIFY</c> pins the flag (the programmatic
-    /// setter is ignored when env-explicit).
-    /// </summary>
-    private sealed class PolygonSimplificationScope : IDisposable
-    {
-        private readonly bool _original = RenderingOptimizations.PolygonSimplificationEnabled;
-
-        public PolygonSimplificationScope() => RenderingOptimizations.PolygonSimplificationEnabled = true;
-
-        public bool Enabled => RenderingOptimizations.PolygonSimplificationEnabled;
-
-        public void Dispose() => RenderingOptimizations.PolygonSimplificationEnabled = _original;
-    }
-
     // World coordinates roughly span [0,1000] in both axes so a 1.0 resolution
     // maps them onto a 1000 px canvas with the centre at (500, 500).
     private const int CanvasSize = 256;
@@ -122,9 +105,8 @@ public class CachedVectorStyleRendererTests
     /// <summary>
     /// Builds the closed coordinate ring of an axis-aligned square whose edges
     /// are subdivided into <paramref name="pointsPerEdge"/> <i>collinear</i>
-    /// vertices. The dense collinear runs are exactly the sub-pixel detail a
-    /// topology-preserving simplifier collapses to the four corners, so the
-    /// build is a deterministic vertex-reduction fixture.
+    /// vertices, yielding a deterministic dense-polygon fixture for the
+    /// vertex-exact path cache and coordinate-budget eviction tests.
     /// </summary>
     private static Coordinate[] DenseSquareCoords(double minX, double minY, double size, int pointsPerEdge)
     {
@@ -143,37 +125,6 @@ public class CachedVectorStyleRendererTests
     {
         var ring = new LinearRing(DenseSquareCoords(minX, minY, size, pointsPerEdge));
         var feature = new GeometryFeature(new Polygon(ring));
-        feature.Styles.Add(new VectorStyle { Fill = new Brush(Color.Black), Outline = null, Line = null });
-        return feature;
-    }
-
-    /// <summary>
-    /// A dense-ringed version of <see cref="MakeHoledPolygonFeature"/>: a 1000-unit
-    /// square shell with a centred 100-unit square hole, each ring subdivided into
-    /// collinear vertices so simplification has detail to drop while topology
-    /// (the hole) must be preserved.
-    /// </summary>
-    private static GeometryFeature MakeDenseHoledSquareFeature(int pointsPerEdge)
-    {
-        var shell = new LinearRing(DenseSquareCoords(0, 0, 1000, pointsPerEdge));
-        var hole = new LinearRing(DenseSquareCoords(450, 450, 100, pointsPerEdge));
-        var feature = new GeometryFeature(new Polygon(shell, new[] { hole }));
-        feature.Styles.Add(new VectorStyle { Fill = new Brush(Color.Black), Outline = null, Line = null });
-        return feature;
-    }
-
-    /// <summary>A regular polygon approximating a circle: vertices are not
-    /// collinear, so larger tolerances drop progressively more of them.</summary>
-    private static GeometryFeature MakeDenseCircleFeature(int points, double cx = 500, double cy = 500, double radius = 400)
-    {
-        var coords = new List<Coordinate>(points + 1);
-        for (var i = 0; i < points; i++)
-        {
-            var a = 2 * Math.PI * i / points;
-            coords.Add(new Coordinate(cx + radius * Math.Cos(a), cy + radius * Math.Sin(a)));
-        }
-        coords.Add(coords[0]);
-        var feature = new GeometryFeature(new Polygon(new LinearRing(coords.ToArray())));
         feature.Styles.Add(new VectorStyle { Fill = new Brush(Color.Black), Outline = null, Line = null });
         return feature;
     }
@@ -395,131 +346,7 @@ public class CachedVectorStyleRendererTests
     }
 
     [Fact]
-    public void Polygon_AtTolerance_ReducesCachedCoordinates()
-    {
-        // A 50-points-per-edge square (201 coords) of collinear runs collapses to
-        // its four corners when simplified, but is copied vertex-for-vertex when
-        // tolerance is 0. CachedCoordinateCount exposes the built path's vertices.
-        var feature = MakeDenseSquareFeature(pointsPerEdge: 50);
-        var style = (VectorStyle)feature.Styles.First();
-        var layer = new MemoryLayer("l") { Opacity = 1.0 };
-        var viewport = ViewportFor(500, 500, 1.0);
-
-        var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
-        var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
-
-        using var scope = new PolygonSimplificationScope();
-        RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
-        RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
-
-        if (!scope.Enabled)
-        {
-            return; // env pins polygon simplification off; strict reduction not exercisable
-        }
-
-        Assert.Equal(201, exact.CachedCoordinateCount);
-        Assert.True(simplified.CachedCoordinateCount < exact.CachedCoordinateCount,
-            $"expected fewer coords, simplified={simplified.CachedCoordinateCount} exact={exact.CachedCoordinateCount}");
-        Assert.True(simplified.CachedCoordinateCount >= 4, "the four corners must survive");
-    }
-
-    [Fact]
-    public void Polygon_BelowMinVertexCount_NotSimplified()
-    {
-        // 2 points/edge → 9 coords, below MinPolygonVertexCount (32): the cheap
-        // NTS pass is bypassed and the path stays vertex-exact.
-        var feature = MakeDenseSquareFeature(pointsPerEdge: 2);
-        var style = (VectorStyle)feature.Styles.First();
-        var layer = new MemoryLayer("l") { Opacity = 1.0 };
-        var viewport = ViewportFor(500, 500, 1.0);
-
-        var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
-        var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
-
-        using var scope = new PolygonSimplificationScope();
-        RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
-        RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
-
-        Assert.Equal(exact.CachedCoordinateCount, simplified.CachedCoordinateCount);
-    }
-
-    [Fact]
-    public void Polygon_LargerTolerance_YieldsFewerOrEqualCoordinates()
-    {
-        // A 360-gon (non-collinear) drops more vertices as tolerance grows.
-        var feature = MakeDenseCircleFeature(points: 360);
-        var style = (VectorStyle)feature.Styles.First();
-        var layer = new MemoryLayer("l") { Opacity = 1.0 };
-        var viewport = ViewportFor(500, 500, 4.0);
-
-        var small = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.5);
-        var large = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 4.0);
-
-        using var scope = new PolygonSimplificationScope();
-        RenderToPng(c => small.Draw(c, viewport, layer, feature, style, Service, 0));
-        RenderToPng(c => large.Draw(c, viewport, layer, feature, style, Service, 0));
-
-        if (!scope.Enabled)
-        {
-            return; // env pins polygon simplification off; strict reduction not exercisable
-        }
-
-        Assert.True(small.CachedCoordinateCount < 361, "some vertices should be dropped");
-        Assert.True(large.CachedCoordinateCount <= small.CachedCoordinateCount,
-            $"coarser tolerance must not add vertices: large={large.CachedCoordinateCount} small={small.CachedCoordinateCount}");
-    }
-
-    [Fact]
-    public void Polygon_Simplified_RendersEquivalentFill()
-    {
-        // Validity preservation: the simplified circle stays a well-formed filled
-        // polygon, so its painted area matches the exact polygon within a few
-        // percent (no self-intersection collapse, no dropped fill).
-        var feature = MakeDenseCircleFeature(points: 360);
-        var style = (VectorStyle)feature.Styles.First();
-        var layer = new MemoryLayer("l") { Opacity = 1.0 };
-        var viewport = ViewportFor(500, 500, 4.0);
-
-        var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
-        var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
-
-        using var scope = new PolygonSimplificationScope();
-        using var exactBmp = SKBitmap.Decode(RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0)));
-        using var simplifiedBmp = SKBitmap.Decode(RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0)));
-
-        var e = OpaqueDarkPixels(exactBmp);
-        var s = OpaqueDarkPixels(simplifiedBmp);
-        Assert.True(e > 0 && s > 0, "both renders must fill");
-        Assert.True(Math.Abs(e - s) <= e * 0.02,
-            $"simplified fill area must match exact within 2%: exact={e} simplified={s}");
-    }
-
-    [Fact]
-    public void Polygon_Simplified_PreservesHole()
-    {
-        // Topology preservation: after simplification the centred hole is still
-        // cut (background at the centre) while the surrounding shell is filled.
-        var feature = MakeDenseHoledSquareFeature(pointsPerEdge: 40);
-        var style = (VectorStyle)feature.Styles.First();
-        var layer = new MemoryLayer("l") { Opacity = 1.0 };
-        var viewport = ViewportFor(500, 500, 1.0);
-
-        var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
-        using var scope = new PolygonSimplificationScope();
-        using var bmp = SKBitmap.Decode(
-            RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0)));
-
-        var centre = bmp.GetPixel(CanvasSize / 2, CanvasSize / 2);
-        Assert.True(centre.Red > 200 && centre.Green > 200 && centre.Blue > 200,
-            $"hole should stay background after simplification, was {centre}");
-
-        var filled = bmp.GetPixel(CanvasSize / 2, CanvasSize / 2 - 90);
-        Assert.True(filled.Red < 80 && filled.Green < 80 && filled.Blue < 80,
-            $"shell should be filled after simplification, was {filled}");
-    }
-
-    [Fact]
-    public void MultiPolygon_SimplifiesEachPart_KeyedByPosition()
+    public void MultiPolygon_CachesEachPart_KeyedByPosition()
     {
         var part1 = new Polygon(new LinearRing(DenseSquareCoords(0, 0, 400, 50)));
         var part2 = new Polygon(new LinearRing(DenseSquareCoords(600, 600, 400, 50)));
@@ -529,23 +356,13 @@ public class CachedVectorStyleRendererTests
         var layer = new MemoryLayer("l") { Opacity = 1.0 };
         var viewport = ViewportFor(500, 500, 1.0);
 
-        var exact = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
-        var simplified = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0.6);
+        var renderer = new CachedVectorStyleRenderer(new VectorStyleRenderer(), simplifyTolerancePx: 0);
 
-        using var scope = new PolygonSimplificationScope();
-        RenderToPng(c => exact.Draw(c, viewport, layer, feature, style, Service, 0));
-        RenderToPng(c => simplified.Draw(c, viewport, layer, feature, style, Service, 0));
+        RenderToPng(c => renderer.Draw(c, viewport, layer, feature, style, Service, 0));
 
-        // One cache entry per part (keyed by position) for both renderers.
-        Assert.Equal(2, simplified.CachedPathCount);
-        Assert.Equal(2, exact.CachedPathCount);
-        if (!scope.Enabled)
-        {
-            return; // env pins polygon simplification off; strict reduction not exercisable
-        }
-
-        Assert.True(simplified.CachedCoordinateCount < exact.CachedCoordinateCount,
-            "each part should be simplified independently");
+        // One vertex-exact cache entry per part (keyed by position).
+        Assert.Equal(2, renderer.CachedPathCount);
+        Assert.Equal(part1.NumPoints + part2.NumPoints, renderer.CachedCoordinateCount);
     }
 
     [Fact]

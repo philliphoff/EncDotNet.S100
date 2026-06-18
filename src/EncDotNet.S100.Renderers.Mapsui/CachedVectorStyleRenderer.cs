@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -11,7 +10,6 @@ using Mapsui.Rendering.Skia.SkiaStyles;
 using Mapsui.Rendering.Skia.Extensions;
 using Mapsui.Styles;
 using NetTopologySuite.Geometries;
-using NetTopologySuite.Simplify;
 using SkiaSharp;
 using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
 
@@ -90,17 +88,8 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     private readonly ISkiaStyleRenderer _inner;
     private readonly double _simplifyOverridePx;
     private double _lastSimplifyPx = double.NaN;
-    private double _lastPolySimplifyPx = double.NaN;
     private readonly object _sync = new();
     private readonly PathCache _cache;
-
-    /// <summary>
-    /// Minimum vertex count below which a polygon is rendered without invoking
-    /// the topology-preserving simplifier. Polygons this small already paint
-    /// cheaply, so the per-call NTS cost is not worth paying. See S-101 perf
-    /// review (<c>docs/design/mapsui-performance.md</c>).
-    /// </summary>
-    public const int MinPolygonVertexCount = 32;
 
     /// <summary>
     /// Effective line-simplification tolerance, in screen pixels. When an
@@ -116,20 +105,6 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             : (RenderingOptimizations.GeometrySimplificationEnabled
                 ? RenderingOptimizations.SimplificationTolerancePx
                 : 0.0);
-
-    /// <summary>
-    /// Effective polygon-simplification tolerance, in screen pixels. Polygons are
-    /// simplified only when both the master geometry-simplification knob and the
-    /// polygon-specific knob are on; otherwise <c>0</c> (vertex-exact). When an
-    /// explicit constructor tolerance was supplied it is honoured (gated only by
-    /// the polygon knob) so unit tests can force a tolerance.
-    /// </summary>
-    private double EffectivePolygonSimplifyPx =>
-        !RenderingOptimizations.PolygonSimplificationEnabled
-            ? 0.0
-            : (_simplifyOverridePx >= 0
-                ? _simplifyOverridePx
-                : EffectiveSimplifyPx);
 
     /// <summary>
     /// Creates a renderer wrapping <paramref name="inner"/> (the real Mapsui
@@ -337,7 +312,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         PathEntry? entry;
         lock (_sync)
         {
-            EnsureToleranceCurrent(tol, EffectivePolygonSimplifyPx);
+            EnsureToleranceCurrent(tol);
             entry = _cache.Get(key);
         }
 
@@ -431,21 +406,20 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
     }
 
     /// <summary>
-    /// Clears the shared path cache when either the line or polygon
-    /// simplification tolerance changes (e.g. a live Settings → Map toggle):
-    /// cached paths were built at the previous tolerance and must be rebuilt.
-    /// Callers must hold <see cref="_sync"/>.
+    /// Clears the shared path cache when the line simplification tolerance
+    /// changes (e.g. a live Settings → Map toggle): cached paths were built at
+    /// the previous tolerance and must be rebuilt. Callers must hold
+    /// <see cref="_sync"/>.
     /// </summary>
-    private void EnsureToleranceCurrent(double lineTol, double polyTol)
+    private void EnsureToleranceCurrent(double lineTol)
     {
-        if (_lastSimplifyPx.Equals(lineTol) && _lastPolySimplifyPx.Equals(polyTol))
+        if (_lastSimplifyPx.Equals(lineTol))
         {
             return;
         }
 
         _cache.Clear();
         _lastSimplifyPx = lineTol;
-        _lastPolySimplifyPx = polyTol;
     }
 
     /// <summary>
@@ -482,12 +456,10 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
 
         var key = new PathKey(featureId, position, BitConverter.DoubleToInt64Bits(resolution));
 
-        var polyTol = EffectivePolygonSimplifyPx;
-
         PathEntry? entry;
         lock (_sync)
         {
-            EnsureToleranceCurrent(EffectiveSimplifyPx, polyTol);
+            EnsureToleranceCurrent(EffectiveSimplifyPx);
             entry = _cache.Get(key);
         }
 
@@ -498,10 +470,7 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
         else
         {
             S100Diag.Telemetry.SimplifyCacheMiss.Add(1);
-            var simplified = polyTol > 0
-                ? SimplifyPolygon(polygon, polyTol * resolution)
-                : polygon;
-            var built = BuildEntry(simplified, resolution);
+            var built = BuildEntry(polygon, resolution);
             lock (_sync)
             {
                 var again = _cache.Get(key);
@@ -567,71 +536,6 @@ public sealed class CachedVectorStyleRenderer : ISkiaStyleRenderer
             (float)(ux - ox), (float)(vx - ox), (float)ox,
             (float)(uy - oy), (float)(vy - oy), (float)oy,
             0f, 0f, 1f);
-    }
-
-    /// <summary>
-    /// Generalizes a polygon for rendering at the build resolution using NTS
-    /// <see cref="TopologyPreservingSimplifier"/> at the supplied metric
-    /// tolerance, preserving topological validity so fills and holes stay
-    /// well-formed (naive per-ring point dropping can self-intersect). Polygons
-    /// below <see cref="MinPolygonVertexCount"/> are returned unchanged. On any
-    /// degenerate, invalid (after a <c>Buffer(0)</c> repair attempt), or
-    /// throwing result the original polygon is returned — a safe pass-through —
-    /// and <c>s100.simplify.polygon.invalid.count</c> is incremented.
-    /// </summary>
-    private static Polygon SimplifyPolygon(Polygon polygon, double toleranceMetres)
-    {
-        var origCount = polygon.NumPoints;
-        if (origCount < MinPolygonVertexCount || !(toleranceMetres > 0))
-        {
-            return polygon;
-        }
-
-        try
-        {
-            var sw = Stopwatch.StartNew();
-            var simplified = TopologyPreservingSimplifier.Simplify(polygon, toleranceMetres);
-            sw.Stop();
-            S100Diag.Telemetry.SimplifyPolygonDuration.Record(sw.Elapsed.TotalMilliseconds);
-
-            Polygon? result = simplified as Polygon;
-            if (result is null || result.IsEmpty)
-            {
-                S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
-                return polygon;
-            }
-
-            if (!result.IsValid)
-            {
-                if (result.Buffer(0) is Polygon repaired && !repaired.IsEmpty && repaired.IsValid)
-                {
-                    result = repaired;
-                }
-                else
-                {
-                    S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
-                    return polygon;
-                }
-            }
-
-            // No reduction: keep the original (avoids caching an equal-size copy).
-            if (result.NumPoints >= origCount)
-            {
-                return polygon;
-            }
-
-            S100Diag.Telemetry.SimplifyPolygonCoordsIn.Record(origCount);
-            S100Diag.Telemetry.SimplifyPolygonCoordsOut.Record(result.NumPoints);
-            return result;
-        }
-        catch (Exception ex) when (ex is TopologyException or ArgumentException or InvalidOperationException)
-        {
-            // Never let a malformed geometry crash the render thread; render the
-            // original, unsimplified polygon.
-            Debug.WriteLine($"[Simplification] polygon TPS threw for {origCount}-coord geom: {ex.Message}");
-            S100Diag.Telemetry.SimplifyPolygonInvalid.Add(1);
-            return polygon;
-        }
     }
 
     /// <summary>

@@ -161,9 +161,9 @@ all downstream consumers. Dropped detail is by construction sub-pixel *on
 screen* at that zoom, so the result is visually indistinguishable at every
 zoom level. On real S-101 datasets dense **line** geometry (contours,
 coverage boundaries) typically simplifies by 5–10× at common pan zooms
-with no visible regression at the default 0.6-pixel tolerance. (Polygon
-*area* simplification is a separate env-only experimental opt-in — see
-[Gating](#gating) — and is **off by default**.)
+with no visible regression at the default 0.6-pixel tolerance. Simplification
+applies to **line** geometry only; polygon areas are always rendered
+vertex-exact (see [Polygons](#polygons)).
 
 ### Lines
 
@@ -176,56 +176,34 @@ segments.
 
 ### Polygons
 
-> Polygon simplification is **off by default** and **env-only**
-> (`S100_VECTOR_POLYGON_SIMPLIFY=1`); see [Gating](#gating) for why it is a
-> memory lever rather than a paint optimization. The mechanism below applies
-> only when that flag is set.
-
 `Polygon`/`MultiPolygon` (land areas, depth areas, sea areas — the
-highest-vertex S-101 features) are generalized with NetTopologySuite's
-`TopologyPreservingSimplifier` at `pixelTolerance × resolution` metres
-before the `SKPath` is built. Topology-preserving simplification is
-required because naive per-ring point dropping can self-intersect; TPS
-keeps rings valid and holes well-formed. The result is validated:
+highest-vertex S-101 features) are **fast-pathed and cached vertex-exact**:
+each part's projected `SKPath` is built once per `(feature, position,
+resolution)`, reused across pans under an affine draw matrix, and bounded
+by the cache's coordinate budget. They are **not** geometrically
+simplified.
 
-- `null`/empty result → original polygon (pass-through),
-- `!IsValid` → a `Buffer(0)` repair is attempted; if that is empty or
-  non-polygonal the original polygon is used,
-- any `TopologyException`/`ArgumentException`/`InvalidOperationException`
-  → original polygon.
-
-So an invalid simplification can never reach the rasteriser — the safe
-fallback is always the exact geometry. `MultiPolygon` parts are simplified
-independently (each part keyed by its position). Polygons below
-`MinPolygonVertexCount` (32) skip the NTS pass entirely (already cheap).
+Topology-preserving polygon simplification (NTS `TopologyPreservingSimplifier`
++ `IsValid`/`Buffer(0)` validation) was implemented and **measured, then
+removed**: a live viewer A/B showed it provides **no paint benefit** on the
+GPU path and is reproducibly *worse* under multi-dataset pressure. The
+translation-invariant path cache already neutralizes vertex count on warm
+paints (cache-served, ~0 ms), so dropping vertices cannot make warm paints
+cheaper, while cold builds pay the simplifier cost; under cache pressure
+that cost is re-paid on every rebuild, and GPU (Metal) fill is area-bound,
+not vertex-bound. See `docs/design/mapsui-performance.md` for the data.
 
 ### Gating
 
 A **Simplify dense geometry** setting
 (`RenderingOptimizations.GeometrySimplificationEnabled`, default on) with a
-shared pixel tolerance (`SimplificationTolerancePx`, default 0.6,
-seeded from `S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification —
-the proven, default-on win — and is the only simplification knob surfaced
-in the viewer UI.
-
-**Polygon** simplification is a separate, **env-only experimental opt-in**
-(`RenderingOptimizations.PolygonSimplificationEnabled`, **default off**,
-enabled only by `S100_VECTOR_POLYGON_SIMPLIFY=1`). It has no persisted
-viewer setting or UI checkbox, is gated *in addition* to
-`GeometrySimplificationEnabled` (both must be on), and never runs on the
-default hot path. It is retained as a **memory** lever, not a paint
-optimization: topology-preserving polygon simplification reduces the
-coordinate count of cached paths (composing with the path cache's
-coordinate-budget eviction), but a live viewer A/B showed **no paint
-improvement** on the GPU path — the translation-invariant path cache
-already neutralizes vertex count on warm paints (cache-served, ~0 ms), so
-dropping vertices does not make warm paints cheaper, while cold builds pay
-the `TopologyPreservingSimplifier` cost. Kept opt-in for future evaluation
-(other data, CPU-bound paths, memory-pressure scenarios). See
-`docs/design/mapsui-performance.md`.
+pixel tolerance (`SimplificationTolerancePx`, default 0.6, seeded from
+`S100_VECTOR_SIMPLIFY_PX`) governs **line** simplification — the proven,
+default-on win — and is the only simplification knob. Polygons are always
+vertex-exact and have no simplification toggle.
 
 Simplification requires the path cache (`S100_VECTOR_PATH_CACHE`); changing
-either effective tolerance clears the cache so rebuilt paths reflect the new
+the effective tolerance clears the cache so rebuilt paths reflect the new
 tolerance.
 
 ### Cache (coordinate-budget eviction)
@@ -243,18 +221,14 @@ hold a reference outside the lock); they are reclaimed by GC finalization.
 | Instrument | Unit | Purpose |
 |---|---|---|
 | `s100.simplify.cache.hit.count` | count | Built path served from cache |
-| `s100.simplify.cache.miss.count` | count | Path (re)built — simplification ran |
+| `s100.simplify.cache.miss.count` | count | Path (re)built |
 | `s100.simplify.cache.coords.tracked` | count | Live coords across all cached paths (drives budget eviction) |
-| `s100.simplify.polygon.duration` | ms | Per-polygon TPS cost (miss only) |
-| `s100.simplify.polygon.coords.in` | count | Original polygon vertex count (miss) |
-| `s100.simplify.polygon.coords.out` | count | Simplified polygon vertex count (miss) |
-| `s100.simplify.polygon.invalid.count` | count | Simplifications that fell back to the exact polygon |
 
 ### Known limits
 
 - The miss path runs synchronously on the render (or prebuild) thread.
   After a zoom change the first paint at the new resolution may stall
-  briefly while visible paths are rebuilt/simplified; subsequent frames at
+  briefly while visible paths are rebuilt; subsequent frames at
   that zoom hit the cache, and sustained pan is served by the vector
   snapshot.
 - Lines use a radial-distance filter rather than true Douglas-Peucker;

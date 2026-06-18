@@ -501,8 +501,9 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     private bool _geometrySimplificationEnabled;
     /// <summary>
-    /// Whether resolution-aware geometry simplification (lines and polygons) is
-    /// enabled. The "best" default (on); requires <see cref="VectorPathCacheEnabled"/>.
+    /// Whether resolution-aware <b>line</b> geometry simplification is enabled.
+    /// The "best" default (on); requires <see cref="VectorPathCacheEnabled"/>.
+    /// Polygons are always rendered vertex-exact.
     /// </summary>
     public bool GeometrySimplificationEnabled
     {
@@ -643,9 +644,6 @@ internal sealed class SettingsViewModel : ViewModelBase
         RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
         RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
         RenderingOptimizations.GeometrySimplificationEnabled = _geometrySimplificationEnabled;
-        // Polygon simplification is an env-only experimental opt-in
-        // (S100_VECTOR_POLYGON_SIMPLIFY=1); it has no persisted setting or UI
-        // knob and is never turned on by the line-simplification toggle.
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;

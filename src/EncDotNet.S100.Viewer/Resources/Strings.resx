@@ -851,7 +851,7 @@
     <value>Simplify dense geometry</value>
   </data>
   <data name="Tooltip_GeometrySimplificationEnabled" xml:space="preserve">
-    <value>Drop on-screen sub-pixel detail from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on. (Polygon area simplification is experimental and opt-in only via the S100_VECTOR_POLYGON_SIMPLIFY environment variable.)</value>
+    <value>Drop on-screen sub-pixel detail from dense S-100 line features when building cached paths, so the renderer strokes far fewer segments. Visually indistinguishable at every zoom; requires "Cache projected vector paths". Recommended on. Applies to line features only; polygon areas are always rendered vertex-exact.</value>
   </data>
   <data name="Settings_MapSection" xml:space="preserve">
     <value>Map</value>
