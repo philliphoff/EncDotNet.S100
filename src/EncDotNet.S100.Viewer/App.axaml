@@ -119,5 +119,33 @@
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
+
+        <!--
+          Shared layout for settings whose change takes immediate effect:
+          a label on the left and a caption-less ToggleSwitch flush to the
+          right (the conventional settings-row layout). Used by the Settings
+          and ECDIS Display Controls panels. Apply Classes="settingRow" to a
+          two-column Grid (ColumnDefinitions="*,Auto") holding a TextBlock
+          label and a ToggleSwitch with Classes="setting".
+        -->
+        <Style Selector="ToggleSwitch.setting">
+            <Setter Property="OnContent" Value="" />
+            <Setter Property="OffContent" Value="" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+        <!--
+          ShadUI's ToggleSwitch fills its "on" track with PrimaryColor; point
+          it at the application AccentBrush instead so toggled settings adopt
+          the app accent colour. (Targets the ShadUI template's SwitchBackground
+          part — see ShadUI Controls/Switch/Switch.axaml.)
+        -->
+        <Style Selector="ToggleSwitch.setting /template/ Border#SwitchBackground">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Grid.settingRow > TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
     </Application.Styles>
 </Application>

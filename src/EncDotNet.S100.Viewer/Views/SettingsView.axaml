@@ -171,9 +171,11 @@
                        FontSize="11"
                        Opacity="0.6"
                        TextWrapping="Wrap" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_BasemapEnabled}"
-                      IsChecked="{Binding BasemapEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_BasemapEnabled}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_BasemapEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_BasemapEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding BasemapEnabled}" />
+            </Grid>
 
             <!-- Rendering optimizations (Settings → Map) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
@@ -184,22 +186,30 @@
                        FontSize="11"
                        Opacity="0.6"
                        TextWrapping="Wrap" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}"
-                      IsChecked="{Binding VectorSnapshotEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}"
-                      IsChecked="{Binding VectorSnapshotPrebuildEnabled}"
-                      IsEnabled="{Binding VectorSnapshotEnabled}"
-                      Margin="16,0,0,0"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}"
-                      IsChecked="{Binding VectorPathCacheEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}"
-                      IsChecked="{Binding GeometrySimplificationEnabled}"
-                      IsEnabled="{Binding VectorPathCacheEnabled}"
-                      Margin="16,0,0,0"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotEnabled}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  Margin="16,0,0,0"
+                  IsEnabled="{Binding VectorSnapshotEnabled}"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotPrebuildEnabled}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorPathCacheEnabled}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  Margin="16,0,0,0"
+                  IsEnabled="{Binding VectorPathCacheEnabled}"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
+            </Grid>
 
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />
@@ -279,27 +289,41 @@
             </StackPanel>
 
             <!-- S-101 toggles -->
-            <CheckBox Content="{x:Static loc:Strings.Settings_FourShades}"
-                      IsChecked="{Binding FourShades}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_ShallowWaterDangers}"
-                      IsChecked="{Binding ShallowWaterDangers}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_PlainBoundaries}"
-                      IsChecked="{Binding PlainBoundaries}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_SimplifiedSymbols}"
-                      IsChecked="{Binding SimplifiedSymbols}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_FullLightLines}"
-                      IsChecked="{Binding FullLightLines}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_RadarOverlay}"
-                      IsChecked="{Binding RadarOverlay}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"
-                      IsChecked="{Binding IgnoreScaleMinimum}"
-                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FourShades}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FourShades}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShallowWaterDangers}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShallowWaterDangers}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_PlainBoundaries}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PlainBoundaries}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_SimplifiedSymbols}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding SimplifiedSymbols}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FullLightLines}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FullLightLines}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_RadarOverlay}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding RadarOverlay}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IgnoreScaleMinimum}" />
+            </Grid>
 
             <!-- National Language -->
             <StackPanel Spacing="6">
@@ -327,9 +351,11 @@
             <TextBlock Text="{x:Static loc:Strings.Settings_OwnVesselSection_Help}"
                        TextWrapping="Wrap"
                        Opacity="0.75" />
-            <CheckBox IsChecked="{Binding OwnShipOverlayEnabled}"
-                      Content="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled_Tooltip}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled_Tooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding OwnShipOverlayEnabled}" />
+            </Grid>
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_Length}"
                            FontSize="12" />
@@ -377,9 +403,11 @@
                        FontSize="12"
                        FontWeight="SemiBold"
                        Margin="0,12,0,0" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_McpEnabled}"
-                      IsChecked="{Binding McpEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Settings_McpEnabledTooltip}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_McpEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_McpEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding McpEnabled}" />
+            </Grid>
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_McpPort}"
                            FontSize="12"
@@ -409,9 +437,11 @@
                        FontSize="11"
                        Opacity="0.6"
                        TextWrapping="Wrap" />
-            <CheckBox Content="{x:Static loc:Strings.Settings_AisEnabled}"
-                      IsChecked="{Binding AisEnabled}"
-                      ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_AisEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding AisEnabled}" />
+            </Grid>
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_AisApiKey}"
                            FontSize="12"

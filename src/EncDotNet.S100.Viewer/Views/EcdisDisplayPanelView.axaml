@@ -48,14 +48,16 @@
                                FontWeight="SemiBold"
                                LetterSpacing="0.5"
                                Opacity="0.7" />
-                    <CheckBox IsChecked="{Binding IsUnderRadarVisible}"
-                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_UnderRadar}">
-                        <TextBlock Text="{x:Static loc:Strings.DisplayPlane_UnderRadar}" />
-                    </CheckBox>
-                    <CheckBox IsChecked="{Binding IsOverRadarVisible}"
-                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_OverRadar}">
-                        <TextBlock Text="{x:Static loc:Strings.DisplayPlane_OverRadar}" />
-                    </CheckBox>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_UnderRadar}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.DisplayPlane_UnderRadar}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsUnderRadarVisible}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_OverRadar}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.DisplayPlane_OverRadar}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsOverRadarVisible}" />
+                    </Grid>
                 </StackPanel>
 
                 <!-- Global reset -->
@@ -99,7 +101,7 @@
                                     <ItemsControl ItemsSource="{Binding Sections}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:EcdisViewingGroupSectionViewModel">
-                                                <StackPanel Spacing="2" Margin="0,4,0,0">
+                                                <StackPanel Spacing="2" Margin="0,12,0,0">
                                                     <TextBlock Text="{Binding Title}"
                                                                IsVisible="{Binding HasTitle}"
                                                                FontSize="11"
@@ -110,12 +112,19 @@
                                                     <ItemsControl ItemsSource="{Binding ViewingGroups}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate x:DataType="vm:EcdisViewingGroupViewModel">
-                                                                <CheckBox IsChecked="{Binding IsVisible}"
-                                                                          ToolTip.Tip="{Binding Tooltip}"
-                                                                          Margin="0,1">
-                                                                    <TextBlock Text="{Binding DisplayLabel}"
+                                                                <!-- Left margin indents sub-section rows; right margin
+                                                                     keeps the right-aligned switch clear of the panel edge. -->
+                                                                <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                                                                      Margin="12,1,12,1"
+                                                                      ToolTip.Tip="{Binding Tooltip}">
+                                                                    <TextBlock Grid.Column="0"
+                                                                               Text="{Binding DisplayLabel}"
+                                                                               TextWrapping="NoWrap"
                                                                                TextTrimming="CharacterEllipsis" />
-                                                                </CheckBox>
+                                                                    <ToggleSwitch Grid.Column="1"
+                                                                                  Classes="setting"
+                                                                                  IsChecked="{Binding IsVisible}" />
+                                                                </Grid>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
