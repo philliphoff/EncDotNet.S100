@@ -148,7 +148,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 - **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop. **✅ Done** — `S100VectorSceneRenderer`; on-screen paint worst case ~409 ms → ~5 ms (Appendix B). Base-plane parity holds; residual point-feature deltas trace to A's own portrayal bug, not B.
 - **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script. **✅ Done** — `TileGrid` + `TileCache` + `S100VectorTileRenderer` (Appendix C). Origin-anchored web-mercator pyramid keeps interior tiles pan-stable; on-screen paint stayed bounded (≤ ~37 ms worst case vs A's ~409 ms) with no visible seams.
 - **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0. **✅ Done** — EMA-velocity warm set (1-ring halo ∪ directional fan ∪ z±1 centre) on a low-priority queue behind `S100VectorTileRenderer`, gated by `S100_VECTOR_TILE_PREDICT` (Appendix D). Prediction-on/off A/B over a 20-step pan: cold-frame fraction **58% → 16%** (residual is cold start, not the pan); hit-rate ~32%.
-- **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles.
+- **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles. **✅ Done (core)** — persistent warm disk cache (`TileDiskCache`) keyed by a namespace folding `productLayerSet` + `styleStateHash`, so a tile is never served for a different mariner/palette state (Appendix E). The in-memory hot cache is already fresh per layer (a settings change rebuilds the layer), so in-memory stale exposure was structurally impossible; the hash extends that guarantee to the persistent tier. **Deferred:** the Label-plane extraction is held per the §4 principle *"labels stay on Mapsui through Phase 4"*; the Dynamic plane already exists and is reused unchanged.
 - **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode.
 
 ---
@@ -453,3 +453,76 @@ warm-set rasterisation, which never blocks an on-screen fill.
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
 - A disk-backed tile cache + `styleStateHash` invalidation (palette/settings)
   with visible-first re-raster is Phase 4.
+
+## Appendix E — Phase 4 findings (warm disk cache + `styleStateHash`)
+
+Phase 4 adds the **warm** (persistent) tier below the in-memory hot tile cache,
+and the `styleStateHash` that makes both tiers safe across mariner/palette state.
+
+### E.1 In-memory invalidation is already structural
+
+A settings/palette change rebuilds the chart layer from scratch
+(`MapsuiDatasetRenderer.RenderAsync` produces a fresh `ILayer` with the new
+palette each pass), and the tile state is held in a `ConditionalWeakTable` keyed
+by layer. So a new layer starts with an **empty** hot cache — there is no path by
+which a stale in-memory tile from the prior style state can be composited. The
+Phase 4 exit criterion ("a setting change never shows stale portrayal on visible
+tiles") is therefore met for the hot tier without extra machinery; visible-first
+re-raster is the existing Phase 2/3 behaviour.
+
+### E.2 The persistent tier needs the hash
+
+A disk cache is shared across layers and sessions, so it **can** outlive a style
+change — that is the whole point (a palette flip-back should reuse warm tiles).
+The safety mechanism is the cache **namespace**:
+`SHA-256(productLayerSet | styleStateHash)`, a per-style-state subdirectory.
+`styleStateHash` is computed in `MapsuiDisplayListRenderer` as
+`SHA-256(palette + symbol/text scale ++ DrawingInstructionSerializer(instructions))`.
+The serialized instruction list already encodes the active display category, the
+selected safety contour, and every other setting that changes *which* features
+and *which* portrayal are drawn; the serializer's `FormatVersion` is folded in
+implicitly (it is the first field). A change to any input yields a different
+namespace, so old tiles are simply orphaned and reclaimed by the byte-budget LRU
+sweep — never served stale. A hash *collision* is the only stale-portrayal risk,
+and SHA-256 over the full resolved content makes that negligible; a spurious hash
+*difference* only costs a re-rasterise.
+
+### E.3 Cache mechanics
+
+`TileDiskCache` mirrors the proven `DiskPortrayalInstructionCache` robustness
+contract: atomic temp-file + move writes, mtime-stamped LRU eviction to a soft
+byte budget, and treat-any-error-as-a-miss. PNG encode/decode runs **outside**
+the lock so concurrent workers do not serialise on the codec; the cap sweep is
+throttled (every 32nd write) because it enumerates the tree. The worker tries the
+disk cache before re-rasterising a hot-cache miss and persists each freshly
+rasterised tile while it still solely owns the image (before handing it to the
+hot cache), so a concurrent eviction can never dispose it mid-encode. Knobs:
+`S100_VECTOR_TILE_DISK` (default on), `S100_VECTOR_TILE_DISK_DIR` (default a
+subdirectory of the OS temp path), `S100_VECTOR_TILE_DISK_MB` (default 512).
+
+### E.4 Verification (reference cell `101AU005PDB01.000`, MCP)
+
+A scripted run panned the chart under the Day palette (writing tiles), flipped to
+Night, then back to Day:
+
+- the disk cache held **two namespaces** — one for Day, one for Night — confirming
+  physical separation by style state (a Night tile is never readable under the
+  Day namespace);
+- **163** tiles were persisted (`tile.disk.writes`);
+- **198** tiles were served warm from disk (`tile.disk.hits`) on the Day
+  flip-back / re-pan instead of being re-rasterised.
+
+The `TileDiskCacheTests` pin the same properties as unit tests, including the
+namespace-isolation safety property and the byte-budget eviction.
+
+### E.5 Open follow-ups (Phase 5+)
+
+- **Label plane.** Free-floating text is still rasterised into the base tiles
+  (the §B.3 / §C tofu-label items). Pulling labels into a live, untiled plane —
+  for S-52 decluttering and rotation correctness — is the next structural step,
+  deferred here per the §4 principle that labels stay on Mapsui through Phase 4.
+- **Instruction-level warm cache.** The disk tier stores *pixels*; if palette-flip
+  cost dominates, caching serialized instructions (above colour resolution) would
+  let day/dusk/night re-resolve cheaply instead of re-rendering (design §3.4).
+- **GPU residency** of recently-used tiles (Phase 5), gated on the foreground
+  surface being GPU-backed.

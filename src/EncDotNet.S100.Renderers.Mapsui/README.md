@@ -588,6 +588,34 @@ Prediction is on by default and is a first-class A/B knob:
 fell from **58 % → 16 %** (the residual is the cold start, not the pan), at a
 ~32 % prediction hit-rate; the steady-pan window itself was entirely zero-cold.
 
+### Persistent warm disk cache + `styleStateHash` (Phase 4)
+
+Below the in-memory hot cache sits a **persistent, on-disk warm tier**
+(`TileDiskCache`, design doc Appendix E): PNG-encoded tiles that survive a layer
+rebuild (a palette flip-back re-uses them) and a process restart. A tile missing
+from the hot cache is decoded from disk on the worker before any re-rasterise,
+and each freshly rasterised tile is persisted for future reuse.
+
+Correctness comes from the cache **namespace**,
+`SHA-256(productLayerSet | styleStateHash)` — a per-style-state subdirectory.
+The `styleStateHash` (computed in `MapsuiDisplayListRenderer`) folds the palette,
+symbol/text scales, and a deterministic serialization of the drawing
+instructions (which already encode display category, safety contour, and every
+feature/portrayal selection). A change to any of those yields a different
+namespace, so **a tile is never served from disk for a different mariner/palette
+state** — old tiles are orphaned and reclaimed by the byte-budget LRU sweep. The
+in-memory tier is already fresh per layer (a settings change rebuilds the layer),
+so this extends the no-stale-portrayal guarantee to the persistent tier.
+
+The cache mirrors `DiskPortrayalInstructionCache`: atomic temp+move writes,
+mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss; PNG codec
+work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),
+`S100_VECTOR_TILE_DISK_DIR` (default an OS-temp subdirectory),
+`S100_VECTOR_TILE_DISK_MB` (default 512). Telemetry counters
+`s100.render.tile.disk.hits` / `.writes`. **Verified (PDB01):** a Day→Night→Day
+palette flip produced two separate namespaces (no cross-style sharing); 163 tiles
+persisted, 198 served warm from disk on the flip-back instead of re-rasterising.
+
 ## Installation
 
 ```sh
