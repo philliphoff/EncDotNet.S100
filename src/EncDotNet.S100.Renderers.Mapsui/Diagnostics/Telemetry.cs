@@ -299,6 +299,43 @@ internal static class Telemetry
             unit: "ms",
             description: "Wall-clock duration of one UI-thread tile composite pass (best-available blits of visible tiles) by the tiled TiledScene render subsystem.");
 
+    /// <summary>
+    /// Count of <b>visible exact-band tiles missing from the cache</b> at one
+    /// composite pass (the tiled <c>TiledScene</c> arm, Phase&#160;3). This is the
+    /// "cold-tile exposure" signal: every such tile is a slot the compositor has
+    /// to fill from a scaled fallback band instead of the crisp target. The
+    /// Phase&#160;3 exit criterion is that this drops to ≈0 during a scripted pan
+    /// once prediction (<see cref="S100VectorTileRenderer"/>) pre-warms the
+    /// perimeter. See <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.6.
+    /// </summary>
+    public static readonly Histogram<int> TileColdExposure =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.cold.exposure",
+            unit: "{tile}",
+            description: "Number of visible exact-band tiles absent from cache at one composite pass by the tiled TiledScene render subsystem (cold-tile exposure).");
+
+    /// <summary>
+    /// Count of tiles rasterised <b>speculatively</b> (as part of the prediction
+    /// warm set, not because they were visible) by the tiled <c>TiledScene</c>
+    /// arm. The denominator of the prediction hit-rate. See §3.6.
+    /// </summary>
+    public static readonly Counter<long> TilePredictionRasterized =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.prediction.rasterized",
+            unit: "{tile}",
+            description: "Tiles rasterised speculatively by the tiled TiledScene prediction warm set.");
+
+    /// <summary>
+    /// Count of speculatively-rasterised tiles that <b>subsequently became
+    /// visible while still cached</b> — a successful prediction. Divided by
+    /// <see cref="TilePredictionRasterized"/> this is the prediction hit-rate. See §3.6.
+    /// </summary>
+    public static readonly Counter<long> TilePredictionHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.prediction.hits",
+            unit: "{tile}",
+            description: "Speculatively-rasterised tiles that later became visible while cached (prediction hits) in the tiled TiledScene render subsystem.");
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);

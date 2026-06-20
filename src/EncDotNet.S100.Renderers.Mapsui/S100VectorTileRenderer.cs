@@ -129,7 +129,15 @@ public static class S100VectorTileRenderer
             state.Generation++;
             state.Cache.Clear();
             state.InFlight.Clear();
-            state.Pending.Clear();
+            state.PendingVisible.Clear();
+            state.PendingPredicted.Clear();
+            state.PredictedInCache.Clear();
+            // A new scene is a teleport for prediction: drop the stale velocity
+            // anchor so the first frame doesn't fling the fan in a random
+            // direction.
+            state.HasLastCenter = false;
+            state.VelocityX = 0;
+            state.VelocityY = 0;
         }
     }
 
@@ -171,6 +179,8 @@ public static class S100VectorTileRenderer
         var visible = TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band);
 
         var startWorker = false;
+        var coldExposure = 0;
+        var predictionHits = 0L;
         var compositeStart = Stopwatch.GetTimestamp();
         lock (state.Sync)
         {
@@ -179,20 +189,52 @@ public static class S100VectorTileRenderer
                 return;
             }
 
-            // Enqueue visible misses (replace the pending set every frame so
-            // tiles panned out of view are dropped before they render).
-            state.Pending.Clear();
+            UpdateVelocity(state, centerX, centerY);
+
+            // Enqueue visible misses at high priority (replace the pending set
+            // every frame so tiles panned out of view are dropped — cancellation).
+            state.PendingVisible.Clear();
+            var visibleSet = new HashSet<TileKey>(visible.Count);
             foreach (var key in visible)
             {
-                if (!state.Cache.Contains(key) && !state.InFlight.Contains(key))
+                visibleSet.Add(key);
+                if (state.Cache.Contains(key))
                 {
-                    state.Pending.Add(key);
+                    // A tile we rasterised speculatively is now actually visible:
+                    // a prediction hit. Count it once.
+                    if (state.PredictedInCache.Remove(key))
+                    {
+                        predictionHits++;
+                    }
+                }
+                else
+                {
+                    coldExposure++;
+                    if (!state.InFlight.Contains(key))
+                    {
+                        state.PendingVisible.Add(key);
+                    }
                 }
             }
 
-            if (state.Pending.Count > 0)
+            // Enqueue the prediction warm set at low priority (visible-first in
+            // the worker). Excludes visible / cached / in-flight tiles.
+            state.PendingPredicted.Clear();
+            var predicted = TileGrid.PredictedTiles(
+                centerX, centerY, widthDip, heightDip, resolution, band,
+                state.VelocityX, state.VelocityY);
+            foreach (var key in predicted)
             {
-                state.PendingBand = band;
+                if (!visibleSet.Contains(key)
+                    && !state.Cache.Contains(key)
+                    && !state.InFlight.Contains(key))
+                {
+                    state.PendingPredicted.Add(key);
+                }
+            }
+
+            if (state.PendingVisible.Count > 0 || state.PendingPredicted.Count > 0)
+            {
                 state.PendingDeviceScale = deviceScale;
                 state.PendingGeneration = state.Generation;
                 if (!state.Rendering)
@@ -202,16 +244,55 @@ public static class S100VectorTileRenderer
                 }
             }
 
+            // Bound the prediction-hit bookkeeping: a tile predicted then
+            // evicted before it was ever shown would otherwise linger. When the
+            // set grows past the cache's own capacity, drop keys no longer
+            // resident (those can never score a hit).
+            if (state.PredictedInCache.Count > state.Cache.Count + 256)
+            {
+                state.PredictedInCache.RemoveWhere(k => !state.Cache.Contains(k));
+            }
+
             Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution);
         }
 
         S100Diag.Telemetry.TileCompositeDuration.Record(
             Stopwatch.GetElapsedTime(compositeStart).TotalMilliseconds);
+        S100Diag.Telemetry.TileColdExposure.Record(coldExposure);
+        if (predictionHits > 0)
+        {
+            S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
+        }
 
         if (startWorker)
         {
             _ = Task.Run(() => Worker(state));
         }
+    }
+
+    /// <summary>
+    /// Folds the current viewport centre into the per-layer velocity EMA (held
+    /// under <c>state.Sync</c>), aiming the prediction fan. A teleport (no prior
+    /// sample, or the scene/generation just changed) seeds the anchor without
+    /// emitting a spurious velocity.
+    /// </summary>
+    private static void UpdateVelocity(TileState state, double centerX, double centerY)
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (state.HasLastCenter)
+        {
+            var dt = Stopwatch.GetElapsedTime(state.LastCenterTimestamp).TotalSeconds;
+            var (vx, vy) = VelocityEstimator.Update(
+                state.VelocityX, state.VelocityY,
+                centerX - state.LastCenterX, centerY - state.LastCenterY, dt);
+            state.VelocityX = vx;
+            state.VelocityY = vy;
+        }
+
+        state.LastCenterX = centerX;
+        state.LastCenterY = centerY;
+        state.LastCenterTimestamp = now;
+        state.HasLastCenter = true;
     }
 
     /// <summary>
@@ -292,21 +373,33 @@ public static class S100VectorTileRenderer
         while (true)
         {
             TileKey key;
-            int band;
             float deviceScale;
             long generation;
             VectorScene scene;
+            bool isPrediction;
 
             lock (state.Sync)
             {
-                if (state.Scene is null || state.Pending.Count == 0)
+                // Visible tiles always drain before speculative ones, so
+                // prediction work yields to anything actually on screen.
+                if (state.Scene is null
+                    || (state.PendingVisible.Count == 0 && state.PendingPredicted.Count == 0))
                 {
                     state.Rendering = false;
                     return;
                 }
 
-                key = TakeOne(state.Pending);
-                band = state.PendingBand;
+                if (state.PendingVisible.Count > 0)
+                {
+                    key = TakeOne(state.PendingVisible);
+                    isPrediction = false;
+                }
+                else
+                {
+                    key = TakeOne(state.PendingPredicted);
+                    isPrediction = true;
+                }
+
                 deviceScale = state.PendingDeviceScale;
                 generation = state.PendingGeneration;
                 scene = state.Scene;
@@ -336,11 +429,21 @@ public static class S100VectorTileRenderer
                 {
                     state.Cache.Put(key, image);
                     published = true;
+                    if (isPrediction)
+                    {
+                        // Track so a later visible frame can score it as a hit.
+                        state.PredictedInCache.Add(key);
+                    }
                 }
                 else
                 {
                     image?.Dispose();
                 }
+            }
+
+            if (isPrediction)
+            {
+                S100Diag.Telemetry.TilePredictionRasterized.Add(1);
             }
 
             if (published)
@@ -416,10 +519,24 @@ public static class S100VectorTileRenderer
 
         public readonly TileCache Cache = new(BudgetBytes);
         public readonly HashSet<TileKey> InFlight = new();
-        public readonly HashSet<TileKey> Pending = new();
+
+        // Visible misses drain before speculative (predicted) tiles.
+        public readonly HashSet<TileKey> PendingVisible = new();
+        public readonly HashSet<TileKey> PendingPredicted = new();
+
+        // Speculatively-rasterised tiles still resident and not yet shown; a
+        // later visible frame that finds one scores a prediction hit.
+        public readonly HashSet<TileKey> PredictedInCache = new();
+
+        // Viewport-centre velocity EMA (EPSG:3857 m/s) for the prediction fan.
+        public double VelocityX;
+        public double VelocityY;
+        public double LastCenterX;
+        public double LastCenterY;
+        public long LastCenterTimestamp;
+        public bool HasLastCenter;
 
         public bool Rendering;
-        public int PendingBand;
         public float PendingDeviceScale = 1f;
         public long PendingGeneration;
     }

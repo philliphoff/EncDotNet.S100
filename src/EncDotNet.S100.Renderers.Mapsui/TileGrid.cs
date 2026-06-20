@@ -33,7 +33,54 @@ internal readonly record struct ScreenRect(double Left, double Top, double Right
 }
 
 /// <summary>
-/// Pure, origin-anchored EPSG:3857 tile-grid math for the tiled base plane
+/// An inclusive, world-clamped range of tile indices at one band, as returned by
+/// <see cref="TileGrid.VisibleTileRange"/>. <see cref="IsEmpty"/> is true when
+/// the source viewport was degenerate.
+/// </summary>
+internal readonly record struct TileRange(int XStart, int XEnd, int YStart, int YEnd, int PerAxis)
+{
+    /// <summary>True when the range covers no tiles.</summary>
+    public bool IsEmpty => XStart > XEnd || YStart > YEnd;
+}
+
+/// <summary>
+/// A pure exponential-moving-average estimator of viewport-centre velocity in
+/// EPSG:3857 metres/second, used to aim the prediction fan
+/// (<see cref="TileGrid.PredictedTiles"/>, design §3.6). Kept Skia-free and
+/// allocation-light so it can live in the per-layer state and be unit-tested.
+/// </summary>
+internal static class VelocityEstimator
+{
+    /// <summary>The default EMA smoothing factor (0 = ignore new, 1 = no smoothing).</summary>
+    public const double DefaultAlpha = 0.4;
+
+    /// <summary>
+    /// Folds one centre move into the running velocity EMA. The instantaneous
+    /// velocity is <c>(dx, dy) / dtSeconds</c>; the result is
+    /// <c>(1-alpha)·previous + alpha·instant</c>. A non-positive
+    /// <paramref name="dtSeconds"/> returns the previous estimate unchanged (no
+    /// time elapsed → no new information), which also damps jitter from
+    /// zero-interval frames.
+    /// </summary>
+    public static (double VelocityX, double VelocityY) Update(
+        double previousVelocityX, double previousVelocityY,
+        double dx, double dy, double dtSeconds, double alpha = DefaultAlpha)
+    {
+        if (dtSeconds <= 0 || double.IsNaN(dtSeconds) || double.IsInfinity(dtSeconds))
+        {
+            return (previousVelocityX, previousVelocityY);
+        }
+
+        alpha = Math.Clamp(alpha, 0.0, 1.0);
+        var instantX = dx / dtSeconds;
+        var instantY = dy / dtSeconds;
+        return (
+            (1 - alpha) * previousVelocityX + alpha * instantX,
+            (1 - alpha) * previousVelocityY + alpha * instantY);
+    }
+}
+
+
 /// (S-100 render subsystem, Phase&#160;2). Uses the standard Web-Mercator
 /// power-of-two pyramid (256-DIP tiles, the same scheme Mapsui's own tile
 /// layers use), so a constant-zoom pan reuses every interior tile and only the
@@ -120,41 +167,167 @@ internal static class TileGrid
         double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
     {
         var result = new List<TileKey>();
-        if (widthDip <= 0 || heightDip <= 0 || resolution <= 0)
+        var range = VisibleTileRange(centerX, centerY, widthDip, heightDip, resolution, band);
+        for (var y = range.YStart; y <= range.YEnd; y++)
         {
-            return result;
-        }
-
-        var halfW = widthDip * 0.5 * resolution;
-        var halfH = heightDip * 0.5 * resolution;
-        var minX = centerX - halfW;
-        var maxX = centerX + halfW;
-        var minY = centerY - halfH;
-        var maxY = centerY + halfH;
-
-        var size = TileWorldSize(band);
-        var perAxis = TilesPerAxis(band);
-
-        var xStart = (int)Math.Floor((minX + Extent) / size);
-        var xEnd = (int)Math.Floor((maxX + Extent) / size);
-        // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
-        var yStart = (int)Math.Floor((Extent - maxY) / size);
-        var yEnd = (int)Math.Floor((Extent - minY) / size);
-
-        xStart = Math.Clamp(xStart, 0, perAxis - 1);
-        xEnd = Math.Clamp(xEnd, 0, perAxis - 1);
-        yStart = Math.Clamp(yStart, 0, perAxis - 1);
-        yEnd = Math.Clamp(yEnd, 0, perAxis - 1);
-
-        for (var y = yStart; y <= yEnd; y++)
-        {
-            for (var x = xStart; x <= xEnd; x++)
+            for (var x = range.XStart; x <= range.XEnd; x++)
             {
                 result.Add(new TileKey(band, x, y));
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The inclusive, world-clamped tile-index range covering the north-up
+    /// viewport at <paramref name="band"/>. A degenerate viewport yields an empty
+    /// range (<c>XStart &gt; XEnd</c>). Shared by <see cref="VisibleTiles"/> and
+    /// <see cref="PredictedTiles"/> so both tile the viewport identically.
+    /// </summary>
+    public static TileRange VisibleTileRange(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
+    {
+        var perAxis = TilesPerAxis(band);
+        if (widthDip <= 0 || heightDip <= 0 || resolution <= 0)
+        {
+            return new TileRange(0, -1, 0, -1, perAxis);
+        }
+
+        var halfW = widthDip * 0.5 * resolution;
+        var halfH = heightDip * 0.5 * resolution;
+        var size = TileWorldSize(band);
+
+        var xStart = (int)Math.Floor((centerX - halfW + Extent) / size);
+        var xEnd = (int)Math.Floor((centerX + halfW + Extent) / size);
+        // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
+        var yStart = (int)Math.Floor((Extent - (centerY + halfH)) / size);
+        var yEnd = (int)Math.Floor((Extent - (centerY - halfH)) / size);
+
+        return new TileRange(
+            Math.Clamp(xStart, 0, perAxis - 1),
+            Math.Clamp(xEnd, 0, perAxis - 1),
+            Math.Clamp(yStart, 0, perAxis - 1),
+            Math.Clamp(yEnd, 0, perAxis - 1),
+            perAxis);
+    }
+
+    /// <summary>
+    /// The <b>warm set</b> for prediction/pre-warm (design §3.6): tiles likely to
+    /// become visible soon, so the worker can rasterise them <i>before</i> a pan
+    /// or zoom exposes them. It is the union of
+    /// <list type="bullet">
+    /// <item>a <paramref name="haloRings"/>-ring halo around the visible range
+    /// (covers a pan in any direction);</item>
+    /// <item>a <b>directional fan</b> projected along the velocity
+    /// (<paramref name="velocityX"/>, <paramref name="velocityY"/> in EPSG:3857
+    /// m/s), whose depth grows with speed up to <paramref name="maxFanDepth"/>
+    /// tiles (anticipates a fling); and</item>
+    /// <item>the centre tiles at <c>band ± 1</c> (a slight zoom bias).</item>
+    /// </list>
+    /// Visible tiles are excluded (the caller rasterises those at higher
+    /// priority). All indices are world-clamped, so no out-of-range key escapes.
+    /// </summary>
+    public static IReadOnlyList<TileKey> PredictedTiles(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band,
+        double velocityX, double velocityY,
+        double lookAheadSeconds = 0.5, int maxFanDepth = 4, int haloRings = 1)
+    {
+        var result = new List<TileKey>();
+        var visible = VisibleTileRange(centerX, centerY, widthDip, heightDip, resolution, band);
+        if (visible.IsEmpty)
+        {
+            return result;
+        }
+
+        var seen = new HashSet<TileKey>();
+        var perAxis = visible.PerAxis;
+
+        // Mark the visible range so we never emit a visible key as "predicted".
+        for (var y = visible.YStart; y <= visible.YEnd; y++)
+        {
+            for (var x = visible.XStart; x <= visible.XEnd; x++)
+            {
+                seen.Add(new TileKey(band, x, y));
+            }
+        }
+
+        // 1) Halo: expand the visible range by haloRings on every side.
+        haloRings = Math.Max(haloRings, 0);
+        AddRange(
+            result, seen, band,
+            visible.XStart - haloRings, visible.XEnd + haloRings,
+            visible.YStart - haloRings, visible.YEnd + haloRings,
+            perAxis);
+
+        // 2) Directional fan: step the viewport forward along the velocity,
+        //    depth proportional to speed (capped), and add each shifted range.
+        var speed = Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
+        if (speed > 0 && lookAheadSeconds > 0 && maxFanDepth > 0)
+        {
+            var size = TileWorldSize(band);
+            var aheadTiles = speed * lookAheadSeconds / size;
+            var depth = Math.Clamp((int)Math.Ceiling(aheadTiles), 1, maxFanDepth);
+            var stepX = velocityX / speed * size;
+            var stepY = velocityY / speed * size;
+            for (var d = 1; d <= depth; d++)
+            {
+                var shifted = VisibleTileRange(
+                    centerX + stepX * d, centerY + stepY * d, widthDip, heightDip, resolution, band);
+                if (!shifted.IsEmpty)
+                {
+                    AddRange(
+                        result, seen, band,
+                        shifted.XStart, shifted.XEnd, shifted.YStart, shifted.YEnd, perAxis);
+                }
+            }
+        }
+
+        // 3) Zoom bias: the centre tiles at band ± 1.
+        AddCenterTile(result, seen, centerX, centerY, band - 1);
+        AddCenterTile(result, seen, centerX, centerY, band + 1);
+
+        return result;
+    }
+
+    private static void AddRange(
+        List<TileKey> result, HashSet<TileKey> seen, int band,
+        int xStart, int xEnd, int yStart, int yEnd, int perAxis)
+    {
+        xStart = Math.Clamp(xStart, 0, perAxis - 1);
+        xEnd = Math.Clamp(xEnd, 0, perAxis - 1);
+        yStart = Math.Clamp(yStart, 0, perAxis - 1);
+        yEnd = Math.Clamp(yEnd, 0, perAxis - 1);
+        for (var y = yStart; y <= yEnd; y++)
+        {
+            for (var x = xStart; x <= xEnd; x++)
+            {
+                var key = new TileKey(band, x, y);
+                if (seen.Add(key))
+                {
+                    result.Add(key);
+                }
+            }
+        }
+    }
+
+    private static void AddCenterTile(
+        List<TileKey> result, HashSet<TileKey> seen, double centerX, double centerY, int band)
+    {
+        if (band < MinBand || band > MaxBand)
+        {
+            return;
+        }
+
+        var size = TileWorldSize(band);
+        var perAxis = TilesPerAxis(band);
+        var x = Math.Clamp((int)Math.Floor((centerX + Extent) / size), 0, perAxis - 1);
+        var y = Math.Clamp((int)Math.Floor((Extent - centerY) / size), 0, perAxis - 1);
+        var key = new TileKey(band, x, y);
+        if (seen.Add(key))
+        {
+            result.Add(key);
+        }
     }
 
     /// <summary>
