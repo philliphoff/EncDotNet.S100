@@ -85,6 +85,16 @@ public interface IPortrayalAssetCache
     /// (and re-opening the underlying colour-profile assets).
     /// </summary>
     bool PalettesLoaded { get; set; }
+
+    /// <summary>
+    /// Serializes the one-shot palette load across catalogues that share this
+    /// cache. Multiple datasets of the same spec (for example, every cell of
+    /// one S-101 exchange set) load on separate threads but share a single
+    /// per-spec cache; without this gate they would race to populate the
+    /// non-thread-safe palette dictionary or observe it half-populated. See
+    /// issue #321.
+    /// </summary>
+    SemaphoreSlim PaletteLoadGate { get; }
 }
 
 /// <summary>
@@ -149,4 +159,7 @@ public sealed class PortrayalAssetCache : IPortrayalAssetCache
 
     /// <inheritdoc/>
     public bool PalettesLoaded { get; set; }
+
+    /// <inheritdoc/>
+    public SemaphoreSlim PaletteLoadGate { get; } = new(1, 1);
 }

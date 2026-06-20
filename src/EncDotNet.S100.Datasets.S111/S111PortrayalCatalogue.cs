@@ -71,13 +71,18 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
         await EnsureSpeedBandsLoadedAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!_cache.Palettes.TryGetValue(type, out var palette))
+        if (_cache.Palettes.TryGetValue(type, out var palette))
         {
-            throw new KeyNotFoundException($"Color palette '{type}' not found in the S-111 portrayal catalogue.");
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
+            ActivePalette = palette;
+            return;
         }
 
-        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
-        ActivePalette = palette;
+        // Graceful fallback rather than throwing (issue #321): prefer Day, then
+        // any loaded palette, then the built-in default.
+        ActivePalette = _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette)
+            ? dayPalette
+            : _cache.Palettes.Values.FirstOrDefault() ?? ColorPalette.Default;
     }
 
     /// <summary>
@@ -134,18 +139,21 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// first access. Subsequent calls are a no-op thanks to the sticky
     /// <see cref="IPortrayalAssetCache.PalettesLoaded"/> flag.
     /// </summary>
-    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_cache.PalettesLoaded)
-        {
-            if (ActivePalette.Colors.Count == 0
-                && _cache.Palettes.TryGetValue(PaletteType.Day, out var cachedDay))
-            {
-                ActivePalette = cachedDay;
-            }
-            return;
-        }
+    private ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken) =>
+        PaletteLoadCoordinator.EnsureLoadedAsync(
+            _cache, LoadPalettesIntoCacheAsync, ApplyDayPalette, cancellationToken);
 
+    private void ApplyDayPalette()
+    {
+        if (ActivePalette.Colors.Count == 0
+            && _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        {
+            ActivePalette = dayPalette;
+        }
+    }
+
+    private async ValueTask LoadPalettesIntoCacheAsync(CancellationToken cancellationToken)
+    {
         var colorProfileItem = _provider.Catalogue.ColorProfiles.FirstOrDefault()
             ?? throw new InvalidOperationException("S-111 portrayal catalogue does not contain a color profile.");
 
@@ -163,13 +171,6 @@ public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
             {
                 _cache.Palettes[type] = palette;
             }
-        }
-
-        _cache.PalettesLoaded = true;
-
-        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
-        {
-            ActivePalette = dayPalette;
         }
     }
 

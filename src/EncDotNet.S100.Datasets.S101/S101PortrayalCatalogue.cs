@@ -58,17 +58,39 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// When the requested palette cannot be resolved (for example, a portrayal
+    /// catalogue whose colour profile is absent, malformed, or in a format the
+    /// reader does not support), this method degrades gracefully rather than
+    /// throwing: it falls back to the Day palette, then to any palette that did
+    /// load, and finally to <see cref="ColorPalette.Default"/>. This mirrors the
+    /// behaviour of <c>GmlPortrayalCatalogueBase.SwitchPaletteAsync</c> so a
+    /// colour-profile problem yields a usable render with a diagnostic instead
+    /// of aborting the whole dataset load. See issue #321.
+    /// </remarks>
     public async ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!_cache.Palettes.TryGetValue(type, out var palette))
+        if (_cache.Palettes.TryGetValue(type, out var palette))
         {
-            throw new KeyNotFoundException($"Color palette '{type}' not found in the portrayal catalogue.");
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
+            ActivePalette = palette;
+            return;
         }
 
-        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
-        ActivePalette = palette;
+        // Graceful fallback: prefer Day, then any loaded palette, then the
+        // built-in default. The active palette never becomes null, so the
+        // renderer can still resolve colour tokens (falling back to black).
+        var fallback = _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette)
+            ? dayPalette
+            : _cache.Palettes.Values.FirstOrDefault() ?? ColorPalette.Default;
+
+        Console.WriteLine(
+            $"[S101] Color palette '{type}' not found in the portrayal catalogue; " +
+            $"falling back to '{fallback.Name}' ({fallback.Colors.Count} colors).");
+
+        ActivePalette = fallback;
     }
 
     public ViewingGroupController ViewingGroups { get; } = new();
@@ -80,18 +102,20 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Palettes ───────────────────────────────────────────────────────
 
-    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_cache.PalettesLoaded)
-        {
-            if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
-            {
-                ActivePalette = dayPalette;
-            }
-            return;
-        }
-        _cache.PalettesLoaded = true;
+    private ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken) =>
+        PaletteLoadCoordinator.EnsureLoadedAsync(
+            _cache, LoadPalettesIntoCacheAsync, ApplyDayPalette, cancellationToken);
 
+    private void ApplyDayPalette()
+    {
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        {
+            ActivePalette = dayPalette;
+        }
+    }
+
+    private async ValueTask LoadPalettesIntoCacheAsync(CancellationToken cancellationToken)
+    {
         foreach (var item in _provider.Catalogue.ColorProfiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -117,7 +141,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
                     var palette = ColorProfileReader.Read(stream, paletteName);
                     _cache.Palettes[paletteType.Value] = palette;
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // If a color profile cannot be loaded, skip it gracefully.
                 }
@@ -139,18 +163,12 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
                             _cache.Palettes[type] = palette;
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // Skip gracefully.
                     }
                 }
             }
-        }
-
-        // Set Day palette as active if available
-        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayFinal))
-        {
-            ActivePalette = dayFinal;
         }
     }
 
