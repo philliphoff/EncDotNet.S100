@@ -83,6 +83,16 @@ public static class S100VectorTileRenderer
     private const int MaxImageDimension = 4096;
 
     /// <summary>
+    /// Whether speculative <b>prediction / pre-warm</b> (Phase&#160;3) is enabled.
+    /// When on, each frame also rasterises a velocity-aimed warm set so
+    /// newly-exposed perimeter tiles are cached before a pan/zoom reveals them.
+    /// Read once from <c>S100_VECTOR_TILE_PREDICT</c> (default on; <c>0</c> or
+    /// <c>false</c> disables it, leaving the Phase&#160;2 visible-only behaviour —
+    /// a first-class A/B knob, design §4).
+    /// </summary>
+    public static bool PredictionEnabled { get; } = ReadBool("S100_VECTOR_TILE_PREDICT", true);
+
+    /// <summary>
     /// Invoked (on a worker thread) when a tile publishes, so the host can
     /// request a single repaint. The viewer marshals a <c>RefreshGraphics()</c>
     /// onto the UI thread.
@@ -104,6 +114,20 @@ public static class S100VectorTileRenderer
         }
 
         return fallback;
+    }
+
+    private static bool ReadBool(string name, bool fallback)
+    {
+        var raw = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrEmpty(raw))
+        {
+            return fallback;
+        }
+
+        return !(raw.Equals("0", StringComparison.OrdinalIgnoreCase)
+            || raw.Equals("false", StringComparison.OrdinalIgnoreCase)
+            || raw.Equals("off", StringComparison.OrdinalIgnoreCase)
+            || raw.Equals("no", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Registers this renderer under <see cref="RendererName"/>. Idempotent.</summary>
@@ -218,18 +242,22 @@ public static class S100VectorTileRenderer
             }
 
             // Enqueue the prediction warm set at low priority (visible-first in
-            // the worker). Excludes visible / cached / in-flight tiles.
+            // the worker). Excludes visible / cached / in-flight tiles. Skipped
+            // entirely when prediction is disabled (Phase-2 A/B baseline).
             state.PendingPredicted.Clear();
-            var predicted = TileGrid.PredictedTiles(
-                centerX, centerY, widthDip, heightDip, resolution, band,
-                state.VelocityX, state.VelocityY);
-            foreach (var key in predicted)
+            if (PredictionEnabled)
             {
-                if (!visibleSet.Contains(key)
-                    && !state.Cache.Contains(key)
-                    && !state.InFlight.Contains(key))
+                var predicted = TileGrid.PredictedTiles(
+                    centerX, centerY, widthDip, heightDip, resolution, band,
+                    state.VelocityX, state.VelocityY);
+                foreach (var key in predicted)
                 {
-                    state.PendingPredicted.Add(key);
+                    if (!visibleSet.Contains(key)
+                        && !state.Cache.Contains(key)
+                        && !state.InFlight.Contains(key))
+                    {
+                        state.PendingPredicted.Add(key);
+                    }
                 }
             }
 
