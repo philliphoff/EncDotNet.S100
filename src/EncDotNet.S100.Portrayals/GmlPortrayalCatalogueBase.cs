@@ -96,19 +96,15 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
 
     // ── Palettes ───────────────────────────────────────────────────────
 
-    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_cache.PalettesLoaded)
-        {
-            if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayCached))
-            {
-                ActivePalette = dayCached;
-            }
-            return;
-        }
-        _cache.PalettesLoaded = true;
-        await LoadPalettesAsync(((PortrayalAssetCache)_cache).PalettesDictionary, cancellationToken).ConfigureAwait(false);
+    private ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken) =>
+        PaletteLoadCoordinator.EnsureLoadedAsync(
+            _cache,
+            ct => new ValueTask(LoadPalettesAsync(((PortrayalAssetCache)_cache).PalettesDictionary, ct)),
+            ApplyDayPalette,
+            cancellationToken);
 
+    private void ApplyDayPalette()
+    {
         if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
         {
             ActivePalette = dayPalette;
@@ -147,7 +143,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
                     var palette = ColorProfileReader.Read(stream, paletteName);
                     palettes[paletteType.Value] = palette;
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Skip gracefully.
                 }
@@ -167,7 +163,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
                             palettes[type] = palette;
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // Skip gracefully.
                     }

@@ -53,7 +53,7 @@ public sealed class S411PortrayalCatalogue : GmlPortrayalCatalogueBase
                 var palette = ColorProfileReader.Read(stream, paletteName);
                 palettes[paletteType.Value] = palette;
             }
-            catch (Exception) { }
+            catch (Exception ex) when (ex is not OperationCanceledException) { }
         }
     }
 

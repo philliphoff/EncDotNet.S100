@@ -65,11 +65,18 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         await EnsurePalettesLoadedAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!_cache.Palettes.TryGetValue(type, out var palette))
-            throw new KeyNotFoundException($"Color palette '{type}' not found in the S-131 portrayal catalogue.");
+        if (_cache.Palettes.TryGetValue(type, out var palette))
+        {
+            Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
+            ActivePalette = palette;
+            return;
+        }
 
-        Portrayals.Diagnostics.PortrayalCacheMetrics.RecordHit(ProductTag, Portrayals.Diagnostics.PortrayalAssetKinds.Palette);
-        ActivePalette = palette;
+        // Graceful fallback rather than throwing (issue #321): prefer Day, then
+        // any loaded palette, then the built-in default.
+        ActivePalette = _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette)
+            ? dayPalette
+            : _cache.Palettes.Values.FirstOrDefault() ?? ColorPalette.Default;
     }
 
     /// <inheritdoc/>
@@ -83,16 +90,18 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
 
     // ── Palettes ───────────────────────────────────────────────────────
 
-    private async ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_cache.PalettesLoaded)
-        {
-            if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayCached))
-                ActivePalette = dayCached;
-            return;
-        }
-        _cache.PalettesLoaded = true;
+    private ValueTask EnsurePalettesLoadedAsync(CancellationToken cancellationToken) =>
+        PaletteLoadCoordinator.EnsureLoadedAsync(
+            _cache, LoadPalettesIntoCacheAsync, ApplyDayPalette, cancellationToken);
 
+    private void ApplyDayPalette()
+    {
+        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+            ActivePalette = dayPalette;
+    }
+
+    private async ValueTask LoadPalettesIntoCacheAsync(CancellationToken cancellationToken)
+    {
         foreach (var item in _provider.Catalogue.ColorProfiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -116,7 +125,7 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
                     var palette = ColorProfileReader.Read(stream, paletteName);
                     _cache.Palettes[paletteType.Value] = palette;
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Skip gracefully if a colour profile cannot be loaded.
                 }
@@ -133,13 +142,10 @@ public sealed class S131PortrayalCatalogue : IVectorPortrayalCatalogue
                         if (palette.Colors.Count > 0)
                             _cache.Palettes[type] = palette;
                     }
-                    catch { }
+                    catch (Exception ex) when (ex is not OperationCanceledException) { }
                 }
             }
         }
-
-        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
-            ActivePalette = dayPalette;
     }
 
     // ── Rules ──────────────────────────────────────────────────────────

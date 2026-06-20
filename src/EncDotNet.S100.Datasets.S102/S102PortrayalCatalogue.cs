@@ -207,7 +207,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                     using var reader = new StreamReader(stream);
                     _cachedLuaSource = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Leave _cachedLuaSource null — ResolveColorScheme will throw
                     // a clear InvalidOperationException when invoked.
@@ -215,17 +215,21 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
             }
         }
 
-        if (_cache.PalettesLoaded)
-        {
-            if (ActivePalette.Colors.Count == 0 &&
-                _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
-            {
-                ActivePalette = dayPalette;
-            }
-            return;
-        }
-        _cache.PalettesLoaded = true;
+        await PaletteLoadCoordinator.EnsureLoadedAsync(
+            _cache, LoadPalettesIntoCacheAsync, ApplyDayPalette, cancellationToken).ConfigureAwait(false);
+    }
 
+    private void ApplyDayPalette()
+    {
+        if (ActivePalette.Colors.Count == 0 &&
+            _cache.Palettes.TryGetValue(PaletteType.Day, out var dayPalette))
+        {
+            ActivePalette = dayPalette;
+        }
+    }
+
+    private async ValueTask LoadPalettesIntoCacheAsync(CancellationToken cancellationToken)
+    {
         foreach (var item in _provider.Catalogue.ColorProfiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -251,7 +255,7 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                     var palette = ColorProfileReader.Read(stream, manifestName);
                     _cache.Palettes[paletteType.Value] = palette;
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Skip gracefully — fall through to fallback colours
                     // at instruction-parse time.
@@ -273,17 +277,12 @@ public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
                             _cache.Palettes[type] = palette;
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // Skip gracefully.
                     }
                 }
             }
-        }
-
-        if (_cache.Palettes.TryGetValue(PaletteType.Day, out var dayFinal))
-        {
-            ActivePalette = dayFinal;
         }
     }
 
