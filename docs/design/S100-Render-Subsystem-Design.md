@@ -146,7 +146,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 
 - **Phase 0 — Harness.** Extract IR (§2). Add `IChartRenderSubsystem` + `RenderSubsystem` flag + fixed gesture-script benchmark over `101AU005PDB01` with the standardized telemetry. The "A" arm is today's path verbatim. **Also confirm the Mapsui foreground surface empirically** — instrument the actual surface type the Avalonia `MapControl` creates (GPU `SKGLView` vs CPU `SKCanvasView`; working assumption is GPU by default). The result sets the compositor blit path: GPU → upload-once + texture residency (Phase 5 in scope); CPU → direct memcpy blit (Phase 5 residency moot). *Exit:* reproducible A-baseline numbers + a recorded surface-type finding.
 - **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop. **✅ Done** — `S100VectorSceneRenderer`; on-screen paint worst case ~409 ms → ~5 ms (Appendix B). Base-plane parity holds; residual point-feature deltas trace to A's own portrayal bug, not B.
-- **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script.
+- **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script. **✅ Done** — `TileGrid` + `TileCache` + `S100VectorTileRenderer` (Appendix C). Origin-anchored web-mercator pyramid keeps interior tiles pan-stable; on-screen paint stayed bounded (≤ ~37 ms worst case vs A's ~409 ms) with no visible seams.
 - **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0.
 - **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles.
 - **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode.
@@ -304,3 +304,84 @@ remaining differences are predominantly A's own portrayal bug (dropped/flickerin
 point features), with a short, tracked list of B-side polish items (line dashes,
 label glyphs) to be validated against the deterministic headless renderer rather
 than the unstable A arm in a follow-up.
+
+---
+
+## Appendix C — Phase 2 findings (tile the base plane)
+
+### C.1 What landed
+
+Three new types in `EncDotNet.S100.Renderers.Mapsui`, behind the existing
+TiledScene seam (`S100_RENDER_SUBSYSTEM=tiledscene`):
+
+- **`TileGrid`** — pure, Skia-free, origin-anchored EPSG:3857 power-of-two
+  tile math (256-DIP tiles, XYZ convention; the same scheme Mapsui's own tile
+  layers use). Band selection snaps the live resolution to the nearest band in
+  log-space; the compositor scales band tiles to the live resolution to fit.
+- **`TileCache`** — thread-safe LRU bounded by a hard **native-byte budget**
+  (decoded `SKImage` pixels live in native memory, the OOM risk §3.4 calls
+  out), default 256 MB (`S100_VECTOR_TILE_BUDGET_MB`). Eviction disposes the
+  LRU image; visible tiles are MRU so they are never the victim mid-frame.
+- **`S100VectorTileRenderer`** — the tiled custom layer renderer. Each frame the
+  UI thread snaps to a band, enumerates visible tiles, and blits the *best
+  available* for every slot (cached fallback bands as a backdrop farthest-first,
+  exact-band tiles on top), each hard-clipped to its core over a rendered
+  **gutter** (default 64 DIP, `S100_VECTOR_TILE_GUTTER`) so strokes stay
+  continuous across seams. A single coalescing worker per layer drains the
+  visible-miss set (replaced every frame, so tiles panned out of view are
+  dropped before they render). All cache access is serialised through the layer
+  lock so no image is disposed mid-blit.
+
+Within the TiledScene subsystem, `S100_VECTOR_SCENE_MODE=single` selects the
+Phase-1 single-surface renderer for A/B comparison; the tiled renderer is the
+default. Telemetry: `s100.render.tile.rasterize.duration` (one off-thread tile)
+and `s100.render.tile.composite.duration` (one UI-thread composite pass).
+
+31 unit tests (`TileGridTests`, `TileCacheTests`) pin the grid math
+(band/resolution round-trips, world-bounds tiling, world→screen projection,
+**interior-key pan-stability**) and the cache (byte-budget eviction, LRU/MRU
+order, replace-disposes, clamp-to-floor).
+
+### C.2 Perf result (same 18-step gesture script, reference cell)
+
+On-screen `frameDurationMs` stayed bounded across the whole script — p50 ≈ 7.7
+ms, p90 ≈ 34 ms, max ≈ 37 ms — versus the A baseline's ~408 ms worst case
+(Appendix A.3). Constant-zoom **pan** frames held ~3–8 ms: the origin-anchored
+grid re-uses every interior tile, so only the newly-exposed perimeter
+rasterises (verified directly by `TileGrid` unit tests; reflected in the bounded
+pan composite cost). The most expensive frames were **zoom-out** steps (~37 ms),
+where the compositor blits many cached finer-band tiles as a backdrop to avoid
+showing a hole while the coarser band fills in — acceptable for Phase 2 and a
+candidate for the Phase-3 pre-warm to mask.
+
+### C.3 Fidelity finding
+
+`render_to_image` (zoomed in) shows the tiled base plane composites with **no
+holes and no visible tile seams** — gutter + hard-clip-to-core meet exactly.
+Base-plane parity with Phase 1 holds (land/water/intertidal fills, depth areas,
+contour geometry). The residual point-symbol (magenta default symbols) and
+tofu-label deltas are the **same Phase-1 B-side polish items** (Appendix B.3),
+not Phase-2 regressions — they live in scene build / symbol resolution, upstream
+of tiling.
+
+### C.4 Decision — fixed power-of-two bands vs live-resolution tiles
+
+Tiles are keyed to **fixed web-mercator bands**, not the live viewport
+resolution. The alternative (rasterise tiles at exactly the current resolution)
+avoids intermediate-zoom scaling blur but **defeats cross-zoom reuse**: every
+pixel-level zoom change re-keys the whole cache. Fixed bands let a zoom settle
+re-use tiles from neighbouring bands instantly (scaled) while the exact band
+fills in, and align with Mapsui's own tile schema. The tradeoff is slight
+scaling blur at intermediate zooms and transiently-blurred *text* (free-floating
+labels move to a live, untiled Label plane in Phase 4 specifically to avoid
+this); for the base plane the blur is imperceptible at a settle and gone once
+the exact band lands. Accepted.
+
+### C.5 Open follow-ups (Phase 3+)
+
+- Pre-warm the z±1 bands and a velocity fan so zoom-out doesn't transiently
+  blit a deep fallback stack (the ~37 ms frames in C.2).
+- Consider a small worker pool (design's "cores−1") if tile fill lags on denser
+  cells; Phase 2 uses one coalescing worker per layer.
+- The Phase-1 B-side polish items (line dashes, label glyphs) still apply and
+  are unchanged by tiling.

@@ -531,6 +531,38 @@ worst case drops from ~409 ms (Mapsui arm) to ~5 ms (B arm) because the
 display-list rasterisation moves off the UI paint thread — full numbers in
 Appendix B of the design doc.
 
+### Tiled base plane (`S100VectorTileRenderer`, render-subsystem "B", Phase 2)
+
+`S100VectorTileRenderer` generalises the single-surface arm above into a
+**pyramid of cached tiles** (design doc Appendix C). It is the **default** arm of
+the TiledScene subsystem; `S100_VECTOR_SCENE_MODE=single` selects the
+Phase-1 single-surface renderer instead. Instead of one viewport-sized image it
+partitions the world into an origin-anchored EPSG:3857 power-of-two grid
+(`TileGrid`, 256-DIP tiles, XYZ convention) and rasterises each visible tile
+from the `VectorScene` IR on a worker. Because the grid is anchored to the world
+origin (not the viewport), a constant-zoom pan re-uses every interior tile and
+only the newly-exposed perimeter rasterises — pan cost scales with *perimeter,
+not area*.
+
+Each frame the UI thread snaps the live resolution to the nearest band, blits
+the **best available** tile for every visible slot (cached fallback bands as a
+backdrop, exact band on top), each hard-clipped to its core over a rendered
+**gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so strokes stay
+continuous across seams and no hole is ever shown. Finished tiles enter a
+thread-safe LRU `TileCache` bounded by a hard **native-byte budget**
+(`S100_VECTOR_TILE_BUDGET_MB`, default 256 MB) — decoded `SKImage` pixels are
+native memory; visible tiles are kept most-recently-used so they are never
+evicted mid-frame. A single coalescing worker per layer drains the visible-miss
+set (replaced every frame), and all cache access is serialised through the layer
+lock so the worker cannot dispose an image the compositor is blitting. Telemetry
+histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI
+composite pass) attribute the two halves. North-up only (v1).
+
+**Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs` stayed
+bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
+backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
+visible tile seams. Full numbers in Appendix C of the design doc.
+
 ## Installation
 
 ```sh
