@@ -19,6 +19,8 @@ public class SetViewportToolTests
 
     private sealed class RecordingMapHost : IMapHost
     {
+        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
+
         public List<ExtentCall> ExtentCalls { get; } = new();
         public List<CenterCall> CenterCalls { get; } = new();
 

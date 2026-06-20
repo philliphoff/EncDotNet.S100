@@ -48,7 +48,12 @@ internal sealed class MapsuiMapHost : IMapHost
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         _mapControl = mapControl;
+        RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
+        RenderSubsystem.Activate();
     }
+
+    /// <inheritdoc />
+    public IChartRenderSubsystem RenderSubsystem { get; }
 
     public void AddLayer(ILayer layer)
     {
