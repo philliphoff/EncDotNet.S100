@@ -357,13 +357,8 @@ internal static class Strings
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
-    public static string Status_ExchangeSetUpdatesApplied => Get(nameof(Status_ExchangeSetUpdatesApplied));
     public static string Status_ExchangeSetUpdatesPartial => Get(nameof(Status_ExchangeSetUpdatesPartial));
 
-    // Exchange-set progress overlay (es3-progress)
-    public static string Progress_ExchangeSetTitle => Get(nameof(Progress_ExchangeSetTitle));
-    public static string Progress_ExchangeSetCounter => Get(nameof(Progress_ExchangeSetCounter));
-    public static string Progress_ExchangeSetCancel => Get(nameof(Progress_ExchangeSetCancel));
 
     // Dataset entry
     public static string DatasetEntry_CurrentTimeFormat => Get(nameof(DatasetEntry_CurrentTimeFormat));
@@ -438,6 +433,20 @@ internal static class Strings
     public static string Toast_PreviousCrashBody => Get(nameof(Toast_PreviousCrashBody));
     public static string Toast_PreviousCrashBodyMultiple => Get(nameof(Toast_PreviousCrashBodyMultiple));
     public static string Toast_PreviousCrashAction => Get(nameof(Toast_PreviousCrashAction));
+
+    // Notification centre (custom notification mechanism)
+    public static string Notification_Close => Get(nameof(Notification_Close));
+    public static string Notification_HistoryTitle => Get(nameof(Notification_HistoryTitle));
+    public static string Notification_ClearHistory => Get(nameof(Notification_ClearHistory));
+    public static string Notification_Empty => Get(nameof(Notification_Empty));
+    public static string Notification_OverflowMore => Get(nameof(Notification_OverflowMore));
+    public static string Notification_ShowMore => Get(nameof(Notification_ShowMore));
+    public static string Notification_ShowLess => Get(nameof(Notification_ShowLess));
+    public static string Notification_Severity_Info => Get(nameof(Notification_Severity_Info));
+    public static string Notification_Severity_Success => Get(nameof(Notification_Severity_Success));
+    public static string Notification_Severity_Warning => Get(nameof(Notification_Severity_Warning));
+    public static string Notification_Severity_Error => Get(nameof(Notification_Severity_Error));
+    public static string Tooltip_Notifications => Get(nameof(Tooltip_Notifications));
 
     // MCP server
     public static string Status_McpRunning => Get(nameof(Status_McpRunning));

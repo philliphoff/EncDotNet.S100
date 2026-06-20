@@ -9,6 +9,7 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using ShadUI;
@@ -19,9 +20,16 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly ViewerSettings _settings;
     private readonly IThemeService _theme;
     private readonly IRecentFilesService _recentFiles;
-    private readonly IToastService _toasts;
+    private readonly INotificationService _notifications;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
+
+    /// <summary>
+    /// The persistent MCP port-conflict notification, held so the
+    /// "find another port" outcome updates it in place rather than
+    /// stacking a second notification.
+    /// </summary>
+    private INotificationHandle? _mcpPortConflictNotification;
 
     public FeatureCataloguesViewModel FeatureCatalogues { get; }
     public PortrayalCataloguesViewModel PortrayalCatalogues { get; }
@@ -630,15 +638,12 @@ internal sealed class MainViewModel : ViewModelBase
     // ─── Exchange-set progress + banner (es3-progress) ────────────────────
 
     private bool _isExchangeSetLoading;
-    private double _exchangeSetProgressFraction;
-    private string? _exchangeSetCurrentDataset;
-    private string? _exchangeSetCounter;
-    private string? _exchangeSetSourceLabel;
     private System.Threading.CancellationTokenSource? _exchangeSetCts;
 
     /// <summary>
-    /// True while an exchange-set load is in flight. Bound to the
-    /// progress overlay's <c>IsVisible</c>.
+    /// True while an exchange-set load is in flight. Gates the
+    /// <see cref="CancelExchangeSetCommand"/>; progress itself is surfaced
+    /// through the notification system, not a modal overlay.
     /// </summary>
     public bool IsExchangeSetLoading
     {
@@ -646,44 +651,13 @@ internal sealed class MainViewModel : ViewModelBase
         private set => SetProperty(ref _isExchangeSetLoading, value);
     }
 
-    /// <summary>
-    /// Progress fraction in <c>[0, 1]</c> — bound to a determinate
-    /// <see cref="Avalonia.Controls.ProgressBar"/>.
-    /// </summary>
-    public double ExchangeSetProgressFraction
-    {
-        get => _exchangeSetProgressFraction;
-        private set => SetProperty(ref _exchangeSetProgressFraction, value);
-    }
-
-    /// <summary>Catalogue-relative path of the dataset currently being routed.</summary>
-    public string? ExchangeSetCurrentDataset
-    {
-        get => _exchangeSetCurrentDataset;
-        private set => SetProperty(ref _exchangeSetCurrentDataset, value);
-    }
-
-    /// <summary>"3 of 12" counter shown in the overlay header.</summary>
-    public string? ExchangeSetCounter
-    {
-        get => _exchangeSetCounter;
-        private set => SetProperty(ref _exchangeSetCounter, value);
-    }
-
-    /// <summary>The folder or .zip path being opened — shown in the overlay.</summary>
-    public string? ExchangeSetSourceLabel
-    {
-        get => _exchangeSetSourceLabel;
-        private set => SetProperty(ref _exchangeSetSourceLabel, value);
-    }
-
     /// <summary>Cancels the in-flight exchange-set load. No-op if idle.</summary>
     public ICommand CancelExchangeSetCommand { get; }
 
     /// <summary>
     /// Called by <see cref="MainWindow"/> when an exchange-set load is
-    /// about to start. Captures the cancellation source and resets
-    /// progress state.
+    /// about to start. Captures the cancellation source and marks the
+    /// load as in flight.
     /// </summary>
     internal System.Threading.CancellationToken BeginExchangeSetLoad(string sourcePath)
     {
@@ -691,38 +665,21 @@ internal sealed class MainViewModel : ViewModelBase
         _exchangeSetCts?.Dispose();
         _exchangeSetCts = new System.Threading.CancellationTokenSource();
 
-        ExchangeSetSourceLabel = sourcePath;
-        ExchangeSetCurrentDataset = null;
-        ExchangeSetCounter = null;
-        ExchangeSetProgressFraction = 0;
         IsExchangeSetLoading = true;
         return _exchangeSetCts.Token;
     }
 
-    /// <summary>Pushes a single progress update from the service into the VM.</summary>
-    internal void ReportExchangeSetProgress(ExchangeSetProgress progress)
-    {
-        ExchangeSetCurrentDataset = progress.CurrentDataset;
-        ExchangeSetCounter = progress.Total > 0
-            ? string.Format(Strings.Progress_ExchangeSetCounter, progress.Completed, progress.Total)
-            : null;
-        ExchangeSetProgressFraction = progress.Total > 0
-            ? Math.Clamp((double)progress.Completed / progress.Total, 0.0, 1.0)
-            : 0.0;
-    }
-
     /// <summary>
     /// Called by <see cref="MainWindow"/> when an exchange-set load
-    /// completes (or is cancelled / fatally fails). Hides the progress
-    /// overlay. Outcome notifications (success / partial / failure) are
+    /// completes (or is cancelled / fatally fails). Clears the in-flight
+    /// flag. Progress and outcome (success / partial / failure) are
     /// surfaced by <see cref="Services.IExchangeSetService"/> through the
-    /// toast notification service.
+    /// notification service.
     /// </summary>
     internal void EndExchangeSetLoad(ExchangeSetOpenResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
         IsExchangeSetLoading = false;
-        ExchangeSetCurrentDataset = null;
     }
 
     /// <summary>
@@ -804,15 +761,19 @@ internal sealed class MainViewModel : ViewModelBase
         var conflictPort = e.Port;
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            _toasts.ShowError(
-                title: Strings.Toast_McpPortConflictTitle,
-                content: string.Format(
+            _mcpPortConflictNotification = _notifications
+                .Create(Strings.Toast_McpPortConflictTitle)
+                .WithSeverity(NotificationSeverity.Error)
+                .WithContent(string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
                     Strings.Toast_McpPortConflictBody,
-                    conflictPort),
-                actionLabel: Strings.Toast_McpPortFindAnother,
-                action: () => _ = FindAnotherMcpPortAsync(),
-                sticky: true);
+                    conflictPort))
+                .WithAction(
+                    Strings.Toast_McpPortFindAnother,
+                    () => _ = FindAnotherMcpPortAsync(),
+                    dismissOnInvoke: false)
+                .Persistent()
+                .Show();
         });
     }
 
@@ -832,15 +793,34 @@ internal sealed class MainViewModel : ViewModelBase
 
         if (newPort is { } port)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            // Reuse the conflict notification: transition it in place to a
+            // success message that auto-dismisses, rather than stacking a
+            // second notification.
+            var handle = _mcpPortConflictNotification;
+            _mcpPortConflictNotification = null;
+            if (handle is not null && !handle.IsDismissed)
             {
-                _toasts.ShowInfo(
+                handle.SetActions();
+                handle.Update(
                     title: Strings.Toast_McpPortReassignedTitle,
-                    content: string.Format(
+                    message: string.Format(
                         System.Globalization.CultureInfo.CurrentCulture,
                         Strings.Toast_McpPortReassignedBody,
-                        port));
-            });
+                        port),
+                    severity: NotificationSeverity.Info);
+                handle.ScheduleAutoDismiss(
+                    NotificationService.DefaultDelayFor(NotificationSeverity.Info));
+            }
+            else
+            {
+                _notifications.Create(Strings.Toast_McpPortReassignedTitle)
+                    .WithSeverity(NotificationSeverity.Info)
+                    .WithContent(string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        Strings.Toast_McpPortReassignedBody,
+                        port))
+                    .Show();
+            }
         }
     }
 
@@ -861,7 +841,7 @@ internal sealed class MainViewModel : ViewModelBase
         IThemeService themeService,
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
-        IToastService toasts,
+        INotificationService notifications,
         ShadUI.DialogManager? dialogManager = null,
         Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
@@ -884,12 +864,12 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(measureAppearance);
-        ArgumentNullException.ThrowIfNull(toasts);
+        ArgumentNullException.ThrowIfNull(notifications);
 
         _settings = settings;
         _theme = themeService;
         _recentFiles = recentFiles;
-        _toasts = toasts;
+        _notifications = notifications;
         // The dialog manager is supplied by DI in the running app; tests
         // that construct the view-model directly omit it, so fall back to
         // an unhosted manager to keep the DialogManager property non-null.
@@ -1190,9 +1170,12 @@ internal sealed class MainViewModel : ViewModelBase
 
         if (!File.Exists(path))
         {
-            _toasts.ShowWarning(
-                Strings.Toast_Warning,
-                string.Format(Strings.Status_FileNoLongerExists, path));
+            _notifications.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(string.Format(
+                    Strings.Status_FileNoLongerExists,
+                    Services.Notifications.NotificationFormat.ShortenPath(path)))
+                .Show();
             // Drop the missing entry so the menu reflects reality.
             _recentFiles.Remove(path);
             return;

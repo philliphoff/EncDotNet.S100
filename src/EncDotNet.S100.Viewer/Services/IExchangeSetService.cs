@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Viewer.Services.Notifications;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -77,7 +78,36 @@ public sealed class ExchangeSetOpenResult
     /// mercator to fit the map after a successful bulk load.
     /// </summary>
     public BoundingBox? UnionBoundingBox { get; init; }
+
+    /// <summary>
+    /// When set, the non-failure terminal state (success / partial /
+    /// loaded-with-errors) the caller should drive the shared progress
+    /// notification to <em>after</em> the loaded cells have been framed and
+    /// the map has painted them — so the "loaded" notification never
+    /// precedes the charts becoming visible. <c>null</c> for outcomes whose
+    /// terminal state is driven immediately by
+    /// <see cref="IExchangeSetService.OpenAsync"/> (cancellation, empty set,
+    /// catalogue-not-found, and hard failures), which have nothing to
+    /// render and therefore no reason to wait.
+    /// </summary>
+    internal ExchangeSetTerminalInfo? PendingTerminal { get; init; }
 }
+
+/// <summary>
+/// A deferred terminal notification state for an exchange-set open whose
+/// content must be rendered before the notification settles. Carried on
+/// <see cref="ExchangeSetOpenResult.PendingTerminal"/> so the view layer
+/// (which owns the map framing and the render-activity monitor) can drive
+/// the shared progress notification to this state only once the cells are
+/// visible.
+/// </summary>
+/// <param name="Severity">Terminal severity (Success / Warning).</param>
+/// <param name="Title">Terminal notification title.</param>
+/// <param name="Message">Terminal notification body.</param>
+internal sealed record ExchangeSetTerminalInfo(
+    NotificationSeverity Severity,
+    string Title,
+    string Message);
 
 /// <summary>
 /// Opens an S-100 exchange set (a folder containing a
@@ -101,11 +131,19 @@ internal interface IExchangeSetService
     /// <param name="cancellationToken">Honored between datasets; the loader
     /// stops dispatching new datasets but does not interrupt one that is
     /// already loading.</param>
+    /// <param name="notification">
+    /// Optional progress notification handle (created by the caller) that the
+    /// service drives to its terminal state — success, partial, cancelled, or
+    /// error — in place, instead of surfacing a separate notification. When
+    /// <see langword="null"/>, the service surfaces its own notification for
+    /// terminal/failure states.
+    /// </param>
     /// <returns>A summary that is always non-null (even on cancellation
     /// or fatal error).</returns>
     Task<ExchangeSetOpenResult> OpenAsync(
         string folderOrZipPath,
         IProgress<ExchangeSetProgress>? progress = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        INotificationHandle? notification = null);
 }
 

@@ -70,17 +70,6 @@ public class MainViewModelOpenRecentTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private sealed class RecordingToastService : IToastService
-    {
-        public int WarningCount { get; private set; }
-        public void ShowInfo(string title, string? content = null) { }
-        public void ShowSuccess(string title, string? content = null) { }
-        public void ShowWarning(string title, string? content = null) => WarningCount++;
-        public void ShowError(string title, string? content = null, string? actionLabel = null, Action? action = null, bool sticky = false) { }
-        public void ShowLoading(string title, string? content = null, string? actionLabel = null, Action? action = null) { }
-        public void DismissAll() { }
-    }
-
     private MainViewModel CreateViewModel(
         out RecordingLoaderService loader,
         out StubRecentFilesService recent)
@@ -89,13 +78,13 @@ public class MainViewModelOpenRecentTests : IDisposable
     private MainViewModel CreateViewModel(
         out RecordingLoaderService loader,
         out StubRecentFilesService recent,
-        out RecordingToastService toasts)
+        out Services.Notifications.NotificationService notifications)
     {
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         loader = new RecordingLoaderService();
         recent = new StubRecentFilesService();
-        toasts = new RecordingToastService();
+        notifications = Notifications.TestNotifications.Create();
         var datasets = new DatasetsViewModel(loader);
         return new MainViewModel(
             settings,
@@ -114,20 +103,23 @@ public class MainViewModelOpenRecentTests : IDisposable
             themeService: new StubThemeService(),
             recentFiles: recent,
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            toasts: toasts);
+            notifications: notifications);
     }
 
     [Fact]
     public async Task OpenRecent_MissingFile_RemovesFromRecentAndNotifies()
     {
-        var vm = CreateViewModel(out var loader, out var recent, out var toasts);
+        var vm = CreateViewModel(out var loader, out var recent, out var notifications);
         var ghost = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}");
         recent.Add(ghost);
 
         await vm.OpenRecentCommand.ExecuteAsync(ghost);
 
         Assert.DoesNotContain(ghost, recent.Items);
-        Assert.Equal(1, toasts.WarningCount);
+        Assert.Single(notifications.Active);
+        Assert.Equal(
+            Services.Notifications.NotificationSeverity.Warning,
+            notifications.Active[0].Severity);
         Assert.Empty(loader.Loaded);
     }
 

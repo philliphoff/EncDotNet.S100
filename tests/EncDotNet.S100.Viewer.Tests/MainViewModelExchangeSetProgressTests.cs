@@ -7,7 +7,6 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
-using ExchangeSetProgress = EncDotNet.S100.Viewer.Services.ExchangeSetProgress;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 using Xunit;
@@ -86,7 +85,7 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            toasts: new StubToastService());
+            notifications: Notifications.TestNotifications.Create());
     }
 
     [Fact]
@@ -97,8 +96,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         var token = vm.BeginExchangeSetLoad("/some/folder");
 
         Assert.True(vm.IsExchangeSetLoading);
-        Assert.Equal("/some/folder", vm.ExchangeSetSourceLabel);
-        Assert.Equal(0.0, vm.ExchangeSetProgressFraction);
         Assert.False(token.IsCancellationRequested);
         Assert.True(vm.CancelExchangeSetCommand.CanExecute(null));
     }
@@ -124,20 +121,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
     }
 
     [Fact]
-    public void ReportProgress_UpdatesFractionAndCounter()
-    {
-        var vm = CreateViewModel();
-        vm.BeginExchangeSetLoad("/some/folder");
-
-        vm.ReportExchangeSetProgress(new ExchangeSetProgress(
-            "/some/folder", Total: 4, Completed: 1, Failed: 0, CurrentDataset: "101NO/foo.000"));
-
-        Assert.Equal(0.25, vm.ExchangeSetProgressFraction);
-        Assert.Equal("101NO/foo.000", vm.ExchangeSetCurrentDataset);
-        Assert.False(string.IsNullOrEmpty(vm.ExchangeSetCounter));
-    }
-
-    [Fact]
     public void EndExchangeSetLoad_FullSuccess_ClearsLoadingState()
     {
         var vm = CreateViewModel();
@@ -151,7 +134,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         });
 
         Assert.False(vm.IsExchangeSetLoading);
-        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 
     [Fact]
@@ -169,7 +151,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         });
 
         Assert.False(vm.IsExchangeSetLoading);
-        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 
     [Fact]
@@ -185,6 +166,5 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         });
 
         Assert.False(vm.IsExchangeSetLoading);
-        Assert.Null(vm.ExchangeSetCurrentDataset);
     }
 }

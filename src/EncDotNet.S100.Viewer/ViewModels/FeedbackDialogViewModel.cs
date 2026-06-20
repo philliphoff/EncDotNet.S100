@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using ShadUI;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -23,7 +24,7 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
 {
     private readonly DialogManager _dialogManager;
     private readonly IFeedbackService _feedbackService;
-    private readonly IToastService _toasts;
+    private readonly INotificationService _notifications;
 
     private FeedbackReport? _report;
     private byte[]? _screenshotPng;
@@ -31,15 +32,15 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
     public FeedbackDialogViewModel(
         DialogManager dialogManager,
         IFeedbackService feedbackService,
-        IToastService toasts)
+        INotificationService notifications)
     {
         ArgumentNullException.ThrowIfNull(dialogManager);
         ArgumentNullException.ThrowIfNull(feedbackService);
-        ArgumentNullException.ThrowIfNull(toasts);
+        ArgumentNullException.ThrowIfNull(notifications);
 
         _dialogManager = dialogManager;
         _feedbackService = feedbackService;
-        _toasts = toasts;
+        _notifications = notifications;
 
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () => !IsBusy);
         CancelCommand = new RelayCommand(Cancel);
@@ -156,20 +157,24 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
             // source) when one was written; otherwise point at the bundle.
             var revealedPath = result.ScreenshotPath ?? result.BundlePath;
 
-            _toasts.ShowSuccess(
-                Strings.Feedback_SubmittedTitle,
-                string.Format(
+            _notifications.Create(Strings.Feedback_SubmittedTitle)
+                .WithSeverity(NotificationSeverity.Success)
+                .WithContent(string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
                     result.ScreenshotOnClipboard
                         ? Strings.Feedback_SubmittedBodyClipboard
                         : Strings.Feedback_SubmittedBody,
-                    revealedPath));
+                    revealedPath))
+                .Show();
 
             _dialogManager.Close(this, new CloseDialogOptions { Success = true });
         }
         catch (Exception ex)
         {
-            _toasts.ShowError(Strings.Feedback_SubmitFailedTitle, ex.Message);
+            _notifications.Create(Strings.Feedback_SubmitFailedTitle)
+                .WithSeverity(NotificationSeverity.Error)
+                .WithContent(ex.Message)
+                .Show();
         }
         finally
         {

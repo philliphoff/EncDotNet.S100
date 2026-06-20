@@ -18,6 +18,7 @@ using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
@@ -41,7 +42,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     private readonly GlobalTimeService _globalTime;
     private readonly EcdisDisplayState _ecdisDisplay;
     private readonly IMarinerSettingsProvider _marinerSettings;
-    private readonly IToastService _toasts;
+    private readonly INotificationService _notifications;
     /// <summary>
     /// Resolves the <em>currently active</em> cross-dataset paint-order
     /// policy on each consult. Hosts can swap the authority at runtime
@@ -50,6 +51,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     /// </summary>
     private readonly IInteroperabilityAuthorityProvider _authorityProvider;
     private readonly EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer _mapsuiRenderer;
+    /// <summary>
+    /// Lets a standalone dataset load hold its progress notification in the
+    /// "loading" state until the map has actually painted the new dataset,
+    /// so the terminal success only appears once the data is visible rather
+    /// than merely parsed. Optional: <see langword="null"/> (e.g. in tests,
+    /// or before the map control exists) disables the wait.
+    /// </summary>
+    private readonly IRenderActivityMonitor? _renderActivityMonitor;
 
     private readonly Dictionary<DatasetEntry, IDatasetProcessor> _processors = new();
     private readonly Dictionary<DatasetEntry, IReadOnlyList<ILayer>> _entryLayers = new();
@@ -129,9 +138,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         GlobalTimeService globalTime,
         EcdisDisplayState ecdisDisplay,
         IMarinerSettingsProvider marinerSettings,
-        IToastService toasts,
+        INotificationService notifications,
         IInteroperabilityAuthorityProvider authorityProvider,
-        EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer)
+        EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer mapsuiRenderer,
+        IRenderActivityMonitor? renderActivityMonitor = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -144,7 +154,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         ArgumentNullException.ThrowIfNull(globalTime);
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
         ArgumentNullException.ThrowIfNull(marinerSettings);
-        ArgumentNullException.ThrowIfNull(toasts);
+        ArgumentNullException.ThrowIfNull(notifications);
 
         _settings = settings;
         _catalogueManager = catalogueManager;
@@ -157,11 +167,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         _globalTime = globalTime;
         _ecdisDisplay = ecdisDisplay;
         _marinerSettings = marinerSettings;
-        _toasts = toasts;
+        _notifications = notifications;
         ArgumentNullException.ThrowIfNull(authorityProvider);
         _authorityProvider = authorityProvider;
         ArgumentNullException.ThrowIfNull(mapsuiRenderer);
         _mapsuiRenderer = mapsuiRenderer;
+        _renderActivityMonitor = renderActivityMonitor;
         // Re-sort the live layer stack whenever the host swaps the
         // active authority. Cheap when no datasets are loaded.
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
@@ -229,31 +240,28 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
     public bool SuppressAutoZoom { get; set; }
 
     /// <summary>
-    /// Surfaces the outcome of S-101 sequential update application as a
-    /// status message (and, when updates failed to apply cleanly, a
-    /// non-blocking warning toast). Updates are applied best-effort, so
-    /// a partial result never prevents the dataset from rendering.
-    /// S-101 / S-100 Part 10a.
+    /// Surfaces problems encountered while applying S-101 sequential updates
+    /// as a non-blocking warning toast. Successful update application is a
+    /// routine, internal part of loading and is not surfaced — only a partial
+    /// or failed apply (which may leave the chart missing corrections) warrants
+    /// the user's attention. Updates are applied best-effort, so a partial
+    /// result never prevents the dataset from rendering. S-101 / S-100 Part 10a.
     /// </summary>
     private void SurfaceUpdateReport(DatasetEntry entry, S101UpdateReport report)
     {
-        var appliedCount = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
         var problem = report.Messages
             .FirstOrDefault(m => m.Severity >= S101UpdateSeverity.Warning);
 
         if (problem.Severity >= S101UpdateSeverity.Warning)
         {
+            var appliedCount = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
             var msg = string.Format(
                 Strings.Status_ExchangeSetUpdatesPartial,
                 appliedCount, entry.DisplayName, problem.Text);
-            _toasts.ShowWarning(Strings.Toast_Warning, msg);
-        }
-        else if (appliedCount > 0)
-        {
-            _toasts.ShowInfo(
-                Strings.Toast_Info,
-                string.Format(
-                    Strings.Status_ExchangeSetUpdatesApplied, appliedCount, entry.DisplayName));
+            _notifications.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(msg)
+                .Show();
         }
     }
 
@@ -306,8 +314,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
             if (spec is null)
             {
-                _toasts.ShowWarning(Strings.Toast_Warning,
-                    string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)));
+                _notifications.Create(Strings.Toast_Warning)
+                    .WithSeverity(NotificationSeverity.Warning)
+                    .WithContent(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)))
+                    .Show();
                 return;
             }
         }
@@ -317,22 +327,29 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var requiredCatalogue = spec == "S-57" ? "S-101" : spec;
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
-            _toasts.ShowWarning(Strings.Toast_Warning,
-                string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue));
+            _notifications.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue))
+                .Show();
             return;
         }
 
-        // Show a loading toast with a Cancel action for standalone
-        // dataset loads. Exchange-set entries are covered by the
-        // exchange-set progress overlay instead, so skip the per-
-        // dataset toast to avoid toast churn during bulk loads.
+        // Hold a single progress notification across the whole load for
+        // standalone dataset loads: indeterminate while loading with a
+        // Cancel action, mutated in place to its terminal state (success /
+        // cancelled / error) instead of dismissing and re-creating toasts.
+        // Exchange-set entries are covered by the aggregate exchange-set
+        // progress notification, so they skip the per-dataset one.
+        INotificationHandle? loadNotification = null;
         if (!fromExchangeSet)
         {
-            _toasts.ShowLoading(
-                Strings.Toast_Loading,
-                string.Format(Strings.Status_LoadingFile, entry.DisplayName),
-                Strings.Toast_Cancel,
-                () => cts.Cancel());
+            loadNotification = _notifications.Create(Strings.Toast_Loading)
+                .WithSeverity(NotificationSeverity.Info)
+                .WithContent(string.Format(Strings.Status_LoadingFile, entry.DisplayName))
+                .AsProgress(indeterminate: true)
+                .Persistent()
+                .WithAction(Strings.Toast_Cancel, () => cts.Cancel(), dismissOnInvoke: false)
+                .Show();
         }
 
         try
@@ -424,6 +441,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 gatedHidden = initialTime is null;
             }
 
+            // Snapshot the paint counter *before* the layers are swapped in,
+            // so the post-load wait can confirm the map actually painted the
+            // new dataset (PaintCount increased) rather than merely settling
+            // on the minimum-quiet floor before any paint occurred.
+            var paintsBeforeRender = _renderActivityMonitor?.PaintCount ?? 0;
+
             DatasetResult? result = null;
             if (gatedHidden)
             {
@@ -465,16 +488,39 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             var validation = await Task.Run(() => SafeValidate(processor), token);
             entry.SetValidationReport(validation);
 
-            // Dismiss the loading toast and surface the per-dataset
-            // load summary as a success toast. Exchange-set entries are
-            // covered by the aggregate exchange-set toast instead, so
-            // they skip the per-dataset toast to avoid churn.
+            // Hold the progress notification in its indeterminate "loading"
+            // state until the map has actually painted the new dataset — not
+            // merely parsed it. The layers were added (ReplaceLayers) and the
+            // viewport framed (ZoomToExtent) above; both only *schedule* an
+            // asynchronous paint. Waiting for the render to settle here means
+            // the terminal success appears once the dataset is visible, which
+            // matches the user's mental model of "loaded". Skipped for hidden
+            // (out-of-range) entries that draw nothing, for exchange-set
+            // entries (covered by the aggregate notification), for an already
+            // dismissed/absent notification, and when no monitor is wired
+            // (e.g. tests) — each has nothing to wait for.
+            if (!fromExchangeSet
+                && !gatedHidden
+                && loadNotification is { IsDismissed: false }
+                && _renderActivityMonitor is not null)
+            {
+                await WaitForDatasetPaintedAsync(paintsBeforeRender, token).ConfigureAwait(true);
+            }
+
+            // Drive the held progress notification to its terminal Success
+            // state (auto-dismissing) instead of dismissing + re-creating a
+            // separate toast. Exchange-set entries are covered by the
+            // aggregate notification, so they have no per-dataset one.
             if (!fromExchangeSet)
             {
-                _toasts.DismissAll();
                 if (!string.IsNullOrWhiteSpace(result?.Info))
                 {
-                    _toasts.ShowSuccess(Strings.Toast_Success, result.Info);
+                    DriveTerminal(
+                        loadNotification, NotificationSeverity.Success, Strings.Toast_Success, result.Info);
+                }
+                else
+                {
+                    loadNotification?.Dismiss();
                 }
             }
 
@@ -500,31 +546,133 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         {
             if (!fromExchangeSet)
             {
-                _toasts.DismissAll();
-                _toasts.ShowInfo(Strings.Toast_DatasetCancelled, entry.DisplayName);
+                DriveTerminal(
+                    loadNotification, NotificationSeverity.Info, Strings.Toast_DatasetCancelled, entry.DisplayName);
             }
         }
         catch (Exception ex)
         {
             if (!fromExchangeSet)
             {
-                _toasts.DismissAll();
-            }
+                // Shape the notification around the innermost structured
+                // S-100 exception (when present) so the user sees a friendly
+                // one-liner instead of a raw stack trace. The full
+                // ToString() is still available via the "Copy details"
+                // action button; the notification stays persistent until
+                // explicitly dismissed.
+                var failure = LoadFailureViewModel.FromException(
+                    entry.DisplayName, entry.FilePath, ex);
+                var errorTitle = string.Format(Strings.Toast_DatasetErrorTitle, entry.DisplayName);
+                var copyDetails = new NotificationActionDescriptor(
+                    Strings.LoadFailureToast_CopyDetails,
+                    () => CopyTextToClipboard(failure.Details),
+                    IsPrimary: false,
+                    DismissOnInvoke: false);
 
-            // Shape the toast around the innermost structured S-100
-            // exception (when present) so the user sees a friendly
-            // one-liner instead of a raw stack trace. The full
-            // ToString() is still available via the "Copy details"
-            // action button; the toast itself sticks around until
-            // explicitly dismissed.
-            var failure = LoadFailureViewModel.FromException(
-                entry.DisplayName, entry.FilePath, ex);
-            _toasts.ShowError(
-                title: string.Format(Strings.Toast_DatasetErrorTitle, entry.DisplayName),
-                content: failure.PrimaryMessage,
-                actionLabel: Strings.LoadFailureToast_CopyDetails,
-                action: () => CopyTextToClipboard(failure.Details),
-                sticky: true);
+                if (loadNotification is not null && !loadNotification.IsDismissed)
+                {
+                    loadNotification.CancelAutoDismiss();
+                    loadNotification.ClearProgress();
+                    loadNotification.Update(
+                        title: errorTitle,
+                        message: failure.PrimaryMessage,
+                        severity: NotificationSeverity.Error);
+                    loadNotification.SetActions(copyDetails);
+                }
+                else
+                {
+                    _notifications.Create(errorTitle)
+                        .WithSeverity(NotificationSeverity.Error)
+                        .WithContent(failure.PrimaryMessage)
+                        .Persistent()
+                        .WithAction(
+                            copyDetails.Label,
+                            copyDetails.Invoke,
+                            isPrimary: false,
+                            dismissOnInvoke: false)
+                        .Show();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drives a held progress notification to a non-error terminal state:
+    /// clears the progress bar and any actions, applies the terminal
+    /// severity/title/message, and schedules a severity-derived auto-dismiss.
+    /// A no-op when no handle was created or it was already dismissed.
+    /// </summary>
+    private static void DriveTerminal(
+        INotificationHandle? handle,
+        NotificationSeverity severity,
+        string title,
+        string? message)
+    {
+        if (handle is null || handle.IsDismissed)
+            return;
+
+        handle.ClearProgress();
+        handle.SetActions();
+        handle.Update(title: title, message: message, severity: severity);
+        handle.ScheduleAutoDismiss(NotificationService.DefaultDelayFor(severity));
+    }
+
+    /// <summary>
+    /// Blocks until the live map has actually painted the newly loaded
+    /// dataset, so the terminal "loaded" notification never precedes the
+    /// chart becoming visible. <see cref="IRenderActivityMonitor.WaitForIdleAsync"/>
+    /// only guarantees a <em>minimum</em> quiet wait — it can report idle on
+    /// the floor before the dataset's first paint lands (or the paint may
+    /// occur during the preceding validation await, before the wait even
+    /// begins). This method therefore gates on the monotonic
+    /// <see cref="IRenderActivityMonitor.PaintCount"/> rising above the value
+    /// captured before the layers were swapped in, then lets the view settle.
+    /// </summary>
+    /// <param name="paintsBeforeRender">
+    /// The monitor's <see cref="IRenderActivityMonitor.PaintCount"/> sampled
+    /// immediately before the new layers were added to the map.
+    /// </param>
+    /// <param name="token">Cancels the wait when the load is cancelled.</param>
+    private async Task WaitForDatasetPaintedAsync(long paintsBeforeRender, CancellationToken token)
+    {
+        var monitor = _renderActivityMonitor;
+        if (monitor is null)
+            return;
+
+        var quiet = TimeSpan.FromMilliseconds(150);
+        var deadline = Environment.TickCount64 + (long)TimeSpan.FromSeconds(5).TotalMilliseconds;
+
+        // Phase 1: ensure at least one paint has landed since the layer swap.
+        // If the paint already occurred (e.g. during the validation await),
+        // PaintCount is already ahead and this loop is skipped entirely.
+        while (monitor.PaintCount <= paintsBeforeRender)
+        {
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0)
+                return;
+
+            var result = await monitor
+                .WaitForIdleAsync(quiet, TimeSpan.FromMilliseconds(remaining), token)
+                .ConfigureAwait(true);
+
+            // A paint landed during the wait — the dataset is on screen.
+            if (result.PaintsObserved > 0)
+                break;
+
+            // The map settled with no paint and the budget elapsed: give up
+            // waiting rather than hold the progress notification indefinitely.
+            if (result.TimedOut)
+                return;
+        }
+
+        // Phase 2: let any fetch-driven follow-up repaints settle so the
+        // success appears once the view is stable, not mid-paint.
+        var settleBudget = deadline - Environment.TickCount64;
+        if (settleBudget > 0)
+        {
+            await monitor
+                .WaitForIdleAsync(quiet, TimeSpan.FromMilliseconds(settleBudget), token)
+                .ConfigureAwait(true);
         }
     }
 
@@ -653,7 +801,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
             }
         }
 
-        _toasts.ShowSuccess(Strings.Toast_Success, Strings.Toast_SettingsApplied);
+        _notifications.Create(Strings.Toast_Success)
+            .WithSeverity(NotificationSeverity.Success)
+            .WithContent(Strings.Toast_SettingsApplied)
+            .Show();
     }
 
     public void RemoveEntry(DatasetEntry entry)

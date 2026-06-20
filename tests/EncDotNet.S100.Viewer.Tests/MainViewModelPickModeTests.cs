@@ -79,7 +79,7 @@ public class MainViewModelPickModeTests
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            toasts: new StubToastService());
+            notifications: Notifications.TestNotifications.Create());
     }
 
     [Fact]

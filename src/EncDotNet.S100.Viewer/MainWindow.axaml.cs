@@ -19,6 +19,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
@@ -112,9 +113,10 @@ public partial class MainWindow : ShadUI.Window
 
         InitializeComponent();
 
-        // Wire the ShadUI toast host to the DI-managed ToastManager so
-        // background services can surface notifications through toasts.
-        ToastHost.Manager = App.Services.GetRequiredService<ShadUI.ToastManager>();
+        // Bind the notification overlay to the DI-managed notification
+        // service so background services can surface notifications.
+        NotificationHost.ItemsSource =
+            App.Services.GetRequiredService<Services.Notifications.INotificationService>().Active;
 
         _viewModel = viewModel;
         _catalogAggregator = catalogAggregator;
@@ -215,9 +217,11 @@ public partial class MainWindow : ShadUI.Window
         // Surface DatasetsViewModel rejection of unknown file extensions.
         _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
         {
-            App.Services.GetRequiredService<IToastService>().ShowWarning(
-                Strings.Toast_Warning,
-                string.Format(Strings.Status_UnrecognizedFileType, extension));
+            App.Services.GetRequiredService<INotificationService>()
+                .Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(string.Format(Strings.Status_UnrecognizedFileType, extension))
+                .Show();
         };
 
         // Clean up layers when a dataset entry is removed from the list.
@@ -452,6 +456,79 @@ public partial class MainWindow : ShadUI.Window
         // Surface a recovery notification when the previous run terminated
         // without a clean shutdown (a native crash, FailFast, kill, …).
         Opened += (_, _) => ReportPreviousUncleanShutdown();
+
+        // Developer aid (--demo-notifications): seed a representative set of
+        // notification cards so the overlay's styling and behaviour can be
+        // verified on-screen without loading real data.
+        if (options?.DemoNotifications == true)
+        {
+            Opened += (_, _) => SeedDemoNotifications();
+        }
+    }
+
+    private bool _demoNotificationsSeeded;
+
+    /// <summary>
+    /// Seeds a representative spread of notification cards (severities,
+    /// long body text for the "Show more"/"Show less" expander, and a
+    /// persistent indeterminate/determinate progress bar) for on-screen
+    /// verification of the notification overlay. Reachable only via the
+    /// undocumented <c>--demo-notifications</c> developer flag, so the demo
+    /// strings are intentionally inline rather than localized.
+    /// </summary>
+    private void SeedDemoNotifications()
+    {
+        if (_demoNotificationsSeeded)
+            return;
+        _demoNotificationsSeeded = true;
+
+        var notifications = App.Services.GetRequiredService<INotificationService>();
+
+        const string longBody =
+            "This is a deliberately long notification body that exceeds two lines "
+            + "so the card clips it with an ellipsis and offers a \"Show more\" link. "
+            + "Expanding it reveals the full wrapped text, and a \"Show less\" link "
+            + "collapses it again — exactly the behaviour we are verifying here.";
+
+        notifications.Create("Information")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(longBody)
+            .Persistent()
+            .Show();
+
+        notifications.Create("Success")
+            .WithSeverity(NotificationSeverity.Success)
+            .WithContent("Dataset loaded and rendered.")
+            .Persistent()
+            .Show();
+
+        notifications.Create("Warning")
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent("Some cells reference updates that were not applied.")
+            .WithAction("Details", () => { })
+            .Persistent()
+            .Show();
+
+        notifications.Create("Error")
+            .WithSeverity(NotificationSeverity.Error)
+            .WithContent(longBody)
+            .WithAction("Copy details", () => { })
+            .Persistent()
+            .Show();
+
+        var indeterminate = notifications.Create("Loading exchange set…")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent("Parsing catalogue")
+            .Persistent()
+            .Show();
+        indeterminate.SetIndeterminate(true);
+
+        var determinate = notifications.Create("Loading dataset…")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent("US5WA50M/US5WA50M.000")
+            .Persistent()
+            .Show();
+        determinate.Report(0.45);
     }
 
     private bool _previousCrashReported;
@@ -479,13 +556,15 @@ public partial class MainWindow : ShadUI.Window
             ? string.Format(Strings.Toast_PreviousCrashBodyMultiple, crashed.Count)
             : string.Format(Strings.Toast_PreviousCrashBody, mostRecent.StartedUtc.ToLocalTime());
 
-        var toasts = App.Services.GetRequiredService<IToastService>();
-        toasts.ShowError(
-            title: Strings.Toast_PreviousCrashTitle,
-            content: body,
-            actionLabel: Strings.Toast_PreviousCrashAction,
-            action: () => _viewModel.ShowFeedbackCommand.Execute(null),
-            sticky: true);
+        App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_PreviousCrashTitle)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(body)
+            .WithAction(
+                Strings.Toast_PreviousCrashAction,
+                () => _viewModel.ShowFeedbackCommand.Execute(null))
+            .Persistent()
+            .Show();
     }
 
     /// <summary>
@@ -908,18 +987,37 @@ public partial class MainWindow : ShadUI.Window
         _viewModel.SelectDefaultTab();
 
         var token = _viewModel.BeginExchangeSetLoad(sourcePath);
-        var progress = new Progress<Services.ExchangeSetProgress>(
-            p => _viewModel.ReportExchangeSetProgress(p));
 
-        // Show a loading toast with a Cancel action that mirrors the
-        // overlay's Cancel button. The toast supplements the progress
-        // overlay for users who switch to another activity panel.
-        var toasts = App.Services.GetRequiredService<IToastService>();
-        toasts.ShowLoading(
-            Strings.Toast_ExchangeSetLoading,
-            sourcePath,
-            Strings.Toast_Cancel,
-            () => _viewModel.CancelExchangeSetCommand.Execute(null));
+        // One progress notification drives the whole open: indeterminate
+        // until the catalogue is parsed, then determinate as datasets are
+        // dispatched. A Cancel action mirrors the overlay. Failure /
+        // cancellation terminal states are driven in place by the exchange-set
+        // service; the success / partial terminal is deferred and driven here
+        // (see DriveExchangeSetTerminalAsync) once the cells are visible.
+        var notification = App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_ExchangeSetLoading)
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(Services.Notifications.NotificationFormat.ShortenPath(sourcePath))
+            .AsProgress(indeterminate: true)
+            .Persistent()
+            .WithAction(
+                Strings.Toast_Cancel,
+                () => _viewModel.CancelExchangeSetCommand.Execute(null),
+                dismissOnInvoke: false)
+            .Show();
+
+        var progress = new Progress<Services.ExchangeSetProgress>(p =>
+        {
+            // Stay indeterminate until at least one cell has actually finished
+            // loading. The exchange-set service reports Completed based on real
+            // load completions (not dispatch), so a single-cell set animates as
+            // indeterminate for its whole load, and multi-cell sets fill as each
+            // cell lands — never racing to 100% during the instant dispatch.
+            if (!notification.IsDismissed && p.Total > 0 && p.Completed > 0)
+            {
+                notification.Report((double)p.Completed / p.Total);
+            }
+        });
 
         // Subscribe to per-dataset load completions for the duration of
         // this open. We accumulate each loaded entry's layer extents so
@@ -953,23 +1051,32 @@ public partial class MainWindow : ShadUI.Window
 
         try
         {
-            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token);
+            var result = await _exchangeSetService.OpenAsync(sourcePath, progress, token, notification);
             _viewModel.EndExchangeSetLoad(result);
 
-            // Prefer the catalogue's union bbox when available — it's
-            // ready immediately and matches producer intent.
+            // Frame the loaded cells. Prefer the catalogue's union bbox when
+            // available — it's ready immediately and matches producer intent.
+            // Otherwise debounce on DatasetLoaded events: zoom once no new
+            // event has arrived for QuietWindowMs. This naturally handles
+            // per-dataset load failures (which never raise the event) without
+            // waiting a fixed timeout.
             if (result.UnionBoundingBox is { } bbox &&
                 MapControl.Map?.Navigator is { } nav)
             {
                 ZoomToCatalogueBoundingBox(nav, bbox);
-                return;
+            }
+            else
+            {
+                await ZoomWhenLoadingQuietsAsync(loadedEntries, unionSlot, lastEventTicks);
             }
 
-            // Otherwise debounce on DatasetLoaded events: zoom once no
-            // new event has arrived for QuietWindowMs. This naturally
-            // handles per-dataset load failures (which never raise the
-            // event) without waiting a fixed timeout.
-            await ZoomWhenLoadingQuietsAsync(loadedEntries, unionSlot, lastEventTicks);
+            // The cells are loaded and framed; hold the progress notification
+            // until the map has actually painted them, then drive it to its
+            // terminal "loaded" state. This keeps the success notification from
+            // ever preceding the charts becoming visible. Failure / cancelled
+            // outcomes were driven immediately inside OpenAsync and leave
+            // PendingTerminal null, so this is a no-op for them.
+            await DriveExchangeSetTerminalAsync(notification, result, token);
         }
         catch (Exception ex)
         {
@@ -978,14 +1085,72 @@ public partial class MainWindow : ShadUI.Window
                 SourcePath = sourcePath,
                 FailureMessage = ex.Message,
             });
+
+            // OpenAsync handles its own failures and drives the
+            // notification's terminal state; this is a safety net for
+            // anything thrown afterwards (e.g. the post-load zoom).
+            if (!notification.IsDismissed)
+            {
+                notification.ClearProgress();
+                notification.SetActions();
+                notification.Update(
+                    title: Strings.Toast_ExchangeSetFailed,
+                    message: ex.Message,
+                    severity: NotificationSeverity.Error);
+                notification.ScheduleAutoDismiss(
+                    NotificationService.DefaultDelayFor(NotificationSeverity.Error));
+            }
         }
         finally
         {
             _loader.DatasetLoaded -= handler;
-            // Dismiss the exchange-set loading toast; the result
-            // toasts from ExchangeSetService will follow immediately.
-            toasts.DismissAll();
         }
+    }
+
+    /// <summary>
+    /// Drives the shared exchange-set progress notification to its deferred
+    /// terminal state (<see cref="Services.ExchangeSetOpenResult.PendingTerminal"/>)
+    /// once the loaded cells have been framed and the map has painted them,
+    /// so the "loaded" notification never precedes the charts becoming
+    /// visible. A no-op when the outcome has no pending terminal (failure /
+    /// cancellation, already driven inside <c>OpenAsync</c>) or the
+    /// notification was dismissed by the user. The render-idle wait is bounded
+    /// by a timeout so a slow basemap never blocks the notification.
+    /// </summary>
+    private async Task DriveExchangeSetTerminalAsync(
+        Services.Notifications.INotificationHandle notification,
+        Services.ExchangeSetOpenResult result,
+        CancellationToken token)
+    {
+        if (result.PendingTerminal is not { } pending || notification.IsDismissed)
+            return;
+
+        if (_renderActivityMonitor is not null)
+        {
+            try
+            {
+                await _renderActivityMonitor
+                    .WaitForIdleAsync(
+                        TimeSpan.FromMilliseconds(200),
+                        TimeSpan.FromSeconds(8),
+                        token)
+                    .ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // Still settle the notification below — the cells are loaded.
+            }
+        }
+
+        if (notification.IsDismissed)
+            return;
+
+        notification.ClearProgress();
+        notification.SetActions();
+        notification.Update(
+            title: pending.Title, message: pending.Message, severity: pending.Severity);
+        notification.ScheduleAutoDismiss(
+            NotificationService.DefaultDelayFor(pending.Severity));
     }
 
     private void ZoomToCatalogueBoundingBox(Mapsui.Navigator nav, EncDotNet.S100.ExchangeSets.BoundingBox bbox)

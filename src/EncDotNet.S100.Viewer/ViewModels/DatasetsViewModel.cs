@@ -703,6 +703,22 @@ internal sealed class DatasetsViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Loads the supplied entry through the dataset loader and returns the
+    /// load task so callers (e.g. the exchange-set open flow) can await the
+    /// completion of a batch of dispatched loads before declaring success.
+    /// Like <see cref="RequestLoad"/>, the loader surfaces any per-entry
+    /// failure via its own notification and does not throw, so the returned
+    /// task completes successfully even when the underlying load fails.
+    /// </summary>
+    /// <param name="entry">The dataset entry to load.</param>
+    /// <returns>A task that completes when the entry has finished loading.</returns>
+    public Task RequestLoadAsync(DatasetEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return _loader.LoadAsync(entry);
+    }
+
+    /// <summary>
     /// Detects the product spec for <paramref name="path"/>, adds an entry,
     /// and asks the loader to render it. If the file extension is not
     /// recognised, raises <see cref="UnrecognizedFileEncountered"/> with the

@@ -113,7 +113,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            toasts: new StubToastService(),
+            notifications: Notifications.TestNotifications.Create(),
             activityTabs: tabs);
     }
 
