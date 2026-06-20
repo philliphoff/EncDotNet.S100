@@ -616,6 +616,44 @@ work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),
 palette flip produced two separate namespaces (no cross-style sharing); 163 tiles
 persisted, 198 served warm from disk on the flip-back instead of re-rasterising.
 
+### GPU texture residency (Phase 5)
+
+The top tier keeps already-composited tiles **resident as GPU textures** so a
+steady pan/zoom does not re-upload identical pixels to the GPU every frame. A
+profile of the pre-residency steady pan attributed **98 % of render-thread native
+self-time to `BlitTile → SKCanvas.DrawImage`** — i.e. a per-frame raster→GPU
+re-upload of unchanged tiles (design doc Appendix F). Residency replaces that with
+a one-time promotion: the first time a raster tile is composited it is promoted via
+`SKImage.ToTextureImage(GRContext)` into a per-layer GPU-texture cache (a second
+`TileCache` instance), and every subsequent frame blits the already-resident
+texture. Telemetry counters `s100.render.tile.gpu.uploads` / `.hits` track the
+reuse ratio.
+
+This is **gated to GPU-backed surfaces**: the live `GRContext` is read from
+`SKCanvas.Context` and is `null` on a software/CPU surface, in which case the
+renderer transparently falls back to the raster blit path. The magnitude of the
+win is therefore machine-dependent — on a Metal/Apple-silicon surface the steady
+pan went from ~38 ms to ~3 ms per frame with a 96–99 % GPU hit ratio — but the
+*direction* (stop re-uploading identical pixels) holds on any GPU surface and the
+software path is unchanged.
+
+**Thread-confinement (critical):** GPU-backed `SKImage`s must be created *and
+freed* on the thread that owns the GPU context (the render thread); freeing one on
+the GC finalizer thread crashes the native Skia GPU backend. All GPU-texture
+mutation funnels through `ManageGpuResidency` / `BlitTile`, which run only on the
+render thread under the layer lock. To make teardown safe — a closed dataset, a
+palette re-portrayal that swaps in a fresh layer, or a silently GC'd layer all
+abandon a `TileState` that will never render again — every GPU-texture cache is
+held by a **process-wide registry** with a *strong* reference to the cache and a
+*weak* reference to its owning layer. The strong reference keeps the textures off
+the finalizer thread; when the layer is collected, the next render reconciles the
+registry and disposes the orphaned cache on the render thread under the live
+context. Knobs: `S100_VECTOR_TILE_GPU` (default on),
+`S100_VECTOR_TILE_GPU_MB` (default 256). **Verified (PDB01):** four
+close-all + reopen cycles (each warming and abandoning a GPU cache) with no native
+crash, frames steady at 6–9 ms and a 96 % GPU hit ratio sustained across the
+cycles.
+
 ## Installation
 
 ```sh

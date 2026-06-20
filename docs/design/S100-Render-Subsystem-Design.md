@@ -149,7 +149,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 - **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script. **✅ Done** — `TileGrid` + `TileCache` + `S100VectorTileRenderer` (Appendix C). Origin-anchored web-mercator pyramid keeps interior tiles pan-stable; on-screen paint stayed bounded (≤ ~37 ms worst case vs A's ~409 ms) with no visible seams.
 - **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0. **✅ Done** — EMA-velocity warm set (1-ring halo ∪ directional fan ∪ z±1 centre) on a low-priority queue behind `S100VectorTileRenderer`, gated by `S100_VECTOR_TILE_PREDICT` (Appendix D). Prediction-on/off A/B over a 20-step pan: cold-frame fraction **58% → 16%** (residual is cold start, not the pan); hit-rate ~32%.
 - **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles. **✅ Done (core)** — persistent warm disk cache (`TileDiskCache`) keyed by a namespace folding `productLayerSet` + `styleStateHash`, so a tile is never served for a different mariner/palette state (Appendix E). The in-memory hot cache is already fresh per layer (a settings change rebuilds the layer), so in-memory stale exposure was structurally impossible; the hash extends that guarantee to the persistent tier. **Deferred:** the Label-plane extraction is held per the §4 principle *"labels stay on Mapsui through Phase 4"*; the Dynamic plane already exists and is reused unchanged.
-- **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode.
+- **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode. **✅ Done (residency)** — composited tiles are promoted once to GPU-resident textures (`SKImage.ToTextureImage`) in a per-layer GPU `TileCache` and re-blitted without re-upload, gated to GPU surfaces with a software raster fallback (Appendix F). A measurement gate first attributed 98 % of render-thread native time to the per-frame re-upload (`BlitTile → DrawImage`); residency cut the steady-pan frame from ~38 ms to ~3 ms with a 96–99 % GPU hit ratio on a Metal surface. GPU textures are confined to the render thread and held by a strong-cache/weak-layer registry so teardown (dataset close, palette re-portrayal, or GC of an abandoned layer) frees them on the render thread instead of crashing the native backend on the finalizer thread. **Deferred (polish):** anticipatory-zoom tuning and the side-by-side A/B diff mode.
 
 ---
 
@@ -526,3 +526,107 @@ namespace-isolation safety property and the byte-budget eviction.
   let day/dusk/night re-resolve cheaply instead of re-rendering (design §3.4).
 - **GPU residency** of recently-used tiles (Phase 5), gated on the foreground
   surface being GPU-backed.
+
+---
+
+## Appendix F — Phase 5 measurement (the GPU-residency decision)
+
+Phase 5's headline is GPU texture residency. Per the design's own
+"measure before you build" stance, the residency work was gated on a
+profiling measurement rather than assumed.
+
+### F.1 Method
+
+A fixed steady-pan script (90 small constant-velocity pan steps at one
+zoom, all tiles warm) drove the **TiledScene** arm over the reference
+cell `101AU005PDB01.000`. Two captures:
+
+1. **OTEL histograms** (`s100.render.tile.composite.duration`,
+   `…tile.rasterize.duration`) for the per-frame UI-thread blit cost.
+2. **`dotnet-trace`** (`dotnet-sampled-thread-time`, the macOS
+   wall-clock profile) over the same pan, converted to Speedscope and
+   reduced to *native self-time attributed to the nearest managed
+   caller on the render thread*.
+
+### F.2 Result
+
+- The UI-thread composite pass averaged ~12 ms (≈60 % of passes in the
+  10–25 ms bucket) on this machine — a large share of the frame.
+- The trace localised it unambiguously: **≈98 % of render-thread native
+  time was under `S100VectorTileRenderer.BlitTile` → `SKCanvas.DrawImage`**.
+  The managed compositor bookkeeping (cache snapshot, fallback scan,
+  sort) was negligible.
+
+The cost is therefore the **per-frame raster→GPU upload/blit of the
+tiles**, not CPU overhead: Skia is not retaining our worker-produced
+raster `SKImage`s as GPU textures across frames, so the same pixels are
+re-uploaded every paint.
+
+### F.3 Why the decision is machine-independent
+
+The specific millisecond figures are a property of *this* hardware
+(Apple-silicon unified-memory Metal) and must **not** be over-indexed —
+other targets will differ. But the *conclusion* does not depend on the
+magnitude:
+
+- Re-uploading identical tile pixels every frame is wasteful on **any**
+  GPU. Removing it is a pure win wherever a GPU context exists.
+- On lower-bandwidth or discrete-GPU targets (Windows/D3D, Linux/GL,
+  integrated Intel/AMD) the per-frame upload tends to cost **more**
+  relative to compute, so residency helps at least as much there.
+- On **software/CPU-backed** surfaces (CI, VMs, headless Linux, no-accel
+  GPUs) there is no `GRContext`; residency is then a **no-op** and the
+  code falls back to today's raster blit — no regression.
+
+Hence Phase 5 promotes warm tiles to GPU-resident textures **once**,
+strictly gated on the foreground surface being GPU-backed
+(`ISkiaSharpApiLease.GrContext != null`, per Appendix A.2), with the
+raster path retained as the universal fallback.
+
+### F.4 Residency outcome
+
+Implemented as a per-layer second `TileCache` of GPU-backed `SKImage`s.
+On the first composite of a warm raster tile the renderer promotes it via
+`SKImage.ToTextureImage(GRContext)` and caches the texture; every later
+frame blits the resident texture and increments
+`s100.render.tile.gpu.hits` instead of re-uploading. The live `GRContext`
+comes from `SKCanvas.Context`; when it is `null` (software surface or
+`S100_VECTOR_TILE_GPU=0`) the path is a no-op and the raster blit runs
+unchanged. Budget knob `S100_VECTOR_TILE_GPU_MB` (default 256).
+
+On this machine (Metal) the steady-pan frame fell from **~38 ms to
+~3 ms** (composite mean ~12 ms → ~0.34 ms) at a **99 % GPU hit ratio**
+(uploads 171 vs hits 17 082). As stated in F.3 the magnitude is
+machine-specific; the elimination of the per-frame re-upload is the
+portable result.
+
+### F.5 Teardown crash and the residency registry
+
+First residency builds crashed the viewer on a **close-all + reopen**:
+the macOS report showed `SIGSEGV` on the .NET **finalizer thread** inside
+`libSkiaSharp` (`FinalizerThread::FinalizeAllObjects → …`). Root cause:
+GPU-backed `SKImage`s must be freed on the thread that owns the
+`GRContext` (the render thread). When a dataset closes — or a palette
+re-portrayal swaps in a fresh layer, or an abandoned layer is silently
+GC'd — its `TileState` is abandoned and never renders again; its GPU
+textures were then reclaimed by the GC and **finalized off the render
+thread**, freeing live GPU resources under the wrong thread → native
+crash.
+
+Fix: a process-wide registry holds a **strong** reference to every
+GPU-texture cache and a **weak** reference to its owning layer. The
+strong reference keeps the textures out of the finalizer's reach; the
+weak reference lets the renderer notice when a layer has been collected.
+At the top of each paint the render thread reconciles the registry and
+disposes any orphaned cache itself, under the live context — so GPU
+images are always both created and freed on the render thread. All other
+GPU mutation (`ManageGpuResidency`, `BlitTile`) is likewise render-thread
+only, under the layer lock. **Verified:** four close-all + reopen cycles
+(each warming then abandoning a GPU cache, with GC pressure from the
+reopen) ran with no crash, frames steady at 6–9 ms and a 96 % GPU hit
+ratio sustained across the cycles. The reused `TileCache`'s
+dispose-on-calling-thread semantics that this relies on are unit-covered
+(`TileCacheTests.Clear_DisposesAndEmptiesCache`,
+`…Put_AfterDispose_…`); the GPU promotion and the registry reconcile are
+GPU-context-bound and so are validated by this integration run rather
+than a headless unit test.

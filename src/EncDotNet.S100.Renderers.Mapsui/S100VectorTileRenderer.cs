@@ -105,6 +105,31 @@ public static class S100VectorTileRenderer
     public static bool DiskCacheEnabled { get; } = ReadBool("S100_VECTOR_TILE_DISK", true);
 
     /// <summary>
+    /// Whether <b>GPU texture residency</b> (Phase&#160;5) is enabled. When on,
+    /// and the live compositor surface is GPU-backed
+    /// (<see cref="SKCanvas.Context"/> resolves to a <see cref="GRContext"/>),
+    /// each warm raster tile is uploaded <i>once</i> to a GPU-resident texture
+    /// (<see cref="SKImage.ToTextureImage(GRContext)"/>) and reused on every
+    /// subsequent frame, instead of re-uploading the same pixels each paint —
+    /// the dominant per-frame cost identified in Appendix&#160;F. Read once from
+    /// <c>S100_VECTOR_TILE_GPU</c> (default on; <c>0</c>/<c>false</c> disables, a
+    /// first-class A/B knob). On a software/CPU surface this is inert and the
+    /// renderer blits the raster tile directly (universal fallback, no regression).
+    /// </summary>
+    public static bool GpuResidencyEnabled { get; } = ReadBool("S100_VECTOR_TILE_GPU", true);
+
+    /// <summary>
+    /// Per-layer GPU-texture residency budget, in native bytes. The resident
+    /// GPU texture set is bounded independently of the CPU hot cache (it holds
+    /// only tiles actually blitted, so it tracks the viewport working set). Read
+    /// once from <c>S100_VECTOR_TILE_GPU_MB</c> (default 256&#160;MB). Must
+    /// comfortably exceed the visible + fallback working set or promotion
+    /// thrashes (re-upload each frame); the default holds ~100 guttered tiles.
+    /// </summary>
+    public static long GpuBudgetBytes { get; } =
+        (long)ReadDouble("S100_VECTOR_TILE_GPU_MB", 256.0, 4.0, 4096.0) * 1024 * 1024;
+
+    /// <summary>
     /// Invoked (on a worker thread) when a tile publishes, so the host can
     /// request a single repaint. The viewer marshals a <c>RefreshGraphics()</c>
     /// onto the UI thread.
@@ -112,6 +137,23 @@ public static class S100VectorTileRenderer
     public static Action? RequestRedraw { get; set; }
 
     private static readonly ConditionalWeakTable<ILayer, TileState> s_states = new();
+
+    /// <summary>
+    /// Process-wide registry of every live GPU-texture residency cache, keyed
+    /// weakly by its owning <see cref="ILayer"/> (Phase&#160;5). This holds a
+    /// <em>strong</em> reference to each <see cref="TileCache"/> of GPU-backed
+    /// <see cref="SKImage"/>s so the GC's finalizer thread can never reclaim
+    /// them — GPU resources must be freed on the thread that owns the
+    /// <see cref="GRContext"/>, and finalizing them off-thread crashes the
+    /// native Skia GPU backend. When a layer is torn down (dataset closed,
+    /// palette re-portrayal swapping in a fresh layer, or a silent GC of an
+    /// abandoned layer) its weak entry goes dead; <see cref="ReconcileGpuCaches"/>
+    /// then disposes the orphaned cache on the render thread under the live
+    /// context. See <c>docs/design/S100-Render-Subsystem-Design.md</c> Appendix&#160;F.
+    /// </summary>
+    private static readonly List<(WeakReference<ILayer> Layer, TileCache Cache, GRContext Context)> s_gpuRegistry = new();
+
+    private static readonly object s_gpuRegistrySync = new();
 
     private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
@@ -273,6 +315,12 @@ public static class S100VectorTileRenderer
 
         var state = s_states.GetValue(layer, static _ => new TileState());
 
+        // Resolve the live GPU context from the compositor canvas (null on a
+        // software/CPU surface or when residency is disabled). Phase 5: warm
+        // tiles are promoted to GPU-resident textures so identical pixels are
+        // not re-uploaded every frame (Appendix F).
+        var grContext = GpuResidencyEnabled ? (canvas.Context as GRContext) : null;
+
         var band = TileGrid.BandForResolution(resolution);
         var centerX = viewport.CenterX;
         var centerY = viewport.CenterY;
@@ -360,7 +408,19 @@ public static class S100VectorTileRenderer
                 state.PredictedInCache.RemoveWhere(k => !state.Cache.Contains(k));
             }
 
-            Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution);
+            // Phase 5 GPU residency (render thread only): first dispose any
+            // GPU-texture caches whose owning layer has been torn down (under
+            // the live context), then reconcile this layer's cache with the
+            // current context + scene generation before compositing, so stale
+            // textures are never blitted.
+            if (grContext is not null)
+            {
+                ReconcileGpuCaches(grContext);
+            }
+
+            ManageGpuResidency(state, grContext, layer);
+
+            Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution, grContext);
         }
 
         S100Diag.Telemetry.TileCompositeDuration.Record(
@@ -411,8 +471,11 @@ public static class S100VectorTileRenderer
     /// </summary>
     private static void Composite(
         SKCanvas canvas, TileState state, int band,
-        double centerX, double centerY, double widthDip, double heightDip, double resolution)
+        double centerX, double centerY, double widthDip, double heightDip, double resolution,
+        GRContext? grContext)
     {
+        var gpuCache = grContext is not null ? state.GpuTextures : null;
+
         // Backdrop: cached tiles from other bands that intersect the viewport,
         // farthest band first so the closest resolution ends up on top.
         var fallback = new List<TileKey>();
@@ -433,29 +496,184 @@ public static class S100VectorTileRenderer
         fallback.Sort((a, b) => Math.Abs(b.Band - band).CompareTo(Math.Abs(a.Band - band)));
         foreach (var key in fallback)
         {
-            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution);
+            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
         }
 
         // Exact target band on top (crisp where present).
         foreach (var key in TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band))
         {
-            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution);
+            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+        }
+    }
+
+    /// <summary>
+    /// Reconciles the per-layer GPU-texture residency cache (Phase&#160;5) with
+    /// the live state, on the render thread. GPU-backed <see cref="SKImage"/>s
+    /// must be created and disposed on the thread that owns the GPU context, so
+    /// every mutation of <see cref="TileState.GpuTextures"/> funnels through here
+    /// and <see cref="BlitTile"/> (both render-thread only):
+    /// <list type="bullet">
+    /// <item>no context (software surface or residency disabled) → drop any
+    /// textures we hold and run the raster path;</item>
+    /// <item>context changed (first paint, or a device reset handed us a new
+    /// <see cref="GRContext"/>) → rebuild the cache, since textures are bound to
+    /// the context that created them;</item>
+    /// <item>scene/style generation advanced (a <see cref="BindScene"/>
+    /// invalidation) → discard the now-stale textures so the re-rasterised
+    /// tiles are re-promoted.</item>
+    /// </list>
+    /// </summary>
+    private static void ManageGpuResidency(TileState state, GRContext? grContext, ILayer layer)
+    {
+        if (grContext is null)
+        {
+            if (state.GpuTextures is not null)
+            {
+                UnregisterGpuCache(state.GpuTextures);
+                state.GpuTextures.Dispose();
+                state.GpuTextures = null;
+                state.GpuContext = null;
+            }
+
+            return;
+        }
+
+        if (!ReferenceEquals(state.GpuContext, grContext))
+        {
+            if (state.GpuTextures is not null)
+            {
+                UnregisterGpuCache(state.GpuTextures);
+                state.GpuTextures.Dispose();
+            }
+
+            state.GpuTextures = new TileCache(GpuBudgetBytes);
+            RegisterGpuCache(layer, state.GpuTextures, grContext);
+            state.GpuContext = grContext;
+            state.GpuGeneration = state.Generation;
+        }
+        else if (state.GpuGeneration != state.Generation)
+        {
+            state.GpuTextures!.Clear();
+            state.GpuGeneration = state.Generation;
+        }
+    }
+
+    /// <summary>
+    /// Registers a GPU-texture cache in the process-wide registry so it is held
+    /// alive against off-thread finalization until its owning layer is collected
+    /// (Phase&#160;5). See <see cref="s_gpuRegistry"/>.
+    /// </summary>
+    private static void RegisterGpuCache(ILayer layer, TileCache cache, GRContext context)
+    {
+        lock (s_gpuRegistrySync)
+        {
+            s_gpuRegistry.Add((new WeakReference<ILayer>(layer), cache, context));
+        }
+    }
+
+    /// <summary>
+    /// Removes a GPU-texture cache from the registry once the render thread has
+    /// taken ownership of disposing it (a live layer rebuilding or dropping its
+    /// cache). See <see cref="s_gpuRegistry"/>.
+    /// </summary>
+    private static void UnregisterGpuCache(TileCache cache)
+    {
+        lock (s_gpuRegistrySync)
+        {
+            for (int i = s_gpuRegistry.Count - 1; i >= 0; i--)
+            {
+                if (ReferenceEquals(s_gpuRegistry[i].Cache, cache))
+                {
+                    s_gpuRegistry.RemoveAt(i);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Disposes — on the render thread, under the live <see cref="GRContext"/> —
+    /// any registered GPU-texture caches whose owning layer has been collected
+    /// (Phase&#160;5). This is the teardown path for closed datasets and
+    /// re-portrayed (layer-swapped) datasets: the layer is gone so its
+    /// <see cref="TileState"/> never renders again, but the registry kept its
+    /// GPU images alive so they are freed here on the GPU-owning thread instead
+    /// of crashing the native backend on the finalizer thread. Only caches bound
+    /// to <paramref name="grContext"/> are touched; a cache from a different
+    /// (e.g. lost) context is left for that context's own teardown rather than
+    /// freed under the wrong one. See <see cref="s_gpuRegistry"/>.
+    /// </summary>
+    private static void ReconcileGpuCaches(GRContext grContext)
+    {
+        lock (s_gpuRegistrySync)
+        {
+            for (int i = s_gpuRegistry.Count - 1; i >= 0; i--)
+            {
+                var entry = s_gpuRegistry[i];
+                if (entry.Layer.TryGetTarget(out _))
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(entry.Context, grContext))
+                {
+                    entry.Cache.Dispose();
+                }
+
+                s_gpuRegistry.RemoveAt(i);
+            }
         }
     }
 
     /// <summary>
     /// Blits one cached tile (if resident): positions its guttered image by
     /// world bounds and hard-clips to the tile core so adjacent tiles meet
-    /// exactly with no seam or double-drawn gutter.
+    /// exactly with no seam or double-drawn gutter. When a GPU context is
+    /// supplied (Phase&#160;5), the tile's raster pixels are uploaded once to a
+    /// GPU-resident texture and reused thereafter, so the same pixels are not
+    /// re-uploaded every frame; on a software surface (<paramref name="grContext"/>
+    /// null) the raster image is drawn directly.
     /// </summary>
     private static void BlitTile(
         SKCanvas canvas, TileState state, TileKey key,
-        double centerX, double centerY, double widthDip, double heightDip, double resolution)
+        double centerX, double centerY, double widthDip, double heightDip, double resolution,
+        GRContext? grContext, TileCache? gpuCache)
     {
         var image = state.Cache.TryGet(key);
         if (image is null)
         {
             return;
+        }
+
+        var toDraw = image;
+        if (grContext is not null && gpuCache is not null)
+        {
+            var gpu = gpuCache.TryGet(key);
+            if (gpu is null)
+            {
+                try
+                {
+                    gpu = image.ToTextureImage(grContext);
+                }
+                catch
+                {
+                    gpu = null;
+                }
+
+                if (gpu is not null)
+                {
+                    gpuCache.Put(key, gpu);
+                    S100Diag.Telemetry.TileGpuUploads.Add(1);
+                }
+            }
+            else
+            {
+                S100Diag.Telemetry.TileGpuHits.Add(1);
+            }
+
+            if (gpu is not null)
+            {
+                toDraw = gpu;
+            }
         }
 
         var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
@@ -471,7 +689,7 @@ public static class S100VectorTileRenderer
 
         canvas.Save();
         canvas.ClipRect(coreRect, SKClipOperation.Intersect, antialias: false);
-        canvas.DrawImage(image, fullRect, s_sampling);
+        canvas.DrawImage(toDraw, fullRect, s_sampling);
         canvas.Restore();
     }
 
@@ -663,6 +881,16 @@ public static class S100VectorTileRenderer
 
         public readonly TileCache Cache = new(BudgetBytes);
         public readonly HashSet<TileKey> InFlight = new();
+
+        // Phase 5 GPU residency: GPU-resident texture twins of blitted tiles,
+        // touched ONLY on the render thread (created/disposed on the GPU-context
+        // thread). Null until the first GPU-backed paint; rebuilt when the
+        // context changes and cleared when the scene generation advances.
+        // Reuses TileCache purely for its LRU + native-byte budgeting; all of
+        // its disposes then happen on the render thread, which GPU images require.
+        public TileCache? GpuTextures;
+        public object? GpuContext;
+        public long GpuGeneration = -1;
 
         // Visible misses drain before speculative (predicted) tiles.
         public readonly HashSet<TileKey> PendingVisible = new();

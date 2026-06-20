@@ -357,6 +357,32 @@ internal static class Telemetry
             unit: "{tile}",
             description: "Tiles written to the persistent disk cache by the tiled TiledScene render subsystem.");
 
+    /// <summary>
+    /// Count of raster tiles <b>uploaded once</b> to a GPU-resident texture
+    /// (Phase&#160;5) via <c>SKImage.ToTextureImage</c> on a GPU-backed surface.
+    /// Each upload is amortised across every subsequent frame the tile is blitted
+    /// (counted by <see cref="TileGpuHits"/>); a healthy steady pan has hits ≫
+    /// uploads. Always zero on a software/CPU surface (residency is a no-op). See
+    /// Appendix&#160;F.
+    /// </summary>
+    public static readonly Counter<long> TileGpuUploads =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.gpu.uploads",
+            unit: "{tile}",
+            description: "Raster tiles uploaded once to a GPU-resident texture by the tiled TiledScene render subsystem (Phase 5 residency).");
+
+    /// <summary>
+    /// Count of tile blits served from an <b>already-resident GPU texture</b>
+    /// (Phase&#160;5) — a re-upload of the same pixels avoided. The dominant
+    /// term during a steady pan once the working set is resident. Always zero on
+    /// a software/CPU surface. See Appendix&#160;F.
+    /// </summary>
+    public static readonly Counter<long> TileGpuHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.gpu.hits",
+            unit: "{tile}",
+            description: "Tile blits served from an already-resident GPU texture by the tiled TiledScene render subsystem (Phase 5 residency), avoiding a re-upload.");
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);
