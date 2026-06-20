@@ -65,10 +65,12 @@ internal sealed class TiledSceneChartRenderSubsystem : IChartRenderSubsystem
     {
         IsActive = true;
         S100VectorSceneRenderer.Register();
+        S100VectorTileRenderer.Register();
         Console.Error.WriteLine(
             "[RENDER-SUBSYSTEM] TiledScene active: base plane rasterises from the " +
-            "VectorScene IR on a worker and composites a single translated image " +
-            "(Phase 1 — single surface, no tiling/prediction yet).");
+            "VectorScene IR on workers and composites cached tiles on the UI thread " +
+            "(Phase 2 — tiled base plane; S100_VECTOR_SCENE_MODE=single selects the " +
+            "Phase 1 single-surface arm).");
     }
 
     public void Deactivate() => IsActive = false;

@@ -120,6 +120,7 @@ public partial class App : Application
         // RenderingOptimizations.RenderSubsystem. Idempotent; the takeover is
         // gated by the flag at layer-build time, not by registration.
         EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.Register();
+        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.Register();
 
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 

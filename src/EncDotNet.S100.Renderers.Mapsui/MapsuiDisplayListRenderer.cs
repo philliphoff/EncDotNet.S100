@@ -184,9 +184,11 @@ public sealed class MapsuiDisplayListRenderer
         // snapshot is disabled.
         S100VectorSnapshotRenderer.Register();
 
-        // Likewise register the TiledScene ("B") custom layer renderer so a layer
-        // tagged for it portrays when that subsystem is active. Idempotent.
+        // Likewise register the TiledScene ("B") custom layer renderers (both the
+        // Phase-1 single-surface and Phase-2 tiled arms) so a layer tagged for
+        // either portrays when that subsystem is active. Idempotent.
         S100VectorSceneRenderer.Register();
+        S100VectorTileRenderer.Register();
 
         // 1. Sort instructions by rendering order: areas first, then lines, then points/text
         //    Within same type, sort by DrawingPriority
@@ -376,6 +378,13 @@ public sealed class MapsuiDisplayListRenderer
         // per-feature path) renders the Mapsui features built above.
         var useTiledScene = RenderingOptimizations.RenderSubsystem == RenderSubsystemKind.TiledScene;
 
+        // Within the TiledScene subsystem, the Phase-2 tiled renderer is the
+        // default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
+        // single-surface arm for A/B comparison. Both consume the same scene.
+        var tiledRendererName = TiledSceneModeIsTiled
+            ? S100VectorTileRenderer.RendererName
+            : S100VectorSceneRenderer.RendererName;
+
         var layer = new InstrumentedMemoryLayer(Product)
         {
             Name = LayerName,
@@ -388,7 +397,7 @@ public sealed class MapsuiDisplayListRenderer
             // path (with the translation-invariant path cache) in place. When
             // the TiledScene subsystem is active it takes precedence.
             CustomLayerRendererName = useTiledScene
-                ? S100VectorSceneRenderer.RendererName
+                ? tiledRendererName
                 : S100VectorSnapshotRenderer.Enabled
                     ? S100VectorSnapshotRenderer.RendererName
                     : null,
@@ -405,11 +414,30 @@ public sealed class MapsuiDisplayListRenderer
                 SymbolScale = SymbolScale,
                 TextScale = TextScale,
             };
-            S100VectorSceneRenderer.BindScene(layer, sceneBuilder.Build(instructions, geometryProvider));
+            var builtScene = sceneBuilder.Build(instructions, geometryProvider);
+            if (TiledSceneModeIsTiled)
+            {
+                S100VectorTileRenderer.BindScene(layer, builtScene);
+            }
+            else
+            {
+                S100VectorSceneRenderer.BindScene(layer, builtScene);
+            }
         }
 
         return layer;
     }
+
+    /// <summary>
+    /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
+    /// or the Phase-1 single-surface renderer. Read once from
+    /// <c>S100_VECTOR_SCENE_MODE</c> (<c>single</c> selects the Phase-1 arm).
+    /// </summary>
+    private static readonly bool TiledSceneModeIsTiled =
+        !string.Equals(
+            Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_MODE"),
+            "single",
+            StringComparison.OrdinalIgnoreCase);
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
 

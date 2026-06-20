@@ -271,6 +271,34 @@ internal static class Telemetry
             unit: "ms",
             description: "Wall-clock duration of one UI-thread composite (translated SKImage blit) by the TiledScene render subsystem.");
 
+    /// <summary>
+    /// Wall-clock duration of one off-thread tile rasterisation (core + gutter)
+    /// by the tiled <c>TiledScene</c> arm (<see cref="S100VectorTileRenderer"/>,
+    /// Phase&#160;2). A constant-zoom pan rasterises only newly-exposed
+    /// perimeter tiles, so the count of these per gesture — not their individual
+    /// cost — is what bounds pan work. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.3.
+    /// </summary>
+    public static readonly Histogram<double> TileRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread base-plane tile rasterisation (core + gutter) by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Wall-clock duration of one UI-thread tile composite pass (best-available
+    /// blits of all visible tiles) by the tiled <c>TiledScene</c> arm
+    /// (<see cref="S100VectorTileRenderer"/>). This is the per-frame work that
+    /// stays on the render thread during a pan; tiling keeps it bounded by the
+    /// visible tile count. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.5.
+    /// </summary>
+    public static readonly Histogram<double> TileCompositeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.composite.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one UI-thread tile composite pass (best-available blits of visible tiles) by the tiled TiledScene render subsystem.");
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);
