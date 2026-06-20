@@ -147,7 +147,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 - **Phase 0 — Harness.** Extract IR (§2). Add `IChartRenderSubsystem` + `RenderSubsystem` flag + fixed gesture-script benchmark over `101AU005PDB01` with the standardized telemetry. The "A" arm is today's path verbatim. **Also confirm the Mapsui foreground surface empirically** — instrument the actual surface type the Avalonia `MapControl` creates (GPU `SKGLView` vs CPU `SKCanvasView`; working assumption is GPU by default). The result sets the compositor blit path: GPU → upload-once + texture residency (Phase 5 in scope); CPU → direct memcpy blit (Phase 5 residency moot). *Exit:* reproducible A-baseline numbers + a recorded surface-type finding.
 - **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop. **✅ Done** — `S100VectorSceneRenderer`; on-screen paint worst case ~409 ms → ~5 ms (Appendix B). Base-plane parity holds; residual point-feature deltas trace to A's own portrayal bug, not B.
 - **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script. **✅ Done** — `TileGrid` + `TileCache` + `S100VectorTileRenderer` (Appendix C). Origin-anchored web-mercator pyramid keeps interior tiles pan-stable; on-screen paint stayed bounded (≤ ~37 ms worst case vs A's ~409 ms) with no visible seams.
-- **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0.
+- **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0. **✅ Done** — EMA-velocity warm set (1-ring halo ∪ directional fan ∪ z±1 centre) on a low-priority queue behind `S100VectorTileRenderer`, gated by `S100_VECTOR_TILE_PREDICT` (Appendix D). Prediction-on/off A/B over a 20-step pan: cold-frame fraction **58% → 16%** (residual is cold start, not the pan); hit-rate ~32%.
 - **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles.
 - **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode.
 
@@ -385,3 +385,71 @@ the exact band lands. Accepted.
   cells; Phase 2 uses one coalescing worker per layer.
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply and
   are unchanged by tiling.
+
+## Appendix D — Phase 3 findings (prediction / pre-warm)
+
+Phase 3 adds speculative tile rasterisation so newly-exposed perimeter (and
+zoom) tiles are already resident when a pan/zoom reveals them, driving
+cold-tile exposure toward zero. It lives in the same `S100VectorTileRenderer`
+behind the TiledScene seam; no new surface or layer.
+
+### D.1 Warm-set model (design §3.6)
+
+Each frame the renderer estimates the viewport-centre velocity (EPSG:3857
+metres/second) as an EMA of inter-frame centre deltas
+(`VelocityEstimator`, `alpha = 0.4`). From the current centre + velocity it
+computes a **warm set** (`TileGrid.PredictedTiles`):
+
+- **1-ring halo** around the visible range (covers slow drift in any direction);
+- **directional fan** aimed along the velocity vector, its depth scaling with
+  speed (`lookAhead = 0.5 s`, capped at `maxFanDepth = 4`) — where a fast fling
+  is heading;
+- **z±1 centre tiles** so a zoom step finds the adjacent band already warm.
+
+The set excludes anything already visible, cached, or in flight, and is
+deduped. It is recomputed (and therefore implicitly *cancelled*) every frame;
+hysteresis comes from the velocity EMA, not from retaining stale predictions.
+
+### D.2 Scheduling
+
+Pending work is split into two queues: `PendingVisible` (on-screen exact-band
+misses, high priority) and `PendingPredicted` (the warm set, low priority). The
+single coalescing worker drains visible-first, so prediction always yields to
+tiles the user is actually looking at and never delays an on-screen fill.
+
+Speculatively-rasterised keys are tracked in `PredictedInCache`; when a later
+frame finds such a key in the visible set it counts a **prediction hit** and
+drops it from the set (bounded-pruned against the cache to stay small).
+
+### D.3 Telemetry
+
+Three instruments (Meter `EncDotNet.S100.Renderers.Mapsui`):
+
+- `s100.render.tile.cold.exposure` (Histogram) — visible exact-band tiles
+  absent from cache at each composite (the metric Phase 3 must minimise);
+- `s100.render.tile.prediction.rasterized` (Counter) — speculative tiles built;
+- `s100.render.tile.prediction.hits` (Counter) — speculative tiles later shown.
+
+### D.4 A/B result (reference cell `101AU005PDB01.000`)
+
+Prediction is a first-class A/B knob: `S100_VECTOR_TILE_PREDICT=0` reverts to
+Phase-2 visible-only behaviour (`PredictionEnabled`). Same scripted 20-step
+eastward pan, prediction OFF vs ON:
+
+| Metric | OFF (Phase 2) | ON (Phase 3) |
+|---|---|---|
+| Frames with cold-tile exposure | 144 / 248 (**58 %**) | 59 / 374 (**16 %**) |
+| Prediction hit-rate | — | 56 / 173 (**~32 %**) |
+| Pan `frameDurationMs` p90 / max | 7.1 / 7.7 | 11.7 / 11.9 |
+
+The residual 16 % cold frames with prediction on are the **cold-start load**
+(no velocity history yet); during the steady-pan window itself every frame was
+zero-cold, meeting the exit criterion. Pan frame time stays well within budget
+in both arms — the extra ~4 ms p90 with prediction on is the low-priority
+warm-set rasterisation, which never blocks an on-screen fill.
+
+### D.5 Open follow-ups (Phase 4+)
+
+- The Phase-1 B-side polish items (line dashes, label glyphs) still apply.
+- A disk-backed tile cache + `styleStateHash` invalidation (palette/settings)
+  with visible-first re-raster is Phase 4.

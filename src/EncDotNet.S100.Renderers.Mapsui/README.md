@@ -563,6 +563,31 @@ bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are z
 backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
 visible tile seams. Full numbers in Appendix C of the design doc.
 
+### Prediction / pre-warm (Phase 3)
+
+To stop a pan or zoom from transiently exposing cold tiles, the tiled renderer
+speculatively rasterises tiles **before** they scroll into view (design doc
+Appendix D). Each frame it estimates the viewport-centre velocity as an EMA of
+inter-frame deltas (`VelocityEstimator`, EPSG:3857 m/s) and builds a **warm
+set** (`TileGrid.PredictedTiles`): a 1-ring halo around the visible range, a
+directional fan aimed along the velocity vector whose depth scales with speed
+(0.5 s look-ahead, capped at 4 tiles), and the z±1 centre tiles so a zoom step
+finds the adjacent band warm.
+
+The warm set is a **separate low-priority queue** (`PendingPredicted`); the
+single worker drains on-screen misses (`PendingVisible`) first, so prediction
+never delays a tile the user is looking at. The set is recomputed — and thereby
+cancelled — every frame; hysteresis comes from the velocity EMA. Speculative
+hits are counted via `s100.render.tile.prediction.hits` /
+`.rasterized`, and cold exposure via the `s100.render.tile.cold.exposure`
+histogram.
+
+Prediction is on by default and is a first-class A/B knob:
+`S100_VECTOR_TILE_PREDICT=0` reverts to the Phase-2 visible-only behaviour.
+**Measured (PDB01, 20-step pan, OFF vs ON):** frames with cold-tile exposure
+fell from **58 % → 16 %** (the residual is the cold start, not the pan), at a
+~32 % prediction hit-rate; the steady-pan window itself was entirely zero-cold.
+
 ## Installation
 
 ```sh
