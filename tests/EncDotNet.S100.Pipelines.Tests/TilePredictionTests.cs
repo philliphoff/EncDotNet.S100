@@ -178,4 +178,20 @@ public class TilePredictionTests
     {
         Assert.Empty(TileGrid.PredictedTiles(0, 0, 0, 600, 100, 5, 10, 10));
     }
+
+    [Theory]
+    [InlineData(true, false, true)]   // published visible tile -> repaint
+    [InlineData(true, true, false)]   // published predicted (pre-warm) tile -> NO repaint
+    [InlineData(false, false, false)] // nothing published -> no repaint
+    [InlineData(false, true, false)]  // predicted, not published -> no repaint
+    public void ShouldRequestRedraw_RepaintsOnlyForVisiblePublishedTiles(
+        bool published, bool isPrediction, bool expected)
+    {
+        // Regression guard: a predicted (off-screen pre-warm) publish must never
+        // request a redraw. If it does, each pre-warm tile triggers a frame that
+        // re-runs prediction and re-publishes the next speculative tile — a
+        // self-sustaining repaint loop that prevents the map from ever settling
+        // (observed as partial zoom-out "rendering never stops" under GPU residency).
+        Assert.Equal(expected, S100VectorTileRenderer.ShouldRequestRedraw(published, isPrediction));
+    }
 }

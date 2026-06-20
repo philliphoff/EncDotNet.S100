@@ -396,16 +396,31 @@ internal static class Telemetry
             description: "Render-thread paint faults caught (and converted to a dropped frame) by the tiled TiledScene render subsystem.");
 
     /// <summary>
-    /// Records a caught render-thread paint fault: bumps <see cref="RenderFaults"/>
-    /// and emits a diagnostic activity event carrying the exception so the failure
-    /// is observable without crashing the frame.
+    /// Records a caught render-thread paint fault: bumps <see cref="RenderFaults"/>,
+    /// emits a diagnostic activity event carrying the exception, and writes a
+    /// rate-limited message to <see cref="Console.Error"/> so a recurring fault is
+    /// visible in the log without requiring an OpenTelemetry exporter to be wired
+    /// up. The first fault is always written; subsequent ones are throttled to one
+    /// per <see cref="RenderFaultLogIntervalMs"/> to avoid flooding the console if
+    /// a fault repeats every frame.
     /// </summary>
     /// <param name="ex">The caught exception.</param>
     public static void RecordRenderFault(Exception ex)
     {
         RenderFaults.Add(1);
         Activity.Current?.AddException(ex);
+
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref s_lastRenderFaultLogTick);
+        if ((last == 0 || now - last >= RenderFaultLogIntervalMs)
+            && Interlocked.CompareExchange(ref s_lastRenderFaultLogTick, now, last) == last)
+        {
+            Console.Error.WriteLine($"[S100.Render] paint fault dropped a frame: {ex}");
+        }
     }
+
+    private const long RenderFaultLogIntervalMs = 5000;
+    private static long s_lastRenderFaultLogTick;
 
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {

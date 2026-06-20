@@ -695,3 +695,45 @@ The new deferred-disposal semantics are unit-covered
 (`TileCacheTests.DeferDisposal_*`, `DrainPendingDisposals_*`); the
 in-frame GPU compositing path remains GPU-context-bound and so is
 validated by the integration run.
+
+### F.7 Prediction-driven repaint loop ("rendering never settles")
+
+With the F.6 crash fixed, a second, previously-masked defect surfaced:
+a **partial** zoom-out (not all the way to the world) left the renderer
+repainting forever — the chart kept churning and never settled, and
+loading more datasets did not reset it. It only reproduced with **both**
+prediction (`S100_VECTOR_TILE_PREDICT=1`) **and** GPU residency
+(`S100_VECTOR_TILE_GPU=1`) on; turning off either made the map settle.
+
+Root cause: the tile worker invoked `RequestRedraw` for **every**
+published tile, including *predicted* (off-screen, pre-warm) tiles. A
+predicted tile becoming cached changes nothing on screen, so that
+repaint is spurious. Under GPU residency a frame is only a few
+milliseconds and Mapsui does **not** coalesce these invalidations, so
+each spurious redraw runs a full fast frame, which re-runs prediction in
+`Render`, re-enqueues the predicted set, and the worker re-publishes it
+(fetched straight from the disk cache, so no rasterisation) — a
+self-sustaining loop measured at ~720 redraws/s with zero rasterisations.
+With GPU **off**, ~100 ms frames let Mapsui coalesce the invalidations
+and the loop dies, which is exactly why the bug only appeared with GPU on.
+
+Fix: gate the repaint on a visible publish —
+`S100VectorTileRenderer.ShouldRequestRedraw(published, isPrediction)`
+returns `true` only for a published, non-predicted tile. Pre-warmed
+tiles stay resident and are picked up the moment the viewport actually
+moves onto them (which itself triggers a frame). The decision is a pure
+internal function with a unit-tested truth table
+(`TilePredictionTests.ShouldRequestRedraw_*`).
+
+While fixing this, render-fault visibility was also addressed (the user
+could not see any error when frames were being dropped): `RecordRenderFault`
+now writes a **rate-limited** (one per 5 s) message to `Console.Error` in
+addition to bumping the counter and the OTEL activity event, so a
+recurring caught fault is observable without an OpenTelemetry exporter
+wired up.
+
+**Verified** (reference cell, `S100_VECTOR_TILE_GPU=1` and
+`S100_VECTOR_TILE_PREDICT=1`): every partial zoom-out step settles in
+~300 ms with zero post-settle paints; the full world zoom-out still does
+not crash; zoom-back renders the chart; no faults logged.
+

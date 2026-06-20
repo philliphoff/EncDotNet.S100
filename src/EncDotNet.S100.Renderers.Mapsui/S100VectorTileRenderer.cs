@@ -843,7 +843,9 @@ public static class S100VectorTileRenderer
                     S100Diag.Telemetry.TilePredictionRasterized.Add(1);
                 }
 
-                if (published)
+                // Only a newly-published *visible* tile changes what is on
+                // screen, so only it warrants a repaint (see ShouldRequestRedraw).
+                if (ShouldRequestRedraw(published, isPrediction))
                 {
                     RequestRedraw?.Invoke();
                 }
@@ -879,6 +881,23 @@ public static class S100VectorTileRenderer
 
         return default;
     }
+
+    /// <summary>
+    /// Decides whether a worker-published tile should request a UI repaint.
+    /// Only a newly-published <em>visible</em> tile changes what is on screen, so
+    /// only it warrants a redraw. A predicted (off-screen, pre-warm) tile must
+    /// <b>not</b> request a redraw: doing so would trigger a frame that re-runs
+    /// prediction and re-publishes the next speculative tile, a self-sustaining
+    /// repaint loop that never lets the map settle — most visible when frames are
+    /// cheap (e.g. GPU residency), where Mapsui does not coalesce the spurious
+    /// invalidations. The pre-warmed tile is still resident and is picked up the
+    /// moment the viewport actually moves onto it (which itself triggers a frame).
+    /// </summary>
+    /// <param name="published">Whether the tile was published into the hot cache.</param>
+    /// <param name="isPrediction">Whether the tile was produced for the prediction (pre-warm) queue.</param>
+    /// <returns><see langword="true"/> only for a published, non-predicted (visible) tile.</returns>
+    internal static bool ShouldRequestRedraw(bool published, bool isPrediction) =>
+        published && !isPrediction;
 
     /// <summary>
     /// Rasterises a single tile (core + gutter) from the scene at its band

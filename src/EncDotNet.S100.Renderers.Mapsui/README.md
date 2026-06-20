@@ -582,6 +582,16 @@ hits are counted via `s100.render.tile.prediction.hits` /
 `.rasterized`, and cold exposure via the `s100.render.tile.cold.exposure`
 histogram.
 
+A published predicted tile must **not** request a repaint
+(`ShouldRequestRedraw` returns `true` only for a published *visible* tile).
+A pre-warm tile is off-screen, so repainting on its arrival changes nothing
+visible — but it *would* trigger a frame that re-runs prediction and
+re-publishes the next speculative tile, a self-sustaining repaint loop that
+never lets the map settle. The loop only bites when frames are cheap (GPU
+residency, where Mapsui does not coalesce the spurious invalidations); with
+the visible-only gate the pre-warmed tile simply stays resident until the
+viewport moves onto it (design doc Appendix F.7).
+
 Prediction is on by default and is a first-class A/B knob:
 `S100_VECTOR_TILE_PREDICT=0` reverts to the Phase-2 visible-only behaviour.
 **Measured (PDB01, 20-step pan, OFF vs ON):** frames with cold-tile exposure
