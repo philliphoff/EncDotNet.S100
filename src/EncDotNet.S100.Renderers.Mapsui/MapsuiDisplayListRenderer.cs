@@ -5,6 +5,7 @@ using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Renderers.Skia;
 using Scene = EncDotNet.S100.Rendering.Scene;
 using Mapsui;
@@ -417,7 +418,11 @@ public sealed class MapsuiDisplayListRenderer
             var builtScene = sceneBuilder.Build(instructions, geometryProvider);
             if (TiledSceneModeIsTiled)
             {
-                S100VectorTileRenderer.BindScene(layer, builtScene);
+                S100VectorTileRenderer.BindScene(
+                    layer,
+                    builtScene,
+                    productLayerSet: Product ?? LayerName,
+                    styleStateHash: ComputeStyleStateHash(instructions));
             }
             else
             {
@@ -426,6 +431,41 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return layer;
+    }
+
+    /// <summary>
+    /// Computes the <c>styleStateHash</c> that keys the persistent tile disk
+    /// cache (design §3.4). It must change whenever <em>anything</em> that alters
+    /// the rasterised tile pixels changes, so a warm tile is never reused for a
+    /// different style state. It folds:
+    /// <list type="bullet">
+    /// <item>the resolved drawing-instruction list — which already encodes the
+    /// active display category, safety contour, and every other mariner setting
+    /// that selects which features and which portrayal are drawn — serialized
+    /// deterministically via <see cref="DrawingInstructionSerializer"/>;</item>
+    /// <item>the colour palette (Day/Dusk/Night), which the scene builder applies
+    /// on top of the instruction colour tokens;</item>
+    /// <item>the symbol and text scale factors.</item>
+    /// </list>
+    /// The instruction-serializer format version is implicitly folded in (it is
+    /// the first field of the serialized frame), so a serialization change also
+    /// invalidates the namespace.
+    /// </summary>
+    private string ComputeStyleStateHash(IReadOnlyList<DrawingInstruction> instructions)
+    {
+        var instructionBytes = DrawingInstructionSerializer.Serialize(instructions);
+
+        var styleHeader =
+            $"palette:{Palette?.ToString() ?? "none"}" +
+            $"|symbolScale:{SymbolScale.ToString("R", CultureInfo.InvariantCulture)}" +
+            $"|textScale:{TextScale.ToString("R", CultureInfo.InvariantCulture)}";
+        var headerBytes = System.Text.Encoding.UTF8.GetBytes(styleHeader);
+
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        sha.AppendData(headerBytes);
+        sha.AppendData(instructionBytes);
+        return Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
     }
 
     /// <summary>

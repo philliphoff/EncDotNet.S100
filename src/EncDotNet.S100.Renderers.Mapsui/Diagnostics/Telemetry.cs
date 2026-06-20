@@ -336,6 +336,27 @@ internal static class Telemetry
             unit: "{tile}",
             description: "Speculatively-rasterised tiles that later became visible while cached (prediction hits) in the tiled TiledScene render subsystem.");
 
+    /// <summary>
+    /// Count of visible/predicted tiles served from the persistent <b>disk
+    /// cache</b> (Phase&#160;4) instead of being re-rasterised — a warm tile
+    /// surviving a layer rebuild (palette flip-back) or a process restart. See §3.4.
+    /// </summary>
+    public static readonly Counter<long> TileDiskHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.hits",
+            unit: "{tile}",
+            description: "Tiles served from the persistent disk cache (warm) by the tiled TiledScene render subsystem, avoiding a re-rasterise.");
+
+    /// <summary>
+    /// Count of rasterised tiles written to the persistent <b>disk cache</b>
+    /// (Phase&#160;4) for future warm reuse. See §3.4.
+    /// </summary>
+    public static readonly Counter<long> TileDiskWrites =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.writes",
+            unit: "{tile}",
+            description: "Tiles written to the persistent disk cache by the tiled TiledScene render subsystem.");
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);

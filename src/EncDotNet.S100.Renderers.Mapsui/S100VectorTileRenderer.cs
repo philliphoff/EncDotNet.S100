@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using EncDotNet.S100.Rendering.Scene;
@@ -93,6 +94,17 @@ public static class S100VectorTileRenderer
     public static bool PredictionEnabled { get; } = ReadBool("S100_VECTOR_TILE_PREDICT", true);
 
     /// <summary>
+    /// Whether the persistent <b>disk tile cache</b> (Phase&#160;4) is enabled.
+    /// When on, a tile missing from the in-memory cache is looked up on disk
+    /// before being re-rasterised, and freshly rasterised tiles are persisted —
+    /// so a palette flip-back or a process restart re-uses warm tiles. Read once
+    /// from <c>S100_VECTOR_TILE_DISK</c> (default on; <c>0</c>/<c>false</c>
+    /// disables). The on-disk key folds a <c>styleStateHash</c> so a tile is
+    /// never served for a different mariner/palette state (design §3.4).
+    /// </summary>
+    public static bool DiskCacheEnabled { get; } = ReadBool("S100_VECTOR_TILE_DISK", true);
+
+    /// <summary>
     /// Invoked (on a worker thread) when a tile publishes, so the host can
     /// request a single repaint. The viewer marshals a <c>RefreshGraphics()</c>
     /// onto the UI thread.
@@ -102,6 +114,41 @@ public static class S100VectorTileRenderer
     private static readonly ConditionalWeakTable<ILayer, TileState> s_states = new();
 
     private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+
+    private static readonly Lazy<TileDiskCache?> s_diskCache = new(CreateSharedDiskCache);
+
+    /// <summary>
+    /// The process-wide warm disk cache, or <see langword="null"/> when disabled
+    /// or its root directory could not be established. Shared across every layer
+    /// and session.
+    /// </summary>
+    private static TileDiskCache? SharedDiskCache => s_diskCache.Value;
+
+    private static TileDiskCache? CreateSharedDiskCache()
+    {
+        if (!DiskCacheEnabled)
+        {
+            return null;
+        }
+
+        try
+        {
+            var root = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
+            if (string.IsNullOrEmpty(root))
+            {
+                root = Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles");
+            }
+
+            var budgetMb = ReadDouble("S100_VECTOR_TILE_DISK_MB", 512.0, 16.0, 8192.0);
+            return new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
+        }
+        catch
+        {
+            // A disk cache is best-effort; failing to create one must not break
+            // rendering.
+            return null;
+        }
+    }
 
     private static double ReadDouble(string name, double fallback, double min, double max)
     {
@@ -139,18 +186,50 @@ public static class S100VectorTileRenderer
     /// <summary>
     /// Binds the fully-resolved <see cref="VectorScene"/> for a layer and
     /// invalidates its tile cache (a new generation), so the next frame
+    /// re-rasterises from the new scene. Equivalent to calling
+    /// <see cref="BindScene(ILayer, VectorScene, string?, string?)"/> without a
+    /// disk-cache key (the warm disk cache is bypassed for this layer).
+    /// </summary>
+    public static void BindScene(ILayer layer, VectorScene scene) =>
+        BindScene(layer, scene, productLayerSet: null, styleStateHash: null);
+
+    /// <summary>
+    /// Binds the fully-resolved <see cref="VectorScene"/> for a layer and
+    /// invalidates its tile cache (a new generation), so the next frame
     /// re-rasterises from the new scene.
     /// </summary>
-    public static void BindScene(ILayer layer, VectorScene scene)
+    /// <param name="layer">The Mapsui layer this scene portrays.</param>
+    /// <param name="scene">The resolved paint operations to rasterise into tiles.</param>
+    /// <param name="productLayerSet">
+    /// Stable identity of the dataset/cell + product, used (with
+    /// <paramref name="styleStateHash"/>) as the persistent disk-cache namespace
+    /// so warm tiles are reused across layer rebuilds and sessions. When either
+    /// this or <paramref name="styleStateHash"/> is null/empty, the warm disk
+    /// cache is bypassed for this layer.
+    /// </param>
+    /// <param name="styleStateHash">
+    /// A hash that fully captures the mariner/palette style state (palette,
+    /// display category, safety settings, symbol/text scale, …) so a tile is
+    /// never served from disk for a different style state (design §3.4).
+    /// </param>
+    public static void BindScene(ILayer layer, VectorScene scene, string? productLayerSet, string? styleStateHash)
     {
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
+
+        var diskNamespace =
+            DiskCacheEnabled
+            && !string.IsNullOrEmpty(productLayerSet)
+            && !string.IsNullOrEmpty(styleStateHash)
+                ? TileDiskCache.NamespaceFor(productLayerSet, styleStateHash)
+                : null;
 
         var state = s_states.GetValue(layer, static _ => new TileState());
         lock (state.Sync)
         {
             state.Scene = scene;
             state.Generation++;
+            state.DiskNamespace = diskNamespace;
             state.Cache.Clear();
             state.InFlight.Clear();
             state.PendingVisible.Clear();
@@ -405,6 +484,7 @@ public static class S100VectorTileRenderer
             long generation;
             VectorScene scene;
             bool isPrediction;
+            string? diskNamespace;
 
             lock (state.Sync)
             {
@@ -431,22 +511,53 @@ public static class S100VectorTileRenderer
                 deviceScale = state.PendingDeviceScale;
                 generation = state.PendingGeneration;
                 scene = state.Scene;
+                diskNamespace = state.DiskNamespace;
                 state.InFlight.Add(key);
             }
 
+            // Warm path: a tile rendered under this exact style state in a prior
+            // layer/session is decoded from disk instead of re-rasterised. The
+            // namespace folds the styleStateHash so this can never be a tile from
+            // a different mariner/palette state.
+            var disk = SharedDiskCache;
             SKImage? image = null;
-            try
+            var fromDisk = false;
+            if (disk is not null && diskNamespace is not null)
             {
-                var rasterStart = Stopwatch.GetTimestamp();
-                using var bitmap = RasterizeTile(scene, key, deviceScale);
-                image = SKImage.FromBitmap(bitmap);
-                S100Diag.Telemetry.TileRasterizeDuration.Record(
-                    Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
+                image = disk.TryRead(diskNamespace, key);
+                if (image is not null)
+                {
+                    fromDisk = true;
+                    S100Diag.Telemetry.TileDiskHits.Add(1);
+                }
             }
-            catch
+
+            if (image is null)
             {
-                image?.Dispose();
-                image = null;
+                try
+                {
+                    var rasterStart = Stopwatch.GetTimestamp();
+                    using var bitmap = RasterizeTile(scene, key, deviceScale);
+                    image = SKImage.FromBitmap(bitmap);
+                    S100Diag.Telemetry.TileRasterizeDuration.Record(
+                        Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
+                }
+                catch
+                {
+                    image?.Dispose();
+                    image = null;
+                }
+            }
+
+            // Persist a freshly-rasterised tile while we still solely own the
+            // image (before handing it to the hot cache), so a concurrent
+            // eviction can never dispose it mid-encode. Disk-sourced tiles are
+            // already persisted. Best-effort: failures are swallowed inside Write.
+            if (image is not null && !fromDisk && disk is not null && diskNamespace is not null
+                && generation == state.Generation)
+            {
+                disk.Write(diskNamespace, key, image);
+                S100Diag.Telemetry.TileDiskWrites.Add(1);
             }
 
             var published = false;
@@ -469,7 +580,7 @@ public static class S100VectorTileRenderer
                 }
             }
 
-            if (isPrediction)
+            if (isPrediction && !fromDisk)
             {
                 S100Diag.Telemetry.TilePredictionRasterized.Add(1);
             }
@@ -544,6 +655,11 @@ public static class S100VectorTileRenderer
 
         public VectorScene? Scene;
         public long Generation;
+
+        // Persistent disk-cache namespace for this layer's current style state
+        // (folds productLayerSet + styleStateHash). Null when the disk cache is
+        // disabled or no style key was supplied.
+        public string? DiskNamespace;
 
         public readonly TileCache Cache = new(BudgetBytes);
         public readonly HashSet<TileKey> InFlight = new();
