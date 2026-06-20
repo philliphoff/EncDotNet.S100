@@ -13,6 +13,7 @@ using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -36,23 +37,51 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 {
     private readonly DatasetsViewModel _datasets;
-    private readonly IToastService _toasts;
+    private readonly INotificationService _notifications;
     private readonly List<TrackedExchangeSet> _tracked = new();
     private bool _subscribed;
     private bool _disposed;
 
-    public ExchangeSetService(DatasetsViewModel datasets, IToastService toasts)
+    public ExchangeSetService(DatasetsViewModel datasets, INotificationService notifications)
     {
         ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(toasts);
+        ArgumentNullException.ThrowIfNull(notifications);
         _datasets = datasets;
-        _toasts = toasts;
+        _notifications = notifications;
+    }
+
+    /// <summary>
+    /// Drives the caller-supplied progress notification to a terminal state
+    /// (clearing the progress bar and any actions and scheduling auto-dismiss),
+    /// or surfaces a fresh notification when no handle was supplied.
+    /// </summary>
+    private void Terminal(
+        INotificationHandle? notification,
+        NotificationSeverity severity,
+        string title,
+        string message)
+    {
+        if (notification is not null && !notification.IsDismissed)
+        {
+            notification.ClearProgress();
+            notification.SetActions();
+            notification.Update(title: title, message: message, severity: severity);
+            notification.ScheduleAutoDismiss(NotificationService.DefaultDelayFor(severity));
+        }
+        else
+        {
+            _notifications.Create(title)
+                .WithSeverity(severity)
+                .WithContent(message)
+                .Show();
+        }
     }
 
     public async Task<ExchangeSetOpenResult> OpenAsync(
         string folderOrZipPath,
         IProgress<ExchangeSetProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        INotificationHandle? notification = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(folderOrZipPath);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -64,7 +93,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         // own loader. S-100 sets fall through to the logic below.
         if (ExchangeSetDetection.LooksLikeS57ExchangeSet(folderOrZipPath))
         {
-            return await OpenS57Async(folderOrZipPath, progress, cancellationToken)
+            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification)
                 .ConfigureAwait(true);
         }
 
@@ -89,7 +118,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             catch (FileNotFoundException)
             {
                 var msg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
-                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, msg);
                 source.Dispose();
                 activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
                 return new ExchangeSetOpenResult
@@ -112,7 +141,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             if (datasets.Count == 0)
             {
                 var emptyMsg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
-                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
                 exchangeSet.Dispose();
                 exchangeSet = null;
                 activity?.SetStatus(ActivityStatusCode.Error, "empty catalogue");
@@ -163,8 +192,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             var dispatched = 0;
             var skipped = 0;
+            var completedLoads = 0;
             var skipMessages = new List<string>();
             var cancelled = false;
+            var loadTasks = new List<Task>();
 
             foreach (var item in plan)
             {
@@ -183,11 +214,14 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 if (item.Kind == S101LoadItemKind.OrphanUpdate)
                 {
                     var orphanMsg = string.Format(Strings.Status_ExchangeSetOrphanUpdate, relativePath);
-                    _toasts.ShowWarning(Strings.Toast_Warning, orphanMsg);
+                    _notifications.Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(orphanMsg)
+                        .Show();
                     skipMessages.Add(orphanMsg);
                     skipped++;
                     progress?.Report(new ExchangeSetProgress(
-                        folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
+                        folderOrZipPath, plan.Count, completedLoads + skipped, skipped, relativePath));
                     continue;
                 }
 
@@ -201,11 +235,14 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                         metadata.ProductSpecification?.ProductIdentifier
                             ?? metadata.ProductSpecification?.Name
                             ?? string.Empty);
-                    _toasts.ShowWarning(Strings.Toast_Warning, msg);
+                    _notifications.Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(msg)
+                        .Show();
                     skipMessages.Add(msg);
                     skipped++;
                     progress?.Report(new ExchangeSetProgress(
-                        folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
+                        folderOrZipPath, plan.Count, completedLoads + skipped, skipped, relativePath));
                     continue;
                 }
 
@@ -220,31 +257,59 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     displayName: Path.GetFileName(relativePath),
                     updateRelativePaths: updateRelativePaths);
                 tracked.Entries.Add(entry);
-                _datasets.RequestLoad(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
                 dispatched++;
-                progress?.Report(new ExchangeSetProgress(
-                    folderOrZipPath, plan.Count, dispatched + skipped, skipped, relativePath));
             }
 
+            // Report progress on actual load completions rather than dispatch:
+            // the loop above queues every cell almost instantly, so advancing the
+            // bar there would race it to 100% before any cell had parsed. Each
+            // cell load runs concurrently (the loader offloads parse/render to the
+            // thread pool); as one finishes we bump the determinate fraction.
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderOrZipPath, plan.Count, done + skipped, skipped, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            // Await the dispatched per-cell loads so the aggregate "loaded"
+            // outcome reflects datasets that have actually parsed and added
+            // their layers — not merely been queued. The loader surfaces any
+            // per-cell failure on its own and never throws, so this completes
+            // even when an individual cell fails.
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            ExchangeSetTerminalInfo? pendingTerminal = null;
+            var sourceLabel = Notifications.NotificationFormat.ShortenPath(folderOrZipPath);
             if (cancelled)
             {
                 var cancelledMsg = string.Format(
                     Strings.Status_ExchangeSetCancelled,
-                    dispatched, plan.Count, folderOrZipPath);
-                _toasts.ShowInfo(Strings.Toast_Info, cancelledMsg);
+                    dispatched, plan.Count, sourceLabel);
+                Terminal(notification, NotificationSeverity.Info, Strings.Toast_Info, cancelledMsg);
             }
             else if (skipped == 0)
             {
                 var loadedMsg = string.Format(
-                    Strings.Status_ExchangeSetLoaded, dispatched, folderOrZipPath);
-                _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
+                    Strings.Status_ExchangeSetLoaded, dispatched, sourceLabel);
+                pendingTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
             }
             else
             {
                 var partialMsg = string.Format(
                     Strings.Status_ExchangeSetLoadedWithErrors,
-                    dispatched, plan.Count, folderOrZipPath, skipped);
-                _toasts.ShowWarning(Strings.Toast_ExchangeSetLoaded, partialMsg);
+                    dispatched, plan.Count, sourceLabel, skipped);
+                pendingTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Warning, Strings.Toast_ExchangeSetLoaded, partialMsg);
             }
 
             activity?.SetTag("s100.exchangeset.dataset.loaded", dispatched);
@@ -294,6 +359,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 Cancelled = cancelled,
                 SkipMessages = skipMessages,
                 UnionBoundingBox = ComputeUnionBoundingBox(datasets),
+                PendingTerminal = pendingTerminal,
             };
         }
         catch (OperationCanceledException)
@@ -310,7 +376,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         catch (Exception ex)
         {
             var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
-            _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
             exchangeSet?.Dispose();
             source?.Dispose();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
@@ -336,7 +402,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     private async Task<ExchangeSetOpenResult> OpenS57Async(
         string folderOrCataloguePath,
         IProgress<ExchangeSetProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        INotificationHandle? notification)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(
             "s57.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
@@ -356,7 +423,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var msg = string.Format(
                     Strings.Status_ExchangeSetCatalogNotFound, folderOrCataloguePath);
-                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, msg);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, msg);
                 activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
                 return new ExchangeSetOpenResult
                 {
@@ -372,7 +439,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var emptyMsg = string.Format(
                     Strings.Status_S57ExchangeSetNoCells, folderOrCataloguePath);
-                _toasts.ShowWarning(Strings.Toast_ExchangeSetFailed, emptyMsg);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
                 activity?.SetStatus(ActivityStatusCode.Error, "no cells");
                 return new ExchangeSetOpenResult
                 {
@@ -407,6 +474,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 closeAction: CloseExchangeSetFromHeader);
 
             var dispatched = 0;
+            var completedLoads = 0;
+            var loadTasks = new List<Task>();
             foreach (var cell in cells)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -422,15 +491,38 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     displayName: cell.CellName,
                     updateRelativePaths: updateRelativePaths);
                 tracked.Entries.Add(entry);
-                _datasets.RequestLoad(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
                 dispatched++;
-                progress?.Report(new ExchangeSetProgress(
-                    folderOrCataloguePath, cells.Count, dispatched, 0, cell.RelativePath));
             }
 
+            // Report progress on actual load completions rather than dispatch
+            // (see the S-100 path for rationale): the loop queues every cell
+            // almost instantly, so the bar stays indeterminate until a cell
+            // truly finishes, then fills as each one lands.
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderOrCataloguePath, cells.Count, done, 0, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            // Await the dispatched per-cell loads so "loaded" reflects cells
+            // that have actually parsed and added their layers (see the S-100
+            // path for rationale). The loader never throws.
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
             var loadedMsg = string.Format(
-                Strings.Status_ExchangeSetLoaded, dispatched, folderOrCataloguePath);
-            _toasts.ShowSuccess(Strings.Toast_ExchangeSetLoaded, loadedMsg);
+                Strings.Status_ExchangeSetLoaded, dispatched,
+                Notifications.NotificationFormat.ShortenPath(folderOrCataloguePath));
+            var pendingTerminal = new ExchangeSetTerminalInfo(
+                NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
 
             activity?.SetTag("s57.exchangeset.dataset.loaded", dispatched);
             activity?.SetStatus(ActivityStatusCode.Ok);
@@ -454,6 +546,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 Cancelled = false,
                 SkipMessages = Array.Empty<string>(),
                 UnionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells),
+                PendingTerminal = pendingTerminal,
             };
         }
         catch (OperationCanceledException)
@@ -469,7 +562,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         catch (Exception ex)
         {
             var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrCataloguePath, ex.Message);
-            _toasts.ShowError(Strings.Toast_ExchangeSetFailed, failedMsg);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
             source?.Dispose();
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             return new ExchangeSetOpenResult

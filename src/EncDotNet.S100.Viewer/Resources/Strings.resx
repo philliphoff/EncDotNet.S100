@@ -974,24 +974,9 @@
     <value>Skipped update {0}: no matching base cell in this exchange set.</value>
     <comment>{0} = update file relative path. Shown when an S-101 update (.001/.002/…) has no base (.000) in the same exchange set.</comment>
   </data>
-  <data name="Status_ExchangeSetUpdatesApplied" xml:space="preserve">
-    <value>Applied {0} update(s) to {1}.</value>
-    <comment>{0} = number of S-101 sequential updates applied, {1} = cell display name.</comment>
-  </data>
   <data name="Status_ExchangeSetUpdatesPartial" xml:space="preserve">
     <value>Applied {0} update(s) to {1} with warnings: {2}</value>
     <comment>{0} = updates applied, {1} = cell display name, {2} = first warning/error message from the update report.</comment>
-  </data>
-
-  <!-- Exchange-set progress overlay (es3-progress) -->
-  <data name="Progress_ExchangeSetTitle" xml:space="preserve">
-    <value>Opening exchange set</value>
-  </data>
-  <data name="Progress_ExchangeSetCounter" xml:space="preserve">
-    <value>{0} of {1}</value>
-  </data>
-  <data name="Progress_ExchangeSetCancel" xml:space="preserve">
-    <value>Cancel</value>
   </data>
 
   <!-- Dataset entry -->
@@ -1189,6 +1174,42 @@
   </data>
   <data name="Toast_Warning" xml:space="preserve">
     <value>Warning</value>
+  </data>
+  <data name="Notification_Close" xml:space="preserve">
+    <value>Dismiss</value>
+  </data>
+  <data name="Notification_HistoryTitle" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="Notification_ClearHistory" xml:space="preserve">
+    <value>Clear all</value>
+  </data>
+  <data name="Notification_Empty" xml:space="preserve">
+    <value>No notifications</value>
+  </data>
+  <data name="Notification_OverflowMore" xml:space="preserve">
+    <value>+{0} more</value>
+  </data>
+  <data name="Notification_ShowMore" xml:space="preserve">
+    <value>Show more</value>
+  </data>
+  <data name="Notification_ShowLess" xml:space="preserve">
+    <value>Show less</value>
+  </data>
+  <data name="Notification_Severity_Info" xml:space="preserve">
+    <value>Information</value>
+  </data>
+  <data name="Notification_Severity_Success" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="Notification_Severity_Warning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="Notification_Severity_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Tooltip_Notifications" xml:space="preserve">
+    <value>Notifications</value>
   </data>
   <data name="Toast_Success" xml:space="preserve">
     <value>Success</value>

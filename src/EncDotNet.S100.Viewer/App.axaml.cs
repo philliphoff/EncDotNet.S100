@@ -12,6 +12,7 @@ using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
@@ -426,8 +427,9 @@ public partial class App : Application
             return state;
         });
         services.AddSingleton<IStatusPresenter, StatusPresenter>();
-        services.AddSingleton<ShadUI.ToastManager>();
-        services.AddSingleton<IToastService, ToastService>();
+        services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<INotificationService, NotificationService>();
 
         // Feedback reporting: diagnostics capture + modal dialog plumbing.
         services.AddSingleton<EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker,

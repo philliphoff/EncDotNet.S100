@@ -1,0 +1,237 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:behaviors="using:EncDotNet.S100.Viewer.Behaviors"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels.Notifications"
+             mc:Ignorable="d"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             x:Class="EncDotNet.S100.Viewer.Views.Notifications.NotificationHost">
+
+    <UserControl.Resources>
+        <!--
+          Severity brushes derived from ShadUI's theme-aware status Colors so
+          notification accents track the active chrome/palette variant.
+        -->
+        <SolidColorBrush x:Key="NotificationInfoBrush" Color="{DynamicResource InfoColor}" />
+        <SolidColorBrush x:Key="NotificationSuccessBrush" Color="{DynamicResource SuccessColor}" />
+        <SolidColorBrush x:Key="NotificationWarningBrush" Color="{DynamicResource WarningColor}" />
+        <SolidColorBrush x:Key="NotificationErrorBrush" Color="{DynamicResource ErrorColor}" />
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Card shell -->
+        <Style Selector="Border.notificationCard">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="MinWidth" Value="320" />
+            <Setter Property="MaxWidth" Value="380" />
+            <Setter Property="BoxShadow" Value="0 4 16 0 #33000000" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.18" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <!-- Severity icon column + content. -->
+        <Style Selector="TextBlock.notificationTitle">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="TextBlock.notificationBody">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MaxLines" Value="2" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <!-- Right gutter clears the floating close button so neither the
+                 title nor the body text ever runs under it. -->
+            <Setter Property="Margin" Value="0,2,26,0" />
+        </Style>
+
+        <!--
+          Bottom-edge progress bar: a minimal sliver flush with the card's
+          lower border, using the user-selected application accent
+          (AccentBrush) for the indicator and a transparent track so only the
+          accent shows. The global ProgressBar ControlTheme is overridden
+          locally to collapse its default height / corner radius / centering.
+        -->
+        <Style Selector="ProgressBar.notificationProgress">
+            <Setter Property="Height" Value="2" />
+            <Setter Property="MinHeight" Value="2" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          "Show more" / "Show less" link: a borderless, accent-coloured button
+          styled as an inline hyperlink, shown only when the body text is
+          clipped (or currently expanded).
+        -->
+        <Style Selector="Button.notificationLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Margin" Value="0,2,26,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button.notificationLink:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.notificationLink TextBlock">
+            <Setter Property="TextDecorations" Value="Underline" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Compact action buttons. ShadUI ships no "Small" button size (every
+          variant is hard-set to Height=36 / Padding=16,8), which is too tall
+          for a toast, so the notification card overrides the metrics locally
+          while keeping ShadUI's Primary / Outline variant styling.
+        -->
+        <Style Selector="Button.notificationAction">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button.notificationAction /template/ TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+    </UserControl.Styles>
+
+    <!--
+      Active notifications, newest at the bottom (closest to the corner).
+      ItemsSource is assigned in code-behind from INotificationService.Active.
+    -->
+    <ItemsControl x:Name="ItemsHost">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <StackPanel />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:NotificationViewModel">
+                <Border Classes="notificationCard"
+                        ClipToBounds="True"
+                        Classes.success="{Binding IsSuccess}"
+                        Classes.warning="{Binding IsWarning}"
+                        Classes.error="{Binding IsError}">
+                    <Grid RowDefinitions="*,Auto">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
+                        <!-- Severity icon: only the matching glyph is visible. -->
+                        <Panel Grid.Column="0" Width="24" Margin="14,12,0,0"
+                               VerticalAlignment="Top">
+                            <ic:FluentIcon FontSize="24" Icon="Info" IconVariant="Filled"
+                                           IsVisible="{Binding IsInfo}"
+                                           Foreground="{DynamicResource NotificationInfoBrush}" />
+                            <ic:FluentIcon FontSize="24" Icon="CheckmarkCircle" IconVariant="Filled"
+                                           IsVisible="{Binding IsSuccess}"
+                                           Foreground="{DynamicResource NotificationSuccessBrush}" />
+                            <ic:FluentIcon FontSize="24" Icon="Warning" IconVariant="Filled"
+                                           IsVisible="{Binding IsWarning}"
+                                           Foreground="{DynamicResource NotificationWarningBrush}" />
+                            <ic:FluentIcon FontSize="24" Icon="ErrorCircle" IconVariant="Filled"
+                                           IsVisible="{Binding IsError}"
+                                           Foreground="{DynamicResource NotificationErrorBrush}" />
+                        </Panel>
+
+                        <!--
+                          Content and the floating close button share this cell so
+                          the close button sits in the card's top-right corner and
+                          the action buttons right-align to the card edge (rather
+                          than to a narrower content column). The title reserves
+                          right padding so it never runs under the close button.
+                        -->
+                        <Grid Grid.Column="1">
+                            <StackPanel Margin="10,12,10,12">
+                                <TextBlock Classes="notificationTitle"
+                                           Margin="0,0,26,0"
+                                           Text="{Binding Title}" />
+                                <TextBlock Classes="notificationBody"
+                                           Text="{Binding Message}"
+                                           MaxLines="{Binding BodyMaxLines}"
+                                           behaviors:TextTruncationTracker.Track="True"
+                                           behaviors:TextTruncationTracker.IsTruncated="{Binding IsMessageTruncated, Mode=OneWayToSource}"
+                                           IsVisible="{Binding HasMessage}" />
+
+                                <Button Classes="notificationLink"
+                                        Content="{Binding ToggleExpandLabel}"
+                                        Command="{Binding ToggleExpandCommand}"
+                                        IsVisible="{Binding ShowExpandToggle}" />
+
+                                <ContentControl Margin="0,8,0,0"
+                                                Content="{Binding CustomContent}"
+                                                IsVisible="{Binding HasCustomContent}" />
+
+                                <ItemsControl Margin="0,10,0,0"
+                                              HorizontalAlignment="Right"
+                                              ItemsSource="{Binding Actions}"
+                                              IsVisible="{Binding HasActions}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="8" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:NotificationActionViewModel">
+                                            <Button Classes="notificationAction"
+                                                    Content="{Binding Label}"
+                                                    Command="{Binding Command}"
+                                                    Classes.Primary="{Binding IsPrimary}"
+                                                    Classes.Outline="{Binding IsSecondary}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Close button modeled on the application panel
+                                 header close button: a plain default-themed Button
+                                 (hover/pressed come for free), Padding=0, sized to
+                                 a small glyph, anchored in the top-right corner. -->
+                            <Button Width="24"
+                                    Height="24"
+                                    MinWidth="0"
+                                    MinHeight="0"
+                                    Padding="0"
+                                    Margin="0,6,6,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Command="{Binding CloseCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Notification_Close}">
+                                <ic:FluentIcon FontSize="14" Icon="Dismiss"
+                                               IconVariant="Regular"
+                                               Foreground="{DynamicResource ForegroundColor}" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Bottom-edge progress sliver (accent-coloured). -->
+                    <ProgressBar Grid.Row="1"
+                                 Classes="notificationProgress"
+                                 Minimum="0" Maximum="1"
+                                 Value="{Binding Progress}"
+                                 IsIndeterminate="{Binding IsIndeterminate}"
+                                 IsVisible="{Binding HasProgress}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

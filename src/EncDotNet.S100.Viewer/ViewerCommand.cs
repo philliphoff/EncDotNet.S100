@@ -128,6 +128,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Enable verbose (Debug-level) logging.")]
     public bool Verbose { get; set; }
 
+    [CommandOption("--demo-notifications")]
+    [Description("Seed a set of sample notification cards on launch to visually exercise the notification overlay (developer aid).")]
+    public bool DemoNotifications { get; set; }
+
     // ── Positional ───────────────────────────────────────────────────
 
     [CommandArgument(0, "[datasets]")]

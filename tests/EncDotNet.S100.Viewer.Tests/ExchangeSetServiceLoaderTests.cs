@@ -69,7 +69,7 @@ public class ExchangeSetServiceLoaderTests
     private static (DatasetsViewModel datasets, ExchangeSetService service) CreateSystem()
     {
         var datasets = new DatasetsViewModel(new NoopLoader());
-        var service = new ExchangeSetService(datasets, new StubToastService());
+        var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create());
         return (datasets, service);
     }
 

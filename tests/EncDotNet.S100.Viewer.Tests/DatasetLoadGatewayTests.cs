@@ -16,7 +16,8 @@ public class DatasetLoadGatewayTests
     {
         public Task<ExchangeSetOpenResult> OpenAsync(
             string folderOrZipPath, IProgress<ExchangeSetProgress>? progress = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Services.Notifications.INotificationHandle? notification = null)
             => Task.FromResult(new ExchangeSetOpenResult { SourcePath = folderOrZipPath });
     }
 

@@ -8,6 +8,14 @@
 
     <Application.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--
+                  Default ProgressBar control theme. Required because neither
+                  ShadUI nor any included base theme templates ProgressBar; see
+                  the file header for details.
+                -->
+                <ResourceInclude Source="avares://EncDotNet.S100.Viewer/Resources/ProgressBarTheme.axaml" />
+            </ResourceDictionary.MergedDictionaries>
             <ResourceDictionary.ThemeDictionaries>
                 <!--
                   S-100 Night chrome variant. Inherits from ShadUI's
