@@ -26,6 +26,8 @@ internal sealed class TileCache : IDisposable
     private readonly object _sync = new();
     private readonly Dictionary<TileKey, LinkedListNode<Entry>> _map = new();
     private readonly LinkedList<Entry> _lru = new();
+    private readonly bool _deferDisposal;
+    private List<SKImage>? _pendingDisposal;
     private long _residentBytes;
     private bool _disposed;
 
@@ -35,9 +37,24 @@ internal sealed class TileCache : IDisposable
     /// Creates a cache with the given native-byte budget. Values ≤ 0 are
     /// clamped to a 1-tile floor so a single tile can always reside.
     /// </summary>
-    public TileCache(long budgetBytes)
+    /// <param name="budgetBytes">The native-byte eviction budget.</param>
+    /// <param name="deferDisposal">
+    /// When <see langword="true"/>, images evicted or cleared from the cache are
+    /// <b>not</b> disposed inline; they are held until <see cref="DrainPendingDisposals"/>
+    /// is called. This is required for a cache of <b>GPU-backed</b>
+    /// <see cref="SKImage"/>s drawn through a deferred canvas (Phase&#160;5
+    /// residency): <c>SKCanvas.DrawImage</c> only records the draw, and the GPU
+    /// flush happens after the render method returns, so a texture freed in the
+    /// same frame it was drawn would be a use-after-free in the native GPU
+    /// backend. Deferring disposal to the start of the next frame — after the
+    /// previous frame has flushed — makes eviction safe regardless of budget.
+    /// The raster cache leaves this <see langword="false"/> (CPU images are safe
+    /// to free inline).
+    /// </param>
+    public TileCache(long budgetBytes, bool deferDisposal = false)
     {
         BudgetBytes = Math.Max(budgetBytes, MinBudgetBytes);
+        _deferDisposal = deferDisposal;
     }
 
     /// <summary>A floor so at least one reasonably-sized tile always fits.</summary>
@@ -117,7 +134,7 @@ internal sealed class TileCache : IDisposable
             {
                 _residentBytes -= existing.Value.Bytes;
                 _lru.Remove(existing);
-                existing.Value.Image.Dispose();
+                RetireImage(existing.Value.Image, ref evicted);
                 _map.Remove(key);
             }
 
@@ -131,13 +148,56 @@ internal sealed class TileCache : IDisposable
                 _lru.RemoveLast();
                 _map.Remove(last.Value.Key);
                 _residentBytes -= last.Value.Bytes;
-                (evicted ??= new List<SKImage>()).Add(last.Value.Image);
+                RetireImage(last.Value.Image, ref evicted);
             }
         }
 
         if (evicted is not null)
         {
             foreach (var img in evicted)
+            {
+                img.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Routes an image removed from the cache to inline disposal, or — when
+    /// <see cref="_deferDisposal"/> is set — to the pending-disposal list drained
+    /// by <see cref="DrainPendingDisposals"/>. Must be called under <c>_sync</c>.
+    /// </summary>
+    private void RetireImage(SKImage image, ref List<SKImage>? evictedInline)
+    {
+        if (_deferDisposal)
+        {
+            (_pendingDisposal ??= new List<SKImage>()).Add(image);
+        }
+        else
+        {
+            (evictedInline ??= new List<SKImage>()).Add(image);
+        }
+    }
+
+    /// <summary>
+    /// Disposes images that were evicted/cleared since the last drain. For a
+    /// deferred-disposal (GPU) cache the caller invokes this at the <b>start of a
+    /// frame, before any draw is recorded</b>, so the images — last referenced by
+    /// the previous (already-flushed) frame — are freed without risking a
+    /// use-after-free in the current frame's deferred draws. A no-op for an
+    /// inline-disposal cache.
+    /// </summary>
+    public void DrainPendingDisposals()
+    {
+        List<SKImage>? pending;
+        lock (_sync)
+        {
+            pending = _pendingDisposal;
+            _pendingDisposal = null;
+        }
+
+        if (pending is not null)
+        {
+            foreach (var img in pending)
             {
                 img.Dispose();
             }
@@ -153,16 +213,20 @@ internal sealed class TileCache : IDisposable
         }
     }
 
-    /// <summary>Disposes and removes every resident tile.</summary>
+    /// <summary>
+    /// Removes every resident tile. Images are disposed inline, or — for a
+    /// deferred-disposal (GPU) cache — held for the next
+    /// <see cref="DrainPendingDisposals"/> so a tile still referenced by the
+    /// in-flight frame's deferred draws is not freed early.
+    /// </summary>
     public void Clear()
     {
-        List<SKImage> images;
+        List<SKImage>? inline = null;
         lock (_sync)
         {
-            images = new List<SKImage>(_map.Count);
             foreach (var node in _map.Values)
             {
-                images.Add(node.Value.Image);
+                RetireImage(node.Value.Image, ref inline);
             }
 
             _map.Clear();
@@ -170,9 +234,12 @@ internal sealed class TileCache : IDisposable
             _residentBytes = 0;
         }
 
-        foreach (var img in images)
+        if (inline is not null)
         {
-            img.Dispose();
+            foreach (var img in inline)
+            {
+                img.Dispose();
+            }
         }
     }
 
@@ -185,5 +252,9 @@ internal sealed class TileCache : IDisposable
         }
 
         Clear();
+        // Teardown frees everything now (the render thread owns the GPU context
+        // at this point and no draw for this cache is in flight): drain any
+        // images Clear() may have deferred.
+        DrainPendingDisposals();
     }
 }

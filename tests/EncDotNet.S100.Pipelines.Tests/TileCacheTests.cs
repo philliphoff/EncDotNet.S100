@@ -143,4 +143,69 @@ public class TileCacheTests
         cache.Put(Key(0), image);
         Assert.Equal(0, cache.Count);
     }
+
+    [Fact]
+    public void DeferDisposal_EvictedImageSurvivesUntilDrain()
+    {
+        // A 1024px tile is 4 MiB == the floor, so a one-tile budget evicts the
+        // prior tile on the next Put. With deferDisposal the evicted image must
+        // remain valid (not yet freed) until DrainPendingDisposals is called —
+        // this is what lets a GPU texture outlive the deferred frame that drew it.
+        var tileBytes = 1024L * 1024 * 4;
+        using var cache = new TileCache(tileBytes, deferDisposal: true);
+
+        var first = MakeImage(1024);
+        cache.Put(Key(0), first);
+        cache.Put(Key(1), MakeImage(1024));
+
+        Assert.False(cache.Contains(Key(0)));
+        // Evicted, but deferred: the native image is still alive.
+        Assert.NotEqual(nint.Zero, first.Handle);
+
+        cache.DrainPendingDisposals();
+        Assert.Equal(nint.Zero, first.Handle);
+    }
+
+    [Fact]
+    public void DeferDisposal_ClearDefersUntilDrain()
+    {
+        using var cache = new TileCache(TileCache.MinBudgetBytes, deferDisposal: true);
+        var image = MakeImage(32);
+        cache.Put(Key(0), image);
+
+        cache.Clear();
+        Assert.Equal(0, cache.Count);
+        // Cleared from the cache but not yet disposed under deferred mode.
+        Assert.NotEqual(nint.Zero, image.Handle);
+
+        cache.DrainPendingDisposals();
+        Assert.Equal(nint.Zero, image.Handle);
+    }
+
+    [Fact]
+    public void DeferDisposal_DisposeDrainsPending()
+    {
+        var cache = new TileCache(TileCache.MinBudgetBytes, deferDisposal: true);
+        var image = MakeImage(32);
+        cache.Put(Key(0), image);
+        cache.Clear();
+        Assert.NotEqual(nint.Zero, image.Handle);
+
+        // Teardown must free everything Clear() deferred.
+        cache.Dispose();
+        Assert.Equal(nint.Zero, image.Handle);
+    }
+
+    [Fact]
+    public void DrainPendingDisposals_InlineCacheIsNoOp()
+    {
+        // A default (inline) cache disposes on eviction; draining is harmless.
+        var tileBytes = 1024L * 1024 * 4;
+        using var cache = new TileCache(tileBytes);
+        cache.Put(Key(0), MakeImage(1024));
+        cache.Put(Key(1), MakeImage(1024));
+
+        cache.DrainPendingDisposals();
+        Assert.True(cache.Contains(Key(1)));
+    }
 }

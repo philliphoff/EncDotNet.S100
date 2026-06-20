@@ -84,6 +84,20 @@ public static class S100VectorTileRenderer
     private const int MaxImageDimension = 4096;
 
     /// <summary>
+    /// How many bands away from the target a cached tile may be and still be
+    /// drawn as a fill-the-gap backdrop. Bounding this is both correctness and
+    /// safety: it stops tiles from many zoom levels stacking up at different
+    /// scales (the multi-band "ghosting" artefact), and it caps the number of
+    /// tiles composited in a single frame. Without the cap, zooming far out
+    /// (target near band&#160;0) would draw every finer-band tile in the cache —
+    /// hundreds at once — which both looks wrong and, under GPU residency, used
+    /// to overflow the texture budget and free a texture mid-frame. A single
+    /// zoom step is ±1 band, so a small window keeps the smooth-zoom backdrop
+    /// while excluding the explosion.
+    /// </summary>
+    private const int MaxFallbackBandDistance = 2;
+
+    /// <summary>
     /// Whether speculative <b>prediction / pre-warm</b> (Phase&#160;3) is enabled.
     /// When on, each frame also rasterises a velocity-aimed warm set so
     /// newly-exposed perimeter tiles are cached before a pan/zoom reveals them.
@@ -413,14 +427,27 @@ public static class S100VectorTileRenderer
             // the live context), then reconcile this layer's cache with the
             // current context + scene generation before compositing, so stale
             // textures are never blitted.
-            if (grContext is not null)
+            //
+            // Guard the whole paint block: a throw here would escape the lock and
+            // skip the worker-start Task.Run below while state.Rendering stays
+            // true, permanently stalling tile production (a blank chart until the
+            // layer is rebuilt). A dropped frame is always recoverable; a stalled
+            // worker is not.
+            try
             {
-                ReconcileGpuCaches(grContext);
+                if (grContext is not null)
+                {
+                    ReconcileGpuCaches(grContext);
+                }
+
+                ManageGpuResidency(state, grContext, layer);
+
+                Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution, grContext);
             }
-
-            ManageGpuResidency(state, grContext, layer);
-
-            Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution, grContext);
+            catch (Exception ex)
+            {
+                S100Diag.Telemetry.RecordRenderFault(ex);
+            }
         }
 
         S100Diag.Telemetry.TileCompositeDuration.Record(
@@ -465,9 +492,9 @@ public static class S100VectorTileRenderer
     /// <summary>
     /// Draws the best-available tiles for the frame, holding <c>state.Sync</c>
     /// so the worker cannot evict/dispose an image mid-blit. Coarser/finer
-    /// cached bands are drawn first as a backdrop (nearest band last, just under
-    /// the target), then exact target-band tiles on top, each hard-clipped to
-    /// its core.
+    /// cached bands within <see cref="MaxFallbackBandDistance"/> of the target are
+    /// drawn first as a backdrop (nearest band last, just under the target), then
+    /// exact target-band tiles on top, each hard-clipped to its core.
     /// </summary>
     private static void Composite(
         SKCanvas canvas, TileState state, int band,
@@ -476,12 +503,20 @@ public static class S100VectorTileRenderer
     {
         var gpuCache = grContext is not null ? state.GpuTextures : null;
 
-        // Backdrop: cached tiles from other bands that intersect the viewport,
-        // farthest band first so the closest resolution ends up on top.
+        // Free GPU textures retired by prior frames before recording any draw
+        // this frame: SKCanvas.DrawImage is deferred and flushes after Render
+        // returns, so a texture must outlive the frame that drew it. Draining
+        // here (frame start, pre-draw) frees only already-flushed images.
+        gpuCache?.DrainPendingDisposals();
+
+        // Backdrop: cached tiles from nearby bands that intersect the viewport,
+        // farthest band first so the closest resolution ends up on top. Bands
+        // beyond MaxFallbackBandDistance are skipped — see the constant for why
+        // (anti-ghosting + bounded per-frame draw count).
         var fallback = new List<TileKey>();
         foreach (var key in state.Cache.SnapshotKeys())
         {
-            if (key.Band == band)
+            if (key.Band == band || Math.Abs(key.Band - band) > MaxFallbackBandDistance)
             {
                 continue;
             }
@@ -546,7 +581,7 @@ public static class S100VectorTileRenderer
                 state.GpuTextures.Dispose();
             }
 
-            state.GpuTextures = new TileCache(GpuBudgetBytes);
+            state.GpuTextures = new TileCache(GpuBudgetBytes, deferDisposal: true);
             RegisterGpuCache(layer, state.GpuTextures, grContext);
             state.GpuContext = grContext;
             state.GpuGeneration = state.Generation;
@@ -695,117 +730,141 @@ public static class S100VectorTileRenderer
 
     private static void Worker(TileState state)
     {
-        while (true)
+        try
         {
-            TileKey key;
-            float deviceScale;
-            long generation;
-            VectorScene scene;
-            bool isPrediction;
-            string? diskNamespace;
-
-            lock (state.Sync)
+            while (true)
             {
-                // Visible tiles always drain before speculative ones, so
-                // prediction work yields to anything actually on screen.
-                if (state.Scene is null
-                    || (state.PendingVisible.Count == 0 && state.PendingPredicted.Count == 0))
-                {
-                    state.Rendering = false;
-                    return;
-                }
+                TileKey key;
+                float deviceScale;
+                long generation;
+                VectorScene scene;
+                bool isPrediction;
+                string? diskNamespace;
 
-                if (state.PendingVisible.Count > 0)
+                lock (state.Sync)
                 {
-                    key = TakeOne(state.PendingVisible);
-                    isPrediction = false;
-                }
-                else
-                {
-                    key = TakeOne(state.PendingPredicted);
-                    isPrediction = true;
-                }
-
-                deviceScale = state.PendingDeviceScale;
-                generation = state.PendingGeneration;
-                scene = state.Scene;
-                diskNamespace = state.DiskNamespace;
-                state.InFlight.Add(key);
-            }
-
-            // Warm path: a tile rendered under this exact style state in a prior
-            // layer/session is decoded from disk instead of re-rasterised. The
-            // namespace folds the styleStateHash so this can never be a tile from
-            // a different mariner/palette state.
-            var disk = SharedDiskCache;
-            SKImage? image = null;
-            var fromDisk = false;
-            if (disk is not null && diskNamespace is not null)
-            {
-                image = disk.TryRead(diskNamespace, key);
-                if (image is not null)
-                {
-                    fromDisk = true;
-                    S100Diag.Telemetry.TileDiskHits.Add(1);
-                }
-            }
-
-            if (image is null)
-            {
-                try
-                {
-                    var rasterStart = Stopwatch.GetTimestamp();
-                    using var bitmap = RasterizeTile(scene, key, deviceScale);
-                    image = SKImage.FromBitmap(bitmap);
-                    S100Diag.Telemetry.TileRasterizeDuration.Record(
-                        Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
-                }
-                catch
-                {
-                    image?.Dispose();
-                    image = null;
-                }
-            }
-
-            // Persist a freshly-rasterised tile while we still solely own the
-            // image (before handing it to the hot cache), so a concurrent
-            // eviction can never dispose it mid-encode. Disk-sourced tiles are
-            // already persisted. Best-effort: failures are swallowed inside Write.
-            if (image is not null && !fromDisk && disk is not null && diskNamespace is not null
-                && generation == state.Generation)
-            {
-                disk.Write(diskNamespace, key, image);
-                S100Diag.Telemetry.TileDiskWrites.Add(1);
-            }
-
-            var published = false;
-            lock (state.Sync)
-            {
-                state.InFlight.Remove(key);
-                if (image is not null && generation == state.Generation)
-                {
-                    state.Cache.Put(key, image);
-                    published = true;
-                    if (isPrediction)
+                    // Visible tiles always drain before speculative ones, so
+                    // prediction work yields to anything actually on screen.
+                    if (state.Scene is null
+                        || (state.PendingVisible.Count == 0 && state.PendingPredicted.Count == 0))
                     {
-                        // Track so a later visible frame can score it as a hit.
-                        state.PredictedInCache.Add(key);
+                        // Drained: leave the loop and let the single finally clear
+                        // state.Rendering. Clearing here as well would open a race
+                        // where a frame restarts the worker between this point and
+                        // the finally, leaving two workers running.
+                        return;
+                    }
+
+                    if (state.PendingVisible.Count > 0)
+                    {
+                        key = TakeOne(state.PendingVisible);
+                        isPrediction = false;
+                    }
+                    else
+                    {
+                        key = TakeOne(state.PendingPredicted);
+                        isPrediction = true;
+                    }
+
+                    deviceScale = state.PendingDeviceScale;
+                    generation = state.PendingGeneration;
+                    scene = state.Scene;
+                    diskNamespace = state.DiskNamespace;
+                    state.InFlight.Add(key);
+                }
+
+                // Warm path: a tile rendered under this exact style state in a prior
+                // layer/session is decoded from disk instead of re-rasterised. The
+                // namespace folds the styleStateHash so this can never be a tile from
+                // a different mariner/palette state.
+                var disk = SharedDiskCache;
+                SKImage? image = null;
+                var fromDisk = false;
+                if (disk is not null && diskNamespace is not null)
+                {
+                    image = disk.TryRead(diskNamespace, key);
+                    if (image is not null)
+                    {
+                        fromDisk = true;
+                        S100Diag.Telemetry.TileDiskHits.Add(1);
                     }
                 }
-                else
+
+                if (image is null)
                 {
-                    image?.Dispose();
+                    try
+                    {
+                        var rasterStart = Stopwatch.GetTimestamp();
+                        using var bitmap = RasterizeTile(scene, key, deviceScale);
+                        image = SKImage.FromBitmap(bitmap);
+                        S100Diag.Telemetry.TileRasterizeDuration.Record(
+                            Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
+                    }
+                    catch
+                    {
+                        image?.Dispose();
+                        image = null;
+                    }
+                }
+
+                // Persist a freshly-rasterised tile while we still solely own the
+                // image (before handing it to the hot cache), so a concurrent
+                // eviction can never dispose it mid-encode. Disk-sourced tiles are
+                // already persisted. Best-effort: failures are swallowed inside Write.
+                if (image is not null && !fromDisk && disk is not null && diskNamespace is not null
+                    && generation == state.Generation)
+                {
+                    disk.Write(diskNamespace, key, image);
+                    S100Diag.Telemetry.TileDiskWrites.Add(1);
+                }
+
+                var published = false;
+                lock (state.Sync)
+                {
+                    state.InFlight.Remove(key);
+                    if (image is not null && generation == state.Generation)
+                    {
+                        state.Cache.Put(key, image);
+                        published = true;
+                        if (isPrediction)
+                        {
+                            // Track so a later visible frame can score it as a hit.
+                            state.PredictedInCache.Add(key);
+                        }
+                    }
+                    else
+                    {
+                        image?.Dispose();
+                    }
+                }
+
+                if (isPrediction && !fromDisk)
+                {
+                    S100Diag.Telemetry.TilePredictionRasterized.Add(1);
+                }
+
+                if (published)
+                {
+                    RequestRedraw?.Invoke();
                 }
             }
-
-            if (isPrediction && !fromDisk)
+        }
+        catch (Exception ex)
+        {
+            // The inner rasterise has its own guard; this catches anything else on
+            // the worker (disk I/O, cache, redraw callback). Never let the worker
+            // die with state.Rendering stuck true — that would permanently stall
+            // tile production (a blank chart until the layer is rebuilt).
+            S100Diag.Telemetry.RecordRenderFault(ex);
+        }
+        finally
+        {
+            // Always release the rendering flag so the next frame can spin up a
+            // fresh worker for any still-pending tiles. Normal drain-exit already
+            // cleared it inside the loop; this covers the abnormal-exit path.
+            lock (state.Sync)
             {
-                S100Diag.Telemetry.TilePredictionRasterized.Add(1);
-            }
-
-            if (published)
-            {
-                RequestRedraw?.Invoke();
+                state.Rendering = false;
             }
         }
     }

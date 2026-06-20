@@ -654,6 +654,23 @@ close-all + reopen cycles (each warming and abandoning a GPU cache) with no nati
 crash, frames steady at 6–9 ms and a 96 % GPU hit ratio sustained across the
 cycles.
 
+**Deferred GPU disposal + bounded backdrop (zoom-out safety):** `SKCanvas.DrawImage`
+is deferred — the texture is only dereferenced when Skia flushes *after* the render
+method returns — so a GPU texture must outlive the frame that drew it. Two measures
+keep that invariant. First, the per-frame compositor only draws cached tiles within
+`MaxFallbackBandDistance` (2) bands of the target; this both removes the multi-scale
+"ghosting" of symbols stacked at different sizes during a zoom and bounds the
+per-frame draw count, so a full zoom-out can no longer try to composite the entire
+cache at once. Second, the GPU `TileCache` is built with `deferDisposal: true`:
+evicted/replaced/cleared textures are not freed inline but on the *next* frame via
+`DrainPendingDisposals()` (called at the top of `Composite`, before any draw is
+recorded), by which point the frame that referenced them has already flushed. The
+render-thread paint block and the rasterisation worker also reset their state from a
+single guarded path, so a paint-time throw drops one frame (counter
+`s100.render.tile.faults`) instead of stranding the pipeline into a blank chart.
+**Verified (PDB01, GPU on and off):** zoom in → zoom out to the whole world → zoom
+back in renders correctly with no crash and no blank frame.
+
 ## Installation
 
 ```sh

@@ -383,6 +383,30 @@ internal static class Telemetry
             unit: "{tile}",
             description: "Tile blits served from an already-resident GPU texture by the tiled TiledScene render subsystem (Phase 5 residency), avoiding a re-upload.");
 
+    /// <summary>
+    /// Count of render-thread paint faults caught by the tiled TiledScene
+    /// compositor (GPU residency or composite step). A non-zero value means a
+    /// frame was dropped rather than allowed to escape the layer lock and strand
+    /// tile production. Steady operation keeps this at zero.
+    /// </summary>
+    public static readonly Counter<long> RenderFaults =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.faults",
+            unit: "{fault}",
+            description: "Render-thread paint faults caught (and converted to a dropped frame) by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Records a caught render-thread paint fault: bumps <see cref="RenderFaults"/>
+    /// and emits a diagnostic activity event carrying the exception so the failure
+    /// is observable without crashing the frame.
+    /// </summary>
+    /// <param name="ex">The caught exception.</param>
+    public static void RecordRenderFault(Exception ex)
+    {
+        RenderFaults.Add(1);
+        Activity.Current?.AddException(ex);
+    }
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);

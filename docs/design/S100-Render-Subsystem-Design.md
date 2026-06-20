@@ -630,3 +630,68 @@ dispose-on-calling-thread semantics that this relies on are unit-covered
 `…Put_AfterDispose_…`); the GPU promotion and the registry reconcile are
 GPU-context-bound and so are validated by this integration run rather
 than a headless unit test.
+
+### F.6 Zoom-out use-after-free and the bounded backdrop
+
+Once residency shipped, a second, distinct crash appeared when the user
+**zoomed all the way out**: the report this time was on the
+**main thread** (`com.apple.main-thread`) inside `libSkiaSharp`'s GPU
+path, `KERN_INVALID_ADDRESS at 0x28` — a GPU **use-after-free during
+compositing**, not the finalizer crash of F.5.
+
+Two independent residency assumptions combined to cause it:
+
+1. **`SKCanvas.DrawImage` is deferred.** The draw is recorded into a
+   display list and the texture is only dereferenced when Skia flushes,
+   *after* the Mapsui/Avalonia render method returns. A texture must
+   therefore outlive the frame that drew it.
+2. **The backdrop loop was unbounded across bands.** `Composite` drew
+   every cached tile from every other band that intersected the
+   viewport. At full zoom-out (target near band 0) the viewport is the
+   whole world, so the loop promoted *every finer-band tile in the
+   cache* to a GPU texture and recorded a `DrawImage` for each. That
+   overflowed the 256 MB GPU budget, so `TileCache.Put` **evicted and
+   disposed GPU `SKImage`s mid-frame** — including textures already
+   recorded into the not-yet-flushed display list. At flush, Skia
+   dereferenced a freed texture → the main-thread crash.
+
+The fix has two parts, and the first is also why the user saw
+**different-sized symbols stacked on top of each other** while zooming:
+
+- **Bound the backdrop (`MaxFallbackBandDistance = 2`).** `Composite`
+  now skips cached tiles more than two bands from the target. A single
+  zoom step is ±1 band, so the near-band backdrop that fills gaps during
+  a smooth zoom is preserved, but the multi-band "ghosting" (the same
+  area drawn at several scales at once) is gone and the per-frame draw
+  count is bounded regardless of how far out the viewport is. This alone
+  removes the budget overflow at band 0.
+- **Defer GPU texture disposal by one frame.** The GPU `TileCache` is
+  constructed with `deferDisposal: true`: images evicted, replaced, or
+  cleared are not freed inline but moved to a pending list that
+  `Composite` drains **at the start of the next frame, before recording
+  any draw**. Because the previous frame has already flushed by then,
+  the images being freed can no longer be referenced by an in-flight
+  display list. This makes eviction safe even if a future change pushes
+  the budget during a frame. The raster (CPU) cache keeps inline
+  disposal — CPU images are copied into the GPU display list, not
+  referenced by handle, so they were never exposed to this hazard.
+
+Defence in depth: the render-thread paint block (GPU reconcile +
+residency + composite) is wrapped so a paint-time throw can no longer
+escape the layer lock and skip the worker-start path, which previously
+could strand `state.Rendering = true` and **permanently stall tile
+production** (a blank chart until the layer was rebuilt — the user's
+"no charts until I load another dataset" report). The rasterisation
+worker likewise resets `state.Rendering` from a single `finally`, so an
+unexpected throw on the worker can never wedge the pipeline. Caught
+paint faults bump a `s100.render.tile.faults` counter and drop the
+frame instead of crashing.
+
+**Verified** (reference cell, both `S100_VECTOR_TILE_GPU=1` and `=0`):
+zoom in → zoom out to the whole world → zoom back in renders the chart
+correctly with no crash and no blank; symbols no longer stack at
+multiple sizes. The four close-all + reopen cycles of F.5 still pass.
+The new deferred-disposal semantics are unit-covered
+(`TileCacheTests.DeferDisposal_*`, `DrainPendingDisposals_*`); the
+in-frame GPU compositing path remains GPU-context-bound and so is
+validated by the integration run.
