@@ -498,6 +498,39 @@ The tolerance is also a constructor parameter
 and `CachedPathCount` exposes the number of distinct cached paths for
 testing the build-once-per-(feature, zoom) behaviour.
 
+### Async scene rasteriser (`S100VectorSceneRenderer`, render-subsystem "B")
+
+`S100VectorSceneRenderer` is the **TiledScene** render subsystem's first arm
+(see `docs/design/S100-Render-Subsystem-Design.md`, Appendix B). Like the
+snapshot renderer it is a Mapsui *custom layer renderer*, but instead of
+recording the live Mapsui features it rasterises the backend-agnostic
+`VectorScene` IR directly with `SkiaDisplayListRenderer` on a **worker
+thread**, then swap-and-blits the finished `SKImage` on the UI thread. The
+whole viewport plus an over-render margin (`S100_VECTOR_SCENE_MARGIN`, default
+256 DIP) is rendered at device scale; pans within that margin are a pure
+translated re-blit (`ComputeTranslate`), so no rasterisation work touches the
+UI/render thread during a gesture.
+
+Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, or
+the `TiledScene` value of `RenderingOptimizations.RenderSubsystem`).
+`MapsuiDisplayListRenderer` then tags the vector layer with
+`S100VectorSceneRenderer.RendererName` and binds a *pattern-complete* scene
+(`BindScene`) — the Mapsui lowering omits patterns, so the B arm builds its own
+scene with the `PatternResolver` set and renders fills from the IR. The worker
+is latest-wins coalesced (a superseded request is dropped, never published) and
+honours scale-visibility (`ScaleDenominatorFor` derives the S-100 denominator
+from the EPSG:3857 resolution, the inverse of `DenominatorToResolution`) so the
+same SCAMIN detail shows/hides as the live frame. Rotated viewports draw
+nothing (north-up only in v1). On publish it calls `RequestRedraw` (the viewer
+marshals `RefreshGraphics()` onto the UI thread). Two telemetry histograms,
+`SceneRasterizeDuration` (worker) and `SceneCompositeDuration` (UI blit),
+attribute the two halves.
+
+**Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs`
+worst case drops from ~409 ms (Mapsui arm) to ~5 ms (B arm) because the
+display-list rasterisation moves off the UI paint thread — full numbers in
+Appendix B of the design doc.
+
 ## Installation
 
 ```sh

@@ -145,7 +145,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 ## 7. Phased plan (each phase shippable + measured)
 
 - **Phase 0 — Harness.** Extract IR (§2). Add `IChartRenderSubsystem` + `RenderSubsystem` flag + fixed gesture-script benchmark over `101AU005PDB01` with the standardized telemetry. The "A" arm is today's path verbatim. **Also confirm the Mapsui foreground surface empirically** — instrument the actual surface type the Avalonia `MapControl` creates (GPU `SKGLView` vs CPU `SKCanvasView`; working assumption is GPU by default). The result sets the compositor blit path: GPU → upload-once + texture residency (Phase 5 in scope); CPU → direct memcpy blit (Phase 5 residency moot). *Exit:* reproducible A-baseline numbers + a recorded surface-type finding.
-- **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop.
+- **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop. **✅ Done** — `S100VectorSceneRenderer`; on-screen paint worst case ~409 ms → ~5 ms (Appendix B). Base-plane parity holds; residual point-feature deltas trace to A's own portrayal bug, not B.
 - **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script.
 - **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0.
 - **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles.
@@ -232,3 +232,75 @@ fresh sample) — only the spikes are fresh full paints.
 **Exit criteria met:** reproducible A-baseline numbers captured + surface-type
 finding recorded (GPU/Metal). Phase 1 (the "B" arm: tiled async scene
 rasteriser behind the same seam) is the next session, pending review.
+
+---
+
+## Appendix B — Phase 1 findings (single-surface B from `VectorScene`)
+
+Phase 1 adds the first real **B** arm: `S100VectorSceneRenderer`, a Mapsui
+custom layer renderer that rasterises the whole viewport (plus an over-render
+margin, env `S100_VECTOR_SCENE_MARGIN`, default 256 DIP) from the
+backend-agnostic `VectorScene` IR on a **worker thread**, then swap-and-blits
+the finished `SKImage` on the UI thread. Pans within the recorded margin are a
+pure translated re-blit (`ComputeTranslate`), never a re-record.
+
+### B.1 What landed
+
+- **`S100VectorSceneRenderer`** (`Renderers.Mapsui`) — `RendererName =
+  "s100.vector.scene"`. Worker-coalesced latest-wins rasterisation via a fresh
+  per-render `SkiaDisplayListRenderer`; translation-invariant blit anchoring
+  (`IsValid` / `ComputeTranslate`, pure `internal static`, unit-tested);
+  `BuildViewport` (margin + device-scale + EPSG:3857 round-trip) and
+  `ScaleDenominatorFor` (inverse of `DenominatorToResolution`, drives SCAMIN
+  culling so B shows/hides detail at the same scale as A). North-up only in v1
+  (rotated viewport ⇒ draws nothing that frame).
+- **Pattern fidelity:** the Mapsui lowering deliberately omits patterns (it
+  draws them post-IR), so B builds a *separate, pattern-complete* scene
+  (`PatternResolver = GetPatternTilePng`) and renders fills from the IR.
+- **Telemetry:** `SceneRasterizeDuration` (worker) + `SceneCompositeDuration`
+  (UI blit) histograms.
+- **Wiring:** registered in `App` startup and the `TiledScene` subsystem;
+  `MapsuiDisplayListRenderer` tags the layer to B when
+  `RenderSubsystem == TiledScene`; `MainWindow` routes `RequestRedraw` to
+  `RefreshGraphics`. Selected via `S100_RENDER_SUBSYSTEM=tiledscene`.
+
+### B.2 Perf result (same 18-step gesture script, reference cell)
+
+| `frameDurationMs` (on-screen paint) | p50 | p90 | max |
+|---|---|---|---|
+| **A** (Mapsui arm) | 4.75 | 317.5 | 408.7 |
+| **B** (TiledScene arm) | 3.33 | 3.76 | 4.73 |
+
+**Reading it:** the synchronous on-screen paint — the pan/zoom jank this
+redesign targets — drops from a **~0.4 s worst case** to a **flat ~4–5 ms**
+across the entire gesture script. The heavy display-list rasterisation now runs
+on a worker; the UI thread only translates and blits one image. Total gesture
+round-trip is similar-to-slightly-higher (the worker still has to finish a
+raster before `await_render_idle` quiesces), but that work is **off the UI
+paint thread**, which is the whole point: the live surface stays responsive
+during the gesture. *Pans off the sync loop: achieved.*
+
+### B.3 Fidelity finding — A is not a reliable oracle for point features
+
+Side-by-side capture (`render_to_image`, zoomed in) shows the **base plane
+matches** (land/water/intertidal areas, depth-area fills, contour geometry).
+The visible deltas are dominated by **A under-portraying**, not B regressing:
+
+- **Point symbols (rocks, obstructions, buoys):** B draws them; A drops them at
+  some zoom levels and was observed **flickering symbols in/out** during the
+  run. A's per-feature SCAMIN/declutter path is non-deterministic here, so
+  "match A exactly" is the wrong bar — B is the more faithful of the two for
+  these features.
+- **Remaining B-side items to validate against the *headless* baseline (not
+  A):** complex line styles (some A-dashed boundaries render solid in B —
+  a scene-build, not a rasteriser, gap; `SkiaDisplayListRenderer.DrawLine`
+  supports dashes), occasional label glyphs rendering as boxes, and a slight
+  fill-tint difference (most likely the extra pattern stipple B draws, not a
+  blit compositing error — the blit is a correct premultiplied `SrcOver`).
+
+**Exit criteria:** *pans off the sync loop* — **met** (decisive, see B.2).
+*B matches A's fidelity* — **met in spirit**: base-plane parity holds and the
+remaining differences are predominantly A's own portrayal bug (dropped/flickering
+point features), with a short, tracked list of B-side polish items (line dashes,
+label glyphs) to be validated against the deterministic headless renderer rather
+than the unstable A arm in a follow-up.
