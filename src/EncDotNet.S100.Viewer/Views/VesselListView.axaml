@@ -56,40 +56,11 @@
                          ItemsSource="{Binding Vessels}"
                          SelectedItem="{Binding SelectedVessel, Mode=TwoWay}"
                          SelectionMode="Single"
+                         Classes="accentList"
                          BorderThickness="0"
                          Background="Transparent"
                          Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.Styles>
-                        <Style Selector="ListBoxItem">
-                            <Setter Property="Padding" Value="12,6" />
-                            <Setter Property="Margin" Value="0,1" />
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="Template">
-                                <ControlTemplate>
-                                    <Border Name="PART_Container"
-                                            Background="{TemplateBinding Background}"
-                                            CornerRadius="4"
-                                            Padding="{TemplateBinding Padding}">
-                                        <ContentPresenter Content="{TemplateBinding Content}"
-                                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                          HorizontalAlignment="Stretch"
-                                                          HorizontalContentAlignment="Stretch" />
-                                    </Border>
-                                </ControlTemplate>
-                            </Setter>
-                        </Style>
-                        <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
-                            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-                        </Style>
-                        <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
-                            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                        </Style>
-                        <Style Selector="ListBoxItem:selected TextBlock">
-                            <Setter Property="Foreground" Value="White" />
-                        </Style>
-                    </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:VesselListItem">
                             <Border Background="Transparent"
@@ -117,6 +88,7 @@
 
                                     <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2">
                                         <TextBlock Text="{Binding Name}"
+                                                   Classes="accentListTitle"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis" />
                                         <TextBlock Text="{Binding StateText}"

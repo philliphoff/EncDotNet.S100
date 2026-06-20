@@ -147,5 +147,156 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
+
+        <!--
+          Shared activity-panel list selection language. Every selectable
+          list in the side panels (Datasets, Feature Search, Catalogues,
+          Vessels, and the Pick Report hit list) adopts the same subtle
+          look instead of a solid accent fill with white text: a 3px accent
+          left bar plus a low-opacity accent tint on hover/selection, and
+          the row's primary text adopting the accent colour when selected.
+          The tint keeps secondary text and inline icons legible without
+          per-row white overrides — important for the muted S-100 dusk and
+          night chrome variants where a bright fill dominates the panel.
+
+          Usage: apply Classes="accentList" to a ListBox, and mark each
+          row's primary/title TextBlock with Classes="accentListTitle" so
+          it picks up the accent colour on selection. Per-row padding can be
+          tuned by overriding ListBoxItem Padding in a list-scoped style.
+        -->
+        <Style Selector="ListBox.accentList ListBoxItem">
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Margin" Value="0,1" />
+            <!-- MinHeight matches the effective height of the datasets list rows
+                 (a 36px ShadUI Icon button + 2x5px vertical padding) so every
+                 accent list shares the same vertical rhythm regardless of whether
+                 a row carries action buttons or text only. -->
+            <Setter Property="MinHeight" Value="46" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid ColumnDefinitions="3,*">
+                        <Border Name="PART_Bar"
+                                Grid.Column="0"
+                                Width="3"
+                                CornerRadius="1.5"
+                                Background="Transparent" />
+                        <Panel Grid.Column="1">
+                            <Border Name="PART_Tint"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Opacity="0"
+                                    CornerRadius="4" />
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Padding="{TemplateBinding Padding}"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              HorizontalContentAlignment="Stretch" />
+                        </Panel>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ListBox.accentList ListBoxItem:pointerover /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="ListBox.accentList ListBoxItem:selected /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="ListBox.accentList ListBoxItem:selected /template/ Border#PART_Bar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="ListBox.accentList ListBoxItem:selected TextBlock.accentListTitle">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Segmented control (iOS-style pill group) used by the map Display
+          Settings overlay. A rounded track (Border.segmentTrack) holds an
+          equal-width row of segments; the active segment is lifted onto a
+          raised card. Two segment flavours share one look:
+            * RadioButton.segment  — single-select groups (display category,
+              palette). Exactly one segment is checked at a time.
+            * ToggleButton.segment — independent multi-toggle groups (text
+              viewing groups), where each segment can be on/off on its own.
+          Theme-aware: the track uses SecondaryColor and the raised card uses
+          CardBackgroundColor, so the control adapts to the S-100 dusk/night
+          chrome variants alongside the rest of the app.
+        -->
+        <Style Selector="Border.segmentTrack">
+            <Setter Property="Background" Value="{DynamicResource SecondaryColor}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
+        <Style Selector="RadioButton.segment">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="Seg"
+                            Background="Transparent"
+                            CornerRadius="6"
+                            Padding="12,5">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.segment">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="FontSize" Value="12" />
+            <!-- ShadUI's base ToggleButton sets MinHeight=36; pin both segment
+                 flavours to the same MinHeight so the multi-toggle Text row
+                 lines up exactly with the single-select Display/Palette rows. -->
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="Seg"
+                            Background="Transparent"
+                            CornerRadius="6"
+                            Padding="12,5">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!-- Hover affordance on the resting (unchecked) segments. -->
+        <Style Selector="RadioButton.segment:pointerover /template/ Border#Seg">
+            <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
+        </Style>
+        <Style Selector="ToggleButton.segment:pointerover /template/ Border#Seg">
+            <Setter Property="Background" Value="{DynamicResource BorderColor30}" />
+        </Style>
+        <!-- Active segment: raised card + stronger, bolder text. -->
+        <Style Selector="RadioButton.segment:checked /template/ Border#Seg">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 3 0 #1F000000" />
+        </Style>
+        <Style Selector="ToggleButton.segment:checked /template/ Border#Seg">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 3 0 #1F000000" />
+        </Style>
+        <Style Selector="RadioButton.segment:checked">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="ToggleButton.segment:checked">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Disabled track (e.g. Text group with no text layers loaded). -->
+        <Style Selector="Border.segmentTrack:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
     </Application.Styles>
 </Application>

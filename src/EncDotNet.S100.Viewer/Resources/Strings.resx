@@ -625,6 +625,13 @@
   <data name="Tooltip_CopyLocation" xml:space="preserve">
     <value>Copy this location (decimal degrees) to the clipboard</value>
   </data>
+  <data name="Pick_IdCaption" xml:space="preserve">
+    <value>ID {0}</value>
+    <comment>Leading segment of the demoted identity caption in the Object Information panel; {0} is the feature identifier.</comment>
+  </data>
+  <data name="Tooltip_CopyIdentity" xml:space="preserve">
+    <value>Copy this feature's name and identity to the clipboard</value>
+  </data>
   <!-- Pick panel: station time-series chart -->
   <data name="Pick_Chart_Title_WaterLevel" xml:space="preserve">
     <value>Water Level</value>
@@ -1134,6 +1141,46 @@
   </data>
   <data name="Tooltip_SwitchPalette" xml:space="preserve">
     <value>Switch S-100 map palette (Day / Dusk / Night)</value>
+  </data>
+
+  <!-- Display settings overlay (consolidated map command-bar settings) -->
+  <data name="DisplaySettings_Title" xml:space="preserve">
+    <value>Display Settings</value>
+  </data>
+  <data name="Tooltip_DisplaySettings" xml:space="preserve">
+    <value>Display settings (category, text, palette)</value>
+  </data>
+  <data name="Tooltip_CloseDisplaySettings" xml:space="preserve">
+    <value>Close display settings</value>
+  </data>
+  <data name="DisplaySettings_DisplayBaseHeader" xml:space="preserve">
+    <value>Display base</value>
+  </data>
+  <data name="DisplaySettings_TextHeader" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="DisplaySettings_PaletteHeader" xml:space="preserve">
+    <value>Palette</value>
+  </data>
+  <data name="Segment_DisplayBase" xml:space="preserve">
+    <value>Base</value>
+    <comment>Compact segment label for the Display Base category in the display-settings overlay.</comment>
+  </data>
+  <data name="Segment_DisplayOther" xml:space="preserve">
+    <value>Other</value>
+    <comment>Compact segment label for the Other Information category in the display-settings overlay.</comment>
+  </data>
+  <data name="Segment_TextImportant" xml:space="preserve">
+    <value>Important</value>
+    <comment>Compact segment label for the Important text viewing group.</comment>
+  </data>
+  <data name="Segment_TextOther" xml:space="preserve">
+    <value>Other</value>
+    <comment>Compact segment label for the Other text viewing group.</comment>
+  </data>
+  <data name="Segment_TextAll" xml:space="preserve">
+    <value>All</value>
+    <comment>Compact segment label for the All text viewing group.</comment>
   </data>
 
   <!-- Toast notification titles -->

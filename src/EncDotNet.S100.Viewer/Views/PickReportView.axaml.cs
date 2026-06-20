@@ -39,15 +39,21 @@ public partial class PickReportView : UserControl
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_subscribed is not null)
-            _subscribed.CopyLocationRequested -= OnCopyLocationRequested;
+        {
+            _subscribed.CopyLocationRequested -= OnCopyTextRequested;
+            _subscribed.CopyIdentityRequested -= OnCopyTextRequested;
+        }
 
         _subscribed = DataContext as PickReportViewModel;
 
         if (_subscribed is not null)
-            _subscribed.CopyLocationRequested += OnCopyLocationRequested;
+        {
+            _subscribed.CopyLocationRequested += OnCopyTextRequested;
+            _subscribed.CopyIdentityRequested += OnCopyTextRequested;
+        }
     }
 
-    private void OnCopyLocationRequested(object? sender, string text)
+    private void OnCopyTextRequested(object? sender, string text)
     {
         try
         {

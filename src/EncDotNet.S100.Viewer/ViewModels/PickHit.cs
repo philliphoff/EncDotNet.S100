@@ -66,4 +66,33 @@ internal sealed class PickHit
     /// back to the raw feature-type code when the FC could not decode it.
     /// </summary>
     public string DisplayLabel => FeatureTypeName ?? FeatureType;
+
+    /// <summary>
+    /// Mariner-facing instance name derived from the feature's attributes
+    /// (e.g. "Number 10" from an S-101 <c>featureName</c>), or
+    /// <see langword="null"/> when the feature carries no name attribute.
+    /// </summary>
+    public string? FeatureName => ViewModels.FeatureName.Derive(Attributes);
+
+    /// <summary>
+    /// Primary line for the hit-list row and identity block: the instance
+    /// name when present, otherwise the feature class name.
+    /// </summary>
+    public string PrimaryLabel => FeatureName ?? DisplayLabel;
+
+    /// <summary>
+    /// Secondary line beneath <see cref="PrimaryLabel"/>: the feature class
+    /// name when an instance name is leading, otherwise <see langword="null"/>
+    /// (the class is already the primary line, so no subtitle is shown).
+    /// </summary>
+    public string? SecondaryLabel => FeatureName is not null ? DisplayLabel : null;
+
+    /// <summary>True when <see cref="SecondaryLabel"/> has a value to show.</summary>
+    public bool HasSecondaryLabel => SecondaryLabel is not null;
+
+    /// <summary>
+    /// Category glyph for the feature class, used as a fast visual scanning
+    /// aid in the hit list and identity block.
+    /// </summary>
+    public FluentIcons.Common.Icon Glyph => Services.FeatureGlyphs.ForFeatureType(FeatureType);
 }

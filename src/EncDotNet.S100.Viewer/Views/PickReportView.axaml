@@ -5,10 +5,98 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
              x:Name="PickRoot"
              x:DataType="vm:PickReportViewModel">
+
+    <UserControl.Resources>
+        <!--
+            Attribute table cell: one label/value row. Attributes are at most
+            two levels deep (simple rows, plus complex rows that carry a single
+            level of leaf children — see FeatureInfoBuilder), so no recursive
+            tree is needed. The label column is a fixed width so values align
+            into a tidy second column; the value column is star-sized and
+            truncates with an ellipsis (full text remains in the tooltip).
+        -->
+        <DataTemplate x:Key="AttributeCellTemplate" x:DataType="pp:PickAttribute">
+            <Border Name="AttrRow" Padding="12,9" Background="Transparent">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="AttrLabel" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding DisplayName}"
+                               FontSize="12"
+                               Opacity="0.7"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="{Binding $parent[views:PickReportView].Bounds.Width, Converter={x:Static conv:ProportionalWidthConverter.Instance}, ConverterParameter=0.55}"
+                               VerticalAlignment="Center">
+                        <ToolTip.Tip>
+                            <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
+                                <Binding Path="DisplayName" />
+                                <Binding Path="Code" />
+                            </MultiBinding>
+                        </ToolTip.Tip>
+                    </TextBlock>
+                    <Grid Grid.Column="2"
+                          ColumnDefinitions="Auto,*"
+                          VerticalAlignment="Center">
+                        <Border Grid.Column="0"
+                                Width="12" Height="12"
+                                CornerRadius="2"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center"
+                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                Background="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}}"
+                                IsVisible="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}, ConverterParameter=visible}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding DisplayText}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis">
+                            <ToolTip.Tip>
+                                <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
+                                    <Binding Path="DisplayText" />
+                                    <Binding Path="RawValue" />
+                                </MultiBinding>
+                            </ToolTip.Tip>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!--
+            Row template for the attribute table: the attribute's own cell,
+            followed (for complex attributes) by its leaf children indented
+            one level. Children never carry further children, so a single
+            nested ItemsControl is sufficient — no recursion.
+        -->
+        <DataTemplate x:Key="AttributeRowTemplate" x:DataType="pp:PickAttribute">
+            <StackPanel>
+                <ContentControl Content="{Binding}"
+                                ContentTemplate="{StaticResource AttributeCellTemplate}" />
+                <ItemsControl ItemsSource="{Binding Children}"
+                              Margin="20,0,0,0"
+                              ItemTemplate="{StaticResource AttributeCellTemplate}" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Zebra-stripe alternate top-level attribute rows for scanability.
+             Targets the row Border inside each even item container. -->
+        <Style Selector="ItemsControl.attrTable ContentPresenter:nth-child(even) Border#AttrRow">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+    </UserControl.Styles>
 
     <!--
         Pick Report (Object Information) panel content. PR-M4: the chrome
@@ -79,19 +167,53 @@
                                Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
                     <ListBox ItemsSource="{Binding Hits}"
                              SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
+                             Classes="accentList"
                              Background="Transparent"
                              BorderThickness="0"
                              Padding="0"
-                             MaxHeight="180">
+                             MaxHeight="200"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:PickHit">
-                                <TextBlock FontSize="12"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
-                                    <Run Text="{Binding DisplayLabel}" />
-                                    <Run Text=" — " FontWeight="Light" />
-                                    <Run Text="{Binding FeatureRef}" FontStyle="Italic" />
-                                </TextBlock>
+                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                                    <!-- Feature category glyph -->
+                                    <Border Grid.Column="0"
+                                            Width="26" Height="26"
+                                            CornerRadius="5"
+                                            Margin="0,0,8,0"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource MutedBackgroundColor}">
+                                        <ic:FluentIcon Icon="{Binding Glyph}"
+                                                       IconVariant="Regular"
+                                                       FontSize="16"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                    </Border>
+                                    <!-- Name (primary) + class (subtitle) -->
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                Spacing="0">
+                                        <TextBlock Classes="accentListTitle"
+                                                   Text="{Binding PrimaryLabel}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding SecondaryLabel}"
+                                                   FontSize="11"
+                                                   Opacity="0.7"
+                                                   IsVisible="{Binding HasSecondaryLabel}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <!-- Identifier, demoted to the trailing edge -->
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding FeatureRef}"
+                                               FontSize="11"
+                                               Opacity="0.55"
+                                               VerticalAlignment="Center"
+                                               Margin="8,0,0,0"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -169,22 +291,55 @@
                 </StackPanel>
             </Border>
 
-            <!-- Header block: feature type + identity -->
-            <StackPanel Spacing="2"
-                        IsVisible="{Binding HasDatasetPick}">
-                <TextBlock Text="{Binding FeatureType}"
-                           FontSize="14"
-                           FontWeight="SemiBold" />
-                <TextBlock FontSize="11" Opacity="0.7">
-                    <Run Text="{x:Static loc:Strings.Pick_IdLabel}" />
-                    <Run Text="{Binding FeatureRef}" />
-                </TextBlock>
-                <TextBlock FontSize="11" Opacity="0.7"
-                           Text="{Binding ProductSpec, StringFormat={x:Static loc:Strings.Pick_SpecFormat}}" />
-                <TextBlock FontSize="11" Opacity="0.7"
-                           Text="{Binding DatasetFileName, StringFormat={x:Static loc:Strings.Pick_SourceFormat}}"
-                           TextWrapping="Wrap" />
-            </StackPanel>
+            <!-- Identity block: glyph + human name + class pill, with the
+                 technical identity (ID / spec / source) demoted to a single
+                 monospace caption line and a copy action. -->
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  IsVisible="{Binding HasDatasetPick}">
+                <Border Grid.Column="0"
+                        Width="36" Height="36"
+                        CornerRadius="7"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Top"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <ic:FluentIcon Icon="{Binding Glyph}"
+                                   IconVariant="Regular"
+                                   FontSize="22"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding PrimaryLabel}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0" />
+                        <Border IsVisible="{Binding HasSecondaryLabel}"
+                                VerticalAlignment="Center"
+                                CornerRadius="4"
+                                Padding="6,1"
+                                Background="{DynamicResource MutedBackgroundColor}">
+                            <TextBlock Text="{Binding SecondaryLabel}"
+                                       FontSize="11"
+                                       Opacity="0.8" />
+                        </Border>
+                    </WrapPanel>
+                    <SelectableTextBlock Text="{Binding IdentityCaption}"
+                                         FontSize="11"
+                                         FontFamily="Menlo,Consolas,Courier New,monospace"
+                                         Opacity="0.6"
+                                         TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="2"
+                        VerticalAlignment="Top"
+                        Padding="6"
+                        Background="Transparent"
+                        Command="{Binding CopyIdentityCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">
+                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                </Button>
+            </Grid>
 
             <!-- References list (xlink:href targets) -->
             <Border BorderBrush="{DynamicResource BorderColor}"
@@ -221,12 +376,24 @@
             </Border>
         </StackPanel>
 
-        <!-- Scrolling region: station chart (when present) + attributes -->
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+        <!-- Scrolling region: station chart (when present) + attributes.
+             The content's width is capped to the panel's own rendered width
+             (PickRoot.Bounds.Width) minus the 24px horizontal scroll padding,
+             so the attribute table (which contains NoWrap cells) can never
+             extend horizontally past the panel. PickRoot's width is sized by
+             the host column and is independent of the content, so the cap
+             always resolves and never feeds back into layout — unlike the
+             themed ScrollViewer's Viewport.Width, which some control themes do
+             not surface to bindings. The cells are vertical-only (no
+             wrapping), so capping width cannot loop with the vertical bar. -->
+        <ScrollViewer x:Name="AttrScroll"
+                      HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto"
                       Padding="12,0,12,12"
                       IsVisible="{Binding HasDatasetPick}">
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="8"
+                        MaxWidth="{Binding #PickRoot.Bounds.Width, Converter={x:Static conv:WidthInsetConverter.Instance}, ConverterParameter=24}"
+                        HorizontalAlignment="Stretch">
                 <!--
                     Station time-series chart, shown only when the
                     selected hit carries a StationTimeSeriesViewModel
@@ -306,42 +473,16 @@
                                    FontWeight="Normal"
                                    LetterSpacing="1"
                                    Opacity="0.7" />
-                        <TreeView ItemsSource="{Binding Attributes}"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  Padding="0">
-                            <TreeView.Styles>
-                                <Style Selector="TreeViewItem">
-                                    <Setter Property="IsExpanded" Value="True" />
-                                </Style>
-                            </TreeView.Styles>
-                            <TreeView.ItemTemplate>
-                                <TreeDataTemplate x:DataType="pp:PickAttribute"
-                                                  ItemsSource="{Binding Children}">
-                                    <Grid Margin="0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="{Binding DisplayName}"
-                                                   FontSize="12"
-                                                   Opacity="0.7"
-                                                   TextWrapping="NoWrap"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip.Tip="{Binding Code}" />
-                                        <TextBlock Grid.Column="2"
-                                                   Text="{Binding DisplayText}"
-                                                   FontSize="12"
-                                                   TextWrapping="NoWrap"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxWidth="220"
-                                                   ToolTip.Tip="{Binding RawValue}" />
-                                    </Grid>
-                                </TreeDataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                Grid.IsSharedSizeScope="True"
+                                IsVisible="{Binding HasAttributes}">
+                            <ItemsControl ItemsSource="{Binding Attributes}"
+                                          Classes="attrTable"
+                                          ItemTemplate="{StaticResource AttributeRowTemplate}" />
+                        </Border>
                         <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
                                    FontSize="12"
                                    FontStyle="Italic"
@@ -355,42 +496,16 @@
                           IsExpanded="False"
                           HorizontalAlignment="Stretch">
                     <StackPanel Spacing="4">
-                        <TreeView ItemsSource="{Binding Attributes}"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  Padding="0">
-                            <TreeView.Styles>
-                                <Style Selector="TreeViewItem">
-                                    <Setter Property="IsExpanded" Value="True" />
-                                </Style>
-                            </TreeView.Styles>
-                            <TreeView.ItemTemplate>
-                                <TreeDataTemplate x:DataType="pp:PickAttribute"
-                                                  ItemsSource="{Binding Children}">
-                                    <Grid Margin="0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="{Binding DisplayName}"
-                                                   FontSize="12"
-                                                   Opacity="0.7"
-                                                   TextWrapping="NoWrap"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip.Tip="{Binding Code}" />
-                                        <TextBlock Grid.Column="2"
-                                                   Text="{Binding DisplayText}"
-                                                   FontSize="12"
-                                                   TextWrapping="NoWrap"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxWidth="220"
-                                                   ToolTip.Tip="{Binding RawValue}" />
-                                    </Grid>
-                                </TreeDataTemplate>
-                            </TreeView.ItemTemplate>
-                        </TreeView>
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                Grid.IsSharedSizeScope="True"
+                                IsVisible="{Binding HasAttributes}">
+                            <ItemsControl ItemsSource="{Binding Attributes}"
+                                          Classes="attrTable"
+                                          ItemTemplate="{StaticResource AttributeRowTemplate}" />
+                        </Border>
                         <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
                                    FontSize="12"
                                    FontStyle="Italic"

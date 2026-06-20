@@ -50,6 +50,7 @@ public partial class MainWindow : ShadUI.Window
     private bool _closeAfterScreenshot;
     private bool _fullWindowScreenshot;
     private ViewerCommandSettings? _startupOptions;
+    private Color _accentColor;
 
     public MainWindow() : this(null) { }
 
@@ -204,9 +205,13 @@ public partial class MainWindow : ShadUI.Window
             }
         }
 
-        // Apply persisted accent color
+        // Apply persisted accent color. Both the user's colour choice and
+        // the active chrome theme feed the effective brush, so re-apply on
+        // either change (the low-light themes mute the accent).
         ApplyAccentColor(_viewModel.Settings.AccentColor);
         _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
+        if (Application.Current is { } themedApp)
+            themedApp.ActualThemeVariantChanged += (_, _) => ApplyAccentColor(_accentColor);
 
         // Apply persisted scale-bar distance unit and react to changes.
         ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
@@ -524,6 +529,15 @@ public partial class MainWindow : ShadUI.Window
     }
 
     /// <summary>
+    /// Closes the consolidated display-settings overlay when its in-panel
+    /// close (✕) button is clicked. The flyout otherwise dismisses on
+    /// light-dismiss (click-away) or Escape; this button gives the panel
+    /// an explicit affordance matching the mockup.
+    /// </summary>
+    private void OnCloseDisplaySettings(object? sender, RoutedEventArgs e)
+        => DisplaySettingsButton.Flyout?.Hide();
+
+    /// <summary>
     /// Adds or removes the online basemap tile layer in response to the
     /// Settings toggle (issue #295). The basemap always sits at the
     /// bottom of the layer stack (index 0) beneath every dataset and
@@ -790,7 +804,10 @@ public partial class MainWindow : ShadUI.Window
 
     private void ApplyAccentColor(Color color)
     {
-        Resources["AccentBrush"] = new SolidColorBrush(color);
+        _accentColor = color;
+        var variant = Application.Current?.ActualThemeVariant;
+        var theme = ChromeThemes.FromVariant(variant) ?? ChromeTheme.Light;
+        Resources["AccentBrush"] = new SolidColorBrush(AccentColors.ForTheme(color, theme));
     }
 
     private void CaptureScreenshot(string outputPath)

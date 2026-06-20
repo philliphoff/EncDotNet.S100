@@ -52,44 +52,11 @@
                  x:Name="EntryList"
                  ItemsSource="{Binding Entries}"
                  SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                 Classes="accentList"
                  Background="Transparent"
                  BorderThickness="0"
                  Padding="0"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.Styles>
-                <!-- Suppress the default ShadUI ListBoxItem chrome (including the
-                     selection check icon) and use our own minimal selection look. -->
-                <Style Selector="ListBoxItem">
-                    <Setter Property="Padding" Value="8,6" />
-                    <Setter Property="Margin" Value="0" />
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <!-- Transparent (not null) background so the entire row hit-tests,
-                         not just the text glyph runs. -->
-                    <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="Template">
-                        <ControlTemplate>
-                            <Border Name="PART_Container"
-                                    Background="{TemplateBinding Background}"
-                                    CornerRadius="4"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter Content="{TemplateBinding Content}"
-                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                  HorizontalAlignment="Stretch"
-                                                  HorizontalContentAlignment="Stretch" />
-                            </Border>
-                        </ControlTemplate>
-                    </Setter>
-                </Style>
-                <Style Selector="ListBoxItem:pointerover /template/ Border#PART_Container">
-                    <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
-                </Style>
-                <Style Selector="ListBoxItem:selected /template/ Border#PART_Container">
-                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-                </Style>
-                <Style Selector="ListBoxItem:selected TextBlock">
-                    <Setter Property="Foreground" Value="White" />
-                </Style>
-            </ListBox.Styles>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CatalogEntryViewModel">
                     <!-- Background=Transparent makes the entire row (including
@@ -100,6 +67,7 @@
                           Background="Transparent">
                         <StackPanel Grid.Column="0" Spacing="2">
                             <TextBlock Text="{Binding Title}"
+                                       Classes="accentListTitle"
                                        FontWeight="SemiBold"
                                        FontSize="13"
                                        TextTrimming="CharacterEllipsis" />
