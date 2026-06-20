@@ -295,6 +295,12 @@ public partial class MainWindow : ShadUI.Window
         EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
 
+        // Same marshalling for the TiledScene ("B") subsystem: when a worker
+        // publishes a freshly rasterised VectorScene image, request a single
+        // UI-thread repaint that swaps the transient stale blit for the new image.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via
         // GetServices<IDynamicFeatureSource>) can read the current

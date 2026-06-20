@@ -184,6 +184,10 @@ public sealed class MapsuiDisplayListRenderer
         // snapshot is disabled.
         S100VectorSnapshotRenderer.Register();
 
+        // Likewise register the TiledScene ("B") custom layer renderer so a layer
+        // tagged for it portrays when that subsystem is active. Idempotent.
+        S100VectorSceneRenderer.Register();
+
         // 1. Sort instructions by rendering order: areas first, then lines, then points/text
         //    Within same type, sort by DrawingPriority
         var sorted = instructions
@@ -363,7 +367,16 @@ public sealed class MapsuiDisplayListRenderer
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        return new InstrumentedMemoryLayer(Product)
+        // Select the base-plane render subsystem (design §4/§5). When the
+        // TiledScene ("B") arm is active, the layer is portrayed by
+        // S100VectorSceneRenderer rasterising the VectorScene IR directly on a
+        // worker — so build a *pattern-complete* scene (the Mapsui lowering above
+        // deliberately omits patterns; the B arm renders them from the IR) and
+        // bind it to the layer. Otherwise the snapshot ("A") arm (or the plain
+        // per-feature path) renders the Mapsui features built above.
+        var useTiledScene = RenderingOptimizations.RenderSubsystem == RenderSubsystemKind.TiledScene;
+
+        var layer = new InstrumentedMemoryLayer(Product)
         {
             Name = LayerName,
             Features = mapFeatures,
@@ -372,11 +385,30 @@ public sealed class MapsuiDisplayListRenderer
             // custom layer renderer when enabled, so pans replay a recorded
             // SKPicture instead of re-iterating every feature. No-op (null)
             // when the snapshot is disabled, leaving the normal per-feature
-            // path (with the translation-invariant path cache) in place.
-            CustomLayerRendererName = S100VectorSnapshotRenderer.Enabled
-                ? S100VectorSnapshotRenderer.RendererName
-                : null,
+            // path (with the translation-invariant path cache) in place. When
+            // the TiledScene subsystem is active it takes precedence.
+            CustomLayerRendererName = useTiledScene
+                ? S100VectorSceneRenderer.RendererName
+                : S100VectorSnapshotRenderer.Enabled
+                    ? S100VectorSnapshotRenderer.RendererName
+                    : null,
         };
+
+        if (useTiledScene)
+        {
+            var sceneBuilder = new Scene.VectorSceneBuilder
+            {
+                ResolveColor = Scene.ColorResolver.Create(Palette),
+                SymbolResolver = ResolveSymbolAsset,
+                LineStyleProvider = LineStyleProvider,
+                PatternResolver = GetPatternTilePng,
+                SymbolScale = SymbolScale,
+                TextScale = TextScale,
+            };
+            S100VectorSceneRenderer.BindScene(layer, sceneBuilder.Build(instructions, geometryProvider));
+        }
+
+        return layer;
     }
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);

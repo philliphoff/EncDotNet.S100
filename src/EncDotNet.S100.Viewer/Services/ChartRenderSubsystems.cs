@@ -40,19 +40,21 @@ internal sealed class MapsuiChartRenderSubsystem : IChartRenderSubsystem
 }
 
 /// <summary>
-/// The "B" arm: the tiled/async predictive render subsystem. <b>Phase&#160;0
-/// placeholder.</b> The tiled base-plane compositor (rasterise from
-/// <c>VectorScene</c>, tile pyramid, prediction, planes) is implemented in
-/// Phases&#160;1–5. Until then selecting this subsystem does not take over the
-/// base plane — the Mapsui layer path continues to render — and activation only
-/// records the selection (with a one-time log) so the A/B harness, settings, and
-/// telemetry can be exercised end-to-end without a half-built compositor.
+/// The "B" arm: the tiled/async predictive render subsystem. <b>Phase&#160;1</b>
+/// renders the chart base plane by rasterising the <c>VectorScene</c> IR on a
+/// worker thread and compositing a single translated image on the UI thread
+/// (<see cref="S100VectorSceneRenderer"/>) — taking pans off the synchronous
+/// per-feature paint. Tiling, prediction, and the live label/dynamic planes are
+/// Phases&#160;2–5. Activation registers the custom layer renderer; the actual
+/// per-layer takeover happens when <see cref="MapsuiDisplayListRenderer"/> tags a
+/// freshly built vector layer for this subsystem (it reads the same
+/// <see cref="RenderingOptimizations.RenderSubsystem"/> flag).
 /// </summary>
 internal sealed class TiledSceneChartRenderSubsystem : IChartRenderSubsystem
 {
     public RenderSubsystemKind Kind => RenderSubsystemKind.TiledScene;
 
-    public string DisplayName => "Tiled scene (async, experimental — not yet implemented)";
+    public string DisplayName => "Tiled scene (async, from VectorScene IR — experimental)";
 
     public bool IsActive { get; private set; }
 
@@ -62,9 +64,11 @@ internal sealed class TiledSceneChartRenderSubsystem : IChartRenderSubsystem
     public void Activate()
     {
         IsActive = true;
+        S100VectorSceneRenderer.Register();
         Console.Error.WriteLine(
-            "[RENDER-SUBSYSTEM] TiledScene selected but not yet implemented; " +
-            "the base plane continues to render via the Mapsui layer path (Phase 0).");
+            "[RENDER-SUBSYSTEM] TiledScene active: base plane rasterises from the " +
+            "VectorScene IR on a worker and composites a single translated image " +
+            "(Phase 1 — single surface, no tiling/prediction yet).");
     }
 
     public void Deactivate() => IsActive = false;

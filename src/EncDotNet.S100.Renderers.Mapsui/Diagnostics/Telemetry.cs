@@ -240,6 +240,37 @@ internal static class Telemetry
             unit: "ms",
             description: "Per-call duration of AnchoredPatternFillRenderer.Draw (one call per pattern-fill feature per frame).");
 
+    /// <summary>
+    /// Wall-clock duration of a single off-thread <c>VectorScene</c>
+    /// rasterisation by the <c>TiledScene</c> ("B") render subsystem
+    /// (<see cref="S100VectorSceneRenderer"/>) — the worker-thread cost of
+    /// turning the scene IR into one device-resolution <c>SKImage</c> for the
+    /// whole viewport plus over-render margin. This is the cost prediction and
+    /// tiling (Phases&#160;2–3) exist to amortise; on the "A" arm the comparable
+    /// work is the synchronous per-feature paint reflected in
+    /// <see cref="FrameDuration"/> / the viewer's map-paint histogram. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §4.
+    /// </summary>
+    public static readonly Histogram<double> SceneRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.scene.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread VectorScene rasterisation by the TiledScene render subsystem (whole viewport + margin).");
+
+    /// <summary>
+    /// Wall-clock duration of a single UI-thread composite (translated
+    /// <c>SKImage</c> blit) by the <c>TiledScene</c> ("B") render subsystem
+    /// (<see cref="S100VectorSceneRenderer"/>). This is the per-frame work that
+    /// stays on the render thread during a pan; keeping it bounded and
+    /// independent of feature count is the whole point of the subsystem. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.5.
+    /// </summary>
+    public static readonly Histogram<double> SceneCompositeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.scene.composite.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one UI-thread composite (translated SKImage blit) by the TiledScene render subsystem.");
+
     private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
     {
         var measurements = new List<Measurement<double>>(s_callStats.Count);

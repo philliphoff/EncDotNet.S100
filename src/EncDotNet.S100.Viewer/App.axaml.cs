@@ -115,6 +115,12 @@ public partial class App : Application
         // time instrumentation (below) has also wrapped it.
         EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.Register();
 
+        // Register the TiledScene ("B") custom layer renderer too, so a layer
+        // tagged for it portrays when that subsystem is the active
+        // RenderingOptimizations.RenderSubsystem. Idempotent; the takeover is
+        // gated by the flag at layer-build time, not by registration.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.Register();
+
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 
         // The viewer uses a plain ServiceCollection (no generic IHost),
