@@ -6,6 +6,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -55,6 +56,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         CopyLocationCommand = new RelayCommand(
             () => { if (_location is { } loc) CopyLocationRequested?.Invoke(this, LatLonFormatter.FormatDecimal(loc.Latitude, loc.Longitude)); },
             () => _location is not null);
+        CopyIdentityCommand = new RelayCommand(
+            () => { var text = IdentityClipboardText; if (!string.IsNullOrEmpty(text)) CopyIdentityRequested?.Invoke(this, text); },
+            () => _selectedHit is not null);
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
@@ -207,6 +211,65 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         private set => SetProperty(ref _productSpec, value);
     }
 
+    /// <summary>
+    /// Primary heading for the identity block: the picked feature's instance
+    /// name when one is present, otherwise the feature class name. Mirrors
+    /// <see cref="PickHit.PrimaryLabel"/> for the selected hit.
+    /// </summary>
+    public string? PrimaryLabel => _selectedHit?.PrimaryLabel;
+
+    /// <summary>
+    /// Class-name pill shown beside <see cref="PrimaryLabel"/> when an
+    /// instance name is leading; <see langword="null"/> otherwise.
+    /// </summary>
+    public string? SecondaryLabel => _selectedHit?.SecondaryLabel;
+
+    /// <summary>True when <see cref="SecondaryLabel"/> has a value to show.</summary>
+    public bool HasSecondaryLabel => !string.IsNullOrEmpty(SecondaryLabel);
+
+    /// <summary>Category glyph for the selected hit's feature class.</summary>
+    public FluentIcons.Common.Icon Glyph =>
+        _selectedHit?.Glyph ?? Services.FeatureGlyphs.Fallback;
+
+    /// <summary>
+    /// Single-line caption demoting the technical identity (ID, product
+    /// spec, source file) beneath the heading, e.g.
+    /// <c>"ID 555 · S-101 · 101GB00502793.000"</c>. Segments that are
+    /// absent are omitted. Rendered in a monospace caption style.
+    /// </summary>
+    public string? IdentityCaption
+    {
+        get
+        {
+            if (_selectedHit is null)
+                return null;
+
+            var segments = new List<string>(3);
+            if (!string.IsNullOrEmpty(FeatureRef))
+                segments.Add(string.Format(CultureInfo.CurrentCulture, Strings.Pick_IdCaption, FeatureRef));
+            if (!string.IsNullOrEmpty(ProductSpec))
+                segments.Add(ProductSpec!);
+            if (!string.IsNullOrEmpty(DatasetFileName))
+                segments.Add(DatasetFileName!);
+
+            return segments.Count > 0 ? string.Join(" · ", segments) : null;
+        }
+    }
+
+    /// <summary>Clipboard text for the copy-identity action: heading plus caption.</summary>
+    private string? IdentityClipboardText
+    {
+        get
+        {
+            if (_selectedHit is null)
+                return null;
+            var caption = IdentityCaption;
+            return string.IsNullOrEmpty(caption)
+                ? PrimaryLabel
+                : $"{PrimaryLabel}\n{caption}";
+        }
+    }
+
     /// <summary>True when a feature is currently displayed in the panel.</summary>
     public bool HasPick
     {
@@ -342,10 +405,24 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public ICommand CopyLocationCommand { get; }
 
     /// <summary>
+    /// Copies the selected hit's identity (heading + technical caption) to
+    /// the clipboard. Enabled only when a hit is selected; raises
+    /// <see cref="CopyIdentityRequested"/> with the text so the view owns
+    /// the actual clipboard access.
+    /// </summary>
+    public ICommand CopyIdentityCommand { get; }
+
+    /// <summary>
     /// Raised when the user invokes <see cref="CopyLocationCommand"/>. The
     /// payload is the clipboard-ready coordinate text.
     /// </summary>
     public event EventHandler<string>? CopyLocationRequested;
+
+    /// <summary>
+    /// Raised when the user invokes <see cref="CopyIdentityCommand"/>. The
+    /// payload is the clipboard-ready identity text.
+    /// </summary>
+    public event EventHandler<string>? CopyIdentityRequested;
 
     /// <summary>
     /// "Take the helm of this vessel" (pirate mode). Parameter is the
@@ -538,6 +615,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));
+            RaiseIdentityChanged();
             return;
         }
 
@@ -559,6 +637,22 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
+        RaiseIdentityChanged();
+    }
+
+    /// <summary>
+    /// Raises change notifications for the identity-block properties derived
+    /// from <see cref="SelectedHit"/> and refreshes the copy-identity
+    /// command's executability.
+    /// </summary>
+    private void RaiseIdentityChanged()
+    {
+        OnPropertyChanged(nameof(PrimaryLabel));
+        OnPropertyChanged(nameof(SecondaryLabel));
+        OnPropertyChanged(nameof(HasSecondaryLabel));
+        OnPropertyChanged(nameof(Glyph));
+        OnPropertyChanged(nameof(IdentityCaption));
+        (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
 
     /// <summary>

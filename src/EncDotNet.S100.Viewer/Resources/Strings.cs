@@ -116,6 +116,7 @@ internal static class Strings
     public static string Tooltip_SelectHit => Get(nameof(Tooltip_SelectHit));
     public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
     public static string Tooltip_CopyLocation => Get(nameof(Tooltip_CopyLocation));
+    public static string Tooltip_CopyIdentity => Get(nameof(Tooltip_CopyIdentity));
     public static string Tooltip_Search => Get(nameof(Tooltip_Search));
     public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
     public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
@@ -233,6 +234,7 @@ internal static class Strings
     public static string PickReport_EmptyTitle => Get(nameof(PickReport_EmptyTitle));
     public static string PickReport_EmptyDescription => Get(nameof(PickReport_EmptyDescription));
     public static string Pick_IdLabel => Get(nameof(Pick_IdLabel));
+    public static string Pick_IdCaption => Get(nameof(Pick_IdCaption));
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
@@ -420,6 +422,19 @@ internal static class Strings
     // Map palette toolbar pill (PR-N1)
     public static string Toolbar_Palette => Get(nameof(Toolbar_Palette));
     public static string Tooltip_SwitchPalette => Get(nameof(Tooltip_SwitchPalette));
+
+    // Display settings overlay (consolidated map command-bar settings)
+    public static string DisplaySettings_Title => Get(nameof(DisplaySettings_Title));
+    public static string Tooltip_DisplaySettings => Get(nameof(Tooltip_DisplaySettings));
+    public static string Tooltip_CloseDisplaySettings => Get(nameof(Tooltip_CloseDisplaySettings));
+    public static string DisplaySettings_DisplayBaseHeader => Get(nameof(DisplaySettings_DisplayBaseHeader));
+    public static string DisplaySettings_TextHeader => Get(nameof(DisplaySettings_TextHeader));
+    public static string DisplaySettings_PaletteHeader => Get(nameof(DisplaySettings_PaletteHeader));
+    public static string Segment_DisplayBase => Get(nameof(Segment_DisplayBase));
+    public static string Segment_DisplayOther => Get(nameof(Segment_DisplayOther));
+    public static string Segment_TextImportant => Get(nameof(Segment_TextImportant));
+    public static string Segment_TextOther => Get(nameof(Segment_TextOther));
+    public static string Segment_TextAll => Get(nameof(Segment_TextAll));
 
     // Toast notification titles
     public static string Toast_Error => Get(nameof(Toast_Error));

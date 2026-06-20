@@ -617,4 +617,69 @@ public class PickReportViewModelTests
         Assert.True(Hit("ais:42").IsAisTarget);
         Assert.False(Hit("ownship").IsAisTarget);
     }
+
+    [Fact]
+    public void Identity_WithNamedFeature_LeadsWithNameAndClassPill()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "101GB00502793.000", "S-101",
+            new[] { Leaf("name", "Number 10"), Leaf("colour", "3", "Colour") });
+
+        Assert.Equal("Number 10", vm.PrimaryLabel);
+        Assert.Equal("Beacon, Lateral", vm.SecondaryLabel);
+        Assert.True(vm.HasSecondaryLabel);
+        Assert.Equal("ID 555 · S-101 · 101GB00502793.000", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void Identity_WithoutName_LeadsWithClassAndNoPill()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
+            new[] { Leaf("DRVAL1", "10.0") });
+
+        Assert.Equal("Depth Area", vm.PrimaryLabel);
+        Assert.Null(vm.SecondaryLabel);
+        Assert.False(vm.HasSecondaryLabel);
+        Assert.Equal("ID 300 · S-101 · test.000", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void IdentityCaption_OmitsMissingSegments()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("Authority", null, "auth.1", null, null, System.Array.Empty<PickAttribute>());
+
+        Assert.Equal("ID auth.1", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void CopyIdentityCommand_RaisesRequestWithNameAndCaption()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
+            new[] { Leaf("name", "Number 10") });
+
+        string? captured = null;
+        vm.CopyIdentityRequested += (_, text) => captured = text;
+
+        Assert.True(vm.CopyIdentityCommand.CanExecute(null));
+        vm.CopyIdentityCommand.Execute(null);
+
+        Assert.Equal("Number 10\nID 555 · S-101 · f.000", captured);
+    }
+
+    [Fact]
+    public void Identity_ClearedAfterClear()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
+            new[] { Leaf("name", "Number 10") });
+
+        vm.Clear();
+
+        Assert.Null(vm.PrimaryLabel);
+        Assert.Null(vm.IdentityCaption);
+        Assert.False(vm.CopyIdentityCommand.CanExecute(null));
+    }
 }
