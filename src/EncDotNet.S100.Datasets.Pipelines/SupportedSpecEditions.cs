@@ -25,7 +25,12 @@ public static class SupportedSpecEditions
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<SpecVersion>> _byName =
         new Dictionary<string, IReadOnlyList<SpecVersion>>(StringComparer.Ordinal)
         {
-            ["S-101"] = [new SpecVersion(1, 2, 0)],
+            // The bundled S-101 Feature and Portrayal Catalogues are Edition
+            // 2.0.0; legacy 1.x datasets are still read (their pre-2.0.0
+            // feature class names are mapped to 2.0.0 equivalents — see
+            // S101LegacyFeatureNames), so both editions are declared supported
+            // to avoid a spurious version warning on either.
+            ["S-101"] = [new SpecVersion(1, 2, 0), new SpecVersion(2, 0, 0)],
             ["S-102"] = [new SpecVersion(2, 1, 0), new SpecVersion(3, 0, 0)],
             ["S-104"] = [new SpecVersion(2, 0, 0)],
             ["S-111"] = [new SpecVersion(2, 0, 0)],

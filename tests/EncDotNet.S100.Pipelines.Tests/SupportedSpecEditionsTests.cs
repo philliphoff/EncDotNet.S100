@@ -49,6 +49,43 @@ public class SupportedSpecEditionsTests
     }
 
     [Fact]
+    public void S101_ImplementsBothEditions()
+    {
+        var editions = SupportedSpecEditions.For("S-101");
+
+        Assert.Contains(new SpecVersion(1, 2, 0), editions);
+        Assert.Contains(new SpecVersion(2, 0, 0), editions);
+    }
+
+    [Fact]
+    public void Assess_DoesNotWarn_ForS101Edition200()
+    {
+        // Latest UKHO test datasets (e.g. S-101_GB_Apr26) declare edition
+        // 2.0.0, which the bundled 2.0.0 catalogues implement. Issue #322.
+        var declared = new SpecRef("S-101", new SpecVersion(2, 0, 0));
+
+        var assessment = SupportedSpecEditions.Assess(declared);
+
+        Assert.NotNull(assessment);
+        Assert.Equal(SpecMatchKind.Exact, assessment!.Kind);
+        Assert.False(assessment.IsWarning);
+    }
+
+    [Fact]
+    public void Assess_DoesNotWarn_ForLegacyS101Edition1x()
+    {
+        // Legacy 1.x datasets remain readable via legacy feature-name mapping,
+        // so they must not raise a version warning either.
+        var declared = new SpecRef("S-101", new SpecVersion(1, 2, 0));
+
+        var assessment = SupportedSpecEditions.Assess(declared);
+
+        Assert.NotNull(assessment);
+        Assert.Equal(SpecMatchKind.Exact, assessment!.Kind);
+        Assert.False(assessment.IsWarning);
+    }
+
+    [Fact]
     public void Assess_Warns_WhenDeclaredOlderMajorThanImplemented()
     {
         // S-111 fixture declares 1.0.0 but the build implements 2.0.0.
