@@ -37,6 +37,7 @@ public static class RenderingOptimizations
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
     private static bool s_geometrySimplificationEnabled;
+    private static RenderSubsystemKind s_renderSubsystem;
 
     static RenderingOptimizations()
     {
@@ -51,6 +52,8 @@ public static class RenderingOptimizations
 
         (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
+
+        (s_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
     }
 
     /// <summary>
@@ -116,6 +119,23 @@ public static class RenderingOptimizations
     public static bool GeometrySimplificationEnvExplicit { get; }
 
     /// <summary>
+    /// Selects the active base-plane chart render subsystem (the A/B switch for
+    /// the tiled/async render-subsystem redesign). <see cref="RenderSubsystemKind.Mapsui"/>
+    /// is today's Mapsui feature/style/layer path (the "A" arm);
+    /// <see cref="RenderSubsystemKind.TiledScene"/> selects the new tiled/async
+    /// subsystem (the "B" arm). Seeded from <c>S100_RENDER_SUBSYSTEM</c>
+    /// (<c>mapsui</c> | <c>tiledscene</c>); default <see cref="RenderSubsystemKind.Mapsui"/>.
+    /// </summary>
+    public static RenderSubsystemKind RenderSubsystem
+    {
+        get => s_renderSubsystem;
+        set { if (!RenderSubsystemEnvExplicit) s_renderSubsystem = value; }
+    }
+
+    /// <summary>True when <see cref="RenderSubsystem"/> is pinned by an explicit environment variable.</summary>
+    public static bool RenderSubsystemEnvExplicit { get; }
+
+    /// <summary>
     /// Pixel tolerance applied when <see cref="GeometrySimplificationEnabled"/> is
     /// on. Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
     /// <see cref="DefaultSimplificationTolerancePx"/>. Used by line simplification.
@@ -147,4 +167,41 @@ public static class RenderingOptimizations
 
         return (true, DefaultSimplificationTolerancePx, false);
     }
+
+    private static (RenderSubsystemKind kind, bool envExplicit) SeedRenderSubsystem()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_RENDER_SUBSYSTEM");
+        if (string.IsNullOrEmpty(raw))
+        {
+            return (RenderSubsystemKind.Mapsui, false);
+        }
+
+        var kind = raw.Trim().ToLowerInvariant() switch
+        {
+            "tiledscene" or "tiled" or "tile" or "b" => RenderSubsystemKind.TiledScene,
+            _ => RenderSubsystemKind.Mapsui,
+        };
+        return (kind, true);
+    }
+}
+
+/// <summary>
+/// Selects the active base-plane chart render subsystem — the A/B switch for the
+/// tiled/async render-subsystem redesign (see
+/// <c>docs/design/S100-Render-Subsystem-Design.md</c>).
+/// </summary>
+public enum RenderSubsystemKind
+{
+    /// <summary>
+    /// The established Mapsui feature/style/layer rendering path (the "A" arm).
+    /// This is the default and the baseline against which the new subsystem is
+    /// measured.
+    /// </summary>
+    Mapsui = 0,
+
+    /// <summary>
+    /// The new tiled/async predictive render subsystem that rasterises the base
+    /// plane directly from the <c>VectorScene</c> IR (the "B" arm).
+    /// </summary>
+    TiledScene = 1,
 }

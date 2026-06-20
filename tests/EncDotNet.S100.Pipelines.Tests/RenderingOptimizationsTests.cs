@@ -80,4 +80,51 @@ public class RenderingOptimizationsTests
         Assert.Equal(RenderingOptimizations.VectorSnapshotEnabled, S100VectorSnapshotRenderer.Enabled);
         Assert.Equal(RenderingOptimizations.VectorSnapshotPrebuildEnabled, S100VectorSnapshotRenderer.PrebuildEnabled);
     }
+
+    [Fact]
+    public void RenderSubsystem_DefaultsToMapsui_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.RenderSubsystemEnvExplicit)
+        {
+            return; // pinned by S100_RENDER_SUBSYSTEM; default not observable
+        }
+
+        Assert.Equal(RenderSubsystemKind.Mapsui, RenderingOptimizations.RenderSubsystem);
+    }
+
+    [Fact]
+    public void RenderSubsystem_RoundTrips_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.RenderSubsystemEnvExplicit)
+        {
+            return; // pinned by env; setter is intentionally a no-op
+        }
+
+        var original = RenderingOptimizations.RenderSubsystem;
+        try
+        {
+            RenderingOptimizations.RenderSubsystem = RenderSubsystemKind.TiledScene;
+            Assert.Equal(RenderSubsystemKind.TiledScene, RenderingOptimizations.RenderSubsystem);
+            RenderingOptimizations.RenderSubsystem = RenderSubsystemKind.Mapsui;
+            Assert.Equal(RenderSubsystemKind.Mapsui, RenderingOptimizations.RenderSubsystem);
+        }
+        finally
+        {
+            RenderingOptimizations.RenderSubsystem = original;
+        }
+    }
+
+    [Fact]
+    public void RenderSubsystem_EnvPinned_Ignores_ProgrammaticWrites()
+    {
+        if (!RenderingOptimizations.RenderSubsystemEnvExplicit)
+        {
+            return; // not pinned in this environment — nothing to assert
+        }
+
+        var pinned = RenderingOptimizations.RenderSubsystem;
+        RenderingOptimizations.RenderSubsystem =
+            pinned == RenderSubsystemKind.Mapsui ? RenderSubsystemKind.TiledScene : RenderSubsystemKind.Mapsui;
+        Assert.Equal(pinned, RenderingOptimizations.RenderSubsystem);
+    }
 }
