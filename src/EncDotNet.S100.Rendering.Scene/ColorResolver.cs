@@ -1,7 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Pipelines;
 
-namespace EncDotNet.S100.Renderers.Skia.Scene;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// S-100 colour-token resolution shared by the vector rendering backends.

@@ -26,7 +26,7 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
-`EncDotNet.S100.Renderers.Skia.Scene` (`VectorSceneBuilder` → `VectorScene` of
+`EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of
 `PaintOp`s). All S-100 Part 9 portrayal-correctness logic — draw ordering,
 colour/symbol/line-style resolution, mm→px conversion, text-anchor selection,
 and the `lat/lon → EPSG:3857` projection half — lives in that core and is shared

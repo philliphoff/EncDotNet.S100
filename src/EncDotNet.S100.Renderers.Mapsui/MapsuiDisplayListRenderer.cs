@@ -6,7 +6,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
-using Scene = EncDotNet.S100.Renderers.Skia.Scene;
+using Scene = EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;

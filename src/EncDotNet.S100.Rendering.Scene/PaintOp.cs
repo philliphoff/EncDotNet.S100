@@ -1,12 +1,12 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
-namespace EncDotNet.S100.Renderers.Skia.Scene;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// A backend-agnostic, fully-resolved S-100 Part 9 paint operation — the
 /// intermediate representation (IR) produced by <see cref="VectorSceneBuilder"/>
-/// and consumed by both the headless <see cref="SkiaDisplayListRenderer"/> and
+/// and consumed by both the headless <c>SkiaDisplayListRenderer</c> and
 /// the Mapsui display-list renderer.
 /// </summary>
 /// <remarks>
@@ -177,7 +177,7 @@ public sealed class AreaPaintOp : PaintOp
 /// <remarks>
 /// <para>The tile bytes are encoded as PNG — a renderer-neutral raster format
 /// chosen to mirror the Mapsui pattern phase's existing
-/// <see cref="SkiaSvgRasterizer.RasterizePatternTile"/> output. A future
+/// <c>SkiaSvgRasterizer.RasterizePatternTile</c> output. A future
 /// non-Skia backend can decode the same bytes.</para>
 /// <para>The headless Skia backend draws the tile via a repeat-tiled
 /// <c>SKShader</c> anchored at world (0,0) projected to screen space, matching
