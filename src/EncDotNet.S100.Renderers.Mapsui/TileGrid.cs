@@ -348,6 +348,25 @@ internal static class TileGrid
         return new ScreenRect(left, top, right, bottom);
     }
 
+    /// <summary>
+    /// The axis-aligned DIP size that bounds the <paramref name="widthDip"/> ×
+    /// <paramref name="heightDip"/> viewport after it is rotated by
+    /// <paramref name="rotationDegrees"/> about its centre. Tile selection
+    /// (<see cref="VisibleTiles"/>, <see cref="PredictedTiles"/>) uses this
+    /// enlarged size so a rotated viewport's corners — which poke outside the
+    /// north-up box — are still covered by rasterised tiles instead of going
+    /// blank. The projection itself (<see cref="WorldToScreenRect"/>) keeps the
+    /// real DIP size; the canvas is rotated about the centre at composite time.
+    /// </summary>
+    public static (double Width, double Height) RotatedCoverSize(
+        double widthDip, double heightDip, double rotationDegrees)
+    {
+        var rad = rotationDegrees * Math.PI / 180.0;
+        var c = Math.Abs(Math.Cos(rad));
+        var s = Math.Abs(Math.Sin(rad));
+        return (widthDip * c + heightDip * s, widthDip * s + heightDip * c);
+    }
+
     /// <summary>The DIP screen rect of a tile's core (gutter excluded).</summary>
     public static ScreenRect TileCoreScreenRect(
         TileKey key, double centerX, double centerY, double widthDip, double heightDip, double resolution)

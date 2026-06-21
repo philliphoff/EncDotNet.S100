@@ -545,10 +545,13 @@ only the newly-exposed perimeter rasterises — pan cost scales with *perimeter,
 not area*.
 
 Each frame the UI thread snaps the live resolution to the nearest band, blits
-the **best available** tile for every visible slot (cached fallback bands as a
-backdrop, exact band on top), each hard-clipped to its core over a rendered
-**gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so strokes stay
-continuous across seams and no hole is ever shown. Finished tiles enter a
+the **best available** tile for every visible slot, each hard-clipped to its
+core over a rendered **gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so
+strokes stay continuous across seams and no hole is ever shown. The exact target
+band is drawn on top; a backdrop of cached fallback tiles is drawn underneath
+**only while the target band is incomplete**, and then only from the **single
+nearest** cached band (one scale, never stacked) so transitional zoom frames do
+not ghost different-sized symbols. Finished tiles enter a
 thread-safe LRU `TileCache` bounded by a hard **native-byte budget**
 (`S100_VECTOR_TILE_BUDGET_MB`, default 256 MB) — decoded `SKImage` pixels are
 native memory; visible tiles are kept most-recently-used so they are never
@@ -556,7 +559,12 @@ evicted mid-frame. A single coalescing worker per layer drains the visible-miss
 set (replaced every frame), and all cache access is serialised through the layer
 lock so the worker cannot dispose an image the compositor is blitting. Telemetry
 histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI
-composite pass) attribute the two halves. North-up only (v1).
+composite pass) attribute the two halves. A rotated viewport (e.g. an incidental
+trackpad-pinch spin) is composited north-up and then rotated about the screen
+centre by an angle derived from Mapsui's own `WorldToScreenXY` projection (so the
+sign matches without hardcoding); tile selection grows to the rotated viewport's
+bounding box (`TileGrid.RotatedCoverSize`) so corners stay covered. See design
+Appendix F.8.
 
 **Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs` stayed
 bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
@@ -667,11 +675,12 @@ cycles.
 **Deferred GPU disposal + bounded backdrop (zoom-out safety):** `SKCanvas.DrawImage`
 is deferred — the texture is only dereferenced when Skia flushes *after* the render
 method returns — so a GPU texture must outlive the frame that drew it. Two measures
-keep that invariant. First, the per-frame compositor only draws cached tiles within
-`MaxFallbackBandDistance` (2) bands of the target; this both removes the multi-scale
-"ghosting" of symbols stacked at different sizes during a zoom and bounds the
-per-frame draw count, so a full zoom-out can no longer try to composite the entire
-cache at once. Second, the GPU `TileCache` is built with `deferDisposal: true`:
+keep that invariant. First, the per-frame compositor draws the fallback backdrop
+only while the target band is incomplete, and then only from the single nearest
+cached band (within `MaxFallbackBandDistance` (2) bands of the target); this both
+removes the multi-scale "ghosting" of symbols stacked at different sizes during a
+zoom and bounds the per-frame draw count, so a full zoom-out can no longer try to
+composite the entire cache at once. Second, the GPU `TileCache` is built with `deferDisposal: true`:
 evicted/replaced/cleared textures are not freed inline but on the *next* frame via
 `DrainPendingDisposals()` (called at the top of `Composite`, before any draw is
 recorded), by which point the frame that referenced them has already flushed. The
@@ -680,6 +689,20 @@ single guarded path, so a paint-time throw drops one frame (counter
 `s100.render.tile.faults`) instead of stranding the pipeline into a blank chart.
 **Verified (PDB01, GPU on and off):** zoom in → zoom out to the whole world → zoom
 back in renders correctly with no crash and no blank frame.
+
+**Rotated-viewport blanking (Appendix F.8):** the tiled compositor formerly bailed
+on any non-zero `viewport.Rotation`, so an incidental trackpad-pinch spin (which
+rarely returns to exactly 0) blanked the chart until a dataset reload. It now
+composites north-up and rotates the canvas about the screen centre by an angle
+derived from Mapsui's `WorldToScreenXY` (matching its convention without
+hardcoding), enlarging tile selection to the rotated bounding box
+(`TileGrid.RotatedCoverSize`) so corners stay covered. Set
+`S100_VECTOR_TILE_DIAG=1` to emit a rate-limited (~1 Hz) per-frame compositor
+summary to stderr (target-band completeness, fallback bands drawn, cache/GPU
+residency) plus a one-line note whenever the layer draws nothing — the diagnostic
+that root-caused both this and the ghosting issue. **Verified (GB Solent exchange
+set):** trackpad pinch-zoom and pinch-rotate keep the chart visible and aligned,
+corners filled, single tile scale with no ghosting.
 
 ## Installation
 

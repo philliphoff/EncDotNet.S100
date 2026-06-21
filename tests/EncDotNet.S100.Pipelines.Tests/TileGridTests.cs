@@ -194,4 +194,56 @@ public class TileGridTests
         Assert.False(new ScreenRect(-30, 10, -10, 20).IntersectsViewport(100, 100));
         Assert.False(new ScreenRect(110, 10, 130, 20).IntersectsViewport(100, 100));
     }
+
+    [Fact]
+    public void RotatedCoverSize_ZeroRotation_ReturnsOriginalSize()
+    {
+        // No rotation must leave the selection box exactly the projection box so
+        // the north-up path is bit-for-bit unchanged.
+        var (w, h) = TileGrid.RotatedCoverSize(800, 600, 0);
+        Assert.Equal(800, w, 9);
+        Assert.Equal(600, h, 9);
+    }
+
+    [Theory]
+    [InlineData(90)]
+    [InlineData(-90)]
+    [InlineData(270)]
+    public void RotatedCoverSize_QuarterTurn_SwapsWidthAndHeight(double degrees)
+    {
+        // A 90° turn maps the viewport's width onto the screen's height axis and
+        // vice-versa, so the bounding box is the transposed size.
+        var (w, h) = TileGrid.RotatedCoverSize(800, 600, degrees);
+        Assert.Equal(600, w, 6);
+        Assert.Equal(800, h, 6);
+    }
+
+    [Theory]
+    [InlineData(30)]
+    [InlineData(45)]
+    [InlineData(0.08)]
+    [InlineData(358.7)]
+    public void RotatedCoverSize_NeverShrinksBelowOriginal(double degrees)
+    {
+        // The rotated viewport's corners always poke outside the north-up box, so
+        // the cover box must grow (never shrink) — otherwise rotated corners go
+        // uncovered and blank. This is the property the blanking fix relies on.
+        const double srcW = 800, srcH = 600;
+        var (w, h) = TileGrid.RotatedCoverSize(srcW, srcH, degrees);
+        Assert.True(w >= srcW - 1e-9, $"cover width {w} < {srcW}");
+        Assert.True(h >= srcH - 1e-9, $"cover height {h} < {srcH}");
+    }
+
+    [Fact]
+    public void RotatedCoverSize_45Degrees_MatchesAabbFormula()
+    {
+        // AABB of a w×h rect rotated by θ: w·|cosθ| + h·|sinθ| by w·|sinθ| + h·|cosθ|.
+        const double srcW = 800, srcH = 600;
+        var r = 45 * System.Math.PI / 180.0;
+        var c = System.Math.Abs(System.Math.Cos(r));
+        var s = System.Math.Abs(System.Math.Sin(r));
+        var (w, h) = TileGrid.RotatedCoverSize(srcW, srcH, 45);
+        Assert.Equal(srcW * c + srcH * s, w, 6);
+        Assert.Equal(srcW * s + srcH * c, h, 6);
+    }
 }

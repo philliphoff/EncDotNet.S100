@@ -737,3 +737,56 @@ wired up.
 ~300 ms with zero post-settle paints; the full world zoom-out still does
 not crash; zoom-back renders the chart; no faults logged.
 
+### F.8 Rotation-induced blanking and one-scale backdrop
+
+After F.7, the chart still **blanked permanently** on a Mac trackpad
+pinch-zoom, and reloading datasets did not bring it back. MCP-scripted
+zoom (`set_viewport`) never reproduced it because it only sets
+centre/zoom, never a rotation.
+
+Root cause: `Render` early-returned whenever `viewport.Rotation != 0`
+("north-up only"). A trackpad pinch imparts a tiny incidental rotation
+(observed 0.08°, and 358.70° = −1.30°) that essentially never lands back
+on exactly `0`, so the tiled layer drew **nothing** on every subsequent
+frame — and stayed blank because nothing resets the rotation. The
+diagnostic (`S100_VECTOR_TILE_DIAG=1`) confirmed it: `Render bailed
+(layer draws nothing): rotation=0.081307`, and `get_render_stats` showed
+only the base `RasterStyle` drawing.
+
+Fix: support rotated viewports instead of bailing (only `resolution <= 0`
+and a sizeless viewport still bail).
+
+- **Canvas rotation, convention-free.** The composite is drawn north-up
+  as before, then the whole sequence is wrapped in
+  `canvas.RotateDegrees(θ, w/2, h/2)` about the screen centre. θ is
+  **derived from Mapsui's own `WorldToScreenXY`** — the projected screen
+  direction of world-north is measured and compared against north-up's
+  straight-up (−90°) — so it matches Mapsui's rotation sign/convention
+  exactly without hardcoding it (Mapsui 5 ships only a DLL; the other
+  vector renderer, `CachedVectorStyleRenderer`, already projects
+  per-vertex through the same `WorldToScreenXY`).
+- **Rotated-corner coverage.** A rotated viewport's corners poke outside
+  the north-up box, so tile *selection* (`VisibleTiles` /
+  `PredictedTiles` / the fallback intersect test) uses
+  `TileGrid.RotatedCoverSize(w, h, θ)` — the axis-aligned bounding box of
+  the rotated rect (`w·|cosθ| + h·|sinθ|` by `w·|sinθ| + h·|cosθ|`). The
+  *projection* keeps the real DIP size, so the centre still maps to the
+  screen centre. At θ = 0 the cover size is exactly the real size, so the
+  north-up path is unchanged. `RotatedCoverSize` is pure and unit-tested
+  (`TileGridTests.RotatedCoverSize_*`).
+
+Same change also closes the **multi-scale symbol ghosting** seen during
+zoom transitions (different-sized buoys/topmarks stacked). The backdrop
+previously drew *every* cached band within `MaxFallbackBandDistance`
+unconditionally, even when the target band already fully covered the
+viewport, so stale adjacent-band tiles bled through at a different scale.
+Now the backdrop is **skipped entirely once the target band is complete**
+(its opaque fills occlude it anyway), and while incomplete only the
+**single nearest** cached band is drawn — one scale only, never stacked.
+The diagnostic confirms it on a settled frame: `target=16/16
+fallbackBands=-` (previously `fallbackBands=9+11`).
+
+**Verified** (GB Solent exchange set `101GB00302045`, GPU + prediction
+on): trackpad pinch-zoom and pinch-rotate keep the chart visible and
+aligned with the base map under rotation, corners stay filled, and a
+settled frame draws a single tile scale with no ghosting.

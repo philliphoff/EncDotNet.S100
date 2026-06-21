@@ -144,6 +144,68 @@ public static class S100VectorTileRenderer
         (long)ReadDouble("S100_VECTOR_TILE_GPU_MB", 256.0, 4.0, 4096.0) * 1024 * 1024;
 
     /// <summary>
+    /// When set (<c>S100_VECTOR_TILE_DIAG=1</c>), the compositor logs a
+    /// rate-limited (~1&#160;Hz) per-frame summary to <see cref="Console.Error"/>:
+    /// the target band, the resolution, how many target-band visible tiles are
+    /// present vs missing, the set of fallback bands actually drawn, and the
+    /// cache/GPU residency counts. Used to diagnose multi-scale ghosting (target
+    /// band incomplete → fallback bands bleed through) and zoom-out blanking
+    /// (no band within fallback distance). Diagnostic only.
+    /// </summary>
+    internal static bool DiagEnabled { get; } = ReadBool("S100_VECTOR_TILE_DIAG", false);
+
+    private static long s_diagLastTick;
+
+    private static long s_diagBailTick;
+
+    /// <summary>
+    /// The on-screen rotation, in degrees, to apply to the north-up tile
+    /// composite so it aligns with Mapsui's rotated base map. Derived from
+    /// Mapsui's own <c>WorldToScreenXY</c> projection (which applies the viewport
+    /// rotation internally) rather than hardcoding a sign convention: the screen
+    /// direction of world-north is measured and compared against north-up's
+    /// straight-up (-90&#176;). Returns 0 for an unrotated viewport.
+    /// </summary>
+    private static double ScreenRotationDegrees(Viewport viewport)
+    {
+        if (viewport.Rotation == 0)
+        {
+            return 0;
+        }
+
+        var (cx, cy) = viewport.WorldToScreenXY(viewport.CenterX, viewport.CenterY);
+        var (nx, ny) = viewport.WorldToScreenXY(viewport.CenterX, viewport.CenterY + viewport.Resolution);
+        var dx = nx - cx;
+        var dy = ny - cy;
+        if (dx == 0 && dy == 0)
+        {
+            return 0;
+        }
+
+        // North-up draws world-north straight up (screen angle -90&#176;, +Y down).
+        // Rotate the canvas so straight-up lands on Mapsui's projected north.
+        var northAngle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        return northAngle + 90.0;
+    }
+
+    private static void DiagBail(string reason)
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref s_diagBailTick);
+        if (last != 0 && now - last < 1000)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref s_diagBailTick, now, last) != last)
+        {
+            return;
+        }
+
+        Console.Error.WriteLine($"[S100.DIAG] Render bailed (layer draws nothing): {reason}");
+    }
+
+    /// <summary>
     /// Invoked (on a worker thread) when a tile publishes, so the host can
     /// request a single repaint. The viewer marshals a <c>RefreshGraphics()</c>
     /// onto the UI thread.
@@ -315,9 +377,13 @@ public static class S100VectorTileRenderer
         }
 
         var resolution = viewport.Resolution;
-        if (resolution <= 0 || viewport.Rotation != 0)
+        if (resolution <= 0)
         {
-            // North-up only (v1); a rotated viewport breaks the axis-aligned blit.
+            if (DiagEnabled)
+            {
+                DiagBail($"resolution={resolution:F3}");
+            }
+
             return;
         }
 
@@ -341,7 +407,19 @@ public static class S100VectorTileRenderer
         var widthDip = viewport.Width;
         var heightDip = viewport.Height;
 
-        var visible = TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band);
+        // A rotated viewport (e.g. a trackpad pinch that imparts a little spin)
+        // is supported by rotating the composite canvas about the screen centre
+        // rather than bailing — bailing left the chart permanently blank because
+        // the rotation rarely lands back on exactly 0. The on-screen rotation is
+        // derived from Mapsui's own projection so it matches its sign/convention
+        // without hardcoding it. Tile selection uses the rotated viewport's
+        // bounding box so the corners stay covered. See design Appendix F.8.
+        var rotationDeg = ScreenRotationDegrees(viewport);
+        var (coverWidth, coverHeight) = rotationDeg == 0
+            ? (widthDip, heightDip)
+            : TileGrid.RotatedCoverSize(widthDip, heightDip, rotationDeg);
+
+        var visible = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
 
         var startWorker = false;
         var coldExposure = 0;
@@ -389,7 +467,7 @@ public static class S100VectorTileRenderer
             if (PredictionEnabled)
             {
                 var predicted = TileGrid.PredictedTiles(
-                    centerX, centerY, widthDip, heightDip, resolution, band,
+                    centerX, centerY, coverWidth, coverHeight, resolution, band,
                     state.VelocityX, state.VelocityY);
                 foreach (var key in predicted)
                 {
@@ -442,7 +520,7 @@ public static class S100VectorTileRenderer
 
                 ManageGpuResidency(state, grContext, layer);
 
-                Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, resolution, grContext);
+                Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
             }
             catch (Exception ex)
             {
@@ -491,14 +569,23 @@ public static class S100VectorTileRenderer
 
     /// <summary>
     /// Draws the best-available tiles for the frame, holding <c>state.Sync</c>
-    /// so the worker cannot evict/dispose an image mid-blit. Coarser/finer
-    /// cached bands within <see cref="MaxFallbackBandDistance"/> of the target are
-    /// drawn first as a backdrop (nearest band last, just under the target), then
-    /// exact target-band tiles on top, each hard-clipped to its core.
+    /// so the worker cannot evict/dispose an image mid-blit. When the exact
+    /// target band does not yet cover the viewport, the single nearest cached
+    /// band within <see cref="MaxFallbackBandDistance"/> is drawn first as a
+    /// gap-filling backdrop (one scale only, so different-sized symbols never
+    /// stack and ghost); once the target band is complete the backdrop is
+    /// skipped entirely. Exact target-band tiles are drawn on top, each
+    /// hard-clipped to its core. A rotated viewport is handled by rotating the
+    /// whole composite about the screen centre (<paramref name="rotationDeg"/>);
+    /// tile <i>selection</i> uses the enlarged <paramref name="coverWidth"/> ×
+    /// <paramref name="coverHeight"/> so rotated corners stay covered, while the
+    /// <i>projection</i> keeps the real <paramref name="widthDip"/> ×
+    /// <paramref name="heightDip"/>.
     /// </summary>
     private static void Composite(
         SKCanvas canvas, TileState state, int band,
-        double centerX, double centerY, double widthDip, double heightDip, double resolution,
+        double centerX, double centerY, double widthDip, double heightDip,
+        double coverWidth, double coverHeight, double resolution, double rotationDeg,
         GRContext? grContext)
     {
         var gpuCache = grContext is not null ? state.GpuTextures : null;
@@ -509,36 +596,139 @@ public static class S100VectorTileRenderer
         // here (frame start, pre-draw) frees only already-flushed images.
         gpuCache?.DrainPendingDisposals();
 
-        // Backdrop: cached tiles from nearby bands that intersect the viewport,
-        // farthest band first so the closest resolution ends up on top. Bands
-        // beyond MaxFallbackBandDistance are skipped — see the constant for why
-        // (anti-ghosting + bounded per-frame draw count).
-        var fallback = new List<TileKey>();
-        foreach (var key in state.Cache.SnapshotKeys())
+        // Target band visible tiles, and whether the band fully covers the
+        // viewport (every visible tile already cached).
+        var target = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
+        var targetComplete = target.Count > 0;
+        foreach (var key in target)
         {
-            if (key.Band == band || Math.Abs(key.Band - band) > MaxFallbackBandDistance)
+            if (!state.Cache.Contains(key))
             {
-                continue;
-            }
-
-            var core = TileGrid.TileCoreScreenRect(key, centerX, centerY, widthDip, heightDip, resolution);
-            if (core.IntersectsViewport(widthDip, heightDip))
-            {
-                fallback.Add(key);
+                targetComplete = false;
+                break;
             }
         }
 
-        fallback.Sort((a, b) => Math.Abs(b.Band - band).CompareTo(Math.Abs(a.Band - band)));
+        // Backdrop: only needed to fill gaps while the target band is still
+        // incomplete (during a zoom transition). Draw the SINGLE nearest cached
+        // band — never multiple bands at once — so symbols rasterised at
+        // different scales cannot stack and ghost. Skipped once the target band
+        // is complete (its opaque fills fully occlude any backdrop anyway).
+        var fallback = new List<TileKey>();
+        if (!targetComplete)
+        {
+            var nearestDist = int.MaxValue;
+            foreach (var key in state.Cache.SnapshotKeys())
+            {
+                var dist = Math.Abs(key.Band - band);
+                if (dist == 0 || dist > MaxFallbackBandDistance)
+                {
+                    continue;
+                }
+
+                var core = TileGrid.TileCoreScreenRect(key, centerX, centerY, widthDip, heightDip, resolution);
+                if (!core.IntersectsViewport(coverWidth, coverHeight))
+                {
+                    continue;
+                }
+
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    fallback.Clear();
+                }
+
+                if (dist == nearestDist)
+                {
+                    fallback.Add(key);
+                }
+            }
+        }
+
+        // Rotate the whole composite about the screen centre so the north-up tile
+        // projection aligns with Mapsui's rotated base map (no-op when 0).
+        var rotate = rotationDeg != 0;
+        if (rotate)
+        {
+            canvas.Save();
+            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+        }
+
         foreach (var key in fallback)
         {
             BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
         }
 
         // Exact target band on top (crisp where present).
-        foreach (var key in TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band))
+        foreach (var key in target)
         {
             BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
         }
+
+        if (rotate)
+        {
+            canvas.Restore();
+        }
+
+        if (DiagEnabled)
+        {
+            DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback);
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic-only (~1&#160;Hz rate-limited) per-frame composite summary, gated
+    /// by <see cref="DiagEnabled"/>. Reports target-band tile completeness, the
+    /// fallback bands actually drawn, and cache/GPU residency so multi-scale
+    /// ghosting and zoom-out blanking can be root-caused from the log.
+    /// </summary>
+    private static void DiagComposite(
+        TileState state, int band,
+        double centerX, double centerY, double widthDip, double heightDip, double resolution,
+        List<TileKey> fallback)
+    {
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref s_diagLastTick);
+        if (last != 0 && now - last < 1000)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref s_diagLastTick, now, last) != last)
+        {
+            return;
+        }
+
+        int targetTotal = 0, targetPresent = 0;
+        var present = new HashSet<TileKey>(state.Cache.SnapshotKeys());
+        var bandHist = new SortedDictionary<int, int>();
+        foreach (var key in present)
+        {
+            bandHist.TryGetValue(key.Band, out var c);
+            bandHist[key.Band] = c + 1;
+        }
+
+        foreach (var key in TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band))
+        {
+            targetTotal++;
+            if (present.Contains(key))
+            {
+                targetPresent++;
+            }
+        }
+
+        var fallbackBands = new SortedSet<int>();
+        foreach (var key in fallback)
+        {
+            fallbackBands.Add(key.Band);
+        }
+
+        var hist = string.Join(",", bandHist.Select(kv => $"b{kv.Key}:{kv.Value}"));
+        var fb = fallbackBands.Count == 0 ? "-" : string.Join("+", fallbackBands);
+        Console.Error.WriteLine(
+            $"[S100.DIAG] band={band} res={resolution:F2} target={targetPresent}/{targetTotal} " +
+            $"fallbackBands={fb} cache={state.Cache.Count}tiles/{state.Cache.ResidentBytes / (1024 * 1024)}MB " +
+            $"gpu={(state.GpuTextures?.Count.ToString() ?? "-")} bandHist=[{hist}]");
     }
 
     /// <summary>
