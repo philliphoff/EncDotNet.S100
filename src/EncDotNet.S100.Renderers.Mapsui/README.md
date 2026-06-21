@@ -391,6 +391,17 @@ in the viewer under **Settings → Map → Rendering optimizations**, backed by
 env var always wins over the persisted viewer setting. The remaining variables
 (margins, refresh fraction, diagnostics) are advanced and env-only.
 
+The **render subsystem switch** (A/B), the TiledScene **scene mode**
+(tiled vs single surface), and the **tiled optimization knobs** (gutter,
+in-memory / disk / GPU budgets, prediction, disk cache) are likewise bound in
+the viewer under **Settings → Render subsystem (experimental)** (issue #331),
+backed by the same [`RenderingOptimizations`](RenderingOptimizations.cs) store.
+The env vars below seed and (when set explicitly) pin those too, disabling the
+matching UI control. Some knobs are read each frame and apply live (subsystem,
+scene mode, prediction, GPU residency); others are captured at init and apply on
+the next dataset reload or restart (gutter, in-memory/disk/GPU budgets, disk
+cache) — the Settings panel notes this.
+
 | Environment variable | Default | Effect |
 |---|---|---|
 | `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. Also bound by *Settings → Map → Cache projected vector paths*. |
@@ -511,8 +522,9 @@ whole viewport plus an over-render margin (`S100_VECTOR_SCENE_MARGIN`, default
 translated re-blit (`ComputeTranslate`), so no rasterisation work touches the
 UI/render thread during a gesture.
 
-Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, or
-the `TiledScene` value of `RenderingOptimizations.RenderSubsystem`).
+Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, the
+`TiledScene` value of `RenderingOptimizations.RenderSubsystem`, or
+**Settings → Render subsystem → Subsystem** in the viewer).
 `MapsuiDisplayListRenderer` then tags the vector layer with
 `S100VectorSceneRenderer.RendererName` and binds a *pattern-complete* scene
 (`BindScene`) — the Mapsui lowering omits patterns, so the B arm builds its own

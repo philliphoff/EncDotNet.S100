@@ -201,6 +201,79 @@ internal sealed class ViewerSettings
     /// </summary>
     public bool? LineSimplificationEnabled { get; set; }
 
+    /// <summary>
+    /// Active base-plane render subsystem (issue #331). One of "Mapsui" (the "A"
+    /// arm) or "TiledScene" (the experimental "B" arm), matching
+    /// <see cref="Renderers.Mapsui.RenderSubsystemKind"/>. <see langword="null"/>
+    /// → best default ("Mapsui"). Mirrors
+    /// <c>RenderingOptimizations.RenderSubsystem</c> /
+    /// <c>S100_RENDER_SUBSYSTEM</c>.
+    /// </summary>
+    public string? RenderSubsystem { get; set; }
+
+    /// <summary>
+    /// Within the TiledScene ("B") arm, the base-plane scene mode (issue #331).
+    /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
+    /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
+    /// <see langword="null"/> → best default ("Tiled"). Mirrors
+    /// <c>RenderingOptimizations.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
+    /// </summary>
+    public string? VectorSceneMode { get; set; }
+
+    /// <summary>
+    /// Tiled-base-plane gutter, in DIP (issue #331). <see langword="null"/> →
+    /// best default. Mirrors <c>RenderingOptimizations.TileGutterDip</c> /
+    /// <c>S100_VECTOR_TILE_GUTTER</c>.
+    /// </summary>
+    public double? TileGutterDip { get; set; }
+
+    /// <summary>
+    /// Per-layer hot-cache native budget, in MB (issue #331).
+    /// <see langword="null"/> → best default. Mirrors
+    /// <c>RenderingOptimizations.TileBudgetMb</c> /
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
+    /// </summary>
+    public double? TileBudgetMb { get; set; }
+
+    /// <summary>
+    /// Whether tiled-base-plane speculative prediction / pre-warm is enabled
+    /// (issue #331). <see langword="null"/> → best default (on). Mirrors
+    /// <c>RenderingOptimizations.TilePredictionEnabled</c> /
+    /// <c>S100_VECTOR_TILE_PREDICT</c>.
+    /// </summary>
+    public bool? TilePredictionEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the warm disk tile cache is enabled (issue #331).
+    /// <see langword="null"/> → best default (on). Mirrors
+    /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
+    /// <c>S100_VECTOR_TILE_DISK</c>.
+    /// </summary>
+    public bool? TileDiskCacheEnabled { get; set; }
+
+    /// <summary>
+    /// Warm disk tile-cache budget, in MB (issue #331). <see langword="null"/> →
+    /// best default. Mirrors <c>RenderingOptimizations.TileDiskMb</c> /
+    /// <c>S100_VECTOR_TILE_DISK_MB</c>.
+    /// </summary>
+    public double? TileDiskMb { get; set; }
+
+    /// <summary>
+    /// Whether tiled-base-plane GPU texture residency is enabled (issue #331).
+    /// <see langword="null"/> → best default (on). Mirrors
+    /// <c>RenderingOptimizations.TileGpuResidencyEnabled</c> /
+    /// <c>S100_VECTOR_TILE_GPU</c>.
+    /// </summary>
+    public bool? TileGpuResidencyEnabled { get; set; }
+
+    /// <summary>
+    /// Per-layer GPU-residency budget, in MB (issue #331).
+    /// <see langword="null"/> → best default. Mirrors
+    /// <c>RenderingOptimizations.TileGpuBudgetMb</c> /
+    /// <c>S100_VECTOR_TILE_GPU_MB</c>.
+    /// </summary>
+    public double? TileGpuBudgetMb { get; set; }
+
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
 

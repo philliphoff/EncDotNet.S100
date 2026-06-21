@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -68,17 +67,20 @@ public static class S100VectorTileRenderer
     /// <summary>
     /// Gutter, in DIP, rasterised beyond each tile's bounds on every edge and
     /// hard-clipped away on composite, so strokes crossing a tile seam keep
-    /// their joins/caps. Read once from <c>S100_VECTOR_TILE_GUTTER</c>
-    /// (default 64).
+    /// their joins/caps. Sourced from
+    /// <see cref="RenderingOptimizations.TileGutterDip"/> (seeded from
+    /// <c>S100_VECTOR_TILE_GUTTER</c>, default 64); only newly-rasterised tiles
+    /// pick up a live change.
     /// </summary>
-    public static double GutterDip { get; } = ReadDouble("S100_VECTOR_TILE_GUTTER", 64.0, 0.0, 256.0);
+    public static double GutterDip => RenderingOptimizations.TileGutterDip;
 
     /// <summary>
-    /// Hot-cache native-byte budget per layer. Read once from
-    /// <c>S100_VECTOR_TILE_BUDGET_MB</c> (default 256&#160;MB).
+    /// Hot-cache native-byte budget per layer. Sourced from
+    /// <see cref="RenderingOptimizations.TileBudgetMb"/> (seeded from
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>, default 256&#160;MB); captured per layer
+    /// when its tile state is created (applies on the next dataset reload).
     /// </summary>
-    public static long BudgetBytes { get; } =
-        (long)ReadDouble("S100_VECTOR_TILE_BUDGET_MB", 256.0, 4.0, 4096.0) * 1024 * 1024;
+    public static long BudgetBytes => (long)(RenderingOptimizations.TileBudgetMb * 1024 * 1024);
 
     /// <summary>Hard cap on either tile-image dimension, in device pixels.</summary>
     private const int MaxImageDimension = 4096;
@@ -101,22 +103,24 @@ public static class S100VectorTileRenderer
     /// Whether speculative <b>prediction / pre-warm</b> (Phase&#160;3) is enabled.
     /// When on, each frame also rasterises a velocity-aimed warm set so
     /// newly-exposed perimeter tiles are cached before a pan/zoom reveals them.
-    /// Read once from <c>S100_VECTOR_TILE_PREDICT</c> (default on; <c>0</c> or
-    /// <c>false</c> disables it, leaving the Phase&#160;2 visible-only behaviour —
-    /// a first-class A/B knob, design §4).
+    /// Sourced from <see cref="RenderingOptimizations.TilePredictionEnabled"/>
+    /// (seeded from <c>S100_VECTOR_TILE_PREDICT</c>, default on); read every frame
+    /// so a change takes effect live.
     /// </summary>
-    public static bool PredictionEnabled { get; } = ReadBool("S100_VECTOR_TILE_PREDICT", true);
+    public static bool PredictionEnabled => RenderingOptimizations.TilePredictionEnabled;
 
     /// <summary>
     /// Whether the persistent <b>disk tile cache</b> (Phase&#160;4) is enabled.
     /// When on, a tile missing from the in-memory cache is looked up on disk
     /// before being re-rasterised, and freshly rasterised tiles are persisted —
-    /// so a palette flip-back or a process restart re-uses warm tiles. Read once
-    /// from <c>S100_VECTOR_TILE_DISK</c> (default on; <c>0</c>/<c>false</c>
-    /// disables). The on-disk key folds a <c>styleStateHash</c> so a tile is
-    /// never served for a different mariner/palette state (design §3.4).
+    /// so a palette flip-back or a process restart re-uses warm tiles. Sourced
+    /// from <see cref="RenderingOptimizations.TileDiskCacheEnabled"/> (seeded from
+    /// <c>S100_VECTOR_TILE_DISK</c>, default on); the shared cache is created once
+    /// per process, so a change applies on restart. The on-disk key folds a
+    /// <c>styleStateHash</c> so a tile is never served for a different
+    /// mariner/palette state (design §3.4).
     /// </summary>
-    public static bool DiskCacheEnabled { get; } = ReadBool("S100_VECTOR_TILE_DISK", true);
+    public static bool DiskCacheEnabled => RenderingOptimizations.TileDiskCacheEnabled;
 
     /// <summary>
     /// Whether <b>GPU texture residency</b> (Phase&#160;5) is enabled. When on,
@@ -125,23 +129,26 @@ public static class S100VectorTileRenderer
     /// each warm raster tile is uploaded <i>once</i> to a GPU-resident texture
     /// (<see cref="SKImage.ToTextureImage(GRContext)"/>) and reused on every
     /// subsequent frame, instead of re-uploading the same pixels each paint —
-    /// the dominant per-frame cost identified in Appendix&#160;F. Read once from
-    /// <c>S100_VECTOR_TILE_GPU</c> (default on; <c>0</c>/<c>false</c> disables, a
-    /// first-class A/B knob). On a software/CPU surface this is inert and the
+    /// the dominant per-frame cost identified in Appendix&#160;F. Sourced from
+    /// <see cref="RenderingOptimizations.TileGpuResidencyEnabled"/> (seeded from
+    /// <c>S100_VECTOR_TILE_GPU</c>, default on); read every frame so a change
+    /// takes effect live. On a software/CPU surface this is inert and the
     /// renderer blits the raster tile directly (universal fallback, no regression).
     /// </summary>
-    public static bool GpuResidencyEnabled { get; } = ReadBool("S100_VECTOR_TILE_GPU", true);
+    public static bool GpuResidencyEnabled => RenderingOptimizations.TileGpuResidencyEnabled;
 
     /// <summary>
     /// Per-layer GPU-texture residency budget, in native bytes. The resident
     /// GPU texture set is bounded independently of the CPU hot cache (it holds
-    /// only tiles actually blitted, so it tracks the viewport working set). Read
-    /// once from <c>S100_VECTOR_TILE_GPU_MB</c> (default 256&#160;MB). Must
-    /// comfortably exceed the visible + fallback working set or promotion
-    /// thrashes (re-upload each frame); the default holds ~100 guttered tiles.
+    /// only tiles actually blitted, so it tracks the viewport working set).
+    /// Sourced from <see cref="RenderingOptimizations.TileGpuBudgetMb"/> (seeded
+    /// from <c>S100_VECTOR_TILE_GPU_MB</c>, default 256&#160;MB); sized when the
+    /// resident-texture cache is first created (applies on the next dataset
+    /// reload). Must comfortably exceed the visible + fallback working set or
+    /// promotion thrashes (re-upload each frame); the default holds ~100 guttered
+    /// tiles.
     /// </summary>
-    public static long GpuBudgetBytes { get; } =
-        (long)ReadDouble("S100_VECTOR_TILE_GPU_MB", 256.0, 4.0, 4096.0) * 1024 * 1024;
+    public static long GpuBudgetBytes => (long)(RenderingOptimizations.TileGpuBudgetMb * 1024 * 1024);
 
     /// <summary>
     /// When set (<c>S100_VECTOR_TILE_DIAG=1</c>), the compositor logs a
@@ -294,13 +301,13 @@ public static class S100VectorTileRenderer
 
         try
         {
-            var root = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
+            var root = RenderingOptimizations.TileDiskDirectory;
             if (string.IsNullOrEmpty(root))
             {
                 root = Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles");
             }
 
-            var budgetMb = ReadDouble("S100_VECTOR_TILE_DISK_MB", 512.0, 16.0, 8192.0);
+            var budgetMb = RenderingOptimizations.TileDiskMb;
             return new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
         }
         catch
@@ -309,19 +316,6 @@ public static class S100VectorTileRenderer
             // rendering.
             return null;
         }
-    }
-
-    private static double ReadDouble(string name, double fallback, double min, double max)
-    {
-        var raw = Environment.GetEnvironmentVariable(name);
-        if (!string.IsNullOrEmpty(raw)
-            && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
-            && v >= min && v <= max)
-        {
-            return v;
-        }
-
-        return fallback;
     }
 
     private static bool ReadBool(string name, bool fallback)
