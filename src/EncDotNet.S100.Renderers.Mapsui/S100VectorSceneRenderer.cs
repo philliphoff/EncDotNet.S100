@@ -195,6 +195,18 @@ public static class S100VectorSceneRenderer
             return;
         }
 
+        // Skip a cell whose data extent lies entirely outside the viewport.
+        // Mapsui invokes this custom renderer for every enabled, in-resolution
+        // layer each frame without extent-culling, so an exchange set of many
+        // S-101 cells would otherwise schedule an off-thread re-raster and hold a
+        // whole-viewport image for every off-view cell. Culling here makes
+        // off-view cells cost nothing; the MarginPx halo (the same over-render
+        // recorded around the viewport) keeps edge cells rendering.
+        if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, MarginPx))
+        {
+            return;
+        }
+
         var state = s_states.GetValue(layer, static _ => new SceneState());
 
         var deviceScale = canvas.TotalMatrix.ScaleX;
