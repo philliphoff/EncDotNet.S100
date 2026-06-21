@@ -456,7 +456,7 @@ public sealed class MapsuiDisplayListRenderer
         var instructionBytes = DrawingInstructionSerializer.Serialize(instructions);
 
         var styleHeader =
-            $"palette:{Palette?.ToString() ?? "none"}" +
+            $"palette:{DescribePalette(Palette)}" +
             $"|symbolScale:{SymbolScale.ToString("R", CultureInfo.InvariantCulture)}" +
             $"|textScale:{TextScale.ToString("R", CultureInfo.InvariantCulture)}";
         var headerBytes = System.Text.Encoding.UTF8.GetBytes(styleHeader);
@@ -466,6 +466,32 @@ public sealed class MapsuiDisplayListRenderer
         sha.AppendData(headerBytes);
         sha.AppendData(instructionBytes);
         return Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Produces a deterministic fingerprint of a colour palette for the
+    /// <c>styleStateHash</c>. <see cref="ColorPalette"/> does not override
+    /// <see cref="object.ToString"/>, so using the instance directly collapses
+    /// Day/Dusk/Night (and any two palettes) to the same type-name string —
+    /// which made the tile disk-cache namespace palette-insensitive and caused a
+    /// Night render to serve the previously-persisted Day tiles. The fingerprint
+    /// folds the palette name <em>and</em> its resolved colour entries (ordered)
+    /// so any difference in palette identity or content invalidates the cache.
+    /// </summary>
+    internal static string DescribePalette(ColorPalette? palette)
+    {
+        if (palette is null)
+        {
+            return "none";
+        }
+
+        var builder = new System.Text.StringBuilder(palette.Name);
+        foreach (var entry in palette.Colors.OrderBy(c => c.Key, StringComparer.Ordinal))
+        {
+            builder.Append('|').Append(entry.Key).Append('=').Append(entry.Value);
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>

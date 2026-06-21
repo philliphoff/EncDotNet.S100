@@ -625,6 +625,15 @@ state** — old tiles are orphaned and reclaimed by the byte-budget LRU sweep. T
 in-memory tier is already fresh per layer (a settings change rebuilds the layer),
 so this extends the no-stale-portrayal guarantee to the persistent tier.
 
+> **Palette fingerprint (design doc Appendix F.9).** The palette is folded via
+> `DescribePalette` — its `Name` plus its ordered colour entries — **not**
+> `ColorPalette.ToString()`. `ColorPalette` has no `ToString()` override, so the
+> earlier code collapsed every palette to one type-name string; combined with the
+> palette-independent S-101 instruction list, that made the namespace
+> palette-insensitive and a Night render served the previously-persisted Day
+> tiles. Folding the actual palette content keeps Day/Dusk/Night (and any palette
+> content change) in distinct namespaces.
+
 The cache mirrors `DiskPortrayalInstructionCache`: atomic temp+move writes,
 mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss; PNG codec
 work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),

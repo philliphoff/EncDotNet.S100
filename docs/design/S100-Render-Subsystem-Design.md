@@ -790,3 +790,31 @@ fallbackBands=-` (previously `fallbackBands=9+11`).
 on): trackpad pinch-zoom and pinch-rotate keep the chart visible and
 aligned with the base map under rotation, corners stay filled, and a
 settled frame draws a single tile scale with no ghosting.
+
+### F.9 Palette-insensitive `styleStateHash` (Night served Day tiles)
+
+Switching Day↔Night re-rendered the *same* pixels: a Night render showed
+the bright Day palette, byte-identical to Day. The S-101 drawing-instruction
+list is palette-independent by design (it carries S-100 colour *tokens*
+resolved later by the scene builder), so a palette switch correctly reuses
+the cached instruction list — `[S101] Reusing N cached drawing instructions`.
+The palette is meant to re-enter downstream, both in the scene's
+`ColorResolver` and in the tile **disk-cache namespace** via `styleStateHash`.
+
+`ComputeStyleStateHash` (in `MapsuiDisplayListRenderer`) folded the palette as
+`Palette?.ToString()`. `ColorPalette` is a plain class with **no `ToString()`
+override**, so every palette stringified to the same type name. With identical
+instructions *and* an identical palette string, Day and Night hashed to the
+**same** namespace `SHA-256(productLayerSet | styleStateHash)`; the Night
+render's first tile lookup hit Day's persisted PNGs and served them. The
+in-memory hot tier is fresh per layer, so this surfaced only through the
+persistent tier — but it manifested on screen because a cold/just-loaded view
+fills from disk.
+
+**Fix:** key the hash on a real palette fingerprint —
+`DescribePalette(palette)` folds the palette `Name` **and** its colour
+entries (ordered, `token=hex`) so Day/Dusk/Night, and any palette *content*
+change, yield distinct namespaces. **Verified** (PDB01, Tasmania bounds):
+Day and Night now produce distinct output (different SHA-1), Night renders the
+genuinely dark Night palette over the S-101 region while the palette-independent
+basemap is unchanged. Tests: `StyleStatePaletteFingerprintTests` (4 cases).
