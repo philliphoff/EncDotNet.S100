@@ -52,6 +52,17 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// </summary>
     private const double DefaultZMultiplicationFactor = 10.0;
 
+    /// <summary>
+    /// Unit of the <c>depths</c> array surfaced for MultiPoint soundings.
+    /// S-101 charted depths are metres by definition: the DSSI Z
+    /// coordinate multiplication factor (<c>CMFZ</c>) scales the encoded
+    /// integer Z ordinate to metres (S-101 §4.3; S-100 Part 10a
+    /// §10a-6.1.2.2). Surfaced explicitly so an MCP client never has to
+    /// infer the unit (issue #316). Positive is down; a negative value is
+    /// a drying height.
+    /// </summary>
+    private const string DepthUnit = "metres";
+
     public string SpecName => "S-101";
 
     public ToolResult<DescribeFeatureResult> Describe(FeatureDescriberContext context)
@@ -336,6 +347,9 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// <c>depths</c> array (metres, positive down) is included, aligned
     /// one-to-one with <c>coordinates</c>, so an agent can read the charted
     /// depth at each sounding (e.g. for under-keel-clearance reasoning).
+    /// A <c>depthUnit</c> field (<c>"metres"</c>) accompanies the array so
+    /// the unit is stated explicitly rather than inferred (issue #316); it
+    /// is <see langword="null"/> when no aligned depths are present.
     /// </summary>
     private static Dictionary<string, object?>? BuildGeometry(
         Feature? geometry, IReadOnlyList<double>? depths)
@@ -392,6 +406,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             },
             ["coordinates"] = coordinates,
             ["depths"] = alignedDepths,
+            ["depthUnit"] = alignedDepths is null ? null : DepthUnit,
             ["interiorRings"] = interiorRings,
         };
     }
