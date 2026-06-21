@@ -76,6 +76,9 @@ public sealed record FindAtResult(
 /// </remarks>
 public sealed class FindAtTool
 {
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "find_at";
+
     private readonly IDatasetCatalog _catalog;
 
     /// <summary>Creates a new <see cref="FindAtTool"/>.</summary>
