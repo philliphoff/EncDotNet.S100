@@ -24,8 +24,17 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
     internal sealed class Settings : DatasetCommandSettings
     {
         [CommandArgument(1, "<output>")]
-        [Description("Path of the PNG image to write.")]
+        [Description("Path of the image to write. The format is inferred from the file extension unless --format is given.")]
         public string OutputPath { get; init; } = string.Empty;
+
+        [CommandOption("--format")]
+        [Description("Output image format: png, jpeg (jpg), or webp. Default: inferred from the output file extension, falling back to png.")]
+        public string? Format { get; init; }
+
+        [CommandOption("--quality")]
+        [Description("Encoder quality (1-100) for lossy formats such as jpeg and webp. Ignored for png. Default 90.")]
+        [DefaultValue(90)]
+        public int Quality { get; init; }
 
         [CommandOption("-w|--width")]
         [Description("Output image width in pixels (default 1024).")]
@@ -78,6 +87,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
             if (string.IsNullOrWhiteSpace(OutputPath))
                 return ValidationResult.Error("An output path is required.");
+
+            if (!TryResolveFormat(Format, OutputPath, out _, out var formatError))
+                return ValidationResult.Error(formatError);
+
+            if (Quality is < 1 or > 100)
+                return ValidationResult.Error("--quality must be between 1 and 100.");
 
             if (Width <= 0 || Height <= 0)
                 return ValidationResult.Error("--width and --height must be positive.");
@@ -156,10 +171,11 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
                 .GetAwaiter().GetResult();
 
-            WritePng(bitmap, settings.OutputPath);
+            TryResolveFormat(settings.Format, settings.OutputPath, out var format, out _);
+            WriteImage(bitmap, settings.OutputPath, format, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {settings.OutputPath} ([grey]{spec}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {settings.OutputPath} ([grey]{spec}, {format}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
         }
         catch (NotSupportedException ex)
@@ -202,12 +218,70 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         }
     }
 
-    private static void WritePng(SKBitmap bitmap, string outputPath)
+    private static void WriteImage(SKBitmap bitmap, string outputPath, SKEncodedImageFormat format, int quality)
     {
         using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var data = image.Encode(format, quality)
+            ?? throw new NotSupportedException(
+                $"SkiaSharp could not encode the image as {format} on this platform.");
         using var stream = File.Create(outputPath);
         data.SaveTo(stream);
+    }
+
+    /// <summary>
+    /// Resolves the desired <see cref="SKEncodedImageFormat"/> from an explicit
+    /// <paramref name="format"/> option when supplied, otherwise infers it from
+    /// the extension of <paramref name="outputPath"/>, falling back to PNG when
+    /// the extension is absent or unrecognised and no explicit format is given.
+    /// Returns <see langword="false"/> with a populated <paramref name="error"/>
+    /// when an explicit format is unrecognised or an explicit format conflicts
+    /// with a recognised, differing output extension.
+    /// </summary>
+    internal static bool TryResolveFormat(
+        string? format, string outputPath, out SKEncodedImageFormat resolved, out string error)
+    {
+        resolved = SKEncodedImageFormat.Png;
+        error = string.Empty;
+
+        var extKnown = TryParseFormatToken(
+            Path.GetExtension(outputPath).TrimStart('.'), out var extFormat);
+
+        if (!string.IsNullOrWhiteSpace(format))
+        {
+            if (!TryParseFormatToken(format, out resolved))
+            {
+                error = $"Unknown --format '{format}'. Use png, jpeg, or webp.";
+                return false;
+            }
+
+            if (extKnown && extFormat != resolved)
+            {
+                error =
+                    $"--format {resolved} conflicts with the output extension " +
+                    $"'{Path.GetExtension(outputPath)}' ({extFormat}). " +
+                    "Use a matching extension or omit --format.";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (extKnown)
+            resolved = extFormat;
+
+        return true;
+    }
+
+    private static bool TryParseFormatToken(string value, out SKEncodedImageFormat format)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "png": format = SKEncodedImageFormat.Png; return true;
+            case "jpg":
+            case "jpeg": format = SKEncodedImageFormat.Jpeg; return true;
+            case "webp": format = SKEncodedImageFormat.Webp; return true;
+            default: format = SKEncodedImageFormat.Png; return false;
+        }
     }
 
     internal static bool TryParsePalette(string value, out PaletteType palette)

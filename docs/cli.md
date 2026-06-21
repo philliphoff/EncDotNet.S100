@@ -1,7 +1,7 @@
 # Command-line rendering (`s100`)
 
 `EncDotNet.S100.Cli` is a cross-platform .NET console tool, invoked as **`s100`**,
-that renders any supported S-100 dataset to a PNG image. It drives the same
+that renders any supported S-100 dataset to a PNG, JPEG, or WebP image. It drives the same
 portrayal pipelines as the Avalonia viewer, but rasterises through the
 Mapsui-free Skia *headless* renderers so it can run without a UI — making it
 suitable for batch scripts (e.g. generating sea-ice or surface-current
@@ -11,7 +11,7 @@ It offers three subcommands:
 
 | Command | Purpose |
 |---|---|
-| `s100 render <dataset> <output>` | Render a dataset to a PNG image. |
+| `s100 render <dataset> <output>` | Render a dataset to an image (PNG, JPEG, or WebP). |
 | `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
 | `s100 list-specs` | List the supported product specifications and which support headless rendering. |
 
@@ -63,7 +63,8 @@ dotnet run --project tools/EncDotNet.S100.Cli -- \
 The CLI detects a dataset's product specification from the file, runs that
 spec's portrayal pipeline — the same pipeline the Avalonia viewer uses, wired to
 the feature and portrayal catalogues bundled in the tool — and encodes the
-result to PNG. Vector specs (S-101 and the GML products) and coverage specs
+result to the requested image format (PNG by default; JPEG or WebP via
+`--format` or the output extension). Vector specs (S-101 and the GML products) and coverage specs
 (S-102/104/111) each rasterise through their own headless Skia renderer; for
 S-111 the current arrows are overlaid on the coverage. No UI or map projection
 stack is involved, so it runs anywhere .NET does.
@@ -77,6 +78,8 @@ stack is involved, so it runs anywhere .NET does.
 | `--symbol-scale` / `--text-scale` | `1.0` | Symbol and text scale factors. |
 | `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104 / S-111). |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
+| `--format <fmt>` | inferred from extension (else `png`) | Output image format: `png`, `jpeg` (`jpg`), or `webp`. |
+| `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
 | `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
 | `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
 
@@ -84,7 +87,9 @@ stack is involved, so it runs anywhere .NET does.
 
 - **Headless rendering** for S-101; S-102; S-104 and S-111 *gridded* coverages;
   and the GML products S-122/124/125/127/128/129/131/201/411/421.
-- **PNG output.**
+- **Output formats:** PNG, JPEG, and WebP. The format is inferred from the
+  output file extension (or set explicitly with `--format`); `--quality`
+  controls the encoder quality for the lossy formats.
 - **Text and category suppression** via `--no-text` / `--hide` for cleaner
   previews of label-dense products.
 - **Fixed-station coverage** (S-104 / S-111 data coding format 3 / 8) is not

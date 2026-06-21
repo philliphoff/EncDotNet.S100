@@ -1,8 +1,8 @@
 # EncDotNet.S100.Cli (`s100`)
 
 A small, cross-platform command-line tool for working with S-100 datasets. Its
-primary command renders any supported dataset to a PNG image by running the
-dataset's portrayal pipeline through the Mapsui-free Skia *headless* renderer;
+primary command renders any supported dataset to a PNG, JPEG, or WebP image by
+running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
 it can also report a dataset's product specification (`info`) and validate a
 dataset against its specification's normative rule pack (`validate`). It is
 intended as the basis for batch scripts (for example, generating previews of
@@ -89,7 +89,8 @@ same step that signs the viewer, so it runs without Gatekeeper prompts.
 ### `s100 render <dataset> <output>`
 
 Detects the product specification of `<dataset>`, runs its portrayal pipeline,
-and writes a PNG to `<output>`.
+and writes an image to `<output>`. The output format (PNG, JPEG, or WebP) is
+inferred from the file extension unless `--format` is given.
 
 | Option | Default | Description |
 |---|---|---|
@@ -100,6 +101,8 @@ and writes a PNG to `<output>`.
 | `--text-scale` | `1.0` | Text scale factor. |
 | `--time-step <index>` | `0` | Zero-based time-step index for time-series datasets (S-104 / S-111). |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
+| `--format <fmt>` | inferred from extension, else `png` | Output image format: `png`, `jpeg` (`jpg`), or `webp`. When omitted, the format is inferred from the output file extension; an unrecognised extension falls back to `png`. An explicit `--format` that conflicts with a recognised output extension is rejected. |
+| `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
 | `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
 | `--no-updates` | off | Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
@@ -112,6 +115,8 @@ s100 render seaice.gml seaice.png --no-text                # clean fill preview
 s100 render chart.gml chart.png --hide text,points         # hide text + symbols
 s100 render NL4NZ110.000 cell.png                          # applies .001/.002/… updates
 s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
+s100 render warnings.gml warnings.jpg --quality 85         # JPEG (format inferred from .jpg)
+s100 render warnings.gml preview.webp                      # WebP preview
 ```
 
 > **S-101 sequential updates.** When pointed at an S-101 base cell
@@ -183,7 +188,6 @@ headless render path.
 
 ## Limitations
 
-- **PNG output only.**
 - **Vector pattern area-fills are omitted** on the headless path; points,
   lines, solid-area fills, and text render.
 - **Coverage fixed-station datasets are not supported.** S-104 / S-111 datasets

@@ -72,6 +72,102 @@ public sealed class RenderCommandTests
         Assert.Equal(0, exit);
     }
 
+    [Theory]
+    [InlineData("jpg")]
+    [InlineData("webp")]
+    public void Render_infers_non_png_format_from_extension(string extension)
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.{extension}");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--width", "320", "--height", "240"]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+
+            // A PNG signature must NOT be present; the bytes must decode as an image.
+            var bytes = File.ReadAllBytes(output);
+            Assert.NotEqual(PngSignature, bytes[..PngSignature.Length]);
+
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+            Assert.Equal(320, bitmap!.Width);
+            Assert.Equal(240, bitmap.Height);
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_honours_explicit_format_option_over_extension()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        // No extension on the output path; --format drives the encoder.
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}");
+        try
+        {
+            int exit = CliApp.Build().Run(
+                ["render", dataset, output, "--format", "jpeg", "--quality", "75",
+                 "--width", "320", "--height", "240"]);
+
+            Assert.Equal(0, exit);
+            Assert.True(File.Exists(output));
+
+            using var bitmap = SKBitmap.Decode(output);
+            Assert.NotNull(bitmap);
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
+    public void Render_with_unknown_format_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "tiff"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Render_with_format_extension_mismatch_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "jpeg"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public void Render_with_out_of_range_quality_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Skip.IfNot(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.jpg");
+        int exit = CliApp.Build().Run(["render", dataset, output, "--quality", "0"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
     [Fact]
     public void Render_writes_a_valid_png_for_an_s57_cell()
     {
