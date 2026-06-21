@@ -758,14 +758,31 @@ Fix: support rotated viewports instead of bailing (only `resolution <= 0`
 and a sizeless viewport still bail).
 
 - **Canvas rotation, convention-free.** The composite is drawn north-up
-  as before, then the whole sequence is wrapped in
-  `canvas.RotateDegrees(θ, w/2, h/2)` about the screen centre. θ is
+  as before, then rotated `θ` about the screen centre. θ is
   **derived from Mapsui's own `WorldToScreenXY`** — the projected screen
   direction of world-north is measured and compared against north-up's
   straight-up (−90°) — so it matches Mapsui's rotation sign/convention
   exactly without hardcoding it (Mapsui 5 ships only a DLL; the other
   vector renderer, `CachedVectorStyleRenderer`, already projects
-  per-vertex through the same `WorldToScreenXY`).
+  per-vertex through the same `WorldToScreenXY`). **Seam-free rotation
+  (issue #330):** the backdrop + target tiles are first composited
+  north-up into an **off-screen surface** (`CompositeRotated`) and then
+  the *single* finished image is rotated about the screen centre — rather
+  than rotating the live canvas and blitting each tile under it. Rotating
+  per-tile turned every hard clip-to-core edge and the cross-band
+  backdrop/target boundary into an independently-rasterised rotated seam,
+  so a non-north-up zoom transition revealed banding/seams between tiles
+  and bands. Compositing north-up first keeps those joins in the clean
+  axis-aligned space (where they abut exactly) and carries no internal
+  seam through the one rotated blit. The off-screen spans the
+  `RotatedCoverSize` box at device resolution; its layout
+  (`TileGrid.RotationCompositeLayout`) is pure and unit-tested
+  (`TileGridTests.RotationCompositeLayout_*`). Because `DrawImage` is
+  deferred until the frame flushes, the surface/image are held on
+  `TileState` and freed at the next composite. If the (GPU) off-screen
+  cannot be allocated the method falls back to the old rotate-canvas
+  per-tile blit so the chart stays visible. North-up (the common case) is
+  unchanged: tiles are blitted straight onto the canvas with no off-screen.
 - **Rotated-corner coverage.** A rotated viewport's corners poke outside
   the north-up box, so tile *selection* (`VisibleTiles` /
   `PredictedTiles` / the fallback intersect test) uses

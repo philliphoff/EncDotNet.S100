@@ -692,6 +692,16 @@ public static class S100VectorTileRenderer
         // here (frame start, pre-draw) frees only already-flushed images.
         gpuCache?.DrainPendingDisposals();
 
+        // Free the previous frame's rotated off-screen composite. DrawImage is
+        // deferred and flushes only after Render returns, so the surface/image
+        // that backed the last rotated blit had to outlive that frame; by now it
+        // has flushed and can be released (mirrors the GPU tile cache's
+        // DrainPendingDisposals discipline). Harmless on north-up frames.
+        state.RotationImage?.Dispose();
+        state.RotationImage = null;
+        state.RotationSurface?.Dispose();
+        state.RotationSurface = null;
+
         // Target band visible tiles, and whether the band fully covers the
         // viewport (every visible tile already cached).
         var target = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
@@ -741,35 +751,148 @@ public static class S100VectorTileRenderer
             }
         }
 
-        // Rotate the whole composite about the screen centre so the north-up tile
-        // projection aligns with Mapsui's rotated base map (no-op when 0).
-        var rotate = rotationDeg != 0;
-        if (rotate)
+        // A rotated viewport is composited north-up into an off-screen surface and
+        // then rotated as a SINGLE image about the screen centre, rather than
+        // rotating the live canvas and blitting each tile under it. Rotating
+        // per-tile turned every hard clip-to-core edge — and the cross-band
+        // backdrop/target boundary — into an independently rasterised rotated
+        // seam, so a non-north-up zoom transition revealed banding/seams between
+        // tiles and bands (issue #330). Compositing north-up first keeps those
+        // joins in the clean axis-aligned space (where they abut exactly) and
+        // carries no internal seam through the one rotated blit. North-up (the
+        // common case) is unchanged: tiles are blitted straight onto the canvas.
+        if (rotationDeg != 0)
         {
-            canvas.Save();
-            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+            CompositeRotated(
+                canvas, state, fallback, target,
+                centerX, centerY, widthDip, heightDip, coverWidth, coverHeight,
+                resolution, rotationDeg, grContext, gpuCache);
         }
-
-        foreach (var key in fallback)
+        else
         {
-            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-        }
+            foreach (var key in fallback)
+            {
+                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
 
-        // Exact target band on top (crisp where present).
-        foreach (var key in target)
-        {
-            BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-        }
-
-        if (rotate)
-        {
-            canvas.Restore();
+            // Exact target band on top (crisp where present).
+            foreach (var key in target)
+            {
+                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
         }
 
         if (DiagEnabled)
         {
             DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback);
         }
+    }
+
+    /// <summary>
+    /// Composites the backdrop + target tiles north-up into an off-screen surface
+    /// sized to the rotated viewport's cover box, then draws that single image
+    /// rotated about the screen centre. Doing the join work (per-tile clip-to-core
+    /// and the cross-band backdrop/target boundary) in the unrotated space — where
+    /// adjacent tiles abut exactly — and rotating only the finished composite
+    /// removes the per-tile rotated seams/banding that a non-north-up zoom
+    /// transition otherwise revealed (issue #330, design Appendix&#160;F.8).
+    /// </summary>
+    /// <remarks>
+    /// The off-screen is allocated at device resolution (the canvas matrix's
+    /// device scale) so the rotated blit stays crisp on HiDPI, and spans
+    /// <paramref name="coverWidth"/>&#160;&#215;&#160;<paramref name="coverHeight"/>
+    /// — the rotated bounding box — so the screen corners are filled once rotated.
+    /// The surface/image are held on <paramref name="state"/> and freed at the next
+    /// frame's composite because <c>DrawImage</c> is deferred and flushes only
+    /// after <c>Render</c> returns. If the (GPU) off-screen cannot be allocated the
+    /// method falls back to rotating the live canvas and blitting per-tile, so the
+    /// chart stays visible rather than dropping the frame.
+    /// </remarks>
+    private static void CompositeRotated(
+        SKCanvas canvas, TileState state,
+        IReadOnlyList<TileKey> fallback, IReadOnlyList<TileKey> target,
+        double centerX, double centerY, double widthDip, double heightDip,
+        double coverWidth, double coverHeight, double resolution, double rotationDeg,
+        GRContext? grContext, TileCache? gpuCache)
+    {
+        // Device scale baked into the live canvas matrix (DIP -> device px).
+        var deviceScale = canvas.TotalMatrix.ScaleX;
+        if (deviceScale <= 0 || float.IsNaN(deviceScale))
+        {
+            deviceScale = 1f;
+        }
+
+        // The north-up composite must cover the rotated viewport's bounding box,
+        // centred on the screen centre, so the screen corners are filled once the
+        // image is rotated back. Layout is a pure function (unit-tested on
+        // TileGrid) so the off-screen sizing stays verifiable without a canvas.
+        var (originX, originY, pxW, pxH) = TileGrid.RotationCompositeLayout(
+            widthDip, heightDip, coverWidth, coverHeight, deviceScale);
+
+        SKSurface? surface = null;
+        if (pxW > 0 && pxH > 0)
+        {
+            var info = new SKImageInfo(pxW, pxH, SKColorType.Rgba8888, SKAlphaType.Premul);
+            surface = grContext is not null
+                ? SKSurface.Create(grContext, budgeted: false, info)
+                : SKSurface.Create(info);
+        }
+
+        // Off-screen allocation can fail (zero size, GPU context loss/budget):
+        // fall back to rotating the live canvas and blitting per-tile so the base
+        // plane stays visible. Any hairline rotated seams beat a blank chart.
+        if (surface is null)
+        {
+            canvas.Save();
+            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+            foreach (var key in fallback)
+            {
+                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
+
+            foreach (var key in target)
+            {
+                BlitTile(canvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+            }
+
+            canvas.Restore();
+            return;
+        }
+
+        // Map screen DIP -> off-screen pixels: translate the cover box to the
+        // surface origin, then scale to device pixels. BlitTile keeps using live
+        // screen DIP coordinates, so the composite lands identically to north-up.
+        var offCanvas = surface.Canvas;
+        offCanvas.Clear(SKColors.Transparent);
+        offCanvas.Scale(deviceScale);
+        offCanvas.Translate((float)-originX, (float)-originY);
+
+        foreach (var key in fallback)
+        {
+            BlitTile(offCanvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+        }
+
+        // Exact target band on top (crisp where present).
+        foreach (var key in target)
+        {
+            BlitTile(offCanvas, state, key, centerX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
+        }
+
+        var image = surface.Snapshot();
+
+        canvas.Save();
+        canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+        var dest = new SKRect(
+            (float)originX, (float)originY,
+            (float)(originX + coverWidth), (float)(originY + coverHeight));
+        canvas.DrawImage(image, dest, s_sampling);
+        canvas.Restore();
+
+        // DrawImage is deferred until the frame flushes (after Render returns), so
+        // the image and its backing surface must outlive this frame; they are freed
+        // at the start of the next composite.
+        state.RotationImage = image;
+        state.RotationSurface = surface;
     }
 
     /// <summary>
@@ -1357,5 +1480,11 @@ public static class S100VectorTileRenderer
         public bool Rendering;
         public float PendingDeviceScale = 1f;
         public long PendingGeneration;
+
+        // Off-screen north-up composite for the current rotated frame (null on
+        // north-up frames). DrawImage is deferred, so these must outlive the frame
+        // that placed them; the next composite frees them once it has flushed.
+        public SKSurface? RotationSurface;
+        public SKImage? RotationImage;
     }
 }

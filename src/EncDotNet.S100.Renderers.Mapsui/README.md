@@ -560,11 +560,15 @@ set (replaced every frame), and all cache access is serialised through the layer
 lock so the worker cannot dispose an image the compositor is blitting. Telemetry
 histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI
 composite pass) attribute the two halves. A rotated viewport (e.g. an incidental
-trackpad-pinch spin) is composited north-up and then rotated about the screen
-centre by an angle derived from Mapsui's own `WorldToScreenXY` projection (so the
-sign matches without hardcoding); tile selection grows to the rotated viewport's
-bounding box (`TileGrid.RotatedCoverSize`) so corners stay covered. See design
-Appendix F.8.
+trackpad-pinch spin) is composited north-up into an off-screen surface and then
+that single image is rotated about the screen centre by an angle derived from
+Mapsui's own `WorldToScreenXY` projection (so the sign matches without
+hardcoding); tile selection grows to the rotated viewport's bounding box
+(`TileGrid.RotatedCoverSize`) so corners stay covered. Compositing north-up first
+(rather than rotating the live canvas and blitting each tile under it) keeps every
+clip-to-core join and the cross-band backdrop/target boundary in the clean
+axis-aligned space, so a non-north-up zoom transition no longer reveals
+banding/seams between tiles and bands (issue #330). See design Appendix F.8.
 
 **Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs` stayed
 bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
@@ -722,10 +726,13 @@ back in renders correctly with no crash and no blank frame.
 **Rotated-viewport blanking (Appendix F.8):** the tiled compositor formerly bailed
 on any non-zero `viewport.Rotation`, so an incidental trackpad-pinch spin (which
 rarely returns to exactly 0) blanked the chart until a dataset reload. It now
-composites north-up and rotates the canvas about the screen centre by an angle
-derived from Mapsui's `WorldToScreenXY` (matching its convention without
-hardcoding), enlarging tile selection to the rotated bounding box
-(`TileGrid.RotatedCoverSize`) so corners stay covered. Set
+composites north-up into an off-screen surface and rotates that single image about
+the screen centre by an angle derived from Mapsui's `WorldToScreenXY` (matching its
+convention without hardcoding), enlarging tile selection to the rotated bounding box
+(`TileGrid.RotatedCoverSize`) so corners stay covered. Compositing north-up first
+also keeps the per-tile clip-to-core joins and the cross-band backdrop/target
+boundary seam-free under rotation, so a non-north-up zoom transition no longer
+bands (issue #330). Set
 `S100_VECTOR_TILE_DIAG=1` to emit a rate-limited (~1 Hz) per-frame compositor
 summary to stderr (target-band completeness, fallback bands drawn, cache/GPU
 residency) plus a one-line note whenever the layer draws nothing — the diagnostic

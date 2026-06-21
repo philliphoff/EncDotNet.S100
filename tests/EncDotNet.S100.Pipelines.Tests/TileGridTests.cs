@@ -246,4 +246,60 @@ public class TileGridTests
         Assert.Equal(srcW * c + srcH * s, w, 6);
         Assert.Equal(srcW * s + srcH * c, h, 6);
     }
+
+    [Fact]
+    public void RotationCompositeLayout_NorthUp_MatchesViewportAtDeviceScale()
+    {
+        // At north-up the cover box equals the viewport, so the off-screen origin
+        // is (0,0) and the pixel size is the DIP size scaled by the device scale.
+        var (originX, originY, pxW, pxH) =
+            TileGrid.RotationCompositeLayout(800, 600, 800, 600, 2.0);
+
+        Assert.Equal(0, originX, 6);
+        Assert.Equal(0, originY, 6);
+        Assert.Equal(1600, pxW);
+        Assert.Equal(1200, pxH);
+    }
+
+    [Fact]
+    public void RotationCompositeLayout_CentresCoverBoxOnScreenCentre()
+    {
+        // A cover box larger than the viewport (rotated corners poke out) is
+        // centred on the screen centre, so the origin is negative and symmetric.
+        var (originX, originY, pxW, pxH) =
+            TileGrid.RotationCompositeLayout(800, 600, 990, 990, 1.0);
+
+        Assert.Equal((800 - 990) / 2.0, originX, 6);
+        Assert.Equal((600 - 990) / 2.0, originY, 6);
+        Assert.Equal(990, pxW);
+        Assert.Equal(990, pxH);
+
+        // The cover box's centre coincides with the screen centre.
+        Assert.Equal(400, originX + 990 / 2.0, 6);
+        Assert.Equal(300, originY + 990 / 2.0, 6);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    public void RotationCompositeLayout_NonPositiveDeviceScale_FallsBackToOnePixelPerDip(double deviceScale)
+    {
+        var (_, _, pxW, pxH) =
+            TileGrid.RotationCompositeLayout(800, 600, 800, 600, deviceScale);
+
+        Assert.Equal(800, pxW);
+        Assert.Equal(600, pxH);
+    }
+
+    [Fact]
+    public void RotationCompositeLayout_RoundsPixelSizeUp()
+    {
+        // Fractional device pixels round up so the surface never clips the cover box.
+        var (_, _, pxW, pxH) =
+            TileGrid.RotationCompositeLayout(800, 600, 100.2, 100.6, 1.5);
+
+        Assert.Equal((int)System.Math.Ceiling(100.2 * 1.5), pxW);
+        Assert.Equal((int)System.Math.Ceiling(100.6 * 1.5), pxH);
+    }
 }
