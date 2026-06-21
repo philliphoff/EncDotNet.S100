@@ -367,6 +367,37 @@ internal static class TileGrid
         return (widthDip * c + heightDip * s, widthDip * s + heightDip * c);
     }
 
+    /// <summary>
+    /// Computes the off-screen layout for compositing a rotated viewport's tiles
+    /// north-up before rotating the finished image as a unit (issue&#160;#330). The
+    /// north-up composite must span the rotated cover box
+    /// (<paramref name="coverWidth"/> × <paramref name="coverHeight"/> DIP, from
+    /// <see cref="RotatedCoverSize"/>) centred on the screen centre so the corners
+    /// are filled once rotated, and is rasterised at device resolution
+    /// (<paramref name="deviceScale"/>) to stay crisp on HiDPI.
+    /// </summary>
+    /// <param name="widthDip">Live viewport width in DIP.</param>
+    /// <param name="heightDip">Live viewport height in DIP.</param>
+    /// <param name="coverWidth">Rotated cover-box width in DIP.</param>
+    /// <param name="coverHeight">Rotated cover-box height in DIP.</param>
+    /// <param name="deviceScale">DIP→device-pixel scale from the canvas matrix.</param>
+    /// <returns>
+    /// The cover box's top-left in screen DIP coordinates
+    /// (<c>OriginX</c>, <c>OriginY</c>) — also the rotated blit's destination
+    /// origin — and the off-screen surface size in device pixels
+    /// (<c>PixelWidth</c>, <c>PixelHeight</c>).
+    /// </returns>
+    public static (double OriginX, double OriginY, int PixelWidth, int PixelHeight) RotationCompositeLayout(
+        double widthDip, double heightDip, double coverWidth, double coverHeight, double deviceScale)
+    {
+        var scale = deviceScale > 0 && !double.IsNaN(deviceScale) ? deviceScale : 1.0;
+        var originX = widthDip * 0.5 - coverWidth * 0.5;
+        var originY = heightDip * 0.5 - coverHeight * 0.5;
+        var pixelWidth = (int)Math.Ceiling(coverWidth * scale);
+        var pixelHeight = (int)Math.Ceiling(coverHeight * scale);
+        return (originX, originY, pixelWidth, pixelHeight);
+    }
+
     /// <summary>The DIP screen rect of a tile's core (gutter excluded).</summary>
     public static ScreenRect TileCoreScreenRect(
         TileKey key, double centerX, double centerY, double widthDip, double heightDip, double resolution)
