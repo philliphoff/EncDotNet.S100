@@ -212,6 +212,39 @@ public static class S100VectorTileRenderer
     /// </summary>
     public static Action? RequestRedraw { get; set; }
 
+    /// <summary>
+    /// Process-wide graceful-shutdown gate for the background tile-rasterisation
+    /// workers. Tile workers call into native Skia; if the process begins
+    /// tearing down — the managed runtime running the C++ <c>__cxa_finalize</c>
+    /// destructors of <c>libSkiaSharp</c> — while a worker is mid-rasterise, the
+    /// worker dereferences freed Skia globals and the process dies with a native
+    /// SIGSEGV (observed on <c>--exit-after-screenshot</c>). The host MUST call
+    /// <see cref="ShutdownAndDrain"/> before letting the process exit. See
+    /// <see cref="WorkerDrainGate"/>.
+    /// </summary>
+    private static readonly WorkerDrainGate s_drainGate = new();
+
+    /// <summary>
+    /// Signals every tile worker to stop and blocks until in-flight tile
+    /// rasterisation has finished, so the process can safely tear down native
+    /// Skia without a worker dereferencing freed Skia globals. Idempotent and
+    /// permanent: once called, no further tiles are rasterised for the lifetime
+    /// of the process. Call this on the host's shutdown path (before
+    /// <c>desktop.Shutdown()</c> / process exit).
+    /// </summary>
+    /// <param name="timeout">
+    /// Maximum time to wait for in-flight workers to drain. A single tile
+    /// rasterise is short; a few seconds is ample. If the timeout elapses with
+    /// workers still running, returns <see langword="false"/> (the caller may
+    /// still proceed, accepting the small teardown-race risk).
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if all workers drained within the timeout;
+    /// otherwise <see langword="false"/>.
+    /// </returns>
+    public static bool ShutdownAndDrain(TimeSpan timeout) =>
+        s_drainGate.DrainAndWait(timeout);
+
     private static readonly ConditionalWeakTable<ILayer, TileState> s_states = new();
 
     /// <summary>
@@ -538,7 +571,20 @@ public static class S100VectorTileRenderer
 
         if (startWorker)
         {
-            _ = Task.Run(() => Worker(state));
+            // Honour a graceful shutdown: TryRegister refuses new Skia work once
+            // the process is tearing down. Release the rendering flag we set
+            // under the lock so the state is left consistent.
+            if (s_drainGate.TryRegister())
+            {
+                _ = Task.Run(() => Worker(state));
+            }
+            else
+            {
+                lock (state.Sync)
+                {
+                    state.Rendering = false;
+                }
+            }
         }
     }
 
@@ -924,6 +970,15 @@ public static class S100VectorTileRenderer
         {
             while (true)
             {
+                // Stop before touching Skia once the process is shutting down,
+                // so ShutdownAndDrain's wait completes and no tile is rasterised
+                // into a half-torn-down Skia. The single finally clears the
+                // rendering flag and completes the drain-gate registration.
+                if (s_drainGate.IsDraining)
+                {
+                    return;
+                }
+
                 TileKey key;
                 float deviceScale;
                 long generation;
@@ -1058,6 +1113,10 @@ public static class S100VectorTileRenderer
             {
                 state.Rendering = false;
             }
+
+            // Pair the TryRegister at the worker-start site. When the last
+            // worker completes, this signals ShutdownAndDrain that Skia is idle.
+            s_drainGate.Complete();
         }
     }
 

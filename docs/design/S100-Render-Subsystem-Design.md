@@ -818,3 +818,33 @@ change, yield distinct namespaces. **Verified** (PDB01, Tasmania bounds):
 Day and Night now produce distinct output (different SHA-1), Night renders the
 genuinely dark Night palette over the S-101 region while the palette-independent
 basemap is unchanged. Tests: `StyleStatePaletteFingerprintTests` (4 cases).
+
+### F.10 Shutdown teardown race (worker rasterising into a dying Skia)
+
+A second, distinct teardown crash (separate from F.5's finalizer-thread GPU
+free) appeared on process **exit** — most reliably with
+`--exit-after-screenshot`, but latent on any quit. The macOS report showed
+`SIGSEGV` with the **main thread** in `exit()` → C++ `__cxa_finalize` tearing
+down `libSkiaSharp`, while a background **tile worker** (.NET TP thread) was
+mid-rasterise inside Skia (`sk_typeface_create_from_name`). The worker
+dereferenced Skia globals the finalizer had already freed.
+
+The tiled renderer's workers are per-layer `Task.Run(Worker)` loops with no
+global stop, so nothing held the process back from tearing down Skia while a
+worker still ran. Fix: a process-wide one-way drain gate
+(`WorkerDrainGate`, exposed as `S100VectorTileRenderer.ShutdownAndDrain`). The
+host calls it on `IClassicDesktopStyleApplicationLifetime.ShutdownRequested`
+(which Avalonia raises on every exit path — explicit `Shutdown()`,
+last-window-close, OS quit), so it covers `--exit-after-screenshot` and a normal
+quit alike. The gate sets a permanent draining flag and blocks (bounded, 5 s)
+until in-flight workers finish. Every worker `TryRegister`s before starting and
+`Complete`s in a `finally`; a worker refused at register time (or one that sees
+the flag at the top of its loop) returns **before any Skia call**. The
+invariant: no Skia call happens after the drain wait returns except for an
+already-registered worker the wait explicitly awaits.
+
+The gate's start/drain/complete races are unit-covered
+(`WorkerDrainGateTests`, 5 cases) since they are pure synchronisation with no
+GPU/window dependency; the end-to-end clean-exit on `--exit-after-screenshot`
+is environment-bound (it needs a window-server-attached GUI session to render
+tiles first) and so is verified live rather than headlessly.
