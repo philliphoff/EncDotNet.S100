@@ -1145,11 +1145,17 @@ public sealed class MapsuiDisplayListRenderer
                 Geometry nonPatterned = nonPatternedColorFills.Count == 1
                     ? nonPatternedColorFills[0]
                     : new MultiPolygon(nonPatternedColorFills.ToArray());
-                excludeAreas = SimplifyForClip(OverlayNGRobust.Union(nonPatterned));
+                // Reduce to polygonal-only so this never becomes a mixed-dimension
+                // overlay clip (see ExtractPolygonal): OverlayNG rejects such inputs.
+                excludeAreas = ExtractPolygonal(SimplifyForClip(OverlayNGRobust.Union(nonPatterned)));
             }
             catch (TopologyException)
             {
                 // If union fails, skip land clipping
+            }
+            catch (ArgumentException)
+            {
+                // Mixed-dimension union input rejected by OverlayNG; skip land clipping.
             }
         }
 
@@ -1221,12 +1227,16 @@ public sealed class MapsuiDisplayListRenderer
             result[i] = (patternRef, priority, clipped);
 
             // Add this entry's (generalized) area to the higher-priority union
-            // for use by the next, lower-priority entries.
+            // for use by the next, lower-priority entries. The union is reduced
+            // to polygonal-only so it can never become a mixed-dimension
+            // GeometryCollection that the next iteration's Difference overlay
+            // (and OverlayNG) would reject.
             try
             {
-                higherPriorityAreas = higherPriorityAreas is null
+                Geometry accumulated = higherPriorityAreas is null
                     ? geometry
                     : OverlayNGRobust.Overlay(higherPriorityAreas, geometry, SpatialFunction.Union);
+                higherPriorityAreas = ExtractPolygonal(accumulated) ?? higherPriorityAreas;
             }
             catch (TopologyException)
             {
@@ -1289,14 +1299,63 @@ public sealed class MapsuiDisplayListRenderer
             if (!simplified.IsValid)
             {
                 var fixedGeometry = simplified.Buffer(0);
-                return fixedGeometry.IsEmpty ? geometry : fixedGeometry;
+                simplified = fixedGeometry.IsEmpty ? geometry : fixedGeometry;
             }
 
-            return simplified;
+            // Topology-preserving simplification (and the Buffer(0) repair above)
+            // can collapse thin polygons to linestrings, producing a
+            // mixed-dimension GeometryCollection. OverlayNG rejects such inputs
+            // with "Overlay input is mixed-dimension", which previously failed the
+            // entire pattern-clip for a cell. Keep only the polygonal components
+            // so the result is always a valid overlay subject/clip area.
+            var polygonal = ExtractPolygonal(simplified);
+            return polygonal is null || polygonal.IsEmpty ? geometry : polygonal;
         }
         catch (TopologyException)
         {
             return geometry;
+        }
+    }
+
+    /// <summary>
+    /// Reduces an arbitrary geometry to its polygonal components, returning a
+    /// <see cref="Polygon"/> or <see cref="MultiPolygon"/> (or <see langword="null"/>
+    /// when no polygonal component exists). This guards the pattern-clip overlays
+    /// against the mixed-dimension <see cref="GeometryCollection"/> that
+    /// topology-preserving simplification can emit, which OverlayNG rejects.
+    /// </summary>
+    /// <param name="geometry">The geometry to reduce; may be any dimension.</param>
+    /// <returns>
+    /// The polygonal-only geometry, or <see langword="null"/> when the input
+    /// contains no polygon.
+    /// </returns>
+    internal static Geometry? ExtractPolygonal(Geometry geometry)
+    {
+        if (geometry is Polygon or MultiPolygon)
+            return geometry;
+
+        var polygons = new List<Polygon>();
+        CollectPolygons(geometry, polygons);
+
+        if (polygons.Count == 0)
+            return null;
+        if (polygons.Count == 1)
+            return polygons[0];
+
+        return geometry.Factory.CreateMultiPolygon(polygons.ToArray());
+    }
+
+    private static void CollectPolygons(Geometry geometry, List<Polygon> sink)
+    {
+        switch (geometry)
+        {
+            case Polygon polygon:
+                sink.Add(polygon);
+                break;
+            case GeometryCollection collection:
+                for (int i = 0; i < collection.NumGeometries; i++)
+                    CollectPolygons(collection.GetGeometryN(i), sink);
+                break;
         }
     }
 }
