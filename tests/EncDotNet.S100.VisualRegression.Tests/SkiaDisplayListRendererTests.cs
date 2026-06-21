@@ -214,6 +214,68 @@ public sealed class SkiaDisplayListRendererTests
         Assert.True(centre.Blue > centre.Red && centre.Blue > centre.Green);
     }
 
+    // ── Rotated pivot placement (#335) ─────────────────────────────────
+
+    [Theory]
+    [InlineData(0.0, 0.0, -1.0)]    // glyph directly above the anchor
+    [InlineData(90.0, 1.0, 0.0)]    // rotated 90° CW (screen) => glyph to the right
+    [InlineData(180.0, 0.0, 1.0)]   // rotated 180° => glyph below the anchor
+    public void Render_RotatedSymbol_PivotsAboutAnchor_NotBboxCentre(
+        double rotation, double expectDirX, double expectDirY)
+    {
+        // A symbol whose pivot (S-100 Part 9 §11.5) sits at the BOTTOM-centre
+        // with its only painted content (a red square) near the TOP. When the
+        // pivot is pinned to the anchor and the glyph is rotated about it, the
+        // glyph must swing around the anchor at a fixed radius. The earlier
+        // renderer applied the pivot shift in screen space *before* rotating,
+        // so rotated secondary symbols (e.g. a buoy's oriented light flare)
+        // drifted off the anchor — the #335 compound-buoy defect.
+        const string svg =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4mm\" height=\"10mm\" " +
+            "viewBox=\"-2 -10 4 10\">" +
+            "<rect x=\"-1\" y=\"-10\" width=\"2\" height=\"2\" fill=\"red\"/>" +
+            "<circle class=\"pivotPoint\" cx=\"0\" cy=\"0\" r=\"0.2\" fill=\"none\"/></svg>";
+
+        var asset = VectorSceneBuilder.ResolveSymbolAsset(svg, null)!.Value;
+        var scene = new VectorScene([
+            new PointPaintOp
+            {
+                FeatureReference = "sym",
+                World = Project(0.005, 0.005),  // centre => screen (100, 100)
+                Rotation = rotation,
+                Symbol = new ResolvedSymbol(
+                    asset.ProcessedSvg, Scale: 2.0,
+                    asset.PivotRelativeX, asset.PivotRelativeY),
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+
+        // Red-square centroid.
+        long sx = 0, sy = 0, n = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        for (int x = 0; x < bitmap.Width; x++)
+        {
+            var p = bitmap.GetPixel(x, y);
+            if (p.Red > 150 && p.Green < 100 && p.Blue < 100) { sx += x; sy += y; n++; }
+        }
+        Assert.True(n > 0, "Symbol rendered nothing.");
+
+        double cx = sx / (double)n, cy = sy / (double)n;
+        const double anchorX = 100, anchorY = 100;
+        double dx = cx - anchorX, dy = cy - anchorY;
+        double radius = Math.Sqrt(dx * dx + dy * dy);
+
+        // The glyph sits ~9 mm above the pivot; at 96 DPI × Scale 2 that is a
+        // fixed ~68 px radius regardless of rotation. A wrong (pre-rotation,
+        // screen-space) pivot shift collapses or shifts this radius.
+        Assert.InRange(radius, 60.0, 76.0);
+
+        // ...and it must lie in the expected direction once rotated.
+        Assert.InRange(dx / radius, expectDirX - 0.15, expectDirX + 0.15);
+        Assert.InRange(dy / radius, expectDirY - 0.15, expectDirY + 0.15);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────
 
     private static double RenderLineAndMeasureCentreWidth(double widthPx, double geoSpan)
