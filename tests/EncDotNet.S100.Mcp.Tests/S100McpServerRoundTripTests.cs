@@ -404,6 +404,62 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task DescribeFeatureType_round_trip_normalises_edition_suffix_and_casing()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = "s124/1.5.0",
+        });
+
+        Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+        Assert.True(payload["totalFeatureTypeCount"]!.GetValue<int>() > 0);
+    }
+
+    [Fact]
+    public async Task DescribeFeatureType_round_trip_missing_catalogue_lists_accepted_specs()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        // S-100 is a valid spec-name pattern but is the framework, not a
+        // product spec, so it has no bundled Feature Catalogue.
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = "S-100",
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for a spec without a bundled Feature Catalogue.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("feature_catalogue_not_available", payload["code"]!.GetValue<string>());
+        var accepted = payload["details"]!["acceptedSpecs"]!.AsArray();
+        Assert.Contains(accepted, n => n!.GetValue<string>() == "S-124");
+    }
+
+    [Fact]
+    public async Task DescribeFeatureType_round_trip_unrecognised_spec_suggests_canonical_names()
+    {
+        var catalog = McpTestHelpers.NewCatalog();
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server);
+
+        var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
+        {
+            ["spec"] = "bathymetry",
+        });
+
+        Assert.True(result.IsError ?? false, "Expected isError=true for an unrecognised spec name.");
+        var payload = ParseSingleJson(result);
+        Assert.Equal("invalid_argument", payload["code"]!.GetValue<string>());
+        Assert.Contains("S-101", payload["message"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task QueryFeatures_round_trip_returns_matching_features()
     {
         var feature = new S124Feature
