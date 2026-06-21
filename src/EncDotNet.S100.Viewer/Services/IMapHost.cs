@@ -22,6 +22,17 @@ namespace EncDotNet.S100.Viewer.Services;
 internal interface IMapHost
 {
     /// <summary>
+    /// The active base-plane chart render subsystem (the A/B switch for the
+    /// tiled/async render-subsystem redesign). Selected at construction from
+    /// <see cref="EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.RenderSubsystem"/>
+    /// and held here so the viewer "switches on" it at the host seam, per the
+    /// render-subsystem design. In Phase&#160;0 both arms still draw through this
+    /// host's Mapsui layers; the subsystem exposes identity, lifecycle, and a
+    /// telemetry handle.
+    /// </summary>
+    IChartRenderSubsystem RenderSubsystem { get; }
+
+    /// <summary>
     /// Adds a dataset layer to the map, above the basemap and below
     /// any tool overlays.
     /// </summary>

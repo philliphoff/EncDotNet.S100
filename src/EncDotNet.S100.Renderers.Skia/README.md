@@ -10,29 +10,34 @@ This library renders S-100 coverage and vector data to SkiaSharp bitmaps. It han
 - **`SkiaSvgRasterizer`** — rasterizes SVG portrayal symbols to tiled pattern bitmaps.
 - **`SkiaColorExtensions`** — helpers for converting between `RgbaColor` and `SKColor`.
 
-### Shared vector rendering core (`Scene` namespace)
+### Shared vector rendering core (now `EncDotNet.S100.Rendering.Scene`)
 
-The `EncDotNet.S100.Renderers.Skia.Scene` namespace hosts a **backend-agnostic
-S-100 Part 9 vector rendering core** consumed by both this library's headless
-renderer and `EncDotNet.S100.Renderers.Mapsui`. It lowers a display list into a
-resolved, projected intermediate representation (IR) so the portrayal-correctness
-logic lives in exactly one place:
+The backend-agnostic **S-100 Part 9 vector rendering core** — `VectorScene`,
+`PaintOp`, `VectorSceneBuilder`, `ColorResolver`, `ScaleVisibility`, and
+`WebMercator` — has been promoted to its own neutral assembly,
+[`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md),
+so every rendering backend (this library, `EncDotNet.S100.Renderers.Mapsui`, and
+the tiled/async render subsystem) depends on the IR without diamonding through
+`Renderers.Skia`. It lowers a display list into a resolved, projected
+intermediate representation (IR) so the portrayal-correctness logic lives in
+exactly one place:
 
-- **`VectorSceneBuilder`** — lowers a `DrawingInstruction` list +
-  `IFeatureGeometryProvider` into an ordered `VectorScene` of `PaintOp`s:
+- **`VectorSceneBuilder`** (in `Rendering.Scene`) — lowers a `DrawingInstruction`
+  list + `IFeatureGeometryProvider` into an ordered `VectorScene` of `PaintOp`s:
   applies S-100 Part 9 draw ordering, colour/symbol/line-style resolution,
   mm→px conversion (`1 px = 0.32 mm`), text-anchor selection, and the
   `lat/lon → EPSG:3857` projection half.
-- **`PaintOp` / `VectorScene`** — the IR. `PaintOp` coordinates are EPSG:3857
-  metres; all sizes are logical display pixels (resolution-independent). See the
-  `PaintOp` XML docs for the full unit contract.
-- **`SkiaDisplayListRenderer`** — `VectorScene` + `Viewport` → `SKBitmap`. The
+- **`PaintOp` / `VectorScene`** (in `Rendering.Scene`) — the IR. `PaintOp`
+  coordinates are EPSG:3857 metres; all sizes are logical display pixels
+  (resolution-independent). See the `PaintOp` XML docs for the full unit contract.
+- **`SkiaDisplayListRenderer`** (in this library, `…Renderers.Skia.Scene`) —
+  `VectorScene` + `Viewport` → `SKBitmap`. The
   vector analogue of `SkiaCoverageRenderer`, suitable for a tile-serving web API
   with no Mapsui/GUI dependency. It supplies the second projection half
   (`EPSG:3857 → screen`) via a `Viewport`-derived affine.
-- **`WebMercator`** — EPSG:3857 forward projection (matches Mapsui's
-  `SphericalMercator.FromLonLat`; a parity test asserts agreement).
-- **`ScaleVisibility`** — shared S-100 Part 9 §11.1 scale-visibility rule.
+- **`WebMercator`** (in `Rendering.Scene`) — EPSG:3857 forward projection (matches
+  Mapsui's `SphericalMercator.FromLonLat`; a parity test asserts agreement).
+- **`ScaleVisibility`** (in `Rendering.Scene`) — shared S-100 Part 9 §11.1 scale-visibility rule.
 - **`ColorResolver`** — S-100 colour-token resolution (palette + inline hex).
 
 **Scope (spike):** the IR currently covers point, line, solid-area, and text

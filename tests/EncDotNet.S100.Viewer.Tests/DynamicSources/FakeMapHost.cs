@@ -14,6 +14,9 @@ internal sealed class FakeMapHost : IMapHost
     public List<ILayer> DatasetLayers { get; } = new();
     public List<ILayer> OverlayLayers { get; } = new();
 
+    /// <summary>Active render subsystem; defaults to the Mapsui ("A") arm.</summary>
+    public IChartRenderSubsystem RenderSubsystem { get; set; } = new MapsuiChartRenderSubsystem();
+
     public void AddLayer(ILayer layer) => DatasetLayers.Add(layer);
     public void RemoveLayer(ILayer layer) => DatasetLayers.Remove(layer);
 

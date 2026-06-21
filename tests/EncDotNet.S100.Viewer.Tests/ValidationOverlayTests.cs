@@ -26,6 +26,8 @@ public class ValidationOverlayTests
 
     private sealed class FakeMapHost : IMapHost
     {
+        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
+
         public List<MRect> ZoomCalls { get; } = new();
         public List<ILayer> Overlays { get; } = new();
 

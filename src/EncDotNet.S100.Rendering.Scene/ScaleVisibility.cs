@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Renderers.Skia.Scene;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// Shared S-100 Part 9 §11.1 scale-visibility semantics. Centralised so the

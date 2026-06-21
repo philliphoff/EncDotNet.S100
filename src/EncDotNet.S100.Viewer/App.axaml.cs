@@ -116,6 +116,13 @@ public partial class App : Application
         // time instrumentation (below) has also wrapped it.
         EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.Register();
 
+        // Register the TiledScene ("B") custom layer renderer too, so a layer
+        // tagged for it portrays when that subsystem is the active
+        // RenderingOptimizations.RenderSubsystem. Idempotent; the takeover is
+        // gated by the flag at layer-build time, not by registration.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.Register();
+        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.Register();
+
         EncDotNet.S100.Viewer.Diagnostics.MapPaintInstrumentation.Install();
 
         // The viewer uses a plain ServiceCollection (no generic IHost),
@@ -266,6 +273,15 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
+
+            // Drain the tiled renderer's background Skia workers before the
+            // process tears down. Avalonia raises ShutdownRequested on every
+            // exit path (explicit Shutdown(), last-window-close, OS quit), so
+            // hooking it here covers --exit-after-screenshot and normal quit
+            // alike. Without this, the managed runtime can begin destroying
+            // libSkiaSharp while a worker is mid-rasterise → native SIGSEGV.
+            desktop.ShutdownRequested += (_, _) =>
+                EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
         }
 
         base.OnFrameworkInitializationCompleted();

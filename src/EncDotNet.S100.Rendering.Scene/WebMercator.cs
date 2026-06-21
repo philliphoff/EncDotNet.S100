@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Renderers.Skia.Scene;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// Spherical Web-Mercator (EPSG:3857) forward projection used by the shared

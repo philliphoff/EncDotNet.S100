@@ -2,7 +2,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 
-namespace EncDotNet.S100.Renderers.Skia.Scene;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// A resolved point-symbol asset: the processed (class-resolved) SVG content
@@ -24,7 +24,7 @@ public readonly record struct SymbolAsset(
 /// Part 9 draw order, colours/symbols/line-styles are resolved, sizes are
 /// converted from millimetres to display pixels (<c>1 px = 0.32 mm</c>), and
 /// geometry is projected to EPSG:3857. The result is consumed by both the
-/// headless <see cref="SkiaDisplayListRenderer"/> and the Mapsui renderer so
+/// headless <c>SkiaDisplayListRenderer</c> and the Mapsui renderer so
 /// the S-100 portrayal-correctness logic lives in exactly one place.
 /// </summary>
 /// <remarks>
