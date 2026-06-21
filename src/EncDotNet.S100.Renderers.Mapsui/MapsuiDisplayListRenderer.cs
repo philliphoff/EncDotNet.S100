@@ -496,14 +496,13 @@ public sealed class MapsuiDisplayListRenderer
 
     /// <summary>
     /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
-    /// or the Phase-1 single-surface renderer. Read once from
-    /// <c>S100_VECTOR_SCENE_MODE</c> (<c>single</c> selects the Phase-1 arm).
+    /// or the Phase-1 single-surface renderer. Sourced live from
+    /// <see cref="RenderingOptimizations.SceneMode"/> (seeded from
+    /// <c>S100_VECTOR_SCENE_MODE</c>; <c>single</c> selects the Phase-1 arm), so a
+    /// runtime change applies on the next re-render.
     /// </summary>
-    private static readonly bool TiledSceneModeIsTiled =
-        !string.Equals(
-            Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_MODE"),
-            "single",
-            StringComparison.OrdinalIgnoreCase);
+    private static bool TiledSceneModeIsTiled =>
+        RenderingOptimizations.SceneMode == VectorSceneMode.Tiled;
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
 
