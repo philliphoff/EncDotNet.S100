@@ -107,8 +107,11 @@ public sealed record DescribeFeatureTypeResult(
 /// <para>
 /// Operates purely over the bundled catalogues exposed by
 /// <see cref="Specification"/>; it does not consult the dataset catalog.
-/// Specs without a bundled Feature Catalogue return
-/// <see cref="FeatureCatalogueNotAvailable"/>.
+/// The spec name is normalised (casing and an optional edition suffix
+/// such as <c>S-101/1.2.0</c> are accepted), so a slightly-off but
+/// recognisable name resolves successfully. Specs without a bundled
+/// Feature Catalogue return <see cref="FeatureCatalogueNotAvailable"/>,
+/// whose <c>AcceptedSpecs</c> list the spec names that do have one.
 /// </para>
 /// </remarks>
 public sealed class DescribeFeatureTypeTool
@@ -117,13 +120,16 @@ public sealed class DescribeFeatureTypeTool
     public const string Name = "describe_feature_type";
 
     private readonly FeatureCatalogueManager _catalogues;
+    private readonly ImmutableArray<string> _acceptedSpecs;
 
     /// <summary>
     /// Creates a tool backed by the bundled Feature Catalogues exposed
     /// through <see cref="Specification.TryOpenFeatureCatalogue"/>.
     /// </summary>
     public DescribeFeatureTypeTool()
-        : this(Specification.TryOpenFeatureCatalogue)
+        : this(
+            Specification.TryOpenFeatureCatalogue,
+            Specification.AvailableSpecs.Where(Specification.HasFeatureCatalogue))
     {
     }
 
@@ -132,10 +138,18 @@ public sealed class DescribeFeatureTypeTool
     /// (primarily for testing with synthetic catalogues).
     /// </summary>
     /// <param name="catalogueResolver">Maps a spec name (e.g. <c>S-124</c>) to a Feature Catalogue XML stream, or <c>null</c> when unavailable.</param>
-    public DescribeFeatureTypeTool(Func<string, Stream?> catalogueResolver)
+    /// <param name="acceptedSpecs">
+    /// The canonical spec names the resolver can serve. Surfaced in the
+    /// <see cref="FeatureCatalogueNotAvailable"/> error so a caller who
+    /// passed a slightly-off name can self-correct. Defaults to empty.
+    /// </param>
+    public DescribeFeatureTypeTool(Func<string, Stream?> catalogueResolver, IEnumerable<string>? acceptedSpecs = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueResolver);
         _catalogues = new FeatureCatalogueManager(catalogueResolver);
+        _acceptedSpecs = acceptedSpecs is null
+            ? ImmutableArray<string>.Empty
+            : acceptedSpecs.ToImmutableArray();
     }
 
     /// <summary>Executes the tool.</summary>
@@ -165,7 +179,7 @@ public sealed class DescribeFeatureTypeTool
         if (catalogue is null)
         {
             return Task.FromResult(ToolResult<DescribeFeatureTypeResult>.Err(
-                new FeatureCatalogueNotAvailable(request.Spec)));
+                new FeatureCatalogueNotAvailable(request.Spec, _acceptedSpecs)));
         }
 
         var simpleByCode = new Dictionary<string, SimpleAttribute>(StringComparer.OrdinalIgnoreCase);

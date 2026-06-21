@@ -79,6 +79,12 @@ internal sealed class InstrumentedMapControl : MapControl
     private sealed class PaintMarker
     {
         public long StartTimestamp;
+
+        /// <summary>
+        /// Whether the start marker successfully took the
+        /// <see cref="RenderGate"/>, so the end marker knows to release it.
+        /// </summary>
+        public bool GateHeld;
     }
 
     private sealed class StartMarkerOp : ICustomDrawOperation
@@ -91,6 +97,12 @@ internal sealed class InstrumentedMapControl : MapControl
         public bool Equals(ICustomDrawOperation? other) => false;
         public void Render(ImmediateDrawingContext context)
         {
+            // Take the render gate *before* the live Skia paint so the
+            // offscreen render_to_image readback cannot touch shared
+            // SKImage symbol textures concurrently (issue #337). Released
+            // by the matching end marker once the paint has run.
+            RenderGate.EnterLivePaint();
+            _marker.GateHeld = true;
             _marker.StartTimestamp = Stopwatch.GetTimestamp();
             MapPaintInstrumentation.BeginPaint();
         }
@@ -114,13 +126,27 @@ internal sealed class InstrumentedMapControl : MapControl
 
         public void Render(ImmediateDrawingContext context)
         {
-            var end = Stopwatch.GetTimestamp();
-            // Defensive: if the start marker somehow didn't run
-            // (e.g. compositor culled it on a clipped frame), the
-            // delta would be wildly negative — skip the sample.
-            if (_marker.StartTimestamp == 0) return;
-            _owner.RecordPaint(_marker.StartTimestamp, end);
-            MapPaintInstrumentation.EndPaintAndEmit();
+            try
+            {
+                var end = Stopwatch.GetTimestamp();
+                // Defensive: if the start marker somehow didn't run
+                // (e.g. compositor culled it on a clipped frame), the
+                // delta would be wildly negative — skip the sample.
+                if (_marker.StartTimestamp == 0) return;
+                _owner.RecordPaint(_marker.StartTimestamp, end);
+                MapPaintInstrumentation.EndPaintAndEmit();
+            }
+            finally
+            {
+                // Release the render gate taken by the start marker once
+                // the live Skia paint has run (issue #337). Guarded so a
+                // missing start marker never triggers a spurious release.
+                if (_marker.GateHeld)
+                {
+                    _marker.GateHeld = false;
+                    RenderGate.ExitLivePaint();
+                }
+            }
         }
     }
 }
