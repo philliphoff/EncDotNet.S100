@@ -266,6 +266,16 @@ public static class S100VectorTileRenderer
 
     private static readonly SKSamplingOptions s_sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
+    // Reusable display-list renderer for the live symbol/text overlay. Render is
+    // single-threaded (Mapsui's render thread), so one shared, stateless
+    // instance is safe. Transparent background + scale-visibility so SCAMIN is
+    // honoured against the live viewport's denominator.
+    private static readonly SkiaDisplayListRenderer s_overlayRenderer = new()
+    {
+        Background = SceneRgbaColor.Transparent,
+        HonorScaleVisibility = true,
+    };
+
     private static readonly Lazy<TileDiskCache?> s_diskCache = new(CreateSharedDiskCache);
 
     /// <summary>
@@ -378,7 +388,9 @@ public static class S100VectorTileRenderer
         var state = s_states.GetValue(layer, static _ => new TileState());
         lock (state.Sync)
         {
-            state.Scene = scene;
+            var (baseScene, overlayScene) = PartitionScene(scene);
+            state.Scene = baseScene;
+            state.OverlayScene = overlayScene;
             state.Generation++;
             state.DiskNamespace = diskNamespace;
             state.Cache.Clear();
@@ -393,6 +405,39 @@ public static class S100VectorTileRenderer
             state.VelocityX = 0;
             state.VelocityY = 0;
         }
+    }
+
+    /// <summary>
+    /// Splits a bound <see cref="VectorScene"/> into the tiled <i>base</i> plane
+    /// (area fills, pattern fills, and lines) and the live <i>overlay</i> plane
+    /// (point symbols and point-anchored text such as soundings), preserving the
+    /// original S-100 Part 9 draw order within each.
+    /// </summary>
+    /// <remarks>
+    /// Point symbols and soundings must render at a constant on-screen size
+    /// regardless of zoom. The base plane is rasterised at a discrete quad-tree
+    /// band resolution and then composited scaled by
+    /// <c>ResolutionForBand(band) / resolution</c> (see <see cref="TileGrid"/>),
+    /// so anything baked into a tile scales with the band fit (and, transiently,
+    /// with a coarser fallback band) — symbols would visibly grow and shrink
+    /// through a zoom. Drawing them in a live overlay against the real viewport
+    /// keeps them scale-stable. This revises the original design's
+    /// "position-stable point symbols → tiled with the base" call: position
+    /// stability (no decluttering) is not the same as scale stability.
+    /// </remarks>
+    internal static (VectorScene Base, VectorScene Overlay) PartitionScene(VectorScene scene)
+    {
+        var baseOps = new List<PaintOp>(scene.Ops.Count);
+        var overlayOps = new List<PaintOp>();
+        foreach (var op in scene.Ops)
+        {
+            if (op is PointPaintOp or TextPaintOp)
+                overlayOps.Add(op);
+            else
+                baseOps.Add(op);
+        }
+
+        return (new VectorScene(baseOps), new VectorScene(overlayOps));
     }
 
     /// <summary>
@@ -554,6 +599,11 @@ public static class S100VectorTileRenderer
                 ManageGpuResidency(state, grContext, layer);
 
                 Composite(canvas, state, band, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext);
+
+                // Draw point symbols + soundings live, on top of the composited
+                // base tiles, at constant on-screen size (the base tiles are
+                // band-scaled, so symbols must not be baked into them).
+                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg);
             }
             catch (Exception ex)
             {
@@ -1149,6 +1199,68 @@ public static class S100VectorTileRenderer
         published && !isPrediction;
 
     /// <summary>
+    /// Draws the live symbol/text overlay (point symbols + soundings) on top of
+    /// the composited base tiles, at constant on-screen size against the live
+    /// viewport. Unlike the base plane, these ops are <i>not</i> tiled/scaled, so
+    /// a buoy or sounding keeps the same pixel size at every zoom. SCAMIN is
+    /// applied against the live scale denominator (matching the base tiles' own
+    /// per-band culling). A rotated viewport is handled exactly as the tile
+    /// composite handles it — rotate the whole overlay about the screen centre so
+    /// symbol anchors stay aligned with the rotated base (north-up is the v1 case
+    /// and is a no-op here).
+    /// </summary>
+    private static void DrawOverlay(
+        SKCanvas canvas, TileState state,
+        double centerX, double centerY, double widthDip, double heightDip,
+        double resolution, double rotationDeg)
+    {
+        var overlay = state.OverlayScene;
+        if (overlay is null || overlay.Ops.Count == 0)
+        {
+            return;
+        }
+
+        var rotate = rotationDeg != 0;
+        if (rotate)
+        {
+            canvas.Save();
+            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+        }
+
+        try
+        {
+            // Live full-screen viewport in DIP space: symbol/text sizes are in
+            // logical display px, so projecting onto a DIP-sized viewport draws
+            // them at their intended on-screen size (the foreground canvas's
+            // device-scale matrix then keeps them crisp on HiDPI).
+            var halfWorldW = widthDip * resolution * 0.5;
+            var halfWorldH = heightDip * resolution * 0.5;
+            var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH);
+            var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH);
+
+            var viewport = new CoreViewport
+            {
+                MinLatitude = minLat,
+                MaxLatitude = maxLat,
+                MinLongitude = minLon,
+                MaxLongitude = maxLon,
+                WidthPixels = Math.Max(1, (int)Math.Round(widthDip)),
+                HeightPixels = Math.Max(1, (int)Math.Round(heightDip)),
+                ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution),
+            };
+
+            s_overlayRenderer.RenderOnto(canvas, overlay, viewport);
+        }
+        finally
+        {
+            if (rotate)
+            {
+                canvas.Restore();
+            }
+        }
+    }
+
+    /// <summary>
     /// Rasterises a single tile (core + gutter) from the scene at its band
     /// resolution and the frame's device scale.
     /// </summary>
@@ -1199,6 +1311,13 @@ public static class S100VectorTileRenderer
         public readonly object Sync = new();
 
         public VectorScene? Scene;
+
+        // Live screen-space overlay: point symbols + point-anchored text
+        // (soundings) partitioned out of the tiled base plane so they draw at
+        // constant on-screen size instead of scaling with the band-resolution
+        // tiles. Null until a scene is bound; empty when the scene has no
+        // point/text ops.
+        public VectorScene? OverlayScene;
         public long Generation;
 
         // Persistent disk-cache namespace for this layer's current style state

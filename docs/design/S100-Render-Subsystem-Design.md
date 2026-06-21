@@ -54,17 +54,18 @@ Organizing principle: **the UI thread has a fixed, tiny per-frame budget and onl
 
 | Plane | Contents | Representation | Thread | Cache |
 |---|---|---|---|---|
-| **Base** | area fills, contours, lines, position-stable point symbols/soundings | tiled `SKImage` pyramid from `VectorScene` | workers | yes (LRU + disk) |
+| **Base** | area fills, contours, lines | tiled `SKImage` pyramid from `VectorScene` | workers | yes (LRU + disk) |
+| **Overlay** | point symbols, point-anchored soundings | vector, live (constant screen size) | UI (render thread, per-frame) | no |
 | **Label** | free-floating decluttered text | vector, live | UI (async placement, 1-frame lag) | no |
 | **Dynamic** | AIS, own-ship, route, range rings, cursor pick | vector, live | UI | no |
 
-The base plane is ~90% of pixels and all the fill cost; tiling it is what makes pans bounded by **perimeter, not area**. The Dynamic plane already exists and is good — reuse `DynamicSources/*` (`AisVesselRenderer`, `OwnShipRenderer`, `CompositeDynamicFeatureRenderer`) unchanged. Labels stay live because placement needs global viewport context and must survive rotation.
+The base plane is ~90% of pixels and all the fill cost; tiling it is what makes pans bounded by **perimeter, not area**. The Dynamic plane already exists and is good — reuse `DynamicSources/*` (`AisVesselRenderer`, `OwnShipRenderer`, `CompositeDynamicFeatureRenderer`) unchanged. Labels stay live because placement needs global viewport context and must survive rotation. Point symbols and soundings are drawn live on the **Overlay plane** rather than baked into base tiles: a tile is rasterized once per resolution band and then composited scaled by `ResolutionForBand(band)/resolution`, so anything baked in scales with the band fit (and transiently with a coarser fallback band). S-100 requires point symbols and soundings to hold a **constant on-screen size** through a zoom, so they must be drawn each frame against the live viewport (see Appendix F.11).
 
 ### 3.2 Tile model
 
 - Fixed power-of-two resolution bands; quadkey-style `(band, x, y)` grid in EPSG:3857.
 - Each tile rendered with a **gutter** (bleed beyond tile bounds) and clipped on composite, so lines/area fills stay continuous across seams. This generalizes the existing `MarginPx` anchor into a grid.
-- Base-plane point symbols/soundings are position-stable → tiled with the base. Only free-floating text escapes to the Label plane.
+- Base-plane tiles carry area fills, contours, and lines. Point symbols and soundings are **not** tiled — they would scale with the band fit — so they escape to the live Overlay plane (constant screen size). Free-floating text escapes to the Label plane.
 
 ### 3.3 Render service (background)
 
@@ -848,3 +849,50 @@ The gate's start/drain/complete races are unit-covered
 GPU/window dependency; the end-to-end clean-exit on `--exit-after-screenshot`
 is environment-bound (it needs a window-server-attached GUI session to render
 tiles first) and so is verified live rather than headlessly.
+
+### F.11 Screen-space symbol/sounding overlay (constant-size point features)
+
+**Symptom.** In the tiled "B" arm, point symbols (buoys, rocks, obstructions)
+and soundings grew during a zoom gesture, then **shrank smaller and smaller**
+as the user zoomed in and settled — the opposite of the S-100 requirement that
+point symbols hold a constant on-screen size.
+
+**Cause.** Base tiles are rasterized at a discrete quad-tree band resolution
+(`TileGrid.ResolutionForBand(band)` = `Band0Resolution / 2^band`) and composited
+into the live viewport scaled by `ResolutionForBand(band)/resolution = 2^δ`,
+δ∈[−0.5,+0.5]. Anything **baked into a tile** therefore scales 0.707–1.414×
+within a band, snaps 2× at band boundaries, and shows a transient ~2× while a
+coarser fallback band is the only cached backdrop. Area fills and lines *should*
+scale with the map; point symbols and soundings must not. You cannot
+counter-scale a baked symbol because the composite scale varies continuously
+with live resolution while a tile is rasterized once per band.
+
+**Fix.** Partition the `VectorScene` at bind time
+(`S100VectorTileRenderer.PartitionScene`): `PointPaintOp` and `TextPaintOp`
+route to an **overlay** scene; everything else (`AreaPaintOp`,
+`PatternAreaPaintOp`, `LinePaintOp`) stays in the **base** scene that feeds the
+tile pyramid. Each frame, after compositing the base tiles, `DrawOverlay`
+builds a live full-screen DIP-space viewport and draws the overlay through the
+shared display-list executor's new `SkiaDisplayListRenderer.RenderOnto(canvas,
+scene, viewport)` (the op-dispatch loop without bitmap allocation, clear, or
+flush — flushing the foreground canvas mid-composite could prematurely flush
+deferred tile `DrawImage`s and interfere with GPU residency). Because the
+overlay draws against the real viewport every frame, symbol px sizes
+(`symbol.Scale`, fallback-dot radius, `FontSizePx` — all already in logical
+display px per the `PaintOp` unit contract) are constant on screen regardless
+of zoom. Under rotation the overlay is rotated about the screen centre to match
+how `Composite` rotates tiles, so anchors stay aligned. Overlay z-order is
+strictly above all base tiles, matching S-100 draw order (symbols/text on top).
+
+**Cache invalidation.** `TileDiskCache.FormatVersion` was bumped `1 → 2` so v1
+tiles (which had symbols/soundings baked in) are never reused alongside the
+overlay — reusing them would double-draw every symbol. The in-memory hot cache
+is per-layer and cleared on `BindScene`, so it needs no separate invalidation.
+
+**Tests.** `SymbolOverlayTests` (Pipelines.Tests):
+`PartitionScene` routes points/text to the overlay and keeps fills/lines/
+patterns in the base, order preserved (and an empty-overlay case); and
+`RenderOnto` draws a point at an **identical pixel footprint** across two
+viewports differing 4× in world span but sharing pixel dimensions — proving the
+constant on-screen size the overlay exists to guarantee. Both are pure,
+machine-independent Skia rasters.

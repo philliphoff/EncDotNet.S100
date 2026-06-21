@@ -56,6 +56,31 @@ public sealed class SkiaDisplayListRenderer
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(Background.ToSkia());
 
+        RenderOnto(canvas, scene, viewport);
+        canvas.Flush();
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="scene"/> onto an existing <paramref name="canvas"/>
+    /// using <paramref name="viewport"/>'s world→screen projection, without
+    /// allocating or clearing a backing bitmap and without flushing the canvas.
+    /// This lets a caller composite a display list directly onto a foreground
+    /// surface — e.g. the tiled subsystem's live screen-space symbol/text
+    /// overlay, which must be drawn at constant on-screen size (the tiled base
+    /// plane is rasterised at a discrete band resolution and then scaled, so any
+    /// op baked into it scales with zoom; ops drawn here against the live
+    /// viewport do not).
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
 
@@ -92,9 +117,6 @@ public sealed class SkiaDisplayListRenderer
                         break;
                 }
             }
-
-            canvas.Flush();
-            return bitmap;
         }
         finally
         {

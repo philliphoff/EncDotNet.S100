@@ -571,6 +571,26 @@ bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are z
 backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
 visible tile seams. Full numbers in Appendix C of the design doc.
 
+#### Constant-size symbol/sounding overlay
+
+Base tiles carry **only** area fills, contours, and lines. Point symbols and
+point-anchored soundings are split out at bind time
+(`S100VectorTileRenderer.PartitionScene` routes `PointPaintOp`/`TextPaintOp` to
+an overlay scene, everything else to the base scene) and drawn **live every
+frame** on top of the composited tiles via
+`SkiaDisplayListRenderer.RenderOnto(canvas, scene, viewport)`. This is required
+for correctness, not just polish: a tile is rasterised once per resolution band
+and composited scaled by `ResolutionForBand(band)/resolution`, so anything baked
+into a tile scales with the band fit — point symbols and soundings would grow
+through a zoom gesture then shrink as you zoomed in, instead of holding the
+constant on-screen size S-100 mandates. Drawing them against the live viewport
+each frame keeps their px sizes (symbol scale, fallback-dot radius, font size —
+all already in logical display px) constant regardless of zoom; under rotation
+the overlay is rotated about the screen centre to match the tile composite.
+Because old tiles had symbols baked in, `TileDiskCache.FormatVersion` was bumped
+`1 → 2` so they are never reused (which would double-draw symbols). See design
+Appendix F.11.
+
 ### Prediction / pre-warm (Phase 3)
 
 To stop a pan or zoom from transiently exposing cold tiles, the tiled renderer

@@ -48,7 +48,13 @@ internal sealed class TileDiskCache
     /// namespace/filename scheme changes, so a stale layout is ignored (a miss)
     /// rather than mis-decoded.
     /// </summary>
-    public const int FormatVersion = 1;
+    /// <remarks>
+    /// v2: point symbols and point-anchored text (soundings) moved out of the
+    /// tiled base plane into a live screen-space overlay, so base tiles no
+    /// longer contain symbol/text pixels. Reusing a v1 tile (symbols baked in)
+    /// alongside the new overlay would double-draw every symbol.
+    /// </remarks>
+    public const int FormatVersion = 2;
 
     private const string FileExtension = ".png";
 
