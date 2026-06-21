@@ -93,7 +93,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
 
         var geometry = ResolveGeometry(s101.Dataset, feature.RecordId);
         var depths = ResolveMultiPointDepths(feature, document);
-        var attributes = SerializeAttributes(feature, document, geometry, depths);
+        var attributes = SerializeAttributes(feature, document, geometry, depths, context.Units);
         return ToolResult<DescribeFeatureResult>.Ok(new DescribeFeatureResult(
             context.Dataset.Spec,
             acronym,
@@ -184,9 +184,34 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
         return depths;
     }
 
+    /// <summary>
+    /// Annotates a serialised attribute entry with its unit of measure when
+    /// the attribute's acronym resolves to a uom-bearing simple attribute in
+    /// the S-101 Feature Catalogue. Adds <c>unit</c> (the symbol, e.g.
+    /// <c>"m"</c>) and <c>unitName</c> (e.g. <c>"metre"</c>); a no-op when
+    /// the attribute carries no unit or the catalogue is unavailable. This
+    /// is how depth-valued attributes (<c>depthRangeMinimumValue</c>,
+    /// <c>valueOfSounding</c>, …) expose their metres unit without inference
+    /// (issue #334).
+    /// </summary>
+    private static void AnnotateUnit(
+        Dictionary<string, object?> entry, string? acronym, AttributeUnitResolver? units)
+    {
+        if (units is null || acronym is null)
+        {
+            return;
+        }
+
+        if (units.TryGetUnit("S-101", acronym, out var uom))
+        {
+            entry["unit"] = uom.Symbol;
+            entry["unitName"] = uom.Name;
+        }
+    }
+
     private static JsonElement SerializeAttributes(
         S101FeatureRecord feature, S101Document document, Feature? geometry,
-        IReadOnlyList<double>? depths)
+        IReadOnlyList<double>? depths, AttributeUnitResolver? units)
     {
         var attributeList = new List<Dictionary<string, object?>>();
         foreach (var attr in feature.Attributes)
@@ -194,13 +219,15 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             var acronym = document.AttributeTypeCatalogue.TryGetValue(attr.NumericCode, out var ac)
                 ? ac
                 : null;
-            attributeList.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            var entry = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["code"] = attr.NumericCode,
                 ["acronym"] = acronym,
                 ["index"] = attr.Index,
                 ["value"] = attr.Value,
-            });
+            };
+            AnnotateUnit(entry, acronym, units);
+            attributeList.Add(entry);
         }
 
         var spatial = new List<Dictionary<string, object?>>();
@@ -245,7 +272,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
                 ["roleAcronym"] = document.RoleCatalogue.TryGetValue(ia.RoleCode, out var rac)
                     ? rac
                     : null,
-                ["target"] = ResolveInformationTarget(ia.RecordId, document),
+                ["target"] = ResolveInformationTarget(ia.RecordId, document, units),
             });
         }
 
@@ -292,7 +319,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// dangling pointer or a record carried by a companion cell).
     /// </summary>
     private static Dictionary<string, object?>? ResolveInformationTarget(
-        uint targetRecordId, S101Document document)
+        uint targetRecordId, S101Document document, AttributeUnitResolver? units)
     {
         if (!document.InformationTypes.TryGetValue(targetRecordId, out var info))
         {
@@ -302,15 +329,18 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
         var attributeList = new List<Dictionary<string, object?>>();
         foreach (var attr in info.Attributes)
         {
-            attributeList.Add(new Dictionary<string, object?>(StringComparer.Ordinal)
+            var acronym = document.AttributeTypeCatalogue.TryGetValue(attr.NumericCode, out var ac)
+                ? ac
+                : null;
+            var entry = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["code"] = attr.NumericCode,
-                ["acronym"] = document.AttributeTypeCatalogue.TryGetValue(attr.NumericCode, out var ac)
-                    ? ac
-                    : null,
+                ["acronym"] = acronym,
                 ["index"] = attr.Index,
                 ["value"] = attr.Value,
-            });
+            };
+            AnnotateUnit(entry, acronym, units);
+            attributeList.Add(entry);
         }
 
         return new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -334,7 +364,8 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// enough for an agent to compute distance / bearing or drive
     /// <c>set_viewport</c>. For MultiPoint soundings a parallel
     /// <c>depths</c> array (metres, positive down) is included, aligned
-    /// one-to-one with <c>coordinates</c>, so an agent can read the charted
+    /// one-to-one with <c>coordinates</c>, accompanied by a
+    /// <c>depthUnit</c> of <c>"metres"</c>, so an agent can read the charted
     /// depth at each sounding (e.g. for under-keel-clearance reasoning).
     /// </summary>
     private static Dictionary<string, object?>? BuildGeometry(
@@ -392,6 +423,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             },
             ["coordinates"] = coordinates,
             ["depths"] = alignedDepths,
+            ["depthUnit"] = alignedDepths is null ? null : "metres",
             ["interiorRings"] = interiorRings,
         };
     }

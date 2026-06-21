@@ -145,6 +145,7 @@ public static class FeatureCatalogueReader
             Alias = (string?)element.Element(S100FC + "alias"),
             Remarks = (string?)element.Element(S100FC + "remarks"),
             ValueType = (string)element.Element(S100FC + "valueType")!,
+            Uom = ReadUnitOfMeasure(element.Element(S100FC + "uom")),
             ListedValues = element
                 .Element(S100FC + "listedValues")?
                 .Elements(S100FC + "listedValue")
@@ -161,6 +162,27 @@ public static class FeatureCatalogueReader
             Definition = (string?)element.Element(S100FC + "definition"),
             Code = (string)element.Element(S100FC + "code")!,
         };
+    }
+
+    /// <summary>
+    /// Reads a simple attribute's <c>&lt;S100FC:uom&gt;</c> element into a
+    /// <see cref="UnitOfMeasure"/>, or returns <c>null</c> when the element
+    /// is absent or carries no <c>S100Base:name</c>.
+    /// </summary>
+    private static UnitOfMeasure? ReadUnitOfMeasure(XElement? element)
+    {
+        if (element is null)
+        {
+            return null;
+        }
+
+        var name = (string?)element.Element(S100Base + "name");
+        if (string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        return new UnitOfMeasure(name, (string?)element.Element(S100Base + "symbol"));
     }
 
     private static ComplexAttribute ReadComplexAttribute(XElement element)

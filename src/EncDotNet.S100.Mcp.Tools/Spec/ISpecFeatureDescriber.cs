@@ -13,10 +13,16 @@ namespace EncDotNet.S100.Mcp.Tools.Spec;
 /// resolve <c>xlink:href</c> references against currently-loaded
 /// datasets.
 /// </param>
+/// <param name="Units">
+/// Resolver for attribute units of measure, used to annotate numeric
+/// attribute values (e.g. S-101 depths) with their Feature Catalogue
+/// unit. May be <see langword="null"/> when units are not required.
+/// </param>
 internal sealed record FeatureDescriberContext(
     LoadedDataset Dataset,
     string FeatureId,
-    ImmutableArray<LoadedDataset> Snapshot);
+    ImmutableArray<LoadedDataset> Snapshot,
+    AttributeUnitResolver? Units = null);
 
 /// <summary>Per-spec describer strategy.</summary>
 internal interface ISpecFeatureDescriber

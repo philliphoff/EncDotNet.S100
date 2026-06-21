@@ -215,6 +215,61 @@ internal static class S101Synth
     }
 
     /// <summary>
+    /// Builds an S-101 dataset with a single point feature carrying flat
+    /// attributes, mapping each attribute's numeric code to an acronym via
+    /// the dataset's <c>AttributeTypeCatalogue</c> so the describer (and the
+    /// unit resolver) can resolve attribute names. Used to exercise unit
+    /// annotation of depth-valued attributes (issue #334).
+    /// </summary>
+    public static S101Dataset DatasetWithAttributedFeature(
+        string name,
+        uint featureRcid,
+        ushort featureTypeCode,
+        string featureTypeName,
+        IEnumerable<(ushort Code, string Acronym, string Value)> attributes,
+        double lat = 50.0,
+        double lon = -1.0)
+    {
+        var attrList = attributes.ToImmutableArray();
+
+        var feature = new S101FeatureRecord
+        {
+            RecordId = featureRcid,
+            FeatureTypeCode = featureTypeCode,
+            ProducingAgency = 540,
+            FeatureIdentificationNumber = featureRcid,
+            FeatureIdentificationSubdivision = 0,
+            Attributes = attrList.Select(a => new S101Attribute(a.Code, 1, a.Value)).ToImmutableArray(),
+            SpatialAssociations = ImmutableArray.Create(new S101SpatialAssociation(110, featureRcid, 1)),
+            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
+            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+        };
+
+        var points = ImmutableDictionary<uint, S101PointRecord>.Empty
+            .Add(featureRcid, new S101PointRecord
+            {
+                RecordId = featureRcid,
+                Y = (int)Math.Round(lat * CoordinateMultiplicationFactor),
+                X = (int)Math.Round(lon * CoordinateMultiplicationFactor),
+            });
+
+        var featureTypes = ImmutableDictionary<ushort, string>.Empty
+            .Add(featureTypeCode, featureTypeName);
+        var attributeTypes = ImmutableDictionary<ushort, string>.Empty;
+        foreach (var a in attrList)
+        {
+            attributeTypes = attributeTypes.SetItem(a.Code, a.Acronym);
+        }
+
+        return Dataset(
+            name,
+            ImmutableArray.Create(feature),
+            featureTypes,
+            attributeTypes,
+            points: points);
+    }
+
+    /// <summary>
     /// Builds a feature record with the given RCID, feature type code,
     /// and optional flat attribute list and spatial associations.
     /// </summary>
