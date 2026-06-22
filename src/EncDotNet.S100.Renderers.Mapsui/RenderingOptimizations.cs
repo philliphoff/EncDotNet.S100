@@ -33,10 +33,55 @@ public static class RenderingOptimizations
     /// <summary>Default geometry-simplification tolerance, in screen pixels, used when the knob is on and no env override is present.</summary>
     public const double DefaultSimplificationTolerancePx = 0.6;
 
+    /// <summary>Default tiled-base-plane gutter, in DIP (<c>S100_VECTOR_TILE_GUTTER</c>).</summary>
+    public const double DefaultTileGutterDip = 64.0;
+
+    /// <summary>Minimum / maximum accepted tiled-base-plane gutter, in DIP.</summary>
+    public const double MinTileGutterDip = 0.0;
+
+    /// <inheritdoc cref="MinTileGutterDip"/>
+    public const double MaxTileGutterDip = 256.0;
+
+    /// <summary>Default per-layer hot-cache native budget, in MB (<c>S100_VECTOR_TILE_BUDGET_MB</c>).</summary>
+    public const double DefaultTileBudgetMb = 256.0;
+
+    /// <summary>Minimum / maximum accepted per-layer hot-cache native budget, in MB.</summary>
+    public const double MinTileBudgetMb = 4.0;
+
+    /// <inheritdoc cref="MinTileBudgetMb"/>
+    public const double MaxTileBudgetMb = 4096.0;
+
+    /// <summary>Default warm disk-cache budget, in MB (<c>S100_VECTOR_TILE_DISK_MB</c>).</summary>
+    public const double DefaultTileDiskMb = 512.0;
+
+    /// <summary>Minimum / maximum accepted warm disk-cache budget, in MB.</summary>
+    public const double MinTileDiskMb = 16.0;
+
+    /// <inheritdoc cref="MinTileDiskMb"/>
+    public const double MaxTileDiskMb = 8192.0;
+
+    /// <summary>Default per-layer GPU-residency budget, in MB (<c>S100_VECTOR_TILE_GPU_MB</c>).</summary>
+    public const double DefaultTileGpuBudgetMb = 256.0;
+
+    /// <summary>Minimum / maximum accepted per-layer GPU-residency budget, in MB.</summary>
+    public const double MinTileGpuBudgetMb = 4.0;
+
+    /// <inheritdoc cref="MinTileGpuBudgetMb"/>
+    public const double MaxTileGpuBudgetMb = 4096.0;
+
     private static bool s_vectorSnapshotEnabled;
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
     private static bool s_geometrySimplificationEnabled;
+    private static RenderSubsystemKind s_renderSubsystem;
+    private static VectorSceneMode s_sceneMode;
+    private static double s_tileGutterDip;
+    private static double s_tileBudgetMb;
+    private static bool s_tilePredictionEnabled;
+    private static bool s_tileDiskCacheEnabled;
+    private static double s_tileDiskMb;
+    private static bool s_tileGpuResidencyEnabled;
+    private static double s_tileGpuBudgetMb;
 
     static RenderingOptimizations()
     {
@@ -51,6 +96,28 @@ public static class RenderingOptimizations
 
         (s_geometrySimplificationEnabled, SimplificationTolerancePx, GeometrySimplificationEnvExplicit) =
             SeedSimplification();
+
+        (s_renderSubsystem, RenderSubsystemEnvExplicit) = SeedRenderSubsystem();
+        (s_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
+
+        (s_tileGutterDip, TileGutterDipEnvExplicit) =
+            SeedDouble("S100_VECTOR_TILE_GUTTER", DefaultTileGutterDip, MinTileGutterDip, MaxTileGutterDip);
+        (s_tileBudgetMb, TileBudgetMbEnvExplicit) =
+            SeedDouble("S100_VECTOR_TILE_BUDGET_MB", DefaultTileBudgetMb, MinTileBudgetMb, MaxTileBudgetMb);
+        (s_tilePredictionEnabled, TilePredictionEnvExplicit) =
+            SeedBool("S100_VECTOR_TILE_PREDICT", defaultValue: true);
+        (s_tileDiskCacheEnabled, TileDiskCacheEnvExplicit) =
+            SeedBool("S100_VECTOR_TILE_DISK", defaultValue: true);
+        (s_tileDiskMb, TileDiskMbEnvExplicit) =
+            SeedDouble("S100_VECTOR_TILE_DISK_MB", DefaultTileDiskMb, MinTileDiskMb, MaxTileDiskMb);
+        (s_tileGpuResidencyEnabled, TileGpuResidencyEnvExplicit) =
+            SeedBool("S100_VECTOR_TILE_GPU", defaultValue: true);
+        (s_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
+            SeedDouble("S100_VECTOR_TILE_GPU_MB", DefaultTileGpuBudgetMb, MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
+
+        var diskDir = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
+        TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
+        TileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
     }
 
     /// <summary>
@@ -116,6 +183,155 @@ public static class RenderingOptimizations
     public static bool GeometrySimplificationEnvExplicit { get; }
 
     /// <summary>
+    /// Selects the active base-plane chart render subsystem (the A/B switch for
+    /// the tiled/async render-subsystem redesign). <see cref="RenderSubsystemKind.Mapsui"/>
+    /// is today's Mapsui feature/style/layer path (the "A" arm);
+    /// <see cref="RenderSubsystemKind.TiledScene"/> selects the new tiled/async
+    /// subsystem (the "B" arm). Seeded from <c>S100_RENDER_SUBSYSTEM</c>
+    /// (<c>mapsui</c> | <c>tiledscene</c>); default <see cref="RenderSubsystemKind.Mapsui"/>.
+    /// </summary>
+    public static RenderSubsystemKind RenderSubsystem
+    {
+        get => s_renderSubsystem;
+        set { if (!RenderSubsystemEnvExplicit) s_renderSubsystem = value; }
+    }
+
+    /// <summary>True when <see cref="RenderSubsystem"/> is pinned by an explicit environment variable.</summary>
+    public static bool RenderSubsystemEnvExplicit { get; }
+
+    /// <summary>
+    /// Within the <see cref="RenderSubsystemKind.TiledScene"/> ("B") arm, selects
+    /// the <see cref="VectorSceneMode.Tiled"/> Phase-2 tiled base plane (default)
+    /// or the <see cref="VectorSceneMode.Single"/> Phase-1 single-surface arm.
+    /// Seeded from <c>S100_VECTOR_SCENE_MODE</c> (<c>single</c> selects Phase&#160;1).
+    /// Read at layer build time, so a change re-applies on the next re-render.
+    /// </summary>
+    public static VectorSceneMode SceneMode
+    {
+        get => s_sceneMode;
+        set { if (!SceneModeEnvExplicit) s_sceneMode = value; }
+    }
+
+    /// <summary>True when <see cref="SceneMode"/> is pinned by an explicit environment variable.</summary>
+    public static bool SceneModeEnvExplicit { get; }
+
+    /// <summary>
+    /// Gutter, in DIP, rasterised beyond each tiled-base-plane tile's bounds so
+    /// strokes crossing a tile seam keep their joins/caps. Seeded from
+    /// <c>S100_VECTOR_TILE_GUTTER</c> (default <see cref="DefaultTileGutterDip"/>).
+    /// Read when a tile is rasterised; only newly-rasterised tiles pick up a
+    /// change (existing cached tiles keep their gutter until evicted), so a live
+    /// change is best paired with a dataset reload.
+    /// </summary>
+    public static double TileGutterDip
+    {
+        get => s_tileGutterDip;
+        set { if (!TileGutterDipEnvExplicit) s_tileGutterDip = Clamp(value, MinTileGutterDip, MaxTileGutterDip); }
+    }
+
+    /// <summary>True when <see cref="TileGutterDip"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileGutterDipEnvExplicit { get; }
+
+    /// <summary>
+    /// Per-layer hot-cache native budget, in MB, for the tiled base plane. Seeded
+    /// from <c>S100_VECTOR_TILE_BUDGET_MB</c> (default
+    /// <see cref="DefaultTileBudgetMb"/>). The cache capacity is captured when a
+    /// layer's tile state is first created, so a change applies on the next
+    /// dataset reload (restart-only in practice).
+    /// </summary>
+    public static double TileBudgetMb
+    {
+        get => s_tileBudgetMb;
+        set { if (!TileBudgetMbEnvExplicit) s_tileBudgetMb = Clamp(value, MinTileBudgetMb, MaxTileBudgetMb); }
+    }
+
+    /// <summary>True when <see cref="TileBudgetMb"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileBudgetMbEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether speculative prediction / pre-warm (Phase&#160;3) is enabled for the
+    /// tiled base plane. Seeded from <c>S100_VECTOR_TILE_PREDICT</c> (default on).
+    /// Read every frame, so a change takes effect live.
+    /// </summary>
+    public static bool TilePredictionEnabled
+    {
+        get => s_tilePredictionEnabled;
+        set { if (!TilePredictionEnvExplicit) s_tilePredictionEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="TilePredictionEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool TilePredictionEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether the persistent warm disk tile cache (Phase&#160;4) is enabled.
+    /// Seeded from <c>S100_VECTOR_TILE_DISK</c> (default on). The shared disk
+    /// cache is created once per process, so a change applies on restart.
+    /// </summary>
+    public static bool TileDiskCacheEnabled
+    {
+        get => s_tileDiskCacheEnabled;
+        set { if (!TileDiskCacheEnvExplicit) s_tileDiskCacheEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="TileDiskCacheEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileDiskCacheEnvExplicit { get; }
+
+    /// <summary>
+    /// Warm disk tile-cache budget, in MB. Seeded from
+    /// <c>S100_VECTOR_TILE_DISK_MB</c> (default <see cref="DefaultTileDiskMb"/>).
+    /// Read when the shared disk cache is created (once per process), so a change
+    /// applies on restart.
+    /// </summary>
+    public static double TileDiskMb
+    {
+        get => s_tileDiskMb;
+        set { if (!TileDiskMbEnvExplicit) s_tileDiskMb = Clamp(value, MinTileDiskMb, MaxTileDiskMb); }
+    }
+
+    /// <summary>True when <see cref="TileDiskMb"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileDiskMbEnvExplicit { get; }
+
+    /// <summary>
+    /// Optional override directory for the warm disk tile cache, seeded from
+    /// <c>S100_VECTOR_TILE_DISK_DIR</c>. <see langword="null"/> uses an OS-temp
+    /// subdirectory. Read once when the disk cache is created (restart-only);
+    /// not surfaced as an interactive control.
+    /// </summary>
+    public static string? TileDiskDirectory { get; }
+
+    /// <summary>True when <see cref="TileDiskDirectory"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileDiskDirectoryEnvExplicit { get; }
+
+    /// <summary>
+    /// Whether GPU texture residency (Phase&#160;5) is enabled for the tiled base
+    /// plane. Seeded from <c>S100_VECTOR_TILE_GPU</c> (default on). Read every
+    /// frame, so a change takes effect live (inert on a software surface).
+    /// </summary>
+    public static bool TileGpuResidencyEnabled
+    {
+        get => s_tileGpuResidencyEnabled;
+        set { if (!TileGpuResidencyEnvExplicit) s_tileGpuResidencyEnabled = value; }
+    }
+
+    /// <summary>True when <see cref="TileGpuResidencyEnabled"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileGpuResidencyEnvExplicit { get; }
+
+    /// <summary>
+    /// Per-layer GPU-residency budget, in MB. Seeded from
+    /// <c>S100_VECTOR_TILE_GPU_MB</c> (default <see cref="DefaultTileGpuBudgetMb"/>).
+    /// The resident-texture cache is sized when first created, so a change applies
+    /// on the next dataset reload (restart-only in practice).
+    /// </summary>
+    public static double TileGpuBudgetMb
+    {
+        get => s_tileGpuBudgetMb;
+        set { if (!TileGpuBudgetMbEnvExplicit) s_tileGpuBudgetMb = Clamp(value, MinTileGpuBudgetMb, MaxTileGpuBudgetMb); }
+    }
+
+    /// <summary>True when <see cref="TileGpuBudgetMb"/> is pinned by an explicit environment variable.</summary>
+    public static bool TileGpuBudgetMbEnvExplicit { get; }
+
+    /// <summary>
     /// Pixel tolerance applied when <see cref="GeometrySimplificationEnabled"/> is
     /// on. Seeded from <c>S100_VECTOR_SIMPLIFY_PX</c>, otherwise
     /// <see cref="DefaultSimplificationTolerancePx"/>. Used by line simplification.
@@ -147,4 +363,91 @@ public static class RenderingOptimizations
 
         return (true, DefaultSimplificationTolerancePx, false);
     }
+
+    private static (RenderSubsystemKind kind, bool envExplicit) SeedRenderSubsystem()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_RENDER_SUBSYSTEM");
+        if (string.IsNullOrEmpty(raw))
+        {
+            return (RenderSubsystemKind.Mapsui, false);
+        }
+
+        var kind = raw.Trim().ToLowerInvariant() switch
+        {
+            "tiledscene" or "tiled" or "tile" or "b" => RenderSubsystemKind.TiledScene,
+            _ => RenderSubsystemKind.Mapsui,
+        };
+        return (kind, true);
+    }
+
+    private static (VectorSceneMode mode, bool envExplicit) SeedSceneMode()
+    {
+        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_MODE");
+        if (string.IsNullOrEmpty(raw))
+        {
+            return (VectorSceneMode.Tiled, false);
+        }
+
+        var mode = string.Equals(raw.Trim(), "single", StringComparison.OrdinalIgnoreCase)
+            ? VectorSceneMode.Single
+            : VectorSceneMode.Tiled;
+        return (mode, true);
+    }
+
+    private static (double value, bool envExplicit) SeedDouble(string envName, double fallback, double min, double max)
+    {
+        var raw = Environment.GetEnvironmentVariable(envName);
+        if (!string.IsNullOrEmpty(raw)
+            && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            return (Clamp(v, min, max), true);
+        }
+
+        return (fallback, false);
+    }
+
+    private static double Clamp(double value, double min, double max) =>
+        value < min ? min : value > max ? max : value;
+}
+
+/// <summary>
+/// Within the <see cref="RenderSubsystemKind.TiledScene"/> arm, selects the
+/// tiled base plane (Phase&#160;2) or the single-surface arm (Phase&#160;1). See
+/// <c>docs/design/S100-Render-Subsystem-Design.md</c>.
+/// </summary>
+public enum VectorSceneMode
+{
+    /// <summary>
+    /// The Phase-2 tiled base plane: a pyramid of cached, gutter-rasterised
+    /// tiles composited under an affine. The default within the TiledScene arm.
+    /// </summary>
+    Tiled = 0,
+
+    /// <summary>
+    /// The Phase-1 single-surface arm: the whole viewport (plus an over-render
+    /// margin) is rasterised to one image on a worker and composited under
+    /// translation. Selected by <c>S100_VECTOR_SCENE_MODE=single</c>.
+    /// </summary>
+    Single = 1,
+}
+
+/// <summary>
+/// Selects the active base-plane chart render subsystem — the A/B switch for the
+/// tiled/async render-subsystem redesign (see
+/// <c>docs/design/S100-Render-Subsystem-Design.md</c>).
+/// </summary>
+public enum RenderSubsystemKind
+{
+    /// <summary>
+    /// The established Mapsui feature/style/layer rendering path (the "A" arm).
+    /// This is the default and the baseline against which the new subsystem is
+    /// measured.
+    /// </summary>
+    Mapsui = 0,
+
+    /// <summary>
+    /// The new tiled/async predictive render subsystem that rasterises the base
+    /// plane directly from the <c>VectorScene</c> IR (the "B" arm).
+    /// </summary>
+    TiledScene = 1,
 }

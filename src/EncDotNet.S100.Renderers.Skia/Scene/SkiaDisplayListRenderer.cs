@@ -1,5 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -55,6 +56,31 @@ public sealed class SkiaDisplayListRenderer
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(Background.ToSkia());
 
+        RenderOnto(canvas, scene, viewport);
+        canvas.Flush();
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="scene"/> onto an existing <paramref name="canvas"/>
+    /// using <paramref name="viewport"/>'s world→screen projection, without
+    /// allocating or clearing a backing bitmap and without flushing the canvas.
+    /// This lets a caller composite a display list directly onto a foreground
+    /// surface — e.g. the tiled subsystem's live screen-space symbol/text
+    /// overlay, which must be drawn at constant on-screen size (the tiled base
+    /// plane is rasterised at a discrete band resolution and then scaled, so any
+    /// op baked into it scales with zoom; ops drawn here against the live
+    /// viewport do not).
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
 
@@ -91,9 +117,6 @@ public sealed class SkiaDisplayListRenderer
                         break;
                 }
             }
-
-            canvas.Flush();
-            return bitmap;
         }
         finally
         {
@@ -247,20 +270,30 @@ public sealed class SkiaDisplayListRenderer
                 // CullRect). Applying a further mm→px factor here would oversize
                 // every symbol by ~3.78×.
                 float scale = (float)symbol.Scale;
-                float w = bounds.Width * scale;
-                float h = bounds.Height * scale;
 
-                // Place the bbox centre on the anchor, then shift by the pivot
-                // fraction so the pivot — not the bbox centre — lands on it.
-                float pivotShiftX = (float)(symbol.PivotRelativeX * w);
-                float pivotShiftY = (float)(symbol.PivotRelativeY * h);
+                // The symbol's pivot point (S-100 Part 9 §11.5) must coincide
+                // with the feature anchor, and any rotation/scale must be about
+                // that pivot — not the bounding-box centre. Working entirely in
+                // picture coordinates, the pivot is the bbox centre shifted by
+                // the pivot fraction (PivotRelative = (centre − pivot) / size):
+                //   pivot = bboxCentre − PivotRelative × bounds
+                // Composing translate(anchor) → rotate → scale → translate(−pivot)
+                // rotates and scales the glyph about its pivot while keeping the
+                // pivot pinned to the anchor for *every* rotation. (Pre-rotation
+                // pivot shifts in screen space only land correctly at 0°, which
+                // left oriented secondary symbols — e.g. a buoy's light flare or
+                // an offset colour symbol — drifting off the anchor; see #335.)
+                float pivotPicX = bounds.Left + bounds.Width / 2f
+                    - (float)(symbol.PivotRelativeX * bounds.Width);
+                float pivotPicY = bounds.Top + bounds.Height / 2f
+                    - (float)(symbol.PivotRelativeY * bounds.Height);
 
                 canvas.Save();
-                canvas.Translate(cx + pivotShiftX, cy + pivotShiftY);
+                canvas.Translate(cx, cy);
                 if (op.Rotation is { } rot)
                     canvas.RotateDegrees((float)rot);
                 canvas.Scale(scale);
-                canvas.Translate(-(bounds.Left + bounds.Width / 2f), -(bounds.Top + bounds.Height / 2f));
+                canvas.Translate(-pivotPicX, -pivotPicY);
                 canvas.DrawPicture(picture);
                 canvas.Restore();
                 return;

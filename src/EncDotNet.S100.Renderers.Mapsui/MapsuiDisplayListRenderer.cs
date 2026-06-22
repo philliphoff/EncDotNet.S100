@@ -5,8 +5,9 @@ using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Renderers.Skia;
-using Scene = EncDotNet.S100.Renderers.Skia.Scene;
+using Scene = EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -183,6 +184,12 @@ public sealed class MapsuiDisplayListRenderer
         // skipped, producing a blank chart. Idempotent and a no-op when the
         // snapshot is disabled.
         S100VectorSnapshotRenderer.Register();
+
+        // Likewise register the TiledScene ("B") custom layer renderers (both the
+        // Phase-1 single-surface and Phase-2 tiled arms) so a layer tagged for
+        // either portrays when that subsystem is active. Idempotent.
+        S100VectorSceneRenderer.Register();
+        S100VectorTileRenderer.Register();
 
         // 1. Sort instructions by rendering order: areas first, then lines, then points/text
         //    Within same type, sort by DrawingPriority
@@ -363,7 +370,23 @@ public sealed class MapsuiDisplayListRenderer
         S100Diag.Telemetry.FrameDuration.Record(
             (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
 
-        return new InstrumentedMemoryLayer(Product)
+        // Select the base-plane render subsystem (design §4/§5). When the
+        // TiledScene ("B") arm is active, the layer is portrayed by
+        // S100VectorSceneRenderer rasterising the VectorScene IR directly on a
+        // worker — so build a *pattern-complete* scene (the Mapsui lowering above
+        // deliberately omits patterns; the B arm renders them from the IR) and
+        // bind it to the layer. Otherwise the snapshot ("A") arm (or the plain
+        // per-feature path) renders the Mapsui features built above.
+        var useTiledScene = RenderingOptimizations.RenderSubsystem == RenderSubsystemKind.TiledScene;
+
+        // Within the TiledScene subsystem, the Phase-2 tiled renderer is the
+        // default; S100_VECTOR_SCENE_MODE=single selects the Phase-1
+        // single-surface arm for A/B comparison. Both consume the same scene.
+        var tiledRendererName = TiledSceneModeIsTiled
+            ? S100VectorTileRenderer.RendererName
+            : S100VectorSceneRenderer.RendererName;
+
+        var layer = new InstrumentedMemoryLayer(Product)
         {
             Name = LayerName,
             Features = mapFeatures,
@@ -372,12 +395,114 @@ public sealed class MapsuiDisplayListRenderer
             // custom layer renderer when enabled, so pans replay a recorded
             // SKPicture instead of re-iterating every feature. No-op (null)
             // when the snapshot is disabled, leaving the normal per-feature
-            // path (with the translation-invariant path cache) in place.
-            CustomLayerRendererName = S100VectorSnapshotRenderer.Enabled
-                ? S100VectorSnapshotRenderer.RendererName
-                : null,
+            // path (with the translation-invariant path cache) in place. When
+            // the TiledScene subsystem is active it takes precedence.
+            CustomLayerRendererName = useTiledScene
+                ? tiledRendererName
+                : S100VectorSnapshotRenderer.Enabled
+                    ? S100VectorSnapshotRenderer.RendererName
+                    : null,
         };
+
+        if (useTiledScene)
+        {
+            var sceneBuilder = new Scene.VectorSceneBuilder
+            {
+                ResolveColor = Scene.ColorResolver.Create(Palette),
+                SymbolResolver = ResolveSymbolAsset,
+                LineStyleProvider = LineStyleProvider,
+                PatternResolver = GetPatternTilePng,
+                SymbolScale = SymbolScale,
+                TextScale = TextScale,
+            };
+            var builtScene = sceneBuilder.Build(instructions, geometryProvider);
+            if (TiledSceneModeIsTiled)
+            {
+                S100VectorTileRenderer.BindScene(
+                    layer,
+                    builtScene,
+                    productLayerSet: Product ?? LayerName,
+                    styleStateHash: ComputeStyleStateHash(instructions));
+            }
+            else
+            {
+                S100VectorSceneRenderer.BindScene(layer, builtScene);
+            }
+        }
+
+        return layer;
     }
+
+    /// <summary>
+    /// Computes the <c>styleStateHash</c> that keys the persistent tile disk
+    /// cache (design §3.4). It must change whenever <em>anything</em> that alters
+    /// the rasterised tile pixels changes, so a warm tile is never reused for a
+    /// different style state. It folds:
+    /// <list type="bullet">
+    /// <item>the resolved drawing-instruction list — which already encodes the
+    /// active display category, safety contour, and every other mariner setting
+    /// that selects which features and which portrayal are drawn — serialized
+    /// deterministically via <see cref="DrawingInstructionSerializer"/>;</item>
+    /// <item>the colour palette (Day/Dusk/Night), which the scene builder applies
+    /// on top of the instruction colour tokens;</item>
+    /// <item>the symbol and text scale factors.</item>
+    /// </list>
+    /// The instruction-serializer format version is implicitly folded in (it is
+    /// the first field of the serialized frame), so a serialization change also
+    /// invalidates the namespace.
+    /// </summary>
+    private string ComputeStyleStateHash(IReadOnlyList<DrawingInstruction> instructions)
+    {
+        var instructionBytes = DrawingInstructionSerializer.Serialize(instructions);
+
+        var styleHeader =
+            $"palette:{DescribePalette(Palette)}" +
+            $"|symbolScale:{SymbolScale.ToString("R", CultureInfo.InvariantCulture)}" +
+            $"|textScale:{TextScale.ToString("R", CultureInfo.InvariantCulture)}";
+        var headerBytes = System.Text.Encoding.UTF8.GetBytes(styleHeader);
+
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        sha.AppendData(headerBytes);
+        sha.AppendData(instructionBytes);
+        return Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Produces a deterministic fingerprint of a colour palette for the
+    /// <c>styleStateHash</c>. <see cref="ColorPalette"/> does not override
+    /// <see cref="object.ToString"/>, so using the instance directly collapses
+    /// Day/Dusk/Night (and any two palettes) to the same type-name string —
+    /// which made the tile disk-cache namespace palette-insensitive and caused a
+    /// Night render to serve the previously-persisted Day tiles. The fingerprint
+    /// folds the palette name <em>and</em> its resolved colour entries (ordered)
+    /// so any difference in palette identity or content invalidates the cache.
+    /// </summary>
+    internal static string DescribePalette(ColorPalette? palette)
+    {
+        if (palette is null)
+        {
+            return "none";
+        }
+
+        var builder = new System.Text.StringBuilder(palette.Name);
+        foreach (var entry in palette.Colors.OrderBy(c => c.Key, StringComparer.Ordinal))
+        {
+            builder.Append('|').Append(entry.Key).Append('=').Append(entry.Value);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
+    /// or the Phase-1 single-surface renderer. Sourced live from
+    /// <see cref="RenderingOptimizations.SceneMode"/> (seeded from
+    /// <c>S100_VECTOR_SCENE_MODE</c>; <c>single</c> selects the Phase-1 arm), so a
+    /// runtime change applies on the next re-render.
+    /// </summary>
+    private static bool TiledSceneModeIsTiled =>
+        RenderingOptimizations.SceneMode == VectorSceneMode.Tiled;
 
     private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
 
@@ -1020,11 +1145,17 @@ public sealed class MapsuiDisplayListRenderer
                 Geometry nonPatterned = nonPatternedColorFills.Count == 1
                     ? nonPatternedColorFills[0]
                     : new MultiPolygon(nonPatternedColorFills.ToArray());
-                excludeAreas = SimplifyForClip(OverlayNGRobust.Union(nonPatterned));
+                // Reduce to polygonal-only so this never becomes a mixed-dimension
+                // overlay clip (see ExtractPolygonal): OverlayNG rejects such inputs.
+                excludeAreas = ExtractPolygonal(SimplifyForClip(OverlayNGRobust.Union(nonPatterned)));
             }
             catch (TopologyException)
             {
                 // If union fails, skip land clipping
+            }
+            catch (ArgumentException)
+            {
+                // Mixed-dimension union input rejected by OverlayNG; skip land clipping.
             }
         }
 
@@ -1096,12 +1227,16 @@ public sealed class MapsuiDisplayListRenderer
             result[i] = (patternRef, priority, clipped);
 
             // Add this entry's (generalized) area to the higher-priority union
-            // for use by the next, lower-priority entries.
+            // for use by the next, lower-priority entries. The union is reduced
+            // to polygonal-only so it can never become a mixed-dimension
+            // GeometryCollection that the next iteration's Difference overlay
+            // (and OverlayNG) would reject.
             try
             {
-                higherPriorityAreas = higherPriorityAreas is null
+                Geometry accumulated = higherPriorityAreas is null
                     ? geometry
                     : OverlayNGRobust.Overlay(higherPriorityAreas, geometry, SpatialFunction.Union);
+                higherPriorityAreas = ExtractPolygonal(accumulated) ?? higherPriorityAreas;
             }
             catch (TopologyException)
             {
@@ -1164,14 +1299,63 @@ public sealed class MapsuiDisplayListRenderer
             if (!simplified.IsValid)
             {
                 var fixedGeometry = simplified.Buffer(0);
-                return fixedGeometry.IsEmpty ? geometry : fixedGeometry;
+                simplified = fixedGeometry.IsEmpty ? geometry : fixedGeometry;
             }
 
-            return simplified;
+            // Topology-preserving simplification (and the Buffer(0) repair above)
+            // can collapse thin polygons to linestrings, producing a
+            // mixed-dimension GeometryCollection. OverlayNG rejects such inputs
+            // with "Overlay input is mixed-dimension", which previously failed the
+            // entire pattern-clip for a cell. Keep only the polygonal components
+            // so the result is always a valid overlay subject/clip area.
+            var polygonal = ExtractPolygonal(simplified);
+            return polygonal is null || polygonal.IsEmpty ? geometry : polygonal;
         }
         catch (TopologyException)
         {
             return geometry;
+        }
+    }
+
+    /// <summary>
+    /// Reduces an arbitrary geometry to its polygonal components, returning a
+    /// <see cref="Polygon"/> or <see cref="MultiPolygon"/> (or <see langword="null"/>
+    /// when no polygonal component exists). This guards the pattern-clip overlays
+    /// against the mixed-dimension <see cref="GeometryCollection"/> that
+    /// topology-preserving simplification can emit, which OverlayNG rejects.
+    /// </summary>
+    /// <param name="geometry">The geometry to reduce; may be any dimension.</param>
+    /// <returns>
+    /// The polygonal-only geometry, or <see langword="null"/> when the input
+    /// contains no polygon.
+    /// </returns>
+    internal static Geometry? ExtractPolygonal(Geometry geometry)
+    {
+        if (geometry is Polygon or MultiPolygon)
+            return geometry;
+
+        var polygons = new List<Polygon>();
+        CollectPolygons(geometry, polygons);
+
+        if (polygons.Count == 0)
+            return null;
+        if (polygons.Count == 1)
+            return polygons[0];
+
+        return geometry.Factory.CreateMultiPolygon(polygons.ToArray());
+    }
+
+    private static void CollectPolygons(Geometry geometry, List<Polygon> sink)
+    {
+        switch (geometry)
+        {
+            case Polygon polygon:
+                sink.Add(polygon);
+                break;
+            case GeometryCollection collection:
+                for (int i = 0; i < collection.NumGeometries; i++)
+                    CollectPolygons(collection.GetGeometryN(i), sink);
+                break;
         }
     }
 }

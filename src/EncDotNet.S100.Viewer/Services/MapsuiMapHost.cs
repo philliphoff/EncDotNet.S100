@@ -11,6 +11,7 @@ using Mapsui.Projections;
 using Mapsui.Rendering;
 using Mapsui.Rendering.Skia;
 using Mapsui.UI.Avalonia;
+using EncDotNet.S100.Viewer.Diagnostics;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -23,6 +24,14 @@ namespace EncDotNet.S100.Viewer.Services;
 internal sealed class MapsuiMapHost : IMapHost
 {
     private readonly MapControl _mapControl;
+
+    /// <summary>
+    /// Upper bound on how long an offscreen <c>render_to_image</c> capture
+    /// waits for the live on-screen paint to yield the shared
+    /// <see cref="RenderGate"/> before rendering unsynchronised. Generous
+    /// so it only ever trips if the compositor is already wedged.
+    /// </summary>
+    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Tracks which layers are dataset layers (as opposed to the basemap
@@ -48,7 +57,12 @@ internal sealed class MapsuiMapHost : IMapHost
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         _mapControl = mapControl;
+        RenderSubsystem = ChartRenderSubsystemFactory.CreateActive();
+        RenderSubsystem.Activate();
     }
+
+    /// <inheritdoc />
+    public IChartRenderSubsystem RenderSubsystem { get; }
 
     public void AddLayer(ILayer layer)
     {
@@ -338,15 +352,26 @@ internal sealed class MapsuiMapHost : IMapHost
                     snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
                 }
 
-                using var stream = new MapRenderer().RenderToBitmapStream(
-                    snapshot,
-                    pixelDensity: (float)pixelDensity,
-                    renderFormat: RenderFormat.Png,
-                    quality: 100);
-                stream.Position = 0;
-                using var ms = new MemoryStream();
-                stream.CopyTo(ms);
-                return ms.ToArray();
+                // Serialise the Skia render against the live on-screen
+                // paint. Both share the live layers' cached SKImage symbol
+                // textures; on a GPU-backed build a concurrent live paint
+                // uploading those images crashes in
+                // sk_image_make_texture_image (issue #337). The gate is
+                // held only for the duration of the offscreen render.
+                return RenderGate.RunCapture(
+                    () =>
+                    {
+                        using var stream = new MapRenderer().RenderToBitmapStream(
+                            snapshot,
+                            pixelDensity: (float)pixelDensity,
+                            renderFormat: RenderFormat.Png,
+                            quality: 100);
+                        stream.Position = 0;
+                        using var ms = new MemoryStream();
+                        stream.CopyTo(ms);
+                        return ms.ToArray();
+                    },
+                    GateTimeout);
             }
             finally
             {

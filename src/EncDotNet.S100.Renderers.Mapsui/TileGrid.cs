@@ -1,0 +1,408 @@
+using System;
+using System.Collections.Generic;
+using EncDotNet.S100.Rendering.Scene;
+
+namespace EncDotNet.S100.Renderers.Mapsui;
+
+/// <summary>
+/// Identifies one base-plane tile in the <see cref="TileGrid"/>: a
+/// power-of-two resolution <paramref name="Band"/> and the tile's
+/// <paramref name="X"/>/<paramref name="Y"/> index within the origin-anchored
+/// EPSG:3857 grid for that band (XYZ convention: <c>X</c> increases east,
+/// <c>Y</c> increases south). See
+/// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.2.
+/// </summary>
+internal readonly record struct TileKey(int Band, int X, int Y);
+
+/// <summary>
+/// A screen-space rectangle in device-independent pixels (DIP), corners
+/// measured from the viewport's top-left. Kept Skia-free so the tile math is
+/// unit-testable without a graphics surface.
+/// </summary>
+internal readonly record struct ScreenRect(double Left, double Top, double Right, double Bottom)
+{
+    /// <summary>Width in DIP (may be negative for an inverted rect).</summary>
+    public double Width => Right - Left;
+
+    /// <summary>Height in DIP.</summary>
+    public double Height => Bottom - Top;
+
+    /// <summary>True when this rect overlaps the half-open viewport box.</summary>
+    public bool IntersectsViewport(double widthDip, double heightDip) =>
+        Right > 0 && Bottom > 0 && Left < widthDip && Top < heightDip;
+}
+
+/// <summary>
+/// An inclusive, world-clamped range of tile indices at one band, as returned by
+/// <see cref="TileGrid.VisibleTileRange"/>. <see cref="IsEmpty"/> is true when
+/// the source viewport was degenerate.
+/// </summary>
+internal readonly record struct TileRange(int XStart, int XEnd, int YStart, int YEnd, int PerAxis)
+{
+    /// <summary>True when the range covers no tiles.</summary>
+    public bool IsEmpty => XStart > XEnd || YStart > YEnd;
+}
+
+/// <summary>
+/// A pure exponential-moving-average estimator of viewport-centre velocity in
+/// EPSG:3857 metres/second, used to aim the prediction fan
+/// (<see cref="TileGrid.PredictedTiles"/>, design §3.6). Kept Skia-free and
+/// allocation-light so it can live in the per-layer state and be unit-tested.
+/// </summary>
+internal static class VelocityEstimator
+{
+    /// <summary>The default EMA smoothing factor (0 = ignore new, 1 = no smoothing).</summary>
+    public const double DefaultAlpha = 0.4;
+
+    /// <summary>
+    /// Folds one centre move into the running velocity EMA. The instantaneous
+    /// velocity is <c>(dx, dy) / dtSeconds</c>; the result is
+    /// <c>(1-alpha)·previous + alpha·instant</c>. A non-positive
+    /// <paramref name="dtSeconds"/> returns the previous estimate unchanged (no
+    /// time elapsed → no new information), which also damps jitter from
+    /// zero-interval frames.
+    /// </summary>
+    public static (double VelocityX, double VelocityY) Update(
+        double previousVelocityX, double previousVelocityY,
+        double dx, double dy, double dtSeconds, double alpha = DefaultAlpha)
+    {
+        if (dtSeconds <= 0 || double.IsNaN(dtSeconds) || double.IsInfinity(dtSeconds))
+        {
+            return (previousVelocityX, previousVelocityY);
+        }
+
+        alpha = Math.Clamp(alpha, 0.0, 1.0);
+        var instantX = dx / dtSeconds;
+        var instantY = dy / dtSeconds;
+        return (
+            (1 - alpha) * previousVelocityX + alpha * instantX,
+            (1 - alpha) * previousVelocityY + alpha * instantY);
+    }
+}
+
+
+/// (S-100 render subsystem, Phase&#160;2). Uses the standard Web-Mercator
+/// power-of-two pyramid (256-DIP tiles, the same scheme Mapsui's own tile
+/// layers use), so a constant-zoom pan reuses every interior tile and only the
+/// newly-exposed perimeter is rasterised. All methods are static and free of
+/// SkiaSharp/Mapsui so they can be unit-tested directly.
+/// </summary>
+/// <remarks>
+/// The grid is anchored to the world origin (not the viewport), which is what
+/// makes tiles pan-stable: the same world position always falls in the same
+/// tile at a given band, so a pan never re-keys interior tiles.
+/// </remarks>
+internal static class TileGrid
+{
+    /// <summary>Tile edge length in device-independent pixels.</summary>
+    public const int TileSizeDip = 256;
+
+    /// <summary>
+    /// Half the EPSG:3857 projected world extent in metres
+    /// (<c>π · 6378137</c>); the grid spans <c>[-Extent, +Extent]</c> on both
+    /// axes.
+    /// </summary>
+    public const double Extent = Math.PI * WebMercator.EarthRadius;
+
+    /// <summary>
+    /// EPSG:3857 resolution (m/px) at band 0 for 256-px tiles:
+    /// <c>2 · Extent / TileSizeDip</c> ≈ 156543.034.
+    /// </summary>
+    public const double Band0Resolution = 2.0 * Extent / TileSizeDip;
+
+    /// <summary>Smallest (most zoomed-out) band the grid emits.</summary>
+    public const int MinBand = 0;
+
+    /// <summary>Largest (most zoomed-in) band the grid emits.</summary>
+    public const int MaxBand = 24;
+
+    /// <summary>The canonical EPSG:3857 resolution (m/px) for a band.</summary>
+    public static double ResolutionForBand(int band) => Band0Resolution / Math.Pow(2.0, band);
+
+    /// <summary>The world size, in metres, of one tile at a band.</summary>
+    public static double TileWorldSize(int band) => 2.0 * Extent / Math.Pow(2.0, band);
+
+    /// <summary>The number of tiles along one axis at a band (<c>2^band</c>).</summary>
+    public static int TilesPerAxis(int band) => 1 << band;
+
+    /// <summary>
+    /// Selects the band whose canonical resolution is closest (in log-space, so
+    /// the choice is symmetric across the octave) to <paramref name="resolution"/>,
+    /// clamped to <see cref="MinBand"/>..<see cref="MaxBand"/>. A live viewport
+    /// at an arbitrary resolution snaps to this band; the composite scales the
+    /// band's tiles by <c>ResolutionForBand(band) / resolution</c> to fit.
+    /// </summary>
+    public static int BandForResolution(double resolution)
+    {
+        if (resolution <= 0 || double.IsNaN(resolution) || double.IsInfinity(resolution))
+        {
+            return MinBand;
+        }
+
+        var band = (int)Math.Round(Math.Log2(Band0Resolution / resolution));
+        return Math.Clamp(band, MinBand, MaxBand);
+    }
+
+    /// <summary>
+    /// The EPSG:3857 world bounds (metres) of a tile, gutter excluded.
+    /// </summary>
+    public static (double MinX, double MinY, double MaxX, double MaxY) TileWorldBounds(TileKey key)
+    {
+        var size = TileWorldSize(key.Band);
+        var minX = -Extent + key.X * size;
+        var maxY = Extent - key.Y * size;
+        return (minX, maxY - size, minX + size, maxY);
+    }
+
+    /// <summary>
+    /// Enumerates every tile at <paramref name="band"/> whose bounds intersect
+    /// the north-up viewport centred at (<paramref name="centerX"/>,
+    /// <paramref name="centerY"/>) in EPSG:3857, sized
+    /// <paramref name="widthDip"/> × <paramref name="heightDip"/> DIP at
+    /// <paramref name="resolution"/> m/px. Indices are clamped to the band's
+    /// valid range, so a viewport overhanging the world edge yields no
+    /// out-of-range keys.
+    /// </summary>
+    public static IReadOnlyList<TileKey> VisibleTiles(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
+    {
+        var result = new List<TileKey>();
+        var range = VisibleTileRange(centerX, centerY, widthDip, heightDip, resolution, band);
+        for (var y = range.YStart; y <= range.YEnd; y++)
+        {
+            for (var x = range.XStart; x <= range.XEnd; x++)
+            {
+                result.Add(new TileKey(band, x, y));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// The inclusive, world-clamped tile-index range covering the north-up
+    /// viewport at <paramref name="band"/>. A degenerate viewport yields an empty
+    /// range (<c>XStart &gt; XEnd</c>). Shared by <see cref="VisibleTiles"/> and
+    /// <see cref="PredictedTiles"/> so both tile the viewport identically.
+    /// </summary>
+    public static TileRange VisibleTileRange(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
+    {
+        var perAxis = TilesPerAxis(band);
+        if (widthDip <= 0 || heightDip <= 0 || resolution <= 0)
+        {
+            return new TileRange(0, -1, 0, -1, perAxis);
+        }
+
+        var halfW = widthDip * 0.5 * resolution;
+        var halfH = heightDip * 0.5 * resolution;
+        var size = TileWorldSize(band);
+
+        var xStart = (int)Math.Floor((centerX - halfW + Extent) / size);
+        var xEnd = (int)Math.Floor((centerX + halfW + Extent) / size);
+        // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
+        var yStart = (int)Math.Floor((Extent - (centerY + halfH)) / size);
+        var yEnd = (int)Math.Floor((Extent - (centerY - halfH)) / size);
+
+        return new TileRange(
+            Math.Clamp(xStart, 0, perAxis - 1),
+            Math.Clamp(xEnd, 0, perAxis - 1),
+            Math.Clamp(yStart, 0, perAxis - 1),
+            Math.Clamp(yEnd, 0, perAxis - 1),
+            perAxis);
+    }
+
+    /// <summary>
+    /// The <b>warm set</b> for prediction/pre-warm (design §3.6): tiles likely to
+    /// become visible soon, so the worker can rasterise them <i>before</i> a pan
+    /// or zoom exposes them. It is the union of
+    /// <list type="bullet">
+    /// <item>a <paramref name="haloRings"/>-ring halo around the visible range
+    /// (covers a pan in any direction);</item>
+    /// <item>a <b>directional fan</b> projected along the velocity
+    /// (<paramref name="velocityX"/>, <paramref name="velocityY"/> in EPSG:3857
+    /// m/s), whose depth grows with speed up to <paramref name="maxFanDepth"/>
+    /// tiles (anticipates a fling); and</item>
+    /// <item>the centre tiles at <c>band ± 1</c> (a slight zoom bias).</item>
+    /// </list>
+    /// Visible tiles are excluded (the caller rasterises those at higher
+    /// priority). All indices are world-clamped, so no out-of-range key escapes.
+    /// </summary>
+    public static IReadOnlyList<TileKey> PredictedTiles(
+        double centerX, double centerY, double widthDip, double heightDip, double resolution, int band,
+        double velocityX, double velocityY,
+        double lookAheadSeconds = 0.5, int maxFanDepth = 4, int haloRings = 1)
+    {
+        var result = new List<TileKey>();
+        var visible = VisibleTileRange(centerX, centerY, widthDip, heightDip, resolution, band);
+        if (visible.IsEmpty)
+        {
+            return result;
+        }
+
+        var seen = new HashSet<TileKey>();
+        var perAxis = visible.PerAxis;
+
+        // Mark the visible range so we never emit a visible key as "predicted".
+        for (var y = visible.YStart; y <= visible.YEnd; y++)
+        {
+            for (var x = visible.XStart; x <= visible.XEnd; x++)
+            {
+                seen.Add(new TileKey(band, x, y));
+            }
+        }
+
+        // 1) Halo: expand the visible range by haloRings on every side.
+        haloRings = Math.Max(haloRings, 0);
+        AddRange(
+            result, seen, band,
+            visible.XStart - haloRings, visible.XEnd + haloRings,
+            visible.YStart - haloRings, visible.YEnd + haloRings,
+            perAxis);
+
+        // 2) Directional fan: step the viewport forward along the velocity,
+        //    depth proportional to speed (capped), and add each shifted range.
+        var speed = Math.Sqrt(velocityX * velocityX + velocityY * velocityY);
+        if (speed > 0 && lookAheadSeconds > 0 && maxFanDepth > 0)
+        {
+            var size = TileWorldSize(band);
+            var aheadTiles = speed * lookAheadSeconds / size;
+            var depth = Math.Clamp((int)Math.Ceiling(aheadTiles), 1, maxFanDepth);
+            var stepX = velocityX / speed * size;
+            var stepY = velocityY / speed * size;
+            for (var d = 1; d <= depth; d++)
+            {
+                var shifted = VisibleTileRange(
+                    centerX + stepX * d, centerY + stepY * d, widthDip, heightDip, resolution, band);
+                if (!shifted.IsEmpty)
+                {
+                    AddRange(
+                        result, seen, band,
+                        shifted.XStart, shifted.XEnd, shifted.YStart, shifted.YEnd, perAxis);
+                }
+            }
+        }
+
+        // 3) Zoom bias: the centre tiles at band ± 1.
+        AddCenterTile(result, seen, centerX, centerY, band - 1);
+        AddCenterTile(result, seen, centerX, centerY, band + 1);
+
+        return result;
+    }
+
+    private static void AddRange(
+        List<TileKey> result, HashSet<TileKey> seen, int band,
+        int xStart, int xEnd, int yStart, int yEnd, int perAxis)
+    {
+        xStart = Math.Clamp(xStart, 0, perAxis - 1);
+        xEnd = Math.Clamp(xEnd, 0, perAxis - 1);
+        yStart = Math.Clamp(yStart, 0, perAxis - 1);
+        yEnd = Math.Clamp(yEnd, 0, perAxis - 1);
+        for (var y = yStart; y <= yEnd; y++)
+        {
+            for (var x = xStart; x <= xEnd; x++)
+            {
+                var key = new TileKey(band, x, y);
+                if (seen.Add(key))
+                {
+                    result.Add(key);
+                }
+            }
+        }
+    }
+
+    private static void AddCenterTile(
+        List<TileKey> result, HashSet<TileKey> seen, double centerX, double centerY, int band)
+    {
+        if (band < MinBand || band > MaxBand)
+        {
+            return;
+        }
+
+        var size = TileWorldSize(band);
+        var perAxis = TilesPerAxis(band);
+        var x = Math.Clamp((int)Math.Floor((centerX + Extent) / size), 0, perAxis - 1);
+        var y = Math.Clamp((int)Math.Floor((Extent - centerY) / size), 0, perAxis - 1);
+        var key = new TileKey(band, x, y);
+        if (seen.Add(key))
+        {
+            result.Add(key);
+        }
+    }
+
+    /// <summary>
+    /// Projects EPSG:3857 world bounds to the north-up viewport's DIP screen
+    /// rectangle (top-left origin, +Y down). Used both to place a tile's core
+    /// and to place its guttered image.
+    /// </summary>
+    public static ScreenRect WorldToScreenRect(
+        double worldMinX, double worldMinY, double worldMaxX, double worldMaxY,
+        double centerX, double centerY, double widthDip, double heightDip, double resolution)
+    {
+        var halfW = widthDip * 0.5;
+        var halfH = heightDip * 0.5;
+        var left = halfW + (worldMinX - centerX) / resolution;
+        var right = halfW + (worldMaxX - centerX) / resolution;
+        var top = halfH - (worldMaxY - centerY) / resolution;
+        var bottom = halfH - (worldMinY - centerY) / resolution;
+        return new ScreenRect(left, top, right, bottom);
+    }
+
+    /// <summary>
+    /// The axis-aligned DIP size that bounds the <paramref name="widthDip"/> ×
+    /// <paramref name="heightDip"/> viewport after it is rotated by
+    /// <paramref name="rotationDegrees"/> about its centre. Tile selection
+    /// (<see cref="VisibleTiles"/>, <see cref="PredictedTiles"/>) uses this
+    /// enlarged size so a rotated viewport's corners — which poke outside the
+    /// north-up box — are still covered by rasterised tiles instead of going
+    /// blank. The projection itself (<see cref="WorldToScreenRect"/>) keeps the
+    /// real DIP size; the canvas is rotated about the centre at composite time.
+    /// </summary>
+    public static (double Width, double Height) RotatedCoverSize(
+        double widthDip, double heightDip, double rotationDegrees)
+    {
+        var rad = rotationDegrees * Math.PI / 180.0;
+        var c = Math.Abs(Math.Cos(rad));
+        var s = Math.Abs(Math.Sin(rad));
+        return (widthDip * c + heightDip * s, widthDip * s + heightDip * c);
+    }
+
+    /// <summary>
+    /// Computes the off-screen layout for compositing a rotated viewport's tiles
+    /// north-up before rotating the finished image as a unit (issue&#160;#330). The
+    /// north-up composite must span the rotated cover box
+    /// (<paramref name="coverWidth"/> × <paramref name="coverHeight"/> DIP, from
+    /// <see cref="RotatedCoverSize"/>) centred on the screen centre so the corners
+    /// are filled once rotated, and is rasterised at device resolution
+    /// (<paramref name="deviceScale"/>) to stay crisp on HiDPI.
+    /// </summary>
+    /// <param name="widthDip">Live viewport width in DIP.</param>
+    /// <param name="heightDip">Live viewport height in DIP.</param>
+    /// <param name="coverWidth">Rotated cover-box width in DIP.</param>
+    /// <param name="coverHeight">Rotated cover-box height in DIP.</param>
+    /// <param name="deviceScale">DIP→device-pixel scale from the canvas matrix.</param>
+    /// <returns>
+    /// The cover box's top-left in screen DIP coordinates
+    /// (<c>OriginX</c>, <c>OriginY</c>) — also the rotated blit's destination
+    /// origin — and the off-screen surface size in device pixels
+    /// (<c>PixelWidth</c>, <c>PixelHeight</c>).
+    /// </returns>
+    public static (double OriginX, double OriginY, int PixelWidth, int PixelHeight) RotationCompositeLayout(
+        double widthDip, double heightDip, double coverWidth, double coverHeight, double deviceScale)
+    {
+        var scale = deviceScale > 0 && !double.IsNaN(deviceScale) ? deviceScale : 1.0;
+        var originX = widthDip * 0.5 - coverWidth * 0.5;
+        var originY = heightDip * 0.5 - coverHeight * 0.5;
+        var pixelWidth = (int)Math.Ceiling(coverWidth * scale);
+        var pixelHeight = (int)Math.Ceiling(coverHeight * scale);
+        return (originX, originY, pixelWidth, pixelHeight);
+    }
+
+    /// <summary>The DIP screen rect of a tile's core (gutter excluded).</summary>
+    public static ScreenRect TileCoreScreenRect(
+        TileKey key, double centerX, double centerY, double widthDip, double heightDip, double resolution)
+    {
+        var (minX, minY, maxX, maxY) = TileWorldBounds(key);
+        return WorldToScreenRect(minX, minY, maxX, maxY, centerX, centerY, widthDip, heightDip, resolution);
+    }
+}

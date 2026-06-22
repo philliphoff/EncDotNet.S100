@@ -127,4 +127,87 @@ public class DescribeFeatureToolS101Tests
         Assert.Equal(JsonValueKind.Array, infoAssociations.ValueKind);
         Assert.Equal(0, infoAssociations.GetArrayLength());
     }
+
+    [Fact]
+    public async Task Depth_valued_attribute_carries_metres_unit()
+    {
+        // DredgedArea.depthRangeMinimumValue is metres by definition in
+        // S-101; the describer must annotate it from the Feature Catalogue's
+        // uom rather than leaving it a bare string (issue #334).
+        var dataset = S101Synth.DatasetWithAttributedFeature(
+            "enc-dredged",
+            featureRcid: 4242,
+            featureTypeCode: 42,
+            featureTypeName: "DredgedArea",
+            attributes: new (ushort, string, string)[]
+            {
+                (17, "depthRangeMinimumValue", "12.5"),
+            });
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc", dataset));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new DescribeFeatureRequest(new DatasetId("enc"), "4242"));
+
+        Assert.True(result.TryGetValue(out var value));
+
+        var attributes = value.Attributes.GetProperty("attributes");
+        Assert.Equal(1, attributes.GetArrayLength());
+        var attr = attributes[0];
+        Assert.Equal("depthRangeMinimumValue", attr.GetProperty("acronym").GetString());
+        Assert.Equal("12.5", attr.GetProperty("value").GetString());
+        Assert.Equal("m", attr.GetProperty("unit").GetString());
+        Assert.Equal("metre", attr.GetProperty("unitName").GetString());
+    }
+
+    [Fact]
+    public async Task Unitless_attribute_omits_unit()
+    {
+        // categoryOfDredgedArea is an enumeration — no uom — so the
+        // describer must not invent a unit.
+        var dataset = S101Synth.DatasetWithAttributedFeature(
+            "enc-dredged",
+            featureRcid: 4242,
+            featureTypeCode: 42,
+            featureTypeName: "DredgedArea",
+            attributes: new (ushort, string, string)[]
+            {
+                (33, "categoryOfDredgedArea", "1"),
+            });
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc", dataset));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new DescribeFeatureRequest(new DatasetId("enc"), "4242"));
+
+        Assert.True(result.TryGetValue(out var value));
+        var attr = value.Attributes.GetProperty("attributes")[0];
+        Assert.False(attr.TryGetProperty("unit", out _));
+    }
+
+    [Fact]
+    public async Task Sounding_geometry_depths_carry_metres_unit()
+    {
+        var dataset = S101Synth.DatasetWithSounding(
+            "enc-with-soundings",
+            new (double Lat, double Lon, double Depth)[]
+            {
+                (50.7699, -1.1396, 11.0),
+            });
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S101("enc", dataset));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(
+            new DescribeFeatureRequest(new DatasetId("enc"), "808"));
+
+        Assert.True(result.TryGetValue(out var value));
+        var geometry = value.Attributes.GetProperty("geometry");
+        Assert.Equal("metres", geometry.GetProperty("depthUnit").GetString());
+    }
 }

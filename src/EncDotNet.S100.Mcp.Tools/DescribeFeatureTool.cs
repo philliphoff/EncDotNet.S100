@@ -53,6 +53,7 @@ public sealed class DescribeFeatureTool
 
     private readonly IDatasetCatalog _catalog;
     private readonly FeatureDescriberRegistry _registry;
+    private readonly AttributeUnitResolver _units = new();
 
     /// <summary>Creates a new <see cref="DescribeFeatureTool"/> with the default registry.</summary>
     public DescribeFeatureTool(IDatasetCatalog catalog)
@@ -103,7 +104,7 @@ public sealed class DescribeFeatureTool
                     new SpecNotSupportedForTool(target.Spec, Name)));
         }
 
-        var context = new FeatureDescriberContext(target, request.FeatureId, snapshot);
+        var context = new FeatureDescriberContext(target, request.FeatureId, snapshot, _units);
         return Task.FromResult(describer.Describe(context));
     }
 }

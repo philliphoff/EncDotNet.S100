@@ -299,6 +299,18 @@ public partial class MainWindow : ShadUI.Window
         EncDotNet.S100.Renderers.Mapsui.S100VectorSnapshotRenderer.RequestRedraw = () =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
 
+        // Same marshalling for the TiledScene ("B") subsystem: when a worker
+        // publishes a freshly rasterised VectorScene image, request a single
+        // UI-thread repaint that swaps the transient stale blit for the new image.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorSceneRenderer.RequestRedraw = () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+
+        // Same marshalling for the Phase-2 tiled arm of the TiledScene subsystem:
+        // when a worker publishes a freshly rasterised base-plane tile, request a
+        // single UI-thread repaint that composites it into the visible mosaic.
+        EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.RequestRedraw = () =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => MapControl.RefreshGraphics());
+
         // Bind the map-viewport notifier as early as possible so the
         // AIS overlay's zoom-gated decorator (resolved below via
         // GetServices<IDynamicFeatureSource>) can read the current

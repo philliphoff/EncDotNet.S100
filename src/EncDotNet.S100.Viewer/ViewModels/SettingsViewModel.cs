@@ -519,6 +519,243 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    // ── Render subsystem (issue #331) ──────────────────────────────────────
+    // The A/B base-plane render-subsystem switch and the "B" tiled-pipeline
+    // optimization knobs. All values mirror RenderingOptimizations (the renderer
+    // source of truth) and persist to ViewerSettings; an explicit environment
+    // variable pins a knob (the perf A/B harness), in which case the matching
+    // *Editable flag is false and the control is shown disabled.
+
+    /// <summary>The selectable base-plane render subsystems (the A/B switch).</summary>
+    public static RenderSubsystemKind[] AvailableRenderSubsystems { get; } =
+        [RenderSubsystemKind.Mapsui, RenderSubsystemKind.TiledScene];
+
+    /// <summary>The selectable scene modes within the TiledScene ("B") arm.</summary>
+    public static VectorSceneMode[] AvailableSceneModes { get; } =
+        [VectorSceneMode.Tiled, VectorSceneMode.Single];
+
+    private RenderSubsystemKind _renderSubsystem;
+    /// <summary>
+    /// The active base-plane render subsystem — "A" (<see cref="RenderSubsystemKind.Mapsui"/>)
+    /// vs the experimental "B" (<see cref="RenderSubsystemKind.TiledScene"/>).
+    /// Read per-render, so switching rebinds the active subsystem on the next
+    /// re-render. Disabled when pinned by <c>S100_RENDER_SUBSYSTEM</c>.
+    /// </summary>
+    public RenderSubsystemKind SelectedRenderSubsystem
+    {
+        get => _renderSubsystem;
+        set
+        {
+            if (SetProperty(ref _renderSubsystem, value))
+            {
+                _settings.RenderSubsystem = value.ToString();
+                RenderingOptimizations.RenderSubsystem = value;
+                OnPropertyChanged(nameof(TiledSceneSelected));
+                OnPropertyChanged(nameof(TiledModeActive));
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the subsystem switch is user-editable (not env-pinned).</summary>
+    public bool RenderSubsystemEditable => !RenderingOptimizations.RenderSubsystemEnvExplicit;
+
+    /// <summary>True when the experimental "B" (TiledScene) arm is selected — gates the knob panel.</summary>
+    public bool TiledSceneSelected => _renderSubsystem == RenderSubsystemKind.TiledScene;
+
+    /// <summary>True when the tiled base plane is active (B arm + tiled scene mode) — gates the tiled knobs.</summary>
+    public bool TiledModeActive => TiledSceneSelected && _sceneMode == VectorSceneMode.Tiled;
+
+    private VectorSceneMode _sceneMode;
+    /// <summary>
+    /// Within the "B" arm, the base-plane scene mode — <see cref="VectorSceneMode.Tiled"/>
+    /// (Phase-2 default) vs <see cref="VectorSceneMode.Single"/> (Phase-1 single
+    /// surface). Read at layer build, so a change applies on the next re-render.
+    /// Disabled when pinned by <c>S100_VECTOR_SCENE_MODE</c>.
+    /// </summary>
+    public VectorSceneMode SelectedSceneMode
+    {
+        get => _sceneMode;
+        set
+        {
+            if (SetProperty(ref _sceneMode, value))
+            {
+                _settings.VectorSceneMode = value.ToString();
+                RenderingOptimizations.SceneMode = value;
+                OnPropertyChanged(nameof(TiledModeActive));
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the scene-mode selector is user-editable (not env-pinned).</summary>
+    public bool SceneModeEditable => !RenderingOptimizations.SceneModeEnvExplicit;
+
+    private double _tileGutterDip;
+    /// <summary>
+    /// Tiled-base-plane gutter, in DIP. Applies to newly-rasterised tiles; pair a
+    /// live change with a dataset reload for a clean result. Disabled when pinned
+    /// by <c>S100_VECTOR_TILE_GUTTER</c>.
+    /// </summary>
+    public double TileGutterDip
+    {
+        get => _tileGutterDip;
+        set
+        {
+            RenderingOptimizations.TileGutterDip = value;
+            var effective = RenderingOptimizations.TileGutterDip;
+            if (SetProperty(ref _tileGutterDip, effective))
+            {
+                _settings.TileGutterDip = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the gutter knob is user-editable (not env-pinned).</summary>
+    public bool TileGutterDipEditable => !RenderingOptimizations.TileGutterDipEnvExplicit;
+
+    private double _tileBudgetMb;
+    /// <summary>
+    /// Per-layer hot-cache native budget, in MB. Captured per layer when its tile
+    /// state is created, so a change applies on the next dataset reload. Disabled
+    /// when pinned by <c>S100_VECTOR_TILE_BUDGET_MB</c>.
+    /// </summary>
+    public double TileBudgetMb
+    {
+        get => _tileBudgetMb;
+        set
+        {
+            RenderingOptimizations.TileBudgetMb = value;
+            var effective = RenderingOptimizations.TileBudgetMb;
+            if (SetProperty(ref _tileBudgetMb, effective))
+            {
+                _settings.TileBudgetMb = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the in-memory budget knob is user-editable (not env-pinned).</summary>
+    public bool TileBudgetMbEditable => !RenderingOptimizations.TileBudgetMbEnvExplicit;
+
+    private bool _tilePredictionEnabled;
+    /// <summary>
+    /// Whether speculative prediction / pre-warm is enabled. Read every frame, so
+    /// the change takes effect live. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_PREDICT</c>.
+    /// </summary>
+    public bool TilePredictionEnabled
+    {
+        get => _tilePredictionEnabled;
+        set
+        {
+            if (SetProperty(ref _tilePredictionEnabled, value))
+            {
+                RenderingOptimizations.TilePredictionEnabled = value;
+                _settings.TilePredictionEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
+    public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
+
+    private bool _tileDiskCacheEnabled;
+    /// <summary>
+    /// Whether the warm disk tile cache is enabled. The shared cache is created
+    /// once per process, so a change applies on restart. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_DISK</c>.
+    /// </summary>
+    public bool TileDiskCacheEnabled
+    {
+        get => _tileDiskCacheEnabled;
+        set
+        {
+            if (SetProperty(ref _tileDiskCacheEnabled, value))
+            {
+                RenderingOptimizations.TileDiskCacheEnabled = value;
+                _settings.TileDiskCacheEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the disk-cache knob is user-editable (not env-pinned).</summary>
+    public bool TileDiskCacheEditable => !RenderingOptimizations.TileDiskCacheEnvExplicit;
+
+    private double _tileDiskMb;
+    /// <summary>
+    /// Warm disk tile-cache budget, in MB. Read when the shared disk cache is
+    /// created (once per process), so a change applies on restart. Disabled when
+    /// pinned by <c>S100_VECTOR_TILE_DISK_MB</c>.
+    /// </summary>
+    public double TileDiskMb
+    {
+        get => _tileDiskMb;
+        set
+        {
+            RenderingOptimizations.TileDiskMb = value;
+            var effective = RenderingOptimizations.TileDiskMb;
+            if (SetProperty(ref _tileDiskMb, effective))
+            {
+                _settings.TileDiskMb = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the disk-budget knob is user-editable (not env-pinned).</summary>
+    public bool TileDiskMbEditable => !RenderingOptimizations.TileDiskMbEnvExplicit;
+
+    private bool _tileGpuResidencyEnabled;
+    /// <summary>
+    /// Whether GPU texture residency is enabled. Read every frame, so the change
+    /// takes effect live (inert on a software surface). Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_GPU</c>.
+    /// </summary>
+    public bool TileGpuResidencyEnabled
+    {
+        get => _tileGpuResidencyEnabled;
+        set
+        {
+            if (SetProperty(ref _tileGpuResidencyEnabled, value))
+            {
+                RenderingOptimizations.TileGpuResidencyEnabled = value;
+                _settings.TileGpuResidencyEnabled = value;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the GPU-residency knob is user-editable (not env-pinned).</summary>
+    public bool TileGpuResidencyEditable => !RenderingOptimizations.TileGpuResidencyEnvExplicit;
+
+    private double _tileGpuBudgetMb;
+    /// <summary>
+    /// Per-layer GPU-residency budget, in MB. Sized when the resident-texture
+    /// cache is first created, so a change applies on the next dataset reload.
+    /// Disabled when pinned by <c>S100_VECTOR_TILE_GPU_MB</c>.
+    /// </summary>
+    public double TileGpuBudgetMb
+    {
+        get => _tileGpuBudgetMb;
+        set
+        {
+            RenderingOptimizations.TileGpuBudgetMb = value;
+            var effective = RenderingOptimizations.TileGpuBudgetMb;
+            if (SetProperty(ref _tileGpuBudgetMb, effective))
+            {
+                _settings.TileGpuBudgetMb = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the GPU-budget knob is user-editable (not env-pinned).</summary>
+    public bool TileGpuBudgetMbEditable => !RenderingOptimizations.TileGpuBudgetMbEnvExplicit;
+
     /// <summary>
     /// Raised when <see cref="BasemapEnabled"/> changes so the host can
     /// add or remove the basemap tile layer live without a restart.
@@ -644,6 +881,73 @@ internal sealed class SettingsViewModel : ViewModelBase
         RenderingOptimizations.VectorSnapshotPrebuildEnabled = _vectorSnapshotPrebuildEnabled;
         RenderingOptimizations.VectorPathCacheEnabled = _vectorPathCacheEnabled;
         RenderingOptimizations.GeometrySimplificationEnabled = _geometrySimplificationEnabled;
+
+        // Render subsystem (issue #331): push the persisted A/B + tiled-knob
+        // preferences into the renderer (each write is ignored for any knob
+        // pinned by an explicit env var — the perf A/B harness), then read the
+        // value back so an env-pinned knob displays the effective (env) value.
+        if (Enum.TryParse<RenderSubsystemKind>(settings.RenderSubsystem, ignoreCase: true, out var subsystem))
+        {
+            RenderingOptimizations.RenderSubsystem = subsystem;
+        }
+
+        _renderSubsystem = RenderingOptimizations.RenderSubsystem;
+
+        if (Enum.TryParse<VectorSceneMode>(settings.VectorSceneMode, ignoreCase: true, out var sceneMode))
+        {
+            RenderingOptimizations.SceneMode = sceneMode;
+        }
+
+        _sceneMode = RenderingOptimizations.SceneMode;
+
+        if (settings.TileGutterDip is { } tileGutter)
+        {
+            RenderingOptimizations.TileGutterDip = tileGutter;
+        }
+
+        _tileGutterDip = RenderingOptimizations.TileGutterDip;
+
+        if (settings.TileBudgetMb is { } tileBudget)
+        {
+            RenderingOptimizations.TileBudgetMb = tileBudget;
+        }
+
+        _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
+
+        if (settings.TilePredictionEnabled is { } tilePredict)
+        {
+            RenderingOptimizations.TilePredictionEnabled = tilePredict;
+        }
+
+        _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
+
+        if (settings.TileDiskCacheEnabled is { } tileDisk)
+        {
+            RenderingOptimizations.TileDiskCacheEnabled = tileDisk;
+        }
+
+        _tileDiskCacheEnabled = RenderingOptimizations.TileDiskCacheEnabled;
+
+        if (settings.TileDiskMb is { } tileDiskMb)
+        {
+            RenderingOptimizations.TileDiskMb = tileDiskMb;
+        }
+
+        _tileDiskMb = RenderingOptimizations.TileDiskMb;
+
+        if (settings.TileGpuResidencyEnabled is { } tileGpu)
+        {
+            RenderingOptimizations.TileGpuResidencyEnabled = tileGpu;
+        }
+
+        _tileGpuResidencyEnabled = RenderingOptimizations.TileGpuResidencyEnabled;
+
+        if (settings.TileGpuBudgetMb is { } tileGpuMb)
+        {
+            RenderingOptimizations.TileGpuBudgetMb = tileGpuMb;
+        }
+
+        _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;

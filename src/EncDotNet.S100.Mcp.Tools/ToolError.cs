@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -81,11 +82,28 @@ public sealed record SpecNotSupportedForTool(
 
 /// <summary>No bundled Feature Catalogue is available for the requested spec.</summary>
 /// <param name="Spec">The product specification whose Feature Catalogue could not be loaded.</param>
+/// <param name="AcceptedSpecs">
+/// The canonical spec names that <em>do</em> have a bundled Feature
+/// Catalogue, so a caller who passed a slightly-off name can self-correct.
+/// </param>
 [Description("Raised when no bundled Feature Catalogue is available for the requested spec.")]
 public sealed record FeatureCatalogueNotAvailable(
-    [property: Description("The product specification whose Feature Catalogue could not be loaded.")] SpecRef Spec) : ToolError(
+    [property: Description("The product specification whose Feature Catalogue could not be loaded.")] SpecRef Spec,
+    [property: Description("Canonical spec names that have a bundled Feature Catalogue; pass one of these (the edition suffix is optional and ignored).")] ImmutableArray<string> AcceptedSpecs) : ToolError(
     "feature_catalogue_not_available",
-    $"No bundled Feature Catalogue is available for spec '{Spec}'.");
+    BuildMessage(Spec, AcceptedSpecs))
+{
+    private static string BuildMessage(SpecRef spec, ImmutableArray<string> acceptedSpecs)
+    {
+        var message = $"No bundled Feature Catalogue is available for spec '{spec.Name}'.";
+        if (!acceptedSpecs.IsDefaultOrEmpty)
+        {
+            message += $" Specs with a bundled Feature Catalogue: {string.Join(", ", acceptedSpecs)} (the edition suffix is optional and ignored).";
+        }
+
+        return message;
+    }
+}
 
 /// <summary>The named feature type is not present in the spec's Feature Catalogue.</summary>
 /// <param name="Spec">The product specification whose Feature Catalogue was searched.</param>

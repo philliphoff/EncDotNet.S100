@@ -872,6 +872,81 @@
   <data name="Settings_MapOptimizationsSubsection_Help" xml:space="preserve">
     <value>Speed up panning and zooming on dense charts. All are on by default; turn one off only to compare rendering behaviour.</value>
   </data>
+  <data name="Settings_RenderSubsystemSubsection" xml:space="preserve">
+    <value>Render subsystem (experimental)</value>
+  </data>
+  <data name="Settings_RenderSubsystemSubsection_Help" xml:space="preserve">
+    <value>Choose the base-plane render subsystem and, for the experimental tiled pipeline, tune its caching. Environment variables set before launch override these and disable the matching control.</value>
+  </data>
+  <data name="Settings_RenderSubsystem" xml:space="preserve">
+    <value>Subsystem</value>
+  </data>
+  <data name="Tooltip_RenderSubsystem" xml:space="preserve">
+    <value>Select the base-plane render subsystem: "Mapsui" is the established feature/style/layer path (A); "Tiled scene" is the experimental async tiled pipeline that rasterizes the chart from the vector scene on worker threads (B). Switching re-renders live.</value>
+  </data>
+  <data name="Settings_RenderSubsystem_Mapsui" xml:space="preserve">
+    <value>Mapsui (A)</value>
+  </data>
+  <data name="Settings_RenderSubsystem_TiledScene" xml:space="preserve">
+    <value>Tiled scene (B)</value>
+  </data>
+  <data name="Settings_SceneMode" xml:space="preserve">
+    <value>Scene mode</value>
+  </data>
+  <data name="Tooltip_SceneMode" xml:space="preserve">
+    <value>Within the tiled subsystem, choose "Tiled" (a pyramid of cached tiles — the default) or "Single surface" (one rasterized image composited under translation). Changing re-renders live.</value>
+  </data>
+  <data name="Settings_SceneMode_Tiled" xml:space="preserve">
+    <value>Tiled</value>
+  </data>
+  <data name="Settings_SceneMode_Single" xml:space="preserve">
+    <value>Single surface</value>
+  </data>
+  <data name="Settings_TileGutterDip" xml:space="preserve">
+    <value>Tile gutter (DIP)</value>
+  </data>
+  <data name="Tooltip_TileGutterDip" xml:space="preserve">
+    <value>Extra margin, in device-independent pixels, rasterized beyond each tile's edges so strokes crossing a seam keep their joins and caps. Applies to newly rasterized tiles; reload the dataset for a clean result.</value>
+  </data>
+  <data name="Settings_TilePredictionEnabled" xml:space="preserve">
+    <value>Predictive pre-warm</value>
+  </data>
+  <data name="Tooltip_TilePredictionEnabled" xml:space="preserve">
+    <value>Speculatively rasterize tiles a pan or zoom is about to reveal, so newly exposed edges are already cached. Takes effect immediately. Recommended on.</value>
+  </data>
+  <data name="Settings_TileBudgetMb" xml:space="preserve">
+    <value>In-memory cache (MB)</value>
+  </data>
+  <data name="Tooltip_TileBudgetMb" xml:space="preserve">
+    <value>Per-layer budget, in megabytes, for decoded tile pixels kept in main memory. Applied when a dataset's tile cache is created — reload the dataset to apply a change.</value>
+  </data>
+  <data name="Settings_TileDiskCacheEnabled" xml:space="preserve">
+    <value>Warm disk cache</value>
+  </data>
+  <data name="Tooltip_TileDiskCacheEnabled" xml:space="preserve">
+    <value>Persist rasterized tiles to disk so a palette flip-back or a restart reuses warm tiles instead of re-rasterizing. Applied at startup — restart to apply a change.</value>
+  </data>
+  <data name="Settings_TileDiskMb" xml:space="preserve">
+    <value>Disk cache (MB)</value>
+  </data>
+  <data name="Tooltip_TileDiskMb" xml:space="preserve">
+    <value>Budget, in megabytes, for the on-disk warm tile cache, shared across layers and sessions. Applied at startup — restart to apply a change.</value>
+  </data>
+  <data name="Settings_TileGpuResidencyEnabled" xml:space="preserve">
+    <value>GPU texture residency</value>
+  </data>
+  <data name="Tooltip_TileGpuResidencyEnabled" xml:space="preserve">
+    <value>Upload each warm tile to a GPU-resident texture once and reuse it every frame, instead of re-uploading the same pixels. Takes effect immediately; inert on a software-rendered surface. Recommended on.</value>
+  </data>
+  <data name="Settings_TileGpuBudgetMb" xml:space="preserve">
+    <value>GPU residency (MB)</value>
+  </data>
+  <data name="Tooltip_TileGpuBudgetMb" xml:space="preserve">
+    <value>Per-layer budget, in megabytes, for GPU-resident tile textures. Sized when the resident-texture cache is created — reload the dataset to apply a change.</value>
+  </data>
+  <data name="Settings_RenderKnob_RestartHint" xml:space="preserve">
+    <value>Reload the dataset or restart to apply.</value>
+  </data>
   <data name="Settings_BasemapEnabled" xml:space="preserve">
     <value>Show online basemap</value>
   </data>

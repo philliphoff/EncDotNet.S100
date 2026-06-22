@@ -211,6 +211,129 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
             </Grid>
 
+            <!-- Render subsystem A/B + tiled knobs (issue #331) -->
+            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystem}"
+                           FontSize="12" />
+                <ComboBox ItemsSource="{Binding AvailableRenderSubsystems}"
+                          SelectedItem="{Binding SelectedRenderSubsystem}"
+                          IsEnabled="{Binding RenderSubsystemEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_RenderSubsystem}"
+                          MinWidth="160"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:RenderSubsystemNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- "B" (tiled scene) knobs — enabled only when the B arm is selected -->
+            <StackPanel Spacing="12"
+                        Margin="16,0,0,0"
+                        IsEnabled="{Binding TiledSceneSelected}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{x:Static loc:Strings.Settings_SceneMode}"
+                               FontSize="12" />
+                    <ComboBox ItemsSource="{Binding AvailableSceneModes}"
+                              SelectedItem="{Binding SelectedSceneMode}"
+                              IsEnabled="{Binding SceneModeEditable}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_SceneMode}"
+                              MinWidth="160"
+                              HorizontalAlignment="Left">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={x:Static viewer:VectorSceneModeNameConverter.Instance}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Tile-specific knobs — only meaningful in tiled scene mode -->
+                <StackPanel Spacing="12" IsEnabled="{Binding TiledModeActive}">
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          IsEnabled="{Binding TilePredictionEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_TilePredictionEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TilePredictionEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TilePredictionEnabled}" />
+                    </Grid>
+
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          IsEnabled="{Binding TileGpuResidencyEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuResidencyEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TileGpuResidencyEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TileGpuResidencyEnabled}" />
+                    </Grid>
+
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          IsEnabled="{Binding TileDiskCacheEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileDiskCacheEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_TileDiskCacheEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding TileDiskCacheEnabled}" />
+                    </Grid>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{x:Static loc:Strings.Settings_TileGutterDip}"
+                                   FontSize="12" />
+                        <NumericUpDown Value="{Binding TileGutterDip}"
+                                       Minimum="0"
+                                       Maximum="256"
+                                       Increment="8"
+                                       FormatString="0.#"
+                                       IsEnabled="{Binding TileGutterDipEditable}"
+                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGutterDip}"
+                                       MinWidth="140"
+                                       HorizontalAlignment="Left" />
+                        <TextBlock Text="{x:Static loc:Strings.Settings_TileBudgetMb}"
+                                   FontSize="12" />
+                        <NumericUpDown Value="{Binding TileBudgetMb}"
+                                       Minimum="4"
+                                       Maximum="4096"
+                                       Increment="32"
+                                       FormatString="0"
+                                       IsEnabled="{Binding TileBudgetMbEditable}"
+                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileBudgetMb}"
+                                       MinWidth="140"
+                                       HorizontalAlignment="Left" />
+                        <TextBlock Text="{x:Static loc:Strings.Settings_TileDiskMb}"
+                                   FontSize="12" />
+                        <NumericUpDown Value="{Binding TileDiskMb}"
+                                       Minimum="16"
+                                       Maximum="8192"
+                                       Increment="64"
+                                       FormatString="0"
+                                       IsEnabled="{Binding TileDiskMbEditable}"
+                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileDiskMb}"
+                                       MinWidth="140"
+                                       HorizontalAlignment="Left" />
+                        <TextBlock Text="{x:Static loc:Strings.Settings_TileGpuBudgetMb}"
+                                   FontSize="12" />
+                        <NumericUpDown Value="{Binding TileGpuBudgetMb}"
+                                       Minimum="4"
+                                       Maximum="4096"
+                                       Increment="32"
+                                       FormatString="0"
+                                       IsEnabled="{Binding TileGpuBudgetMbEditable}"
+                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuBudgetMb}"
+                                       MinWidth="140"
+                                       HorizontalAlignment="Left" />
+                        <TextBlock Text="{x:Static loc:Strings.Settings_RenderKnob_RestartHint}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+
             <!-- Mariner Settings (S-100 Part 9 §4.2) -->
             <Separator Margin="0,8,0,0" />
             <TextBlock Text="{x:Static loc:Strings.Settings_MarinerSection}"

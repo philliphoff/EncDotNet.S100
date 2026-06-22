@@ -94,7 +94,7 @@ public class DescribeFeatureTypeToolTests
             ? new MemoryStream(Encoding.UTF8.GetBytes(SyntheticFc))
             : null;
 
-    private static DescribeFeatureTypeTool Tool() => new(Resolver);
+    private static DescribeFeatureTypeTool Tool() => new(Resolver, new[] { "S-101" });
 
     private static SpecRef Synth => new("S-101", default);
 
@@ -196,6 +196,43 @@ public class DescribeFeatureTypeToolTests
         Assert.False(result.TryGetValue(out _));
         var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
         Assert.Equal("feature_catalogue_not_available", err.Error.Code);
+    }
+
+    [Fact]
+    public async Task Not_available_error_lists_the_accepted_spec_names()
+    {
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-102", default)));
+
+        var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
+        var notAvailable = Assert.IsType<FeatureCatalogueNotAvailable>(err.Error);
+        Assert.Equal(new[] { "S-101" }, notAvailable.AcceptedSpecs);
+        // The accepted names are surfaced in the message so an agent can self-correct.
+        Assert.Contains("S-101", notAvailable.Message);
+    }
+
+    [Fact]
+    public async Task Edition_suffix_and_casing_are_normalised_and_resolved()
+    {
+        // "s101" (mis-cased) and an edition suffix both normalise to S-101,
+        // which has a bundled catalogue, so the call resolves successfully.
+        var byCasing = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(SpecRef.Parse("s101/1.2.0")));
+
+        Assert.True(byCasing.TryGetValue(out var value));
+        Assert.Equal("Synthetic FC", value.CatalogueName);
+    }
+
+    [Fact]
+    public async Task Default_tool_reports_bundled_specs_as_accepted()
+    {
+        // The parameterless ctor derives its accepted-spec list from the
+        // bundled catalogues; S-102 has no FC so the error names the real ones.
+        var tool = new DescribeFeatureTypeTool();
+
+        var result = await tool.InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-100", default)));
+
+        var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
+        var notAvailable = Assert.IsType<FeatureCatalogueNotAvailable>(err.Error);
+        Assert.Contains("S-124", notAvailable.AcceptedSpecs);
     }
 
     [Fact]

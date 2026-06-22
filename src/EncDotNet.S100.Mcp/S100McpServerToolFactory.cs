@@ -8,6 +8,7 @@ using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Mcp.Tools.Time;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Specifications;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -165,8 +166,10 @@ internal static class S100McpServerToolFactory
             "add a featureType (code, name, or alias) to get that type's attribute bindings — each " +
             "attribute's value type, whether it is mandatory and/or repeatable, and its enumerated " +
             "listed values. Use it to build valid attribute predicates without a loaded dataset. " +
-            "Specs without a bundled Feature Catalogue return feature_catalogue_not_available. " +
-            "Read-only and side-effect free.";
+            "The spec name is normalised, so casing and an optional edition suffix " +
+            "(e.g. \"s101\" or \"S-101/1.2.0\") are accepted. Specs without a bundled Feature " +
+            "Catalogue return feature_catalogue_not_available, whose details list the accepted " +
+            "spec names. Read-only and side-effect free.";
 
         var del = ([Description("Product specification whose bundled Feature Catalogue to inspect (e.g. \"S-101\" or \"S-124/1.5.0\"). Edition is ignored.")] string spec,
                    [Description("Optional feature-type code, name, or alias (case-insensitive). Null lists every feature type with attribute counts only; supplied returns full attribute detail.")] string? featureType = null,
@@ -555,7 +558,11 @@ internal static class S100McpServerToolFactory
                 return new SpecRef(name, default);
             }
 
-            throw new FormatException($"'{spec}' is not a valid spec.");
+            throw new ArgumentException(
+                $"'{spec}' is not a recognised S-100 product specification name. " +
+                $"Use a canonical name such as {string.Join(", ", Specification.AvailableSpecs)} " +
+                "(the edition suffix is optional and ignored).",
+                nameof(spec));
         }
 
         return parsed;

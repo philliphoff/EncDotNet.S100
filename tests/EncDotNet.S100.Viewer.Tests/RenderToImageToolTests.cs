@@ -27,6 +27,8 @@ public class RenderToImageToolTests
 
     private sealed class FakeMapHost : IMapHost
     {
+        public IChartRenderSubsystem RenderSubsystem { get; } = new MapsuiChartRenderSubsystem();
+
         public int ObservedWidth, ObservedHeight;
         public double ObservedDensity;
         public byte[]? Result = StubPng;

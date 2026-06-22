@@ -26,7 +26,7 @@ This library bridges the S-100 portrayal pipeline output to Mapsui map layers, i
 
 `MapsuiDisplayListRenderer` lowers the display list through the **shared,
 backend-agnostic vector rendering core** in
-`EncDotNet.S100.Renderers.Skia.Scene` (`VectorSceneBuilder` → `VectorScene` of
+`EncDotNet.S100.Rendering.Scene` (`VectorSceneBuilder` → `VectorScene` of
 `PaintOp`s). All S-100 Part 9 portrayal-correctness logic — draw ordering,
 colour/symbol/line-style resolution, mm→px conversion, text-anchor selection,
 and the `lat/lon → EPSG:3857` projection half — lives in that core and is shared
@@ -391,6 +391,17 @@ in the viewer under **Settings → Map → Rendering optimizations**, backed by
 env var always wins over the persisted viewer setting. The remaining variables
 (margins, refresh fraction, diagnostics) are advanced and env-only.
 
+The **render subsystem switch** (A/B), the TiledScene **scene mode**
+(tiled vs single surface), and the **tiled optimization knobs** (gutter,
+in-memory / disk / GPU budgets, prediction, disk cache) are likewise bound in
+the viewer under **Settings → Render subsystem (experimental)** (issue #331),
+backed by the same [`RenderingOptimizations`](RenderingOptimizations.cs) store.
+The env vars below seed and (when set explicitly) pin those too, disabling the
+matching UI control. Some knobs are read each frame and apply live (subsystem,
+scene mode, prediction, GPU residency); others are captured at init and apply on
+the next dataset reload or restart (gutter, in-memory/disk/GPU budgets, disk
+cache) — the Settings panel notes this.
+
 | Environment variable | Default | Effect |
 |---|---|---|
 | `S100_VECTOR_PATH_CACHE` | on | `0`/`false` disables the renderer entirely (pure Mapsui), for A/B comparison. Also bound by *Settings → Map → Cache projected vector paths*. |
@@ -497,6 +508,261 @@ The tolerance is also a constructor parameter
 (`new CachedVectorStyleRenderer(inner, capacity, simplifyTolerancePx)`),
 and `CachedPathCount` exposes the number of distinct cached paths for
 testing the build-once-per-(feature, zoom) behaviour.
+
+### Async scene rasteriser (`S100VectorSceneRenderer`, render-subsystem "B")
+
+`S100VectorSceneRenderer` is the **TiledScene** render subsystem's first arm
+(see `docs/design/S100-Render-Subsystem-Design.md`, Appendix B). Like the
+snapshot renderer it is a Mapsui *custom layer renderer*, but instead of
+recording the live Mapsui features it rasterises the backend-agnostic
+`VectorScene` IR directly with `SkiaDisplayListRenderer` on a **worker
+thread**, then swap-and-blits the finished `SKImage` on the UI thread. The
+whole viewport plus an over-render margin (`S100_VECTOR_SCENE_MARGIN`, default
+256 DIP) is rendered at device scale; pans within that margin are a pure
+translated re-blit (`ComputeTranslate`), so no rasterisation work touches the
+UI/render thread during a gesture.
+
+Activate it by selecting the subsystem (`S100_RENDER_SUBSYSTEM=tiledscene`, the
+`TiledScene` value of `RenderingOptimizations.RenderSubsystem`, or
+**Settings → Render subsystem → Subsystem** in the viewer).
+`MapsuiDisplayListRenderer` then tags the vector layer with
+`S100VectorSceneRenderer.RendererName` and binds a *pattern-complete* scene
+(`BindScene`) — the Mapsui lowering omits patterns, so the B arm builds its own
+scene with the `PatternResolver` set and renders fills from the IR. The worker
+is latest-wins coalesced (a superseded request is dropped, never published) and
+honours scale-visibility (`ScaleDenominatorFor` derives the S-100 denominator
+from the EPSG:3857 resolution, the inverse of `DenominatorToResolution`) so the
+same SCAMIN detail shows/hides as the live frame. Rotated viewports draw
+nothing (north-up only in v1). On publish it calls `RequestRedraw` (the viewer
+marshals `RefreshGraphics()` onto the UI thread). Two telemetry histograms,
+`SceneRasterizeDuration` (worker) and `SceneCompositeDuration` (UI blit),
+attribute the two halves.
+
+**Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs`
+worst case drops from ~409 ms (Mapsui arm) to ~5 ms (B arm) because the
+display-list rasterisation moves off the UI paint thread — full numbers in
+Appendix B of the design doc.
+
+### Tiled base plane (`S100VectorTileRenderer`, render-subsystem "B", Phase 2)
+
+`S100VectorTileRenderer` generalises the single-surface arm above into a
+**pyramid of cached tiles** (design doc Appendix C). It is the **default** arm of
+the TiledScene subsystem; `S100_VECTOR_SCENE_MODE=single` selects the
+Phase-1 single-surface renderer instead. Instead of one viewport-sized image it
+partitions the world into an origin-anchored EPSG:3857 power-of-two grid
+(`TileGrid`, 256-DIP tiles, XYZ convention) and rasterises each visible tile
+from the `VectorScene` IR on a worker. Because the grid is anchored to the world
+origin (not the viewport), a constant-zoom pan re-uses every interior tile and
+only the newly-exposed perimeter rasterises — pan cost scales with *perimeter,
+not area*.
+
+Each frame the UI thread snaps the live resolution to the nearest band, blits
+the **best available** tile for every visible slot, each hard-clipped to its
+core over a rendered **gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so
+strokes stay continuous across seams and no hole is ever shown. The exact target
+band is drawn on top; a backdrop of cached fallback tiles is drawn underneath
+**only while the target band is incomplete**, and then only from the **single
+nearest** cached band (one scale, never stacked) so transitional zoom frames do
+not ghost different-sized symbols. Finished tiles enter a
+thread-safe LRU `TileCache` bounded by a hard **native-byte budget**
+(`S100_VECTOR_TILE_BUDGET_MB`, default 256 MB) — decoded `SKImage` pixels are
+native memory; visible tiles are kept most-recently-used so they are never
+evicted mid-frame. A single coalescing worker per layer drains the visible-miss
+set (replaced every frame), and all cache access is serialised through the layer
+lock so the worker cannot dispose an image the compositor is blitting. Telemetry
+histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI
+composite pass) attribute the two halves. A rotated viewport (e.g. an incidental
+trackpad-pinch spin) is composited north-up into an off-screen surface and then
+that single image is rotated about the screen centre by an angle derived from
+Mapsui's own `WorldToScreenXY` projection (so the sign matches without
+hardcoding); tile selection grows to the rotated viewport's bounding box
+(`TileGrid.RotatedCoverSize`) so corners stay covered. Compositing north-up first
+(rather than rotating the live canvas and blitting each tile under it) keeps every
+clip-to-core join and the cross-band backdrop/target boundary in the clean
+axis-aligned space, so a non-north-up zoom transition no longer reveals
+banding/seams between tiles and bands (issue #330). See design Appendix F.8.
+
+**Measured (PDB01, 18-step gesture script).** On-screen `frameDurationMs` stayed
+bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
+backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
+visible tile seams. Full numbers in Appendix C of the design doc.
+
+#### Constant-size symbol/sounding overlay
+
+Base tiles carry **only** area fills, contours, and lines. Point symbols and
+point-anchored soundings are split out at bind time
+(`S100VectorTileRenderer.PartitionScene` routes `PointPaintOp`/`TextPaintOp` to
+an overlay scene, everything else to the base scene) and drawn **live every
+frame** on top of the composited tiles via
+`SkiaDisplayListRenderer.RenderOnto(canvas, scene, viewport)`. This is required
+for correctness, not just polish: a tile is rasterised once per resolution band
+and composited scaled by `ResolutionForBand(band)/resolution`, so anything baked
+into a tile scales with the band fit — point symbols and soundings would grow
+through a zoom gesture then shrink as you zoomed in, instead of holding the
+constant on-screen size S-100 mandates. Drawing them against the live viewport
+each frame keeps their px sizes (symbol scale, fallback-dot radius, font size —
+all already in logical display px) constant regardless of zoom; under rotation
+the overlay is rotated about the screen centre to match the tile composite.
+Because old tiles had symbols baked in, `TileDiskCache.FormatVersion` was bumped
+`1 → 2` so they are never reused (which would double-draw symbols). See design
+Appendix F.11.
+
+### Prediction / pre-warm (Phase 3)
+
+To stop a pan or zoom from transiently exposing cold tiles, the tiled renderer
+speculatively rasterises tiles **before** they scroll into view (design doc
+Appendix D). Each frame it estimates the viewport-centre velocity as an EMA of
+inter-frame deltas (`VelocityEstimator`, EPSG:3857 m/s) and builds a **warm
+set** (`TileGrid.PredictedTiles`): a 1-ring halo around the visible range, a
+directional fan aimed along the velocity vector whose depth scales with speed
+(0.5 s look-ahead, capped at 4 tiles), and the z±1 centre tiles so a zoom step
+finds the adjacent band warm.
+
+The warm set is a **separate low-priority queue** (`PendingPredicted`); the
+single worker drains on-screen misses (`PendingVisible`) first, so prediction
+never delays a tile the user is looking at. The set is recomputed — and thereby
+cancelled — every frame; hysteresis comes from the velocity EMA. Speculative
+hits are counted via `s100.render.tile.prediction.hits` /
+`.rasterized`, and cold exposure via the `s100.render.tile.cold.exposure`
+histogram.
+
+A published predicted tile must **not** request a repaint
+(`ShouldRequestRedraw` returns `true` only for a published *visible* tile).
+A pre-warm tile is off-screen, so repainting on its arrival changes nothing
+visible — but it *would* trigger a frame that re-runs prediction and
+re-publishes the next speculative tile, a self-sustaining repaint loop that
+never lets the map settle. The loop only bites when frames are cheap (GPU
+residency, where Mapsui does not coalesce the spurious invalidations); with
+the visible-only gate the pre-warmed tile simply stays resident until the
+viewport moves onto it (design doc Appendix F.7).
+
+Prediction is on by default and is a first-class A/B knob:
+`S100_VECTOR_TILE_PREDICT=0` reverts to the Phase-2 visible-only behaviour.
+**Measured (PDB01, 20-step pan, OFF vs ON):** frames with cold-tile exposure
+fell from **58 % → 16 %** (the residual is the cold start, not the pan), at a
+~32 % prediction hit-rate; the steady-pan window itself was entirely zero-cold.
+
+### Persistent warm disk cache + `styleStateHash` (Phase 4)
+
+Below the in-memory hot cache sits a **persistent, on-disk warm tier**
+(`TileDiskCache`, design doc Appendix E): PNG-encoded tiles that survive a layer
+rebuild (a palette flip-back re-uses them) and a process restart. A tile missing
+from the hot cache is decoded from disk on the worker before any re-rasterise,
+and each freshly rasterised tile is persisted for future reuse.
+
+Correctness comes from the cache **namespace**,
+`SHA-256(productLayerSet | styleStateHash)` — a per-style-state subdirectory.
+The `styleStateHash` (computed in `MapsuiDisplayListRenderer`) folds the palette,
+symbol/text scales, and a deterministic serialization of the drawing
+instructions (which already encode display category, safety contour, and every
+feature/portrayal selection). A change to any of those yields a different
+namespace, so **a tile is never served from disk for a different mariner/palette
+state** — old tiles are orphaned and reclaimed by the byte-budget LRU sweep. The
+in-memory tier is already fresh per layer (a settings change rebuilds the layer),
+so this extends the no-stale-portrayal guarantee to the persistent tier.
+
+> **Palette fingerprint (design doc Appendix F.9).** The palette is folded via
+> `DescribePalette` — its `Name` plus its ordered colour entries — **not**
+> `ColorPalette.ToString()`. `ColorPalette` has no `ToString()` override, so the
+> earlier code collapsed every palette to one type-name string; combined with the
+> palette-independent S-101 instruction list, that made the namespace
+> palette-insensitive and a Night render served the previously-persisted Day
+> tiles. Folding the actual palette content keeps Day/Dusk/Night (and any palette
+> content change) in distinct namespaces.
+
+The cache mirrors `DiskPortrayalInstructionCache`: atomic temp+move writes,
+mtime-LRU eviction to a soft byte budget, treat-any-error-as-a-miss; PNG codec
+work runs outside the lock. Knobs: `S100_VECTOR_TILE_DISK` (default on),
+`S100_VECTOR_TILE_DISK_DIR` (default an OS-temp subdirectory),
+`S100_VECTOR_TILE_DISK_MB` (default 512). Telemetry counters
+`s100.render.tile.disk.hits` / `.writes`. **Verified (PDB01):** a Day→Night→Day
+palette flip produced two separate namespaces (no cross-style sharing); 163 tiles
+persisted, 198 served warm from disk on the flip-back instead of re-rasterising.
+
+### GPU texture residency (Phase 5)
+
+The top tier keeps already-composited tiles **resident as GPU textures** so a
+steady pan/zoom does not re-upload identical pixels to the GPU every frame. A
+profile of the pre-residency steady pan attributed **98 % of render-thread native
+self-time to `BlitTile → SKCanvas.DrawImage`** — i.e. a per-frame raster→GPU
+re-upload of unchanged tiles (design doc Appendix F). Residency replaces that with
+a one-time promotion: the first time a raster tile is composited it is promoted via
+`SKImage.ToTextureImage(GRContext)` into a per-layer GPU-texture cache (a second
+`TileCache` instance), and every subsequent frame blits the already-resident
+texture. Telemetry counters `s100.render.tile.gpu.uploads` / `.hits` track the
+reuse ratio.
+
+This is **gated to GPU-backed surfaces**: the live `GRContext` is read from
+`SKCanvas.Context` and is `null` on a software/CPU surface, in which case the
+renderer transparently falls back to the raster blit path. The magnitude of the
+win is therefore machine-dependent — on a Metal/Apple-silicon surface the steady
+pan went from ~38 ms to ~3 ms per frame with a 96–99 % GPU hit ratio — but the
+*direction* (stop re-uploading identical pixels) holds on any GPU surface and the
+software path is unchanged.
+
+**Thread-confinement (critical):** GPU-backed `SKImage`s must be created *and
+freed* on the thread that owns the GPU context (the render thread); freeing one on
+the GC finalizer thread crashes the native Skia GPU backend. All GPU-texture
+mutation funnels through `ManageGpuResidency` / `BlitTile`, which run only on the
+render thread under the layer lock. To make teardown safe — a closed dataset, a
+palette re-portrayal that swaps in a fresh layer, or a silently GC'd layer all
+abandon a `TileState` that will never render again — every GPU-texture cache is
+held by a **process-wide registry** with a *strong* reference to the cache and a
+*weak* reference to its owning layer. The strong reference keeps the textures off
+the finalizer thread; when the layer is collected, the next render reconciles the
+registry and disposes the orphaned cache on the render thread under the live
+context. Knobs: `S100_VECTOR_TILE_GPU` (default on),
+`S100_VECTOR_TILE_GPU_MB` (default 256). **Verified (PDB01):** four
+close-all + reopen cycles (each warming and abandoning a GPU cache) with no native
+crash, frames steady at 6–9 ms and a 96 % GPU hit ratio sustained across the
+cycles.
+
+**Deferred GPU disposal + bounded backdrop (zoom-out safety):** `SKCanvas.DrawImage`
+is deferred — the texture is only dereferenced when Skia flushes *after* the render
+method returns — so a GPU texture must outlive the frame that drew it. Two measures
+keep that invariant. First, the per-frame compositor draws the fallback backdrop
+only while the target band is incomplete, and then only from the single nearest
+cached band (within `MaxFallbackBandDistance` (2) bands of the target); this both
+removes the multi-scale "ghosting" of symbols stacked at different sizes during a
+zoom and bounds the per-frame draw count, so a full zoom-out can no longer try to
+composite the entire cache at once. Second, the GPU `TileCache` is built with `deferDisposal: true`:
+evicted/replaced/cleared textures are not freed inline but on the *next* frame via
+`DrainPendingDisposals()` (called at the top of `Composite`, before any draw is
+recorded), by which point the frame that referenced them has already flushed. The
+render-thread paint block and the rasterisation worker also reset their state from a
+single guarded path, so a paint-time throw drops one frame (counter
+`s100.render.tile.faults`) instead of stranding the pipeline into a blank chart.
+**Verified (PDB01, GPU on and off):** zoom in → zoom out to the whole world → zoom
+back in renders correctly with no crash and no blank frame.
+
+**Rotated-viewport blanking (Appendix F.8):** the tiled compositor formerly bailed
+on any non-zero `viewport.Rotation`, so an incidental trackpad-pinch spin (which
+rarely returns to exactly 0) blanked the chart until a dataset reload. It now
+composites north-up into an off-screen surface and rotates that single image about
+the screen centre by an angle derived from Mapsui's `WorldToScreenXY` (matching its
+convention without hardcoding), enlarging tile selection to the rotated bounding box
+(`TileGrid.RotatedCoverSize`) so corners stay covered. Compositing north-up first
+also keeps the per-tile clip-to-core joins and the cross-band backdrop/target
+boundary seam-free under rotation, so a non-north-up zoom transition no longer
+bands (issue #330). Set
+`S100_VECTOR_TILE_DIAG=1` to emit a rate-limited (~1 Hz) per-frame compositor
+summary to stderr (target-band completeness, fallback bands drawn, cache/GPU
+residency) plus a one-line note whenever the layer draws nothing — the diagnostic
+that root-caused both this and the ghosting issue. **Verified (GB Solent exchange
+set):** trackpad pinch-zoom and pinch-rotate keep the chart visible and aligned,
+corners filled, single tile scale with no ghosting.
+
+**Graceful shutdown (Appendix F.10):** the rasterisation workers call into native
+Skia, so the process must not begin tearing down `libSkiaSharp` (managed-runtime
+exit → C++ `__cxa_finalize`) while a worker is mid-rasterise — that dereferences
+freed Skia globals and dies with a native `SIGSEGV` (seen on
+`--exit-after-screenshot`, latent on any quit). `S100VectorTileRenderer.ShutdownAndDrain(timeout)`
+(backed by the one-way `WorkerDrainGate`) sets a permanent draining flag and
+blocks until in-flight workers finish; every worker `TryRegister`s before starting
+and a refused/late worker returns before any Skia call. The viewer calls it from
+`IClassicDesktopStyleApplicationLifetime.ShutdownRequested`, which Avalonia raises
+on every exit path. The gate's synchronisation is unit-covered
+(`WorkerDrainGateTests`).
 
 ## Installation
 

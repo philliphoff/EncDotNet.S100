@@ -1,6 +1,6 @@
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia;

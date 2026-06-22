@@ -14,6 +14,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
