@@ -82,7 +82,7 @@ public sealed class SkiaDisplayListRenderer
     /// and caching it on first use. Returns <see langword="null"/> when the SVG
     /// cannot be parsed.
     /// </summary>
-    private static SKPicture? GetSymbolPicture(string processedSvg)
+    internal static SKPicture? GetSymbolPicture(string processedSvg)
     {
         var svg = s_symbolPictureCache.GetOrAdd(processedSvg, static content =>
         {
@@ -156,19 +156,45 @@ public sealed class SkiaDisplayListRenderer
     /// margin.
     /// </param>
     public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport, SKRect? pointCullBounds)
+        => RenderOnto(canvas, scene, viewport, new OverlayDrawOptions { PointCullBounds = pointCullBounds });
+
+    /// <summary>
+    /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, SKRect?)"/>, but
+    /// driven by <paramref name="options"/> so the tiled subsystem's live label
+    /// plane can: suppress decluttered text
+    /// (<see cref="OverlayDrawOptions.SuppressedText"/>), keep label glyphs
+    /// <b>upright</b> under a rotated viewport by rotating each text
+    /// <i>anchor</i> about the screen centre while drawing glyphs axis-aligned
+    /// (<see cref="OverlayDrawOptions.TextAnchorRotationDegrees"/>), and draw the
+    /// point and text passes separately
+    /// (<see cref="OverlayDrawOptions.DrawPoints"/> /
+    /// <see cref="OverlayDrawOptions.DrawText"/>). The defaults reproduce the
+    /// plain overlay behaviour (draw everything, no suppression, no rotation).
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    /// <param name="options">Overlay draw controls; see <see cref="OverlayDrawOptions"/>.</param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport, OverlayDrawOptions options)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(options);
 
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
 
-        var cullBounds = pointCullBounds ?? new SKRect(
+        var cullBounds = options.PointCullBounds ?? new SKRect(
             -PointCullMarginPx,
             -PointCullMarginPx,
             viewport.WidthPixels + PointCullMarginPx,
             viewport.HeightPixels + PointCullMarginPx);
+
+        var suppressed = options.SuppressedText;
+        double textRotationDeg = options.TextAnchorRotationDegrees;
+        float centerX = options.ScreenCenterX;
+        float centerY = options.ScreenCenterY;
 
         // Per-render cache of decoded pattern tiles, keyed by pattern
         // reference. Real S-101 cells can have many polygons sharing a single
@@ -202,12 +228,15 @@ public sealed class SkiaDisplayListRenderer
                     case LinePaintOp line:
                         DrawLine(canvas, line, transform);
                         break;
-                    case PointPaintOp point:
+                    case PointPaintOp point when options.DrawPoints:
                         DrawPoint(canvas, point, transform, cullBounds);
                         break;
-                    case TextPaintOp text:
+                    case TextPaintOp text when options.DrawText:
+                        if (suppressed is not null && suppressed.Contains(text))
+                            break;
                         textScratch ??= new TextDrawScratch();
-                        DrawText(canvas, text, transform, cullBounds, textScratch);
+                        DrawText(canvas, text, transform, cullBounds, textScratch,
+                            textRotationDeg, centerX, centerY);
                         break;
                 }
             }
@@ -408,17 +437,69 @@ public sealed class SkiaDisplayListRenderer
         canvas.DrawCircle(cx, cy, radius, dot);
     }
 
-    private static void DrawText(SKCanvas canvas, TextPaintOp op, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch)
+    private static void DrawText(
+        SKCanvas canvas, TextPaintOp op, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch,
+        double anchorRotationDeg, float centerX, float centerY)
     {
         var (ax, ay) = t.Project(op.World);
+
+        // Upright-under-rotation: rotate the label *anchor* about the screen
+        // centre to match where the rotated base/point passes place the feature,
+        // but draw the glyphs axis-aligned (this method never rotates the
+        // canvas), so the text stays horizontal. North-up (deg == 0) is a no-op.
+        (ax, ay) = RotateAbout(ax, ay, centerX, centerY, anchorRotationDeg);
 
         if (!cullBounds.Contains(ax + (float)op.OffsetXpx, ay + (float)op.OffsetYpx))
             return;
 
         var font = scratch.FontFor((float)op.FontSizePx);
         var paint = scratch.Paint;
-        paint.Color = SKColors.Black;
 
+        var layout = LayoutText(op, ax, ay, font, paint);
+
+        if (op.BackColor is { } back)
+        {
+            paint.Color = back.ToSkia();
+            canvas.DrawRect(layout.Background, paint);
+        }
+
+        paint.Color = op.ForeColor.ToSkia();
+        DrawRunsWithFallback(canvas, op.Text, layout.X, layout.Baseline, (float)op.FontSizePx, font, paint, scratch);
+    }
+
+    /// <summary>
+    /// Rotates the screen point (<paramref name="x"/>, <paramref name="y"/>)
+    /// about (<paramref name="cx"/>, <paramref name="cy"/>) by
+    /// <paramref name="degrees"/>, in the same sense as
+    /// <see cref="SKCanvas.RotateDegrees(float, float, float)"/> (screen +Y down).
+    /// A zero angle returns the point unchanged. Used to keep label anchors
+    /// aligned with a rotated viewport while glyphs stay upright.
+    /// </summary>
+    internal static (float X, float Y) RotateAbout(float x, float y, float cx, float cy, double degrees)
+    {
+        if (degrees == 0)
+            return (x, y);
+
+        double rad = degrees * Math.PI / 180.0;
+        double cos = Math.Cos(rad);
+        double sin = Math.Sin(rad);
+        double dx = x - cx;
+        double dy = y - cy;
+        return ((float)(cx + dx * cos - dy * sin), (float)(cy + dx * sin + dy * cos));
+    }
+
+    /// <summary>
+    /// Computes the draw origin and the ink/background rectangle for a label,
+    /// given an already-rotated screen anchor (<paramref name="ax"/>,
+    /// <paramref name="ay"/>). Shared by <see cref="DrawText"/> (which draws at
+    /// the returned origin) and <see cref="LabelDeclutterer"/> (which uses the
+    /// returned rectangle as the label's collision footprint), so both agree on
+    /// exactly where a label lands. The rectangle includes the same small pad as
+    /// the optional background box.
+    /// </summary>
+    internal static (float X, float Baseline, SKRect Background) LayoutText(
+        TextPaintOp op, float ax, float ay, SKFont font, SKPaint paint)
+    {
         font.MeasureText(op.Text, out var textBounds, paint);
         float textWidth = textBounds.Width;
         float textHeight = textBounds.Height;
@@ -440,35 +521,133 @@ public sealed class SkiaDisplayListRenderer
         x += (float)op.OffsetXpx;
         baseline += (float)op.OffsetYpx;
 
-        if (op.BackColor is { } back)
+        const float pad = 1.5f;
+        var background = new SKRect(
+            x + textBounds.Left - pad,
+            baseline + textBounds.Top - pad,
+            x + textBounds.Left + textWidth + pad,
+            baseline + textBounds.Top + textHeight + pad);
+
+        return (x, baseline, background);
+    }
+
+    /// <summary>
+    /// Draws <paramref name="text"/> with per-run font fallback. When the primary
+    /// face has every glyph (the common ASCII case for soundings and most
+    /// labels) the whole string is drawn in one call. Otherwise the string is
+    /// split into runs of consecutive codepoints the primary face can render and
+    /// runs it cannot; each missing run is drawn with a fallback face resolved
+    /// via <see cref="SKFontManager.MatchCharacter(int)"/>, advancing the pen by
+    /// each run's measured width. This avoids <c>.notdef</c> "tofu" boxes for
+    /// codepoints absent from the primary face.
+    /// </summary>
+    private static void DrawRunsWithFallback(
+        SKCanvas canvas, string text, float x, float baseline, float sizePx,
+        SKFont primary, SKPaint paint, TextDrawScratch scratch)
+    {
+        if (string.IsNullOrEmpty(text) || primary.Typeface is null || primary.Typeface.ContainsGlyphs(text))
         {
-            paint.Color = back.ToSkia();
-            const float pad = 1.5f;
-            var rect = new SKRect(
-                x + textBounds.Left - pad,
-                baseline + textBounds.Top - pad,
-                x + textBounds.Left + textWidth + pad,
-                baseline + textBounds.Top + textHeight + pad);
-            canvas.DrawRect(rect, paint);
+            canvas.DrawText(text, x, baseline, SKTextAlign.Left, primary, paint);
+            return;
         }
 
-        paint.Color = op.ForeColor.ToSkia();
-        canvas.DrawText(op.Text, x, baseline, SKTextAlign.Left, font, paint);
+        var primaryFace = primary.Typeface;
+        var runs = SegmentRuns(text, cp => primaryFace.ContainsGlyph(cp) ? null : scratch.FallbackFor(cp));
+
+        float penX = x;
+        foreach (var (start, length, face) in runs)
+        {
+            var runFont = face is SKTypeface fallback ? scratch.FallbackFontFor(fallback, sizePx) : primary;
+            string run = text.Substring(start, length);
+            canvas.DrawText(run, penX, baseline, SKTextAlign.Left, runFont, paint);
+            penX += runFont.MeasureText(run, paint);
+        }
+    }
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into maximal runs of consecutive
+    /// codepoints served by the same face, where <paramref name="resolveFace"/>
+    /// returns the face to use for a Unicode codepoint (<see langword="null"/>
+    /// meaning "use the primary face" — either it has the glyph or no fallback
+    /// exists). Runs are compared by reference identity so a shared fallback face
+    /// is drawn in one call. Pure and codepoint-aware (handles surrogate pairs),
+    /// exposed for deterministic testing of the run segmentation independent of
+    /// the platform font manager.
+    /// </summary>
+    internal static List<(int Start, int Length, object? Face)> SegmentRuns(
+        string text, Func<int, object?> resolveFace)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(resolveFace);
+
+        var runs = new List<(int, int, object?)>();
+        if (text.Length == 0)
+            return runs;
+
+        int runStart = 0;
+        object? runFace = resolveFace(char.ConvertToUtf32(text, 0));
+        int i = char.IsSurrogatePair(text, 0) ? 2 : 1;
+
+        while (i < text.Length)
+        {
+            object? face = resolveFace(char.ConvertToUtf32(text, i));
+            if (!ReferenceEquals(face, runFace))
+            {
+                runs.Add((runStart, i - runStart, runFace));
+                runStart = i;
+                runFace = face;
+            }
+            i += char.IsSurrogatePair(text, i) ? 2 : 1;
+        }
+
+        runs.Add((runStart, text.Length - runStart, runFace));
+        return runs;
+    }
+
+    /// <summary>
+    /// Computes the on-screen bounding rectangle of a point symbol (or fallback
+    /// dot), centred on its already-rotated screen anchor. Used by
+    /// <see cref="LabelDeclutterer"/> so labels avoid colliding with symbols
+    /// (S-100 Part 9 draw order keeps symbols on top of yielding text). The box
+    /// is centred on the anchor; the small pivot asymmetry is immaterial for a
+    /// collision obstacle.
+    /// </summary>
+    internal static SKRect PointScreenBounds(PointPaintOp op, float cx, float cy)
+    {
+        float halfW, halfH;
+        if (op.Symbol is { } symbol && GetSymbolPicture(symbol.ProcessedSvg) is { } picture)
+        {
+            var bounds = picture.CullRect;
+            float scale = (float)symbol.Scale;
+            halfW = Math.Max(bounds.Width * scale / 2f, 1f);
+            halfH = Math.Max(bounds.Height * scale / 2f, 1f);
+        }
+        else
+        {
+            float radius = (float)Math.Max(op.FallbackScale * 12.0, 1.0);
+            halfW = halfH = radius;
+        }
+
+        return new SKRect(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
     }
 
     /// <summary>
     /// Per-render scratch for text drawing: a single reusable
     /// <see cref="SKPaint"/> (its colour is reset per op) and a cache of
-    /// <see cref="SKFont"/> keyed by pixel size. Avoids allocating native font
-    /// and paint handles per text op, which matters for the live overlay that
-    /// redraws thousands of soundings/labels every frame. Not thread-safe; one
-    /// instance per <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, SKRect?)"/>
+    /// <see cref="SKFont"/> keyed by pixel size, plus per-codepoint fallback
+    /// faces (and their fonts) resolved on demand for missing-glyph runs. Avoids
+    /// allocating native font and paint handles per text op, which matters for
+    /// the live overlay that redraws thousands of soundings/labels every frame.
+    /// Not thread-safe; one instance per
+    /// <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, OverlayDrawOptions)"/>
     /// call. The paint defaults to <see cref="SKPaintStyle.Fill"/>, which is
     /// correct for both the glyph fill and the optional label background rect.
     /// </summary>
-    private sealed class TextDrawScratch : IDisposable
+    internal sealed class TextDrawScratch : IDisposable
     {
         private readonly Dictionary<float, SKFont> _fonts = new();
+        private readonly Dictionary<int, SKTypeface?> _fallbackFaces = new();
+        private readonly Dictionary<(SKTypeface, float), SKFont> _fallbackFonts = new();
 
         /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
         public SKPaint Paint { get; } = new() { IsAntialias = true };
@@ -484,12 +663,53 @@ public sealed class SkiaDisplayListRenderer
             return font;
         }
 
+        /// <summary>
+        /// Returns a typeface that can render <paramref name="codepoint"/> when
+        /// the primary face cannot, or <see langword="null"/> when the platform
+        /// font manager has no match. Cached per codepoint (the lookup is
+        /// expensive and labels repeat characters).
+        /// </summary>
+        public SKTypeface? FallbackFor(int codepoint)
+        {
+            if (!_fallbackFaces.TryGetValue(codepoint, out var face))
+            {
+                try
+                {
+                    face = SKFontManager.Default.MatchCharacter(codepoint);
+                }
+                catch
+                {
+                    face = null;
+                }
+                _fallbackFaces[codepoint] = face;
+            }
+            return face;
+        }
+
+        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/>.</summary>
+        public SKFont FallbackFontFor(SKTypeface face, float sizePx)
+        {
+            var key = (face, sizePx);
+            if (!_fallbackFonts.TryGetValue(key, out var font))
+            {
+                font = new SKFont(face, sizePx);
+                _fallbackFonts[key] = font;
+            }
+            return font;
+        }
+
         public void Dispose()
         {
             Paint.Dispose();
             foreach (var font in _fonts.Values)
                 font.Dispose();
             _fonts.Clear();
+            foreach (var font in _fallbackFonts.Values)
+                font.Dispose();
+            _fallbackFonts.Clear();
+            foreach (var face in _fallbackFaces.Values)
+                face?.Dispose();
+            _fallbackFaces.Clear();
         }
     }
 

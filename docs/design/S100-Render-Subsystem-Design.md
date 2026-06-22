@@ -149,7 +149,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 - **Phase 1 — Single-surface B, from `VectorScene`.** New subsystem renders the whole viewport (over-render margin) on a worker from the scene IR, swap-and-blit. No tiling yet. *Exit:* B matches A's fidelity; pans off the sync loop. **✅ Done** — `S100VectorSceneRenderer`; on-screen paint worst case ~409 ms → ~5 ms (Appendix B). Base-plane parity holds; residual point-feature deltas trace to A's own portrayal bug, not B.
 - **Phase 2 — Tile the base.** Pyramid, gutter/clip seams, LRU + native-byte budget, best-available compositor. *Exit:* pan frame time bounded by perimeter; p99 under budget on the gesture script. **✅ Done** — `TileGrid` + `TileCache` + `S100VectorTileRenderer` (Appendix C). Origin-anchored web-mercator pyramid keeps interior tiles pan-stable; on-screen paint stayed bounded (≤ ~37 ms worst case vs A's ~409 ms) with no visible seams.
 - **Phase 3 — Prediction.** Velocity fan, z±1, fling projection, idle fill, cancellation/hysteresis. *Exit:* prediction hit-rate metric; cold-tile exposure during scripted pans ≈ 0. **✅ Done** — EMA-velocity warm set (1-ring halo ∪ directional fan ∪ z±1 centre) on a low-priority queue behind `S100VectorTileRenderer`, gated by `S100_VECTOR_TILE_PREDICT` (Appendix D). Prediction-on/off A/B over a 20-step pan: cold-frame fraction **58% → 16%** (residual is cold start, not the pan); hit-rate ~32%.
-- **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles. **✅ Done (core)** — persistent warm disk cache (`TileDiskCache`) keyed by a namespace folding `productLayerSet` + `styleStateHash`, so a tile is never served for a different mariner/palette state (Appendix E). The in-memory hot cache is already fresh per layer (a settings change rebuilds the layer), so in-memory stale exposure was structurally impossible; the hash extends that guarantee to the persistent tier. **Deferred:** the Label-plane extraction is held per the §4 principle *"labels stay on Mapsui through Phase 4"*; the Dynamic plane already exists and is reused unchanged.
+- **Phase 4 — Planes + invalidation.** Live Label plane (async placement), wire Dynamic plane, disk cache, `styleStateHash` invalidation on settings/palette with visible-first re-raster. *Exit:* setting change never shows stale portrayal on visible tiles. **✅ Done** — persistent warm disk cache (`TileDiskCache`) keyed by a namespace folding `productLayerSet` + `styleStateHash`, so a tile is never served for a different mariner/palette state (Appendix E). The in-memory hot cache is already fresh per layer (a settings change rebuilds the layer), so in-memory stale exposure was structurally impossible; the hash extends that guarantee to the persistent tier. The **Label plane** is complete: free-floating text was lifted out of the base tiles onto the live Overlay plane with the symbol/sounding work (Appendix F.11, giving constant on-screen size), and the Label-plane completion adds priority-driven declutter, upright-under-rotation text, and per-run glyph fallback on that plane (Appendix G). The Dynamic plane already exists and is reused unchanged.
 - **Phase 5 — GPU residency + polish.** Texture cache/atlas, anticipatory-zoom tuning, side-by-side diff mode. **✅ Done (residency)** — composited tiles are promoted once to GPU-resident textures (`SKImage.ToTextureImage`) in a per-layer GPU `TileCache` and re-blitted without re-upload, gated to GPU surfaces with a software raster fallback (Appendix F). A measurement gate first attributed 98 % of render-thread native time to the per-frame re-upload (`BlitTile → DrawImage`); residency cut the steady-pan frame from ~38 ms to ~3 ms with a 96–99 % GPU hit ratio on a Metal surface. GPU textures are confined to the render thread and held by a strong-cache/weak-layer registry so teardown (dataset close, palette re-portrayal, or GC of an abandoned layer) frees them on the render thread instead of crashing the native backend on the finalizer thread. **Deferred (polish):** anticipatory-zoom tuning and the side-by-side A/B diff mode.
 
 ---
@@ -164,7 +164,7 @@ Tile job state machine: `Requested → (coalesced?) → Queued(priority) → Run
 **Decisions & deferrals:**
 1. **Cold cache tier — pixels (v1).** Fastest warm. Instructions (`DrawingInstructionSerializer`) are the upgrade path if palette-flip cost dominates; revisit post-Phase 4.
 2. **GPU vs CPU compositor — set by the Phase 0 surface test.** Working assumption: Mapsui defaults to GPU acceleration, so plan for upload-once + texture residency — but confirm the actual `MapControl` surface empirically before committing the Phase 5 residency work.
-3. **Labels — stay on Mapsui through Phase 4**, then evaluate pulling text into the subsystem for S-52 decluttering / rotation correctness.
+3. **Labels — pulled into the subsystem (Phase 4 complete).** The §4 "stay on Mapsui through Phase 4" hold is **lifted**. Free-floating text already escaped to the live Overlay plane with the symbol/sounding work (Appendix F.11), so labels hold a constant on-screen size; the Label-plane completion adds priority-driven declutter, upright-under-rotation text, and per-run glyph fallback on that same plane (Appendix G). Text is never baked into a base tile.
 4. **Orientation — north-up only for v1.** The transform stays a pure translation (matching today's snapshot math). Course-up rotation is a designed-for Phase-2+ addition — it touches tile coverage (rotated viewport footprint), label uprightness, and the prediction frame — and is explicitly out of v1 scope.
 
 ---
@@ -518,10 +518,12 @@ namespace-isolation safety property and the byte-budget eviction.
 
 ### E.5 Open follow-ups (Phase 5+)
 
-- **Label plane.** Free-floating text is still rasterised into the base tiles
-  (the §B.3 / §C tofu-label items). Pulling labels into a live, untiled plane —
-  for S-52 decluttering and rotation correctness — is the next structural step,
-  deferred here per the §4 principle that labels stay on Mapsui through Phase 4.
+- **Label plane.** ✅ **Done (Appendix G).** Free-floating text is no longer
+  rasterised into the base tiles — it escaped to the live Overlay plane with the
+  symbol/sounding work (Appendix F.11), resolving the §B.3 / §C tofu-label
+  band-scaling deltas (text now holds a constant on-screen size). The
+  Label-plane completion adds priority-driven declutter, upright-under-rotation
+  text, and per-run glyph fallback (the residual tofu cause) on that plane.
 - **Instruction-level warm cache.** The disk tier stores *pixels*; if palette-flip
   cost dominates, caching serialized instructions (above colour resolution) would
   let day/dusk/night re-resolve cheaply instead of re-rendering (design §3.4).
@@ -913,3 +915,116 @@ patterns in the base, order preserved (and an empty-overlay case); and
 viewports differing 4× in world span but sharing pixel dimensions — proving the
 constant on-screen size the overlay exists to guarantee. Both are pure,
 machine-independent Skia rasters.
+
+---
+
+## Appendix G — Phase 4 Label-plane completion (declutter, upright text, glyph fallback)
+
+**Context.** #347's "Extract the Label plane" item was written when free-floating
+text was assumed to be baked into the base tiles and therefore scaling with the
+resolution band. By the time this work started, that was **already false**: the
+screen-space overlay (Appendix F.11) routes **every** `TextPaintOp` (alongside
+`PointPaintOp`) to the live Overlay plane via `S100VectorTileRenderer.PartitionScene`,
+drawn each frame against the real viewport, so labels already held a constant
+on-screen size and `TileDiskCache.FormatVersion` was already at `2` (no baked
+text). There is exactly one text op type and no text anchored into base tiles,
+so the "labels not free-floating" sub-item is empty. The genuine remaining
+Label-plane gaps — all on the live plane — were declutter, rotation-correct
+uprightness, and missing-glyph fallback.
+
+> **Terminology.** "S-52 declutter" in #347 and earlier appendices is shorthand.
+> S-52 is the S-57/ECDIS Presentation Library; S-100 replaces it with Part 9 +
+> the product Portrayal Catalogue. Part 9 makes overlap avoidance the **portrayal
+> engine's** responsibility (no per-label collision rule ships in the catalogue),
+> so the declutter is implemented here in the renderer, driven by the
+> drawing-priority order already carried on each `PaintOp`.
+
+### G.1 Deterministic, priority-driven declutter
+
+`LabelDeclutterer` (`EncDotNet.S100.Renderers.Skia/Scene/`) is a pure,
+Skia-measure-only pass run each frame over the Overlay scene **before** drawing:
+
+- **Footprints (final screen space).** Each `TextPaintOp` projects to its screen
+  anchor + alignment + px offset + measured text bounds + a small pad → an AABB.
+  Each `PointPaintOp` → an AABB from the symbol `CullRect`×`Scale` (or fallback-dot
+  radius). Determinism is a **feature** (Appendix B.3 — do not chase A's
+  nondeterministic placement).
+- **Order = priority.** `VectorScene.Ops` is in ascending Part 9 drawing
+  priority (later = on top). Point symbols reserve their footprints **first**
+  (S-100 draw order: symbols/text on top, and symbols win over text); then text
+  is processed **highest-priority-first** (reverse op order). A label whose
+  footprint collides with an already-reserved footprint is **suppressed**.
+  Survivors are returned as a suppression set and drawn in original order to
+  preserve z-order.
+- **Fullest fidelity.** Soundings (a `TextPaintOp`) participate as both occupant
+  and obstacle, and labels avoid **symbol** footprints too.
+- **O(n) index.** A uniform screen-bucket grid (`ScreenRectIndex`, 64 px cells)
+  keeps collision queries linear for the thousands of ops/frame; scratch is
+  reused to avoid per-frame churn, within the same budget as drawing the ops.
+
+### G.2 Upright text under rotation
+
+The old overlay rotated the whole canvas about screen-centre (F.11), which
+rotated glyphs too. `DrawOverlay` now splits the pass:
+
+- **Point pass** — unchanged: drawn under the rotated canvas (symbols rotate
+  with the chart, a deliberate scope guard).
+- **Text pass** — drawn on the **unrotated** canvas; each anchor is rotated in
+  code about the screen centre (`RotateAbout`, matching `SKCanvas.RotateDegrees`
+  sense) so the label stays pinned to its feature, while the glyph baseline stays
+  **horizontal** (upright). `RenderOnto`/`DrawText` gained an optional screen-space
+  anchor rotation (`OverlayDrawOptions.TextAnchorRotationDegrees` + screen
+  centre) that moves the projected anchor but never the glyph orientation.
+
+Declutter footprints use the **post-rotation** anchors so collision is computed
+in true on-screen space. North-up (the v1 default) is the rotation==0 no-op path
+— a single `RenderOnto` with the suppression set.
+
+### G.3 Tofu / missing-glyph fallback
+
+`canvas.DrawText(string, …)` emits `.notdef` boxes for any codepoint the chosen
+face lacks (no shaping/fallback) — the residual "tofu-label" cause from §B.3/§C.3.
+`DrawText` now keeps the fast path when the primary face has all glyphs
+(`Typeface.ContainsGlyphs`); otherwise `SegmentRuns` splits the string into runs
+by resolved face and `DrawRunsWithFallback` draws each run with the primary face
+or a `SKFontManager.MatchCharacter`-resolved fallback, advancing the pen by the
+measured run width. Resolved fallback faces/fonts are cached in `TextDrawScratch`
+so only non-ASCII text pays the lookup. `SegmentRuns` is codepoint-aware (handles
+surrogate pairs) and pure for deterministic testing.
+
+### G.4 Where it plugs in
+
+- `LabelDeclutterer` + `OverlayDrawOptions` — new in `Renderers.Skia/Scene/`.
+- `SkiaDisplayListRenderer.RenderOnto(canvas, scene, viewport, OverlayDrawOptions)`
+  — new overload accepting the suppression set, screen anchor-rotation, and
+  point/text draw filters; `DrawText` gained per-run font fallback.
+- `S100VectorTileRenderer.DrawOverlay` — runs declutter over `state.OverlayScene`
+  each frame, then composes the north-up single pass or the rotated point-pass +
+  upright-text-pass.
+- **No `TileDiskCache.FormatVersion` bump** — the overlay is live, not baked, so
+  no persisted tile is affected.
+
+### G.5 Verification
+
+- **Pure (Pipelines.Tests).** `LabelDeclutterTests` — non-overlapping labels both
+  survive; overlapping suppresses the lower priority; label yields to symbol;
+  soundings participate; stable across runs. `LabelPlaneTextTests` — upright
+  anchor-rotation yields an axis-aligned (wider-than-tall) opaque AABB vs a
+  canvas-rotated control (taller-than-wide), and `SegmentRuns` font-fallback
+  segmentation (ASCII single run, missing-glyph split, surrogate pairs).
+- **Integrated (VisualRegression.Tests).** `LabelOverlayCompositionTests`
+  composes the exact `DrawOverlay` north-up pieces (declutter → `RenderOnto`
+  with the suppression set) and asserts decluttered label count < raw, a separate
+  symbol+label both render, and a label sharing a symbol's anchor is suppressed
+  while the symbol survives. Machine-independent; no committed golden binary.
+- **Viewer (executed, north-up).** End-to-end confirmation in the tiled "B"
+  subsystem (`S100_RENDER_SUBSYSTEM=TiledScene`, Metal GPU surface) on cell
+  `101GB0050242H.000` (Portsmouth Harbour): place names, soundings, and light
+  characters render crisp and horizontal with **no `.notdef` tofu** and point
+  symbols drawn on top; label/sounding glyph heights are **identical** at zoom
+  15 vs 16 while the base chart scales (constant on-screen size). An A/B capture
+  at the same frame shows subsystem A omitting all point symbols/soundings/labels
+  (the §B.3 A-side point-feature bug), so B is strictly more faithful on labels.
+  Rotation is a UI gesture with no CLI/MCP control, so upright-under-rotation is
+  pinned by the unit tests above. The full real-cell labels+symbols
+  **golden-image set** remains its own #347 item.
