@@ -607,6 +607,21 @@ Because old tiles had symbols baked in, `TileDiskCache.FormatVersion` was bumped
 `1 → 2` so they are never reused (which would double-draw symbols). See design
 Appendix F.11.
 
+Because the overlay redraws every symbol and sounding glyph **per frame**, three
+costs are kept off the hot path. First, parsed symbol pictures are cached
+process-wide in `SkiaDisplayListRenderer` keyed by the resolved SVG content, so
+`SKSvg.CreateFromSvg` runs once per distinct symbol rather than once per op per
+frame (the set of distinct symbol SVGs is small and bounded by the symbol
+catalogue × palette). Second, `RenderOnto` culls point/text ops whose projected
+anchor falls outside the viewport (inflated by `PointCullMarginPx`) before
+parsing a symbol or measuring a label; `DrawOverlay` passes an explicit cull
+rectangle expanded to the rotated viewport's bounding box so nothing visible is
+dropped under rotation. Third, text drawing pools its `SKFont` (cached by pixel
+size) and `SKPaint` for the duration of a render instead of allocating a native
+font/paint per label, so a dense sounding overlay no longer churns thousands of
+handles per frame. None of these change what is drawn — only the work done for
+glyphs that cannot be seen or that share resources.
+
 ### Prediction / pre-warm (Phase 3)
 
 To stop a pan or zoom from transiently exposing cold tiles, the tiled renderer
@@ -751,6 +766,24 @@ residency) plus a one-line note whenever the layer draws nothing — the diagnos
 that root-caused both this and the ghosting issue. **Verified (GB Solent exchange
 set):** trackpad pinch-zoom and pinch-rotate keep the chart visible and aligned,
 corners filled, single tile scale with no ghosting.
+
+**Rotation-composite teardown (off-thread finalization, issue #332).** The rotated
+frame's off-screen composite — a GPU-backed `SKSurface` and its `SKImage` snapshot —
+is GPU-resident just like the tiles, so it carries the same thread-confinement rule:
+it must be freed on the render thread, never the GC finalizer thread. During steady
+rendering the next `Composite` frees the previous frame's pair inline (deferred-draw
+safe), but when the tiled ("B") layer is torn down with a rotated frame still set —
+notably **switching the render subsystem from "B" tiled to "A" Mapsui**, which
+re-portrays and swaps in fresh layers — that pair was reachable only from the
+weakly-held `TileState` and was finalized off-thread, racing the now-active "A" render
+thread inside the native Skia GPU backend and crashing the process. The fix mirrors
+each GPU-backed rotation pair into its layer's `GpuRegistryEntry` (the same
+strong-referenced, render-thread-disposed registry that already shields the GPU
+texture cache), in lockstep with the `TileState`, so `ReconcileGpuCaches` frees it on
+the render thread when the owning layer is collected. Only the small GPU pair is
+pinned — the far larger CPU tile cache stays on the weakly-held `TileState` and
+remains GC-collectible. (Software/CPU rotation surfaces are safe to finalize
+off-thread and are not mirrored.)
 
 **Graceful shutdown (Appendix F.10):** the rasterisation workers call into native
 Skia, so the process must not begin tearing down `libSkiaSharp` (managed-runtime
