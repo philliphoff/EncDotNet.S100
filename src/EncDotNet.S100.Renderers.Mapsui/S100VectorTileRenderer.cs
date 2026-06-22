@@ -86,6 +86,16 @@ public static class S100VectorTileRenderer
     private const int MaxImageDimension = 4096;
 
     /// <summary>
+    /// Over-render halo, in screen pixels, added around the viewport before the
+    /// per-layer extent-cull test (<see cref="LayerExtentCulling.ShouldRender"/>).
+    /// A cell whose data extent — grown by this halo — does not reach the
+    /// viewport is skipped for the frame. Sized at one tile (<see
+    /// cref="TileGrid.TileSizeDip"/>) so a cell whose geometry sits just off the
+    /// edge, but whose point symbols / gutter reach in, is never wrongly culled.
+    /// </summary>
+    private const double CullMarginPx = TileGrid.TileSizeDip;
+
+    /// <summary>
     /// How many bands away from the target a cached tile may be and still be
     /// drawn as a fill-the-gap backdrop. Bounding this is both correctness and
     /// safety: it stops tiles from many zoom levels stacking up at different
@@ -463,6 +473,20 @@ public static class S100VectorTileRenderer
         if (deviceScale <= 0 || float.IsNaN(deviceScale))
         {
             deviceScale = 1f;
+        }
+
+        // Skip a cell whose data extent lies entirely outside the viewport.
+        // Mapsui invokes this custom renderer for every enabled, in-resolution
+        // layer each frame without extent-culling (VisibleFeatureIterator only
+        // filters Enabled/Min/MaxVisible), so an exchange set of many S-101 cells
+        // would otherwise run the full per-frame path — empty-tile scheduling,
+        // GPU residency, composite, live overlay, and a redraw on every off-view
+        // worker publish — once per off-view cell. Culling here makes off-view
+        // cells cost nothing. The CullMarginPx halo keeps edge cells (whose
+        // symbols/over-render reach into the view) rendering.
+        if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, CullMarginPx))
+        {
+            return;
         }
 
         var state = s_states.GetValue(layer, static _ => new TileState());
