@@ -126,7 +126,7 @@ internal static class S100McpServerToolFactory
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
-            Name = "list_datasets",
+            Name = ListDatasetsTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });
@@ -257,7 +257,7 @@ internal static class S100McpServerToolFactory
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
-            Name = "find_at",
+            Name = FindAtTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

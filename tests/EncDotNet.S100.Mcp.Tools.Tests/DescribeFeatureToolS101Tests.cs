@@ -45,6 +45,10 @@ public class DescribeFeatureToolS101Tests
         Assert.Equal(11.0, depths[0].GetDouble(), 6);
         Assert.Equal(6.4, depths[1].GetDouble(), 6);
         Assert.Equal(18.3, depths[2].GetDouble(), 6);
+
+        // The depth unit is stated explicitly so a client never infers it
+        // (issue #316).
+        Assert.Equal("metres", geometry.GetProperty("depthUnit").GetString());
     }
 
     [Fact]
@@ -64,6 +68,10 @@ public class DescribeFeatureToolS101Tests
         Assert.True(result.TryGetValue(out var value));
         var depths = value.Attributes.GetProperty("geometry").GetProperty("depths");
         Assert.Equal(JsonValueKind.Null, depths.ValueKind);
+
+        // With no aligned depths the unit is null, not a misleading "metres".
+        var depthUnit = value.Attributes.GetProperty("geometry").GetProperty("depthUnit");
+        Assert.Equal(JsonValueKind.Null, depthUnit.ValueKind);
     }
 
     [Fact]

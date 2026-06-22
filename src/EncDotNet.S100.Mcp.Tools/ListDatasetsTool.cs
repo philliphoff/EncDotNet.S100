@@ -49,6 +49,9 @@ public sealed record ListDatasetsResult(
 /// </summary>
 public sealed class ListDatasetsTool
 {
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "list_datasets";
+
     private readonly IDatasetCatalog _catalog;
 
     /// <summary>Creates a new <see cref="ListDatasetsTool"/>.</summary>
