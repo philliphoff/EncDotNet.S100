@@ -34,7 +34,14 @@ exactly one place:
   `VectorScene` + `Viewport` → `SKBitmap`. The
   vector analogue of `SkiaCoverageRenderer`, suitable for a tile-serving web API
   with no Mapsui/GUI dependency. It supplies the second projection half
-  (`EPSG:3857 → screen`) via a `Viewport`-derived affine.
+  (`EPSG:3857 → screen`) via a `Viewport`-derived affine. Parsed symbol pictures
+  are cached process-wide (keyed by the resolved SVG), point/text ops whose
+  anchor falls outside the viewport (plus `PointCullMarginPx`) are culled before
+  any per-op work, and text drawing pools its `SKFont`/`SKPaint` per render —
+  all three matter for the tiled subsystem's per-frame overlay, which replays
+  this renderer live every frame. `RenderOnto` takes an optional cull rectangle
+  so a caller that rotates the canvas can expand it to the rotated viewport's
+  bounding box.
 - **`WebMercator`** (in `Rendering.Scene`) — EPSG:3857 forward projection (matches
   Mapsui's `SphericalMercator.FromLonLat`; a parity test asserts agreement).
 - **`ScaleVisibility`** (in `Rendering.Scene`) — shared S-100 Part 9 §11.1 scale-visibility rule.

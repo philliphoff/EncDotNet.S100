@@ -147,6 +147,71 @@ public class SymbolOverlayTests
         Assert.Equal(zoomedOut.Height, zoomedIn.Height);
     }
 
+    [Fact]
+    public void RenderOnto_PointAnchoredFarOutsideViewport_IsCulled()
+    {
+        const double lon = 10.0;
+        const double lat = 0.0;
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = RgbaColor.Transparent,
+            HonorScaleVisibility = false,
+        };
+
+        // A point centred in the viewport renders; the same point pushed far
+        // off-screen (many viewport widths away) is culled before it draws.
+        var inView = MeasureOpaqueBounds(renderer,
+            new VectorScene(new List<PaintOp> { Point("p", lon, lat) }),
+            Centred(lon, lat, 0.1));
+        var offView = MeasureOpaqueBounds(renderer,
+            new VectorScene(new List<PaintOp> { Point("p", lon + 5.0, lat) }),
+            Centred(lon, lat, 0.1));
+
+        Assert.True(inView.Width > 0 && inView.Height > 0, "in-view point did not render");
+        Assert.Equal((0, 0), offView);
+    }
+
+    [Fact]
+    public void RenderOnto_SvgSymbol_RendersConsistentlyAcrossRepeatedRenders()
+    {
+        const double lon = 10.0;
+        const double lat = 0.0;
+        var scene = new VectorScene(new List<PaintOp> { PointWithSvg("buoy", lon, lat) });
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = RgbaColor.Transparent,
+            HonorScaleVisibility = false,
+        };
+
+        // The parsed symbol picture is cached process-wide and reused across
+        // renders/frames. A regression that disposed the cached picture would
+        // yield a null picture on the next render (falling back to a dot, or
+        // nothing) — so repeated renders of the same symbol must stay identical.
+        var first = MeasureOpaqueBounds(renderer, scene, Centred(lon, lat, 0.1));
+        Assert.True(first.Width > 0 && first.Height > 0, "symbol did not render");
+        for (var i = 0; i < 3; i++)
+        {
+            var again = MeasureOpaqueBounds(renderer, scene, Centred(lon, lat, 0.1));
+            Assert.Equal(first, again);
+        }
+    }
+
+    private static PointPaintOp PointWithSvg(string id, double lon, double lat) =>
+        new()
+        {
+            FeatureReference = id,
+            World = WebMercator.FromLonLat(lon, lat),
+            Symbol = new ResolvedSymbol(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"3.98mm\" " +
+                "height=\"3.98mm\" viewBox=\"-1.99 -1.99 3.98 3.98\">" +
+                "<rect x=\"-1.99\" y=\"-1.99\" width=\"3.98\" height=\"3.98\" fill=\"red\"/></svg>",
+                Scale: 1.0,
+                PivotRelativeX: 0.0,
+                PivotRelativeY: 0.0),
+            FallbackColor = new RgbaColor(220, 20, 60, 255),
+            FallbackScale = 1.0,
+        };
+
     private static Viewport Centred(double lon, double lat, double span) =>
         new()
         {

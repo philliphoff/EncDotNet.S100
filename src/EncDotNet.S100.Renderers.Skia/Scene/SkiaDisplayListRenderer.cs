@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
@@ -42,6 +43,62 @@ public sealed class SkiaDisplayListRenderer
     public bool HonorScaleVisibility { get; set; } = true;
 
     /// <summary>
+    /// Process-wide cache of parsed symbol pictures keyed by the resolved SVG
+    /// content (<see cref="ResolvedSymbol.ProcessedSvg"/>). Parsing an SVG into
+    /// an <see cref="SKPicture"/> via <see cref="SKSvg.CreateFromSvg(string)"/>
+    /// is expensive, and the tiled subsystem's live overlay redraws every point
+    /// symbol and sounding glyph on <i>every</i> frame (see
+    /// <c>S100VectorTileRenderer.DrawOverlay</c>). The set of distinct symbol
+    /// SVGs is small and bounded (symbol catalogue × palette), so caching the
+    /// parsed picture across frames and tiles eliminates per-op re-parsing.
+    /// </summary>
+    /// <remarks>
+    /// The cached value is the owning <see cref="SKSvg"/>, not the bare
+    /// <see cref="SKPicture"/>: an <see cref="SKSvg"/> owns and disposes its
+    /// <see cref="SKSvg.Picture"/>, so keeping a strong reference to the
+    /// <see cref="SKSvg"/> keeps the picture's native resources alive (a GC'd
+    /// <see cref="SKSvg"/> would finalise the picture out from under us). Entries
+    /// are never evicted; the natural bound on distinct symbols keeps the cache
+    /// small. <see cref="SKPicture"/> playback (<c>DrawPicture</c>) is
+    /// thread-safe, and the cache is a <see cref="ConcurrentDictionary{TKey,TValue}"/>
+    /// because tiles rasterise on background threads while the overlay draws on
+    /// the render thread.
+    /// </remarks>
+    private static readonly ConcurrentDictionary<string, SKSvg?> s_symbolPictureCache =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Half-extent, in display pixels, by which the point/text cull rectangle is
+    /// grown beyond the viewport so a symbol or label whose <i>anchor</i> sits
+    /// just off-screen but whose body is partly visible is still drawn. Sized to
+    /// comfortably exceed the largest compound symbol / point-anchored label.
+    /// Exposed so callers that supply an explicit cull rectangle (e.g. the live
+    /// overlay under a rotated viewport) inflate by the same margin.
+    /// </summary>
+    public const float PointCullMarginPx = 256f;
+
+    /// <summary>
+    /// Returns the parsed picture for <paramref name="processedSvg"/>, parsing
+    /// and caching it on first use. Returns <see langword="null"/> when the SVG
+    /// cannot be parsed.
+    /// </summary>
+    private static SKPicture? GetSymbolPicture(string processedSvg)
+    {
+        var svg = s_symbolPictureCache.GetOrAdd(processedSvg, static content =>
+        {
+            try
+            {
+                return SKSvg.CreateFromSvg(content);
+            }
+            catch
+            {
+                return null;
+            }
+        });
+        return svg?.Picture;
+    }
+
+    /// <summary>
     /// Renders the scene at the requested viewport, returning a new bitmap of
     /// <see cref="Viewport.WidthPixels"/> × <see cref="Viewport.HeightPixels"/>.
     /// The caller owns the returned bitmap.
@@ -76,6 +133,29 @@ public sealed class SkiaDisplayListRenderer
     /// <param name="scene">The display list to draw.</param>
     /// <param name="viewport">The live viewport whose projection places the ops.</param>
     public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport)
+        => RenderOnto(canvas, scene, viewport, pointCullBounds: null);
+
+    /// <summary>
+    /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>, but culls
+    /// point and point-anchored text ops whose projected anchor falls outside
+    /// <paramref name="pointCullBounds"/> (in viewport pixel space) before any
+    /// per-op work — avoiding the cost of parsing a symbol SVG or measuring a
+    /// label that cannot be visible. When <paramref name="pointCullBounds"/> is
+    /// <see langword="null"/>, the cull rectangle is the viewport inflated by
+    /// <see cref="PointCullMarginPx"/>. A caller that rotates the canvas (the
+    /// live overlay under a rotated viewport) must pass an explicit rectangle
+    /// expanded to the rotated viewport's bounding box, since this method draws
+    /// in pre-rotation pixel space.
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    /// <param name="pointCullBounds">
+    /// Pixel-space rectangle outside which point/text ops are skipped, or
+    /// <see langword="null"/> to derive it from the viewport plus the symbol
+    /// margin.
+    /// </param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport, SKRect? pointCullBounds)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(scene);
@@ -84,11 +164,24 @@ public sealed class SkiaDisplayListRenderer
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
 
+        var cullBounds = pointCullBounds ?? new SKRect(
+            -PointCullMarginPx,
+            -PointCullMarginPx,
+            viewport.WidthPixels + PointCullMarginPx,
+            viewport.HeightPixels + PointCullMarginPx);
+
         // Per-render cache of decoded pattern tiles, keyed by pattern
         // reference. Real S-101 cells can have many polygons sharing a single
         // pattern (e.g. quality-of-bathymetry overlays) so decoding the PNG
         // once and reusing the SKImage across ops is a meaningful saving.
         Dictionary<string, SKImage?>? patternImages = null;
+
+        // Per-render reusable text resources. The live overlay redraws every
+        // sounding/label per frame; allocating an SKFont + SKPaint per text op
+        // (S-100 "All" scenes have thousands) churns native handles. A single
+        // scratch reuses one paint and caches fonts by pixel size (soundings
+        // share a size), disposed once when the render completes.
+        TextDrawScratch? textScratch = null;
 
         try
         {
@@ -110,10 +203,11 @@ public sealed class SkiaDisplayListRenderer
                         DrawLine(canvas, line, transform);
                         break;
                     case PointPaintOp point:
-                        DrawPoint(canvas, point, transform);
+                        DrawPoint(canvas, point, transform, cullBounds);
                         break;
                     case TextPaintOp text:
-                        DrawText(canvas, text, transform);
+                        textScratch ??= new TextDrawScratch();
+                        DrawText(canvas, text, transform, cullBounds, textScratch);
                         break;
                 }
             }
@@ -125,6 +219,7 @@ public sealed class SkiaDisplayListRenderer
                 foreach (var img in patternImages.Values)
                     img?.Dispose();
             }
+            textScratch?.Dispose();
         }
     }
 
@@ -249,16 +344,18 @@ public sealed class SkiaDisplayListRenderer
         paint.PathEffect?.Dispose();
     }
 
-    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t)
+    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds)
     {
         var (cx, cy) = t.Project(op.World);
         cx += (float)op.OffsetXpx;
         cy += (float)op.OffsetYpx;
 
+        if (!cullBounds.Contains(cx, cy))
+            return;
+
         if (op.Symbol is { } symbol)
         {
-            using var svg = SKSvg.CreateFromSvg(symbol.ProcessedSvg);
-            var picture = svg?.Picture;
+            var picture = GetSymbolPicture(symbol.ProcessedSvg);
             if (picture is not null)
             {
                 var bounds = picture.CullRect;
@@ -311,12 +408,16 @@ public sealed class SkiaDisplayListRenderer
         canvas.DrawCircle(cx, cy, radius, dot);
     }
 
-    private static void DrawText(SKCanvas canvas, TextPaintOp op, WorldToScreen t)
+    private static void DrawText(SKCanvas canvas, TextPaintOp op, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch)
     {
         var (ax, ay) = t.Project(op.World);
 
-        using var font = new SKFont(RendererFonts.Default, (float)op.FontSizePx);
-        using var paint = new SKPaint { IsAntialias = true };
+        if (!cullBounds.Contains(ax + (float)op.OffsetXpx, ay + (float)op.OffsetYpx))
+            return;
+
+        var font = scratch.FontFor((float)op.FontSizePx);
+        var paint = scratch.Paint;
+        paint.Color = SKColors.Black;
 
         font.MeasureText(op.Text, out var textBounds, paint);
         float textWidth = textBounds.Width;
@@ -341,18 +442,55 @@ public sealed class SkiaDisplayListRenderer
 
         if (op.BackColor is { } back)
         {
-            using var bg = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, Color = back.ToSkia() };
+            paint.Color = back.ToSkia();
             const float pad = 1.5f;
             var rect = new SKRect(
                 x + textBounds.Left - pad,
                 baseline + textBounds.Top - pad,
                 x + textBounds.Left + textWidth + pad,
                 baseline + textBounds.Top + textHeight + pad);
-            canvas.DrawRect(rect, bg);
+            canvas.DrawRect(rect, paint);
         }
 
         paint.Color = op.ForeColor.ToSkia();
         canvas.DrawText(op.Text, x, baseline, SKTextAlign.Left, font, paint);
+    }
+
+    /// <summary>
+    /// Per-render scratch for text drawing: a single reusable
+    /// <see cref="SKPaint"/> (its colour is reset per op) and a cache of
+    /// <see cref="SKFont"/> keyed by pixel size. Avoids allocating native font
+    /// and paint handles per text op, which matters for the live overlay that
+    /// redraws thousands of soundings/labels every frame. Not thread-safe; one
+    /// instance per <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, SKRect?)"/>
+    /// call. The paint defaults to <see cref="SKPaintStyle.Fill"/>, which is
+    /// correct for both the glyph fill and the optional label background rect.
+    /// </summary>
+    private sealed class TextDrawScratch : IDisposable
+    {
+        private readonly Dictionary<float, SKFont> _fonts = new();
+
+        /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
+        public SKPaint Paint { get; } = new() { IsAntialias = true };
+
+        /// <summary>Returns a cached font for <paramref name="sizePx"/>, creating it on first use.</summary>
+        public SKFont FontFor(float sizePx)
+        {
+            if (!_fonts.TryGetValue(sizePx, out var font))
+            {
+                font = new SKFont(RendererFonts.Default, sizePx);
+                _fonts[sizePx] = font;
+            }
+            return font;
+        }
+
+        public void Dispose()
+        {
+            Paint.Dispose();
+            foreach (var font in _fonts.Values)
+                font.Dispose();
+            _fonts.Clear();
+        }
     }
 
     private static void AddRing(SKPath path, IReadOnlyList<(double X, double Y)> ring, WorldToScreen t)

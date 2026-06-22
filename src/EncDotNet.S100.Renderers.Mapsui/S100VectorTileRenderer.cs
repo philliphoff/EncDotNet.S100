@@ -266,18 +266,53 @@ public static class S100VectorTileRenderer
 
     /// <summary>
     /// Process-wide registry of every live GPU-texture residency cache, keyed
-    /// weakly by its owning <see cref="ILayer"/> (Phase&#160;5). This holds a
-    /// <em>strong</em> reference to each <see cref="TileCache"/> of GPU-backed
-    /// <see cref="SKImage"/>s so the GC's finalizer thread can never reclaim
-    /// them — GPU resources must be freed on the thread that owns the
-    /// <see cref="GRContext"/>, and finalizing them off-thread crashes the
-    /// native Skia GPU backend. When a layer is torn down (dataset closed,
-    /// palette re-portrayal swapping in a fresh layer, or a silent GC of an
-    /// abandoned layer) its weak entry goes dead; <see cref="ReconcileGpuCaches"/>
-    /// then disposes the orphaned cache on the render thread under the live
-    /// context. See <c>docs/design/S100-Render-Subsystem-Design.md</c> Appendix&#160;F.
+    /// weakly by its owning <see cref="ILayer"/> (Phase&#160;5). Each entry holds
+    /// a <em>strong</em> reference to that layer's <see cref="TileCache"/> of
+    /// GPU-backed <see cref="SKImage"/> tiles <em>and</em> to its current
+    /// GPU-backed rotation composite (<see cref="GpuRegistryEntry.RotationSurface"/>
+    /// / <see cref="GpuRegistryEntry.RotationImage"/>), so the GC's finalizer
+    /// thread can never reclaim any of them. GPU resources must be freed on the
+    /// thread that owns the <see cref="GRContext"/>, and finalizing them
+    /// off-thread crashes the native Skia GPU backend (observed as a
+    /// finalizer/render-thread race when switching the render subsystem from "B"
+    /// tiled to "A" Mapsui, which re-portrays and swaps in fresh layers, leaving
+    /// the old layer's GPU rotation surface to be finalized off-thread). Only GPU
+    /// objects are pinned here — the layer's far larger CPU tile cache stays on
+    /// the weakly-held <see cref="TileState"/> so it remains GC-collectible. When
+    /// a layer is torn down (dataset closed, palette re-portrayal or subsystem
+    /// switch swapping in a fresh layer, or a silent GC of an abandoned layer)
+    /// its weak entry goes dead; <see cref="ReconcileGpuCaches"/> then disposes
+    /// the orphaned cache and rotation composite on the render thread under the
+    /// live context. See <c>docs/design/S100-Render-Subsystem-Design.md</c>
+    /// Appendix&#160;F.
     /// </summary>
-    private static readonly List<(WeakReference<ILayer> Layer, TileCache Cache, GRContext Context)> s_gpuRegistry = new();
+    private static readonly List<GpuRegistryEntry> s_gpuRegistry = new();
+
+    /// <summary>
+    /// A single layer's pinned GPU residency: its texture cache and — mirrored
+    /// from the owning <see cref="TileState"/> in lockstep — its current rotated
+    /// off-screen composite. The mirror exists purely to keep those GPU objects
+    /// strongly reachable (off the weakly-held <see cref="TileState"/>) so they
+    /// survive to be disposed on the render thread rather than the finalizer
+    /// thread. See <see cref="s_gpuRegistry"/>.
+    /// </summary>
+    internal sealed class GpuRegistryEntry
+    {
+        public required WeakReference<ILayer> Layer;
+        public required TileCache Cache;
+
+        // The owning GRContext (typed as object so the teardown lifecycle can be
+        // unit-tested with a sentinel context — a real GRContext needs a GPU and
+        // is unavailable headlessly). Compared only by reference identity.
+        public required object Context;
+
+        // Strong mirror of TileState.RotationSurface/RotationImage for GPU-backed
+        // rotated frames, kept in lockstep with the TileState (set and cleared
+        // together in Composite). Null on north-up frames.
+        public SKSurface? RotationSurface;
+        public SKImage? RotationImage;
+    }
+
 
     private static readonly object s_gpuRegistrySync = new();
 
@@ -714,11 +749,18 @@ public static class S100VectorTileRenderer
         // deferred and flushes only after Render returns, so the surface/image
         // that backed the last rotated blit had to outlive that frame; by now it
         // has flushed and can be released (mirrors the GPU tile cache's
-        // DrainPendingDisposals discipline). Harmless on north-up frames.
+        // DrainPendingDisposals discipline). Harmless on north-up frames. The
+        // GPU-registry mirror is cleared in lockstep so it never references a
+        // disposed surface (see GpuRegistryEntry).
         state.RotationImage?.Dispose();
         state.RotationImage = null;
         state.RotationSurface?.Dispose();
         state.RotationSurface = null;
+        if (state.GpuEntry is { } entryAtStart)
+        {
+            entryAtStart.RotationImage = null;
+            entryAtStart.RotationSurface = null;
+        }
 
         // Target band visible tiles, and whether the band fully covers the
         // viewport (every visible tile already cached).
@@ -908,9 +950,19 @@ public static class S100VectorTileRenderer
 
         // DrawImage is deferred until the frame flushes (after Render returns), so
         // the image and its backing surface must outlive this frame; they are freed
-        // at the start of the next composite.
+        // at the start of the next composite. Mirror GPU-backed resources into the
+        // GPU registry entry (in lockstep with the TileState) so that, if this
+        // layer is torn down before the next composite, ReconcileGpuCaches frees
+        // them on the render thread rather than the finalizer thread crashing the
+        // native backend. CPU-backed (no grContext) composites are safe to
+        // finalize off-thread and need no mirror.
         state.RotationImage = image;
         state.RotationSurface = surface;
+        if (grContext is not null && state.GpuEntry is { } entryAtEnd)
+        {
+            entryAtEnd.RotationImage = image;
+            entryAtEnd.RotationSurface = surface;
+        }
     }
 
     /// <summary>
@@ -995,6 +1047,7 @@ public static class S100VectorTileRenderer
                 state.GpuTextures.Dispose();
                 state.GpuTextures = null;
                 state.GpuContext = null;
+                state.GpuEntry = null;
             }
 
             return;
@@ -1009,7 +1062,7 @@ public static class S100VectorTileRenderer
             }
 
             state.GpuTextures = new TileCache(GpuBudgetBytes, deferDisposal: true);
-            RegisterGpuCache(layer, state.GpuTextures, grContext);
+            state.GpuEntry = RegisterGpuCache(layer, state.GpuTextures, grContext);
             state.GpuContext = grContext;
             state.GpuGeneration = state.Generation;
         }
@@ -1021,16 +1074,27 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Registers a GPU-texture cache in the process-wide registry so it is held
-    /// alive against off-thread finalization until its owning layer is collected
-    /// (Phase&#160;5). See <see cref="s_gpuRegistry"/>.
+    /// Registers a GPU-texture cache in the process-wide registry so it — and the
+    /// owning layer's GPU rotation composite, mirrored into the returned entry —
+    /// are held alive against off-thread finalization until the owning layer is
+    /// collected (Phase&#160;5). Returns the entry so the caller can mirror its
+    /// rotation resources into it. See <see cref="s_gpuRegistry"/>.
     /// </summary>
-    private static void RegisterGpuCache(ILayer layer, TileCache cache, GRContext context)
+    private static GpuRegistryEntry RegisterGpuCache(ILayer layer, TileCache cache, object context)
     {
+        var entry = new GpuRegistryEntry
+        {
+            Layer = new WeakReference<ILayer>(layer),
+            Cache = cache,
+            Context = context,
+        };
+
         lock (s_gpuRegistrySync)
         {
-            s_gpuRegistry.Add((new WeakReference<ILayer>(layer), cache, context));
+            s_gpuRegistry.Add(entry);
         }
+
+        return entry;
     }
 
     /// <summary>
@@ -1054,17 +1118,20 @@ public static class S100VectorTileRenderer
 
     /// <summary>
     /// Disposes — on the render thread, under the live <see cref="GRContext"/> —
-    /// any registered GPU-texture caches whose owning layer has been collected
-    /// (Phase&#160;5). This is the teardown path for closed datasets and
-    /// re-portrayed (layer-swapped) datasets: the layer is gone so its
-    /// <see cref="TileState"/> never renders again, but the registry kept its
-    /// GPU images alive so they are freed here on the GPU-owning thread instead
-    /// of crashing the native backend on the finalizer thread. Only caches bound
-    /// to <paramref name="grContext"/> are touched; a cache from a different
-    /// (e.g. lost) context is left for that context's own teardown rather than
-    /// freed under the wrong one. See <see cref="s_gpuRegistry"/>.
+    /// the GPU resources of any registered entry whose owning layer has been
+    /// collected (Phase&#160;5): the GPU-texture residency cache and the GPU
+    /// rotation composite (<see cref="GpuRegistryEntry.RotationSurface"/> /
+    /// <see cref="GpuRegistryEntry.RotationImage"/>). This is the teardown path
+    /// for closed datasets, re-portrayed (layer-swapped) datasets, and
+    /// render-subsystem switches: the layer is gone so its <see cref="TileState"/>
+    /// never renders again, but the registry kept its GPU objects alive so they
+    /// are freed here on the GPU-owning thread instead of crashing the native
+    /// backend on the finalizer thread. Only resources bound to
+    /// <paramref name="grContext"/> are touched; a cache from a different (e.g.
+    /// lost) context is left for that context's own teardown rather than freed
+    /// under the wrong one. See <see cref="s_gpuRegistry"/>.
     /// </summary>
-    private static void ReconcileGpuCaches(GRContext grContext)
+    private static void ReconcileGpuCaches(object grContext)
     {
         lock (s_gpuRegistrySync)
         {
@@ -1079,6 +1146,14 @@ public static class S100VectorTileRenderer
                 if (ReferenceEquals(entry.Context, grContext))
                 {
                     entry.Cache.Dispose();
+
+                    // Free the dead layer's GPU rotation composite (if a rotated
+                    // frame left one set) on the render thread too; like the
+                    // texture cache, it must not be finalized off-thread.
+                    entry.RotationImage?.Dispose();
+                    entry.RotationImage = null;
+                    entry.RotationSurface?.Dispose();
+                    entry.RotationSurface = null;
                 }
 
                 s_gpuRegistry.RemoveAt(i);
@@ -1087,7 +1162,59 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Blits one cached tile (if resident): positions its guttered image by
+    /// Test-only seam: registers a GPU-registry entry for <paramref name="layer"/>
+    /// (with a sentinel <paramref name="context"/> and CPU-backed rotation
+    /// resources) and returns it, so the off-thread-finalization teardown
+    /// (<see cref="ReconcileGpuCaches(object)"/>) can be exercised deterministically
+    /// without a GPU <see cref="GRContext"/>. The lifecycle is identical for CPU-
+    /// and GPU-backed resources. Not for production use.
+    /// </summary>
+    internal static GpuRegistryEntry RegisterGpuEntryForTest(
+        ILayer layer, TileCache cache, object context, SKSurface? rotationSurface, SKImage? rotationImage)
+    {
+        var entry = RegisterGpuCache(layer, cache, context);
+        entry.RotationSurface = rotationSurface;
+        entry.RotationImage = rotationImage;
+        return entry;
+    }
+
+    /// <summary>
+    /// Test-only seam: runs the dead-layer GPU teardown for the given sentinel
+    /// <paramref name="context"/>. See <see cref="ReconcileGpuCaches(object)"/>.
+    /// </summary>
+    internal static void ReconcileGpuCachesForTest(object context) => ReconcileGpuCaches(context);
+
+    /// <summary>Test-only seam: the current GPU-registry entry count.</summary>
+    internal static int GpuRegistryEntryCountForTest
+    {
+        get
+        {
+            lock (s_gpuRegistrySync)
+            {
+                return s_gpuRegistry.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Test-only seam: disposes and clears every GPU-registry entry, so a test
+    /// leaves the process-wide registry clean for the next one. Not for
+    /// production use.
+    /// </summary>
+    internal static void ClearGpuRegistryForTest()
+    {
+        lock (s_gpuRegistrySync)
+        {
+            foreach (var entry in s_gpuRegistry)
+            {
+                entry.Cache.Dispose();
+                entry.RotationImage?.Dispose();
+                entry.RotationSurface?.Dispose();
+            }
+
+            s_gpuRegistry.Clear();
+        }
+    }
     /// world bounds and hard-clips to the tile core so adjacent tiles meet
     /// exactly with no seam or double-drawn gutter. When a GPU context is
     /// supplied (Phase&#160;5), the tile's raster pixels are uploaded once to a
@@ -1390,7 +1517,36 @@ public static class S100VectorTileRenderer
                 ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution),
             };
 
-            s_overlayRenderer.RenderOnto(canvas, overlay, viewport);
+            // Cull point/text overlay ops whose anchor cannot be visible before
+            // paying to parse a symbol SVG or measure a label. The canvas is
+            // rotated about its centre (north-up is the v1 no-op case), and
+            // RenderOnto draws in pre-rotation pixel space, so under rotation the
+            // cull rectangle must cover the rotated viewport's bounding box.
+            const float margin = SkiaDisplayListRenderer.PointCullMarginPx;
+            SKRect cullBounds;
+            if (rotate)
+            {
+                var rad = rotationDeg * Math.PI / 180.0;
+                var cosR = Math.Abs(Math.Cos(rad));
+                var sinR = Math.Abs(Math.Sin(rad));
+                var halfW = widthDip * 0.5;
+                var halfH = heightDip * 0.5;
+                var extentX = (float)(halfW * cosR + halfH * sinR);
+                var extentY = (float)(halfW * sinR + halfH * cosR);
+                var cx0 = (float)halfW;
+                var cy0 = (float)halfH;
+                cullBounds = new SKRect(
+                    cx0 - extentX - margin, cy0 - extentY - margin,
+                    cx0 + extentX + margin, cy0 + extentY + margin);
+            }
+            else
+            {
+                cullBounds = new SKRect(
+                    -margin, -margin,
+                    (float)widthDip + margin, (float)heightDip + margin);
+            }
+
+            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, cullBounds);
         }
         finally
         {
@@ -1478,6 +1634,15 @@ public static class S100VectorTileRenderer
         public TileCache? GpuTextures;
         public object? GpuContext;
         public long GpuGeneration = -1;
+
+        // The process-wide GPU-registry entry for this layer's current GPU
+        // residency (Phase 5), or null on a software surface / before the first
+        // GPU-backed paint. The registry strong-references this entry, so
+        // mirroring the GPU-backed RotationSurface/RotationImage into it (in
+        // lockstep with the fields below) keeps them reachable for render-thread
+        // disposal even after the weakly-held TileState is collected. See
+        // GpuRegistryEntry / s_gpuRegistry.
+        public GpuRegistryEntry? GpuEntry;
 
         // Visible misses drain before speculative (predicted) tiles.
         public readonly HashSet<TileKey> PendingVisible = new();

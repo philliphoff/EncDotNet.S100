@@ -411,6 +411,87 @@ public sealed class SkiaDisplayListRendererTests
         return renderer.Render(scene, viewport);
     }
 
+    [Fact]
+    public void Render_TextWithBackground_PaintsBothBackgroundAndForeground()
+    {
+        // The per-render text scratch reuses one SKPaint for the label
+        // background rectangle and the glyph fill, resetting its colour between
+        // them. This guards that the background still paints (its colour is not
+        // left as the glyph colour) and the foreground glyph paints over it.
+        var background = new RgbaColor(255, 0, 0, 255);   // red box
+        var foreground = new RgbaColor(0, 0, 255, 255);   // blue text
+        var scene = new VectorScene([
+            new TextPaintOp
+            {
+                FeatureReference = "text",
+                World = Project(0.005, 0.005),
+                Text = "ABC",
+                FontSizePx = 40,
+                ForeColor = foreground,
+                BackColor = background,
+            },
+        ]);
+
+        using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+
+        int red = 0, blue = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        for (int x = 0; x < bitmap.Width; x++)
+        {
+            var p = bitmap.GetPixel(x, y);
+            if (p.Red > 200 && p.Green < 80 && p.Blue < 80) red++;
+            if (p.Blue > 200 && p.Red < 80 && p.Green < 80) blue++;
+        }
+
+        Assert.True(red > 50, $"label background did not paint (red pixels={red}).");
+        Assert.True(blue > 20, $"label foreground did not paint (blue pixels={blue}).");
+    }
+
+    [Fact]
+    public void Render_TextOpsWithDifferentFontSizes_RenderAtDistinctSizes()
+    {
+        // The text scratch caches SKFont by pixel size; a regression that keyed
+        // the cache wrongly (or shared one font) would render both labels at the
+        // same size. Two same-text labels at 12 px and 40 px must differ in
+        // painted extent, and both must paint.
+        int Extent(double fontPx)
+        {
+            var scene = new VectorScene([
+                new TextPaintOp
+                {
+                    FeatureReference = "t",
+                    World = Project(0.005, 0.005),
+                    Text = "8",
+                    FontSizePx = fontPx,
+                    ForeColor = Black,
+                },
+            ]);
+            using var bitmap = Render(scene, MakeViewport(denom: 25_000));
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+            for (int y = 0; y < bitmap.Height; y++)
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                var p = bitmap.GetPixel(x, y);
+                if (p.Red < 128 && p.Green < 128 && p.Blue < 128)
+                {
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+            return maxX < 0 ? 0 : (maxY - minY + 1);
+        }
+
+        int small = Extent(12);
+        int large = Extent(40);
+
+        Assert.True(small > 0, "12 px label did not render.");
+        Assert.True(large > small * 1.5,
+            $"40 px label ({large}px tall) was not clearly larger than the 12 px label ({small}px tall).");
+    }
+
+
     private static Viewport MakeViewport(double denom) => new()
     {
         MinLongitude = 0.0,
