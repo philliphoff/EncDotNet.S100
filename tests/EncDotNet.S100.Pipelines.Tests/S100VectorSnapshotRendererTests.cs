@@ -484,4 +484,47 @@ public sealed class S100VectorSnapshotRendererTests
         // Spans none (between 6.16 and 30.0).
         Assert.False(S100VectorSnapshotRenderer.VisibleSetMayDiffer(thresholds, 9.55, 19.11));
     }
+
+    [Fact]
+    public void EnsureImageSourcesRegistered_FetchesSvgImageBeforeRecord()
+    {
+        // Regression for the snapshot fast-path dropping SVG point symbols
+        // (buoys, beacons, lights). The one-shot record races Mapsui's async
+        // image-source fetch loop: ImageStyleRenderer draws nothing on an
+        // ImageSourceCache miss, so a record taken before the fetch completes
+        // bakes a symbol-less raster that the (still "valid") snapshot never
+        // re-records. The renderer must register the layer's image sources
+        // synchronously before drawing — svg-content:// resolves in-process.
+        var svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\">"
+            + $"<!-- {Guid.NewGuid()} --><rect width=\"8\" height=\"8\" fill=\"green\"/></svg>";
+        var image = new Mapsui.Styles.Image { Source = "svg-content://" + svg, RasterizeSvg = true };
+        var feature = new Mapsui.Layers.PointFeature(0, 0);
+        feature.Styles.Add(new Mapsui.Styles.ImageStyle { Image = image });
+
+        var renderService = new Mapsui.Rendering.RenderService();
+
+        // Precondition: the SVG bytes are not yet in the cache, so a record now
+        // would omit the symbol.
+        Assert.Null(renderService.ImageSourceCache.Get(image));
+
+        S100VectorSnapshotRenderer.EnsureImageSourcesRegistered([feature], renderService);
+
+        // After registration the bytes are present, so ImageStyleRenderer can
+        // resolve and draw the symbol into the recorded raster.
+        Assert.NotNull(renderService.ImageSourceCache.Get(image));
+    }
+
+    [Fact]
+    public void EnsureImageSourcesRegistered_NoopForFeaturesWithoutImageStyles()
+    {
+        // A fallback coloured-dot point (SymbolStyle, not ImageStyle) needs no
+        // image fetch; the helper must tolerate it without throwing.
+        var feature = new Mapsui.Layers.PointFeature(0, 0);
+        feature.Styles.Add(new Mapsui.Styles.SymbolStyle());
+
+        var renderService = new Mapsui.Rendering.RenderService();
+
+        // Should complete without throwing.
+        S100VectorSnapshotRenderer.EnsureImageSourcesRegistered([feature], renderService);
+    }
 }

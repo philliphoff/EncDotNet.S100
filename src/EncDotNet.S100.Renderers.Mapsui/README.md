@@ -431,6 +431,21 @@ The trade-off is the *record* frame: the first frame at each new resolution
 device scale, costing more than a single live frame (~650 ms on PDB01). The
 off-thread pre-build below hides that cost for both zoom and sustained pan.
 
+**Image-source readiness at record time.** Mapsui resolves an `ImageStyle`'s
+image (the SVG point symbols for buoys, beacons, lights) from its
+`RenderService.ImageSourceCache`, which is normally populated by an
+*asynchronous* fetch loop. The live per-frame path tolerates a cache miss
+because it simply redraws the next frame once the fetch lands, but the
+snapshot's one-shot record does not: a record taken before the fetch
+completes would bake a symbol-less raster that the (still "valid") snapshot
+never re-records, so the symbols would vanish until the next zoom. The
+recorder therefore registers the layer's image sources **synchronously**
+before drawing (`EnsureImageSourcesRegistered`), mirroring Mapsui's own
+offscreen rasteriser (`RasterizingTileSource`, which awaits
+`ImageSourceCache.FetchAllImageDataAsync` before `RenderToBitmapStream`). The
+`svg-content://` / `base64-content://` sources used here resolve in-process,
+so this adds no I/O wait.
+
 **Off-thread pre-build (`S100_VECTOR_SNAPSHOT_PREBUILD`, default on).** When
 enabled, the renderer keeps a small per-resolution LRU of recorded images
 instead of a single image, and hides the record-frame stall in four ways:
