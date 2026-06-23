@@ -146,10 +146,20 @@ public sealed class TelemetrySmokeTests
     [Fact]
     public async Task VectorPipeline_emits_xslt_transform_span()
     {
+        // Use a dedicated test ActivitySource so we can start a root activity
+        // whose TraceId scopes the spans captured by the listener. Under
+        // parallel execution, a sibling test's XSLT span can be emitted into
+        // the same process during this test's window; filtering by our own
+        // root's TraceId ensures we only assert on spans produced by this
+        // test's pipeline invocation.
+        using var testSource = new ActivitySource(
+            "EncDotNet.S100.Tests.VectorPipeline_emits_xslt_transform_span");
+
         var observed = new ConcurrentBag<Activity>();
         using var listener = new ActivityListener
         {
-            ShouldListenTo = src => src.Name == "EncDotNet.S100.Core",
+            ShouldListenTo = src =>
+                src.Name == "EncDotNet.S100.Core" || src.Name == testSource.Name,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
             ActivityStopped = activity => observed.Add(activity),
         };
@@ -169,15 +179,16 @@ public sealed class TelemetrySmokeTests
             [new PortrayalRule { Name = "TestRule", Type = PortrayalRuleType.Xslt, ExecutionOrder = 1, AppliesTo = ["Buoy"] }],
             xsltRules: new() { ["TestRule"] = xslt });
 
+        using var root = testSource.StartActivity("test-root");
+        Assert.NotNull(root);
+
         await new VectorPipeline().ProcessAsync(source, catalogue);
 
-        // The global ActivityListener also observes xslt.transform spans emitted
-        // by sibling telemetry tests running in parallel, so assert that *this*
-        // pipeline's span (tagged with this test's rule) is present rather than
-        // taking the first xslt.transform span seen.
-        Assert.Contains(observed, a =>
-            a.OperationName == "s100.xslt.transform" &&
-            (string?)a.GetTagItem("s100.xslt.rule") == "TestRule");
+        // Only consider the XSLT transform span belonging to this test's own
+        // activity tree (same TraceId as the root we started above).
+        var transformSpan = observed.First(a =>
+            a.OperationName == "s100.xslt.transform" && a.TraceId == root.TraceId);
+        Assert.Equal("TestRule", transformSpan.GetTagItem("s100.xslt.rule"));
     }
 
     #region Helpers
