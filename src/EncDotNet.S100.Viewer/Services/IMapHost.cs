@@ -97,6 +97,15 @@ internal interface IMapHost
     void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution);
 
     /// <summary>
+    /// Sets the navigator's rotation to <paramref name="degrees"/> clockwise
+    /// (0 = north-up), without animation. Used by scripted viewport overrides to
+    /// exercise the rotated-viewport render path — e.g. verifying that the live
+    /// label plane keeps text upright under rotation. No-op when the map's
+    /// navigator is unavailable.
+    /// </summary>
+    void SetRotation(double degrees);
+
+    /// <summary>
     /// Pans the navigator to centre on the supplied WGS-84 lat/lon
     /// <b>without changing the current zoom level</b> (resolution is
     /// preserved). Intended for UI-driven "reveal this feature"

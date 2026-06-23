@@ -26,14 +26,6 @@ internal sealed class MapsuiMapHost : IMapHost
     private readonly MapControl _mapControl;
 
     /// <summary>
-    /// Upper bound on how long an offscreen <c>render_to_image</c> capture
-    /// waits for the live on-screen paint to yield the shared
-    /// <see cref="RenderGate"/> before rendering unsynchronised. Generous
-    /// so it only ever trips if the compositor is already wedged.
-    /// </summary>
-    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
-
-    /// <summary>
     /// Tracks which layers are dataset layers (as opposed to the basemap
     /// or tool overlays). Used to compute the correct insertion point
     /// when a new dataset layer is added and to identify which subset
@@ -158,6 +150,16 @@ internal sealed class MapsuiMapHost : IMapHost
         if (_mapControl.Map?.Navigator is { } nav)
         {
             nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
+        }
+    }
+
+    public void SetRotation(double degrees)
+    {
+        if (_mapControl.Map?.Navigator is { } nav)
+        {
+            // duration: 0 for an instantaneous, scripted rotation — animations
+            // would prevent reproducible measurement / capture runs.
+            nav.RotateTo(degrees, duration: 0);
         }
     }
 
@@ -352,13 +354,30 @@ internal sealed class MapsuiMapHost : IMapHost
                     snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
                 }
 
+                // Carry the live viewport rotation onto the snapshot so a
+                // rotated on-screen view is captured rotated (the base chart
+                // turns; the screen-space symbol/label overlay holds upright).
+                // Without this the snapshot would render north-up — flattening
+                // the rotation and making the rotated overlay path unverifiable
+                // via render_to_image. ToExtent() above is the rotated view's
+                // axis-aligned bound, so fitting it then rotating shows the same
+                // content slightly zoomed out (matching the "slightly more area"
+                // contract). duration: 0 keeps the capture deterministic.
+                if (liveViewport.Rotation != 0)
+                {
+                    snapshot.Navigator.RotateTo(liveViewport.Rotation, duration: 0);
+                }
+
                 // Serialise the Skia render against the live on-screen
                 // paint. Both share the live layers' cached SKImage symbol
                 // textures; on a GPU-backed build a concurrent live paint
                 // uploading those images crashes in
-                // sk_image_make_texture_image (issue #337). The gate is
-                // held only for the duration of the offscreen render.
-                return RenderGate.RunCapture(
+                // sk_image_make_texture_image (issue #337). The shared
+                // CaptureDrained protocol marks a capture pending, forces one
+                // fully-drained live frame, then holds the gate for the
+                // offscreen render.
+                return RenderGate.CaptureDrained(
+                    () => _mapControl.InvalidateVisual(),
                     () =>
                     {
                         using var stream = new MapRenderer().RenderToBitmapStream(
@@ -370,8 +389,7 @@ internal sealed class MapsuiMapHost : IMapHost
                         using var ms = new MemoryStream();
                         stream.CopyTo(ms);
                         return ms.ToArray();
-                    },
-                    GateTimeout);
+                    });
             }
             finally
             {

@@ -328,6 +328,11 @@ public static class S100VectorTileRenderer
         HonorScaleVisibility = true,
     };
 
+    // Stateless, render-thread-only label declutter for the live overlay. S-100
+    // Part 9 makes overlap avoidance the portrayal engine's job; this resolves it
+    // deterministically each frame from the ops' drawing priority / SCAMIN.
+    private static readonly LabelDeclutterer s_labelDeclutterer = new();
+
     private static readonly Lazy<TileDiskCache?> s_diskCache = new(CreateSharedDiskCache);
 
     /// <summary>
@@ -1467,15 +1472,20 @@ public static class S100VectorTileRenderer
         published && !isPrediction;
 
     /// <summary>
-    /// Draws the live symbol/text overlay (point symbols + soundings) on top of
-    /// the composited base tiles, at constant on-screen size against the live
-    /// viewport. Unlike the base plane, these ops are <i>not</i> tiled/scaled, so
-    /// a buoy or sounding keeps the same pixel size at every zoom. SCAMIN is
-    /// applied against the live scale denominator (matching the base tiles' own
-    /// per-band culling). A rotated viewport is handled exactly as the tile
-    /// composite handles it — rotate the whole overlay about the screen centre so
-    /// symbol anchors stay aligned with the rotated base (north-up is the v1 case
-    /// and is a no-op here).
+    /// Draws the live symbol/text overlay (point symbols + soundings + labels)
+    /// on top of the composited base tiles, at constant on-screen size against
+    /// the live viewport. Unlike the base plane, these ops are <i>not</i>
+    /// tiled/scaled, so a buoy, sounding, or label keeps the same pixel size at
+    /// every zoom. SCAMIN is applied against the live scale denominator (matching
+    /// the base tiles' own per-band culling).
+    /// <para>
+    /// Labels are <b>decluttered</b> each frame (S-100 Part 9 overlap avoidance;
+    /// see <see cref="LabelDeclutterer"/>) and kept <b>upright</b> under a rotated
+    /// viewport: point symbols are drawn under the rotated canvas (as the tile
+    /// composite rotates tiles), while text is drawn on an unrotated canvas with
+    /// its anchor rotated in code so glyphs stay horizontal. North-up is the v1
+    /// case and draws points and text in a single unrotated pass.
+    /// </para>
     /// </summary>
     private static void DrawOverlay(
         SKCanvas canvas, TileState state,
@@ -1488,73 +1498,92 @@ public static class S100VectorTileRenderer
             return;
         }
 
-        var rotate = rotationDeg != 0;
-        if (rotate)
+        // Live full-screen viewport in DIP space: symbol/text sizes are in
+        // logical display px, so projecting onto a DIP-sized viewport draws
+        // them at their intended on-screen size (the foreground canvas's
+        // device-scale matrix then keeps them crisp on HiDPI).
+        var halfWorldW = widthDip * resolution * 0.5;
+        var halfWorldH = heightDip * resolution * 0.5;
+        var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH);
+
+        var viewport = new CoreViewport
         {
-            canvas.Save();
-            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+            MinLatitude = minLat,
+            MaxLatitude = maxLat,
+            MinLongitude = minLon,
+            MaxLongitude = maxLon,
+            WidthPixels = Math.Max(1, (int)Math.Round(widthDip)),
+            HeightPixels = Math.Max(1, (int)Math.Round(heightDip)),
+            ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution),
+        };
+
+        var rotate = rotationDeg != 0;
+        float cx = (float)(widthDip * 0.5);
+        float cy = (float)(heightDip * 0.5);
+        const float margin = SkiaDisplayListRenderer.PointCullMarginPx;
+
+        // The plain (unrotated) viewport cull rect, in real screen space. Both
+        // the declutter pass and the upright text pass work in this frame because
+        // they rotate anchors in code rather than rotating the canvas.
+        var screenCull = new SKRect(
+            -margin, -margin,
+            (float)widthDip + margin, (float)heightDip + margin);
+
+        // Declutter labels deterministically: footprints are computed in final
+        // on-screen space (anchors rotated by the same angle as the overlay), so
+        // collisions are correct under rotation. Points reserve space first;
+        // lower-priority labels that overlap an occupied footprint are skipped.
+        var suppressed = s_labelDeclutterer.Declutter(
+            overlay, viewport, screenCull, s_overlayRenderer.HonorScaleVisibility,
+            rotationDeg, cx, cy);
+
+        if (!rotate)
+        {
+            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
+            {
+                PointCullBounds = screenCull,
+                SuppressedText = suppressed,
+            });
+            return;
         }
 
+        // Rotated viewport: draw symbols under the rotated canvas (anchors stay
+        // aligned with the rotated base), then draw labels upright by rotating
+        // the anchor in code while keeping glyphs axis-aligned.
+        var rad = rotationDeg * Math.PI / 180.0;
+        var cosR = Math.Abs(Math.Cos(rad));
+        var sinR = Math.Abs(Math.Sin(rad));
+        var extentX = (float)(widthDip * 0.5 * cosR + heightDip * 0.5 * sinR);
+        var extentY = (float)(widthDip * 0.5 * sinR + heightDip * 0.5 * cosR);
+        var rotatedCull = new SKRect(
+            cx - extentX - margin, cy - extentY - margin,
+            cx + extentX + margin, cy + extentY + margin);
+
+        canvas.Save();
+        canvas.RotateDegrees((float)rotationDeg, cx, cy);
         try
         {
-            // Live full-screen viewport in DIP space: symbol/text sizes are in
-            // logical display px, so projecting onto a DIP-sized viewport draws
-            // them at their intended on-screen size (the foreground canvas's
-            // device-scale matrix then keeps them crisp on HiDPI).
-            var halfWorldW = widthDip * resolution * 0.5;
-            var halfWorldH = heightDip * resolution * 0.5;
-            var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH);
-            var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH);
-
-            var viewport = new CoreViewport
+            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
             {
-                MinLatitude = minLat,
-                MaxLatitude = maxLat,
-                MinLongitude = minLon,
-                MaxLongitude = maxLon,
-                WidthPixels = Math.Max(1, (int)Math.Round(widthDip)),
-                HeightPixels = Math.Max(1, (int)Math.Round(heightDip)),
-                ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution),
-            };
-
-            // Cull point/text overlay ops whose anchor cannot be visible before
-            // paying to parse a symbol SVG or measure a label. The canvas is
-            // rotated about its centre (north-up is the v1 no-op case), and
-            // RenderOnto draws in pre-rotation pixel space, so under rotation the
-            // cull rectangle must cover the rotated viewport's bounding box.
-            const float margin = SkiaDisplayListRenderer.PointCullMarginPx;
-            SKRect cullBounds;
-            if (rotate)
-            {
-                var rad = rotationDeg * Math.PI / 180.0;
-                var cosR = Math.Abs(Math.Cos(rad));
-                var sinR = Math.Abs(Math.Sin(rad));
-                var halfW = widthDip * 0.5;
-                var halfH = heightDip * 0.5;
-                var extentX = (float)(halfW * cosR + halfH * sinR);
-                var extentY = (float)(halfW * sinR + halfH * cosR);
-                var cx0 = (float)halfW;
-                var cy0 = (float)halfH;
-                cullBounds = new SKRect(
-                    cx0 - extentX - margin, cy0 - extentY - margin,
-                    cx0 + extentX + margin, cy0 + extentY + margin);
-            }
-            else
-            {
-                cullBounds = new SKRect(
-                    -margin, -margin,
-                    (float)widthDip + margin, (float)heightDip + margin);
-            }
-
-            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, cullBounds);
+                PointCullBounds = rotatedCull,
+                DrawText = false,
+            });
         }
         finally
         {
-            if (rotate)
-            {
-                canvas.Restore();
-            }
+            canvas.Restore();
         }
+
+        s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
+        {
+            PointCullBounds = screenCull,
+            SuppressedText = suppressed,
+            TextAnchorRotationDegrees = rotationDeg,
+            ScreenCenterX = cx,
+            ScreenCenterY = cy,
+            DrawPoints = false,
+        });
     }
 
     /// <summary>

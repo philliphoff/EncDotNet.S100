@@ -118,4 +118,198 @@ public class RenderGateTests
         Assert.Throws<ArgumentNullException>(() =>
             RenderGate.RunCapture(null!, TimeSpan.FromSeconds(1)));
     }
+
+    [Fact]
+    public void CaptureActive_is_false_at_rest()
+    {
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureActive_is_true_only_for_the_duration_of_a_capture()
+    {
+        Assert.False(RenderGate.CaptureActive);
+
+        var observedInside = false;
+        RenderGate.RunCapture(
+            () =>
+            {
+                observedInside = RenderGate.CaptureActive;
+                return Array.Empty<byte>();
+            },
+            TimeSpan.FromSeconds(1));
+
+        // While a capture is pending the live paint's end marker drains the
+        // GPU before releasing the gate (issue #337); outside a capture it
+        // pays nothing.
+        Assert.True(observedInside);
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureActive_is_cleared_when_the_capture_throws()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            RenderGate.RunCapture(
+                byte[]? () => throw new InvalidOperationException("boom"),
+                TimeSpan.FromSeconds(1)));
+
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public async Task CaptureActive_signals_before_the_gate_is_acquired()
+    {
+        // The flag must be set *before* contending for the gate so the live
+        // frame currently holding it sees the pending capture at its end
+        // marker and drains the GPU. Hold the gate as the live paint would
+        // and confirm the flag flips while the capture is still blocked.
+        var releaseLivePaint = new ManualResetEventSlim(false);
+        var paintThread = new Thread(() =>
+        {
+            RenderGate.EnterLivePaint();
+            try
+            {
+                releaseLivePaint.Wait(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                RenderGate.ExitLivePaint();
+            }
+        });
+        paintThread.Start();
+        Thread.Sleep(50);
+
+        var captureTask = Task.Run(() => RenderGate.RunCapture(
+            () => Array.Empty<byte>(),
+            TimeSpan.FromSeconds(5)));
+
+        // The capture is blocked on the gate but must already advertise
+        // itself as active to the live paint.
+        SpinWait.SpinUntil(() => RenderGate.CaptureActive, TimeSpan.FromSeconds(2));
+        Assert.True(RenderGate.CaptureActive);
+
+        releaseLivePaint.Set();
+        await captureTask.WaitAsync(TimeSpan.FromSeconds(5));
+        paintThread.Join(TimeSpan.FromSeconds(5));
+
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureActive_stays_set_across_nested_captures()
+    {
+        var innerObservedActive = false;
+        RenderGate.RunCapture(
+            () =>
+            {
+                RenderGate.RunCapture(
+                    () =>
+                    {
+                        innerObservedActive = RenderGate.CaptureActive;
+                        return Array.Empty<byte>();
+                    },
+                    TimeSpan.FromSeconds(1));
+
+                // The inner capture finishing must not clear the flag while
+                // the outer capture is still running (depth-counted).
+                Assert.True(RenderGate.CaptureActive);
+                return Array.Empty<byte>();
+            },
+            TimeSpan.FromSeconds(1));
+
+        Assert.True(innerObservedActive);
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void BeginCapture_EndCapture_toggle_CaptureActive_with_depth()
+    {
+        Assert.False(RenderGate.CaptureActive);
+
+        RenderGate.BeginCapture();
+        Assert.True(RenderGate.CaptureActive);
+
+        RenderGate.BeginCapture();
+        RenderGate.EndCapture();
+        // Still one outstanding BeginCapture.
+        Assert.True(RenderGate.CaptureActive);
+
+        RenderGate.EndCapture();
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void WaitForFreshDrain_returns_false_when_no_drain_occurs()
+    {
+        // No NotifyDrained → the wait must time out (and not block forever),
+        // letting the capture proceed in the degraded path.
+        var drained = RenderGate.WaitForFreshDrain(TimeSpan.FromMilliseconds(50));
+        Assert.False(drained);
+    }
+
+    [Fact]
+    public async Task WaitForFreshDrain_returns_true_when_a_drain_is_notified()
+    {
+        // WaitForFreshDrain resets the signal first, so only a NotifyDrained
+        // raised *after* the wait begins counts — mirroring a forced live
+        // frame draining the GPU while the capture waits.
+        var waitTask = Task.Run(() =>
+            RenderGate.WaitForFreshDrain(TimeSpan.FromSeconds(5)));
+
+        await Task.Delay(50);
+        RenderGate.NotifyDrained();
+
+        Assert.True(await waitTask);
+    }
+
+    [Fact]
+    public void WaitForFreshDrain_ignores_a_stale_drain_signal()
+    {
+        // A drain signalled before the wait must not satisfy it: the capture
+        // needs a *fresh* drain that reflects the current frame's uploads.
+        RenderGate.NotifyDrained();
+        var drained = RenderGate.WaitForFreshDrain(TimeSpan.FromMilliseconds(50));
+        Assert.False(drained);
+    }
+
+    [Fact]
+    public void CaptureDrained_requests_repaint_before_capturing_and_returns_result()
+    {
+        var order = new System.Collections.Generic.List<string>();
+        var expected = new byte[] { 7, 8, 9 };
+
+        var result = RenderGate.CaptureDrained(
+            requestRepaint: () => order.Add("repaint"),
+            capture: () =>
+            {
+                order.Add("capture");
+                Assert.True(RenderGate.CaptureActive);
+                return expected;
+            });
+
+        Assert.Equal(expected, result);
+        Assert.Equal(new[] { "repaint", "capture" }, order);
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureDrained_clears_CaptureActive_when_the_capture_throws()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            RenderGate.CaptureDrained(
+                requestRepaint: () => { },
+                capture: () => throw new InvalidOperationException("boom")));
+
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureDrained_null_arguments_throw()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            RenderGate.CaptureDrained(null!, () => Array.Empty<byte>()));
+        Assert.Throws<ArgumentNullException>(() =>
+            RenderGate.CaptureDrained(() => { }, null!));
+    }
 }

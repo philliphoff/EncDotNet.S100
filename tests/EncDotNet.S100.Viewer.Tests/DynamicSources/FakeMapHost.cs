@@ -33,6 +33,8 @@ internal sealed class FakeMapHost : IMapHost
     public void SetViewportToExtent(MRect mercatorExtent) { }
     public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
+    public void SetRotation(double degrees) { }
+
     /// <summary>Records every <see cref="CenterOn"/> call (lat, lon).</summary>
     public List<(double Latitude, double Longitude)> CenterOnCalls { get; } = new();
 

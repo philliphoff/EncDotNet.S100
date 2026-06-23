@@ -41,7 +41,21 @@ exactly one place:
   all three matter for the tiled subsystem's per-frame overlay, which replays
   this renderer live every frame. `RenderOnto` takes an optional cull rectangle
   so a caller that rotates the canvas can expand it to the rotated viewport's
-  bounding box.
+  bounding box, plus an `OverlayDrawOptions` overload that adds the live
+  Label-plane behaviour: a suppressed-text set (from `LabelDeclutterer`), a
+  screen-space text anchor-rotation that keeps glyphs **upright** under a rotated
+  viewport while pinning the anchor to its feature, point/text draw filters, and
+  per-run glyph fallback in `DrawText` (so codepoints the primary face lacks are
+  drawn via `SKFontManager.MatchCharacter` instead of `.notdef` tofu boxes).
+- **`LabelDeclutterer`** (`…Renderers.Skia.Scene`) — deterministic,
+  priority-driven S-100 Part 9 overlap avoidance for the live label plane. Given
+  a `VectorScene` it returns the set of `TextPaintOp`s to suppress: point symbols
+  reserve their screen footprints first, then text is placed highest-priority-first
+  against a uniform screen-bucket index, with labels yielding to symbols and to
+  higher-priority labels. Pure and machine-independent.
+- **`OverlayDrawOptions`** (`…Renderers.Skia.Scene`) — the options bag for the
+  `RenderOnto` overlay pass (cull bounds, suppressed text, text anchor-rotation +
+  screen centre, and point/text draw filters).
 - **`WebMercator`** (in `Rendering.Scene`) — EPSG:3857 forward projection (matches
   Mapsui's `SphericalMercator.FromLonLat`; a parity test asserts agreement).
 - **`ScaleVisibility`** (in `Rendering.Scene`) — shared S-100 Part 9 §11.1 scale-visibility rule.

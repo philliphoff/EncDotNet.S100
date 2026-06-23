@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
 using Mapsui.UI.Avalonia;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
@@ -143,9 +144,60 @@ internal sealed class InstrumentedMapControl : MapControl
                 // missing start marker never triggers a spurious release.
                 if (_marker.GateHeld)
                 {
+                    // If an offscreen render_to_image capture is waiting on
+                    // (or running under) the gate, drain this frame's GPU
+                    // work before releasing it. The live paint records its
+                    // symbol-texture uploads (sk_image_make_texture_image)
+                    // into the Metal command buffer during this frame; if we
+                    // release the gate before that work has completed, the
+                    // capture can read the same shared SKImage while the GPU
+                    // upload is still in flight — the #337 crash. A
+                    // synchronous flush makes the upload finish inside the
+                    // bracket. Only paid while a capture is pending; steady
+                    // live painting is untouched.
+                    if (RenderGate.CaptureActive)
+                    {
+                        DrainGpu(context);
+
+                        // Let a capture waiting in WaitForFreshDrain know that
+                        // a fully-synchronised frame has just completed, so it
+                        // can read the shared layers without racing a pending
+                        // GPU upload (issue #337).
+                        RenderGate.NotifyDrained();
+                    }
+
                     _marker.GateHeld = false;
                     RenderGate.ExitLivePaint();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Synchronously flushes and submits the live Skia GPU context so any
+        /// symbol-texture uploads recorded during this frame complete before
+        /// the render gate is released to a waiting offscreen capture
+        /// (issue #337). Best-effort: a flush failure must never crash the
+        /// compositor render thread or mask the paint, and on a CPU/software
+        /// backend (<see cref="ISkiaSharpApiLease.GrContext"/> is null) there
+        /// is no GPU work to drain.
+        /// </summary>
+        private static void DrainGpu(ImmediateDrawingContext context)
+        {
+            try
+            {
+                if (context.TryGetFeature(typeof(ISkiaSharpApiLeaseFeature))
+                        is not ISkiaSharpApiLeaseFeature leaseFeature)
+                {
+                    return;
+                }
+
+                using var lease = leaseFeature.Lease();
+                lease.GrContext?.Flush(submit: true, synchronous: true);
+            }
+            catch
+            {
+                // The gate still serialises the draw calls themselves; a
+                // missed flush only narrows, never widens, the race window.
             }
         }
     }

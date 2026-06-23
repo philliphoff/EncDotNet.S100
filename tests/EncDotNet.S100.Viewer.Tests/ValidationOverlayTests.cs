@@ -38,6 +38,8 @@ public class ValidationOverlayTests
         public void SetViewportToExtent(MRect mercatorExtent) { }
         public void SetViewportToCenterAndResolution(MPoint mercatorCenter, double resolution) { }
 
+        public void SetRotation(double degrees) { }
+
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
         public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
         public (double Width, double Height)? TryGetViewportSizePx() => null;
