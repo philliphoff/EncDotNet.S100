@@ -48,4 +48,22 @@ public sealed class OverlayDrawOptions
 
     /// <summary>Whether to draw text/labels this pass. Defaults to <see langword="true"/>.</summary>
     public bool DrawText { get; init; } = true;
+
+    /// <summary>
+    /// Device-pixel scale of the target canvas (its HiDPI back-buffer matrix
+    /// scale), used to rasterise cached symbol sprites at the correct resolution
+    /// for the symbol atlas (#332 lever c2). Defaults to <c>1</c>.
+    /// </summary>
+    public float DeviceScale { get; init; } = 1f;
+
+    /// <summary>
+    /// Whether point symbols may be drawn from the render-thread symbol-sprite
+    /// atlas (a once-rasterised <see cref="SkiaSharp.SKImage"/> blit) instead of
+    /// replaying their vector <see cref="SkiaSharp.SKPicture"/> every frame
+    /// (#332 lever c2). Defaults to <see langword="true"/>; set
+    /// <see langword="false"/> to force the vector path (used for pixel-parity
+    /// tests and as a safety fallback). Per-op-rotated symbols always use the
+    /// vector path regardless.
+    /// </summary>
+    public bool UseSymbolAtlas { get; init; } = true;
 }

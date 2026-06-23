@@ -664,7 +664,7 @@ public static class S100VectorTileRenderer
                 // Draw point symbols + soundings live, on top of the composited
                 // base tiles, at constant on-screen size (the base tiles are
                 // band-scaled, so symbols must not be baked into them).
-                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg);
+                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
             }
             catch (Exception ex)
             {
@@ -1493,7 +1493,7 @@ public static class S100VectorTileRenderer
     private static void DrawOverlay(
         SKCanvas canvas, TileState state,
         double centerX, double centerY, double widthDip, double heightDip,
-        double resolution, double rotationDeg)
+        double resolution, double rotationDeg, float deviceScale)
     {
         var overlay = state.OverlayScene;
         if (overlay is null || overlay.Ops.Count == 0)
@@ -1574,6 +1574,7 @@ public static class S100VectorTileRenderer
             {
                 PointCullBounds = screenCull,
                 SuppressedText = suppressed,
+                DeviceScale = deviceScale,
             });
             return;
         }
@@ -1589,6 +1590,7 @@ public static class S100VectorTileRenderer
             {
                 PointCullBounds = rotatedCull,
                 DrawText = false,
+                DeviceScale = deviceScale,
             });
         }
         finally
