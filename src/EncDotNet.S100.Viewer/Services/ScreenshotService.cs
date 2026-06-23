@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
@@ -33,10 +34,30 @@ internal sealed class ScreenshotService
                 return;
             }
 
-            using var bitmap = new RenderTargetBitmap(pixelSize);
-            bitmap.Render(target);
-            bitmap.Save(outputPath);
+            // RenderTargetBitmap.Render re-reads the map's GPU-resident tile
+            // textures on the UI thread; left unsynchronised it races the
+            // render thread's Metal paint and crashes in Skia (issue #337).
+            // Route through the shared capture protocol that forces one
+            // fully-drained live frame and holds the gate during the render —
+            // the same guard the MCP render_to_image path uses.
+            var png = RenderGate.CaptureDrained(
+                target.InvalidateVisual,
+                () =>
+                {
+                    using var bitmap = new RenderTargetBitmap(pixelSize);
+                    bitmap.Render(target);
+                    using var ms = new MemoryStream();
+                    bitmap.Save(ms);
+                    return ms.ToArray();
+                });
 
+            if (png is null)
+            {
+                Console.Error.WriteLine("[Screenshot] Capture produced no data.");
+                return;
+            }
+
+            File.WriteAllBytes(outputPath, png);
             Console.WriteLine($"[Screenshot] Saved {pixelSize.Width}x{pixelSize.Height} to {outputPath}");
         }
         catch (Exception ex)

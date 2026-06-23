@@ -272,4 +272,44 @@ public class RenderGateTests
         var drained = RenderGate.WaitForFreshDrain(TimeSpan.FromMilliseconds(50));
         Assert.False(drained);
     }
+
+    [Fact]
+    public void CaptureDrained_requests_repaint_before_capturing_and_returns_result()
+    {
+        var order = new System.Collections.Generic.List<string>();
+        var expected = new byte[] { 7, 8, 9 };
+
+        var result = RenderGate.CaptureDrained(
+            requestRepaint: () => order.Add("repaint"),
+            capture: () =>
+            {
+                order.Add("capture");
+                Assert.True(RenderGate.CaptureActive);
+                return expected;
+            });
+
+        Assert.Equal(expected, result);
+        Assert.Equal(new[] { "repaint", "capture" }, order);
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureDrained_clears_CaptureActive_when_the_capture_throws()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            RenderGate.CaptureDrained(
+                requestRepaint: () => { },
+                capture: () => throw new InvalidOperationException("boom")));
+
+        Assert.False(RenderGate.CaptureActive);
+    }
+
+    [Fact]
+    public void CaptureDrained_null_arguments_throw()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            RenderGate.CaptureDrained(null!, () => Array.Empty<byte>()));
+        Assert.Throws<ArgumentNullException>(() =>
+            RenderGate.CaptureDrained(() => { }, null!));
+    }
 }

@@ -26,23 +26,6 @@ internal sealed class MapsuiMapHost : IMapHost
     private readonly MapControl _mapControl;
 
     /// <summary>
-    /// Upper bound on how long an offscreen <c>render_to_image</c> capture
-    /// waits for the live on-screen paint to yield the shared
-    /// <see cref="RenderGate"/> before rendering unsynchronised. Generous
-    /// so it only ever trips if the compositor is already wedged.
-    /// </summary>
-    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
-
-    /// <summary>
-    /// Upper bound on how long an offscreen <c>render_to_image</c> capture
-    /// waits for a forced live frame to flush and synchronise the GPU before
-    /// it reads the shared layers (issue #337). Short: it only needs one
-    /// repaint, and on a quiescent or software backend there is nothing to
-    /// drain, so the capture proceeds immediately when the wait elapses.
-    /// </summary>
-    private static readonly TimeSpan CaptureDrainTimeout = TimeSpan.FromMilliseconds(750);
-
-    /// <summary>
     /// Tracks which layers are dataset layers (as opposed to the basemap
     /// or tool overlays). Used to compute the correct insertion point
     /// when a new dataset layer is added and to identify which subset
@@ -389,42 +372,24 @@ internal sealed class MapsuiMapHost : IMapHost
                 // paint. Both share the live layers' cached SKImage symbol
                 // textures; on a GPU-backed build a concurrent live paint
                 // uploading those images crashes in
-                // sk_image_make_texture_image (issue #337). The gate is
-                // held only for the duration of the offscreen render.
-                //
-                // Before reading the shared layers, force one fully-drained
-                // live frame: mark a capture as pending, trigger a repaint,
-                // and wait for the live paint's end marker to flush and
-                // synchronise the GPU. This closes the residual window where
-                // the capture finds the gate free but a prior frame's
-                // symbol-texture upload is still in flight on the GPU. The
-                // wait is bounded; if the compositor is idle/slow we proceed
-                // anyway (the gate + per-frame drain still serialise draws).
-                RenderGate.BeginCapture();
-                try
-                {
-                    _mapControl.InvalidateVisual();
-                    RenderGate.WaitForFreshDrain(CaptureDrainTimeout);
-
-                    return RenderGate.RunCapture(
-                        () =>
-                        {
-                            using var stream = new MapRenderer().RenderToBitmapStream(
-                                snapshot,
-                                pixelDensity: (float)pixelDensity,
-                                renderFormat: RenderFormat.Png,
-                                quality: 100);
-                            stream.Position = 0;
-                            using var ms = new MemoryStream();
-                            stream.CopyTo(ms);
-                            return ms.ToArray();
-                        },
-                        GateTimeout);
-                }
-                finally
-                {
-                    RenderGate.EndCapture();
-                }
+                // sk_image_make_texture_image (issue #337). The shared
+                // CaptureDrained protocol marks a capture pending, forces one
+                // fully-drained live frame, then holds the gate for the
+                // offscreen render.
+                return RenderGate.CaptureDrained(
+                    () => _mapControl.InvalidateVisual(),
+                    () =>
+                    {
+                        using var stream = new MapRenderer().RenderToBitmapStream(
+                            snapshot,
+                            pixelDensity: (float)pixelDensity,
+                            renderFormat: RenderFormat.Png,
+                            quality: 100);
+                        stream.Position = 0;
+                        using var ms = new MemoryStream();
+                        stream.CopyTo(ms);
+                        return ms.ToArray();
+                    });
             }
             finally
             {

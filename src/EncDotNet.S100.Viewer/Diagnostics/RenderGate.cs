@@ -48,6 +48,21 @@ internal static class RenderGate
     private static readonly object Gate = new();
 
     /// <summary>
+    /// Maximum time a capture waits for the live paint to yield the gate
+    /// before proceeding unsynchronised rather than hanging (see
+    /// <see cref="RunCapture"/>). Shared by every offscreen capture path.
+    /// </summary>
+    public static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Maximum time a capture waits for one fully-drained live frame after
+    /// triggering a repaint (see <see cref="WaitForFreshDrain"/> and
+    /// <see cref="CaptureDrained"/>). Bounded so an idle/slow compositor never
+    /// hangs the capture.
+    /// </summary>
+    public static readonly TimeSpan CaptureDrainTimeout = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>
     /// Number of offscreen captures currently waiting for, or holding, the
     /// gate. Read by the live paint's end marker so it knows to drain this
     /// frame's GPU work before releasing the gate while a capture is pending.
@@ -169,6 +184,39 @@ internal static class RenderGate
         finally
         {
             if (taken) Monitor.Exit(Gate);
+            EndCapture();
+        }
+    }
+
+    /// <summary>
+    /// Performs the full #337 capture protocol: mark a capture pending, trigger
+    /// a repaint via <paramref name="requestRepaint"/>, wait (bounded) for one
+    /// fully-drained live frame, then run <paramref name="capture"/> while
+    /// holding the gate so it cannot overlap a live on-screen paint. Shared by
+    /// every offscreen capture path (the MCP <c>render_to_image</c> tool and the
+    /// CLI <c>--screenshot</c> service) so they harden identically.
+    /// </summary>
+    /// <param name="requestRepaint">
+    /// Invalidates the live surface so the render thread paints one more frame
+    /// and, because a capture is pending, drains and synchronises the GPU at its
+    /// end marker before the capture reads the shared textures.
+    /// </param>
+    /// <param name="capture">The offscreen render to perform under the gate.</param>
+    /// <returns>The bytes produced by <paramref name="capture"/>.</returns>
+    public static byte[]? CaptureDrained(Action requestRepaint, Func<byte[]?> capture)
+    {
+        ArgumentNullException.ThrowIfNull(requestRepaint);
+        ArgumentNullException.ThrowIfNull(capture);
+
+        BeginCapture();
+        try
+        {
+            requestRepaint();
+            WaitForFreshDrain(CaptureDrainTimeout);
+            return RunCapture(capture, GateTimeout);
+        }
+        finally
+        {
             EndCapture();
         }
     }
