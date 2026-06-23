@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -1329,6 +1330,18 @@ public static class S100VectorSnapshotRenderer
         var iteration = System.Threading.Interlocked.Increment(ref s_iteration);
         var features = layer.SortFeatures(layer.GetFeatures(queryExtent, resolution)).ToList();
 
+        // The one-shot snapshot record races Mapsui's asynchronous image-source
+        // fetch loop. ImageStyleRenderer draws nothing when the (SVG) image bytes
+        // are not yet present in the RenderService image cache, so a record taken
+        // before that fetch completes would bake out the point symbols (buoys,
+        // beacons, lights) permanently — the snapshot stays "valid" and is never
+        // re-recorded. Mirror Mapsui's own offscreen rasteriser
+        // (RasterizingTileSource, which awaits FetchAllImageDataAsync before
+        // RenderToBitmapStream) by registering this layer's image sources
+        // synchronously before drawing. svg-content:// / base64-content:// sources
+        // resolve in-process, so the fetch completes without blocking on I/O.
+        EnsureImageSourcesRegistered(features, renderService);
+
         if (layer.Style is { } layerStyle)
         {
             foreach (var style in layerStyle.GetStylesToApply(resolution))
@@ -1377,6 +1390,47 @@ public static class S100VectorSnapshotRenderer
         finally
         {
             target.RestoreToCount(restore);
+        }
+    }
+
+    internal static void EnsureImageSourcesRegistered(IReadOnlyList<IFeature> features, RenderService renderService)
+    {
+        var cache = renderService.ImageSourceCache;
+        ConcurrentDictionary<string, string>? pending = null;
+
+        foreach (var feature in features)
+        {
+            var styles = feature.Styles;
+            if (styles is null)
+            {
+                continue;
+            }
+
+            foreach (var style in styles)
+            {
+                if (style is ImageStyle { Image: { } image } && cache.Get(image) is null)
+                {
+                    pending ??= new ConcurrentDictionary<string, string>();
+                    pending[image.Source] = image.SourceId;
+                }
+            }
+        }
+
+        if (pending is null || pending.IsEmpty)
+        {
+            return;
+        }
+
+        try
+        {
+            cache.FetchAllImageDataAsync(pending).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            if (s_diag)
+            {
+                Console.Error.WriteLine($"[VecSnapshot] image source fetch failed: {ex.Message}");
+            }
         }
     }
 
