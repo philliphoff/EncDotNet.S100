@@ -29,7 +29,8 @@ internal sealed record SetViewportRequest(
     [property: Description("Bounding-box east edge in decimal degrees (WGS-84). Must be paired with south/west/north; mutually exclusive with centre+zoom.")] double? East = null,
     [property: Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and zoom; mutually exclusive with the bbox form.")] double? CenterLat = null,
     [property: Description("Centre longitude in decimal degrees (WGS-84). Must be paired with centerLat and zoom; mutually exclusive with the bbox form.")] double? CenterLon = null,
-    [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with the bbox form.")] double? Zoom = null);
+    [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with the bbox form.")] double? Zoom = null,
+    [property: Description("Optional clockwise viewport rotation in degrees (0 = north-up). Applied on top of the bbox or centre+zoom frame, so it exercises the rotated-viewport render path (e.g. upright-label verification). Any finite value is accepted and normalised to [0, 360); must accompany a bbox or centre+zoom form.")] double? Rotation = null);
 
 /// <summary>Result of <see cref="SetViewportTool"/>.</summary>
 [Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs.")]
@@ -38,7 +39,8 @@ internal sealed record SetViewportResult(
     [property: Description("Echoed south edge of the resolved viewport in decimal degrees, WGS-84.")] double South,
     [property: Description("Echoed west edge of the resolved viewport in decimal degrees, WGS-84.")] double West,
     [property: Description("Echoed north edge of the resolved viewport in decimal degrees, WGS-84.")] double North,
-    [property: Description("Echoed east edge of the resolved viewport in decimal degrees, WGS-84.")] double East);
+    [property: Description("Echoed east edge of the resolved viewport in decimal degrees, WGS-84.")] double East,
+    [property: Description("Clockwise viewport rotation in degrees that was applied (0 = north-up), normalised to [0, 360).")] double Rotation);
 
 /// <summary>
 /// Mutates the live viewer's navigator to a specific WGS-84 viewport
@@ -76,6 +78,7 @@ internal sealed class SetViewportTool
     internal const double MaxLon = 180.0;
     internal const double MinZoom = 0.0;
     internal const double MaxZoom = 24.0;
+    internal const double FullCircleDegrees = 360.0;
 
     // Standard web-mercator resolution (metres / pixel) at zoom 0 with a
     // 256-pixel tile, used to convert a zoom level to the resolution the
@@ -123,14 +126,28 @@ internal sealed class SetViewportTool
             return Err(new MapNotReady("the viewer's map control has not been initialised yet"));
         }
 
+        // Rotation is an optional modifier on whichever frame form is supplied;
+        // normalise any finite value into [0, 360). It must accompany a frame so
+        // the echoed bbox stays meaningful — to rotate in place, re-issue the
+        // same centre+zoom (cheap; duration 0) with the new rotation.
+        if (request.Rotation is { } rot
+            && (double.IsNaN(rot) || double.IsInfinity(rot)))
+        {
+            return Err(new InvalidArgument("rotation", $"value {rot} is not a finite number"));
+        }
+        double rotation = request.Rotation is { } r
+            ? ((r % FullCircleDegrees) + FullCircleDegrees) % FullCircleDegrees
+            : 0.0;
+
         return hasBboxAny
-            ? ApplyBbox(request, host)
-            : ApplyCenterZoom(request, host);
+            ? ApplyBbox(request, host, rotation)
+            : ApplyCenterZoom(request, host, rotation);
     }
 
     private static Task<ToolResult<SetViewportResult>> ApplyBbox(
         SetViewportRequest request,
-        IMapHost host)
+        IMapHost host,
+        double rotation)
     {
         if (request.South is not { } south
             || request.West is not { } west
@@ -163,13 +180,15 @@ internal sealed class SetViewportTool
         var (minX, minY) = SphericalMercator.FromLonLat(west, south);
         var (maxX, maxY) = SphericalMercator.FromLonLat(east, north);
         host.SetViewportToExtent(new MRect(minX, minY, maxX, maxY));
+        host.SetRotation(rotation);
 
-        return Ok(new SetViewportResult("bbox", south, west, north, east));
+        return Ok(new SetViewportResult("bbox", south, west, north, east, rotation));
     }
 
     private static Task<ToolResult<SetViewportResult>> ApplyCenterZoom(
         SetViewportRequest request,
-        IMapHost host)
+        IMapHost host,
+        double rotation)
     {
         if (request.CenterLat is not { } lat
             || request.CenterLon is not { } lon
@@ -196,6 +215,7 @@ internal sealed class SetViewportTool
         var (cx, cy) = SphericalMercator.FromLonLat(lon, lat);
         var resolution = ResolutionAtZoomZero / Math.Pow(2, zoom);
         host.SetViewportToCenterAndResolution(new MPoint(cx, cy), resolution);
+        host.SetRotation(rotation);
 
         // Echo the WGS-84 frame implied by the centre+zoom so callers
         // can verify what was applied. The half-extent is computed in
@@ -203,7 +223,7 @@ internal sealed class SetViewportTool
         // identical to whatever the navigator will surface to the
         // render pass.
         var (south, west, north, east) = ResolveCenterFrame(cx, cy, resolution);
-        return Ok(new SetViewportResult("center", south, west, north, east));
+        return Ok(new SetViewportResult("center", south, west, north, east, rotation));
     }
 
     /// <summary>

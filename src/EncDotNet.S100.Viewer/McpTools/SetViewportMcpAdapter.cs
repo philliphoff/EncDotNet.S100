@@ -31,7 +31,9 @@ internal static class SetViewportMcpAdapter
         "Mutates the live viewer's map navigator to a specific WGS-84 viewport. Supply EITHER a " +
         "bbox (south/west/north/east) OR centre+zoom (centerLat/centerLon/zoom); mixing the two " +
         "is rejected. Coordinates are decimal degrees. Zoom is the standard web-mercator level " +
-        "(0–24). Antimeridian-crossing bboxes are not supported in v1. Companion to render_to_image: " +
+        "(0–24). An optional rotation (degrees clockwise, 0 = north-up) is applied on top of the " +
+        "frame so scripted runs can exercise the rotated-viewport render path. " +
+        "Antimeridian-crossing bboxes are not supported in v1. Companion to render_to_image: " +
         "this tool drives the navigator, render_to_image then captures the resulting frame. " +
         "Viewer-injected tool — not available from a headless MCP host until that host supplies its own equivalent.";
 
@@ -48,9 +50,10 @@ internal static class SetViewportMcpAdapter
             [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and zoom; mutually exclusive with the bbox form.")] double? centerLat = null,
             [Description("Centre longitude in decimal degrees (WGS-84). Must be paired with centerLat and zoom; mutually exclusive with the bbox form.")] double? centerLon = null,
             [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with the bbox form.")] double? zoom = null,
+            [Description("Optional clockwise viewport rotation in degrees (0 = north-up), applied on top of the bbox or centre+zoom frame. Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? rotation = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
-                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom),
+                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -103,6 +106,7 @@ internal static class SetViewportMcpAdapter
             ["west"] = value.West,
             ["north"] = value.North,
             ["east"] = value.East,
+            ["rotation"] = value.Rotation,
         };
 
         return new CallToolResult

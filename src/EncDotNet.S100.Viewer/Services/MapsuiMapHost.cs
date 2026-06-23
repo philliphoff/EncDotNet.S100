@@ -34,6 +34,15 @@ internal sealed class MapsuiMapHost : IMapHost
     private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// Upper bound on how long an offscreen <c>render_to_image</c> capture
+    /// waits for a forced live frame to flush and synchronise the GPU before
+    /// it reads the shared layers (issue #337). Short: it only needs one
+    /// repaint, and on a quiescent or software backend there is nothing to
+    /// drain, so the capture proceeds immediately when the wait elapses.
+    /// </summary>
+    private static readonly TimeSpan CaptureDrainTimeout = TimeSpan.FromMilliseconds(750);
+
+    /// <summary>
     /// Tracks which layers are dataset layers (as opposed to the basemap
     /// or tool overlays). Used to compute the correct insertion point
     /// when a new dataset layer is added and to identify which subset
@@ -158,6 +167,16 @@ internal sealed class MapsuiMapHost : IMapHost
         if (_mapControl.Map?.Navigator is { } nav)
         {
             nav.CenterOnAndZoomTo(mercatorCenter, resolution, duration: 0);
+        }
+    }
+
+    public void SetRotation(double degrees)
+    {
+        if (_mapControl.Map?.Navigator is { } nav)
+        {
+            // duration: 0 for an instantaneous, scripted rotation — animations
+            // would prevent reproducible measurement / capture runs.
+            nav.RotateTo(degrees, duration: 0);
         }
     }
 
@@ -352,26 +371,60 @@ internal sealed class MapsuiMapHost : IMapHost
                     snapshot.Navigator.ZoomToBox(extent, MBoxFit.Fit);
                 }
 
+                // Carry the live viewport rotation onto the snapshot so a
+                // rotated on-screen view is captured rotated (the base chart
+                // turns; the screen-space symbol/label overlay holds upright).
+                // Without this the snapshot would render north-up — flattening
+                // the rotation and making the rotated overlay path unverifiable
+                // via render_to_image. ToExtent() above is the rotated view's
+                // axis-aligned bound, so fitting it then rotating shows the same
+                // content slightly zoomed out (matching the "slightly more area"
+                // contract). duration: 0 keeps the capture deterministic.
+                if (liveViewport.Rotation != 0)
+                {
+                    snapshot.Navigator.RotateTo(liveViewport.Rotation, duration: 0);
+                }
+
                 // Serialise the Skia render against the live on-screen
                 // paint. Both share the live layers' cached SKImage symbol
                 // textures; on a GPU-backed build a concurrent live paint
                 // uploading those images crashes in
                 // sk_image_make_texture_image (issue #337). The gate is
                 // held only for the duration of the offscreen render.
-                return RenderGate.RunCapture(
-                    () =>
-                    {
-                        using var stream = new MapRenderer().RenderToBitmapStream(
-                            snapshot,
-                            pixelDensity: (float)pixelDensity,
-                            renderFormat: RenderFormat.Png,
-                            quality: 100);
-                        stream.Position = 0;
-                        using var ms = new MemoryStream();
-                        stream.CopyTo(ms);
-                        return ms.ToArray();
-                    },
-                    GateTimeout);
+                //
+                // Before reading the shared layers, force one fully-drained
+                // live frame: mark a capture as pending, trigger a repaint,
+                // and wait for the live paint's end marker to flush and
+                // synchronise the GPU. This closes the residual window where
+                // the capture finds the gate free but a prior frame's
+                // symbol-texture upload is still in flight on the GPU. The
+                // wait is bounded; if the compositor is idle/slow we proceed
+                // anyway (the gate + per-frame drain still serialise draws).
+                RenderGate.BeginCapture();
+                try
+                {
+                    _mapControl.InvalidateVisual();
+                    RenderGate.WaitForFreshDrain(CaptureDrainTimeout);
+
+                    return RenderGate.RunCapture(
+                        () =>
+                        {
+                            using var stream = new MapRenderer().RenderToBitmapStream(
+                                snapshot,
+                                pixelDensity: (float)pixelDensity,
+                                renderFormat: RenderFormat.Png,
+                                quality: 100);
+                            stream.Position = 0;
+                            using var ms = new MemoryStream();
+                            stream.CopyTo(ms);
+                            return ms.ToArray();
+                        },
+                        GateTimeout);
+                }
+                finally
+                {
+                    RenderGate.EndCapture();
+                }
             }
             finally
             {
