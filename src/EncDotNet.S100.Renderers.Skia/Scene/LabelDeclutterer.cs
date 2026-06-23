@@ -122,7 +122,24 @@ public sealed class LabelDeclutterer
 
         public void Add(SKRect rect)
         {
-            ForEachCell(rect, (key, list) => list.Add(rect));
+            int minX = (int)Math.Floor(rect.Left / CellSize);
+            int maxX = (int)Math.Floor(rect.Right / CellSize);
+            int minY = (int)Math.Floor(rect.Top / CellSize);
+            int maxY = (int)Math.Floor(rect.Bottom / CellSize);
+
+            for (int cy = minY; cy <= maxY; cy++)
+            {
+                for (int cx = minX; cx <= maxX; cx++)
+                {
+                    var key = (cx, cy);
+                    if (!_cells.TryGetValue(key, out var list))
+                    {
+                        list = new List<SKRect>(2);
+                        _cells[key] = list;
+                    }
+                    list.Add(rect);
+                }
+            }
         }
 
         public bool Intersects(SKRect rect)
@@ -146,28 +163,6 @@ public sealed class LabelDeclutterer
                 }
             }
             return false;
-        }
-
-        private void ForEachCell(SKRect rect, Action<(int, int), List<SKRect>> action)
-        {
-            int minX = (int)Math.Floor(rect.Left / CellSize);
-            int maxX = (int)Math.Floor(rect.Right / CellSize);
-            int minY = (int)Math.Floor(rect.Top / CellSize);
-            int maxY = (int)Math.Floor(rect.Bottom / CellSize);
-
-            for (int cy = minY; cy <= maxY; cy++)
-            {
-                for (int cx = minX; cx <= maxX; cx++)
-                {
-                    var key = (cx, cy);
-                    if (!_cells.TryGetValue(key, out var list))
-                    {
-                        list = new List<SKRect>(2);
-                        _cells[key] = list;
-                    }
-                    action(key, list);
-                }
-            }
         }
     }
 }

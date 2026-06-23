@@ -958,9 +958,16 @@ Skia-measure-only pass run each frame over the Overlay scene **before** drawing:
   preserve z-order.
 - **Fullest fidelity.** Soundings (a `TextPaintOp`) participate as both occupant
   and obstacle, and labels avoid **symbol** footprints too.
-- **O(n) index.** A uniform screen-bucket grid (`ScreenRectIndex`, 64 px cells)
-  keeps collision queries linear for the thousands of ops/frame; scratch is
-  reused to avoid per-frame churn, within the same budget as drawing the ops.
+- **O(n) index, alloc-lean hot path.** A uniform screen-bucket grid
+  (`ScreenRectIndex`, 64 px cells) keeps collision queries near-O(1) for the
+  thousands of ops/frame, and — because a suppressed label is **never** inserted
+  — each cell holds only mutually-non-overlapping placed rects (area-bounded), so
+  clustering does **not** degrade toward O(n²). The pass walks the whole-cell
+  `OverlayScene` once, culling each op inline (`cullBounds.Contains`) before any
+  layout/index work, so off-screen labels never enter the placement set. The
+  grid's `Add` inlines its cell loop (no per-footprint capturing-lambda
+  allocation). See G.6 for the per-frame allocation profile and the remaining
+  `OverlayScene` viewport-scoping opportunity (#332).
 
 ### G.2 Upright text under rotation
 
@@ -984,13 +991,18 @@ in true on-screen space. North-up (the v1 default) is the rotation==0 no-op path
 
 `canvas.DrawText(string, …)` emits `.notdef` boxes for any codepoint the chosen
 face lacks (no shaping/fallback) — the residual "tofu-label" cause from §B.3/§C.3.
-`DrawText` now keeps the fast path when the primary face has all glyphs
-(`Typeface.ContainsGlyphs`); otherwise `SegmentRuns` splits the string into runs
+`DrawText` now keeps the fast path when the primary face has all glyphs;
+otherwise `SegmentRuns` splits the string into runs
 by resolved face and `DrawRunsWithFallback` draws each run with the primary face
 or a `SKFontManager.MatchCharacter`-resolved fallback, advancing the pen by the
-measured run width. Resolved fallback faces/fonts are cached in `TextDrawScratch`
-so only non-ASCII text pays the lookup. `SegmentRuns` is codepoint-aware (handles
-surrogate pairs) and pure for deterministic testing.
+measured run width. The all-glyphs probe (`Typeface.ContainsGlyphs`, which
+allocates a `ushort[]` and runs a full glyph-mapping pass) is **memoised
+per (face, text)** in a process-wide cache, so a stable frame re-scans nothing on
+the common all-ASCII path. Resolved fallback faces and their fonts are likewise
+held in **process-wide, app-lifetime** caches (keyed by codepoint and by
+(face, size)) — `SKFontManager.MatchCharacter` is an expensive platform
+font-enumeration and must not re-run per frame. `SegmentRuns` is codepoint-aware
+(handles surrogate pairs) and pure for deterministic testing.
 
 ### G.4 Where it plugs in
 
@@ -1028,3 +1040,30 @@ surrogate pairs) and pure for deterministic testing.
   Rotation is a UI gesture with no CLI/MCP control, so upright-under-rotation is
   pinned by the unit tests above. The full real-cell labels+symbols
   **golden-image set** remains its own #347 item.
+
+### G.6 Per-frame hot-path cost (#332)
+
+The Overlay/declutter pass runs every frame, so its allocation and CPU profile is
+part of the #332 "overlay cost under the *All* category on dense cells" budget.
+
+- **Complexity.** O(N_overlay) per frame, where N_overlay is the cell's whole
+  point+text op count; collision queries are near-O(1) via the 64 px bucket grid
+  and stay bounded under clustering (suppressed labels are never indexed). A
+  synthetic micro-measurement (Apple Silicon, Release, per `Declutter` call, all
+  ops in-viewport) scales ~linearly — ≈0.6 ms at 2 000 ops, ≈1.3 ms at 5 000,
+  with the **clustered** case consistently *cheaper* than the spread case.
+- **Glyph fast path is alloc-free.** The per-(face,text) coverage memo means the
+  dominant all-ASCII soundings/labels draw without the `ContainsGlyphs`
+  `ushort[]` allocation or a doubled glyph-mapping pass; fallback faces/fonts are
+  resolved once for the process, not per frame.
+- **Declutter `Add` is closure-free.** The bucket-grid insert inlines its cell
+  loop, so placing a footprint allocates nothing beyond the (amortised) cell
+  list growth.
+- **Remaining lever.** `state.OverlayScene` is still the **whole cell's** ops
+  (not viewport-scoped), so the per-frame walk is O(N_cell) even when most labels
+  are off-screen, and under rotation the overlay is traversed three times
+  (declutter + point pass + upright-text pass). Viewport-scoping (or per-tile
+  partitioning) the overlay set to make the walk O(N_visible) is the open #332
+  optimisation; it is independent of the collision algorithm above. The
+  per-frame `HashSet`/`ScreenRectIndex`/`TextDrawScratch` are not yet pooled
+  across frames — a cheap follow-up once the overlay set is scoped.

@@ -68,6 +68,49 @@ public sealed class SkiaDisplayListRenderer
         new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Process-wide cache of "does this typeface contain every glyph in this
+    /// string" results, keyed by (face, text). The glyph-coverage probe
+    /// (<see cref="SKTypeface.ContainsGlyphs(string)"/>) allocates a
+    /// <c>ushort[text.Length]</c> and runs a full codepoint→glyph mapping pass,
+    /// so calling it per text op per frame would heap-allocate and double the
+    /// glyph mapping on the live overlay's hot path (the dominant all-ASCII
+    /// soundings/labels case). Caching by text makes stable frames re-scan
+    /// nothing. Entries are never evicted; the natural bound on distinct label
+    /// strings (feature names and sounding values in a cell) keeps it small. A
+    /// <see cref="ConcurrentDictionary{TKey,TValue}"/> because tiles and the
+    /// overlay may probe coverage from different threads.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> s_primaryCoverageCache = new();
+
+    /// <summary>
+    /// Process-wide cache of fallback typefaces resolved via
+    /// <see cref="SKFontManager.MatchCharacter(int)"/>, keyed by Unicode
+    /// codepoint. <c>MatchCharacter</c> enumerates the platform font set and is
+    /// expensive, so this must outlive any single frame: held for the app
+    /// lifetime (entries never evicted, faces never disposed), mirroring
+    /// <see cref="s_symbolPictureCache"/>. A <see langword="null"/> value caches
+    /// "no platform fallback exists" so the miss is not re-probed every frame.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, SKTypeface?> s_fallbackFaceCache = new();
+
+    /// <summary>
+    /// Process-wide cache of fallback <see cref="SKFont"/>s keyed by their
+    /// typeface and pixel size, so a non-ASCII label does not allocate and
+    /// destroy a native font handle every frame. App-lifetime, like
+    /// <see cref="s_fallbackFaceCache"/>.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> s_fallbackFontCache = new();
+
+    /// <summary>
+    /// Returns whether <paramref name="face"/> can render every glyph in
+    /// <paramref name="text"/>, caching the result per (face, text) so the
+    /// allocating full-string probe runs at most once per distinct string. See
+    /// <see cref="s_primaryCoverageCache"/>.
+    /// </summary>
+    private static bool PrimaryRendersAll(SKTypeface face, string text) =>
+        s_primaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
+
+    /// <summary>
     /// Half-extent, in display pixels, by which the point/text cull rectangle is
     /// grown beyond the viewport so a symbol or label whose <i>anchor</i> sits
     /// just off-screen but whose body is partly visible is still drawn. Sized to
@@ -545,7 +588,7 @@ public sealed class SkiaDisplayListRenderer
         SKCanvas canvas, string text, float x, float baseline, float sizePx,
         SKFont primary, SKPaint paint, TextDrawScratch scratch)
     {
-        if (string.IsNullOrEmpty(text) || primary.Typeface is null || primary.Typeface.ContainsGlyphs(text))
+        if (string.IsNullOrEmpty(text) || primary.Typeface is null || PrimaryRendersAll(primary.Typeface, text))
         {
             canvas.DrawText(text, x, baseline, SKTextAlign.Left, primary, paint);
             return;
@@ -646,8 +689,6 @@ public sealed class SkiaDisplayListRenderer
     internal sealed class TextDrawScratch : IDisposable
     {
         private readonly Dictionary<float, SKFont> _fonts = new();
-        private readonly Dictionary<int, SKTypeface?> _fallbackFaces = new();
-        private readonly Dictionary<(SKTypeface, float), SKFont> _fallbackFonts = new();
 
         /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
         public SKPaint Paint { get; } = new() { IsAntialias = true };
@@ -666,37 +707,26 @@ public sealed class SkiaDisplayListRenderer
         /// <summary>
         /// Returns a typeface that can render <paramref name="codepoint"/> when
         /// the primary face cannot, or <see langword="null"/> when the platform
-        /// font manager has no match. Cached per codepoint (the lookup is
-        /// expensive and labels repeat characters).
+        /// font manager has no match. Resolved via the app-lifetime
+        /// <see cref="s_fallbackFaceCache"/> (the platform lookup is expensive
+        /// and must not re-run per frame).
         /// </summary>
-        public SKTypeface? FallbackFor(int codepoint)
-        {
-            if (!_fallbackFaces.TryGetValue(codepoint, out var face))
+        public SKTypeface? FallbackFor(int codepoint) =>
+            s_fallbackFaceCache.GetOrAdd(codepoint, static cp =>
             {
                 try
                 {
-                    face = SKFontManager.Default.MatchCharacter(codepoint);
+                    return SKFontManager.Default.MatchCharacter(cp);
                 }
                 catch
                 {
-                    face = null;
+                    return null;
                 }
-                _fallbackFaces[codepoint] = face;
-            }
-            return face;
-        }
+            });
 
-        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/>.</summary>
-        public SKFont FallbackFontFor(SKTypeface face, float sizePx)
-        {
-            var key = (face, sizePx);
-            if (!_fallbackFonts.TryGetValue(key, out var font))
-            {
-                font = new SKFont(face, sizePx);
-                _fallbackFonts[key] = font;
-            }
-            return font;
-        }
+        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="s_fallbackFontCache"/>.</summary>
+        public SKFont FallbackFontFor(SKTypeface face, float sizePx) =>
+            s_fallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
 
         public void Dispose()
         {
@@ -704,12 +734,6 @@ public sealed class SkiaDisplayListRenderer
             foreach (var font in _fonts.Values)
                 font.Dispose();
             _fonts.Clear();
-            foreach (var font in _fallbackFonts.Values)
-                font.Dispose();
-            _fallbackFonts.Clear();
-            foreach (var face in _fallbackFaces.Values)
-                face?.Dispose();
-            _fallbackFaces.Clear();
         }
     }
 

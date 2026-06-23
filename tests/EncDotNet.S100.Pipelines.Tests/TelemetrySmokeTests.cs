@@ -171,8 +171,13 @@ public sealed class TelemetrySmokeTests
 
         await new VectorPipeline().ProcessAsync(source, catalogue);
 
-        var transformSpan = observed.First(a => a.OperationName == "s100.xslt.transform");
-        Assert.Equal("TestRule", transformSpan.GetTagItem("s100.xslt.rule"));
+        // The global ActivityListener also observes xslt.transform spans emitted
+        // by sibling telemetry tests running in parallel, so assert that *this*
+        // pipeline's span (tagged with this test's rule) is present rather than
+        // taking the first xslt.transform span seen.
+        Assert.Contains(observed, a =>
+            a.OperationName == "s100.xslt.transform" &&
+            (string?)a.GetTagItem("s100.xslt.rule") == "TestRule");
     }
 
     #region Helpers
