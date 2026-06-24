@@ -1186,3 +1186,112 @@ pooling do not reach budget, the next step is **not** to thin hazards — it is 
 confirm SCAMIN is encoded/honoured as intended and, if needed, surface an
 overscale indication.
 
+
+## Appendix I — Phase 7: Cold tile-generation (base-plane spatial index, #332 / #347)
+
+A new **perf** line under #347 (make tiled "B" the default) — **not** a Fidelity
+item (Appendix H.0 is untouched: this renders the *identical* base plane,
+pixel-for-pixel, only faster). It addresses the lag the original #332 report
+actually felt: Appendix H.1 established that the "~30 ms" figure was **cold
+tile-generation**, not the live overlay (the overlay on the densest available
+trial cell was already declutter 0.6 ms + draw ~3 ms). This phase attacks that
+cold cost.
+
+### I.1 Measured cold-tile breakdown
+
+Dense Solent/St Peter Port cell `101GB00510210.000` (the same cell named in
+Appendix H.1), Release, Apple Silicon, 768×768 px tiles (256 dip + 64 gutter @
+deviceScale 2). The bound **base plane** = 10,398 ops (2,690 area + 2,907
+pattern + 4,801 line), **1.37 M vertices**, cell span 55 × 25 km. Cold cost is
+**~85–100 ms per fresh tile, roughly flat across zoom** — so a fresh pan band of
+several tiles costs hundreds of ms.
+
+The GUI viewer could not bind a Metal surface in the measurement shell
+(`Avalonia.Native … RenderTimer … -6661`, as in Appendix H.1), so the breakdown
+was taken GUI-free with an env-gated (`S100_TILEGEN_TIMING=1`) micro-benchmark
+driving the **same `VectorScene` IR and `SkiaDisplayListRenderer`** the worker
+uses, over real per-tile viewports reconstructed exactly as `RasterizeTile`
+builds them. Instrumentation was reverted before commit (skill hygiene rule).
+A/B per cold tile, swept by zoom band:
+
+| zoom | full scene | + per-tile op cull (index) | + cull **& generalize** | ops intersecting | verts intersecting |
+|---|---|---|---|---|---|
+| +1 | 82.9 ms | 60.8 ms (−27 %) | 15.4 ms (−81 %) | 13.8 % | 29 % |
+| +3 | 101.8 ms | 91.2 ms (−10 %) | 42.6 ms (−58 %) | 10.0 % | 43 % |
+| +5 | 88.2 ms | 76.8 ms (−13 %) | 56.0 ms (−37 %) | 2.6 % | 40 % |
+| +7 | 88.3 ms | 76.9 ms (−13 %) | 73.5 ms (−17 %) | 1.3 % | 37 % |
+
+**Dominant stage = vertex-bound rasterisation of the large *intersecting*
+area/line geometry** (`DrawArea`/`DrawLine` build a full-resolution `SKPath` then
+antialiased-fill it). Time tracks vertex count ~1:1 (~0.2 µs/vertex): only
+1–14 % of ops intersect a tile, but they carry 29–43 % of all vertices (the big
+depth/land polygons and contours). It is **not** fill-bound and **not**
+pattern-bound (patterns were 7–16 % of clipped cost).
+
+### I.2 What shipped this phase — the base-plane spatial index (fidelity-neutral)
+
+The shipped `RasterizeTile` rasterised the **whole** base scene for **every**
+tile, even though design §3.3 (line 74) specified *"query VectorScene ops
+intersecting tile+gutter (spatial index over the scene)"*. That base-plane index
+was never built — only the *overlay* plane got one (Appendix H.3 /
+`OverlaySpatialIndex`, #351). This phase finally builds the base-plane
+counterpart, `BaseSpatialIndex`:
+
+- A uniform grid over base-op **world AABBs** (area/pattern = `WorldShell`
+  bounds; line = polyline bounds), built **once** at `BindScene` and rebuilt on
+  every scene generation. An op straddling cells is inserted into each; `Query`
+  de-duplicates and returns matches **in ascending original op index** (S-100
+  Part 9 draw/z-order). Any op whose geometry the index cannot bound becomes an
+  **always-candidate** so it is never dropped.
+- `RasterizeTile` queries the tile+gutter world AABB and rasterises only the
+  returned ops. The query is a deliberate **conservative superset** (bbox
+  intersection only) and the renderer still applies the exact per-op
+  `ScaleVisibility` cull and pixel clip — so the output is **pixel-identical** to
+  rasterising the whole scene. A null index (defensive) falls back to the full
+  scene.
+
+Measured payoff of the index alone: **10–27 %** faster cold tiles (27 % at the
+coarse bands a fresh pan most exposes). Scoping is also the structural enabler
+for the deferred generalization lever below.
+
+### I.3 Threading / correctness
+
+`BaseSpatialIndex` is **immutable after construction** and touches no Skia/GPU
+objects — a pure-CPU transform over the immutable paint-op IR — so it is safe to
+`Query` concurrently from the multiple **worker** threads that rasterise tiles,
+and it is independent of the render thread's GPU-context lifetime rules (§3.7 /
+Appendix F: GPU-backed `SKObject`s are created **and** freed on the render
+thread). Tile rasterisation itself remains CPU/software (`SKBitmap` →
+`SKImage.FromBitmap`, no `GRContext`). `Query` allocates its own result list per
+call (no shared scratch), so concurrent worker queries never race.
+
+### I.4 Deferred — Lever A: band-keyed geometry generalization
+
+The data's biggest lever is **resolution-aware geometry generalization**
+(Douglas–Peucker at ~½ device-pixel, keyed per zoom band): 81 % / 58 % / 37 %
+cold-tile reductions at zoom +1 / +3 / +5, tracking the vertex reduction ~1:1.
+It is **deferred** by branch-owner decision because, unlike every lever shipped
+so far, it is the first that **alters rendered chart geometry**, so it is gated
+on:
+
+1. a **topology-preserving** simplifier (naive per-ring DP can self-intersect /
+   invalidate area fills; thick strokes need a conservative tolerance) — see the
+   `chart-cartography` skill §2;
+2. **golden-image sign-off** (the #347 golden-image set), to confirm the ½-px
+   tolerance is sub-perceptual at the band it is keyed to; and
+3. a **Metal-capable GUI session** for in-viewer A/B confirmation
+   (`TileRasterizeDuration` histogram + `dotnet-trace`), unavailable in the
+   profiling shell.
+
+It remains fidelity-*bounded* (no feature dropped — unlike the LOD-thinning
+ruled out in Appendix H.0), just not fidelity-*neutral*, so it ships separately.
+
+### I.5 Exit criterion (feeds #347)
+
+A cold pan into a fresh band on a dense *All* cell rasterises each tile by
+walking only the ops that intersect it, not the whole cell, with **pixel-
+identical** output to the pre-index path. Verified by `BaseSpatialIndexTests`
+(conservative-superset / draw-order / de-dup / degenerate / always-candidate) and
+`BaseScopingBenchTests` (an interior tile-sized query over a dense synthetic base
+plane returns O(covering), not O(cell)). Absolute wall-clock reconfirmation
+in-viewer is pending a Metal GUI session.

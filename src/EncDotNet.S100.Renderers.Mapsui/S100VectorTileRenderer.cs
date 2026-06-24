@@ -434,6 +434,7 @@ public static class S100VectorTileRenderer
         {
             var (baseScene, overlayScene) = PartitionScene(scene);
             state.Scene = baseScene;
+            state.BaseIndex = new BaseSpatialIndex(baseScene);
             state.OverlayScene = overlayScene;
             state.OverlayIndex = new OverlaySpatialIndex(overlayScene);
             state.OverlayCandidates.Clear();
@@ -1309,6 +1310,7 @@ public static class S100VectorTileRenderer
                 float deviceScale;
                 long generation;
                 VectorScene scene;
+                BaseSpatialIndex? baseIndex;
                 bool isPrediction;
                 string? diskNamespace;
 
@@ -1340,6 +1342,7 @@ public static class S100VectorTileRenderer
                     deviceScale = state.PendingDeviceScale;
                     generation = state.PendingGeneration;
                     scene = state.Scene;
+                    baseIndex = state.BaseIndex;
                     diskNamespace = state.DiskNamespace;
                     state.InFlight.Add(key);
                 }
@@ -1366,7 +1369,7 @@ public static class S100VectorTileRenderer
                     try
                     {
                         var rasterStart = Stopwatch.GetTimestamp();
-                        using var bitmap = RasterizeTile(scene, key, deviceScale);
+                        using var bitmap = RasterizeTile(scene, baseIndex, key, deviceScale);
                         image = SKImage.FromBitmap(bitmap);
                         S100Diag.Telemetry.TileRasterizeDuration.Record(
                             Stopwatch.GetElapsedTime(rasterStart).TotalMilliseconds);
@@ -1654,7 +1657,7 @@ public static class S100VectorTileRenderer
     /// Rasterises a single tile (core + gutter) from the scene at its band
     /// resolution and the frame's device scale.
     /// </summary>
-    private static SKBitmap RasterizeTile(VectorScene scene, TileKey key, float deviceScale)
+    private static SKBitmap RasterizeTile(VectorScene scene, BaseSpatialIndex? baseIndex, TileKey key, float deviceScale)
     {
         var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
         var bandResolution = TileGrid.ResolutionForBand(key.Band);
@@ -1664,6 +1667,16 @@ public static class S100VectorTileRenderer
         var fullMaxX = maxX + gutterWorld;
         var fullMinY = minY - gutterWorld;
         var fullMaxY = maxY + gutterWorld;
+
+        // Scope the base-plane walk to the ops whose world bounds intersect this
+        // tile (+ gutter). The index is a conservative superset and the renderer
+        // still applies the exact per-op scale cull and pixel clip, so the result
+        // is pixel-identical to rasterising the whole scene — only fewer ops are
+        // walked (#332 cold tile-gen, perf line under #347). A null index (before
+        // the first BindScene, defensive) falls back to the full scene.
+        var tileScene = baseIndex is null
+            ? scene
+            : new VectorScene(baseIndex.Query(fullMinX, fullMinY, fullMaxX, fullMaxY));
 
         var (minLon, minLat) = WebMercator.ToLonLat(fullMinX, fullMinY);
         var (maxLon, maxLat) = WebMercator.ToLonLat(fullMaxX, fullMaxY);
@@ -1692,7 +1705,7 @@ public static class S100VectorTileRenderer
             HonorScaleVisibility = true,
         };
 
-        return renderer.Render(scene, viewport);
+        return renderer.Render(tileScene, viewport);
     }
 
     /// <summary>Per-layer tiling state, held in a weak table keyed by layer.</summary>
@@ -1701,6 +1714,14 @@ public static class S100VectorTileRenderer
         public readonly object Sync = new();
 
         public VectorScene? Scene;
+
+        // Spatial index over the base-plane op extents (#332 cold tile-gen,
+        // perf line under #347), built once when a scene is bound so each
+        // off-thread RasterizeTile walk can be scoped to the ops intersecting
+        // the tile (+ gutter) instead of the whole cell. Immutable after
+        // construction, so it is safe to query from the multiple worker threads
+        // that rasterise tiles concurrently. Null until a scene is bound.
+        public BaseSpatialIndex? BaseIndex;
 
         // Live screen-space overlay: point symbols + point-anchored text
         // (soundings) partitioned out of the tiled base plane so they draw at
