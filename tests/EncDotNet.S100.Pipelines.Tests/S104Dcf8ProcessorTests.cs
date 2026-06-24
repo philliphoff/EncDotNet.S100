@@ -64,7 +64,7 @@ public class S104Dcf8ProcessorTests
     }
 
     [Fact]
-    public void Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
+    public async Task Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
     {
         var path = WriteFixture();
         try
@@ -72,7 +72,7 @@ public class S104Dcf8ProcessorTests
             using var processor = (System.IDisposable?)null; // placeholder so analyzers don't complain about disposable processors
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
-            var result = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
             Assert.Single(result.Layers);
             var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
@@ -95,7 +95,7 @@ public class S104Dcf8ProcessorTests
     }
 
     [Fact]
-    public void GetFeatureInfo_StationRef_AfterRender_ReturnsCurrentTimeSample()
+    public async Task GetFeatureInfo_StationRef_AfterRender_ReturnsCurrentTimeSample()
     {
         var path = WriteFixture();
         try
@@ -105,7 +105,7 @@ public class S104Dcf8ProcessorTests
             // Render at the second time-step; GetFeatureInfo should report
             // the value at the same step (height = 1.5, trend = 2 for Alpha).
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S104RenderContext { TimeStep = secondStep }).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S104RenderContext { TimeStep = secondStep });
 
             var info = p.GetFeatureInfo("station:Alpha");
 
@@ -129,13 +129,13 @@ public class S104Dcf8ProcessorTests
     }
 
     [Fact]
-    public void GetFeatureInfo_UnknownStationRef_ReturnsNull()
+    public async Task GetFeatureInfo_UnknownStationRef_ReturnsNull()
     {
         var path = WriteFixture();
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station-ref"));

@@ -4,6 +4,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Keep the build warning-free: any compiler/analyzer warning fails the
+         build so they cannot quietly accumulate again. NuGet audit advisories
+         (NU190x) are deliberately NOT excluded — a newly-published CVE against a
+         direct or transitive package SHOULD stop the line until it is triaged.
+         NuGetAudit runs against transitive packages too (audit mode 'all'). -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
   </PropertyGroup>
 
 </Project>

@@ -483,7 +483,7 @@ public sealed class DatasetPipelineFactory
         var source = FileSystemAssetSource.Create(directory);
 
         var baseRelative = Path.GetFileName(fullBase);
-        var updateRelatives = updateFilePaths.Select(Path.GetFileName).ToList();
+        var updateRelatives = updateFilePaths.Select(p => Path.GetFileName(p)).ToList();
 
         return new S101DatasetProcessor(
             source,

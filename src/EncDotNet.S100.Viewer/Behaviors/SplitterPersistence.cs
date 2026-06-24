@@ -160,9 +160,9 @@ internal static class SplitterPersistence
         {
             if (i < grid.RowDefinitions.Count) { prev = grid.RowDefinitions[i]; break; }
         }
-        for (int i = splitterRow + 1; i < grid.RowDefinitions.Count; i++)
+        if (splitterRow + 1 < grid.RowDefinitions.Count)
         {
-            next = grid.RowDefinitions[i]; break;
+            next = grid.RowDefinitions[splitterRow + 1];
         }
         return (prev, next);
     }
@@ -176,9 +176,9 @@ internal static class SplitterPersistence
         {
             if (i < grid.ColumnDefinitions.Count) { prev = grid.ColumnDefinitions[i]; break; }
         }
-        for (int i = splitterCol + 1; i < grid.ColumnDefinitions.Count; i++)
+        if (splitterCol + 1 < grid.ColumnDefinitions.Count)
         {
-            next = grid.ColumnDefinitions[i]; break;
+            next = grid.ColumnDefinitions[splitterCol + 1];
         }
         return (prev, next);
     }

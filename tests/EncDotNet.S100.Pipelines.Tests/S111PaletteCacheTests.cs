@@ -25,7 +25,7 @@ public class S111PaletteCacheTests
     private const string S111ColorProfileRelativePath = "ColorProfiles/colorProfile.xml";
 
     [Fact]
-    public void Repeated_SwitchPalette_calls_open_color_profile_only_once()
+    public async Task Repeated_SwitchPalette_calls_open_color_profile_only_once()
     {
         using var inner = Specification.CreatePortrayalCatalogueSource("S-111");
         using var counting = new CountingAssetSource(inner);
@@ -41,16 +41,16 @@ public class S111PaletteCacheTests
         // Switch through every palette, in arbitrary order, including a
         // switch back to Day — none of these should re-open the asset
         // after the first one.
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Night);
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPaletteAsync(PaletteType.Dusk).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
 
         var after = counting.GetOpenCount(S111ColorProfileRelativePath);
@@ -64,7 +64,7 @@ public class S111PaletteCacheTests
     }
 
     [Fact]
-    public void ResolveColorScheme_does_not_reopen_color_profile_after_SwitchPalette()
+    public async Task ResolveColorScheme_does_not_reopen_color_profile_after_SwitchPalette()
     {
         using var inner = Specification.CreatePortrayalCatalogueSource("S-111");
         using var counting = new CountingAssetSource(inner);
@@ -75,7 +75,7 @@ public class S111PaletteCacheTests
         var provider = manager.GetProvider("S-111");
         var catalogue = new S111PortrayalCatalogue(provider);
 
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
         var afterSwitch = counting.GetOpenCount(S111ColorProfileRelativePath);
 
         // The defensive ActivePalette.Colors.Count == 0 re-load was the

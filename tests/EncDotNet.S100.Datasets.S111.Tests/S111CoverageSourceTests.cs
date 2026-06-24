@@ -107,13 +107,13 @@ public class S111CoverageSourceTests : IDisposable
     }
 
     [Fact]
-    public void PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
+    public async Task PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
     {
         const string portrayalPath = "TestData/PortrayalCatalogue";
         Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source);
         var catalogue = new S111PortrayalCatalogue(provider);
 
         var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
@@ -156,15 +156,15 @@ public class S111CoverageSourceTests : IDisposable
     }
 
     [Fact]
-    public void PortrayalCatalogue_ResolveSymbolScheme_Returns9Bands()
+    public async Task PortrayalCatalogue_ResolveSymbolScheme_Returns9Bands()
     {
         const string portrayalPath = "TestData/PortrayalCatalogue";
         Skip.IfNot(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = PortrayalCatalogueProvider.OpenAsync(source).GetAwaiter().GetResult();
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source);
         var catalogue = new S111PortrayalCatalogue(provider);
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
         var scheme = catalogue.ResolveSymbolScheme(MarinerSettings.Default);
 

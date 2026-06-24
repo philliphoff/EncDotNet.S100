@@ -49,7 +49,7 @@ public class WorkerDrainGateTests
     }
 
     [Fact]
-    public void DrainAndWait_BlocksUntilRegisteredWorkerCompletes()
+    public async Task DrainAndWait_BlocksUntilRegisteredWorkerCompletes()
     {
         var gate = new WorkerDrainGate();
         Assert.True(gate.TryRegister());
@@ -65,12 +65,12 @@ public class WorkerDrainGateTests
         });
 
         Assert.True(gate.DrainAndWait(TimeSpan.FromSeconds(5)));
-        completer.Wait();
+        await completer;
         Assert.Equal(0, gate.ActiveWorkers);
     }
 
     [Fact]
-    public void DrainAndWait_AwaitsWorkerRegisteredConcurrentlyWithDrain()
+    public async Task DrainAndWait_AwaitsWorkerRegisteredConcurrentlyWithDrain()
     {
         // A worker that registers and immediately completes while the drain is
         // racing must still leave the gate idle (no leaked active count).
@@ -85,7 +85,7 @@ public class WorkerDrainGateTests
         });
 
         gate.DrainAndWait(TimeSpan.FromSeconds(5));
-        worker.Wait();
+        await worker;
 
         Assert.Equal(0, gate.ActiveWorkers);
         Assert.True(gate.IsDraining);

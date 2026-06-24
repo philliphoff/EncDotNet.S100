@@ -35,9 +35,9 @@ public sealed class CacheCounterTests
             "s100.lua.source.cache.miss.count", misses);
 
         const string fileName = "S100Scripting.lua";
-        _ = catalogue.GetLuaSourceAsync(fileName).AsTask().GetAwaiter().GetResult();
-        _ = catalogue.GetLuaSourceAsync(fileName).AsTask().GetAwaiter().GetResult();
-        _ = catalogue.GetLuaSourceAsync(fileName).AsTask().GetAwaiter().GetResult();
+        _ = await catalogue.GetLuaSourceAsync(fileName);
+        _ = await catalogue.GetLuaSourceAsync(fileName);
+        _ = await catalogue.GetLuaSourceAsync(fileName);
 
         listener.Dispose();
         KeyValuePair<string, object?>[][] hitSnap;
@@ -73,8 +73,8 @@ public sealed class CacheCounterTests
 
         // Find a real symbol id to ensure we hit the cache miss/hit path.
         var symbolId = provider.Catalogue.Symbols.First().Id;
-        _ = catalogue.GetSymbolAsync(symbolId).AsTask().GetAwaiter().GetResult();
-        _ = catalogue.GetSymbolAsync(symbolId).AsTask().GetAwaiter().GetResult();
+        _ = await catalogue.GetSymbolAsync(symbolId);
+        _ = await catalogue.GetSymbolAsync(symbolId);
 
         listener.Dispose();
         KeyValuePair<string, object?>[][] hitSnap;

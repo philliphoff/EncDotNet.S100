@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 public class XsltRuleExecutorTests
 {
     [Fact]
-    public void Execute_XsltPointRule_ReturnsTypedInstruction()
+    public async Task Execute_XsltPointRule_ReturnsTypedInstruction()
     {
         var source = new FakeFeatureXmlSource(
             ["Buoy"],
@@ -46,14 +46,14 @@ public class XsltRuleExecutorTests
 
         // The mariner argument is ignored by the XSLT engine; pass an explicit
         // non-default value to confirm it has no effect.
-        var instructions = executor.ExecuteAsync(new MarinerSettings { FourShades = true }).GetAwaiter().GetResult();
+        var instructions = await executor.ExecuteAsync(new MarinerSettings { FourShades = true });
 
         var inst = Assert.IsType<PointInstruction>(Assert.Single(instructions));
         Assert.Equal("1", inst.FeatureReference);
     }
 
     [Fact]
-    public void Execute_ExposesFeatureTypeAndRuleCountsForTelemetry()
+    public async Task Execute_ExposesFeatureTypeAndRuleCountsForTelemetry()
     {
         var source = new FakeFeatureXmlSource(
             ["Buoy", "Light"],
@@ -73,7 +73,7 @@ public class XsltRuleExecutorTests
             xsltRules: new() { ["BuoyRule"] = xslt });
 
         var executor = new XsltRuleExecutor(source, catalogue);
-        executor.ExecuteAsync(MarinerSettings.Default).GetAwaiter().GetResult();
+        await executor.ExecuteAsync(MarinerSettings.Default);
 
         Assert.Equal(2, executor.LastFeatureTypeCount);
 

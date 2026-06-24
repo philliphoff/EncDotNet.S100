@@ -140,7 +140,7 @@ public sealed class AnchoredPatternFillRenderer : ISkiaStyleRenderer
                 float tx = (float)anchorScreenX + col * tileStepW;
                 float ty = (float)anchorScreenY + row * tileStepH;
                 var tileMatrix = SKMatrix.Concat(SKMatrix.CreateTranslation(tx, ty), tileScale);
-                canvas.DrawPicture(patternStyle.Tile, ref tileMatrix);
+                canvas.DrawPicture(patternStyle.Tile, in tileMatrix);
             }
         }
 
