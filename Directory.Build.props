@@ -6,11 +6,12 @@
     <Nullable>enable</Nullable>
     <!-- Keep the build warning-free: any compiler/analyzer warning fails the
          build so they cannot quietly accumulate again. NuGet audit advisories
-         (NU19xx) are kept as warnings rather than errors because they depend on
-         an external, changing advisory feed (and on transitive packages we do
-         not control), so they must not turn a clean checkout's build red. -->
+         (NU190x) are deliberately NOT excluded — a newly-published CVE against a
+         direct or transitive package SHOULD stop the line until it is triaged.
+         NuGetAudit runs against transitive packages too (audit mode 'all'). -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <WarningsNotAsErrors>NU1900;NU1901;NU1902;NU1903;NU1904;NU1905</WarningsNotAsErrors>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
   </PropertyGroup>
 
 </Project>
