@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -100,11 +101,21 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var processor = _factory.CreateProcessor(path);
-        var context = BuildContext(processor, options);
-        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
+        var prior = RenderingOptimizations.RenderSubsystem;
+        try
+        {
+            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
 
-        return Rasterize(result, options);
+            var processor = _factory.CreateProcessor(path);
+            var context = BuildContext(processor, options);
+            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
+
+            return Rasterize(result, options);
+        }
+        finally
+        {
+            RenderingOptimizations.RenderSubsystem = prior;
+        }
     }
 
     /// <summary>
@@ -118,11 +129,21 @@ public sealed class RenderHarness : IDisposable
         ArgumentException.ThrowIfNullOrEmpty(path);
         options ??= HarnessOptions.Default;
 
-        var processor = _factory.CreateProcessor(path);
-        var context = BuildContext(processor, options);
-        var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
+        var prior = RenderingOptimizations.RenderSubsystem;
+        try
+        {
+            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
 
-        return (Rasterize(result, options), result);
+            var processor = _factory.CreateProcessor(path);
+            var context = BuildContext(processor, options);
+            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
+
+            return (Rasterize(result, options), result);
+        }
+        finally
+        {
+            RenderingOptimizations.RenderSubsystem = prior;
+        }
     }
 
     private static RenderContext BuildContext(IDatasetProcessor processor, HarnessOptions options)
@@ -130,6 +151,9 @@ public sealed class RenderHarness : IDisposable
         var palette = options.Palette;
         var symScale = options.SymbolScale;
         var txtScale = options.TextScale;
+        var ecdis = options.DisplayCategory is { } category
+            ? new EcdisDisplaySettings { Category = category }
+            : null;
 
         // Time-series specs need a DateTime resolved from the time-step index.
         DateTime? timeStep = null;
@@ -150,14 +174,14 @@ public sealed class RenderHarness : IDisposable
 
         return processor.Spec.Name switch
         {
-            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
-            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
-            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
-            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
-            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
-            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
+            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
             // S-421 reuses the base RenderContext (no spec-specific record exists yet).
-            _ => new SimpleRenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale },
+            _ => new SimpleRenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
         };
     }
 
@@ -177,19 +201,93 @@ public sealed class RenderHarness : IDisposable
 
         map.Navigator.SetSize(options.Width, options.Height);
 
-        var extent = result.Extent;
-        if (extent.Width > 0 && extent.Height > 0)
+        if (options.Viewport is { } vp)
         {
-            map.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+            var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(vp.West, vp.South);
+            var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(vp.East, vp.North);
+            map.Navigator.ZoomToBox(new MRect(minX, minY, maxX, maxY), MBoxFit.Fit);
+        }
+        else
+        {
+            var extent = result.Extent;
+            if (extent.Width > 0 && extent.Height > 0)
+            {
+                map.Navigator.ZoomToBox(extent, MBoxFit.Fit);
+            }
         }
 
+        return options.RenderSubsystem == RenderSubsystemKind.TiledScene
+            ? RasterizeSettled(map, options)
+            : RenderFrame(map);
+    }
+
+    /// <summary>
+    /// Renders the map once to an <see cref="SKBitmap"/> via Mapsui's headless
+    /// <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>.
+    /// </summary>
+    private static SKBitmap RenderFrame(Map map)
+    {
         using var stream = new MapRenderer().RenderToBitmapStream(
             map, pixelDensity: 1f, renderFormat: RenderFormat.Png, quality: 100);
         stream.Position = 0;
-        var bitmap = SKBitmap.Decode(stream)
+        return SKBitmap.Decode(stream)
             ?? throw new InvalidOperationException(
                 "Mapsui.Rendering.Skia produced a stream that SkiaSharp could not decode.");
-        return bitmap;
+    }
+
+    /// <summary>
+    /// Drives the TiledScene ("B") subsystem to a settled frame. Unlike the "A"
+    /// arm — where a single <see cref="MapRenderer.RenderToBitmapStream(Map, float, RenderFormat, int)"/>
+    /// produces the final pixels — the "B" base plane rasterises on a worker
+    /// thread: the first paint blits nothing and schedules a worker, which later
+    /// fires <see cref="S100VectorTileRenderer.RequestRedraw"/> (or the
+    /// single-surface arm's <see cref="S100VectorSceneRenderer.RequestRedraw"/>)
+    /// when a tile publishes. This loop is the headless analogue of the viewer's
+    /// <c>await_render_idle</c>: it re-renders on every published tile and stops
+    /// once no new tile arrives within <see cref="HarnessOptions.SettleQuietPeriod"/>
+    /// (or <see cref="HarnessOptions.SettleTimeout"/> elapses). Prediction
+    /// (pre-warm) tiles deliberately do not request a redraw, so the loop is
+    /// not kept alive by speculative rasterisation.
+    /// </summary>
+    private static SKBitmap RasterizeSettled(Map map, HarnessOptions options)
+    {
+        using var redraw = new ManualResetEventSlim(initialState: false);
+        void OnRedraw() => redraw.Set();
+
+        var priorTile = S100VectorTileRenderer.RequestRedraw;
+        var priorScene = S100VectorSceneRenderer.RequestRedraw;
+        S100VectorTileRenderer.RequestRedraw = OnRedraw;
+        S100VectorSceneRenderer.RequestRedraw = OnRedraw;
+
+        try
+        {
+            var deadline = Stopwatch.GetTimestamp()
+                + (long)(options.SettleTimeout.TotalSeconds * Stopwatch.Frequency);
+
+            // First frame schedules the worker raster for the visible tiles.
+            var bitmap = RenderFrame(map);
+
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                if (!redraw.Wait(options.SettleQuietPeriod))
+                {
+                    // No new tile published within the quiet period: the base
+                    // plane has settled.
+                    break;
+                }
+
+                redraw.Reset();
+                bitmap.Dispose();
+                bitmap = RenderFrame(map);
+            }
+
+            return bitmap;
+        }
+        finally
+        {
+            S100VectorTileRenderer.RequestRedraw = priorTile;
+            S100VectorSceneRenderer.RequestRedraw = priorScene;
+        }
     }
 
     private static Mapsui.Styles.Color MapsuiColorFromUInt(uint argb)
