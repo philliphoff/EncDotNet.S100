@@ -85,3 +85,76 @@ regressions in geometry, colour, or symbology.
    ```
 3. Run the test once → inspect `*.received.png` → if correct, rename to
    `*.verified.png` and commit.
+
+## A/B render-subsystem parity (`RenderParityTests`)
+
+`RenderParityTests` is the headless half of the issue #347 "golden-image
+parity set": it establishes that the tiled async **"B"** base-plane renderer
+(`RenderSubsystemKind.TiledScene`) is at least as faithful as the per-feature
+Mapsui **"A"** renderer. Three things run against the committed S-101 cell:
+
+- **B-arm goldens** (`BMode_EncCell_Palette`, Day/Dusk/Night) — render the cell
+  through "B" and compare to committed snapshots. This is the durable
+  regression guard for the tiled renderer.
+- **A/B close-match** (`AbParity_EncCell_Palette`, Day/Dusk/Night) — render the
+  same cell through both arms and assert they match within the perceptual
+  tolerance. Per the #347 decision, most datasets are expected to match
+  closely; a divergence beyond tolerance **fails**, surfacing a real fidelity
+  gap in one arm.
+- **Dense labels+symbols** (`BMode_DenseCell_LabelsAndSymbols`) — local-only,
+  golden-free: zooms "B" into a labelled harbour area and asserts the frame is
+  non-blank and richly multi-coloured (area fills + point symbols + labels),
+  proving the tiled overlay composites headlessly. Skipped in CI (real ENC data
+  is never committed).
+
+Both arms render with `EcdisDisplayCategory.Standard` to match the live
+viewer's default display mode. (The legacy `S101RenderingTests` baselines use
+the harness's historical `DisplayCategory = null`, i.e. no display-mode filter,
+which draws supplementary `OtherInformation` content the live product hides at
+`Standard` — so those baselines are **not** comparable pixel-for-pixel with the
+parity goldens.)
+
+### Why this is not a blanket `A == B` assertion
+
+On dense real cells "B" sometimes *fixes* an "A" draw-order bug (e.g. a
+supplementary depth area flooding the Isle of Wight land in the Solent trial
+cell), where "B" > "A". A perpetual equality gate across every cell would emit
+false failures there. The committed cell is a pure area-pattern fill with no
+ordering hazard, so it is a stable apples-to-apples close-match fixture.
+
+### What the headless path does *not* cover
+
+The "B" base plane rasterises **north-up on a software surface**, so:
+
+- viewport **rotation** uprightness (rotated "B" returns blank headlessly), and
+- **GPU residency** (Metal/ANGLE-backed tile upload),
+
+are out of scope for these tests and must be checked in the viewer.
+
+## In-viewer Metal A/B capture recipe
+
+For the rotation / GPU / multi-product cases above, drive the Avalonia viewer
+headlessly (per the `viewer-evaluation` skill / `docs/mcp-server.md`). The
+`S100_RENDER_SUBSYSTEM` env var selects the arm (`mapsui` = "A",
+`tiledscene` = "B")) and overrides the in-app flag.
+
+One-shot capture of the same cell + viewport through each arm:
+
+```bash
+VIEW=src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer
+CELL=tests/datasets/S101/S-101/DATASET_FILES/101AA0000DS0009.000
+
+for arm in mapsui tiledscene; do
+  S100_RENDER_SUBSYSTEM=$arm "$VIEW" \
+    --ephemeral --window-size 800x600 \
+    --bbox -32.466667,61.5,-32.4417611,61.6145761 \
+    --palette Day --display-category Standard \
+    --screenshot /tmp/eval/committed_$arm.png --exit-after-screenshot "$CELL"
+done
+```
+
+`--bbox` is `south,west,north,east`. For rotation, drive the MCP server
+(`--mcp`) and set a rotated viewport before `render_to_image`; the headless
+harness cannot (rotated "B" yields a blank base plane by design). The viewer
+ignores SIGTERM — stop it with `kill -9 <pid>`. **Never commit** captured
+images, traces, or real ENC datasets.
