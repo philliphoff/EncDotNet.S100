@@ -156,12 +156,15 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         context?.EcdisDisplay?.ApplyTo(_catalogue);
         var palette = _catalogue.ActivePalette;
 
-        // Run the Lua portrayal pipeline. S-131 is Lua-only — there are no
-        // XSLT rules — so we provide an empty FeatureXML source to satisfy
-        // the VectorPipeline contract. All drawing instructions come from the
-        // Lua executor (Stage 4).
+        // Run the Lua portrayal pipeline. S-131 is Lua-only — its portrayal
+        // catalogue contains no XSLT rules — so the VectorPipeline's XSLT stage
+        // selects zero rules and the XsltRuleExecutor short-circuits before
+        // touching the feature source. We therefore pass the real GML feature
+        // source (consistent with every other feature product); the central
+        // gate, not a bespoke empty source, is what avoids the FeatureXML cost.
+        // All drawing instructions come from the Lua executor (Stage 4).
         var executor = new S131LuaRuleExecutor(_luaEngine, _dataset, _catalogue, fc);
-        var featureSource = new EmptyFeatureXmlSource();
+        var featureSource = new GmlFeatureXmlSource<S131Feature>(_dataset.Features);
         var pipeline = new PortrayalPipeline(executor);
         var portrayalLayer = await pipeline.ProcessAsync(
                 featureSource, _catalogue, mariner: mariner, cancellationToken: cancellationToken)
@@ -328,25 +331,5 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         if (lat > maxLat) maxLat = lat;
         if (lon < minLon) minLon = lon;
         if (lon > maxLon) maxLon = lon;
-    }
-}
-
-/// <summary>
-/// An <see cref="IFeatureXmlSource"/> that contains no features. Used by
-/// S-131 (and potentially other Lua-only products) where all drawing
-/// instructions come from the Part 9A Lua executor and the XSLT stage
-/// of the <see cref="VectorPipeline"/> has nothing to do.
-/// </summary>
-internal sealed class EmptyFeatureXmlSource : IFeatureXmlSource
-{
-    /// <inheritdoc/>
-    public IReadOnlyList<string> FeatureTypesPresent => [];
-
-    /// <inheritdoc/>
-    public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        // Return a minimal well-formed XML document so XDocument.Load succeeds.
-        return XmlReader.Create(new StringReader("<Features/>"));
     }
 }

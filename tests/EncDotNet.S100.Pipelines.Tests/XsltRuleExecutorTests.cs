@@ -96,6 +96,43 @@ public class XsltRuleExecutorTests
             () => executor.ExecuteAsync(MarinerSettings.Default, cts.Token).GetAwaiter().GetResult());
     }
 
+    [Fact]
+    public async Task Execute_NoApplicableXsltRules_DoesNotBuildFeatureXml()
+    {
+        // A catalogue with zero rules: the XSLT engine has nothing to do, so
+        // the expensive FeatureXML build must be skipped entirely.
+        var source = new ThrowingFeatureXmlSource(["Buoy"]);
+        var catalogue = new FakeVectorPortrayalCatalogue([]);
+        var executor = new XsltRuleExecutor(source, catalogue);
+
+        var instructions = await executor.ExecuteAsync(MarinerSettings.Default);
+
+        Assert.Empty(instructions);
+        Assert.False(source.FeatureXmlRequested);
+        Assert.Equal(1, executor.LastFeatureTypeCount);
+        Assert.Equal(0, executor.LastRuleCount);
+    }
+
+    [Fact]
+    public async Task Execute_OnlyLuaRulesApply_DoesNotBuildFeatureXml()
+    {
+        // A Lua-only product (e.g. S-101, S-131): an applicable rule exists but
+        // it is not an XSLT rule, so the FeatureXML build is still skipped.
+        var source = new ThrowingFeatureXmlSource(["Buoy"]);
+        var catalogue = new FakeVectorPortrayalCatalogue(
+            [new PortrayalRule { Name = "BuoyLua", Type = PortrayalRuleType.Lua, ExecutionOrder = 1, AppliesTo = ["Buoy"] }]);
+        var executor = new XsltRuleExecutor(source, catalogue);
+
+        var instructions = await executor.ExecuteAsync(MarinerSettings.Default);
+
+        Assert.Empty(instructions);
+        Assert.False(source.FeatureXmlRequested);
+
+        // The applicable (Lua) rule is still reflected in telemetry even though
+        // the XSLT engine performed no work.
+        Assert.Equal(1, executor.LastRuleCount);
+    }
+
     private static XslCompiledTransform CompileXslt(string xslt)
     {
         var transform = new XslCompiledTransform();
@@ -110,6 +147,20 @@ public class XsltRuleExecutorTests
 
         public XmlReader GetFeatureXml(CancellationToken cancellationToken = default) =>
             XmlReader.Create(new StringReader(featureXml));
+    }
+
+    private sealed class ThrowingFeatureXmlSource(IReadOnlyList<string> featureTypes) : IFeatureXmlSource
+    {
+        public IReadOnlyList<string> FeatureTypesPresent { get; } = featureTypes;
+
+        public bool FeatureXmlRequested { get; private set; }
+
+        public XmlReader GetFeatureXml(CancellationToken cancellationToken = default)
+        {
+            FeatureXmlRequested = true;
+            throw new InvalidOperationException(
+                "GetFeatureXml must not be called when no applicable XSLT rule exists.");
+        }
     }
 
     private sealed class FakeVectorPortrayalCatalogue(
