@@ -1046,12 +1046,10 @@ font-enumeration and must not re-run per frame. `SegmentRuns` is codepoint-aware
 The Overlay/declutter pass runs every frame, so its allocation and CPU profile is
 part of the #332 "overlay cost under the *All* category on dense cells" budget.
 
-- **Complexity.** O(N_overlay) per frame, where N_overlay is the cell's whole
-  point+text op count; collision queries are near-O(1) via the 64 px bucket grid
-  and stay bounded under clustering (suppressed labels are never indexed). A
-  synthetic micro-measurement (Apple Silicon, Release, per `Declutter` call, all
-  ops in-viewport) scales ~linearly — ≈0.6 ms at 2 000 ops, ≈1.3 ms at 5 000,
-  with the **clustered** case consistently *cheaper* than the spread case.
+- **Complexity.** Was O(N_overlay) per frame over the cell's whole point+text op
+  count; **now O(N_visible)** via the overlay spatial index (Appendix H). Collision
+  queries are near-O(1) via the 64 px bucket grid and stay bounded under clustering
+  (suppressed labels are never indexed).
 - **Glyph fast path is alloc-free.** The per-(face,text) coverage memo means the
   dominant all-ASCII soundings/labels draw without the `ContainsGlyphs`
   `ushort[]` allocation or a doubled glyph-mapping pass; fallback faces/fonts are
@@ -1059,11 +1057,132 @@ part of the #332 "overlay cost under the *All* category on dense cells" budget.
 - **Declutter `Add` is closure-free.** The bucket-grid insert inlines its cell
   loop, so placing a footprint allocates nothing beyond the (amortised) cell
   list growth.
-- **Remaining lever.** `state.OverlayScene` is still the **whole cell's** ops
-  (not viewport-scoped), so the per-frame walk is O(N_cell) even when most labels
-  are off-screen, and under rotation the overlay is traversed three times
-  (declutter + point pass + upright-text pass). Viewport-scoping (or per-tile
-  partitioning) the overlay set to make the walk O(N_visible) is the open #332
-  optimisation; it is independent of the collision algorithm above. The
-  per-frame `HashSet`/`ScreenRectIndex`/`TextDrawScratch` are not yet pooled
-  across frames — a cheap follow-up once the overlay set is scoped.
+- **All three deferred levers are now shipped (Appendix H):** (a) the per-frame
+  `HashSet`/`ScreenRectIndex`/`TextDrawScratch` are **pooled** as render-thread
+  reusable buffers (`Clear()` not realloc); (b) the overlay walk is **viewport
+  scoped** to O(N_visible) via `OverlaySpatialIndex`, preserving the rotated
+  footprint and draw order; (c) upright point symbols draw from a **rasterised
+  sprite atlas** instead of replaying their vector picture every frame. The
+  fourth floated idea — runtime LOD-thinning of dense soundings/symbols — is
+  **rejected on safety grounds** (Appendix H.0): it omits data and is not an
+  ECDIS action, so it is out of scope.
+
+
+## Appendix H — Phase 6: Overlay density (#332)
+
+The first unchecked **Fidelity** item in #347 (make tiled "B" the default).
+Pan/zoom under the *All* display category lagged on dense cells because the
+screen-space symbol/sounding overlay is redrawn live every frame and its op set
+was the **whole cell**, walked O(N_cell) (up to 3× under rotation) with every
+visible symbol replayed as a vector picture. The fix is three **fidelity-neutral**
+levers — the identical scene rendered faster, no feature dropped.
+
+### H.0 Fidelity-preservation principle (binding on all optimisation work)
+
+**An optimisation must never alter what the chart presents — in particular it
+must never omit, drop, thin, merge, or hide source data — unless either (1) the
+user has explicitly turned that data/category off (a display category, a layer
+toggle, a declutter/own-ship setting), or (2) it is a standard ECDIS-style
+decluttering action defined by the spec/portrayal (e.g. SCAMIN minimum-display-
+scale culling, text-label overlap declutter).**
+
+Pure speed-ups that render the **identical** scene faster — caching, batching,
+atlasing, viewport-scoping the *walk*, buffer pooling, GPU residency — are always
+fair game. Dropping hazards/soundings to save frame time is **not**: it is a
+safety-of-navigation regression dressed up as performance.
+
+Direct consequence for #332: runtime **LOD-thinning of dense soundings/symbols is
+out of scope**. The sanctioned density controls are **SCAMIN** (Part 9 §11.1,
+encoded per-feature by the producing HO, already applied per-op via
+`ScaleVisibility`) and **text-label declutter** (already shipped, Appendix G).
+If a small-scale view is still over-dense, that is a producer-side SCAMIN
+encoding matter or an overscale indication — not the renderer dropping hazards.
+
+### H.1 Measured baseline (the data drives the priorities)
+
+Two sources. (1) **Live** instrumentation of `DrawOverlay` on real UKHO trial
+cells (Release, Metal, warm tiles): the densest *available* cell
+(`101GB00510210`, z13 *All*) carries **1 802 point ops, 0 sounding text** and the
+overlay costs **declutter 0.6 ms + draw ~3 ms**; Portsmouth `101GB0050242H` is
+365 pt / ≤1 ms. The earlier "~30 ms" figure was **cold tile-generation**, not the
+overlay. **The available trial cells do not reach the #332 regime**, so they
+cannot rank the levers. (2) **Synthetic** micro-measurement of
+`Declutter` + `RenderOnto` over N symbol+text ops in a 1600×1000 viewport
+(Release, Apple Silicon, 20-iter mean):
+
+| N visible | declutter | draw (all visible) | draw (1 % visible) | declutter alloc/frame |
+|---|---|---|---|---|
+| 1 000 | 0.9 ms | 4.1 ms | 0.2 ms | 180 KB |
+| 5 000 | 1.6 ms | 20 ms | 0.5 ms | 770 KB |
+| 10 000 | 5.9 ms | **48 ms** | 1.0 ms | 1.5 MB |
+| 25 000 | 10 ms | 105 ms | 2.2 ms | 3.1 MB |
+| 50 000 | 16 ms | **202 ms** | 4.1 ms | 6.3 MB |
+
+Reading: native **draw of *visible* point ops is the steep ~4 µs/op curve** (the
+vector `DrawPicture` replay) and dominates when a dense cell is zoomed so most ops
+are on-screen (where culling can't help) → **atlas is the primary lever**. The
+per-op cull already keeps *drawing* cheap when ops are off-screen (≤4 ms at 50k,
+1 % visible), but `Declutter` still walks **all N** (16 ms + 6.3 MB at 50k) →
+**scoping** bounds that to O(visible) and **pooling** removes the per-frame
+allocation.
+
+### H.2 The three levers (all fidelity-neutral)
+
+- **(c2) Symbol sprite atlas — `SkiaDisplayListRenderer` (primary).** Each unique
+  `(processed SVG, symbol scale, device scale)` is rasterised **once** to an
+  `SKImage` at device resolution (never-evicted, process-wide cache, immutable
+  CPU image so cross-thread safe). Upright point ops then blit the sprite 1:1
+  through the HiDPI matrix instead of replaying the vector picture. Pivot
+  placement reuses the exact `DrawPicture` pivot math; **per-op-rotated** symbols
+  (oriented lights/secondary symbols) and over-large/degenerate symbols fall back
+  to the vector path. A `UseSymbolAtlas` toggle (default on) drives pixel-parity
+  tests. Verified pixel-identical at device scale 1×/2× with offset pivots.
+- **(b) Viewport scoping — `OverlaySpatialIndex` (`Renderers.Mapsui`).** A uniform
+  grid over the overlay anchors (EPSG:3857) built **once** at scene-bind (off the
+  per-frame path, on `TileState`). Each frame `DrawOverlay` queries the **world
+  preimage of the (rotated, margin-inflated) viewport footprint** and feeds the
+  scoped candidate set to declutter + all draw passes. The query is a deliberate
+  **conservative superset** returned in original op order (z-order/priority
+  preserved); the precise per-op screen cull still runs downstream, so the
+  suppression set and the drawn set are **identical** to the whole-cell walk —
+  scoping bounds the walk, it never drops a feature. Reuses caller-owned scratch
+  buffers for zero steady-state allocation.
+  - *Correctness edges:* (i) inflate the world query by the largest op pixel
+    offset (the cull tests anchor+offset, the index keys the anchor); (ii) under
+    rotation use the rotated footprint, never the axis-aligned screen rect (it is
+    larger, and covers the point pass plus declutter's in-code anchor rotation
+    plus the upright-text pass); (iii) each op anchors at a single world point so
+    it sits in exactly one cell — no duplicates, just sort indices.
+- **(a) Declutter/overlay pooling — `LabelDeclutterer` (render-thread-confined).**
+  The `suppressed` `HashSet`, the `ScreenRectIndex` (+ its per-bucket lists), and
+  the `TextDrawScratch` are reused across frames (`Clear()` not realloc; scratch
+  held and disposed on teardown, not per frame). Confined to the render-thread
+  overlay path — the worker tile-raster path keeps its own per-call scratch; no
+  shared cross-thread mutable state. `Clear()` yields byte-identical output to a
+  fresh buffer (determinism preserved).
+
+### H.3 Verification
+
+- **Unit (`Pipelines.Tests`):** `OverlaySpatialIndexTests` (query returns exactly
+  the in-bounds ops in original order; whole-extent query reproduces the full op
+  list; offset/rotated/degenerate edges); `SymbolAtlasParityTests` (atlas vs
+  vector pixel parity at 1×/2× with offset pivots); `LabelDeclutterPoolingTests`
+  (reused buffer ≡ fresh buffer, zero steady-state allocation); and a committed
+  micro-measurement `OverlayScopingBenchTests` (40k-op cell → candidate set O(
+  visible), viewport-bounded under pan, zero steady-state query allocation) as
+  the regression guard for the synthetic curve above.
+- **Live:** the available trial cells (≤1 802 overlay ops, ≤3 ms) do not stress
+  the regime, so the synthetic microbench is the primary quantitative evidence;
+  the live path confirms no visual regression. (When driving the viewer headless
+  for this, note Avalonia.Native needs an active display surface — a render-timer
+  start failure (`-6661`) means no Metal surface is bound to the shell session.)
+
+### H.4 Exit criterion (feeds #347)
+
+On a genuinely dense *All* cell, a warm-tile tiny-pan burst should hold the
+overlay's per-frame declutter+draw within frame budget at the worst (zoomed-out,
+whole-dense-cell) scale **without dropping any feature**. If atlas + scoping +
+pooling do not reach budget, the next step is **not** to thin hazards — it is to
+confirm SCAMIN is encoded/honoured as intended and, if needed, surface an
+overscale indication.
+

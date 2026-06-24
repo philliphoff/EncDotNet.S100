@@ -435,6 +435,9 @@ public static class S100VectorTileRenderer
             var (baseScene, overlayScene) = PartitionScene(scene);
             state.Scene = baseScene;
             state.OverlayScene = overlayScene;
+            state.OverlayIndex = new OverlaySpatialIndex(overlayScene);
+            state.OverlayCandidates.Clear();
+            state.OverlayScopedScene = new VectorScene(state.OverlayCandidates);
             state.Generation++;
             state.DiskNamespace = diskNamespace;
             state.Cache.Clear();
@@ -661,7 +664,7 @@ public static class S100VectorTileRenderer
                 // Draw point symbols + soundings live, on top of the composited
                 // base tiles, at constant on-screen size (the base tiles are
                 // band-scaled, so symbols must not be baked into them).
-                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg);
+                DrawOverlay(canvas, state, centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
             }
             catch (Exception ex)
             {
@@ -1490,7 +1493,7 @@ public static class S100VectorTileRenderer
     private static void DrawOverlay(
         SKCanvas canvas, TileState state,
         double centerX, double centerY, double widthDip, double heightDip,
-        double resolution, double rotationDeg)
+        double resolution, double rotationDeg, float deviceScale)
     {
         var overlay = state.OverlayScene;
         if (overlay is null || overlay.Ops.Count == 0)
@@ -1530,20 +1533,48 @@ public static class S100VectorTileRenderer
             -margin, -margin,
             (float)widthDip + margin, (float)heightDip + margin);
 
+        // The rotated point pass culls against the rotated viewport footprint,
+        // which is larger than the axis-aligned screen rect. Compute it up-front
+        // so it can also bound the viewport scoping below (the declutter and
+        // upright-text passes rotate anchors into the same footprint).
+        SKRect rotatedCull = default;
+        if (rotate)
+        {
+            var rad = rotationDeg * Math.PI / 180.0;
+            var cosR = Math.Abs(Math.Cos(rad));
+            var sinR = Math.Abs(Math.Sin(rad));
+            var extentX = (float)(widthDip * 0.5 * cosR + heightDip * 0.5 * sinR);
+            var extentY = (float)(widthDip * 0.5 * sinR + heightDip * 0.5 * cosR);
+            rotatedCull = new SKRect(
+                cx - extentX - margin, cy - extentY - margin,
+                cx + extentX + margin, cy + extentY + margin);
+        }
+
+        // #332 lever b — scope the per-frame walk to the ops near the viewport.
+        // The query bounds are the world preimage of the (rotated) cull rect, so
+        // the candidate set is a conservative superset of everything any pass
+        // would draw; the precise per-op screen cull still runs downstream, so no
+        // visible feature is dropped (fidelity neutral). Falls back to the whole
+        // overlay if the index is somehow absent.
+        var scene = ScopeOverlay(
+            state, overlay, rotate ? rotatedCull : screenCull,
+            centerX, centerY, widthDip, heightDip, resolution);
+
         // Declutter labels deterministically: footprints are computed in final
         // on-screen space (anchors rotated by the same angle as the overlay), so
         // collisions are correct under rotation. Points reserve space first;
         // lower-priority labels that overlap an occupied footprint are skipped.
         var suppressed = s_labelDeclutterer.Declutter(
-            overlay, viewport, screenCull, s_overlayRenderer.HonorScaleVisibility,
+            scene, viewport, screenCull, s_overlayRenderer.HonorScaleVisibility,
             rotationDeg, cx, cy);
 
         if (!rotate)
         {
-            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
+            s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
             {
                 PointCullBounds = screenCull,
                 SuppressedText = suppressed,
+                DeviceScale = deviceScale,
             });
             return;
         }
@@ -1551,23 +1582,15 @@ public static class S100VectorTileRenderer
         // Rotated viewport: draw symbols under the rotated canvas (anchors stay
         // aligned with the rotated base), then draw labels upright by rotating
         // the anchor in code while keeping glyphs axis-aligned.
-        var rad = rotationDeg * Math.PI / 180.0;
-        var cosR = Math.Abs(Math.Cos(rad));
-        var sinR = Math.Abs(Math.Sin(rad));
-        var extentX = (float)(widthDip * 0.5 * cosR + heightDip * 0.5 * sinR);
-        var extentY = (float)(widthDip * 0.5 * sinR + heightDip * 0.5 * cosR);
-        var rotatedCull = new SKRect(
-            cx - extentX - margin, cy - extentY - margin,
-            cx + extentX + margin, cy + extentY + margin);
-
         canvas.Save();
         canvas.RotateDegrees((float)rotationDeg, cx, cy);
         try
         {
-            s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
+            s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
             {
                 PointCullBounds = rotatedCull,
                 DrawText = false,
+                DeviceScale = deviceScale,
             });
         }
         finally
@@ -1575,7 +1598,7 @@ public static class S100VectorTileRenderer
             canvas.Restore();
         }
 
-        s_overlayRenderer.RenderOnto(canvas, overlay, viewport, new OverlayDrawOptions
+        s_overlayRenderer.RenderOnto(canvas, scene, viewport, new OverlayDrawOptions
         {
             PointCullBounds = screenCull,
             SuppressedText = suppressed,
@@ -1584,6 +1607,47 @@ public static class S100VectorTileRenderer
             ScreenCenterY = cy,
             DrawPoints = false,
         });
+    }
+
+    /// <summary>
+    /// Scopes the overlay to the ops whose anchor lies within the world preimage
+    /// of <paramref name="queryCull"/> (inflated by the largest op offset), using
+    /// the scene's <see cref="OverlaySpatialIndex"/> and the layer's reusable
+    /// candidate buffers. Returns the whole <paramref name="overlay"/> unchanged
+    /// when no index is available.
+    /// </summary>
+    private static VectorScene ScopeOverlay(
+        TileState state, VectorScene overlay, SKRect queryCull,
+        double centerX, double centerY, double widthDip, double heightDip, double resolution)
+    {
+        var index = state.OverlayIndex;
+        if (index is null || state.OverlayScopedScene is null)
+        {
+            return overlay;
+        }
+
+        // Inflate by the max op offset (px) because the per-op screen cull tests
+        // the anchor plus its offset, while the index keys on the anchor alone.
+        double inflate = index.MaxOffsetPx;
+        double sx0 = queryCull.Left - inflate;
+        double sy0 = queryCull.Top - inflate;
+        double sx1 = queryCull.Right + inflate;
+        double sy1 = queryCull.Bottom + inflate;
+
+        // Invert the north-up viewport projection (screen px → EPSG:3857 metres):
+        //   screenX = widthDip/2 + (worldX - centerX) / resolution
+        //   screenY = heightDip/2 - (worldY - centerY) / resolution
+        double wxA = centerX + (sx0 - widthDip * 0.5) * resolution;
+        double wxB = centerX + (sx1 - widthDip * 0.5) * resolution;
+        double wyA = centerY - (sy0 - heightDip * 0.5) * resolution;
+        double wyB = centerY - (sy1 - heightDip * 0.5) * resolution;
+
+        index.Query(
+            Math.Min(wxA, wxB), Math.Min(wyA, wyB),
+            Math.Max(wxA, wxB), Math.Max(wyA, wyB),
+            state.OverlayQueryScratch, state.OverlayCandidates);
+
+        return state.OverlayScopedScene;
     }
 
     /// <summary>
@@ -1644,6 +1708,16 @@ public static class S100VectorTileRenderer
         // tiles. Null until a scene is bound; empty when the scene has no
         // point/text ops.
         public VectorScene? OverlayScene;
+
+        // Spatial index over the overlay anchors (#332 lever b), built once when
+        // the scene is bound so the per-frame overlay walk can be scoped to the
+        // viewport instead of the whole cell. The candidate list + sort scratch
+        // are render-thread-only reusable buffers; the scoped scene is a stable
+        // wrapper over the candidate list so a frame allocates nothing here.
+        public OverlaySpatialIndex? OverlayIndex;
+        public readonly List<int> OverlayQueryScratch = new();
+        public readonly List<PaintOp> OverlayCandidates = new();
+        public VectorScene? OverlayScopedScene;
         public long Generation;
 
         // Persistent disk-cache namespace for this layer's current style state

@@ -68,6 +68,52 @@ public sealed class SkiaDisplayListRenderer
         new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Process-wide cache of rasterised symbol <i>sprites</i> for the live
+    /// overlay's symbol atlas (#332 lever c2), keyed by
+    /// (processed SVG, quantised symbol scale, quantised device scale). Replaying
+    /// a vector <see cref="SKPicture"/> per point op per frame is the overlay hot
+    /// path's steepest cost on dense "All" cells (~4 µs/op); blitting a
+    /// once-rasterised <see cref="SKImage"/> instead removes the per-frame replay.
+    /// <para>
+    /// The sprite is rasterised at <c>symbolScale × deviceScale</c> device pixels
+    /// so the 1:1 blit through the canvas's HiDPI matrix is crisp; a different
+    /// device scale (e.g. moving the window to another monitor) keys a fresh
+    /// sprite. <see cref="SKImage"/> is immutable and its CPU pixels are safe to
+    /// share across threads, so — like <see cref="s_symbolPictureCache"/> — this
+    /// is a never-evicted <see cref="ConcurrentDictionary{TKey,TValue}"/> bounded
+    /// by the small number of distinct symbols in a cell. A <see langword="null"/>
+    /// value caches "do not atlas this symbol" (unparseable, or larger than
+    /// <see cref="MaxSpriteDimensionPx"/>) so the miss is not re-probed each frame.
+    /// </para>
+    /// </summary>
+    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> s_symbolSpriteCache = new();
+
+    /// <summary>
+    /// Sampling for the atlas blit. The sprite is rasterised at device resolution
+    /// and drawn 1:1 in device space, so linear sampling only matters for the
+    /// fractional sub-pixel anchor placement; it matches the antialiased vector
+    /// edge to within a pixel.
+    /// </summary>
+    private static readonly SKSamplingOptions s_spriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+
+    /// <summary>
+    /// Maximum width/height (device px) of a cached symbol sprite. Symbols larger
+    /// than this fall back to the vector <c>DrawPicture</c> path rather than
+    /// rasterising a large image; normal point symbols are a few tens of pixels.
+    /// </summary>
+    private const int MaxSpriteDimensionPx = 1024;
+
+    /// <summary>A once-rasterised symbol sprite plus the picture bounds it covers.</summary>
+    private sealed class SymbolSprite
+    {
+        /// <summary>The rasterised symbol, in device pixels at the keyed scale.</summary>
+        public required SKImage Image { get; init; }
+
+        /// <summary>The symbol picture's cull rect (display px), for pivot/placement math.</summary>
+        public required SKRect Bounds { get; init; }
+    }
+
+    /// <summary>
     /// Process-wide cache of "does this typeface contain every glyph in this
     /// string" results, keyed by (face, text). The glyph-coverage probe
     /// (<see cref="SKTypeface.ContainsGlyphs(string)"/>) allocates a
@@ -272,7 +318,8 @@ public sealed class SkiaDisplayListRenderer
                         DrawLine(canvas, line, transform);
                         break;
                     case PointPaintOp point when options.DrawPoints:
-                        DrawPoint(canvas, point, transform, cullBounds);
+                        DrawPoint(canvas, point, transform, cullBounds,
+                            options.UseSymbolAtlas, options.DeviceScale);
                         break;
                     case TextPaintOp text when options.DrawText:
                         if (suppressed is not null && suppressed.Contains(text))
@@ -416,7 +463,8 @@ public sealed class SkiaDisplayListRenderer
         paint.PathEffect?.Dispose();
     }
 
-    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds)
+    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds,
+        bool useAtlas = false, float deviceScale = 1f)
     {
         var (cx, cy) = t.Project(op.World);
         cx += (float)op.OffsetXpx;
@@ -457,6 +505,28 @@ public sealed class SkiaDisplayListRenderer
                 float pivotPicY = bounds.Top + bounds.Height / 2f
                     - (float)(symbol.PivotRelativeY * bounds.Height);
 
+                // #332 lever c2 — atlas the common upright case as a cached sprite
+                // blit. The sprite is rasterised at scale×deviceScale device px,
+                // so placing it in a logical-size dest rect blits 1:1 through the
+                // HiDPI matrix — identical pixels to replaying the picture, minus
+                // the per-frame vector replay. Per-op-rotated symbols (oriented
+                // lights/secondary symbols) keep the vector path for exact parity.
+                if (useAtlas && op.Rotation is null)
+                {
+                    var sprite = GetSymbolSprite(symbol.ProcessedSvg, scale, deviceScale, picture, bounds);
+                    if (sprite is not null)
+                    {
+                        float destLeft = cx + (bounds.Left - pivotPicX) * scale;
+                        float destTop = cy + (bounds.Top - pivotPicY) * scale;
+                        var dest = new SKRect(
+                            destLeft, destTop,
+                            destLeft + bounds.Width * scale,
+                            destTop + bounds.Height * scale);
+                        canvas.DrawImage(sprite.Image, dest, s_spriteSampling);
+                        return;
+                    }
+                }
+
                 canvas.Save();
                 canvas.Translate(cx, cy);
                 if (op.Rotation is { } rot)
@@ -478,6 +548,50 @@ public sealed class SkiaDisplayListRenderer
             Color = op.FallbackColor.ToSkia(),
         };
         canvas.DrawCircle(cx, cy, radius, dot);
+    }
+
+    /// <summary>
+    /// Returns the cached device-resolution sprite for an upright symbol at the
+    /// given symbol/device scale, rasterising it once on first use. Returns
+    /// <see langword="null"/> (cached) when the symbol should not be atlased
+    /// (degenerate bounds, or larger than <see cref="MaxSpriteDimensionPx"/>),
+    /// signalling the caller to use the vector path.
+    /// </summary>
+    private static SymbolSprite? GetSymbolSprite(
+        string processedSvg, float scale, float deviceScale, SKPicture picture, SKRect bounds)
+    {
+        var key = (processedSvg,
+            (int)MathF.Round(scale * 1000f),
+            (int)MathF.Round(deviceScale * 1000f));
+
+        return s_symbolSpriteCache.GetOrAdd(key, _ =>
+        {
+            float r = scale * deviceScale;
+            if (!(r > 0) || bounds.Width <= 0 || bounds.Height <= 0)
+                return null;
+
+            int widthPx = (int)MathF.Ceiling(bounds.Width * r);
+            int heightPx = (int)MathF.Ceiling(bounds.Height * r);
+            if (widthPx < 1 || heightPx < 1 ||
+                widthPx > MaxSpriteDimensionPx || heightPx > MaxSpriteDimensionPx)
+            {
+                return null;
+            }
+
+            var info = new SKImageInfo(widthPx, heightPx, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using var surface = SKSurface.Create(info);
+            if (surface is null)
+                return null;
+
+            var c = surface.Canvas;
+            c.Clear(SKColors.Transparent);
+            c.Scale(r);
+            c.Translate(-bounds.Left, -bounds.Top);
+            c.DrawPicture(picture);
+            c.Flush();
+
+            return new SymbolSprite { Image = surface.Snapshot(), Bounds = bounds };
+        });
     }
 
     private static void DrawText(

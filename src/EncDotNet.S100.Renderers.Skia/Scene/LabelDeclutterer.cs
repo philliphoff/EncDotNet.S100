@@ -28,9 +28,27 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// Mapsui "A" arm's non-deterministic declutter, the same scene and viewport
 /// always suppress the same labels.
 /// </para>
+/// <para>
+/// <b>Threading.</b> The reusable per-frame buffers (the suppressed set, the
+/// screen-rect index and its bucket lists, and the text-layout scratch) are
+/// <i>render-thread-confined</i>: a single instance is reused across frames and
+/// <see cref="Declutter"/> <see cref="ScreenRectIndex.Clear"/>s them at entry
+/// rather than reallocating, eliminating the per-frame allocation that scaled
+/// with op count (~180&#160;KB at 1k ops, ~6&#160;MB at 50k). This makes the
+/// type <b>non-reentrant</b> — it must only be called from the one render
+/// thread (the tiled subsystem's <c>DrawOverlay</c>), never concurrently. The
+/// tile-raster path uses its own per-call renderer/scratch and is unaffected.
+/// </para>
 /// </remarks>
-public sealed class LabelDeclutterer
+public sealed class LabelDeclutterer : IDisposable
 {
+    // Render-thread-confined reusable buffers. Cleared (not reallocated) each
+    // Declutter call so a dense overlay no longer allocates per frame. See the
+    // threading note in the class remarks.
+    private readonly HashSet<TextPaintOp> _suppressed = new();
+    private readonly ScreenRectIndex _index = new();
+    private readonly SkiaDisplayListRenderer.TextDrawScratch _scratch = new();
+
     /// <summary>
     /// Returns the set of <see cref="TextPaintOp"/>s to <b>suppress</b> this
     /// frame (by reference identity) so the live overlay draws a decluttered
@@ -50,7 +68,12 @@ public sealed class LabelDeclutterer
     /// </param>
     /// <param name="centerX">Screen-space X of the rotation centre.</param>
     /// <param name="centerY">Screen-space Y of the rotation centre.</param>
-    /// <returns>The text ops to skip; empty when nothing collides.</returns>
+    /// <returns>
+    /// The text ops to skip; empty when nothing collides. <b>The returned set is
+    /// a render-thread-confined reusable buffer</b> — valid only until the next
+    /// <see cref="Declutter"/> call on this instance. Callers that must retain it
+    /// across frames should copy it.
+    /// </returns>
     public IReadOnlySet<TextPaintOp> Declutter(
         VectorScene scene, Viewport viewport, SKRect cullBounds, bool honorScaleVisibility,
         double anchorRotationDegrees, float centerX, float centerY)
@@ -58,10 +81,13 @@ public sealed class LabelDeclutterer
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var suppressed = new HashSet<TextPaintOp>();
+        // Reuse the render-thread-confined buffers: clear, don't reallocate.
+        _suppressed.Clear();
+        _index.Clear();
+        var suppressed = _suppressed;
         var transform = WorldToScreen.Create(viewport);
         double denom = viewport.ScaleDenominator;
-        var index = new ScreenRectIndex();
+        var index = _index;
 
         // Pass 1 — point symbols reserve their footprints as obstacles.
         foreach (var op in scene.Ops)
@@ -85,7 +111,7 @@ public sealed class LabelDeclutterer
         // A label that collides with an already-placed footprint is suppressed;
         // otherwise it claims its footprint and becomes an obstacle for
         // lower-priority labels.
-        using var scratch = new SkiaDisplayListRenderer.TextDrawScratch();
+        var scratch = _scratch;
         for (int i = scene.Ops.Count - 1; i >= 0; i--)
         {
             if (scene.Ops[i] is not TextPaintOp text)
@@ -111,14 +137,42 @@ public sealed class LabelDeclutterer
     }
 
     /// <summary>
+    /// Disposes the held render-thread text-layout scratch (native paint/fonts).
+    /// The tiled subsystem's shared instance lives for the process lifetime; this
+    /// exists so unit tests (and any future per-layer owner) can release the
+    /// native handles deterministically.
+    /// </summary>
+    public void Dispose() => _scratch.Dispose();
+
+    /// <summary>
     /// A uniform screen-space grid of occupied rectangles giving near-O(1)
     /// overlap queries, so decluttering thousands of overlay ops per frame stays
     /// linear. Rectangles are bucketed by the fixed-size cells they touch.
     /// </summary>
+    /// <remarks>
+    /// Reusable across frames: <see cref="Clear"/> recycles the bucket lists into
+    /// a free pool rather than discarding them, so a steady-state overlay walk
+    /// allocates nothing here after warm-up.
+    /// </remarks>
     private sealed class ScreenRectIndex
     {
         private const float CellSize = 64f;
         private readonly Dictionary<(int Cx, int Cy), List<SKRect>> _cells = new();
+        private readonly Stack<List<SKRect>> _pool = new();
+
+        /// <summary>
+        /// Recycles all bucket lists into the free pool and empties the grid,
+        /// leaving the index ready for reuse without reallocation.
+        /// </summary>
+        public void Clear()
+        {
+            foreach (var list in _cells.Values)
+            {
+                list.Clear();
+                _pool.Push(list);
+            }
+            _cells.Clear();
+        }
 
         public void Add(SKRect rect)
         {
@@ -134,7 +188,7 @@ public sealed class LabelDeclutterer
                     var key = (cx, cy);
                     if (!_cells.TryGetValue(key, out var list))
                     {
-                        list = new List<SKRect>(2);
+                        list = _pool.Count > 0 ? _pool.Pop() : new List<SKRect>(4);
                         _cells[key] = list;
                     }
                     list.Add(rect);
