@@ -17,12 +17,21 @@ namespace EncDotNet.S100.Pipelines.Vector.Xslt;
 /// The executor performs four sub-stages, each of which previously lived
 /// inline in <see cref="VectorPipeline"/>:
 /// <list type="number">
+///   <item>Rule selection — match dataset feature types to catalogue rules
+///     (uses only the cheap <see cref="IFeatureXmlSource.FeatureTypesPresent"/>).</item>
 ///   <item>FeatureXML acquisition from <see cref="IFeatureXmlSource"/>.</item>
-///   <item>Rule selection — match dataset feature types to catalogue rules.</item>
 ///   <item>XSLT transformation — run each applicable XSLT rule against the FeatureXML.</item>
 ///   <item>Drawing-instruction assembly — parse the XSLT output into typed
 ///     objects via <see cref="Part9DisplayListReader"/>.</item>
 /// </list>
+/// </para>
+/// <para>
+/// Rule selection deliberately precedes FeatureXML acquisition so the
+/// expensive FeatureXML materialisation can be skipped entirely when no
+/// applicable XSLT rule exists — the common case for products whose
+/// portrayal is entirely Lua-driven (e.g. S-101, S-131). This is
+/// behaviour-preserving: an XSLT pass over zero rules always yields an
+/// empty display list.
 /// </para>
 /// <para>
 /// Instances are <b>render-bound</b>: the FeatureXML source, catalogue, and
@@ -79,19 +88,17 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
         cancellationToken.ThrowIfCancellationRequested();
         var stageTag = new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "vector");
 
-        // Stage 1 — load FeatureXML into a navigable document
-        XDocument featureDoc;
-        using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.feature_xml"))
-        {
-            var stageStart = Stopwatch.GetTimestamp();
-            using (var reader = _source.GetFeatureXml(cancellationToken))
-            {
-                featureDoc = XDocument.Load(reader);
-            }
-            RecordStageDuration(stageStart, "feature_xml");
-        }
-
-        // Stage 2 — select applicable rules
+        // Stage 1 — select applicable rules.
+        //
+        // Rule selection is performed *before* FeatureXML acquisition because
+        // it needs only the cheap, memoised <see cref="IFeatureXmlSource.FeatureTypesPresent"/>
+        // list — never the full materialised document. This lets us gate the
+        // expensive FeatureXML build (Stage 2) on whether any applicable XSLT
+        // rule actually exists. Products whose portrayal is entirely Lua-driven
+        // (e.g. S-101, S-131) select zero XSLT rules, so an XSLT pass would
+        // produce an empty display list regardless of input; skipping the
+        // build is therefore behaviour-preserving and avoids the dominant cost
+        // of materialising large datasets as XML.
         IReadOnlyList<PortrayalRule> applicableRules;
         using (var ruleSelectActivity = Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.rule_select"))
         {
@@ -105,6 +112,26 @@ public sealed class XsltRuleExecutor : IVectorRuleExecutor
             LastRuleCount = applicableRules.Count;
             ruleSelectActivity?.SetTag("s100.pipeline.rules.count", applicableRules.Count);
             RecordStageDuration(stageStart, "rule_select");
+        }
+
+        // Gate — if no applicable rule is an XSLT rule there is nothing for the
+        // XSLT engine to do. Return early without materialising the FeatureXML,
+        // running the (empty) transform loop, or assembling instructions.
+        if (!applicableRules.Any(r => r.Type == PortrayalRuleType.Xslt))
+        {
+            return Array.Empty<DrawingInstruction>();
+        }
+
+        // Stage 2 — load FeatureXML into a navigable document
+        XDocument featureDoc;
+        using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.feature_xml"))
+        {
+            var stageStart = Stopwatch.GetTimestamp();
+            using (var reader = _source.GetFeatureXml(cancellationToken))
+            {
+                featureDoc = XDocument.Load(reader);
+            }
+            RecordStageDuration(stageStart, "feature_xml");
         }
 
         // Stage 3 — XSLT transformation
