@@ -108,6 +108,8 @@ public class TileCacheTests
         // The replacement is now resident; the prior image was disposed on replace.
         Assert.Same(second, cache.TryGet(Key(0)));
     }
+
+    [Fact]
     public void SnapshotKeys_ReturnsResidentKeysWithoutReordering()
     {
         using var cache = new TileCache(TileCache.MinBudgetBytes);

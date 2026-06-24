@@ -73,13 +73,13 @@ public class StationTimeSeriesSnapshotTests
     }
 
     [Fact]
-    public void S104_StationRef_PopulatesStationSeries_WithFullHeightSeries()
+    public async Task S104_StationRef_PopulatesStationSeries_WithFullHeightSeries()
     {
         var path = WriteS104Fixture();
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
             var info = p.GetFeatureInfo("station:ST01");
 
             Assert.NotNull(info);
@@ -95,13 +95,13 @@ public class StationTimeSeriesSnapshotTests
     }
 
     [Fact]
-    public void S111_StationRef_PopulatesStationSeries_WithSpeedAndDirectionChannels()
+    public async Task S111_StationRef_PopulatesStationSeries_WithSpeedAndDirectionChannels()
     {
         var path = WriteS111Fixture();
         try
         {
             var p = new S111DatasetProcessor(path, new PortrayalCatalogueManager(), IdentityFactory.Instance);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
             var info = p.GetFeatureInfo("station:S1");
 
             Assert.NotNull(info);
@@ -118,13 +118,13 @@ public class StationTimeSeriesSnapshotTests
     }
 
     [Fact]
-    public void S104_NonStationRef_StationSeriesIsNull()
+    public async Task S104_NonStationRef_StationSeriesIsNull()
     {
         var path = WriteS104Fixture();
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
             // unknown ref returns null FeatureInfo entirely
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station"));

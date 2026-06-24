@@ -285,7 +285,7 @@ internal static class MapPaintInstrumentation
             var pointCount = (feature is GeometryFeature gf && gf.Geometry is not null)
                 ? gf.Geometry.NumPoints
                 : -1;
-            var stats = GetStats(_styleName, layer?.Name ?? "(unnamed)", BucketPoints(pointCount));
+            var stats = GetStats(_styleName, layer.Name ?? "(unnamed)", BucketPoints(pointCount));
             var startTimestamp = Stopwatch.GetTimestamp();
             try
             {

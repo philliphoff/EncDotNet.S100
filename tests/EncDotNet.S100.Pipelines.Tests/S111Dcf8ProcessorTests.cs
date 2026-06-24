@@ -65,7 +65,7 @@ public class S111Dcf8ProcessorTests
     }
 
     [Fact]
-    public void Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
+    public async Task Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
     {
         var path = WriteFixture();
         try
@@ -75,7 +75,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = new PortrayalCatalogueManager();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
             Assert.Single(result.Layers);
             var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
@@ -98,7 +98,7 @@ public class S111Dcf8ProcessorTests
     }
 
     [Fact]
-    public void GetFeatureInfo_StationRef_AfterRender_ReturnsCurrentTimeSample()
+    public async Task GetFeatureInfo_StationRef_AfterRender_ReturnsCurrentTimeSample()
     {
         var path = WriteFixture();
         try
@@ -108,7 +108,7 @@ public class S111Dcf8ProcessorTests
 
             // Render at the second time-step; expected S1 speed = 0.6, dir = 50.
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S111RenderContext { TimeStep = secondStep }).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S111RenderContext { TimeStep = secondStep });
 
             var info = p.GetFeatureInfo("station:S1");
 
@@ -132,14 +132,14 @@ public class S111Dcf8ProcessorTests
     }
 
     [Fact]
-    public void GetFeatureInfo_UnknownStationRef_ReturnsNull()
+    public async Task GetFeatureInfo_UnknownStationRef_ReturnsNull()
     {
         var path = WriteFixture();
         try
         {
             using var catalogues = new PortrayalCatalogueManager();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
-            _ = new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p).GetAwaiter().GetResult();
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
 
             Assert.Null(p.GetFeatureInfo("station:Nope"));
             Assert.Null(p.GetFeatureInfo("plain-ref"));

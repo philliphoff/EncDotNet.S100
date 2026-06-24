@@ -53,10 +53,10 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void DayPalette_LoadsAllSixDepthTokens()
+    public async Task DayPalette_LoadsAllSixDepthTokens()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
         foreach (var token in new[] { "DEPDW", "DEPMD", "DEPMS", "DEPVS", "DEPIT", "NODTA" })
         {
@@ -70,17 +70,17 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void DuskAndNightPalettes_Load_AndDifferFromDay()
+    public async Task DuskAndNightPalettes_Load_AndDifferFromDay()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var dayHex));
 
-        catalogue.SwitchPaletteAsync(PaletteType.Dusk).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var duskHex));
         Assert.NotEqual(dayHex, duskHex);
 
-        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Night);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var nightHex));
         Assert.Equal(NightDEPVS, nightHex, StringComparer.OrdinalIgnoreCase);
     }
@@ -139,10 +139,10 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void NightPalette_SwitchAppliesToResolvedScheme()
+    public async Task NightPalette_SwitchAppliesToResolvedScheme()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Night);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
 
@@ -150,10 +150,10 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void NoDataColor_IsPopulatedFromActivePaletteNODTA()
+    public async Task NoDataColor_IsPopulatedFromActivePaletteNODTA()
     {
         var catalogue = CreateCatalogue();
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
 
@@ -163,10 +163,10 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     }
 
     [Fact]
-    public void NoDataColor_IsNull_WhenRenderNoDataFillDisabled()
+    public async Task NoDataColor_IsNull_WhenRenderNoDataFillDisabled()
     {
         var catalogue = new S102PortrayalCatalogue(_engine, _provider) { RenderNoDataFill = false };
-        catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await catalogue.SwitchPaletteAsync(PaletteType.Day);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = 30.0 });
 

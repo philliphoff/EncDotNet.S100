@@ -51,7 +51,7 @@ public class LatLonFormatterTests
     [Fact]
     public void Placeholder_IsEmpty()
     {
-        Assert.Equal(string.Empty, LatLonFormatter.Placeholder);
+        Assert.Empty(LatLonFormatter.Placeholder);
     }
 
     [Fact]

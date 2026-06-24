@@ -152,15 +152,15 @@ public sealed class S111ArrowRenderingTests : IDisposable
     }
 
     [Fact]
-    public void Day_and_Night_palettes_produce_different_resolved_SVG()
+    public async Task Day_and_Night_palettes_produce_different_resolved_SVG()
     {
         var renderer = CreateRenderer();
 
-        _catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
+        await _catalogue.SwitchPaletteAsync(PaletteType.Day);
         renderer.Palette = _catalogue.ActivePalette;
         var daySvg = renderer.GetResolvedSvg("SCAROW01");
 
-        _catalogue.SwitchPaletteAsync(PaletteType.Night).AsTask().GetAwaiter().GetResult();
+        await _catalogue.SwitchPaletteAsync(PaletteType.Night);
         renderer.Palette = _catalogue.ActivePalette;
         var nightSvg = renderer.GetResolvedSvg("SCAROW01");
 
