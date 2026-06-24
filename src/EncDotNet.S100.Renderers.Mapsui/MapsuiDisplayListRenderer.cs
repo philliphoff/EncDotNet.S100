@@ -101,6 +101,19 @@ public sealed class MapsuiDisplayListRenderer
     public double TextScale { get; set; } = 1.0;
 
     /// <summary>
+    /// Optional dataset-wide out-of-scale-band cap, as an S-100 Part 9 §11.1
+    /// scale denominator (the cell's most-permissive
+    /// <c>DataCoverage.minimumDisplayScale</c>; S-101 FC §3.1.1). Applies only
+    /// to the TiledScene ("B") render subsystem: it is propagated onto the
+    /// <see cref="Scene.VectorScene"/> ops so that, like the Mapsui ("A")
+    /// feature path (<c>MapsuiDatasetRenderer.ApplyOutOfScaleBandCap</c>),
+    /// features lacking their own SCAMIN are hidden once the display is zoomed
+    /// out past the cell's compilation scale. <see langword="null"/> (the
+    /// default) applies no cap.
+    /// </summary>
+    public int? OutOfBandMinDisplayScale { get; set; }
+
+    /// <summary>
     /// Optional shared cache for processed-SVG symbol entries and rasterised
     /// pattern tiles. When set, the renderer routes its symbol/pattern
     /// lookups through this cache so re-renders of the same dataset (e.g.
@@ -414,6 +427,7 @@ public sealed class MapsuiDisplayListRenderer
                 PatternResolver = GetPatternTilePng,
                 SymbolScale = SymbolScale,
                 TextScale = TextScale,
+                OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
             };
             var builtScene = sceneBuilder.Build(instructions, geometryProvider);
             if (TiledSceneModeIsTiled)

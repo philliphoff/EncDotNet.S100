@@ -152,6 +152,14 @@ public sealed class MapsuiDatasetRenderer
                 SymbolProvider = result.SymbolProvider,
                 AreaFillProvider = result.AreaFillProvider,
                 LineStyleProvider = result.LineStyleProvider,
+                // TiledScene ("B") subsystem only: the Mapsui ("A") path enforces
+                // this cell-wide cap via per-feature MaxVisible below
+                // (ApplyOutOfScaleBandCap). Propagating it here lets the
+                // VectorScene IR honour it too, so features without their own
+                // SCAMIN are hidden out of scale band in both subsystems.
+                OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
+                    ? result.OutOfBandMinDisplayScale
+                    : null,
             };
 
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);

@@ -74,6 +74,34 @@ public sealed class VectorSceneBuilder
     public double TextScale { get; init; } = 1.0;
 
     /// <summary>
+    /// Optional dataset-wide out-of-scale-band cap, expressed as an S-100
+    /// Part 9 §11.1 scale denominator (the cell's most-permissive
+    /// <c>DataCoverage.minimumDisplayScale</c>; S-101 FC §3.1.1). When set,
+    /// every op's effective <see cref="PaintOp.ScaleMinimum"/> is clamped to
+    /// this denominator, so features lacking their own SCAMIN — and those
+    /// whose SCAMIN is more permissive than the cell's — are hidden once the
+    /// display is zoomed out past the cell's compilation scale. This mirrors
+    /// the cap the Mapsui feature path applies via per-feature
+    /// <c>MaxVisible</c> (<c>MapsuiDatasetRenderer.ApplyOutOfScaleBandCap</c>),
+    /// keeping the <see cref="VectorScene"/> IR consumed by the TiledScene
+    /// render subsystem in agreement with the Mapsui subsystem.
+    /// </summary>
+    public double? OutOfBandMinDisplayScale { get; init; }
+
+    /// <summary>
+    /// Clamps a per-op <c>ScaleMinimum</c> (largest allowed denominator) to the
+    /// dataset-wide <see cref="OutOfBandMinDisplayScale"/> cap when one is set.
+    /// An op with no SCAMIN inherits the cap; an op with a more-permissive
+    /// SCAMIN is tightened to it. Returns the value unchanged when no cap is set.
+    /// </summary>
+    private double? CapScaleMinimum(double? scaleMinimum)
+    {
+        if (OutOfBandMinDisplayScale is not double cap)
+            return scaleMinimum;
+        return scaleMinimum.HasValue ? Math.Min(scaleMinimum.Value, cap) : cap;
+    }
+
+    /// <summary>
     /// Convenience helper that produces a <see cref="SymbolAsset"/> from raw SVG
     /// content by recovering the pivot (<see cref="SvgPivotMetrics.TryParse"/>)
     /// and processing CSS classes (<see cref="SvgProcessor.Process"/>). Returns
@@ -177,7 +205,7 @@ public sealed class VectorSceneBuilder
         return new PatternAreaPaintOp
         {
             FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
             PatternReference = patternRef,
             WorldShell = Project(geometry.Coordinates),
@@ -211,7 +239,7 @@ public sealed class VectorSceneBuilder
         return new AreaPaintOp
         {
             FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
             WorldShell = Project(geometry.Coordinates),
             WorldHoles = holes,
@@ -268,7 +296,7 @@ public sealed class VectorSceneBuilder
         return new LinePaintOp
         {
             FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
             World = Project(coords),
             Color = ResolveColor(colorToken),
@@ -308,7 +336,7 @@ public sealed class VectorSceneBuilder
         return new PointPaintOp
         {
             FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
             World = WebMercator.FromLonLat(lon, lat),
             Symbol = symbol,
@@ -366,7 +394,7 @@ public sealed class VectorSceneBuilder
         return new TextPaintOp
         {
             FeatureReference = instruction.FeatureReference,
-            ScaleMinimum = instruction.ScaleMinimum,
+            ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
             World = WebMercator.FromLonLat(lon, lat),
             Text = instruction.Text,
