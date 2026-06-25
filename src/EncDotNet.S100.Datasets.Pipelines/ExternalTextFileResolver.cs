@@ -14,7 +14,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <c>supportFileDiscoveryMetadata</c> is supplied, the referenced file is
 /// located through it first (the canonical ECDIS mechanism); otherwise the
 /// file is looked up relative to the dataset's own directory, then at the
-/// exchange-set root, then under a sibling <c>support/</c> directory.
+/// exchange-set root, then under a sibling <c>SUPPORT_FILES</c> /
+/// <c>support</c> directory (the S100_ROOT exchange-set layout).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -130,8 +131,8 @@ public sealed class ExternalTextFileResolver
             return rootText;
 
         // 3. Heuristic fallback for loose datasets whose support files sit in a
-        //    sibling "support/" directory (the common S-101 exchange-set layout)
-        //    without a catalogue to consult.
+        //    sibling SUPPORT_FILES / support directory (the S100_ROOT
+        //    exchange-set layout) without a catalogue to consult.
         if (!normalized.Contains('/'))
         {
             foreach (var dir in SupportProbeDirectories())
@@ -152,15 +153,34 @@ public sealed class ExternalTextFileResolver
 
     private IEnumerable<string> SupportProbeDirectories()
     {
-        // <root>/support and <dataset-parent>/support cover the two layouts
-        // seen in the wild: support files alongside the catalogue, and support
-        // files beside the dataset's own directory.
-        yield return "support";
-        if (!string.IsNullOrEmpty(_baseDirectory))
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dir in EnumerateSupportProbeDirectories())
         {
-            var parent = GetDirectory(_baseDirectory);
-            yield return (string.IsNullOrEmpty(parent) ? "support" : parent + "/support");
+            if (!string.IsNullOrEmpty(dir) && seen.Add(dir))
+                yield return dir;
         }
+    }
+
+    private IEnumerable<string> EnumerateSupportProbeDirectories()
+    {
+        // The S100_ROOT exchange-set layout (S-100 Edition 5.2.1 Part 17) keeps
+        // referenced text files in a SUPPORT_FILES folder that is a sibling of the
+        // DATASET_FILES folder holding the cell; older / loose layouts use a
+        // lower-case support/. Probe both spellings at the root, under the
+        // dataset's own directory, and beside it.
+        yield return "SUPPORT_FILES";
+        yield return "support";
+
+        if (string.IsNullOrEmpty(_baseDirectory))
+            yield break;
+
+        yield return _baseDirectory + "/SUPPORT_FILES";
+        yield return _baseDirectory + "/support";
+
+        var parent = GetDirectory(_baseDirectory);
+        var prefix = string.IsNullOrEmpty(parent) ? string.Empty : parent + "/";
+        yield return prefix + "SUPPORT_FILES";
+        yield return prefix + "support";
     }
 
     private bool TryRead(string relativePath, out string? text)

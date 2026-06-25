@@ -341,15 +341,33 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     /// <summary>
     /// Builds an external-text resolver for a loose dataset file on the local
-    /// file system, rooted at the dataset's directory so co-located support
-    /// text files named by <c>fileReference</c> attributes resolve. Returns
-    /// <c>null</c> when the path has no directory component.
+    /// file system so support text files named by <c>fileReference</c>
+    /// attributes resolve. The resolver is normally rooted at the dataset's own
+    /// directory; when the dataset sits in the S100_ROOT exchange-set layout
+    /// (S-100 Edition 5.2.1 Part 17) — a <c>DATASET_FILES</c> folder with a
+    /// sibling <c>SUPPORT_FILES</c> folder — it is rooted one level up so the
+    /// sibling support directory is reachable. Returns <c>null</c> when the path
+    /// has no directory component.
     /// </summary>
     private static Func<string, string?>? CreateFileSystemResolver(string path)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (string.IsNullOrEmpty(directory))
             return null;
+
+        // S100_ROOT layout keeps referenced text files in a SUPPORT_FILES folder
+        // that is a sibling of the DATASET_FILES folder holding the cell. Root the
+        // asset source at the parent so that sibling is in scope, and record the
+        // dataset's path relative to that parent.
+        var parent = Path.GetDirectoryName(directory);
+        if (!string.IsNullOrEmpty(parent)
+            && (Directory.Exists(Path.Combine(parent, "SUPPORT_FILES"))
+                || Directory.Exists(Path.Combine(parent, "support"))))
+        {
+            var rootedSource = FileSystemAssetSource.Create(parent);
+            var relativePath = Path.GetFileName(directory) + "/" + Path.GetFileName(path);
+            return new ExternalTextFileResolver(rootedSource, relativePath).AsDelegate();
+        }
 
         var source = FileSystemAssetSource.Create(directory);
         return new ExternalTextFileResolver(source, Path.GetFileName(path)).AsDelegate();

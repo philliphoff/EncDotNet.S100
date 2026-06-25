@@ -128,4 +128,23 @@ public sealed class ExternalTextFileResolverTests : IDisposable
         // No catalogue map; the heuristic "support/" probe should still locate it.
         Assert.Equal("Caution.", CreateResolver().Resolve("NOTE.TXT"));
     }
+
+    [Fact]
+    public void Resolve_FindsSiblingSupportFilesDirectory_S100RootLayout()
+    {
+        // S100_ROOT exchange-set layout: the cell sits in DATASET_FILES/ and the
+        // referenced text file in a *sibling* SUPPORT_FILES/ directory. The asset
+        // source is rooted at the product folder (the parent of both), and the
+        // dataset's relative path carries the DATASET_FILES segment — mirroring how
+        // S101DatasetProcessor roots the resolver for a loose cell in this layout.
+        Directory.CreateDirectory(Path.Combine(_dir, "DATASET_FILES"));
+        var supportDir = Path.Combine(_dir, "SUPPORT_FILES");
+        Directory.CreateDirectory(supportDir);
+        File.WriteAllText(Path.Combine(supportDir, "101GB00N00659.TXT"), "TIDAL STREAM STATIONS");
+
+        var resolver = new ExternalTextFileResolver(
+            FileSystemAssetSource.Create(_dir), "DATASET_FILES/101GB005DEVRF.000");
+
+        Assert.Equal("TIDAL STREAM STATIONS", resolver.Resolve("101GB00N00659.TXT"));
+    }
 }
