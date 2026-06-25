@@ -22,6 +22,7 @@
         -->
         <DataTemplate x:Key="AttributeCellTemplate" x:DataType="pp:PickAttribute">
             <Border Name="AttrRow" Padding="12,9" Background="Transparent">
+                <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" SharedSizeGroup="AttrLabel" />
@@ -70,6 +71,23 @@
                         </TextBlock>
                     </Grid>
                 </Grid>
+                <!--
+                    External text referenced by a `fileReference` attribute
+                    (S-101 FC; alias TXTDSC / NTXTDS): the value above is the
+                    file name, this expander reveals the resolved file content,
+                    mirroring an ECDIS "show textual description" affordance.
+                -->
+                <Expander Margin="0,6,0,0"
+                          Padding="0"
+                          Header="{x:Static loc:Strings.Pick_FileReference_Header}"
+                          IsVisible="{Binding HasExternalText}">
+                    <SelectableTextBlock Text="{Binding ExternalText}"
+                                         FontSize="12"
+                                         FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                         TextWrapping="Wrap"
+                                         Margin="0,6,0,0" />
+                </Expander>
+                </StackPanel>
             </Border>
         </DataTemplate>
 

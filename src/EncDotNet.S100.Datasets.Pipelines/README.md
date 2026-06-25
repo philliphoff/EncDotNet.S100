@@ -247,6 +247,13 @@ for the full design rationale.
   `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
   blocks for the per-processor `Render` / `GetFeatureInfo` /
   `GetCoverageInfo` paths.
+- `ExternalTextFileResolver` — resolves the textual content of external
+  files named by S-100 `fileReference` attributes (S-101 FC; alias
+  `TXTDSC` / `NTXTDS`, e.g. on Caution Area, Tidal Stream Panel Data)
+  from the dataset's exchange-set asset source. `S101DatasetProcessor`
+  uses it (via `FeatureInfoBuilder.ResolveFileReferences`) to populate
+  `PickAttribute.ExternalText`, so a pick / object-info consumer can show
+  the referenced text the way an ECDIS does.
 - `GmlDatasetProcessorBase` — common base for the GML-encoded vector
   processors (S-122 / S-124 / S-125 / S-127 / S-128 / S-129 / S-131 /
   S-201 / S-411 / S-421).

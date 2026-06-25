@@ -61,6 +61,29 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPick_PreservesExternalTextThroughReformat()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "CAUTION.TXT",
+            DisplayValue = null,
+            ExternalText = "Beware of strong currents.",
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
+
+        var row = Assert.Single(vm.Attributes);
+        Assert.True(row.HasExternalText);
+        Assert.Equal("Beware of strong currents.", row.ExternalText);
+        Assert.Equal("CAUTION.TXT", row.RawValue);
+    }
+
+    [Fact]
     public void SetPick_ReplacesPreviousPickContents()
     {
         var vm = new PickReportViewModel();

@@ -171,4 +171,103 @@ public static class FeatureInfoBuilder
         }
         return result;
     }
+
+    /// <summary>
+    /// S-100 attribute codes (and their S-57-era aliases) whose value names
+    /// an externally referenced text file co-located in the exchange set.
+    /// Defined by the S-101 Feature Catalogue simple attribute
+    /// <c>fileReference</c> ("The file name of an externally referenced
+    /// text file"), aliases <c>TXTDSC</c> and <c>NTXTDS</c>. Matched
+    /// case-insensitively when resolving file references.
+    /// </summary>
+    public static readonly IReadOnlySet<string> FileReferenceAttributeCodes =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "fileReference",
+            "TXTDSC",
+            "NTXTDS",
+        };
+
+    /// <summary>
+    /// Returns a copy of <paramref name="attributes"/> in which every
+    /// file-reference leaf (see <see cref="FileReferenceAttributeCodes"/>)
+    /// has its <see cref="PickAttribute.ExternalText"/> populated from
+    /// <paramref name="resolver"/>. The resolver is invoked with the
+    /// referenced file name (the attribute's <see cref="PickAttribute.RawValue"/>)
+    /// and should return the file's textual content, or <c>null</c> when it
+    /// cannot be resolved (missing, oversized, unreadable). Complex-attribute
+    /// children are walked recursively, since <c>fileReference</c> is bound
+    /// as a sub-attribute of the S-101 <c>information</c> / <c>textContent</c>
+    /// complex attributes (S-101 Feature Catalogue).
+    /// </summary>
+    /// <param name="attributes">The attribute tree to enrich.</param>
+    /// <param name="resolver">
+    /// File-name → text resolver, typically backed by the dataset's
+    /// exchange-set asset source. Must not be <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// A new list with resolved file references; rows that are not file
+    /// references, carry no value, or whose file could not be resolved are
+    /// returned with <see cref="PickAttribute.ExternalText"/> left
+    /// <c>null</c>. The input list is returned unchanged when it contains no
+    /// file references.
+    /// </returns>
+    public static IReadOnlyList<PickAttribute> ResolveFileReferences(
+        IReadOnlyList<PickAttribute> attributes,
+        Func<string, string?> resolver)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+        ArgumentNullException.ThrowIfNull(resolver);
+
+        if (!ContainsFileReference(attributes))
+            return attributes;
+
+        var result = new List<PickAttribute>(attributes.Count);
+        foreach (var attr in attributes)
+            result.Add(ResolveFileReference(attr, resolver));
+        return result;
+    }
+
+    private static bool ContainsFileReference(IReadOnlyList<PickAttribute> attributes)
+    {
+        foreach (var attr in attributes)
+        {
+            if (FileReferenceAttributeCodes.Contains(attr.Code) && !attr.HasExternalText)
+                return true;
+            if (attr.Children.Count > 0 && ContainsFileReference(attr.Children))
+                return true;
+        }
+        return false;
+    }
+
+    private static PickAttribute ResolveFileReference(
+        PickAttribute attr, Func<string, string?> resolver)
+    {
+        var children = attr.Children.Count == 0
+            ? attr.Children
+            : ResolveFileReferences(attr.Children, resolver);
+
+        var isFileReference =
+            FileReferenceAttributeCodes.Contains(attr.Code)
+            && !attr.HasExternalText
+            && !string.IsNullOrWhiteSpace(attr.RawValue);
+
+        var text = isFileReference ? resolver(attr.RawValue) : null;
+
+        if (text is null && ReferenceEquals(children, attr.Children))
+            return attr;
+
+        return new PickAttribute
+        {
+            Code = attr.Code,
+            Name = attr.Name,
+            RawValue = attr.RawValue,
+            DisplayValue = attr.DisplayValue,
+            DateTimeValue = attr.DateTimeValue,
+            DateTimeRangeValue = attr.DateTimeRangeValue,
+            DepthMetresValue = attr.DepthMetresValue,
+            ExternalText = text ?? attr.ExternalText,
+            Children = children,
+        };
+    }
 }

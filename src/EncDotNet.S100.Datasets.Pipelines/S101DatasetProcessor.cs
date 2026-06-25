@@ -33,6 +33,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
 
+    // Resolves the textual content of external text files named by
+    // `fileReference` attributes (S-101 FC, alias TXTDSC / NTXTDS) from the
+    // dataset's exchange-set asset source, so the pick / object-info path can
+    // surface the referenced text (e.g. Caution Area, Tidal Stream Panel
+    // Data). Null when the dataset was opened from a bare stream with no
+    // resolvable support-file location.
+    private readonly Func<string, string?>? _externalTextResolver;
+
     // Deterministic per-dataset scope prepended to the portrayal cache key when
     // forming the (Mapsui-side) pattern-clip cache key. Encodes dataset content
     // (SHA-256) + name + edition + CRS so the resulting clip key is globally
@@ -130,7 +138,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
         IPortrayalInstructionCache? sharedInstructionCache = null)
-        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache, CreateFileSystemResolver(path))
     {
     }
 
@@ -152,7 +160,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             catalogueManager,
             luaEngine,
             featureCatalogueManager,
-            sharedInstructionCache)
+            sharedInstructionCache,
+            new ExternalTextFileResolver(source, relativePath).AsDelegate())
     {
     }
 
@@ -178,7 +187,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             catalogueManager,
             luaEngine,
             featureCatalogueManager,
-            sharedInstructionCache)
+            sharedInstructionCache,
+            new ExternalTextFileResolver(source, baseRelativePath).AsDelegate())
     {
     }
 
@@ -188,14 +198,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache)
+        IPortrayalInstructionCache? sharedInstructionCache,
+        Func<string, string?>? externalTextResolver = null)
         : this(
             PrepareFromStream(datasetStream),
             fileName,
             catalogueManager,
             luaEngine,
             featureCatalogueManager,
-            sharedInstructionCache)
+            sharedInstructionCache,
+            externalTextResolver)
     {
     }
 
@@ -205,13 +217,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache)
+        IPortrayalInstructionCache? sharedInstructionCache,
+        Func<string, string?>? externalTextResolver = null)
     {
         _fileName = fileName;
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-101");
         _catalogueManager = catalogueManager;
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
+        _externalTextResolver = externalTextResolver;
 
         _dataset = prepared.Dataset;
         _updateReport = prepared.Report;
@@ -321,6 +335,22 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     {
         using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
         return ReadAllBytes(stream);
+    }
+
+    /// <summary>
+    /// Builds an external-text resolver for a loose dataset file on the local
+    /// file system, rooted at the dataset's directory so co-located support
+    /// text files named by <c>fileReference</c> attributes resolve. Returns
+    /// <c>null</c> when the path has no directory component.
+    /// </summary>
+    private static Func<string, string?>? CreateFileSystemResolver(string path)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (string.IsNullOrEmpty(directory))
+            return null;
+
+        var source = FileSystemAssetSource.Create(directory);
+        return new ExternalTextFileResolver(source, Path.GetFileName(path)).AsDelegate();
     }
 
     /// <summary>
@@ -939,6 +969,13 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             feature.Attributes.Select(kv =>
                 new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
             _decoder);
+
+        // Resolve any `fileReference` attribute (S-101 FC; alias TXTDSC /
+        // NTXTDS) to the textual content of the external file it names,
+        // co-located in the dataset's exchange set, so the pick / object-info
+        // path can surface it (e.g. Caution Area, Tidal Stream Panel Data).
+        if (_externalTextResolver is not null)
+            attributes = FeatureInfoBuilder.ResolveFileReferences(attributes, _externalTextResolver);
 
         return new FeatureInfo
         {

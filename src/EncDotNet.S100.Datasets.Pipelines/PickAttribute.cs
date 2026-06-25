@@ -74,6 +74,25 @@ public sealed class PickAttribute
     public IReadOnlyList<PickAttribute> Children { get; init; } = [];
 
     /// <summary>
+    /// The resolved textual content of the external text file named by a
+    /// <c>fileReference</c> attribute (S-100 Edition 5.2.1 Part 5; S-101
+    /// Feature Catalogue simple attribute <c>fileReference</c>, aliases
+    /// <c>TXTDSC</c> / <c>NTXTDS</c>), or <c>null</c> when this row is not a
+    /// file reference or the referenced file could not be resolved from the
+    /// dataset's exchange set. <see cref="RawValue"/> still carries the
+    /// referenced file name. Presentation layers (e.g. the viewer's pick
+    /// report) surface this as expandable text, mirroring how an ECDIS lets
+    /// the mariner read an externally referenced textual description.
+    /// </summary>
+    public string? ExternalText { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when <see cref="ExternalText"/> carries resolved content
+    /// from an external text file referenced by this attribute.
+    /// </summary>
+    public bool HasExternalText => !string.IsNullOrEmpty(ExternalText);
+
+    /// <summary>
     /// The label most viewers want to render: <see cref="Name"/> when
     /// available, otherwise <see cref="Code"/>.
     /// </summary>
