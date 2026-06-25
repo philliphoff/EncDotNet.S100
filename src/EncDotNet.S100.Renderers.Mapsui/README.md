@@ -622,6 +622,12 @@ Because old tiles had symbols baked in, `TileDiskCache.FormatVersion` was bumped
 `1 → 2` so they are never reused (which would double-draw symbols). See design
 Appendix F.11.
 
+The partitioned base/overlay scenes a layer is rasterising can be read back for
+fidelity verification via `S100VectorTileRenderer.TryGetPartitionedScene(layer,
+out base, out overlay)` — a pixel-free diagnostics accessor that backs the
+issue #347 multi-product parity guard (`MultiProductParityTests`), which asserts
+at the paint-op level that point symbols never suppress labels.
+
 Because the overlay redraws every symbol and sounding glyph **per frame**, three
 costs are kept off the hot path. First, parsed symbol pictures are cached
 process-wide in `SkiaDisplayListRenderer` keyed by the resolved SVG content, so

@@ -456,6 +456,46 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// Attempts to retrieve the partitioned <i>base</i> and <i>overlay</i>
+    /// <see cref="VectorScene"/>s most recently bound to <paramref name="layer"/>
+    /// via <see cref="BindScene(ILayer, VectorScene, string?, string?)"/>.
+    /// </summary>
+    /// <remarks>
+    /// A fidelity-verification / diagnostics accessor (no frame is rendered): it
+    /// exposes the exact resolved paint operations the tiled subsystem will
+    /// rasterise into the base plane and composite into the live overlay plane.
+    /// It backs the issue #347 multi-product parity guard, which inspects the
+    /// per-product overlay (point symbols + labels) at the op level rather than
+    /// through the coarse perceptual pixel gate.
+    /// </remarks>
+    /// <param name="layer">The layer a scene was bound to.</param>
+    /// <param name="baseScene">The tiled base plane (area/pattern fills and lines).</param>
+    /// <param name="overlayScene">The live overlay plane (point symbols and point-anchored text).</param>
+    /// <returns><see langword="true"/> when a scene is bound; otherwise <see langword="false"/>.</returns>
+    public static bool TryGetPartitionedScene(
+        ILayer layer, out VectorScene baseScene, out VectorScene overlayScene)
+    {
+        ArgumentNullException.ThrowIfNull(layer);
+
+        if (s_states.TryGetValue(layer, out var state))
+        {
+            lock (state.Sync)
+            {
+                if (state.Scene is not null && state.OverlayScene is not null)
+                {
+                    baseScene = state.Scene;
+                    overlayScene = state.OverlayScene;
+                    return true;
+                }
+            }
+        }
+
+        baseScene = null!;
+        overlayScene = null!;
+        return false;
+    }
+
+    /// <summary>
     /// Splits a bound <see cref="VectorScene"/> into the tiled <i>base</i> plane
     /// (area fills, pattern fills, and lines) and the live <i>overlay</i> plane
     /// (point symbols and point-anchored text such as soundings), preserving the

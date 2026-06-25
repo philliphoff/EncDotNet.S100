@@ -131,6 +131,35 @@ The "B" base plane rasterises **north-up on a software surface**, so:
 
 are out of scope for these tests and must be checked in the viewer.
 
+## Multi-product A/B parity (`MultiProductParityTests`)
+
+Where `RenderParityTests` covers the S-101 cell, `MultiProductParityTests`
+extends the #347 "Multi-product / multi-dataset validation" item across the
+non-S-101 products, turning the one-off A/B survey into committed CI gates. "B"
+only swaps the **vector** base plane, so the guard has three tiers matched to
+what can actually diverge:
+
+- **Coverage exact-match** (`Coverage_AbPixelIdentical`, S-102/104/111) — the
+  HDF5 coverage raster path is untouched by "B", so A and B must render
+  effectively pixel-identical. A divergence means "B" leaked into a path it must
+  not affect.
+- **Per-product B-arm goldens** (`Vector_BArmGolden`) — one representative
+  committed GML fixture per vector product (S-122/124/125/127/128/129/131/201/
+  411/421) is rendered through "B" and compared to a committed snapshot, guarding
+  the tiled renderer against self-drift across every product family.
+- **Label preservation** (`Vector_PointSymbolsDoNotSuppressLabels`, S-421/S-124)
+  — a structural, pixel-free assertion: it reads the real per-product overlay
+  scene back from the tiled renderer (`S100VectorTileRenderer.TryGetPartitionedScene`)
+  and decluttered both with and without the point symbols, asserting the symbols
+  never change which labels survive. This catches the dropped-label class of bug
+  (the S-421 route labels anchored on waypoint circles) that the coarse
+  perceptual gate cannot see.
+
+The structural tier runs with `DisplayCategory = null` ("All") so no label is
+hidden by the Standard filter, and derives a viewport that encloses every
+overlay anchor so the comparison is never vacuous. It is the strong signal placed
+exactly where the labels+symbols declutter risk lives.
+
 ## In-viewer Metal A/B capture recipe
 
 For the rotation / GPU / multi-product cases above, drive the Avalonia viewer
