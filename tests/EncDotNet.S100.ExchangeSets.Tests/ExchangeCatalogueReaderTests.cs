@@ -123,6 +123,66 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
+    public void SupportFiles_RepeatedInlineElements_WithFileLocation_AreParsed()
+    {
+        // Real-world S-101 trial cells repeat <supportFileDiscoveryMetadata>
+        // with the fields inline and declare the directory via <fileLocation>.
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:supportFileDiscoveryMetadata>
+                    <S100XC:fileName>101GB00N00659.TXT</S100XC:fileName>
+                    <S100XC:fileLocation>support</S100XC:fileLocation>
+                </S100XC:supportFileDiscoveryMetadata>
+                <S100XC:supportFileDiscoveryMetadata>
+                    <S100XC:fileName>101GB00N00660.TXT</S100XC:fileName>
+                    <S100XC:fileLocation>support</S100XC:fileLocation>
+                </S100XC:supportFileDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        Assert.Equal(2, catalogue.SupportFileDiscoveryMetadata.Count);
+        var first = catalogue.SupportFileDiscoveryMetadata[0];
+        Assert.Equal("101GB00N00659.TXT", first.FileName);
+        Assert.Equal("support", first.FilePath);
+        Assert.Equal("support/101GB00N00659.TXT", first.RelativePath);
+    }
+
+    [Fact]
+    public void SupportFiles_ContainerWithTypedChildren_AreParsed()
+    {
+        // The other valid encoding: a single container wrapping a typed
+        // S100_SupportFileDiscoveryMetadata record using <filePath>.
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:supportFileDiscoveryMetadata>
+                    <S100XC:S100_SupportFileDiscoveryMetadata>
+                        <S100XC:fileName>101GB00G2BXXX.TXT</S100XC:fileName>
+                        <S100XC:filePath>support</S100XC:filePath>
+                    </S100XC:S100_SupportFileDiscoveryMetadata>
+                </S100XC:supportFileDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        var entry = Assert.Single(catalogue.SupportFileDiscoveryMetadata);
+        Assert.Equal("101GB00G2BXXX.TXT", entry.FileName);
+        Assert.Equal("support/101GB00G2BXXX.TXT", entry.RelativePath);
+    }
+
+    [Fact]
     public void CatalogueFiles_IsEmpty()
     {
         var catalogue = ReadTestCatalogue();

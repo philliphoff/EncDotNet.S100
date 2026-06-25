@@ -65,6 +65,11 @@ public sealed class ExchangeSetLoader
 
         var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
 
+        // Index the catalogue's support files by name so S-101 can resolve
+        // `fileReference` external text files through the catalogue — the
+        // canonical ECDIS mechanism. S-100 Edition 5.2.1 Part 17.
+        var supportFiles = BuildSupportFileMap(exchangeSet);
+
         // Group S-101 base cells with their in-set sequential updates so each
         // cell is loaded once at its up-to-date state (S-100 Part 10a). Non-S-101
         // datasets pass through unchanged.
@@ -89,7 +94,7 @@ public sealed class ExchangeSetLoader
                     case S101LoadItemKind.BaseWithUpdates:
                         var updatePaths = item.Updates.Select(u => u.RelativePath).ToList();
                         processor = _factory.CreateS101ProcessorWithUpdates(
-                            exchangeSet.Source, relativePath, updatePaths);
+                            exchangeSet.Source, relativePath, updatePaths, supportFiles);
                         break;
 
                     case S101LoadItemKind.OrphanUpdate:
@@ -103,7 +108,8 @@ public sealed class ExchangeSetLoader
                         processor = _factory.CreateProcessor(
                             exchangeSet.Source,
                             relativePath,
-                            metadata.ProductSpecification?.ProductIdentifier);
+                            metadata.ProductSpecification?.ProductIdentifier,
+                            supportFiles);
                         break;
                 }
             }
@@ -119,5 +125,29 @@ public sealed class ExchangeSetLoader
             yield return new ExchangeSetLoadResult(metadata, relativePath, processor, error);
             await Task.Yield();
         }
+    }
+
+    /// <summary>
+    /// Builds a case-insensitive map of support-file name to its source-relative
+    /// path from the exchange set's <c>supportFileDiscoveryMetadata</c>, so a
+    /// dataset can resolve a <c>fileReference</c> attribute to the actual file
+    /// regardless of the sub-directory it is stored in. S-100 Edition 5.2.1
+    /// Part 17. Returns <see langword="null"/> when the catalogue declares no
+    /// support files.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? BuildSupportFileMap(ExchangeSet exchangeSet)
+    {
+        var entries = exchangeSet.Catalogue.SupportFileDiscoveryMetadata;
+        if (entries.Count == 0)
+            return null;
+
+        var map = new Dictionary<string, string>(entries.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            if (!string.IsNullOrEmpty(entry.FileName))
+                map[entry.FileName] = entry.RelativePath;
+        }
+
+        return map.Count > 0 ? map : null;
     }
 }

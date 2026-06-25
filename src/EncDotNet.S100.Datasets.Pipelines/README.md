@@ -250,8 +250,14 @@ for the full design rationale.
 - `ExternalTextFileResolver` — resolves the textual content of external
   files named by S-100 `fileReference` attributes (S-101 FC; alias
   `TXTDSC` / `NTXTDS`, e.g. on Caution Area, Tidal Stream Panel Data)
-  from the dataset's exchange-set asset source. `S101DatasetProcessor`
-  uses it (via `FeatureInfoBuilder.ResolveFileReferences`) to populate
+  from the dataset's exchange-set asset source. When the exchange-set
+  catalogue's `supportFileDiscoveryMetadata` is supplied (built by
+  `ExchangeSetLoader` and passed through the factory), the file is located
+  through it first — the canonical ECDIS mechanism, which honours the
+  catalogue-declared `support/` sub-directory — before falling back to
+  probing the dataset directory, the exchange-set root, and a sibling
+  `support/` directory. `S101DatasetProcessor` uses it (via
+  `FeatureInfoBuilder.ResolveFileReferences`) to populate
   `PickAttribute.ExternalText`, so a pick / object-info consumer can show
   the referenced text the way an ECDIS does.
 - `GmlDatasetProcessorBase` — common base for the GML-encoded vector

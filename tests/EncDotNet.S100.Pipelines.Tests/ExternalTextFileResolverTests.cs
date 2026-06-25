@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using EncDotNet.S100.Core;
@@ -96,5 +97,35 @@ public sealed class ExternalTextFileResolverTests : IDisposable
         Encoding.ASCII.GetBytes("hello").CopyTo(withText, 3);
 
         Assert.Equal("hello", ExternalTextFileResolver.Decode(withText));
+    }
+
+    [Fact]
+    public void Resolve_UsesCatalogueSupportFileMap()
+    {
+        // The catalogue declares the file under a "support/" sub-directory,
+        // which neither the dataset directory nor the root probe would find.
+        var supportDir = Path.Combine(_dir, "support");
+        Directory.CreateDirectory(supportDir);
+        File.WriteAllText(Path.Combine(supportDir, "101GB00N00659.TXT"), "TIDAL STREAM STATIONS");
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["101GB00N00659.TXT"] = "support/101GB00N00659.TXT",
+        };
+        var resolver = new ExternalTextFileResolver(
+            FileSystemAssetSource.Create(_dir), "101GB0050242H/101GB0050242H.000", map);
+
+        Assert.Equal("TIDAL STREAM STATIONS", resolver.Resolve("101GB00N00659.TXT"));
+    }
+
+    [Fact]
+    public void Resolve_FallsBackToSupportDirectory_WhenNoCatalogueMap()
+    {
+        var supportDir = Path.Combine(_dir, "support");
+        Directory.CreateDirectory(supportDir);
+        File.WriteAllText(Path.Combine(supportDir, "NOTE.TXT"), "Caution.");
+
+        // No catalogue map; the heuristic "support/" probe should still locate it.
+        Assert.Equal("Caution.", CreateResolver().Resolve("NOTE.TXT"));
     }
 }

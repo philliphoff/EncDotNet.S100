@@ -153,7 +153,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache = null)
+        IPortrayalInstructionCache? sharedInstructionCache = null,
+        IReadOnlyDictionary<string, string>? supportFiles = null)
         : this(
             AssetSourceHelpers.OpenSeekable(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
@@ -161,7 +162,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, relativePath).AsDelegate())
+            new ExternalTextFileResolver(source, relativePath, supportFiles).AsDelegate())
     {
     }
 
@@ -180,7 +181,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager,
-        IPortrayalInstructionCache? sharedInstructionCache = null)
+        IPortrayalInstructionCache? sharedInstructionCache = null,
+        IReadOnlyDictionary<string, string>? supportFiles = null)
         : this(
             PrepareWithUpdates(source, baseRelativePath, updateRelativePaths),
             AssetSourceHelpers.GetFileName(baseRelativePath),
@@ -188,7 +190,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             luaEngine,
             featureCatalogueManager,
             sharedInstructionCache,
-            new ExternalTextFileResolver(source, baseRelativePath).AsDelegate())
+            new ExternalTextFileResolver(source, baseRelativePath, supportFiles).AsDelegate())
     {
     }
 

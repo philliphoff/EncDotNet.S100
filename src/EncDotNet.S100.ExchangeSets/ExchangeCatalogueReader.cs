@@ -59,12 +59,7 @@ public static class ExchangeCatalogueReader
                 .Where(e => e.Name.LocalName.EndsWith("_DatasetDiscoveryMetadata", StringComparison.Ordinal))
                 .Select(e => ReadDatasetDiscovery(e, xc, lan))
                 .ToList() ?? [],
-            SupportFileDiscoveryMetadata = root
-                .Element(xc + "supportFileDiscoveryMetadata")?
-                .Elements()
-                .Where(e => e.Name.LocalName.EndsWith("_SupportFileDiscoveryMetadata", StringComparison.Ordinal))
-                .Select(e => ReadSupportFileDiscovery(e, xc))
-                .ToList() ?? [],
+            SupportFileDiscoveryMetadata = ReadSupportFileDiscoveries(root, xc),
             CatalogueDiscoveryMetadata = root
                 .Element(xc + "catalogueDiscoveryMetadata")?
                 .Elements()
@@ -148,12 +143,50 @@ public static class ExchangeCatalogueReader
         };
     }
 
+    /// <summary>
+    /// Reads all support-file discovery records from the catalogue root,
+    /// tolerating both encodings seen in the wild: a single
+    /// <c>supportFileDiscoveryMetadata</c> container wrapping typed
+    /// <c>*_SupportFileDiscoveryMetadata</c> children, and repeated
+    /// <c>supportFileDiscoveryMetadata</c> elements that carry the fields
+    /// inline. S-100 Edition 5.2.1 Part 17.
+    /// </summary>
+    private static List<SupportFileDiscoveryMetadata> ReadSupportFileDiscoveries(XElement root, XNamespace xc)
+    {
+        var result = new List<SupportFileDiscoveryMetadata>();
+
+        foreach (var container in root.Elements(xc + "supportFileDiscoveryMetadata"))
+        {
+            var typed = container
+                .Elements()
+                .Where(e => e.Name.LocalName.EndsWith("_SupportFileDiscoveryMetadata", StringComparison.Ordinal))
+                .ToList();
+
+            if (typed.Count > 0)
+            {
+                result.AddRange(typed.Select(e => ReadSupportFileDiscovery(e, xc)));
+                continue;
+            }
+
+            // Inline (repeated-sibling) form: the container itself is the record.
+            if (container.Element(xc + "fileName") is not null)
+                result.Add(ReadSupportFileDiscovery(container, xc));
+        }
+
+        return result;
+    }
+
     private static SupportFileDiscoveryMetadata ReadSupportFileDiscovery(XElement element, XNamespace xc)
     {
         return new SupportFileDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
-            FilePath = (string?)element.Element(xc + "filePath"),
+            // S-100 Edition 5.2.1 Part 17: support file discovery declares its
+            // directory via <fileLocation>; some producers instead reuse the
+            // dataset-style <filePath>. Accept either so support files placed in
+            // a sub-directory (e.g. "support/") resolve correctly.
+            FilePath = (string?)element.Element(xc + "filePath")
+                ?? (string?)element.Element(xc + "fileLocation"),
             RevisionStatus = (string?)element.Element(xc + "revisionStatus"),
             EditionNumber = ParseInt(element, "editionNumber", xc),
             IssueDate = (string?)element.Element(xc + "issueDate"),

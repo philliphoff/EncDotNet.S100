@@ -394,10 +394,17 @@ public sealed class DatasetPipelineFactory
     /// unrecognized, falls back to extension-based sniffing on
     /// <paramref name="relativePath"/>.
     /// </param>
+    /// <param name="supportFiles">
+    /// Optional map of support-file name (case-insensitive) to source-relative
+    /// path, from the exchange-set catalogue's
+    /// <c>supportFileDiscoveryMetadata</c> (S-100 Edition 5.2.1 Part 17). Lets
+    /// S-101 resolve <c>fileReference</c> external text files via the catalogue.
+    /// </param>
     public IDatasetProcessor CreateProcessor(
         IAssetSource source,
         string relativePath,
-        string? declaredProductSpec = null)
+        string? declaredProductSpec = null,
+        IReadOnlyDictionary<string, string>? supportFiles = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -411,7 +418,7 @@ public sealed class DatasetPipelineFactory
         return spec switch
         {
             "S-102" => new S102DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _crsTransformFactory),
-            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache),
+            "S-101" => new S101DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager, _sharedInstructionCache, supportFiles),
             "S-57" => new S57DatasetProcessor(source, relativePath, _catalogueManager, _luaEngine, _featureCatalogueManager),
             "S-104" => new S104DatasetProcessor(source, relativePath, _crsTransformFactory),
             "S-111" => new S111DatasetProcessor(source, relativePath, _catalogueManager, _crsTransformFactory),
@@ -442,7 +449,8 @@ public sealed class DatasetPipelineFactory
     public IDatasetProcessor CreateS101ProcessorWithUpdates(
         IAssetSource source,
         string baseRelativePath,
-        IReadOnlyList<string> updateRelativePaths)
+        IReadOnlyList<string> updateRelativePaths,
+        IReadOnlyDictionary<string, string>? supportFiles = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(baseRelativePath);
@@ -455,7 +463,8 @@ public sealed class DatasetPipelineFactory
             _catalogueManager,
             _luaEngine,
             _featureCatalogueManager,
-            _sharedInstructionCache);
+            _sharedInstructionCache,
+            supportFiles);
     }
 
     /// <summary>

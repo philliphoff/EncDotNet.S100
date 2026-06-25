@@ -62,6 +62,16 @@ public class ExchangeSetPathResolutionTests
     }
 
     [Fact]
+    public void ResolveRelativePath_DoesNotDoubleSuffixWhenDirectoryAlreadyCarriesFileName()
+    {
+        // Some producers fold the whole path into the support-file
+        // <fileLocation> element while still repeating the bare <fileName>.
+        Assert.Equal(
+            "support/101GB00N00659.TXT",
+            ExchangeSet.ResolveRelativePath("support/101GB00N00659.TXT", "101GB00N00659.TXT"));
+    }
+
+    [Fact]
     public void Read_SeparateFilePath_CapturesFilePathAndResolvesRelativePath()
     {
         var catalogue = ExchangeCatalogueReader.Read(GetFixturePath("SeparateFilePath_CATALOG.XML"));

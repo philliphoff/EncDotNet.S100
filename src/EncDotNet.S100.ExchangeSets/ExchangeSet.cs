@@ -147,6 +147,15 @@ public sealed class ExchangeSet : IDisposable
             return normalizedName;
         }
 
+        // Guard against double-suffixing when the directory already carries
+        // the file name (some producers fold the whole path into the
+        // <fileLocation> element). S-100 Edition 5.2.1 Part 17.
+        if (directory.Equals(normalizedName, StringComparison.OrdinalIgnoreCase)
+            || directory.EndsWith("/" + normalizedName, StringComparison.OrdinalIgnoreCase))
+        {
+            return directory;
+        }
+
         return directory + "/" + normalizedName;
     }
 }

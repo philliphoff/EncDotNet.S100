@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using EncDotNet.S100.Core;
@@ -9,10 +10,11 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// Resolves the textual content of an externally referenced text file (named
 /// by an S-100 <c>fileReference</c> attribute — S-101 Feature Catalogue, alias
 /// <c>TXTDSC</c> / <c>NTXTDS</c>) from the dataset's exchange-set
-/// <see cref="IAssetSource"/>. The referenced file is looked up relative to
-/// the dataset's own directory first (the common co-location convention), then
-/// at the exchange-set root, mirroring how an ECDIS locates the support file
-/// that backs a feature's textual description.
+/// <see cref="IAssetSource"/>. When the exchange-set catalogue's
+/// <c>supportFileDiscoveryMetadata</c> is supplied, the referenced file is
+/// located through it first (the canonical ECDIS mechanism); otherwise the
+/// file is looked up relative to the dataset's own directory, then at the
+/// exchange-set root, then under a sibling <c>support/</c> directory.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,6 +41,7 @@ public sealed class ExternalTextFileResolver
 
     private readonly IAssetSource _source;
     private readonly string? _baseDirectory;
+    private readonly IReadOnlyDictionary<string, string>? _supportFiles;
 
     /// <summary>
     /// Initializes a new <see cref="ExternalTextFileResolver"/>.
@@ -52,11 +55,22 @@ public sealed class ExternalTextFileResolver
     /// be <c>null</c> or a bare file name, in which case only the exchange-set
     /// root is searched.
     /// </param>
-    public ExternalTextFileResolver(IAssetSource source, string? datasetRelativePath = null)
+    /// <param name="supportFiles">
+    /// Optional map of support-file name (case-insensitive) to its source-relative
+    /// path, as declared by the exchange-set catalogue's
+    /// <c>supportFileDiscoveryMetadata</c> (S-100 Edition 5.2.1 Part 17). When
+    /// supplied, a referenced file is located via the catalogue first — the
+    /// canonical ECDIS mechanism — before falling back to directory probing.
+    /// </param>
+    public ExternalTextFileResolver(
+        IAssetSource source,
+        string? datasetRelativePath = null,
+        IReadOnlyDictionary<string, string>? supportFiles = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         _source = source;
         _baseDirectory = GetDirectory(datasetRelativePath);
+        _supportFiles = supportFiles;
     }
 
     /// <summary>
@@ -87,9 +101,23 @@ public sealed class ExternalTextFileResolver
         if (normalized.Length == 0)
             return null;
 
-        // Prefer the dataset's own directory, then fall back to the exchange
-        // set root. Skip the second probe when the file name already carries a
-        // path or no base directory is known.
+        // 1. Catalogue-declared location (the canonical ECDIS mechanism):
+        //    look the file up by its bare name in the exchange set's
+        //    supportFileDiscoveryMetadata. S-100 Edition 5.2.1 Part 17.
+        if (_supportFiles is not null)
+        {
+            var bareName = LastSegment(normalized);
+            if (_supportFiles.TryGetValue(bareName, out var declaredPath)
+                && !string.IsNullOrEmpty(declaredPath)
+                && TryRead(declaredPath, out var declaredText))
+            {
+                return declaredText;
+            }
+        }
+
+        // 2. Prefer the dataset's own directory, then fall back to the exchange
+        //    set root. Skip these probes when the file name already carries a
+        //    path or no base directory is known.
         if (!string.IsNullOrEmpty(_baseDirectory)
             && !normalized.Contains('/'))
         {
@@ -98,7 +126,41 @@ public sealed class ExternalTextFileResolver
                 return text;
         }
 
-        return TryRead(normalized, out var rootText) ? rootText : null;
+        if (TryRead(normalized, out var rootText))
+            return rootText;
+
+        // 3. Heuristic fallback for loose datasets whose support files sit in a
+        //    sibling "support/" directory (the common S-101 exchange-set layout)
+        //    without a catalogue to consult.
+        if (!normalized.Contains('/'))
+        {
+            foreach (var dir in SupportProbeDirectories())
+            {
+                if (TryRead(dir + "/" + normalized, out var supportText))
+                    return supportText;
+            }
+        }
+
+        return null;
+    }
+
+    private static string LastSegment(string path)
+    {
+        var idx = path.LastIndexOf('/');
+        return idx < 0 ? path : path[(idx + 1)..];
+    }
+
+    private IEnumerable<string> SupportProbeDirectories()
+    {
+        // <root>/support and <dataset-parent>/support cover the two layouts
+        // seen in the wild: support files alongside the catalogue, and support
+        // files beside the dataset's own directory.
+        yield return "support";
+        if (!string.IsNullOrEmpty(_baseDirectory))
+        {
+            var parent = GetDirectory(_baseDirectory);
+            yield return (string.IsNullOrEmpty(parent) ? "support" : parent + "/support");
+        }
     }
 
     private bool TryRead(string relativePath, out string? text)
