@@ -132,10 +132,12 @@ public sealed class LabelOverlayCompositionTests
     }
 
     [Fact]
-    public void Overlay_LabelOverSymbol_SymbolSurvivesLabelSuppressed()
+    public void Overlay_LabelOverSymbol_BothRendered()
     {
-        // A label sharing the symbol's anchor yields to the symbol footprint, so
-        // the symbol's red pixels are present and the label's black ink is gone.
+        // A label sharing the symbol's anchor is NOT suppressed: point symbols
+        // always draw but never displace a label (parity with the Mapsui "A"
+        // arm; issue #347). Both the symbol's red pixels and the label's black
+        // ink are present.
         var scene = new VectorScene(new List<PaintOp>
         {
             Symbol("sym", 10.0, 0.0),
@@ -146,6 +148,6 @@ public sealed class LabelOverlayCompositionTests
         var (black, red) = RenderOverlay(scene, viewport, declutter: true);
 
         Assert.True(red > 0, "symbol did not render");
-        Assert.True(black == 0, $"label over symbol should be suppressed, but {black} label pixels remain");
+        Assert.True(black > 0, $"label over symbol should survive, but {black} label pixels remain");
     }
 }
