@@ -85,6 +85,17 @@ public partial class App : Application
         s_lastErrorTracker = s_services.GetRequiredService<
             EncDotNet.S100.Viewer.Diagnostics.ILastErrorTracker>();
 
+        // Re-root the warm tile disk cache under the active data directory
+        // when one is in use (--data-dir / S100_DATA_DIR), so an isolated
+        // instance keeps its tile cache self-contained. An explicit
+        // S100_VECTOR_TILE_DISK_DIR env var still wins (the setter is a
+        // no-op when env-pinned). Must run before the tile renderer creates
+        // its shared disk cache below.
+        if (s_services.GetRequiredService<ViewerDataPaths>().TileDiskCacheDirectory is { } tileDir)
+        {
+            EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.TileDiskDirectory = tileDir;
+        }
+
         // Detect an unclean shutdown from the previous run (native crash,
         // FailFast, kill, … — none of which the managed handlers above can
         // catch) and route it into the last-error tracker so the feedback
@@ -298,10 +309,17 @@ public partial class App : Application
             logFilePath: StartupOptions?.LogFile,
             verbose: StartupOptions?.Verbose ?? false);
 
+        // Resolved on-disk locations for this run (settings + caches),
+        // honouring --data-dir / S100_DATA_DIR (and --settings for the
+        // settings file). A single shared instance drives the settings
+        // file, the disk caches, and the crash-marker directory.
+        services.AddSingleton<ViewerDataPaths>(_ => ViewerDataPaths.Resolve(StartupOptions));
+
         // Persisted user settings, with any command-line overrides
         // (settings path / --ephemeral / MCP / palette / display
         // category) layered on top for this run only.
-        services.AddSingleton<ViewerSettings>(_ => StartupSettingsFactory.Create(StartupOptions));
+        services.AddSingleton<ViewerSettings>(sp =>
+            StartupSettingsFactory.Create(StartupOptions, sp.GetRequiredService<ViewerDataPaths>()));
 
         // Shared application-level state
         services.AddSingleton<PortrayalCatalogueManager>();
@@ -335,10 +353,7 @@ public partial class App : Application
             // NetTopologySuite pattern-fill clip, even across restarts. The clip
             // geometry is palette-independent and the cache key is content-hash +
             // FormatVersion stamped, so persisted entries auto-invalidate.
-            var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "EncDotNet.S100",
-                "PatternClipCache");
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PatternClipCacheDirectory;
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
         });
@@ -350,10 +365,7 @@ public partial class App : Application
             // the portrayal-content hash (dataset bytes + FC/PC content +
             // pipeline / VM assemblies) so persisted entries auto-invalidate
             // when anything affecting the instruction list changes.
-            var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "EncDotNet.S100",
-                "PortrayalInstructionCache");
+            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PortrayalInstructionCacheDirectory;
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
         });
@@ -378,6 +390,8 @@ public partial class App : Application
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IRecentFilesService, RecentFilesService>();
+        services.AddSingleton<IDataMaintenanceService, DataMaintenanceService>();
+        services.AddSingleton<IApplicationControlService, ApplicationControlService>();
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<ScreenshotService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
@@ -778,7 +792,10 @@ public partial class App : Application
 
         var version = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 
-        EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.Configure(enabled);
+        // Route crash markers under the active data directory so an
+        // isolated --data-dir instance keeps them self-contained.
+        var markersDir = s_services?.GetService<ViewerDataPaths>()?.CrashMarkersDirectory;
+        EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.Configure(enabled, markersDir);
         var crashed =
             EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.BeginSession(version);
         if (crashed.Count == 0)

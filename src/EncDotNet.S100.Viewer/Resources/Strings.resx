@@ -947,6 +947,45 @@
   <data name="Settings_RenderKnob_RestartHint" xml:space="preserve">
     <value>Reload the dataset or restart to apply.</value>
   </data>
+  <data name="Settings_MaintenanceSubsection" xml:space="preserve">
+    <value>Maintenance</value>
+  </data>
+  <data name="Settings_MaintenanceSubsection_Help" xml:space="preserve">
+    <value>Free disk space or return the viewer to a clean, just-installed state. Both actions restart the viewer.</value>
+  </data>
+  <data name="Settings_ClearCaches_Button" xml:space="preserve">
+    <value>Clear caches</value>
+  </data>
+  <data name="Tooltip_ClearCaches" xml:space="preserve">
+    <value>Delete the on-disk render caches (pattern-clip, portrayal-instruction, and tile caches) to free disk space. Your settings are kept. The viewer restarts to rebuild the caches.</value>
+  </data>
+  <data name="Settings_ClearCaches_ConfirmTitle" xml:space="preserve">
+    <value>Clear caches?</value>
+  </data>
+  <data name="Settings_ClearCaches_ConfirmMessage" xml:space="preserve">
+    <value>This deletes the viewer's on-disk render caches to free disk space. Your settings are kept. The viewer will restart and rebuild the caches as datasets are opened.</value>
+  </data>
+  <data name="Settings_ClearCaches_ConfirmButton" xml:space="preserve">
+    <value>Clear caches</value>
+  </data>
+  <data name="Settings_ResetAll_Button" xml:space="preserve">
+    <value>Reset all settings</value>
+  </data>
+  <data name="Tooltip_ResetAllSettings" xml:space="preserve">
+    <value>Return the viewer to a clean, just-installed state: reset all settings, clear recently-opened files, and delete all on-disk caches. The viewer restarts afterwards. This cannot be undone.</value>
+  </data>
+  <data name="Settings_ResetAll_ConfirmTitle" xml:space="preserve">
+    <value>Reset all settings?</value>
+  </data>
+  <data name="Settings_ResetAll_ConfirmMessage" xml:space="preserve">
+    <value>This returns the viewer to a clean, just-installed state. All settings and recently-opened files are reset and every on-disk cache is deleted. The viewer will restart. This cannot be undone.</value>
+  </data>
+  <data name="Settings_ResetAll_ConfirmButton" xml:space="preserve">
+    <value>Reset everything</value>
+  </data>
+  <data name="Settings_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
   <data name="Settings_BasemapEnabled" xml:space="preserve">
     <value>Show online basemap</value>
   </data>

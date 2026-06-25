@@ -74,12 +74,20 @@ a `dotnet` host:
 ```bash
 dotnet build -c Release src/EncDotNet.S100.Viewer
 nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer \
-  --ephemeral --mcp --mcp-port-file /tmp/eval/mcp.url \
+  --data-dir /tmp/eval/data --mcp --mcp-port-file /tmp/eval/mcp.url \
   >/tmp/eval/viewer.log 2>&1 & disown
 ```
 
-- `--ephemeral` → throwaway settings (clean, reproducible baseline; never
-  touches the user's profile).
+- `--data-dir <PATH>` → **fully isolated instance**: settings, crash
+  markers, and all disk caches are re-rooted under the folder. Point it
+  at an empty temp dir for a guaranteed-fresh viewer (no local profile
+  or cache is read), and `rm -rf` the folder to dispose of it
+  completely. Prefer this over `--ephemeral` for evaluation runs that
+  must not be influenced by — or leave traces in — the developer's real
+  data. It can also be set via the `S100_DATA_DIR` env var, and you can
+  pre-seed the folder to launch with mocked-up settings/caches.
+- `--ephemeral` → throwaway settings only (still reads the user's other
+  on-disk state); use `--data-dir` when you need a clean cache too.
 - `--mcp` enables the server; default `--mcp-port 0` picks a free port.
   Any MCP flag implies `--mcp`. A CLI-driven MCP run **never** persists
   the bound port.

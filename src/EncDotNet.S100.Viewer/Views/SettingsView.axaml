@@ -177,39 +177,45 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding BasemapEnabled}" />
             </Grid>
 
-            <!-- Rendering optimizations (Settings → Map) -->
-            <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
-                       FontSize="12"
-                       FontWeight="SemiBold"
-                       Margin="0,8,0,0" />
-            <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection_Help}"
-                       FontSize="11"
-                       Opacity="0.6"
-                       TextWrapping="Wrap" />
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotEnabled}" />
-            </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  Margin="16,0,0,0"
-                  IsEnabled="{Binding VectorSnapshotEnabled}"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotPrebuildEnabled}" />
-            </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorPathCacheEnabled}" />
-            </Grid>
-            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
-                  Margin="16,0,0,0"
-                  IsEnabled="{Binding VectorPathCacheEnabled}"
-                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}">
-                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
-            </Grid>
+            <!-- Rendering optimizations (Settings → Map) — shown for the
+                 "A" (Mapsui) subsystem only, so the panel never lists knobs
+                 that don't apply to the active renderer. -->
+            <StackPanel Spacing="16" IsVisible="{Binding MapsuiSelected}">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Margin="0,8,0,0" />
+                    <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection_Help}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               TextWrapping="Wrap" />
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotEnabled}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          Margin="16,0,0,0"
+                          IsEnabled="{Binding VectorSnapshotEnabled}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorSnapshotPrebuildEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorSnapshotPrebuildEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorSnapshotPrebuildEnabled}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_VectorPathCacheEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_VectorPathCacheEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding VectorPathCacheEnabled}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          Margin="16,0,0,0"
+                          IsEnabled="{Binding VectorPathCacheEnabled}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_GeometrySimplificationEnabled}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_GeometrySimplificationEnabled}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
 
             <!-- Render subsystem A/B + tiled knobs (issue #331) -->
             <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
@@ -237,10 +243,10 @@
                 </ComboBox>
             </StackPanel>
 
-            <!-- "B" (tiled scene) knobs — enabled only when the B arm is selected -->
+            <!-- "B" (tiled scene) knobs — shown only when the B arm is selected -->
             <StackPanel Spacing="12"
                         Margin="16,0,0,0"
-                        IsEnabled="{Binding TiledSceneSelected}">
+                        IsVisible="{Binding TiledSceneSelected}">
                 <StackPanel Spacing="6">
                     <TextBlock Text="{x:Static loc:Strings.Settings_SceneMode}"
                                FontSize="12" />
@@ -258,8 +264,8 @@
                     </ComboBox>
                 </StackPanel>
 
-                <!-- Tile-specific knobs — only meaningful in tiled scene mode -->
-                <StackPanel Spacing="12" IsEnabled="{Binding TiledModeActive}">
+                <!-- Tile-specific knobs — shown only in tiled scene mode -->
+                <StackPanel Spacing="12" IsVisible="{Binding TiledModeActive}">
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           IsEnabled="{Binding TilePredictionEditable}"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TilePredictionEnabled}">
@@ -595,6 +601,26 @@
                            FontSize="11"
                            Opacity="0.6"
                            TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Maintenance: clear caches / reset all settings -->
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MaintenanceSubsection}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Opacity="0.7" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_MaintenanceSubsection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="{x:Static loc:Strings.Settings_ClearCaches_Button}"
+                        Command="{Binding ClearCachesCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearCaches}" />
+                <Button Content="{x:Static loc:Strings.Settings_ResetAll_Button}"
+                        Command="{Binding ResetAllSettingsCommand}"
+                        Classes="Destructive"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetAllSettings}" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

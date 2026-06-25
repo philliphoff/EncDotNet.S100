@@ -568,6 +568,20 @@ that is **never written back**, so CLI/MCP-port write-back and
 palette/category overrides cannot pollute the real profile and
 parallel agent runs do not collide.
 
+**Full data-directory redirect.** `--data-dir <PATH>` (also honoured
+via the `S100_DATA_DIR` environment variable) re-roots **everything**
+the viewer writes — the settings file, crash markers, and all three
+disk caches (pattern-clip, portrayal-instruction, warm tile cache) —
+underneath one folder. Point it at an empty temp directory for a
+guaranteed-fresh instance whose entire footprint can be deleted in one
+`rm -rf`, or pre-seed the folder to launch with mocked-up settings or
+caches. `--settings <PATH>` still overrides just the settings-file
+location (caches stay under the data directory), and `--ephemeral`
+still combines (the redirected settings are loaded read-only). An
+explicit `S100_VECTOR_TILE_DISK_DIR` continues to win for the tile
+cache. The same locations can be wiped at runtime from
+**Settings → Maintenance** ("Clear caches" / "Reset all settings").
+
 **Deterministic viewport.** `--center <LAT,LON> --zoom <LEVEL>` or
 `--bbox <SOUTH,WEST,NORTH,EAST>` frame the map after datasets load.
 Supplying an explicit viewport suppresses the automatic
@@ -616,6 +630,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--mcp-bind <ADDR>` | MCP bind address; implies `--mcp` |
 | `--mcp-port-file <PATH>` | Write the bound MCP endpoint URI here |
 | `--settings <PATH>` | Use an alternate settings file |
+| `--data-dir <PATH>` | Redirect all settings + caches under one folder (or `S100_DATA_DIR`) |
 | `--ephemeral` | Throwaway settings, never persisted |
 | `--center <LAT,LON>` | Center the map (needs `--zoom`) |
 | `--zoom <LEVEL>` | Web-mercator zoom level (with `--center`) |
