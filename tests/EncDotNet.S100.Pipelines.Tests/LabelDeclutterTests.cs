@@ -89,18 +89,36 @@ public class LabelDeclutterTests
     }
 
     [Fact]
-    public void Declutter_LabelOverlappingSymbol_SuppressesLabel()
+    public void Declutter_LabelOverlappingSymbol_KeepsLabel()
     {
-        // A point symbol always draws and reserves its footprint; a label at the
-        // same anchor yields to it (even though the label is later/higher in the
-        // op list, symbols are obstacles that never lose).
+        // A point symbol always draws but never displaces a label (parity with
+        // the Mapsui "A" arm; issue #347). A label co-located with a symbol is
+        // therefore kept — dropping it would lose annotation text "A" renders,
+        // e.g. S-421 route action-point labels anchored on a waypoint symbol.
         var point = Point("sym", 10.0, 0.0);
         var label = Text("name", 10.0, 0.0);
         var scene = new VectorScene(new List<PaintOp> { point, label });
 
         var suppressed = Declutter(scene, Centred(10.0, 0.0, 0.4));
 
-        Assert.Contains(label, suppressed);
+        Assert.DoesNotContain(label, suppressed);
+        Assert.Empty(suppressed);
+    }
+
+    [Fact]
+    public void Declutter_LabelOverlappingUnrelatedSymbol_KeepsLabel()
+    {
+        // Regression for the S-421 finding: a label anchored to one feature
+        // (a waypoint leg / action point) overlapping a *different* feature's
+        // point symbol (a co-located waypoint circle) must still draw. Point
+        // symbols are obstacles to nothing.
+        var waypointSymbol = Point("RTE.WPT.2", 10.0, 0.0);
+        var legLabel = Text("RTE.WPT.LEG.2", 10.0, 0.0, "Shallow water");
+        var scene = new VectorScene(new List<PaintOp> { waypointSymbol, legLabel });
+
+        var suppressed = Declutter(scene, Centred(10.0, 0.0, 0.4));
+
+        Assert.Empty(suppressed);
     }
 
     [Fact]

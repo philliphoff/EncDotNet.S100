@@ -13,12 +13,22 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Point symbols always draw and act as fixed obstacles; labels (feature-name
-/// text and soundings, both <see cref="TextPaintOp"/>) yield to symbols and to
-/// higher-priority labels. The op list is already ordered by ascending S-100
-/// Part 9 drawing priority (later = drawn on top = more important), so labels
-/// are placed highest-priority first; a label whose on-screen footprint
-/// overlaps an already-placed footprint is suppressed.
+/// Point symbols always draw and are <b>never</b> suppressed. Matching the
+/// Mapsui "A" arm (the fidelity baseline for issue&#160;#347), they do
+/// <i>not</i> displace labels either: decluttering operates among labels only.
+/// Labels (feature-name text and soundings, both <see cref="TextPaintOp"/>)
+/// yield only to higher-priority labels. The op list is already ordered by
+/// ascending S-100 Part 9 drawing priority (later = drawn on top = more
+/// important), so labels are placed highest-priority first; a label whose
+/// on-screen footprint overlaps an already-placed <i>label</i> footprint is
+/// suppressed.
+/// </para>
+/// <para>
+/// Letting a point symbol suppress an overlapping label would drop annotation
+/// text the "A" arm always draws — e.g. S-421 route action-point / leg labels
+/// anchored on (or beside) a co-located waypoint symbol, which the coarse
+/// perceptual gate does not catch. Point symbols are therefore obstacles to
+/// nothing; only label-vs-label overlap is resolved here.
 /// </para>
 /// <para>
 /// All footprints are computed in <i>final</i> on-screen space — each anchor is
@@ -52,8 +62,9 @@ public sealed class LabelDeclutterer : IDisposable
     /// <summary>
     /// Returns the set of <see cref="TextPaintOp"/>s to <b>suppress</b> this
     /// frame (by reference identity) so the live overlay draws a decluttered
-    /// label plane. Point symbols are never suppressed; they reserve their
-    /// footprint first as obstacles. Ops that are scale-culled or fall outside
+    /// label plane. Point symbols are never suppressed and never displace a
+    /// label (parity with the Mapsui arm) — only label-vs-label overlap is
+    /// resolved. Ops that are scale-culled or fall outside
     /// <paramref name="cullBounds"/> are ignored (they are not drawn, so they
     /// neither occupy space nor need suppressing).
     /// </summary>
@@ -89,28 +100,11 @@ public sealed class LabelDeclutterer : IDisposable
         double denom = viewport.ScaleDenominator;
         var index = _index;
 
-        // Pass 1 — point symbols reserve their footprints as obstacles.
-        foreach (var op in scene.Ops)
-        {
-            if (op is not PointPaintOp point)
-                continue;
-            if (honorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(point, denom))
-                continue;
-
-            var (px, py) = transform.Project(point.World);
-            px += (float)point.OffsetXpx;
-            py += (float)point.OffsetYpx;
-            (px, py) = SkiaDisplayListRenderer.RotateAbout(px, py, centerX, centerY, anchorRotationDegrees);
-            if (!cullBounds.Contains(px, py))
-                continue;
-
-            index.Add(SkiaDisplayListRenderer.PointScreenBounds(point, px, py));
-        }
-
-        // Pass 2 — labels, highest drawing priority first (reverse op order).
-        // A label that collides with an already-placed footprint is suppressed;
-        // otherwise it claims its footprint and becomes an obstacle for
-        // lower-priority labels.
+        // Labels, highest drawing priority first (reverse op order). A label that
+        // collides with an already-placed label footprint is suppressed; otherwise
+        // it claims its footprint and becomes an obstacle for lower-priority
+        // labels. Point symbols are intentionally not indexed: they always draw
+        // and never displace a label, matching the Mapsui "A" arm (issue #347).
         var scratch = _scratch;
         for (int i = scene.Ops.Count - 1; i >= 0; i--)
         {
@@ -145,8 +139,8 @@ public sealed class LabelDeclutterer : IDisposable
     public void Dispose() => _scratch.Dispose();
 
     /// <summary>
-    /// A uniform screen-space grid of occupied rectangles giving near-O(1)
-    /// overlap queries, so decluttering thousands of overlay ops per frame stays
+    /// A uniform screen-space grid of occupied label rectangles giving near-O(1)
+    /// overlap queries, so decluttering thousands of label ops per frame stays
     /// linear. Rectangles are bucketed by the fixed-size cells they touch.
     /// </summary>
     /// <remarks>
