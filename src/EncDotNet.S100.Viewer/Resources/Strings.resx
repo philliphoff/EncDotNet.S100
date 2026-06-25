@@ -593,6 +593,9 @@
   <data name="Pick_AttributesHeading" xml:space="preserve">
     <value>ATTRIBUTES</value>
   </data>
+  <data name="Pick_FileReference_Header" xml:space="preserve">
+    <value>Referenced text</value>
+  </data>
   <data name="Pick_NoAttributes" xml:space="preserve">
     <value>(no attributes)</value>
   </data>

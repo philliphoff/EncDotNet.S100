@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Xml.Xsl;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -99,19 +100,26 @@ public interface IPortrayalAssetCache
 
 /// <summary>
 /// Default <see cref="IPortrayalAssetCache"/> implementation backed by
-/// plain <see cref="Dictionary{TKey, TValue}"/> instances.
+/// <see cref="ConcurrentDictionary{TKey, TValue}"/> instances.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Thread-safety:</b> this implementation is <em>not</em>
-/// thread-safe. All slots are non-concurrent dictionaries. Today the
-/// dataset processors that consume catalogues read and write the cache
-/// on a single pipeline thread per dataset, which makes this safe in
-/// practice — but two pipelines running in parallel against catalogues
-/// for the same spec would race. Hardening to
-/// <see cref="System.Collections.Concurrent.ConcurrentDictionary{TKey, TValue}"/>
-/// is tracked separately by PR-6 of the asset-caching audit
+/// <b>Thread-safety:</b> the per-asset slots are
+/// <see cref="ConcurrentDictionary{TKey, TValue}"/> instances, so two or
+/// more dataset pipelines rendering in parallel against catalogues for the
+/// same spec (a single shared cache) can read and write them concurrently
+/// without corrupting their internal state. The catalogues' load logic is
+/// idempotent — a concurrent miss may load the same asset more than once,
+/// with last-writer-wins — which is acceptable because the decoded asset is
+/// value-equivalent regardless of which thread produced it. This implements
+/// the hardening tracked by PR-6 of the asset-caching audit
 /// (<c>docs/internal/asset-caching-audit.md</c> §6 PR-6).
+/// </para>
+/// <para>
+/// Palette loading remains serialized through <see cref="PaletteLoadGate"/>
+/// and <see cref="PalettesLoaded"/>; the palette slot keeps a plain
+/// dictionary because its concrete-typed view is part of the protected
+/// <c>GmlPortrayalCatalogueBase.LoadPalettes</c> API.
 /// </para>
 /// <para>
 /// The <see cref="LuaSources"/> dictionary uses
@@ -124,19 +132,19 @@ public sealed class PortrayalAssetCache : IPortrayalAssetCache
 {
     /// <inheritdoc/>
     public IDictionary<string, XslCompiledTransform> CompiledXslt { get; } =
-        new Dictionary<string, XslCompiledTransform>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, XslCompiledTransform>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public IDictionary<string, SvgSymbol> Symbols { get; } =
-        new Dictionary<string, SvgSymbol>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, SvgSymbol>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public IDictionary<string, LineStyle> LineStyles { get; } =
-        new Dictionary<string, LineStyle>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, LineStyle>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public IDictionary<string, AreaFill> AreaFills { get; } =
-        new Dictionary<string, AreaFill>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, AreaFill>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public IDictionary<PaletteType, ColorPalette> Palettes => PalettesDictionary;
@@ -145,17 +153,18 @@ public sealed class PortrayalAssetCache : IPortrayalAssetCache
     /// Concrete-typed view of the palette dictionary, used by
     /// <c>GmlPortrayalCatalogueBase.LoadPalettes</c> whose signature is
     /// part of the protected API and remains <c>Dictionary&lt;,&gt;</c>.
+    /// Writes are serialized by <see cref="PaletteLoadGate"/>.
     /// </summary>
     internal Dictionary<PaletteType, ColorPalette> PalettesDictionary { get; } =
         new Dictionary<PaletteType, ColorPalette>();
 
     /// <inheritdoc/>
     public IDictionary<string, Script> LuaScripts { get; } =
-        new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, Script>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public IDictionary<string, string?> LuaSources { get; } =
-        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        new ConcurrentDictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public bool PalettesLoaded { get; set; }

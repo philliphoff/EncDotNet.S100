@@ -238,6 +238,7 @@ internal static class Strings
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
+    public static string Pick_FileReference_Header => Get(nameof(Pick_FileReference_Header));
     public static string Pick_NoAttributes => Get(nameof(Pick_NoAttributes));
     public static string Pick_HitListHeader => Get(nameof(Pick_HitListHeader));
     public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));

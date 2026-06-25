@@ -160,4 +160,91 @@ public class FeatureInfoBuilderTests
         Assert.Equal(lv.Code, result[0].RawValue);
         Assert.Equal(lv.Label, result[0].DisplayValue);
     }
+
+    [Fact]
+    public void ResolveFileReferences_PopulatesExternalTextForFileReferenceLeaf()
+    {
+        var attrs = FeatureInfoBuilder.BuildFlat(
+            new[] { new KeyValuePair<string, string?>("fileReference", "CAUTION.TXT") },
+            decoder: null);
+
+        var resolved = FeatureInfoBuilder.ResolveFileReferences(
+            attrs, name => name == "CAUTION.TXT" ? "Beware of strong currents." : null);
+
+        Assert.Single(resolved);
+        Assert.Equal("fileReference", resolved[0].Code);
+        Assert.Equal("CAUTION.TXT", resolved[0].RawValue);
+        Assert.True(resolved[0].HasExternalText);
+        Assert.Equal("Beware of strong currents.", resolved[0].ExternalText);
+    }
+
+    [Theory]
+    [InlineData("TXTDSC")]
+    [InlineData("NTXTDS")]
+    [InlineData("filereference")]
+    public void ResolveFileReferences_MatchesAliasesCaseInsensitively(string code)
+    {
+        var attrs = FeatureInfoBuilder.BuildFlat(
+            new[] { new KeyValuePair<string, string?>(code, "DOC.TXT") },
+            decoder: null);
+
+        var resolved = FeatureInfoBuilder.ResolveFileReferences(attrs, _ => "content");
+
+        Assert.Equal("content", resolved[0].ExternalText);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_LeavesUnresolvedFileNull()
+    {
+        var attrs = FeatureInfoBuilder.BuildFlat(
+            new[] { new KeyValuePair<string, string?>("fileReference", "MISSING.TXT") },
+            decoder: null);
+
+        var resolved = FeatureInfoBuilder.ResolveFileReferences(attrs, _ => null);
+
+        Assert.False(resolved[0].HasExternalText);
+        Assert.Null(resolved[0].ExternalText);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_DoesNotTouchNonFileReferenceAttributes()
+    {
+        var attrs = FeatureInfoBuilder.BuildFlat(
+            new[] { new KeyValuePair<string, string?>("objectName", "Buoy 12") },
+            decoder: null);
+
+        var resolved = FeatureInfoBuilder.ResolveFileReferences(attrs, _ => "should-not-apply");
+
+        Assert.Same(attrs, resolved);
+        Assert.False(resolved[0].HasExternalText);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_ResolvesNestedComplexAttributeChild()
+    {
+        // `fileReference` is bound as a sub-attribute of the S-101
+        // `information` / `textContent` complex attributes, so the resolver
+        // must walk children.
+        var complex = new[]
+        {
+            new FeatureInfoBuilder.ComplexAttributeRow(
+                "information",
+                new[]
+                {
+                    new KeyValuePair<string, string>("headline", "Caution"),
+                    new KeyValuePair<string, string>("fileReference", "PANEL.TXT"),
+                }),
+        };
+
+        var attrs = FeatureInfoBuilder.Build(
+            System.Array.Empty<KeyValuePair<string, string>>(), complex, decoder: null);
+
+        var resolved = FeatureInfoBuilder.ResolveFileReferences(
+            attrs, name => name == "PANEL.TXT" ? "Tidal stream data." : null);
+
+        var parent = Assert.Single(resolved);
+        var child = System.Linq.Enumerable.Single(
+            parent.Children, c => c.Code == "fileReference");
+        Assert.Equal("Tidal stream data.", child.ExternalText);
+    }
 }

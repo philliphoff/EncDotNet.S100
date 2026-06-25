@@ -124,6 +124,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
+                ExternalText = attr.ExternalText,
                 Children = children,
             };
         }
@@ -139,6 +140,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
+                ExternalText = attr.ExternalText,
                 Children = children,
             };
         }
@@ -154,6 +156,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
+                ExternalText = attr.ExternalText,
                 Children = children,
             };
         }
@@ -169,6 +172,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeValue = attr.DateTimeValue,
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
+                ExternalText = attr.ExternalText,
                 Children = children,
             };
         }
