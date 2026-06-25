@@ -86,8 +86,10 @@ dotnet run --project src/EncDotNet.S100.Viewer -- \
   port (`--mcp-port 0`, the default). The endpoint is also printed to
   stdout as `[MCP] listening on …`.
 - A CLI-driven MCP run **never persists** the bound port back to
-  `settings.json`. Combine with `--ephemeral` (throwaway settings) or
-  `--settings <PATH>` (alternate settings file) to keep the real
+  `settings.json`. Combine with `--ephemeral` (throwaway settings),
+  `--settings <PATH>` (alternate settings file), or `--data-dir <PATH>`
+  (redirect settings **and** all disk caches under one disposable
+  folder — the cleanest isolation for agent runs) to keep the real
   profile pristine and let parallel runs avoid collisions.
 
 See the **Automation / agent control** section of the

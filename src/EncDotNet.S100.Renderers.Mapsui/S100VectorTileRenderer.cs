@@ -342,6 +342,17 @@ public static class S100VectorTileRenderer
     /// </summary>
     private static TileDiskCache? SharedDiskCache => s_diskCache.Value;
 
+    /// <summary>
+    /// The effective warm-tile disk-cache root directory for this process:
+    /// the <see cref="RenderingOptimizations.TileDiskDirectory"/> override
+    /// (env var or host-assigned), or an OS-temp subdirectory when unset.
+    /// Exposed so the host can locate the cache for a "clear caches" sweep.
+    /// </summary>
+    public static string ResolveTileDiskDirectory() =>
+        string.IsNullOrEmpty(RenderingOptimizations.TileDiskDirectory)
+            ? Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles")
+            : RenderingOptimizations.TileDiskDirectory!;
+
     private static TileDiskCache? CreateSharedDiskCache()
     {
         if (!DiskCacheEnabled)
@@ -351,12 +362,7 @@ public static class S100VectorTileRenderer
 
         try
         {
-            var root = RenderingOptimizations.TileDiskDirectory;
-            if (string.IsNullOrEmpty(root))
-            {
-                root = Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles");
-            }
-
+            var root = ResolveTileDiskDirectory();
             var budgetMb = RenderingOptimizations.TileDiskMb;
             return new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
         }

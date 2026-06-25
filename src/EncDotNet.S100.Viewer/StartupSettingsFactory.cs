@@ -16,31 +16,37 @@ internal static class StartupSettingsFactory
     /// <paramref name="options"/> over it.
     /// </summary>
     /// <remarks>
-    /// Path selection:
+    /// Path selection (see <see cref="ViewerDataPaths"/>):
     /// <list type="bullet">
-    /// <item><c>--settings &lt;PATH&gt;</c> loads (and saves) that file.</item>
-    /// <item><c>--ephemeral</c> loads the user profile read-only — nothing
-    /// is persisted, so the real profile is never mutated.</item>
+    /// <item><c>--data-dir &lt;PATH&gt;</c> (or <c>S100_DATA_DIR</c>) re-roots the
+    /// settings file <em>and</em> all disk caches under one folder.</item>
+    /// <item><c>--settings &lt;PATH&gt;</c> overrides just the settings file
+    /// (still combinable with <c>--data-dir</c>).</item>
+    /// <item><c>--ephemeral</c> loads the profile read-only — nothing is
+    /// persisted, so the underlying profile is never mutated.</item>
     /// <item>otherwise the per-user default profile is used as before.</item>
     /// </list>
     /// MCP, palette, and display-category options override the loaded
     /// values for the lifetime of the process only.
     /// </remarks>
-    public static ViewerSettings Create(ViewerCommandSettings? options)
-    {
-        var settings = LoadBase(options);
-        ApplyOverrides(settings, options);
-        return settings;
-    }
+    public static ViewerSettings Create(ViewerCommandSettings? options) =>
+        Create(options, ViewerDataPaths.Resolve(options));
 
-    private static ViewerSettings LoadBase(ViewerCommandSettings? options)
+    /// <summary>
+    /// Resolves the settings file from the supplied <paramref name="dataPaths"/>
+    /// and layers the command-line <paramref name="options"/> over it. The
+    /// caller passes a pre-resolved <see cref="ViewerDataPaths"/> so the same
+    /// instance drives both the settings file and the disk-cache locations.
+    /// </summary>
+    public static ViewerSettings Create(ViewerCommandSettings? options, ViewerDataPaths dataPaths)
     {
-        if (options?.SettingsPath is { } path && !string.IsNullOrWhiteSpace(path))
-            return ViewerSettings.Load(path);
+        ArgumentNullException.ThrowIfNull(dataPaths);
 
-        var settings = ViewerSettings.Load();
+        var settings = ViewerSettings.Load(dataPaths.SettingsFilePath);
         if (options?.Ephemeral == true)
             settings.IsReadOnly = true;
+
+        ApplyOverrides(settings, options);
         return settings;
     }
 

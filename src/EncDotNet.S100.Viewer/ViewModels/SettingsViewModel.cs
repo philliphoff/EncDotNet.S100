@@ -8,12 +8,16 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
+using ShadUI;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 internal sealed class SettingsViewModel : ViewModelBase
 {
     private readonly ViewerSettings _settings;
+    private readonly IDataMaintenanceService? _dataMaintenance;
+    private readonly IApplicationControlService? _applicationControl;
+    private readonly DialogManager? _dialogManager;
 
     private Color _accentColor;
     public Color AccentColor
@@ -550,6 +554,7 @@ internal sealed class SettingsViewModel : ViewModelBase
             {
                 _settings.RenderSubsystem = value.ToString();
                 RenderingOptimizations.RenderSubsystem = value;
+                OnPropertyChanged(nameof(MapsuiSelected));
                 OnPropertyChanged(nameof(TiledSceneSelected));
                 OnPropertyChanged(nameof(TiledModeActive));
                 RaiseMarinerChanged();
@@ -559,6 +564,13 @@ internal sealed class SettingsViewModel : ViewModelBase
 
     /// <summary>Whether the subsystem switch is user-editable (not env-pinned).</summary>
     public bool RenderSubsystemEditable => !RenderingOptimizations.RenderSubsystemEnvExplicit;
+
+    /// <summary>
+    /// True when the "A" (<see cref="RenderSubsystemKind.Mapsui"/>) arm is
+    /// selected — gates the snapshot / path-cache / geometry-simplification
+    /// optimization group so only the active subsystem's knobs are shown.
+    /// </summary>
+    public bool MapsuiSelected => _renderSubsystem == RenderSubsystemKind.Mapsui;
 
     /// <summary>True when the experimental "B" (TiledScene) arm is selected — gates the knob panel.</summary>
     public bool TiledSceneSelected => _renderSubsystem == RenderSubsystemKind.TiledScene;
@@ -836,9 +848,16 @@ internal sealed class SettingsViewModel : ViewModelBase
         return code;
     }
 
-    public SettingsViewModel(ViewerSettings settings)
+    public SettingsViewModel(
+        ViewerSettings settings,
+        IDataMaintenanceService? dataMaintenance = null,
+        IApplicationControlService? applicationControl = null,
+        DialogManager? dialogManager = null)
     {
         _settings = settings;
+        _dataMaintenance = dataMaintenance;
+        _applicationControl = applicationControl;
+        _dialogManager = dialogManager;
         _accentColor = Color.TryParse(settings.AccentColor, out var c) ? c : Color.Parse("#007ACC");
         _selectedPalette = Enum.TryParse<PaletteType>(settings.ColorProfile, ignoreCase: true, out var p) ? p : PaletteType.Day;
         _selectedChromeTheme = Enum.TryParse<ChromeTheme>(settings.ChromeTheme, ignoreCase: true, out var ct) ? ct : ChromeTheme.Light;
@@ -967,6 +986,9 @@ internal sealed class SettingsViewModel : ViewModelBase
         SetPaletteDuskCommand = new RelayCommand(() => SelectedPalette = PaletteType.Dusk);
         SetPaletteNightCommand = new RelayCommand(() => SelectedPalette = PaletteType.Night);
 
+        ResetAllSettingsCommand = new RelayCommand(ConfirmResetAllSettings);
+        ClearCachesCommand = new RelayCommand(ConfirmClearCaches);
+
         var ais = settings.AisOverlay ?? new AisOverlaySettings();
         _aisEnabled = ais.Enabled;
         _aisApiKey = ais.ApiKey;
@@ -979,6 +1001,64 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// ephemeral port (which the host then persists back).
     /// </summary>
     public ICommand ResetMcpPortCommand { get; }
+
+    /// <summary>
+    /// Command bound to the "Reset all settings" button. Shows a
+    /// confirmation dialog; on confirm it performs a full clean-slate reset
+    /// (settings + crash markers + caches) and restarts the viewer.
+    /// </summary>
+    public ICommand ResetAllSettingsCommand { get; }
+
+    /// <summary>
+    /// Command bound to the "Clear caches" button. Shows a confirmation
+    /// dialog; on confirm it deletes the on-disk caches (settings are kept)
+    /// and restarts so in-memory caches are dropped too.
+    /// </summary>
+    public ICommand ClearCachesCommand { get; }
+
+    private void ConfirmResetAllSettings()
+    {
+        if (_dialogManager is null || _dataMaintenance is null || _applicationControl is null)
+        {
+            return;
+        }
+
+        _dialogManager
+            .CreateDialog(Strings.Settings_ResetAll_ConfirmTitle, Strings.Settings_ResetAll_ConfirmMessage)
+            .WithPrimaryButton(
+                Strings.Settings_ResetAll_ConfirmButton,
+                () =>
+                {
+                    _dataMaintenance.ResetAll();
+                    _applicationControl.Restart();
+                },
+                DialogButtonStyle.Destructive)
+            .WithCancelButton(Strings.Settings_Cancel)
+            .Dismissible()
+            .Show();
+    }
+
+    private void ConfirmClearCaches()
+    {
+        if (_dialogManager is null || _dataMaintenance is null || _applicationControl is null)
+        {
+            return;
+        }
+
+        _dialogManager
+            .CreateDialog(Strings.Settings_ClearCaches_ConfirmTitle, Strings.Settings_ClearCaches_ConfirmMessage)
+            .WithPrimaryButton(
+                Strings.Settings_ClearCaches_ConfirmButton,
+                () =>
+                {
+                    _dataMaintenance.ClearCaches();
+                    _applicationControl.Restart();
+                },
+                DialogButtonStyle.Destructive)
+            .WithCancelButton(Strings.Settings_Cancel)
+            .Dismissible()
+            .Show();
+    }
 
     /// <summary>
     /// Raised when an MCP-related setting changes so the

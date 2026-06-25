@@ -64,6 +64,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Use the settings file at this path instead of the per-user default. Lets agent runs avoid the real profile.")]
     public string? SettingsPath { get; set; }
 
+    [CommandOption("--data-dir <PATH>")]
+    [Description("Redirect all settings AND disk caches under this folder (also honoured via the S100_DATA_DIR env var). Point at an empty temp directory for a guaranteed-fresh instance; --settings still overrides just the settings file.")]
+    public string? DataDir { get; set; }
+
     [CommandOption("--ephemeral")]
     [Description("Run against a throwaway settings file that is never persisted, leaving the user's profile untouched.")]
     public bool Ephemeral { get; set; }

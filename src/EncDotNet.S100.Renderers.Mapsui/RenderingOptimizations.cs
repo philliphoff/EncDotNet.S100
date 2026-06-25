@@ -82,6 +82,7 @@ public static class RenderingOptimizations
     private static double s_tileDiskMb;
     private static bool s_tileGpuResidencyEnabled;
     private static double s_tileGpuBudgetMb;
+    private static string? s_tileDiskDirectory;
 
     static RenderingOptimizations()
     {
@@ -117,7 +118,7 @@ public static class RenderingOptimizations
 
         var diskDir = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
         TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
-        TileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
+        s_tileDiskDirectory = TileDiskDirectoryEnvExplicit ? diskDir : null;
     }
 
     /// <summary>
@@ -295,9 +296,15 @@ public static class RenderingOptimizations
     /// Optional override directory for the warm disk tile cache, seeded from
     /// <c>S100_VECTOR_TILE_DISK_DIR</c>. <see langword="null"/> uses an OS-temp
     /// subdirectory. Read once when the disk cache is created (restart-only);
-    /// not surfaced as an interactive control.
+    /// not surfaced as an interactive control. The host may assign it at
+    /// startup (e.g. to re-root the cache under a <c>--data-dir</c> folder);
+    /// an explicit environment variable always wins.
     /// </summary>
-    public static string? TileDiskDirectory { get; }
+    public static string? TileDiskDirectory
+    {
+        get => s_tileDiskDirectory;
+        set { if (!TileDiskDirectoryEnvExplicit) s_tileDiskDirectory = value; }
+    }
 
     /// <summary>True when <see cref="TileDiskDirectory"/> is pinned by an explicit environment variable.</summary>
     public static bool TileDiskDirectoryEnvExplicit { get; }

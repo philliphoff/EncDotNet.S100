@@ -453,6 +453,28 @@ internal sealed class ViewerSettings
     /// <summary>Clears the recently-opened dataset list.</summary>
     public void ClearRecentDatasets() => RecentDatasetPaths.Clear();
 
+    /// <summary>
+    /// Prepares a "reset all" clean slate: suppresses any further
+    /// persistence for the remainder of this session (so the in-flight
+    /// shutdown save cannot resurrect the old values) and deletes the
+    /// settings file so the next launch starts from defaults. Best-effort:
+    /// a delete failure is swallowed so the restart still proceeds.
+    /// </summary>
+    public void ResetForRestart()
+    {
+        IsReadOnly = true;
+        try
+        {
+            if (File.Exists(SettingsFilePath))
+                File.Delete(SettingsFilePath);
+        }
+        catch
+        {
+            // Best-effort: the next launch still falls back to defaults if
+            // the (now unreadable/locked) file cannot be removed.
+        }
+    }
+
     public static ViewerSettings Load() => Load(DefaultSettingsPath);
 
     /// <summary>
