@@ -146,6 +146,38 @@ public sealed class RenderHarness : IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs the dataset pipeline and Mapsui layer build for <paramref name="path"/>
+    /// under the subsystem selected in <paramref name="options"/> and returns the
+    /// produced layers <b>without rasterising a frame</b>. Used by fidelity tests
+    /// that inspect the bound tiled <c>VectorScene</c> (via
+    /// <see cref="S100VectorTileRenderer.TryGetPartitionedScene"/>) at the paint-op
+    /// level rather than through pixels — see the issue #347 multi-product parity
+    /// guard. Returns the layers together with the dataset extent.
+    /// </summary>
+    public (IReadOnlyList<ILayer> Layers, MRect Extent) BuildLayers(
+        string path, HarnessOptions? options = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        options ??= HarnessOptions.Default;
+
+        var prior = RenderingOptimizations.RenderSubsystem;
+        try
+        {
+            RenderingOptimizations.RenderSubsystem = options.RenderSubsystem;
+
+            var processor = _factory.CreateProcessor(path);
+            var context = BuildContext(processor, options);
+            var result = _mapsuiRenderer.RenderAsync(processor, context).GetAwaiter().GetResult();
+
+            return (result.Layers.ToList(), result.Extent);
+        }
+        finally
+        {
+            RenderingOptimizations.RenderSubsystem = prior;
+        }
+    }
+
     private static RenderContext BuildContext(IDatasetProcessor processor, HarnessOptions options)
     {
         var palette = options.Palette;
