@@ -29,8 +29,10 @@ provides:
   supported dataset to a PNG from the shell — self-contained, with no
   .NET install required — for batch and headless scripting.
 - An **optional MCP server** that exposes loaded datasets to AI
-  agents (`list_datasets`, `describe_feature`, `sample_coverage`,
-  `render_to_image`).
+  agents — feature discovery and query (`identify_features`,
+  `nearest_features`, `count_features`, `describe_feature`), coverage
+  sampling, interactive route planning, and live viewer control
+  (drive the viewport, capture the view, steer the own-ship).
 
 The goal is to make S-100 data approachable for .NET developers and
 end users without requiring native dependencies, commercial S-52
@@ -108,9 +110,15 @@ OpenStreetMap basemap. Headline features:
   authority (display planes, within-plane priority, inter-product
   rules) rather than load order.
 - **Activity-bar panels** for Datasets, Layer Stack, ECDIS Display
-  Controls, Object Information (pick reports), Validation, and
-  Settings — every panel can be docked, hidden, or rearranged, and
-  the layout persists between sessions.
+  Controls, Object Information (pick reports), Routes, Vessels (AIS
+  targets + own-ship), Validation, and Settings — every panel can be
+  docked, hidden, or rearranged, and the layout persists between
+  sessions.
+- **Interactive route planning** — build editable, persistent routes
+  aligned to the in-repo S-421 route model: a numbered waypoint / leg
+  timeline with per-leg great-circle or rhumb-line geometry and live
+  distance and bearing, drawn and edited directly on the map (and
+  drivable by an AI agent through the MCP route tools).
 - **Pick / Object Information** for both vector and coverage
   products, with FC-decoded attribute names, follow-the-`xlink`
   reference navigation, and an embedded time-series chart for
@@ -123,6 +131,9 @@ OpenStreetMap basemap. Headline features:
   S-411).
 - **Validation panel** with click-to-zoom, severity colouring, and
   an overlay marker layer.
+- **In-app feedback and crash recovery** — a Report Feedback flow
+  that bundles diagnostics into a pre-filled GitHub issue, plus
+  next-startup detection and reporting of unclean shutdowns.
 - **Live overlays** through the dynamic-feature-source abstraction —
   an own-ship glyph with true-scale hull + arrowhead + CCRP cross at
   zoom, plus an **AIS-target overlay** backed by the
@@ -157,15 +168,18 @@ product looks like in the viewer.
 ## Command-line tool
 
 `s100` is a cross-platform console tool that renders any supported
-product to a PNG from the shell, driving the same portrayal pipelines
-as the viewer through a headless Skia renderer — no UI required. It is
-suited to batch and scripted previews (sea-ice, surface-current, and
-chart thumbnails).
+product to a PNG, JPEG, or WebP from the shell — and **validates**
+datasets and exchange sets against the normative rule packs — driving
+the same portrayal and validation pipelines as the viewer through a
+headless Skia renderer, no UI required. It is suited to batch and
+scripted previews (sea-ice, surface-current, and chart thumbnails)
+and to CI conformance checks.
 
 ```sh
 s100 render dataset.h5 out.png --palette night -w 2048 -h 1536
-s100 info dataset.h5          # detected spec, edition, and time steps
-s100 list-specs               # supported products
+s100 validate exchange-set/    # normative rules + exchange-set integrity
+s100 info dataset.h5           # detected spec, edition, and time steps
+s100 list-specs                # supported products
 ```
 
 Each [release](https://github.com/philliphoff/EncDotNet.S100/releases)
@@ -192,7 +206,7 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Core** | Pipeline abstractions (asset sources, HDF5, Lua, coverage + vector pipelines), the validation framework, and the dynamic-feature-source abstraction. |
 | **EncDotNet.S100.Features** | Parser for S-100 Feature Catalogue XML files (ISO 19110 / S-100 Part 5). |
-| **EncDotNet.S100.ExchangeSets** | Reader for S-100 Exchange Set catalogues and dataset/support file discovery. |
+| **EncDotNet.S100.ExchangeSets** | Reader for S-100 Exchange Set catalogues and dataset/support file discovery, with signature/checksum **integrity verification** and S-100 Part 15 data-protection (decryption) support. |
 | **EncDotNet.S100.Portrayals** | Parser for S-100 Portrayal Catalogues (symbols, line styles, area fills, colour profiles, viewing groups). |
 | **EncDotNet.S100.Specifications** | Bundles official feature and portrayal catalogues as embedded resources. |
 
@@ -202,12 +216,13 @@ split into focused packages.
 |---|---|
 | **EncDotNet.S100.Hdf5.PureHdf** | HDF5 reader implementation using [PureHDF](https://github.com/Apollo3zehn/PureHDF) (fully managed, no native dependencies). |
 | **EncDotNet.S100.Scripting.MoonSharp** | Lua 5.2 scripting engine using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). |
+| **EncDotNet.S100.Crs.ProjNet** | CRS transform backend (`ICrsTransformFactory`) using [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) — WGS84 UTM zones and EPSG:4326 ↔ EPSG:3857. Mapsui-free, so headless consumers (the facade and the `s100` CLI) can reproject coverage products without linking a map renderer. |
 
 ### Product datasets
 
 | Package | Description |
 |---|---|
-| **EncDotNet.S100.Datasets.S101** | S-101 ENC reader, Lua portrayal pipeline, validation pack (`S101DatasetView` façade + 10 rules). |
+| **EncDotNet.S100.Datasets.S101** | S-101 ENC reader (incl. sequential updates), Lua portrayal pipeline, validation pack (`S101DatasetView` façade + 10 rules). |
 | **EncDotNet.S100.Datasets.S102** | S-102 bathymetry reader, coverage pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S104** | S-104 water level reader, coverage pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S111** | S-111 surface currents reader, coverage pipeline (per-feature arrow symbology), validation pack. |
@@ -223,6 +238,12 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
 | **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, and the `ConcatReports` rebadge helper used by S-57. |
+
+The **EncDotNet.S100.Datasets.S129.Fusion** library (project reference,
+not published to NuGet) is a purely additive cross-product helper that
+fuses an S-129 under-keel-clearance plan with the typed S-102, S-104,
+and S-421 datasets it references and exposes a time-indexed view over
+the plan.
 
 ### Renderers
 
