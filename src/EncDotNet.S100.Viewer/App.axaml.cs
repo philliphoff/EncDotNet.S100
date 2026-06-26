@@ -607,7 +607,8 @@ public partial class App : Application
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<IRenderActivityMonitor>(),
             sp.GetRequiredService<IDatasetLoadGateway>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

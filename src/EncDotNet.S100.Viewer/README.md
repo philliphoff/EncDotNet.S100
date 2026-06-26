@@ -564,7 +564,7 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Eleven viewer-only tools
+bound port back to the user's `settings.json`. Twenty-one viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
@@ -584,10 +584,16 @@ on-screen paint: frame duration, interval, and per-style draw-call
 breakdown, for measuring rendering performance), `open_dataset`
 (mutating — loads a file or exchange set through the viewer's own
 open code path and reports the resulting catalog id(s), bbox, and
-load duration), and `close_dataset` (mutating — unloads a dataset by
-catalog id, tolerating unknown ids gracefully), and
+load duration), `close_dataset` (mutating — unloads a dataset by
+catalog id, tolerating unknown ids gracefully),
 `close_all_datasets` (mutating — unloads every currently-loaded
-dataset in one call). See
+dataset in one call), and the **route-editing family** that lets an
+agent build and refine persistent routes shown live in the **Routes**
+panel and route overlay: `create_route`, `list_routes` (read-only),
+`get_route` (read-only), `delete_route`, `append_waypoint`,
+`insert_waypoint`, `move_waypoint`, `delete_waypoint`,
+`set_leg_attributes`, and `set_route_info` (all mutating; fields mirror
+the in-repo S-421 model). See
 `docs/mcp-server.md` for the full catalogue and the read-only /
 mutating split.
 
