@@ -33,6 +33,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly IDatasetLoadGateway? _loadGateway;
     private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
+    private readonly RoutesService? _routesService;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -48,7 +49,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         GlobalTimeService? globalTime = null,
         IRenderActivityMonitor? renderActivityMonitor = null,
         IDatasetLoadGateway? loadGateway = null,
-        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null)
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null,
+        RoutesService? routesService = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -60,6 +62,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _renderActivityMonitor = renderActivityMonitor;
         _loadGateway = loadGateway;
         _ownShipHelm = ownShipHelm;
+        _routesService = routesService;
         _loggers = loggers;
     }
 
@@ -298,6 +301,20 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_ownShipHelm is not null)
         {
             tools.Add(SetOwnShipMcpAdapter.Create(new SetOwnShipTool(_ownShipHelm)));
+        }
+        if (_routesService is not null)
+        {
+            var invoker = new DispatcherRouteEditInvoker();
+            tools.Add(CreateRouteMcpAdapter.Create(new CreateRouteTool(_routesService, invoker)));
+            tools.Add(ListRoutesMcpAdapter.Create(new ListRoutesTool(_routesService, invoker)));
+            tools.Add(GetRouteMcpAdapter.Create(new GetRouteTool(_routesService, invoker)));
+            tools.Add(DeleteRouteMcpAdapter.Create(new DeleteRouteTool(_routesService, invoker)));
+            tools.Add(AppendWaypointMcpAdapter.Create(new AppendWaypointTool(_routesService, invoker)));
+            tools.Add(InsertWaypointMcpAdapter.Create(new InsertWaypointTool(_routesService, invoker)));
+            tools.Add(MoveWaypointMcpAdapter.Create(new MoveWaypointTool(_routesService, invoker)));
+            tools.Add(DeleteWaypointMcpAdapter.Create(new DeleteWaypointTool(_routesService, invoker)));
+            tools.Add(SetLegAttributesMcpAdapter.Create(new SetLegAttributesTool(_routesService, invoker)));
+            tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
         }
         return tools.Count == 0 ? null : tools;
     }

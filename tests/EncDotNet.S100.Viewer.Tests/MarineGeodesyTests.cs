@@ -94,4 +94,88 @@ public class MarineGeodesyTests
         var split = MarineGeodesy.SplitAtAntimeridian(System.Array.Empty<(double, double)>());
         Assert.Empty(split);
     }
+
+    [Fact]
+    public void GreatCircleDistance_NewYorkToLisbon_MatchesReference()
+    {
+        // Reference great-circle distance ≈ 5414 km / 2923 NM.
+        var nm = MarineGeodesy.GreatCircleDistanceNm(40.7128, -74.0060, 38.7223, -9.1393);
+        Assert.InRange(nm, 2900.0, 2945.0);
+    }
+
+    [Fact]
+    public void GreatCircleDistance_IsShorterThanRhumbOnHighLatitudeEastWestLeg()
+    {
+        var gc = MarineGeodesy.GreatCircleDistanceNm(60.0, -10.0, 60.0, 10.0);
+        var rl = MarineGeodesy.RhumbDistanceNm(60.0, -10.0, 60.0, 10.0);
+        Assert.True(gc < rl);
+    }
+
+    [Fact]
+    public void GreatCircleDistance_ZeroLengthLeg_IsZero()
+    {
+        var nm = MarineGeodesy.GreatCircleDistanceNm(45.0, -10.0, 45.0, -10.0);
+        Assert.Equal(0.0, nm, precision: 6);
+    }
+
+    [Fact]
+    public void GreatCircleInitialBearing_PureEastAlongEquator_Returns090()
+    {
+        // Along the equator the great circle coincides with the parallel, so
+        // the initial bearing is due east.
+        var deg = MarineGeodesy.GreatCircleInitialBearingDegrees(0.0, 0.0, 0.0, 10.0);
+        Assert.InRange(deg, 89.99, 90.01);
+    }
+
+    [Fact]
+    public void GreatCircleInitialBearing_NorthernEastWardLeg_StartsNorthOfEast()
+    {
+        // Heading east at a positive latitude, the great circle initially
+        // bears north of due east (poleward), unlike the constant-east rhumb.
+        var deg = MarineGeodesy.GreatCircleInitialBearingDegrees(60.0, -10.0, 60.0, 10.0);
+        Assert.InRange(deg, 0.0, 90.0);
+    }
+
+    [Fact]
+    public void GreatCircleIntermediatePoints_ReturnsSegmentsPlusOnePoints()
+    {
+        var pts = MarineGeodesy.GreatCircleIntermediatePoints(0.0, 0.0, 0.0, 30.0, 6);
+        Assert.Equal(7, pts.Count);
+        Assert.Equal(0.0, pts[0].Lat, 6);
+        Assert.Equal(0.0, pts[0].Lon, 6);
+        Assert.Equal(0.0, pts[^1].Lat, 6);
+        Assert.Equal(30.0, pts[^1].Lon, 6);
+    }
+
+    [Fact]
+    public void GreatCircleIntermediatePoints_EquatorLeg_StaysOnEquator()
+    {
+        var pts = MarineGeodesy.GreatCircleIntermediatePoints(0.0, -20.0, 0.0, 20.0, 8);
+        foreach (var (lat, _) in pts)
+            Assert.InRange(lat, -1e-6, 1e-6);
+    }
+
+    [Fact]
+    public void GreatCircleIntermediatePoints_NorthernLeg_BowsPoleward()
+    {
+        // The mid-arc of a high-latitude east-west leg lies poleward of the
+        // straight rhumb (constant-latitude) line.
+        var pts = MarineGeodesy.GreatCircleIntermediatePoints(60.0, -30.0, 60.0, 30.0, 10);
+        var mid = pts[pts.Count / 2];
+        Assert.True(mid.Lat > 60.0);
+    }
+
+    [Fact]
+    public void GreatCircleIntermediatePoints_CoincidentPoints_ReturnsEndpoints()
+    {
+        var pts = MarineGeodesy.GreatCircleIntermediatePoints(12.0, 34.0, 12.0, 34.0, 5);
+        Assert.Equal(2, pts.Count);
+    }
+
+    [Fact]
+    public void GreatCircleIntermediatePoints_SegmentsClampedToAtLeastOne()
+    {
+        var pts = MarineGeodesy.GreatCircleIntermediatePoints(0.0, 0.0, 0.0, 10.0, 0);
+        Assert.Equal(2, pts.Count);
+    }
 }

@@ -134,6 +134,16 @@ viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
 | `open_dataset` *(viewer only, **mutating**)* | Loads a dataset into the live viewer using its existing open code path, so agents can measure the load hot path. `path` is a single file (S-101 `.000`, HDF5 `.h5`, GML, etc.) OR an exchange set (a folder containing `CATALOG.XML`, or a `.zip` of one); the kind is auto-detected. `spec` optionally forces a product-spec hint (e.g. `S-102`) for single-file loads. Returns the resulting catalog id(s), `spec`, bounding box (`southLatitude`/`westLongitude`/`northLatitude`/`eastLongitude`), `count`, `loadDurationMs`, and `timedOut` (exchange-set quiescence). |
 | `close_dataset` *(viewer only, **mutating**)* | Unloads a currently-loaded dataset from the live viewer by its catalog `id` (as returned by `list_datasets` / `open_dataset`), using the viewer's existing close code path so agents can measure the unload hot path. An unknown / already-removed id resolves gracefully as a non-error result with `removed = false`. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
 | `close_all_datasets` *(viewer only, **mutating**)* | Unloads every currently-loaded dataset from the live viewer through the same close path used by `close_dataset`. Useful for retention loops that repeatedly load → render → unload without restarting the viewer process. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
+| `create_route` *(viewer only, **mutating**)* | Creates a new, empty editable route in the live viewer's route collection and makes it the active route. Optional `name` and `id` (a GUID is generated when `id` is omitted; ids must be unique). Returns the new route's full state (see `get_route`). Add waypoints with `append_waypoint`. |
+| `list_routes` *(viewer only, read-only)* | Lists every editable route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm`, and `isActive`, plus the collection's `activeRouteId`. |
+| `get_route` *(viewer only, read-only)* | Returns the full state of one route: `routeId`, `name`, `isActive`, `info` (name/author/description/ports/validity/vessel), `waypoints` (`index`, `lat`, `lon`, optional `number`/`name`/`fixed`/`turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm`/`initialBearingDegrees`, plus the S-421 navigational envelope), and `totalDistanceNm`. Omit `routeId` to read the active route. |
+| `delete_route` *(viewer only, **mutating**)* | Removes a route from the collection. Omit `routeId` to delete the active route. Returns `routeId`, `deleted`, and the new `activeRouteId`. |
+| `append_waypoint` *(viewer only, **mutating**)* | Appends a waypoint (`lat`/`lon`, WGS-84 decimal degrees) to the end of a route, with optional `number`/`name`/`fixed`/`turnRadiusNm`. Omit `routeId` to use the active route. Returns the route's full updated state. |
+| `insert_waypoint` *(viewer only, **mutating**)* | Inserts a waypoint at `index` (in `[0, waypointCount]`; `0` prepends, `waypointCount` appends), splitting the affected leg. Same optional metadata as `append_waypoint`. Omit `routeId` to use the active route. Returns the route's full updated state. |
+| `move_waypoint` *(viewer only, **mutating**)* | Moves the waypoint at `index` (in `[0, waypointCount)`) to a new `lat`/`lon`. Omit `routeId` to use the active route. Returns the route's full updated state. |
+| `delete_waypoint` *(viewer only, **mutating**)* | Removes the waypoint at `index` (in `[0, waypointCount)`), merging the adjacent legs. Omit `routeId` to use the active route. Returns the route's full updated state. |
+| `set_leg_attributes` *(viewer only, **mutating**)* | Updates one leg (`legIndex`, in `[0, legCount)`): its `geometryType` (`loxodrome`\|`geodesic`) and/or navigational envelope (cross-track / channel limits, safety contour & depth, SOG/STW min & max, draft, static & dynamic UKC, safety margin, note — all metres/knots per S-421). All attributes optional; supplied values overwrite, omitted values are unchanged. Omit `routeId` to use the active route. Returns the route's full updated state. |
+| `set_route_info` *(viewer only, **mutating**)* | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`/`validityEnd`) and vessel particulars (`vesselName`/`vesselMmsi`/`vesselImo`/`vesselCallsign`/`vesselLengthMeters`/`vesselBeamMeters`; supplying any vessel field creates the vessel block). All fields optional; supplied values overwrite. Omit `routeId` to use the active route. Returns the route's full updated state. |
 
 ### Read-only vs mutating tools
 
@@ -147,17 +157,20 @@ Tools fall into two groups:
   `describe_feature_type`, `sample_coverage`, `render_to_image` (which
   snapshots from a clone of the live `Map`), `pick_features` (which
   projects a pixel through the live viewport without changing it),
-  `await_render_idle`, and
+  `await_render_idle`,
   `get_render_stats` (which observe the live render loop without
-  changing it).
+  changing it), `list_routes`, and `get_route` (which snapshot the
+  editable route collection without changing it).
 * **Mutating** — modify the live viewer's state (navigator, palette,
-  time step, loaded datasets, etc.). Use only when you intend to
+  time step, loaded datasets, routes, etc.). Use only when you intend to
   drive the viewer's UI from outside. Examples: `set_viewport`,
   `set_palette`, `set_display_category`, `set_time_step`,
-  `set_own_ship`, `open_dataset`, `close_dataset`, and
+  `set_own_ship`, `open_dataset`, `close_dataset`,
   `close_all_datasets` (which
   load / unload datasets through the viewer's own open / close code
-  path).
+  path), and the route-editing family `create_route`, `delete_route`,
+  `append_waypoint`, `insert_waypoint`, `move_waypoint`,
+  `delete_waypoint`, `set_leg_attributes`, and `set_route_info`.
 
 Tool descriptions in the registered MCP catalogue identify each tool
 as one or the other; this table is the canonical reference.
@@ -211,6 +224,33 @@ to project a screen pixel back to a geographic point.
 > dataset?"
 >
 > "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
+>
+> "Plan a mid-channel route from the harbour entrance to the marina:
+> create a route, then append waypoints staying clear of the charted
+> safety contour, and set each leg's safety contour and cross-track
+> limits."
+
+### Route editing workflow
+
+The route family lets an agent close the *create → inspect → refine*
+loop against loaded datasets. A typical sequence:
+
+1. `create_route` (optionally `name`/`id`) → becomes the active route.
+2. `append_waypoint` / `insert_waypoint` to lay down the geometry; reason
+   about placement with the read-only query tools (`sample_coverage`,
+   `nearest_features`, `find_at`) along each leg.
+3. `move_waypoint` / `delete_waypoint` to refine.
+4. `set_leg_attributes` (geometry type + S-421 navigational envelope) and
+   `set_route_info` (metadata + vessel particulars).
+5. `get_route` / `list_routes` to read back the result.
+
+Edits are applied to the same persistent route collection the viewer's
+**Routes** panel and route overlay display, so changes appear live in the
+GUI. Most route tools default to the **active** route when `routeId` is
+omitted. Waypoints are addressed by zero-based `index`; legs by zero-based
+`legIndex` (leg `i` joins waypoint `i` to waypoint `i+1`). The fields
+mirror the in-repo S-421 model so a route projects onto S-421 GML with a
+near-mechanical mapping.
 
 ## Security notes
 

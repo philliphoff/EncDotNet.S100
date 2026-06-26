@@ -17,6 +17,7 @@ internal sealed class MapToolContext
     private readonly Action<string?> _setStatusSummary;
     private readonly Action _refreshGraphics;
     private readonly Func<Point, (double Lat, double Lon)?> _screenToLatLon;
+    private readonly Func<(double Lat, double Lon), Point?> _latLonToScreen;
 
     public MapToolContext(
         MapControl mapControl,
@@ -24,7 +25,8 @@ internal sealed class MapToolContext
         Action<ILayer> removeLayer,
         Action<string?> setStatusSummary,
         Action refreshGraphics,
-        Func<Point, (double Lat, double Lon)?> screenToLatLon)
+        Func<Point, (double Lat, double Lon)?> screenToLatLon,
+        Func<(double Lat, double Lon), Point?> latLonToScreen)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(addLayer);
@@ -32,6 +34,7 @@ internal sealed class MapToolContext
         ArgumentNullException.ThrowIfNull(setStatusSummary);
         ArgumentNullException.ThrowIfNull(refreshGraphics);
         ArgumentNullException.ThrowIfNull(screenToLatLon);
+        ArgumentNullException.ThrowIfNull(latLonToScreen);
 
         MapControl = mapControl;
         _addLayer = addLayer;
@@ -39,6 +42,7 @@ internal sealed class MapToolContext
         _setStatusSummary = setStatusSummary;
         _refreshGraphics = refreshGraphics;
         _screenToLatLon = screenToLatLon;
+        _latLonToScreen = latLonToScreen;
     }
 
     /// <summary>
@@ -73,4 +77,12 @@ internal sealed class MapToolContext
     /// the Mercator pole limit).
     /// </summary>
     public (double Lat, double Lon)? ScreenToLatLon(Point screen) => _screenToLatLon(screen);
+
+    /// <summary>
+    /// Converts a WGS-84 lat/lon to a pointer position in
+    /// <see cref="MapControl"/> client coordinates, or <c>null</c> when no
+    /// viewport is available. Used by editing tools for hit-testing screen
+    /// gestures against world-space features (e.g. grabbing a waypoint).
+    /// </summary>
+    public Point? LatLonToScreen((double Lat, double Lon) world) => _latLonToScreen(world);
 }

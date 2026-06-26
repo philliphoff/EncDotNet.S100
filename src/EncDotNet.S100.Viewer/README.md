@@ -119,6 +119,36 @@ and projects to EPSG:3857 (Web Mercator) for display. Coverage
 grids tagged with UTM-band CRSs (typical for S-102) are reprojected
 on the fly via ProjNet.
 
+## Routes
+
+The viewer can hold a collection of editable **routes** — ordered
+waypoints joined by legs — that persist on the map independently of
+the transient **Measure** ruler. Routes are first-class objects an
+agent can also create and manipulate over the
+[MCP server](#optional-mcp-server) so the *compose → inspect →
+refine* loop against loaded datasets stays in one place.
+
+- **Route Edit Mode** (route button in the top-right map toolbar):
+  click on the water to append a waypoint, drag a waypoint to move
+  it, click an existing leg to insert a waypoint that splits it,
+  and right-click (or select + `Delete`) to remove one. `Backspace`
+  drops the last waypoint. The status bar shows the latest leg's
+  distance/bearing and the route total.
+- **Routes panel** (route icon in the activity bar): lists every
+  route (add / remove / rename / select the active one) and the
+  active route's waypoints with per-leg distance, initial bearing,
+  and geometry type. Each leg can be toggled between a **rhumb line**
+  (loxodrome, the ECDIS default) and a **great circle** (geodesic),
+  which the overlay densifies into a curved arc in Mercator space.
+- **Promote a measurement**: the *From measurement* button copies the
+  current Measure Mode path into a new route, then switches to Route
+  Edit Mode so it can be refined.
+
+The active route is emphasised on the map; inactive routes recede so
+several routes can coexist legibly. The model mirrors the in-repo
+S-421 route schema (`Route` → `RouteWaypoint` → `RouteLeg`), keeping a
+future S-421 export a near-mechanical projection.
+
 ## Layer stack
 
 The **Layer Stack** panel collects every visible layer into the
@@ -534,7 +564,7 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Eleven viewer-only tools
+bound port back to the user's `settings.json`. Twenty-one viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
@@ -554,10 +584,16 @@ on-screen paint: frame duration, interval, and per-style draw-call
 breakdown, for measuring rendering performance), `open_dataset`
 (mutating — loads a file or exchange set through the viewer's own
 open code path and reports the resulting catalog id(s), bbox, and
-load duration), and `close_dataset` (mutating — unloads a dataset by
-catalog id, tolerating unknown ids gracefully), and
+load duration), `close_dataset` (mutating — unloads a dataset by
+catalog id, tolerating unknown ids gracefully),
 `close_all_datasets` (mutating — unloads every currently-loaded
-dataset in one call). See
+dataset in one call), and the **route-editing family** that lets an
+agent build and refine persistent routes shown live in the **Routes**
+panel and route overlay: `create_route`, `list_routes` (read-only),
+`get_route` (read-only), `delete_route`, `append_waypoint`,
+`insert_waypoint`, `move_waypoint`, `delete_waypoint`,
+`set_leg_attributes`, and `set_route_info` (all mutating; fields mirror
+the in-repo S-421 model). See
 `docs/mcp-server.md` for the full catalogue and the read-only /
 mutating split.
 

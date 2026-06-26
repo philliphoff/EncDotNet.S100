@@ -202,7 +202,7 @@
                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
                 <TextBlock DockPanel.Dock="Right"
                            Text="{Binding MeasureSummary}"
-                           IsVisible="{Binding IsMeasureModeActive}"
+                           IsVisible="{Binding IsToolSummaryVisible}"
                            FontSize="12"
                            FontFamily="Menlo,Consolas,Courier New,monospace"
                            Opacity="0.85"
@@ -466,6 +466,38 @@
                             </Style>
                         </Button.Styles>
                         <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Route Edit Mode toggle button. Mirrors the Measure
+                      button's accent-fill pattern; the route icon
+                      distinguishes it. Clicking enters the interactive
+                      route editor (click to add waypoints, drag to move).
+                    -->
+                    <Button x:Name="RouteEditModeButton"
+                            Classes="Icon MapOverlay"
+                            Classes.routeActive="{Binding IsRouteEditModeActive}"
+                            Command="{Binding ToggleRouteEditModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteEditMode}">
+                        <Button.Styles>
+                            <Style Selector="Button#RouteEditModeButton.routeActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Flow" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <!--
                       Consolidated display-settings button. Replaces the

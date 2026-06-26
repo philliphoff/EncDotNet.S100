@@ -1,0 +1,404 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RoutesView"
+             x:DataType="vm:RoutesPanelViewModel">
+
+    <UserControl.Styles>
+        <!--
+          Full-width selectable waypoint row. The accent left bar and the
+          low-opacity accent tint live on the row Border so the selection
+          spans the whole list width (content + overflow), matching the
+          `accentList` language used by the Datasets / Search / Pick lists.
+          The inner hit button is a bare, chrome-free click target; hover
+          and selection visuals are driven by the parent Border's pseudo /
+          selected classes.
+        -->
+        <!--
+          Full-width selectable waypoint row. This mirrors the `accentList`
+          ListBoxItem template (a "3,*" grid with a rounded accent bar plus a
+          tinted content panel) so the waypoint list lines up pixel-for-pixel
+          with the routes list above it. Hover/selection visuals are driven by
+          the root grid's pseudo/selected classes; a full-area, chrome-free
+          hit button sits beneath the (non-hit-testable) row visuals so a click
+          anywhere on the row selects the waypoint.
+        -->
+        <Style Selector="Grid.wpRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="MinHeight" Value="46" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+        <Style Selector="Border.wpBar">
+            <Setter Property="Width" Value="3" />
+            <Setter Property="CornerRadius" Value="1.5" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.wpTint">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Grid.wpRow:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+
+        <!-- Full-area click target for the waypoint row. The templated Border
+             carries the (transparent) background so the entire row area is
+             hit-testable, not just where content happens to sit. -->
+        <Style Selector="Button.wpHit">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <!-- Numbered timeline circle: outlined by default, filled accent when
+             its waypoint is selected. -->
+        <Style Selector="Border.wpCircle">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpCircle">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock.wpNum">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBlock.wpNum">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="TextBlock.wpLabel">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBlock.wpLabel">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!-- Vertical connector segment drawn in the rail of each leg row so
+             consecutive waypoint circles read as a single timeline spine. The
+             rail width (28) and leading offset match the waypoint circle so
+             the line passes through the circle centres. -->
+        <Style Selector="Border.legConnector">
+            <Setter Property="Width" Value="2" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+
+        <!-- Leg geometry pill. -->
+        <Style Selector="Button.geoChip">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="7,1" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+        <Style Selector="Button.geoChip.geodesic">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Route-collection header actions (the host pane supplies the
+             "ROUTES" title above this row). -->
+        <Border DockPanel.Dock="Top" Padding="8,4,6,4">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <Button Grid.Column="1"
+                        Classes="Icon"
+                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).PromoteMeasurementToRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
+                    <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                </Button>
+                <Button Grid.Column="2"
+                        Classes="Icon"
+                        Command="{Binding AddRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddRoute}">
+                    <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Empty state. -->
+        <views:PlaceholderView DockPanel.Dock="Top"
+                               IsVisible="{Binding !HasRoutes}"
+                               Icon="Flow"
+                               Header="{x:Static loc:Strings.Pane_Routes}"
+                               Description="{Binding EmptyText}" />
+
+        <!-- Main body: routes list (top) over the active route detail. -->
+        <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding HasRoutes}">
+
+            <!-- Routes list. -->
+            <ListBox Grid.Row="0"
+                     x:Name="RouteList"
+                     MaxHeight="200"
+                     ItemsSource="{Binding Routes}"
+                     SelectedItem="{Binding SelectedRoute, Mode=TwoWay}"
+                     Classes="accentList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0"
+                     Margin="8,2,8,4"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RouteRowViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <ic:FluentIcon Grid.Column="0"
+                                           Icon="Flow"
+                                           IconVariant="Filled"
+                                           FontSize="16"
+                                           VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}"
+                                           Classes="accentListTitle"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Meta}"
+                                           FontSize="11"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Classes="Icon"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteRowMenu}">
+                                <ic:FluentIcon Icon="MoreHorizontal" IconVariant="Regular" FontSize="16" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_RenameRoute}"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RenameRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_ReverseRoute}"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ReverseRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <Separator />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_RemoveRoute}"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Active-route detail header: name (+ inline rename) and meta. -->
+            <Border Grid.Row="1"
+                    IsVisible="{Binding HasActiveRoute}"
+                    Padding="11,6,8,6"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,1,0,1">
+                <StackPanel Spacing="2">
+                    <Grid ColumnDefinitions="*,Auto"
+                          IsVisible="{Binding !IsRenamingActiveRoute}">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding ActiveRouteName}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                        <Button Grid.Column="1"
+                                Classes="Icon"
+                                Command="{Binding BeginRenameCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
+                            <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" />
+                        </Button>
+                    </Grid>
+                    <TextBox Text="{Binding RenameText, Mode=TwoWay}"
+                             FontSize="13"
+                             Padding="4,2"
+                             IsVisible="{Binding IsRenamingActiveRoute}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                            <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <TextBlock Text="{Binding ActiveRouteDetailMeta}"
+                               FontSize="11"
+                               Opacity="0.6" />
+                </StackPanel>
+            </Border>
+
+            <!-- Active-route waypoint/leg timeline. -->
+            <Grid Grid.Row="2" RowDefinitions="*,Auto">
+                <ScrollViewer Grid.Row="0"
+                              IsVisible="{Binding HasActiveRoute}"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="TimelineItems"
+                                  ItemsSource="{Binding Timeline}"
+                                  Margin="8,2,8,4">
+                        <ItemsControl.DataTemplates>
+                            <!-- Waypoint row. The accent bar + tint live on
+                                 the row Border so selection spans the full
+                                 width (content + overflow). The inner grid's
+                                 8,5 margin matches the `accentList` content
+                                 padding so this list lines up with the routes
+                                 list above it. -->
+                            <DataTemplate x:DataType="vm:RouteWaypointRowViewModel">
+                                <Grid Classes="wpRow"
+                                      Classes.selected="{Binding IsSelected}"
+                                      ColumnDefinitions="3,*">
+                                    <Border Grid.Column="0" Classes="wpBar" />
+                                    <Panel Grid.Column="1">
+                                        <Border Classes="wpTint" />
+                                        <!-- Full-area select target (bottom layer). -->
+                                        <Button Classes="wpHit"
+                                                Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).SelectWaypointCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <!-- Row visuals (top layer). The circle/text
+                                             are non-hit-testable so clicks fall through
+                                             to the select target; only the overflow
+                                             button captures its own clicks. -->
+                                        <Grid ColumnDefinitions="*,Auto" Margin="8,5">
+                                            <Grid Grid.Column="0"
+                                                  ColumnDefinitions="28,*"
+                                                  ColumnSpacing="8"
+                                                  IsHitTestVisible="False">
+                                                <Border Grid.Column="0" Classes="wpCircle">
+                                                    <TextBlock Classes="wpNum"
+                                                               Text="{Binding Number}" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Classes="wpLabel"
+                                                               Text="{Binding Label}" />
+                                                    <TextBlock Text="{Binding Coords}"
+                                                               FontSize="11"
+                                                               Opacity="0.55"
+                                                               FontFamily="Menlo,Consolas,Courier New,monospace" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <!-- Overflow menu. The flyout binds to
+                                                 commands surfaced on the row VM:
+                                                 ancestor bindings do not resolve
+                                                 across the flyout popup, but the
+                                                 inherited DataContext does. -->
+                                            <Button Grid.Column="1"
+                                                    Classes="Icon"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaypointRowMenu}">
+                                                <ic:FluentIcon Icon="MoreHorizontal" IconVariant="Regular" FontSize="16" />
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_InsertWaypointAfter}"
+                                                                  Command="{Binding InsertAfterCommand}"
+                                                                  CommandParameter="{Binding}" />
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_DeleteWaypoint}"
+                                                                  Command="{Binding DeleteCommand}"
+                                                                  CommandParameter="{Binding}" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Grid>
+                                    </Panel>
+                                </Grid>
+                            </DataTemplate>
+                            <!-- Leg row (sits between two waypoint rows). The
+                                 11px left margin (3px accent bar + 8px content
+                                 margin) lines the connector up with the
+                                 waypoint circle centres above and below. -->
+                            <DataTemplate x:DataType="vm:RouteLegRowViewModel">
+                                <Grid ColumnDefinitions="28,*" ColumnSpacing="8" Margin="11,5,8,5">
+                                    <Border Grid.Column="0" Classes="legConnector" />
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                Spacing="8"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding LegText}"
+                                                   FontSize="11"
+                                                   Opacity="0.75"
+                                                   VerticalAlignment="Center" />
+                                        <Button Classes="geoChip"
+                                                Classes.geodesic="{Binding IsGeodesic}"
+                                                Content="{Binding GeometryText}"
+                                                Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).ToggleLegGeometryAtCommand}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleLegGeometry}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.DataTemplates>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- No-active-route hint. -->
+                <TextBlock Grid.Row="0"
+                           Text="{Binding NoActiveRouteText}"
+                           FontSize="11"
+                           Opacity="0.55"
+                           TextWrapping="Wrap"
+                           Margin="12,8"
+                           VerticalAlignment="Top"
+                           IsVisible="{Binding !HasActiveRoute}" />
+
+                <!-- Footer action bar. -->
+                <Border Grid.Row="1"
+                        IsVisible="{Binding HasActiveRoute}"
+                        Padding="8,6,8,8"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+                        <Button Grid.Column="0"
+                                Classes="Outline"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding InsertAfterSelectedCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_InsertWaypoint}">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_InsertWaypoint}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="1"
+                                Classes="Outline"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding ReverseActiveRouteCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReverseRoute}">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="ArrowSwap" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_ReverseRoute}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="3"
+                                Classes="Primary"
+                                VerticalContentAlignment="Center"
+                                Content="{x:Static loc:Strings.Button_DoneRouteEdit}"
+                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ExitRouteEditModeCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_DoneRouteEdit}" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

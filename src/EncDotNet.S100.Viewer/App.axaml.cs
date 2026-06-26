@@ -395,6 +395,7 @@ public partial class App : Application
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<ScreenshotService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
@@ -606,7 +607,8 @@ public partial class App : Application
             sp.GetRequiredService<GlobalTimeService>(),
             sp.GetRequiredService<IRenderActivityMonitor>(),
             sp.GetRequiredService<IDatasetLoadGateway>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();
@@ -630,6 +632,7 @@ public partial class App : Application
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
+        services.AddSingleton<RoutesPanelViewModel>();
         services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
@@ -674,6 +677,13 @@ public partial class App : Application
             title: Strings.Pane_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
+        services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
+            id: "Routes",
+            order: 55,
+            title: Strings.Pane_Routes,
+            tooltip: Strings.Tooltip_RoutesPanel,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Flow, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false);
         // Vessels tab — shown only while the AIS overlay is enabled
         // (its visibility source bridges SettingsViewModel.AisEnabled).
         services.AddActivityTab<VesselListViewModel, VesselListView>(

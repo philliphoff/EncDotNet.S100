@@ -439,6 +439,56 @@ internal static class Strings
     public static string Status_MeasureNoData => Get(nameof(Status_MeasureNoData));
     public static string Status_MeasureLegLabel => Get(nameof(Status_MeasureLegLabel));
 
+    // Routing
+    public static string Route_LegLabel => Get(nameof(Route_LegLabel));
+    public static string Tooltip_RouteEditMode => Get(nameof(Tooltip_RouteEditMode));
+    public static string Menu_RouteEditMode => Get(nameof(Menu_RouteEditMode));
+    public static string Status_RouteEditNoData => Get(nameof(Status_RouteEditNoData));
+    public static string Status_RouteLeg => Get(nameof(Status_RouteLeg));
+    public static string Status_RouteTotal => Get(nameof(Status_RouteTotal));
+    public static string Pane_Routes => Get(nameof(Pane_Routes));
+    public static string Tooltip_RoutesPanel => Get(nameof(Tooltip_RoutesPanel));
+    public static string Routes_NewRouteNameFormat => Get(nameof(Routes_NewRouteNameFormat));
+    public static string Routes_NoRoutes => Get(nameof(Routes_NoRoutes));
+    public static string Routes_NoActiveRoute => Get(nameof(Routes_NoActiveRoute));
+    public static string Routes_WaypointsHeader => Get(nameof(Routes_WaypointsHeader));
+    public static string Routes_TotalDistanceFormat => Get(nameof(Routes_TotalDistanceFormat));
+    public static string Routes_WaypointRowFormat => Get(nameof(Routes_WaypointRowFormat));
+    public static string Routes_LegRowFormat => Get(nameof(Routes_LegRowFormat));
+    public static string Button_AddRoute => Get(nameof(Button_AddRoute));
+    public static string Tooltip_AddRoute => Get(nameof(Tooltip_AddRoute));
+    public static string Button_RemoveRoute => Get(nameof(Button_RemoveRoute));
+    public static string Tooltip_RemoveRoute => Get(nameof(Tooltip_RemoveRoute));
+    public static string Button_PromoteMeasurement => Get(nameof(Button_PromoteMeasurement));
+    public static string Tooltip_PromoteMeasurement => Get(nameof(Tooltip_PromoteMeasurement));
+    public static string Button_DeleteWaypoint => Get(nameof(Button_DeleteWaypoint));
+    public static string Tooltip_DeleteWaypoint => Get(nameof(Tooltip_DeleteWaypoint));
+    public static string Button_ToggleLegGeometry => Get(nameof(Button_ToggleLegGeometry));
+    public static string Tooltip_ToggleLegGeometry => Get(nameof(Tooltip_ToggleLegGeometry));
+    public static string Routes_GeometryLoxodrome => Get(nameof(Routes_GeometryLoxodrome));
+    public static string Routes_GeometryGeodesic => Get(nameof(Routes_GeometryGeodesic));
+    public static string Routes_GeometryMixed => Get(nameof(Routes_GeometryMixed));
+    public static string Routes_RouteMetaFormat => Get(nameof(Routes_RouteMetaFormat));
+    public static string Routes_DetailMetaFormat => Get(nameof(Routes_DetailMetaFormat));
+    public static string Routes_DetailMetaWithGeometryFormat => Get(nameof(Routes_DetailMetaWithGeometryFormat));
+    public static string Routes_WaypointNameFormat => Get(nameof(Routes_WaypointNameFormat));
+    public static string Routes_WaypointCoordFormat => Get(nameof(Routes_WaypointCoordFormat));
+    public static string Routes_LegMetaFormat => Get(nameof(Routes_LegMetaFormat));
+    public static string Button_InsertWaypoint => Get(nameof(Button_InsertWaypoint));
+    public static string Tooltip_InsertWaypoint => Get(nameof(Tooltip_InsertWaypoint));
+    public static string Button_ReverseRoute => Get(nameof(Button_ReverseRoute));
+    public static string Tooltip_ReverseRoute => Get(nameof(Tooltip_ReverseRoute));
+    public static string Button_DoneRouteEdit => Get(nameof(Button_DoneRouteEdit));
+    public static string Tooltip_DoneRouteEdit => Get(nameof(Tooltip_DoneRouteEdit));
+    public static string Menu_RenameRoute => Get(nameof(Menu_RenameRoute));
+    public static string Menu_ReverseRoute => Get(nameof(Menu_ReverseRoute));
+    public static string Menu_RemoveRoute => Get(nameof(Menu_RemoveRoute));
+    public static string Menu_InsertWaypointAfter => Get(nameof(Menu_InsertWaypointAfter));
+    public static string Menu_DeleteWaypoint => Get(nameof(Menu_DeleteWaypoint));
+    public static string Tooltip_RouteRowMenu => Get(nameof(Tooltip_RouteRowMenu));
+    public static string Tooltip_WaypointRowMenu => Get(nameof(Tooltip_WaypointRowMenu));
+    public static string Tooltip_EditRouteName => Get(nameof(Tooltip_EditRouteName));
+
     // ECDIS Display Planes
     public static string EcdisPanel_DisplayPlanesHeader => Get(nameof(EcdisPanel_DisplayPlanesHeader));
     public static string DisplayPlane_UnderRadar => Get(nameof(DisplayPlane_UnderRadar));
