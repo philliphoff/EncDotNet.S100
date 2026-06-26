@@ -71,6 +71,106 @@ internal static class MarineGeodesy
     }
 
     /// <summary>
+    /// Computes the great-circle (orthodromic) distance, in nautical miles,
+    /// between two WGS-84 points using the haversine formula on a sphere of
+    /// mean Earth radius. This is the shorter geodesic distance and pairs
+    /// with <see cref="GreatCircleInitialBearingDegrees"/> for legs whose
+    /// geometry is geodesic rather than loxodromic.
+    /// </summary>
+    public static double GreatCircleDistanceNm(double lat1Deg, double lon1Deg, double lat2Deg, double lon2Deg)
+    {
+        var phi1 = DegToRad(lat1Deg);
+        var phi2 = DegToRad(lat2Deg);
+        var dphi = DegToRad(lat2Deg - lat1Deg);
+        var dlam = NormalizeDeltaLonRadians(DegToRad(lon2Deg - lon1Deg));
+
+        var sinDphi = Math.Sin(dphi / 2.0);
+        var sinDlam = Math.Sin(dlam / 2.0);
+        var a = sinDphi * sinDphi + Math.Cos(phi1) * Math.Cos(phi2) * sinDlam * sinDlam;
+        var c = 2.0 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1.0 - a));
+        return c * EarthRadiusNm;
+    }
+
+    /// <summary>
+    /// Computes the great-circle initial (forward) true bearing in degrees
+    /// [0°, 360°) from the first point to the second. Unlike a rhumb-line
+    /// bearing this changes continuously along the path; it is the bearing
+    /// to steer at the departure point.
+    /// </summary>
+    public static double GreatCircleInitialBearingDegrees(double lat1Deg, double lon1Deg, double lat2Deg, double lon2Deg)
+    {
+        var phi1 = DegToRad(lat1Deg);
+        var phi2 = DegToRad(lat2Deg);
+        var dlam = NormalizeDeltaLonRadians(DegToRad(lon2Deg - lon1Deg));
+
+        var y = Math.Sin(dlam) * Math.Cos(phi2);
+        var x = Math.Cos(phi1) * Math.Sin(phi2) -
+                Math.Sin(phi1) * Math.Cos(phi2) * Math.Cos(dlam);
+        var theta = Math.Atan2(y, x);
+        var deg = RadToDeg(theta);
+        return ((deg % 360.0) + 360.0) % 360.0;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="segments"/>+1 points along the great-circle
+    /// arc from the first point to the second (inclusive of both ends),
+    /// using spherical interpolation. Lets a renderer draw a geodesic leg
+    /// as a curve in Mercator space rather than a straight (rhumb-looking)
+    /// line. <paramref name="segments"/> is clamped to at least 1.
+    /// </summary>
+    public static IReadOnlyList<(double Lat, double Lon)> GreatCircleIntermediatePoints(
+        double lat1Deg, double lon1Deg, double lat2Deg, double lon2Deg, int segments)
+    {
+        if (segments < 1) segments = 1;
+
+        var phi1 = DegToRad(lat1Deg);
+        var lam1 = DegToRad(lon1Deg);
+        var phi2 = DegToRad(lat2Deg);
+        var lam2 = DegToRad(lon2Deg);
+
+        // Angular distance between the two points (haversine).
+        var dphi = phi2 - phi1;
+        var dlam = NormalizeDeltaLonRadians(lam2 - lam1);
+        var sinDphi = Math.Sin(dphi / 2.0);
+        var sinDlam = Math.Sin(dlam / 2.0);
+        var a = sinDphi * sinDphi + Math.Cos(phi1) * Math.Cos(phi2) * sinDlam * sinDlam;
+        var delta = 2.0 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1.0 - a));
+
+        var result = new List<(double Lat, double Lon)>(segments + 1);
+        if (delta < 1e-12)
+        {
+            // Coincident points — nothing to interpolate.
+            result.Add((lat1Deg, lon1Deg));
+            result.Add((lat2Deg, lon2Deg));
+            return result;
+        }
+
+        // Cartesian endpoints for slerp.
+        var x1 = Math.Cos(phi1) * Math.Cos(lam1);
+        var y1 = Math.Cos(phi1) * Math.Sin(lam1);
+        var z1 = Math.Sin(phi1);
+        var x2 = Math.Cos(phi2) * Math.Cos(lam2);
+        var y2 = Math.Cos(phi2) * Math.Sin(lam2);
+        var z2 = Math.Sin(phi2);
+        var sinDelta = Math.Sin(delta);
+
+        for (var i = 0; i <= segments; i++)
+        {
+            var f = (double)i / segments;
+            var aCoef = Math.Sin((1.0 - f) * delta) / sinDelta;
+            var bCoef = Math.Sin(f * delta) / sinDelta;
+            var x = aCoef * x1 + bCoef * x2;
+            var y = aCoef * y1 + bCoef * y2;
+            var z = aCoef * z1 + bCoef * z2;
+            var lat = Math.Atan2(z, Math.Sqrt(x * x + y * y));
+            var lon = Math.Atan2(y, x);
+            result.Add((RadToDeg(lat), RadToDeg(lon)));
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Splits a sequence of waypoints into one or more sub-paths so that no
     /// segment crosses the antimeridian (±180° longitude). Each output
     /// sub-path uses unwrapped longitudes that are continuous across its

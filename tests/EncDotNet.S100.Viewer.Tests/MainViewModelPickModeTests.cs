@@ -130,4 +130,45 @@ public class MainViewModelPickModeTests
 
         Assert.Equal(2, fired);
     }
+
+    [Fact]
+    public void ToggleRouteEditModeCommand_FlipsState()
+    {
+        var vm = CreateViewModel();
+
+        vm.ToggleRouteEditModeCommand.Execute(null);
+        Assert.True(vm.IsRouteEditModeActive);
+
+        vm.ToggleRouteEditModeCommand.Execute(null);
+        Assert.False(vm.IsRouteEditModeActive);
+    }
+
+    [Fact]
+    public void RouteEditMode_AndPickMode_AreMutuallyExclusive()
+    {
+        var vm = CreateViewModel();
+
+        vm.IsPickModeActive = true;
+        vm.ToggleRouteEditModeCommand.Execute(null);
+
+        Assert.True(vm.IsRouteEditModeActive);
+        Assert.False(vm.IsPickModeActive);
+    }
+
+    [Fact]
+    public void PromoteMeasurementToRouteCommand_DisabledWithoutMeasurement()
+    {
+        var vm = CreateViewModel();
+        Assert.False(vm.PromoteMeasurementToRouteCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void IsToolSummaryVisible_TrueWhileRouteEditing()
+    {
+        var vm = CreateViewModel();
+        Assert.False(vm.IsToolSummaryVisible);
+
+        vm.ToggleRouteEditModeCommand.Execute(null);
+        Assert.True(vm.IsToolSummaryVisible);
+    }
 }

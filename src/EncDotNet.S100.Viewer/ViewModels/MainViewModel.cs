@@ -21,6 +21,9 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly IThemeService _theme;
     private readonly IRecentFilesService _recentFiles;
     private readonly INotificationService _notifications;
+    private readonly RoutesService _routes;
+    private readonly MeasureTool _measureTool;
+    private readonly RouteEditTool _routeEditTool;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
 
@@ -586,6 +589,50 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand ToggleMeasureModeCommand { get; }
 
     /// <summary>
+    /// The application-scoped editable route store. Exposed so the host
+    /// window can drive the persistent route overlay and the routes side
+    /// panel can bind to it.
+    /// </summary>
+    public RoutesService RoutesService => _routes;
+
+    /// <summary>
+    /// True when the interactive route editor tool is active. Mirrors
+    /// <see cref="MapToolController.ActiveToolId"/> like
+    /// <see cref="IsMeasureModeActive"/>.
+    /// </summary>
+    public bool IsRouteEditModeActive => Tools.IsActive(RouteEditTool.ToolId);
+
+    /// <summary>
+    /// True when the tool-owned status summary should be shown — i.e. while
+    /// either Measure Mode or Route Edit Mode is active.
+    /// </summary>
+    public bool IsToolSummaryVisible => IsMeasureModeActive || IsRouteEditModeActive;
+
+    /// <summary>Toggles the interactive route editor tool on/off.</summary>
+    public ICommand ToggleRouteEditModeCommand { get; }
+
+    /// <summary>
+    /// Activates the interactive route editor tool. Unlike
+    /// <see cref="ToggleRouteEditModeCommand"/> this never turns the tool
+    /// off, so it is safe to bind to an explicit "edit" affordance.
+    /// </summary>
+    public ICommand EnterRouteEditModeCommand { get; }
+
+    /// <summary>
+    /// Deactivates the interactive route editor tool when it is active.
+    /// Bound to the Routes panel's "Done" action so finishing an edit
+    /// returns the map to its default (no-tool) state.
+    /// </summary>
+    public ICommand ExitRouteEditModeCommand { get; }
+
+    /// <summary>
+    /// Promotes the current Measure Mode path into a new editable route and
+    /// switches to the route editor. Enabled only when the measurement has
+    /// at least two waypoints.
+    /// </summary>
+    public ICommand PromoteMeasurementToRouteCommand { get; }
+
+    /// <summary>
     /// Discrete tool actions wired to keyboard accelerators; current
     /// active tool decides what (if anything) to do.
     /// </summary>
@@ -730,6 +777,29 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Copies the current Measure Mode path into a brand-new editable route,
+    /// makes it the active route, and switches to the route editor tool so
+    /// the user can immediately refine it.
+    /// </summary>
+    private void PromoteMeasurementToRoute()
+    {
+        var waypoints = _measureTool.State.Waypoints;
+        if (waypoints.Count < 2)
+            return;
+
+        var name = string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            Strings.Routes_NewRouteNameFormat,
+            _routes.Routes.Routes.Count + 1);
+        var route = _routes.Routes.CreateRoute(name);
+        foreach (var (lat, lon) in waypoints)
+            route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
+
+        _routes.SelectedWaypointIndex = null;
+        Tools.Activate(RouteEditTool.ToolId);
+    }
+
     private void AttachToMcpServer()
     {
         if (_attachedMcpServer is { } prev)
@@ -846,7 +916,8 @@ internal sealed class MainViewModel : ViewModelBase
         Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        IStatusPresenter? statusPresenter = null)
+        IStatusPresenter? statusPresenter = null,
+        RoutesService? routes = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -879,6 +950,7 @@ internal sealed class MainViewModel : ViewModelBase
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
         _mcpServerHost = mcpServerHost;
+        _routes = routes ?? new RoutesService();
 
         // PR-M3: debounced settings writer used by the splitter-size
         // setters. 500 ms window coalesces rapid drag updates into one
@@ -902,8 +974,11 @@ internal sealed class MainViewModel : ViewModelBase
             };
         }
 
+        _measureTool = new MeasureTool(measureAppearance);
+        _routeEditTool = new RouteEditTool(_routes);
         Tools.Register(new PickTool());
-        Tools.Register(new MeasureTool(measureAppearance));
+        Tools.Register(_measureTool);
+        Tools.Register(_routeEditTool);
 
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
@@ -1010,6 +1085,14 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
         ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
+        ToggleRouteEditModeCommand = new RelayCommand(() => Tools.Toggle(RouteEditTool.ToolId));
+        EnterRouteEditModeCommand = new RelayCommand(() => Tools.Activate(RouteEditTool.ToolId));
+        ExitRouteEditModeCommand = new RelayCommand(
+            () => Tools.Activate(null),
+            () => Tools.IsActive(RouteEditTool.ToolId));
+        PromoteMeasurementToRouteCommand = new RelayCommand(
+            PromoteMeasurementToRoute,
+            () => _measureTool.State.Waypoints.Count >= 2);
         ToolCommitCommand = new RelayCommand(
             () => Tools.OnAction(MapToolAction.Commit),
             () => Tools.ActiveTool != null);
@@ -1033,8 +1116,12 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsPickModeActive));
             }
             OnPropertyChanged(nameof(IsMeasureModeActive));
+            OnPropertyChanged(nameof(IsRouteEditModeActive));
+            OnPropertyChanged(nameof(IsToolSummaryVisible));
             ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
             ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)ExitRouteEditModeCommand).NotifyCanExecuteChanged();
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());

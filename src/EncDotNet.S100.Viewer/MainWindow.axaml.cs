@@ -45,6 +45,9 @@ public partial class MainWindow : ShadUI.Window
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
     private ILayer? _basemapLayer;
+    private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
+    private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
+    private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private string? _screenshotPath;
     private bool _exitAfterScreenshot;
@@ -935,7 +938,8 @@ public partial class MainWindow : ShadUI.Window
             removeLayer: layer => MapControl.Map?.Layers.Remove(layer),
             setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
             refreshGraphics: () => MapControl.RefreshGraphics(),
-            screenToLatLon: ScreenToLatLon);
+            screenToLatLon: ScreenToLatLon,
+            latLonToScreen: LatLonToScreen);
 
         // Tools (pick, measure) were registered by the view-model in its
         // constructor; here we just hand them an Avalonia-aware context.
@@ -945,8 +949,58 @@ public partial class MainWindow : ShadUI.Window
         // events are offered to the active tool first.
         interactionController.SetToolController(tools);
 
+        // The route overlay is persistent (unlike the measure overlay, which
+        // only exists while its tool is active): routes stay visible whether
+        // or not the editor tool is engaged. The host owns the layer and
+        // rebuilds it whenever the route store or theme/accent changes.
+        InitializeRouteOverlay();
+
         // Tool selection is intentionally not persisted across launches —
         // entering Pick or Measure mode must be an explicit user action.
+    }
+
+    /// <summary>
+    /// Creates the persistent route overlay layer, adds it to the map, and
+    /// subscribes to the route store and appearance provider so the overlay
+    /// reflects the current routes and theme at all times.
+    /// </summary>
+    private void InitializeRouteOverlay()
+    {
+        _routeStore = _viewModel.RoutesService;
+        _routeAppearance = App.Services.GetRequiredService<
+            EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>();
+
+        _routeOverlayLayer = EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Create();
+        MapControl.Map?.Layers.Add(_routeOverlayLayer);
+
+        _routeStore.Changed += OnRouteStoreChanged;
+        _routeAppearance.Changed += OnRouteStoreChanged;
+
+        RebuildRouteOverlay();
+    }
+
+    private void OnRouteStoreChanged(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(RebuildRouteOverlay);
+
+    /// <summary>
+    /// Rebuilds the persistent route overlay from the current
+    /// <see cref="EncDotNet.S100.Viewer.Services.RoutesService"/> state and
+    /// schedules a redraw. Re-adds the layer if a map rebuild dropped it.
+    /// </summary>
+    private void RebuildRouteOverlay()
+    {
+        if (_routeOverlayLayer is null || _routeStore is null || _routeAppearance is null)
+            return;
+
+        if (MapControl.Map is { } map && !map.Layers.Contains(_routeOverlayLayer))
+            map.Layers.Add(_routeOverlayLayer);
+
+        EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Update(
+            _routeOverlayLayer,
+            _routeStore.Routes,
+            _routeStore.SelectedWaypointIndex,
+            _routeAppearance.Current);
+        MapControl.RefreshGraphics();
     }
 
     /// <summary>
@@ -974,6 +1028,29 @@ public partial class MainWindow : ShadUI.Window
         // that cross the antimeridian render with consistent endpoints.
         lon = ((lon + 540.0) % 360.0) - 180.0;
         return (lat, lon);
+    }
+
+    /// <summary>
+    /// Converts a WGS-84 lat/lon to a pointer position in
+    /// <see cref="MapControl"/> client coordinates, or <c>null</c> when no
+    /// viewport is available. Inverse of <see cref="ScreenToLatLon"/>; used
+    /// by editing tools to hit-test pointer gestures against world-space
+    /// features.
+    /// </summary>
+    private Point? LatLonToScreen((double Lat, double Lon) world)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return null;
+
+        var (x, y) = SphericalMercator.FromLonLat(world.Lon, world.Lat);
+        var screen = navigator.Viewport.WorldToScreen(x, y);
+        if (double.IsNaN(screen.X) || double.IsNaN(screen.Y) ||
+            double.IsInfinity(screen.X) || double.IsInfinity(screen.Y))
+        {
+            return null;
+        }
+
+        return new Point(screen.X, screen.Y);
     }
 
     private async Task OpenDatasetAsync()
