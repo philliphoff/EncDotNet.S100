@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -21,6 +22,16 @@ internal interface IRenderStateController
     /// <summary>The currently active ECDIS display category.</summary>
     EcdisDisplayCategory CurrentDisplayCategory { get; }
 
+    /// <summary>The currently active base-plane render subsystem ("A" vs "B").</summary>
+    RenderSubsystemKind CurrentRenderSubsystem { get; }
+
+    /// <summary>
+    /// True when the render subsystem is pinned by the
+    /// <c>S100_RENDER_SUBSYSTEM</c> environment variable and therefore
+    /// cannot be switched at runtime.
+    /// </summary>
+    bool RenderSubsystemPinned { get; }
+
     /// <summary>
     /// Sets the active map palette. Marshals to the UI thread when
     /// the underlying setter has thread affinity (e.g. INotifyPropertyChanged
@@ -36,6 +47,18 @@ internal interface IRenderStateController
     /// <c>Changed</c> subscribers may touch UI state.
     /// </summary>
     Task SetDisplayCategoryAsync(EcdisDisplayCategory category, CancellationToken ct = default);
+
+    /// <summary>
+    /// Switches the live base-plane render subsystem between "A"
+    /// (<see cref="RenderSubsystemKind.Mapsui"/>) and "B"
+    /// (<see cref="RenderSubsystemKind.TiledScene"/>). The change is read
+    /// per-render, so it rebinds the active subsystem on the next
+    /// re-render. Marshals to the UI thread for parity with
+    /// <see cref="SetPaletteAsync"/>. Idempotent: setting the current
+    /// value is a no-op. Throws <see cref="System.InvalidOperationException"/>
+    /// when <see cref="RenderSubsystemPinned"/> is true.
+    /// </summary>
+    Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default);
 }
 
 /// <summary>

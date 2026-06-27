@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using Xunit;
@@ -15,6 +16,8 @@ public class SetPaletteToolTests
     {
         public PaletteType CurrentPalette { get; set; } = PaletteType.Day;
         public EcdisDisplayCategory CurrentDisplayCategory { get; set; } = EcdisDisplayCategory.Standard;
+        public RenderSubsystemKind CurrentRenderSubsystem { get; set; } = RenderSubsystemKind.Mapsui;
+        public bool RenderSubsystemPinned { get; set; }
         public int PaletteCalls { get; private set; }
         public int CategoryCalls { get; private set; }
 
@@ -29,6 +32,12 @@ public class SetPaletteToolTests
         {
             CategoryCalls++;
             CurrentDisplayCategory = category;
+            return Task.CompletedTask;
+        }
+
+        public Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default)
+        {
+            CurrentRenderSubsystem = subsystem;
             return Task.CompletedTask;
         }
     }
@@ -107,6 +116,8 @@ public class SetDisplayCategoryToolTests
     {
         public PaletteType CurrentPalette { get; set; } = PaletteType.Day;
         public EcdisDisplayCategory CurrentDisplayCategory { get; set; } = EcdisDisplayCategory.Standard;
+        public RenderSubsystemKind CurrentRenderSubsystem { get; set; } = RenderSubsystemKind.Mapsui;
+        public bool RenderSubsystemPinned { get; set; }
         public int Calls { get; private set; }
 
         public Task SetPaletteAsync(PaletteType palette, CancellationToken ct = default) => Task.CompletedTask;
@@ -114,6 +125,12 @@ public class SetDisplayCategoryToolTests
         {
             Calls++;
             CurrentDisplayCategory = category;
+            return Task.CompletedTask;
+        }
+
+        public Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default)
+        {
+            CurrentRenderSubsystem = subsystem;
             return Task.CompletedTask;
         }
     }

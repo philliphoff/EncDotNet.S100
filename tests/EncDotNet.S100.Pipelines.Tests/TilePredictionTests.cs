@@ -194,4 +194,56 @@ public class TilePredictionTests
         // (observed as partial zoom-out "rendering never stops" under GPU residency).
         Assert.Equal(expected, S100VectorTileRenderer.ShouldRequestRedraw(published, isPrediction));
     }
+
+    /// <summary>
+    /// The world-tile key containing the EPSG:3857 point at <paramref name="band"/>,
+    /// using the same flooring convention as <see cref="TileGrid.VisibleTileRange"/>.
+    /// </summary>
+    private static TileKey TileAt(double wx, double wy, int band)
+    {
+        var size = TileGrid.TileWorldSize(band);
+        var x = (int)System.Math.Floor((wx + TileGrid.Extent) / size);
+        var y = (int)System.Math.Floor((TileGrid.Extent - wy) / size);
+        return new TileKey(band, x, y);
+    }
+
+    [Fact]
+    public void PredictedTiles_RotatedViewport_WarmFrameExpandsWithCoverSize()
+    {
+        // §F.8 regression (issue #347): the prediction frame consumes the same
+        // RotatedCoverSize the visible selection does, so the pre-warm ring tracks
+        // the rotated footprint rather than the (smaller) north-up box. Mirrors the
+        // renderer composition (S100VectorTileRenderer.Render ~lines 604/655). At
+        // rest (zero velocity) PredictedTiles is the 1-ring halo around the cover
+        // range plus the z±1 centre tiles.
+        const int band = 8;
+        var res = TileGrid.ResolutionForBand(band);
+        const double cx = 100_000, cy = 100_000, wDip = 2560, hDip = 1600, deg = 45;
+
+        TileKey[] Footprint(double w, double h)
+        {
+            var visible = TileGrid.VisibleTiles(cx, cy, w, h, res, band);
+            var predicted = TileGrid.PredictedTiles(cx, cy, w, h, res, band, 0, 0);
+            return visible.Concat(predicted).ToArray();
+        }
+
+        var raw = Footprint(wDip, hDip).ToHashSet();
+        var (coverW, coverH) = TileGrid.RotatedCoverSize(wDip, hDip, deg);
+        var cover = Footprint(coverW, coverH).ToHashSet();
+
+        // The total warm+visible footprint grows with rotation and contains the
+        // north-up footprint (the rotated frame never warms *fewer* tiles).
+        Assert.True(raw.IsSubsetOf(cover), "rotated warm footprint must contain the north-up footprint");
+        Assert.True(cover.Count > raw.Count, "rotated warm footprint must add tiles beyond the north-up frame");
+
+        // A probe half a tile beyond the rotated +Y extent is warmed by the rotated
+        // prediction halo, but lies outside the north-up footprint entirely — proving
+        // the pre-warm frame follows the rotated footprint, not the north-up box.
+        var coverHalfHeightWorld = coverH * 0.5 * res;
+        var probeY = cy + coverHalfHeightWorld + TileGrid.TileWorldSize(band) * 0.5;
+        var probe = TileAt(cx, probeY, band);
+        Assert.Contains(probe, cover);
+        Assert.DoesNotContain(probe, raw);
+    }
 }
+

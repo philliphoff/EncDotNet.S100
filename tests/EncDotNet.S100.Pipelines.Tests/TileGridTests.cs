@@ -302,4 +302,53 @@ public class TileGridTests
         Assert.Equal((int)System.Math.Ceiling(100.2 * 1.5), pxW);
         Assert.Equal((int)System.Math.Ceiling(100.6 * 1.5), pxH);
     }
+
+    // --- Prediction/selection under rotation (issue #347 §F.8 regression) ---
+    // §F.8: a rotated viewport early-returned "north-up only" and the chart
+    // blanked permanently on a trackpad pinch-rotate. The fix selects tiles
+    // against RotatedCoverSize so the rotated corners stay filled. These pin the
+    // *composition* the renderer performs (S100VectorTileRenderer.Render lines
+    // ~604-608): RotatedCoverSize → VisibleTiles. A revert to passing the raw
+    // DIP size would drop the rotated corners and re-introduce the blank.
+
+    /// <summary>
+    /// The world-tile key containing the EPSG:3857 point (<paramref name="wx"/>,
+    /// <paramref name="wy"/>) at <paramref name="band"/>, using the same flooring
+    /// convention as <see cref="TileGrid.VisibleTileRange"/> (Y inverted).
+    /// </summary>
+    private static TileKey TileAt(double wx, double wy, int band)
+    {
+        var size = TileGrid.TileWorldSize(band);
+        var x = (int)System.Math.Floor((wx + TileGrid.Extent) / size);
+        var y = (int)System.Math.Floor((TileGrid.Extent - wy) / size);
+        return new TileKey(band, x, y);
+    }
+
+    [Fact]
+    public void VisibleTiles_RotatedViewport_FillsExtentThatRawSizeMisses()
+    {
+        // An interior viewport, band 8, native resolution so tiles are far smaller
+        // than the viewport (multi-tile cover). Rotating 45° pokes the corners well
+        // beyond the north-up box: the cover-box height grows from 1600 to ~2941 DIP.
+        const int band = 8;
+        var res = TileGrid.ResolutionForBand(band);
+        const double cx = 100_000, cy = 100_000, wDip = 2560, hDip = 1600, deg = 45;
+
+        var raw = TileGrid.VisibleTiles(cx, cy, wDip, hDip, res, band).ToHashSet();
+        var (coverW, coverH) = TileGrid.RotatedCoverSize(wDip, hDip, deg);
+        var cover = TileGrid.VisibleTiles(cx, cy, coverW, coverH, res, band).ToHashSet();
+
+        // The rotated cover strictly contains the north-up selection and adds tiles.
+        Assert.True(raw.IsSubsetOf(cover), "rotated cover must be a superset of the north-up selection");
+        Assert.True(cover.Count > raw.Count, "rotated cover must add corner tiles the north-up size omits");
+
+        // A probe at the rotated viewport's extreme +Y extent (just inside the cover
+        // box, but well outside the north-up box) must be covered by the rotated
+        // selection and NOT by the raw-size selection — the exact §F.8 corner gap.
+        var probeY = cy + coverH * 0.5 * res * 0.95;
+        var probe = TileAt(cx, probeY, band);
+        Assert.Contains(probe, cover);
+        Assert.DoesNotContain(probe, raw);
+    }
 }
+

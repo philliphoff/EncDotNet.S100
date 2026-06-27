@@ -916,6 +916,35 @@ viewports differing 4× in world span but sharing pixel dimensions — proving t
 constant on-screen size the overlay exists to guarantee. Both are pure,
 machine-independent Skia rasters.
 
+### F.12 Failure-mode → regression-test traceability
+
+Every native/threading defect found by manually driving "B" (this appendix)
+is now pinned by a deterministic, headless regression test, so it cannot
+silently return once "B" is the default everyone runs (issue #347, Stability ▸
+"Regression tests for each known failure mode"). The GPU/context-bound paths
+that cannot run headlessly are exercised with CPU-backed Skia surfaces and a
+sentinel context — the registry lifecycle is identical for CPU- and GPU-backed
+resources — and backed by the live integration runs recorded above.
+
+| # | Failure mode (symptom) | Regression test(s) | Project |
+|---|---|---|---|
+| §F.5 | Teardown finalizer-thread GPU free on close-all + reopen | `GpuRegistryTeardownTests.ReconcileGpuCaches_OwningLayerCollected_*`, `TileCacheTests.Clear_DisposesAndEmptiesCache` / `Put_AfterDispose_*` | Pipelines.Tests |
+| §F.6 | Zoom-out GPU use-after-free (mid-frame eviction) | `TileCacheTests.DeferDisposal_*`, `DrainPendingDisposals_*` | Pipelines.Tests |
+| §F.7 | Prediction-driven repaint loop ("never settles") | `TilePredictionTests.ShouldRequestRedraw_RepaintsOnlyForVisiblePublishedTiles` | Pipelines.Tests |
+| §F.8 | Rotation-induced blanking / one-scale backdrop | `TileGridTests.RotatedCoverSize_*`, `RotationCompositeLayout_*`, `VisibleTiles_RotatedViewport_FillsExtentThatRawSizeMisses`; `TilePredictionTests.PredictedTiles_RotatedViewport_WarmFrameExpandsWithCoverSize` | Pipelines.Tests |
+| §F.9 | Palette-insensitive `styleStateHash` (Night served Day) | `StyleStatePaletteFingerprintTests` (4 cases) | Pipelines.Tests |
+| §F.10 | Shutdown teardown race (worker into a dying Skia) | `WorkerDrainGateTests` (5 cases) | Pipelines.Tests |
+| #345 | B→A switch crash (abandoned-layer GPU free off-thread) | `GpuRegistryTeardownTests.ReconcileGpuCaches_SwitchBToA_FreesAbandonedBLayerButKeepsSurvivingLayer` (+ the `*_LiveLayer_*` / `*_DeadLayerDifferentContext_*` cases) | Pipelines.Tests |
+
+The §F.8 prediction-under-rotation cases were added once rotation became
+scriptable end-to-end: the `set_render_subsystem` MCP tool (the last missing
+soak affordance — rotation was already driveable via `set_viewport {rotation}`)
+lets a scripted soak exercise the A↔B switch and rotated viewports without the
+GUI. The two new tests pin the renderer's `RotatedCoverSize → VisibleTiles` /
+`PredictedTiles` composition (`S100VectorTileRenderer.Render`), so a revert to
+selecting tiles against the raw north-up DIP size — the shape of the §F.8 bug —
+fails CI.
+
 ---
 
 ## Appendix G — Phase 4 Label-plane completion (declutter, upright text, glyph fallback)
