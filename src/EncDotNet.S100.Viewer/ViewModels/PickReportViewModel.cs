@@ -59,6 +59,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         CopyIdentityCommand = new RelayCommand(
             () => { var text = IdentityClipboardText; if (!string.IsNullOrEmpty(text)) CopyIdentityRequested?.Invoke(this, text); },
             () => _selectedHit is not null);
+        CopyReferencedTextCommand = new RelayCommand<PickReferencedText>(
+            t => { if (t is not null && !string.IsNullOrEmpty(t.ClipboardText)) CopyIdentityRequested?.Invoke(this, t.ClipboardText); },
+            t => t is not null && !string.IsNullOrEmpty(t.ClipboardText));
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
@@ -89,10 +92,28 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private void ReformatAttributesFromSelectedHit()
     {
         if (_selectedHit is null) return;
-        var reformatted = ReformatTypedAttributes(_selectedHit.Attributes);
+        PopulateAttributeSections(ReformatTypedAttributes(_selectedHit.Attributes));
+    }
+
+    /// <summary>
+    /// Splits the reformatted attribute tree into the key/value
+    /// <see cref="Attributes"/> table and the standalone
+    /// <see cref="ReferencedTexts"/> cards, then publishes both. Resolved
+    /// <c>fileReference</c> rows (S-101 FC; alias TXTDSC / NTXTDS) are lifted
+    /// out of the table so their text is read as its own block rather than a
+    /// monospace dump inside the table.
+    /// </summary>
+    private void PopulateAttributeSections(IReadOnlyList<PickAttribute> reformatted)
+    {
         Attributes.Clear();
-        foreach (var a in reformatted) Attributes.Add(a);
+        foreach (var a in FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted))
+            Attributes.Add(a);
         OnPropertyChanged(nameof(HasAttributes));
+
+        ReferencedTexts.Clear();
+        foreach (var fileRef in FeatureInfoBuilder.CollectResolvedFileReferences(reformatted))
+            ReferencedTexts.Add(PickReferencedText.FromAttribute(fileRef));
+        OnPropertyChanged(nameof(HasReferencedText));
     }
 
     private IReadOnlyList<PickAttribute> ReformatTypedAttributes(IReadOnlyList<PickAttribute> source)
@@ -376,6 +397,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasAttributes => Attributes.Count > 0;
 
     /// <summary>
+    /// Externally referenced text blocks for the picked feature, lifted out
+    /// of <see cref="Attributes"/> from resolved <c>fileReference</c>
+    /// attributes (S-101 Feature Catalogue; aliases <c>TXTDSC</c> /
+    /// <c>NTXTDS</c>). Rendered in the panel as labelled cards with the full
+    /// text always visible, mirroring an ECDIS "show textual description"
+    /// affordance.
+    /// </summary>
+    public ObservableCollection<PickReferencedText> ReferencedTexts { get; } = new();
+
+    /// <summary>True when the current pick carries at least one referenced text block.</summary>
+    public bool HasReferencedText => ReferencedTexts.Count > 0;
+
+    /// <summary>
     /// xlink-style references the currently selected hit points to.
     /// Surfaced in the panel above the attributes table; clicking a row
     /// invokes <see cref="NavigateCommand"/> to re-open the panel on the
@@ -415,6 +449,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// the actual clipboard access.
     /// </summary>
     public ICommand CopyIdentityCommand { get; }
+
+    /// <summary>
+    /// Copies a <see cref="PickReferencedText"/> card's full text to the
+    /// clipboard. The command parameter is the card to copy; raises
+    /// <see cref="CopyIdentityRequested"/> with the text so the view owns the
+    /// actual clipboard access.
+    /// </summary>
+    public ICommand CopyReferencedTextCommand { get; }
 
     /// <summary>
     /// Raised when the user invokes <see cref="CopyLocationCommand"/>. The
@@ -538,6 +580,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             // ApplyHitToDetailFields(null) cleared the detail fields;
             // re-raise the attribute panels so the view collapses them.
             OnPropertyChanged(nameof(HasAttributes));
+            OnPropertyChanged(nameof(HasReferencedText));
             OnPropertyChanged(nameof(HasReferences));
         }
     }
@@ -594,10 +637,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = null;
         ProductSpec = null;
         Attributes.Clear();
+        ReferencedTexts.Clear();
         References.Clear();
         Location = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
+        OnPropertyChanged(nameof(HasReferencedText));
         OnPropertyChanged(nameof(HasReferences));
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
@@ -614,8 +659,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             DatasetFileName = null;
             ProductSpec = null;
             Attributes.Clear();
+            ReferencedTexts.Clear();
             References.Clear();
             OnPropertyChanged(nameof(HasAttributes));
+            OnPropertyChanged(nameof(HasReferencedText));
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));
@@ -629,10 +676,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = hit.DatasetFileName;
         ProductSpec = hit.ProductSpec;
 
-        Attributes.Clear();
-        foreach (var attr in ReformatTypedAttributes(hit.Attributes))
-            Attributes.Add(attr);
-        OnPropertyChanged(nameof(HasAttributes));
+        PopulateAttributeSections(ReformatTypedAttributes(hit.Attributes));
 
         References.Clear();
         foreach (var reference in hit.References)

@@ -259,7 +259,10 @@ for the full design rationale.
   `support/` directory. `S101DatasetProcessor` uses it (via
   `FeatureInfoBuilder.ResolveFileReferences`) to populate
   `PickAttribute.ExternalText`, so a pick / object-info consumer can show
-  the referenced text the way an ECDIS does.
+  the referenced text the way an ECDIS does. Presentation layers can
+  then call `FeatureInfoBuilder.CollectResolvedFileReferences` /
+  `WithoutResolvedFileReferences` to lift those resolved blocks out of the
+  key/value attribute table into a dedicated "referenced text" section.
 - `GmlDatasetProcessorBase` — common base for the GML-encoded vector
   processors (S-122 / S-124 / S-125 / S-127 / S-128 / S-129 / S-131 /
   S-201 / S-411 / S-421).
