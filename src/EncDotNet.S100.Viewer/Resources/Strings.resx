@@ -880,31 +880,31 @@
     <value>Speed up panning and zooming on dense charts. All are on by default; turn one off only to compare rendering behaviour.</value>
   </data>
   <data name="Settings_RenderSubsystemSubsection" xml:space="preserve">
-    <value>Render subsystem (experimental)</value>
+    <value>Render subsystem</value>
   </data>
   <data name="Settings_RenderSubsystemSubsection_Help" xml:space="preserve">
-    <value>Choose the base-plane render subsystem and, for the experimental tiled pipeline, tune its caching. Environment variables set before launch override these and disable the matching control.</value>
+    <value>Choose the base-plane render subsystem and, for the tiled pipeline, tune its caching.</value>
   </data>
   <data name="Settings_RenderSubsystem" xml:space="preserve">
     <value>Subsystem</value>
   </data>
   <data name="Tooltip_RenderSubsystem" xml:space="preserve">
-    <value>Select the base-plane render subsystem: "Mapsui" is the established feature/style/layer path (A); "Tiled scene" is the experimental async tiled pipeline that rasterizes the chart from the vector scene on worker threads (B). Switching re-renders live.</value>
+    <value>Select the base-plane render subsystem. "Standard" is the established feature/style/layer path; "Tiled" rasterizes the chart from the vector scene on worker threads for faster panning and zooming. Switching re-renders live.</value>
   </data>
   <data name="Settings_RenderSubsystem_Mapsui" xml:space="preserve">
-    <value>Mapsui (A)</value>
+    <value>Standard</value>
   </data>
   <data name="Settings_RenderSubsystem_TiledScene" xml:space="preserve">
-    <value>Tiled scene (B)</value>
+    <value>Tiled</value>
   </data>
   <data name="Settings_SceneMode" xml:space="preserve">
     <value>Scene mode</value>
   </data>
   <data name="Tooltip_SceneMode" xml:space="preserve">
-    <value>Within the tiled subsystem, choose "Tiled" (a pyramid of cached tiles — the default) or "Single surface" (one rasterized image composited under translation). Changing re-renders live.</value>
+    <value>Within the Tiled subsystem, choose "Tile pyramid" (a pyramid of cached tiles — the default) or "Single surface" (one rasterized image composited under translation). Changing re-renders live.</value>
   </data>
   <data name="Settings_SceneMode_Tiled" xml:space="preserve">
-    <value>Tiled</value>
+    <value>Tile pyramid</value>
   </data>
   <data name="Settings_SceneMode_Single" xml:space="preserve">
     <value>Single surface</value>

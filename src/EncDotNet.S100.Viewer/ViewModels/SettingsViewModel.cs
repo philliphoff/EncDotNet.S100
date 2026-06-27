@@ -541,7 +541,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     private RenderSubsystemKind _renderSubsystem;
     /// <summary>
     /// The active base-plane render subsystem — "A" (<see cref="RenderSubsystemKind.Mapsui"/>)
-    /// vs the experimental "B" (<see cref="RenderSubsystemKind.TiledScene"/>).
+    /// vs the "B" (<see cref="RenderSubsystemKind.TiledScene"/>).
     /// Read per-render, so switching rebinds the active subsystem on the next
     /// re-render. Disabled when pinned by <c>S100_RENDER_SUBSYSTEM</c>.
     /// </summary>
@@ -572,7 +572,7 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// </summary>
     public bool MapsuiSelected => _renderSubsystem == RenderSubsystemKind.Mapsui;
 
-    /// <summary>True when the experimental "B" (TiledScene) arm is selected — gates the knob panel.</summary>
+    /// <summary>True when the "B" (TiledScene) arm is selected — gates the knob panel.</summary>
     public bool TiledSceneSelected => _renderSubsystem == RenderSubsystemKind.TiledScene;
 
     /// <summary>True when the tiled base plane is active (B arm + tiled scene mode) — gates the tiled knobs.</summary>

@@ -394,7 +394,7 @@ env var always wins over the persisted viewer setting. The remaining variables
 The **render subsystem switch** (A/B), the TiledScene **scene mode**
 (tiled vs single surface), and the **tiled optimization knobs** (gutter,
 in-memory / disk / GPU budgets, prediction, disk cache) are likewise bound in
-the viewer under **Settings → Render subsystem (experimental)** (issue #331),
+the viewer under **Settings → Render subsystem** (issue #331),
 backed by the same [`RenderingOptimizations`](RenderingOptimizations.cs) store.
 The env vars below seed and (when set explicitly) pin those too, disabling the
 matching UI control. Some knobs are read each frame and apply live (subsystem,

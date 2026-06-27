@@ -82,14 +82,14 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
-    public void RenderSubsystem_DefaultsToMapsui_WhenNotEnvPinned()
+    public void RenderSubsystem_DefaultsToTiledScene_WhenNotEnvPinned()
     {
         if (RenderingOptimizations.RenderSubsystemEnvExplicit)
         {
             return; // pinned by S100_RENDER_SUBSYSTEM; default not observable
         }
 
-        Assert.Equal(RenderSubsystemKind.Mapsui, RenderingOptimizations.RenderSubsystem);
+        Assert.Equal(RenderSubsystemKind.TiledScene, RenderingOptimizations.RenderSubsystem);
     }
 
     [Fact]

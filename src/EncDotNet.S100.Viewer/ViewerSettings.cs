@@ -203,9 +203,9 @@ internal sealed class ViewerSettings
 
     /// <summary>
     /// Active base-plane render subsystem (issue #331). One of "Mapsui" (the "A"
-    /// arm) or "TiledScene" (the experimental "B" arm), matching
+    /// arm) or "TiledScene" (the "B" arm), matching
     /// <see cref="Renderers.Mapsui.RenderSubsystemKind"/>. <see langword="null"/>
-    /// → best default ("Mapsui"). Mirrors
+    /// → best default ("TiledScene"). Mirrors
     /// <c>RenderingOptimizations.RenderSubsystem</c> /
     /// <c>S100_RENDER_SUBSYSTEM</c>.
     /// </summary>
