@@ -945,6 +945,27 @@ GUI. The two new tests pin the renderer's `RotatedCoverSize → VisibleTiles` /
 selecting tiles against the raw north-up DIP size — the shape of the §F.8 bug —
 fails CI.
 
+### F.13 Measurable exit criteria for defaulting "B"
+
+The flip of the default to `RenderSubsystemKind.TiledScene` is gated on three
+**measurable** bars (issue #347 ▸ "Define measurable exit criteria"). All three
+are met today; the flip itself (`SeedRenderSubsystem()` empty-value branch +
+enum default in `RenderingOptimizations.cs`) remains a separate, deliberately
+deferred step that keeps "A" selectable as a fallback for at least one release.
+
+| Bar | Criterion | Gate / evidence | Status |
+|---|---|---|---|
+| **Fidelity** | "B" ≥ "A" on the golden-image set (S-101 + every non-S-101 product), with coverage rasters near-pixel-identical and declutter/label survival unchanged. | `RenderParityTests` (S-101) + `MultiProductParityTests` (coverage exact-match, per-product B-arm goldens, label preservation) — committed CI gates (#360). | ✅ |
+| **Performance** | p95 on-screen frame time ≤ the 16.7 ms (60 fps) interactivity budget on the pan/zoom/rotate gesture script for a dense cell, and B ≤ A. | `get_render_stats` `window` (`frameP95Ms`/`frameMaxMs`) over a 40-step scripted gesture burst on GB Solent `101GB00302045` (GPU/Metal): **B** p95 4.4–8.5 ms / max ≤ 14.6 ms / mean 1.6–3.1 ms vs **A** p95 7.7 ms / max 9.8 ms / mean 2.3 ms — B ≤ A, both well inside budget (90 draw calls either arm). | ✅ |
+| **Stability** | Zero crashes / blanks / paint-fault growth across an ≥ M-minute multi-product soak that exercises the A↔B switch in both directions, palette/category churn, rotation, and dataset open/close GC; and every known failure mode (§F.5–§F.10, #345) maps to a passing regression test. | A 10-minute GPU/Metal soak (real S-101 GB cell + synthetic S-124/125/127/131/201 GML churn): **863 steps, 149 A↔B switches, 0 paint faults, 0 render bails, 0 never-settles, 0 blanks, process alive, no crash-log, no native/Skia fatal frame.** Failure-mode coverage: traceability matrix §F.12. | ✅ |
+
+The performance and stability figures are the output of a scripted MCP soak
+(the `set_render_subsystem` tool added for this work makes the A↔B switch
+driveable from outside the GUI; rotation rides on `set_viewport {rotation}`).
+The harness is a session-only evaluation artefact and is intentionally **not**
+committed — only the deterministic unit regressions (§F.12) are CI gates; the
+soak is the developer/manual confidence gate, reproducible on demand.
+
 ---
 
 ## Appendix G — Phase 4 Label-plane completion (declutter, upright text, glyph fallback)
