@@ -948,23 +948,34 @@ fails CI.
 ### F.13 Measurable exit criteria for defaulting "B"
 
 The flip of the default to `RenderSubsystemKind.TiledScene` is gated on three
-**measurable** bars (issue #347 ▸ "Define measurable exit criteria"). All three
-are met today; the flip itself (`SeedRenderSubsystem()` empty-value branch +
-enum default in `RenderingOptimizations.cs`) remains a separate, deliberately
-deferred step that keeps "A" selectable as a fallback for at least one release.
+**measurable** bars (issue #347 ▸ "Define measurable exit criteria"). Fidelity
+and stability are met today; the **performance** bar is **not yet rigorously
+established** (see below). The flip itself (`SeedRenderSubsystem()` empty-value
+branch + enum default in `RenderingOptimizations.cs`) remains a separate,
+deliberately deferred step that keeps "A" selectable as a fallback for at least
+one release.
 
 | Bar | Criterion | Gate / evidence | Status |
 |---|---|---|---|
 | **Fidelity** | "B" ≥ "A" on the golden-image set (S-101 + every non-S-101 product), with coverage rasters near-pixel-identical and declutter/label survival unchanged. | `RenderParityTests` (S-101) + `MultiProductParityTests` (coverage exact-match, per-product B-arm goldens, label preservation) — committed CI gates (#360). | ✅ |
-| **Performance** | p95 on-screen frame time ≤ the 16.7 ms (60 fps) interactivity budget on the pan/zoom/rotate gesture script for a dense cell, and B ≤ A. | `get_render_stats` `window` (`frameP95Ms`/`frameMaxMs`) over a 40-step scripted gesture burst on GB Solent `101GB00302045` (GPU/Metal): **B** p95 4.4–8.5 ms / max ≤ 14.6 ms / mean 1.6–3.1 ms vs **A** p95 7.7 ms / max 9.8 ms / mean 2.3 ms — B ≤ A, both well inside budget (90 draw calls either arm). | ✅ |
-| **Stability** | Zero crashes / blanks / paint-fault growth across an ≥ M-minute multi-product soak that exercises the A↔B switch in both directions, palette/category churn, rotation, and dataset open/close GC; and every known failure mode (§F.5–§F.10, #345) maps to a passing regression test. | A 10-minute GPU/Metal soak (real S-101 GB cell + synthetic S-124/125/127/131/201 GML churn): **863 steps, 149 A↔B switches, 0 paint faults, 0 render bails, 0 never-settles, 0 blanks, process alive, no crash-log, no native/Skia fatal frame.** Failure-mode coverage: traceability matrix §F.12. | ✅ |
+| **Performance** | A bounded on-screen frame-time budget on the pan/zoom/rotate gesture script for a dense cell **plus** a bounded async tile-build latency for "B". | **Open.** `get_render_stats` instruments the **UI-thread** paint only, so it is not an A↔B comparator: under "A" that paint carries the full *synchronous* vector portrayal (GB Solent `101GB00302045` gesture burst: ~485 `VectorStyle` draw calls, ~1974 total draws, mean ~17 ms / p95 ~110 ms / max ~280 ms), whereas under "B" vector rasterisation runs on worker threads and is composited as tiles, so the same instrument sees **0** `VectorStyle` calls and only the ~90-draw composite — i.e. it captures none of "B"'s actual render cost. A valid bar needs the async tile-build latency exposed via dedicated telemetry (`EncDotNet.S100.Renderers.Mapsui` `Meter`) or a `dotnet-trace` capture; that measurement is still TODO. | ⏳ |
+| **Stability** | Zero crashes / blanks / paint-fault growth across an ≥ M-minute multi-product soak that exercises the A↔B switch in both directions, palette/category churn, rotation, and dataset open/close GC; and every known failure mode (§F.5–§F.10, #345) maps to a passing regression test. | A 10-minute GPU/Metal soak (real S-101 GB cell — real `loadDurationMs`≈6.4 s confirming S-101 portrayal, not a base-map-only frame — + synthetic S-124/125/127/131/201 GML churn): **863 steps, 149 A↔B switches, 0 paint faults, 0 render bails, 0 never-settles, 0 blanks, process alive, no crash-log, no native/Skia fatal frame.** Failure-mode coverage: traceability matrix §F.12. | ✅ |
 
-The performance and stability figures are the output of a scripted MCP soak
-(the `set_render_subsystem` tool added for this work makes the A↔B switch
-driveable from outside the GUI; rotation rides on `set_viewport {rotation}`).
-The harness is a session-only evaluation artefact and is intentionally **not**
-committed — only the deterministic unit regressions (§F.12) are CI gates; the
-soak is the developer/manual confidence gate, reproducible on demand.
+The stability figures are the output of a scripted MCP soak (the
+`set_render_subsystem` tool added for this work makes the A↔B switch driveable
+from outside the GUI; rotation rides on `set_viewport {rotation}`). The harness
+is a session-only evaluation artefact and is intentionally **not** committed —
+only the deterministic unit regressions (§F.12) are CI gates; the soak is the
+developer/manual confidence gate, reproducible on demand.
+
+> **Measurement caveat (learned the hard way).** Two traps invalidate a naïve
+> perf number here: (1) `open_dataset` returns `map_not_ready` during the
+> viewer's cold layout, so a harness must **retry until the dataset actually
+> loads** — otherwise the gesture burst measures the OSM base map, not the
+> chart; and (2) because "B" renders off the UI thread, `get_render_stats`'
+> per-style/`window` figures are **not** comparable between the arms. Any
+> committed performance claim must assert a non-zero `VectorStyle` (or
+> tile-build) draw count for the arm under test before trusting the timings.
 
 ---
 
