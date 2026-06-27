@@ -177,9 +177,36 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding BasemapEnabled}" />
             </Grid>
 
-            <!-- Rendering optimizations (Settings → Map) — shown for the
-                 "A" (Mapsui) subsystem only, so the panel never lists knobs
-                 that don't apply to the active renderer. -->
+            <!-- Render subsystem A/B + tiled knobs (issue #331) -->
+            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="0,8,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection_Help}"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystem}"
+                           FontSize="12" />
+                <ComboBox ItemsSource="{Binding AvailableRenderSubsystems}"
+                          SelectedItem="{Binding SelectedRenderSubsystem}"
+                          IsEnabled="{Binding RenderSubsystemEditable}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_RenderSubsystem}"
+                          MinWidth="160"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:RenderSubsystemNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- "Standard" (Mapsui) optimizations — shown below the subsystem
+                 selector, and only when the Standard arm is selected, so the
+                 panel never lists knobs that don't apply to the active
+                 renderer. -->
             <StackPanel Spacing="16" IsVisible="{Binding MapsuiSelected}">
                 <StackPanel Spacing="16">
                     <TextBlock Text="{x:Static loc:Strings.Settings_MapOptimizationsSubsection}"
@@ -215,32 +242,6 @@
                         <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding GeometrySimplificationEnabled}" />
                     </Grid>
                 </StackPanel>
-            </StackPanel>
-
-            <!-- Render subsystem A/B + tiled knobs (issue #331) -->
-            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection}"
-                       FontSize="12"
-                       FontWeight="SemiBold"
-                       Margin="0,8,0,0" />
-            <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystemSubsection_Help}"
-                       FontSize="11"
-                       Opacity="0.6"
-                       TextWrapping="Wrap" />
-            <StackPanel Spacing="6">
-                <TextBlock Text="{x:Static loc:Strings.Settings_RenderSubsystem}"
-                           FontSize="12" />
-                <ComboBox ItemsSource="{Binding AvailableRenderSubsystems}"
-                          SelectedItem="{Binding SelectedRenderSubsystem}"
-                          IsEnabled="{Binding RenderSubsystemEditable}"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_RenderSubsystem}"
-                          MinWidth="160"
-                          HorizontalAlignment="Left">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding Converter={x:Static viewer:RenderSubsystemNameConverter.Instance}}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
             </StackPanel>
 
             <!-- "B" (tiled scene) knobs — shown only when the B arm is selected -->

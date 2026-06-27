@@ -186,10 +186,10 @@ public static class RenderingOptimizations
     /// <summary>
     /// Selects the active base-plane chart render subsystem (the A/B switch for
     /// the tiled/async render-subsystem redesign). <see cref="RenderSubsystemKind.Mapsui"/>
-    /// is today's Mapsui feature/style/layer path (the "A" arm);
-    /// <see cref="RenderSubsystemKind.TiledScene"/> selects the new tiled/async
+    /// is the established Mapsui feature/style/layer path (the "A" arm);
+    /// <see cref="RenderSubsystemKind.TiledScene"/> selects the tiled/async
     /// subsystem (the "B" arm). Seeded from <c>S100_RENDER_SUBSYSTEM</c>
-    /// (<c>mapsui</c> | <c>tiledscene</c>); default <see cref="RenderSubsystemKind.Mapsui"/>.
+    /// (<c>mapsui</c> | <c>tiledscene</c>); default <see cref="RenderSubsystemKind.TiledScene"/>.
     /// </summary>
     public static RenderSubsystemKind RenderSubsystem
     {
@@ -376,7 +376,7 @@ public static class RenderingOptimizations
         var raw = Environment.GetEnvironmentVariable("S100_RENDER_SUBSYSTEM");
         if (string.IsNullOrEmpty(raw))
         {
-            return (RenderSubsystemKind.Mapsui, false);
+            return (RenderSubsystemKind.TiledScene, false);
         }
 
         var kind = raw.Trim().ToLowerInvariant() switch
@@ -447,14 +447,15 @@ public enum RenderSubsystemKind
 {
     /// <summary>
     /// The established Mapsui feature/style/layer rendering path (the "A" arm).
-    /// This is the default and the baseline against which the new subsystem is
-    /// measured.
+    /// Retained as a selectable fallback; <see cref="TiledScene"/> is now the
+    /// default and the baseline against which this path is compared.
     /// </summary>
     Mapsui = 0,
 
     /// <summary>
-    /// The new tiled/async predictive render subsystem that rasterises the base
-    /// plane directly from the <c>VectorScene</c> IR (the "B" arm).
+    /// The tiled/async predictive render subsystem that rasterises the base
+    /// plane directly from the <c>VectorScene</c> IR (the "B" arm). This is the
+    /// default subsystem.
     /// </summary>
     TiledScene = 1,
 }

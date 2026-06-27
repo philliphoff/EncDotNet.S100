@@ -8,7 +8,7 @@ using Xunit;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// Covers the Settings → "Render subsystem (experimental)" knobs (issue #331):
+/// Covers the Settings → "Render subsystem" knobs (issue #331):
 /// the A/B subsystem switch, the tiled scene mode, and the "B" tiled-pipeline
 /// optimization knobs. Each mirrors a <see cref="RenderingOptimizations"/>
 /// value, defaults to the "best" set, persists through <see cref="ViewerSettings"/>,
@@ -34,9 +34,9 @@ public class SettingsViewModelRenderSubsystemTests
 
         var vm = new SettingsViewModel(NewSettings());
 
-        Assert.Equal(RenderSubsystemKind.Mapsui, vm.SelectedRenderSubsystem);
+        Assert.Equal(RenderSubsystemKind.TiledScene, vm.SelectedRenderSubsystem);
         Assert.Equal(VectorSceneMode.Tiled, vm.SelectedSceneMode);
-        Assert.False(vm.TiledSceneSelected);
+        Assert.True(vm.TiledSceneSelected);
         Assert.True(vm.TilePredictionEnabled);
         Assert.True(vm.TileGpuResidencyEnabled);
         Assert.True(vm.TileDiskCacheEnabled);
@@ -63,7 +63,7 @@ public class SettingsViewModelRenderSubsystemTests
         Assert.Equal(VectorSceneMode.Single, vm.SelectedSceneMode);
 
         // Restore the global renderer flags so cross-test ordering is unaffected.
-        vm.SelectedRenderSubsystem = RenderSubsystemKind.Mapsui;
+        vm.SelectedRenderSubsystem = RenderSubsystemKind.TiledScene;
         vm.SelectedSceneMode = VectorSceneMode.Tiled;
     }
 
@@ -82,17 +82,17 @@ public class SettingsViewModelRenderSubsystemTests
 
         try
         {
-            vm.SelectedRenderSubsystem = RenderSubsystemKind.TiledScene;
+            vm.SelectedRenderSubsystem = RenderSubsystemKind.Mapsui;
 
-            Assert.Equal(nameof(RenderSubsystemKind.TiledScene), s.RenderSubsystem);
-            Assert.Equal(RenderSubsystemKind.TiledScene, RenderingOptimizations.RenderSubsystem);
-            Assert.True(vm.TiledSceneSelected);
+            Assert.Equal(nameof(RenderSubsystemKind.Mapsui), s.RenderSubsystem);
+            Assert.Equal(RenderSubsystemKind.Mapsui, RenderingOptimizations.RenderSubsystem);
+            Assert.True(vm.MapsuiSelected);
             Assert.Equal(1, reloads);
             Assert.True(File.Exists(s.SettingsFilePath));
         }
         finally
         {
-            vm.SelectedRenderSubsystem = RenderSubsystemKind.Mapsui;
+            vm.SelectedRenderSubsystem = RenderSubsystemKind.TiledScene;
             if (File.Exists(s.SettingsFilePath)) File.Delete(s.SettingsFilePath);
         }
     }
@@ -109,18 +109,19 @@ public class SettingsViewModelRenderSubsystemTests
         var vm = new SettingsViewModel(NewSettings());
         try
         {
-            Assert.False(vm.TiledModeActive); // A arm
+            vm.SelectedRenderSubsystem = RenderSubsystemKind.Mapsui;
+            Assert.False(vm.TiledModeActive); // Standard arm
 
             vm.SelectedRenderSubsystem = RenderSubsystemKind.TiledScene;
-            Assert.True(vm.TiledModeActive); // B + tiled (default)
+            Assert.True(vm.TiledModeActive); // Tiled arm + tiled scene mode (default)
 
             vm.SelectedSceneMode = VectorSceneMode.Single;
-            Assert.False(vm.TiledModeActive); // B + single
+            Assert.False(vm.TiledModeActive); // Tiled arm + single
         }
         finally
         {
             vm.SelectedSceneMode = VectorSceneMode.Tiled;
-            vm.SelectedRenderSubsystem = RenderSubsystemKind.Mapsui;
+            vm.SelectedRenderSubsystem = RenderSubsystemKind.TiledScene;
         }
     }
 
