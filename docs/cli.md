@@ -1,17 +1,19 @@
 # Command-line rendering (`s100`)
 
 `EncDotNet.S100.Cli` is a cross-platform .NET console tool, invoked as **`s100`**,
-that renders any supported S-100 dataset to a PNG, JPEG, or WebP image. It drives the same
-portrayal pipelines as the Avalonia viewer, but rasterises through the
-Mapsui-free Skia *headless* renderers so it can run without a UI — making it
-suitable for batch scripts (e.g. generating sea-ice or surface-current
-previews).
+that renders any supported S-100 dataset to a PNG, JPEG, or WebP image, and
+**validates** datasets and exchange sets against the normative rule packs. It
+drives the same portrayal and validation pipelines as the Avalonia viewer, but
+rasterises through the Mapsui-free Skia *headless* renderers so it can run
+without a UI — making it suitable for batch scripts (e.g. generating sea-ice or
+surface-current previews) and CI conformance checks.
 
-It offers three subcommands:
+It offers four subcommands:
 
 | Command | Purpose |
 |---|---|
 | `s100 render <dataset> <output>` | Render a dataset to an image (PNG, JPEG, or WebP). |
+| `s100 validate <dataset-or-exchange-set>` | Validate against the spec's normative rule pack (plus exchange-set signature/checksum integrity), with compiler-style output and suppression. |
 | `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
 | `s100 list-specs` | List the supported product specifications and which support headless rendering. |
 
@@ -52,6 +54,9 @@ dotnet run --project tools/EncDotNet.S100.Cli -- render dataset.h5 out.png
 
 # Inspect a time-series dataset and list its time steps
 dotnet run --project tools/EncDotNet.S100.Cli -- info currents.h5
+
+# Validate a dataset or exchange set against its normative rule pack
+dotnet run --project tools/EncDotNet.S100.Cli -- validate exchange-set/
 
 # Render the 7th time step at night-palette, larger canvas
 dotnet run --project tools/EncDotNet.S100.Cli -- \
