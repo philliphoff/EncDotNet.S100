@@ -52,6 +52,11 @@
                     <Color x:Key="BorderColor60">#1F0606</Color>
                     <Color x:Key="BorderColor30">#4C280808</Color>
                     <Color x:Key="OutlineColor">#301010</Color>
+
+                    <!-- Subtle fill for muted surfaces (section headers,
+                         zebra rows). A low-alpha white overlay reads as a
+                         faint lift against the near-black Night surfaces. -->
+                    <Color x:Key="MutedBackgroundColor">#14FFFFFF</Color>
                 </ResourceDictionary>
 
                 <!--
@@ -88,8 +93,20 @@
                     <Color x:Key="BorderColor60">#D4C8AE</Color>
                     <Color x:Key="BorderColor30">#4CC8B89A</Color>
                     <Color x:Key="OutlineColor">#DDD0B8</Color>
+
+                    <!-- Subtle fill for muted surfaces (section headers,
+                         zebra rows): a faintly deeper warm tint than the
+                         cream card surface. -->
+                    <Color x:Key="MutedBackgroundColor">#14000000</Color>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+
+            <!-- Default subtle muted-surface fill for the Light / Dark
+                 chrome variants (which have no explicit theme dictionary
+                 here): a low-alpha black overlay reads as a light gray on
+                 the white-ish card surfaces. Night / Dusk override this in
+                 their dictionaries above. -->
+            <Color x:Key="MutedBackgroundColor">#12000000</Color>
         </ResourceDictionary>
     </Application.Resources>
 

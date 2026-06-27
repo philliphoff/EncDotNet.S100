@@ -71,22 +71,6 @@
                         </TextBlock>
                     </Grid>
                 </Grid>
-                <!--
-                    External text referenced by a `fileReference` attribute
-                    (S-101 FC; alias TXTDSC / NTXTDS): the value above is the
-                    file name, this expander reveals the resolved file content,
-                    mirroring an ECDIS "show textual description" affordance.
-                -->
-                <Expander Margin="0,6,0,0"
-                          Padding="0"
-                          Header="{x:Static loc:Strings.Pick_FileReference_Header}"
-                          IsVisible="{Binding HasExternalText}">
-                    <SelectableTextBlock Text="{Binding ExternalText}"
-                                         FontSize="12"
-                                         FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
-                                         TextWrapping="Wrap"
-                                         Margin="0,6,0,0" />
-                </Expander>
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -105,6 +89,65 @@
                               Margin="20,0,0,0"
                               ItemTemplate="{StaticResource AttributeCellTemplate}" />
             </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Referenced-text card: a resolved `fileReference` (S-101 FC; alias
+            TXTDSC / NTXTDS) lifted out of the attribute table into its own
+            labelled block. Header row carries a document glyph, the file's
+            promoted heading, the source file name, and a copy button; the
+            body shows the full referenced text (always visible, no expander),
+            mirroring an ECDIS "show textual description" affordance.
+        -->
+        <DataTemplate x:Key="ReferencedTextCardTemplate" x:DataType="vm:PickReferencedText">
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Margin="0,0,0,8"
+                    ClipToBounds="True">
+                <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*,Auto"
+                          Background="{DynamicResource MutedBackgroundColor}">
+                        <ic:FluentIcon Grid.Column="0"
+                                       Icon="DocumentText"
+                                       IconVariant="Regular"
+                                       FontSize="18"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center"
+                                       Margin="12,0,8,0" />
+                        <StackPanel Grid.Column="1"
+                                    Spacing="2"
+                                    Margin="0,10"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding FileName}"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="2"
+                                VerticalAlignment="Top"
+                                Padding="6"
+                                Margin="4"
+                                Background="Transparent"
+                                Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).CopyReferencedTextCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyReferencedText}">
+                            <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                    </Grid>
+                    <SelectableTextBlock Text="{Binding Body}"
+                                         FontSize="14"
+                                         LineHeight="22"
+                                         TextWrapping="Wrap"
+                                         Margin="14,12,14,14"
+                                         IsVisible="{Binding HasBody}" />
+                </StackPanel>
+            </Border>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -531,6 +574,27 @@
                                    IsVisible="{Binding !HasAttributes}" />
                     </StackPanel>
                 </Expander>
+
+                <!--
+                    Referenced text. Resolved `fileReference` content lifted
+                    out of the attribute table above into standalone cards so
+                    the mariner can read it without an expander or a monospace
+                    table dump. Hidden when the pick has no referenced text.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding HasReferencedText}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_ReferencedTextHeader}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <ItemsControl ItemsSource="{Binding ReferencedTexts}"
+                                      ItemTemplate="{StaticResource ReferencedTextCardTemplate}" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

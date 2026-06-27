@@ -476,6 +476,8 @@ public partial class App : Application
 
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();
+        services.AddSingleton<IGeographicPickPresenter>(sp =>
+            new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
@@ -608,7 +610,8 @@ public partial class App : Application
             sp.GetRequiredService<IRenderActivityMonitor>(),
             sp.GetRequiredService<IDatasetLoadGateway>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+            sp.GetRequiredService<IGeographicPickPresenter>()));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>();

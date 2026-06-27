@@ -43,6 +43,79 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPick_LiftsResolvedFileReferenceIntoReferencedTexts()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "CAUTION.TXT",
+            DisplayValue = null,
+            ExternalText = "ANCHORING RESTRICTED\n\nBeware of strong currents.",
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101",
+            new[] { Leaf("objectName", "Caution Area"), fileRef });
+
+        // The resolved file reference is pulled out of the attribute table…
+        var row = Assert.Single(vm.Attributes);
+        Assert.Equal("objectName", row.Code);
+
+        // …and surfaced as a referenced-text card with a promoted heading.
+        Assert.True(vm.HasReferencedText);
+        var card = Assert.Single(vm.ReferencedTexts);
+        Assert.Equal("ANCHORING RESTRICTED", card.Title);
+        Assert.Equal("CAUTION.TXT", card.FileName);
+        Assert.Equal("Beware of strong currents.", card.Body);
+        Assert.Equal(fileRef.ExternalText, card.ClipboardText);
+    }
+
+    [Fact]
+    public void SetPick_UnresolvedFileReferenceStaysInAttributeTable()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "MISSING.TXT",
+            DisplayValue = null,
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
+
+        Assert.False(vm.HasReferencedText);
+        Assert.Empty(vm.ReferencedTexts);
+        var row = Assert.Single(vm.Attributes);
+        Assert.Equal("MISSING.TXT", row.RawValue);
+    }
+
+    [Fact]
+    public void Clear_EmptiesReferencedTexts()
+    {
+        var vm = new PickReportViewModel();
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            RawValue = "CAUTION.TXT",
+            ExternalText = "Hazard.\nDetails.",
+            Children = [],
+        };
+        vm.SetPick("CautionArea", null, "7", "test.000", "S-101", new[] { fileRef });
+        Assert.True(vm.HasReferencedText);
+
+        vm.Clear();
+
+        Assert.False(vm.HasReferencedText);
+        Assert.Empty(vm.ReferencedTexts);
+    }
+
+    [Fact]
     public void SetPick_WithEmptyAttributes_ReportsHasAttributesFalse()
     {
         var vm = new PickReportViewModel();
@@ -61,7 +134,7 @@ public class PickReportViewModelTests
     }
 
     [Fact]
-    public void SetPick_PreservesExternalTextThroughReformat()
+    public void SetPick_PreservesReferencedTextThroughReformat()
     {
         var vm = new PickReportViewModel();
 
@@ -77,10 +150,11 @@ public class PickReportViewModelTests
 
         vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
 
-        var row = Assert.Single(vm.Attributes);
-        Assert.True(row.HasExternalText);
-        Assert.Equal("Beware of strong currents.", row.ExternalText);
-        Assert.Equal("CAUTION.TXT", row.RawValue);
+        Assert.Empty(vm.Attributes);
+        var card = Assert.Single(vm.ReferencedTexts);
+        Assert.Equal("CAUTION.TXT", card.FileName);
+        Assert.Equal("Beware of strong currents.", card.Title);
+        Assert.Equal("Beware of strong currents.", card.ClipboardText);
     }
 
     [Fact]
