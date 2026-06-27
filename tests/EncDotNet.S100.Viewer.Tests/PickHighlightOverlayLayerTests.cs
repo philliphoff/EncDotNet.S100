@@ -52,8 +52,8 @@ public class PickHighlightOverlayLayerTests
             new PickHighlightState((47.6, -122.3), Geometry: null),
             Appearance);
 
-        // Halo ring + accent ring + centre dot.
-        Assert.Equal(3, FeatureCount(layer));
+        // Casing ring + accent ring (no centre dot).
+        Assert.Equal(2, FeatureCount(layer));
     }
 
     [Fact]
@@ -80,8 +80,8 @@ public class PickHighlightOverlayLayerTests
             new PickHighlightState((47.5, -121.5), geometry),
             Appearance);
 
-        // Area fill (1) + exterior ring outline (1) + marker triplet (3).
-        Assert.Equal(5, FeatureCount(layer));
+        // Area fill (1) + exterior ring outline (1) + marker pair (2).
+        Assert.Equal(4, FeatureCount(layer));
     }
 
     [Fact]

@@ -98,13 +98,16 @@ internal static class PickHighlightOverlayLayer
     // area fill keeps the interior readable without obscuring the chart.
     private const double OutlineWidth = 3.0;
     private const float OutlineOpacity = 0.9f;
-    private const float AreaFillOpacity = 0.14f;
+    // Selected-area shading: accent colour at 15% (per UX spec).
+    private const float AreaFillOpacity = 0.15f;
 
     // The position marker is screen-space (constant pixel size at any zoom) so
-    // it always reads as a cursor echo rather than a feature.
-    private const double MarkerRingScale = 1.5;
-    private const double MarkerHaloScale = 1.7;
-    private const double MarkerDotScale = 0.32;
+    // it always reads as a cursor echo rather than a feature. It is a thin
+    // accent ring cased in white (no centre dot, so the selected feature stays
+    // visible through the ring).
+    private const double MarkerRingScale = 1.4;
+    private const double MarkerCasingWidth = 5.0;
+    private const double MarkerRingWidth = 2.0;
 
     /// <summary>Creates a fresh, empty overlay layer.</summary>
     public static MemoryLayer Create() => new()
@@ -125,11 +128,12 @@ internal static class PickHighlightOverlayLayer
 
         var accent = appearance.Accent;
         var accentColor = new MapsuiColor(accent.R, accent.G, accent.B);
-        // Halo contrasts the accent against a varied basemap: a light halo in
-        // dark themes, a dark halo in light themes (mirrors MeasureOverlayLayer).
-        var haloColor = appearance.IsDarkTheme
-            ? new MapsuiColor(245, 245, 245, 220)
-            : new MapsuiColor(0, 0, 0, 180);
+        // The accent ring is cased in white so it reads against any basemap.
+        // Dusk/Night palettes dim the casing so the marker doesn't glare on a
+        // dark chart (a fully-white ring is too bright at night).
+        var casingColor = appearance.IsDarkTheme
+            ? new MapsuiColor(200, 200, 200, 230)
+            : new MapsuiColor(255, 255, 255, 255);
 
         // 1) Object outline (drawn first so the marker sits on top).
         if (state.Geometry is { } geometry && geometry.HasGeometry)
@@ -140,7 +144,7 @@ internal static class PickHighlightOverlayLayer
         // 2) Position marker (cursor echo) at the click location.
         if (state.Location is { } loc)
         {
-            AddPositionMarker(features, loc.Lat, loc.Lon, accentColor, haloColor);
+            AddPositionMarker(features, loc.Lat, loc.Lon, accentColor, casingColor);
         }
 
         layer.Features = features;
@@ -293,42 +297,33 @@ internal static class PickHighlightOverlayLayer
         double lat,
         double lon,
         MapsuiColor accentColor,
-        MapsuiColor haloColor)
+        MapsuiColor casingColor)
     {
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
         var point = new Point(mx, my);
 
-        // Halo ring (slightly larger) for contrast against the basemap.
-        var halo = new GeometryFeature(point.Copy());
-        halo.Styles.Add(new SymbolStyle
+        // White casing (wider stroke, drawn first) gives the accent ring crisp
+        // light edges against any basemap.
+        var casing = new GeometryFeature(point.Copy());
+        casing.Styles.Add(new SymbolStyle
         {
             SymbolType = SymbolType.Ellipse,
-            SymbolScale = MarkerHaloScale,
+            SymbolScale = MarkerRingScale,
             Fill = null,
-            Outline = new Pen { Color = haloColor, Width = 4.0 },
+            Outline = new Pen { Color = casingColor, Width = MarkerCasingWidth },
         });
-        features.Add(halo);
+        features.Add(casing);
 
-        // Accent ring.
+        // Thin accent ring on top. No centre fill/dot, so the selected feature
+        // remains visible through the ring.
         var ring = new GeometryFeature(point.Copy());
         ring.Styles.Add(new SymbolStyle
         {
             SymbolType = SymbolType.Ellipse,
             SymbolScale = MarkerRingScale,
             Fill = null,
-            Outline = new Pen { Color = accentColor, Width = 2.5 },
+            Outline = new Pen { Color = accentColor, Width = MarkerRingWidth },
         });
         features.Add(ring);
-
-        // Centre dot pins the exact pick position.
-        var dot = new GeometryFeature(point.Copy());
-        dot.Styles.Add(new SymbolStyle
-        {
-            SymbolType = SymbolType.Ellipse,
-            SymbolScale = MarkerDotScale,
-            Fill = new Brush { Color = accentColor },
-            Outline = new Pen { Color = haloColor, Width = 1.0 },
-        });
-        features.Add(dot);
     }
 }
