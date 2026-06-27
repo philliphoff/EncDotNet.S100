@@ -916,6 +916,73 @@ viewports differing 4× in world span but sharing pixel dimensions — proving t
 constant on-screen size the overlay exists to guarantee. Both are pure,
 machine-independent Skia rasters.
 
+### F.12 Failure-mode → regression-test traceability
+
+Every native/threading defect found by manually driving "B" (this appendix)
+is now pinned by a deterministic, headless regression test, so it cannot
+silently return once "B" is the default everyone runs (issue #347, Stability ▸
+"Regression tests for each known failure mode"). The GPU/context-bound paths
+that cannot run headlessly are exercised with CPU-backed Skia surfaces and a
+sentinel context — the registry lifecycle is identical for CPU- and GPU-backed
+resources — and backed by the live integration runs recorded above.
+
+| # | Failure mode (symptom) | Regression test(s) | Project |
+|---|---|---|---|
+| §F.5 | Teardown finalizer-thread GPU free on close-all + reopen | `GpuRegistryTeardownTests.ReconcileGpuCaches_OwningLayerCollected_*`, `TileCacheTests.Clear_DisposesAndEmptiesCache` / `Put_AfterDispose_*` | Pipelines.Tests |
+| §F.6 | Zoom-out GPU use-after-free (mid-frame eviction) | `TileCacheTests.DeferDisposal_*`, `DrainPendingDisposals_*` | Pipelines.Tests |
+| §F.7 | Prediction-driven repaint loop ("never settles") | `TilePredictionTests.ShouldRequestRedraw_RepaintsOnlyForVisiblePublishedTiles` | Pipelines.Tests |
+| §F.8 | Rotation-induced blanking / one-scale backdrop | `TileGridTests.RotatedCoverSize_*`, `RotationCompositeLayout_*`, `VisibleTiles_RotatedViewport_FillsExtentThatRawSizeMisses`; `TilePredictionTests.PredictedTiles_RotatedViewport_WarmFrameExpandsWithCoverSize` | Pipelines.Tests |
+| §F.9 | Palette-insensitive `styleStateHash` (Night served Day) | `StyleStatePaletteFingerprintTests` (4 cases) | Pipelines.Tests |
+| §F.10 | Shutdown teardown race (worker into a dying Skia) | `WorkerDrainGateTests` (5 cases) | Pipelines.Tests |
+| #345 | B→A switch crash (abandoned-layer GPU free off-thread) | `GpuRegistryTeardownTests.ReconcileGpuCaches_SwitchBToA_FreesAbandonedBLayerButKeepsSurvivingLayer` (+ the `*_LiveLayer_*` / `*_DeadLayerDifferentContext_*` cases) | Pipelines.Tests |
+
+The §F.8 prediction-under-rotation cases were added once rotation became
+scriptable end-to-end: the `set_render_subsystem` MCP tool (the last missing
+soak affordance — rotation was already driveable via `set_viewport {rotation}`)
+lets a scripted soak exercise the A↔B switch and rotated viewports without the
+GUI. The two new tests pin the renderer's `RotatedCoverSize → VisibleTiles` /
+`PredictedTiles` composition (`S100VectorTileRenderer.Render`), so a revert to
+selecting tiles against the raw north-up DIP size — the shape of the §F.8 bug —
+fails CI.
+
+### F.13 Measurable exit criteria for defaulting "B"
+
+The flip of the default to `RenderSubsystemKind.TiledScene` is gated on three
+**measurable** bars (issue #347 ▸ "Define measurable exit criteria"). All three
+are now met: fidelity and stability via committed gates, and **performance** via
+the A↔B telemetry capture recorded below. The flip itself (`SeedRenderSubsystem()`
+empty-value branch + enum default in `RenderingOptimizations.cs`) remains a
+separate, deliberately deferred step that keeps "A" selectable as a fallback for
+at least one release.
+
+| Bar | Criterion | Gate / evidence | Status |
+|---|---|---|---|
+| **Fidelity** | "B" ≥ "A" on the golden-image set (S-101 + every non-S-101 product), with coverage rasters near-pixel-identical and declutter/label survival unchanged. | `RenderParityTests` (S-101) + `MultiProductParityTests` (coverage exact-match, per-product B-arm goldens, label preservation) — committed CI gates (#360). | ✅ |
+| **Performance** | A bounded on-screen frame-time budget on the pan/zoom/rotate gesture script for a dense cell **plus** a bounded async tile-build latency for "B". | **Met.** Two complementary measurements on the GB Solent `101GB00302045` cell with an identical (seeded) smooth pan/zoom/rotate gesture burst per arm, dataset-load asserted (`count=1`, `loadDurationMs`≈6.2 s) and a non-zero draw count asserted (A: 1817 draws, B: 90 composite draws). **(1) UI-thread on-screen paint** (`get_render_stats` `window`, the apples-to-apples *responsiveness* number): **B** mean **6.0 ms** / p95 **21.6 ms** / max 125 ms at **90 draws**, vs **A** mean **13.1 ms** / p95 **57.1 ms** / max 227 ms at **1817 draws** — "B" keeps the UI thread ≈2× cheaper on both mean and p95 by compositing tiles instead of re-iterating every feature. **(2) "B"'s off-thread cost** (`EncDotNet.S100.Renderers.Mapsui` `Meter` via `dotnet-counters`, typical = median 1-s window / worst = max window): `tile.rasterize.duration` typ **1.6 ms** / worst-window p95 55.5 ms; `tile.composite.duration` typ 0.2 ms / worst-window p95 67 ms; `tile.cold.exposure` typ ~17 tiles / worst ~46 — i.e. "B" trades a bounded async build latency and brief cold-tile exposure during rapid panning for the UI-thread win. Numbers reproduced across two runs (±0.5 ms). | ✅ |
+| **Stability** | Zero crashes / blanks / paint-fault growth across an ≥ M-minute multi-product soak that exercises the A↔B switch in both directions, palette/category churn, rotation, and dataset open/close GC; and every known failure mode (§F.5–§F.10, #345) maps to a passing regression test. | A 10-minute GPU/Metal soak (real S-101 GB cell — real `loadDurationMs`≈6.4 s confirming S-101 portrayal, not a base-map-only frame — + synthetic S-124/125/127/131/201 GML churn): **863 steps, 149 A↔B switches, 0 paint faults, 0 render bails, 0 never-settles, 0 blanks, process alive, no crash-log, no native/Skia fatal frame.** Failure-mode coverage: traceability matrix §F.12. | ✅ |
+
+The stability figures are the output of a scripted MCP soak (the
+`set_render_subsystem` tool added for this work makes the A↔B switch driveable
+from outside the GUI; rotation rides on `set_viewport {rotation}`). The harness
+is a session-only evaluation artefact and is intentionally **not** committed —
+only the deterministic unit regressions (§F.12) are CI gates; the soak is the
+developer/manual confidence gate, reproducible on demand.
+
+> **Measurement caveat (learned the hard way).** Three traps invalidate a naïve
+> perf number here: (1) `open_dataset` returns `map_not_ready` during the
+> viewer's cold layout, so a harness must **retry until the dataset actually
+> loads** — otherwise the gesture burst measures the OSM base map, not the
+> chart; (2) because "B" renders off the UI thread, `get_render_stats`'
+> per-style/`window` figures capture "B"'s *UI-thread* cost but **not** its
+> off-thread tile-build cost — the two arms are only comparable on the
+> UI-thread responsiveness number, with "B"'s async build cost read separately
+> from the `EncDotNet.S100.Renderers.Mapsui` `Meter`; and (3) `frame.duration`
+> and `layer.getfeatures.duration` fire on **layer rebuild**, not per paint, so
+> they are silent during a pan/zoom burst — use `get_render_stats` for the
+> per-frame UI cost and the `tile.*` histograms for "B"'s worker cost. Any
+> committed performance claim must assert a non-zero `VectorStyle`/tile draw
+> count for the arm under test before trusting the timings.
+
 ---
 
 ## Appendix G — Phase 4 Label-plane completion (declutter, upright text, glyph fallback)

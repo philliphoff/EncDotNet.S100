@@ -135,6 +135,55 @@ public sealed class GpuRegistryTeardownTests
         }
     }
 
+    [Fact]
+    public void ReconcileGpuCaches_SwitchBToA_FreesAbandonedBLayerButKeepsSurvivingLayer()
+    {
+        // Models the #345 B→A switch precisely: flipping the subsystem from "B"
+        // (tiled) to "A" (Mapsui) re-portrays and swaps in a fresh layer, abandoning
+        // the old tiled layer while the SAME GPU context keeps rendering. The first
+        // post-switch paint's reconcile must free the abandoned "B" layer's GPU
+        // objects on the render thread, while leaving the surviving layer's
+        // resources — bound to the same live context — untouched. (Before the fix,
+        // the abandoned layer's textures were finalized off-thread → native crash.)
+        var survivingLayer = new MemoryLayer("surviving");
+        var liveSurface = SKSurface.Create(new SKImageInfo(8, 8));
+        var liveImage = liveSurface.Snapshot();
+        var deadSurface = SKSurface.Create(new SKImageInfo(8, 8));
+        var deadImage = deadSurface.Snapshot();
+        try
+        {
+            var context = new object();
+
+            // The abandoned "B" tiled layer (collectable once this returns) and the
+            // surviving layer, both registered under the one live render context.
+            RegisterWithCollectableLayer(new TileCache(1024 * 1024), context, deadSurface, deadImage);
+            S100VectorTileRenderer.RegisterGpuEntryForTest(
+                survivingLayer, new TileCache(1024 * 1024), context, liveSurface, liveImage);
+            Assert.Equal(2, S100VectorTileRenderer.GpuRegistryEntryCountForTest);
+
+            for (var i = 0; i < 4; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
+
+            S100VectorTileRenderer.ReconcileGpuCachesForTest(context);
+
+            // Only the surviving layer remains; the abandoned "B" layer's GPU
+            // objects were disposed on this (render) thread, the survivor's were not.
+            Assert.Equal(1, S100VectorTileRenderer.GpuRegistryEntryCountForTest);
+            Assert.True(IsDisposed(deadSurface));
+            Assert.True(IsDisposed(deadImage));
+            Assert.False(IsDisposed(liveSurface));
+            Assert.False(IsDisposed(liveImage));
+        }
+        finally
+        {
+            GC.KeepAlive(survivingLayer);
+            S100VectorTileRenderer.ClearGpuRegistryForTest();
+        }
+    }
+
     // SkiaSharp surfaces the native handle as IntPtr.Zero once disposed.
     private static bool IsDisposed(SKObject obj) => obj.Handle == nint.Zero;
 }
