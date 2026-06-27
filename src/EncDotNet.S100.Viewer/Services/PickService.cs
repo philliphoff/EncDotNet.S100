@@ -177,6 +177,73 @@ internal sealed class PickService : IPickService
         }
     }
 
+    /// <summary>
+    /// Publishes a pre-resolved geographic pick (the MCP <c>pick_features</c>
+    /// path). Each feature is re-queried against its owning dataset's
+    /// processor so the panel shows full FC-decoded attributes; entries that
+    /// no longer resolve are skipped. The pick highlight follows because it
+    /// observes the same <see cref="PickReportViewModel"/>.
+    /// </summary>
+    public void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        IReadOnlyList<GeographicPickFeature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+
+        using var __cmd = ViewerObservability.BeginCommand("pick.geographic");
+
+        var hits = new List<PickHit>();
+        foreach (var feature in features)
+        {
+            if (!TryResolveProcessorByDisplayName(feature.DatasetDisplayName, out var entry, out var processor))
+                continue;
+
+            var info = processor.GetFeatureInfo(feature.FeatureRef);
+            if (info is null)
+                continue;
+
+            hits.Add(BuildHit(info, entry.DisplayName, processor));
+        }
+
+        if (hits.Count == 0)
+        {
+            _pickReport.Clear();
+            return;
+        }
+
+        _pickReport.SetPicks(hits, Array.Empty<DynamicPickHit>(), new PickLocation(latitude, longitude));
+
+        var first = hits[0];
+        var primary = string.Format(
+            Strings.Status_FeatureSummary,
+            first.FeatureTypeName ?? first.FeatureType,
+            first.FeatureRef);
+        _status.StatusText = hits.Count > 1
+            ? string.Format(Strings.Status_FeatureSummaryWithMore, primary, hits.Count - 1)
+            : primary;
+    }
+
+    private bool TryResolveProcessorByDisplayName(
+        string displayName,
+        out DatasetEntry owningEntry,
+        out IDatasetProcessor processor)
+    {
+        foreach (var (entry, proc) in _loader.Processors)
+        {
+            if (string.Equals(entry.DisplayName, displayName, StringComparison.Ordinal))
+            {
+                owningEntry = entry;
+                processor = proc;
+                return true;
+            }
+        }
+
+        owningEntry = null!;
+        processor = null!;
+        return false;
+    }
+
     private List<PickHit> ResolveHits(MapInfo mapInfo)
     {
         var hits = new List<PickHit>();

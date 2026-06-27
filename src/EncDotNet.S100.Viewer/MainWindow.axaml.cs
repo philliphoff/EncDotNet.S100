@@ -44,6 +44,7 @@ public partial class MainWindow : ShadUI.Window
     private Map? _renderActivityMap;
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourceOverlayHost? _dynamicSourceOverlayHost;
+    private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private ILayer? _basemapLayer;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -186,6 +187,8 @@ public partial class MainWindow : ShadUI.Window
                 .Current = null;
             _dynamicSourceOverlayHost?.Dispose();
             _dynamicSourceOverlayHost = null;
+            _pickHighlightController?.Dispose();
+            _pickHighlightController = null;
         };
         DataContext = _viewModel;
 
@@ -364,6 +367,16 @@ public partial class MainWindow : ShadUI.Window
         {
             _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
         }
+
+        // Pick highlight: keep a cursor-echo marker + selected-feature outline
+        // on the overlay tier in sync with the current pick report, so the
+        // pick stays visible as the user (or an MCP agent) pans the map.
+        _pickHighlightController = new EncDotNet.S100.Viewer.Services.PickHighlightController(
+            mapHost,
+            App.Services.GetRequiredService<PickReportViewModel>(),
+            App.Services.GetRequiredService<ViewerDatasetCatalog>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>());
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the

@@ -34,6 +34,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IDatasetLoadGateway? _loadGateway;
     private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
     private readonly RoutesService? _routesService;
+    private readonly IGeographicPickPresenter? _pickPresenter;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -50,7 +51,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IRenderActivityMonitor? renderActivityMonitor = null,
         IDatasetLoadGateway? loadGateway = null,
         EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? ownShipHelm = null,
-        RoutesService? routesService = null)
+        RoutesService? routesService = null,
+        IGeographicPickPresenter? pickPresenter = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
@@ -63,6 +65,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         _loadGateway = loadGateway;
         _ownShipHelm = ownShipHelm;
         _routesService = routesService;
+        _pickPresenter = pickPresenter;
         _loggers = loggers;
     }
 
@@ -276,7 +279,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(RenderToImageMcpAdapter.Create(new RenderToImageTool(_mapHostAccessor)));
             tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_mapHostAccessor)));
-            tools.Add(PickFeaturesMcpAdapter.Create(new PickFeaturesTool(_mapHostAccessor, _catalog)));
+            tools.Add(PickFeaturesMcpAdapter.Create(new PickFeaturesTool(_mapHostAccessor, _catalog, _pickPresenter)));
         }
         if (_renderStateAccessor is not null)
         {
