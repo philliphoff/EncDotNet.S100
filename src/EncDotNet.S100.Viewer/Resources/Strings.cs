@@ -117,6 +117,7 @@ internal static class Strings
     public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
     public static string Tooltip_CopyLocation => Get(nameof(Tooltip_CopyLocation));
     public static string Tooltip_CopyIdentity => Get(nameof(Tooltip_CopyIdentity));
+    public static string Tooltip_CopyReferencedText => Get(nameof(Tooltip_CopyReferencedText));
     public static string Tooltip_Search => Get(nameof(Tooltip_Search));
     public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
     public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
@@ -238,7 +239,7 @@ internal static class Strings
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
-    public static string Pick_FileReference_Header => Get(nameof(Pick_FileReference_Header));
+    public static string Pick_ReferencedTextHeader => Get(nameof(Pick_ReferencedTextHeader));
     public static string Pick_NoAttributes => Get(nameof(Pick_NoAttributes));
     public static string Pick_HitListHeader => Get(nameof(Pick_HitListHeader));
     public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));

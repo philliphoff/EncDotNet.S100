@@ -593,8 +593,9 @@
   <data name="Pick_AttributesHeading" xml:space="preserve">
     <value>ATTRIBUTES</value>
   </data>
-  <data name="Pick_FileReference_Header" xml:space="preserve">
-    <value>Referenced text</value>
+  <data name="Pick_ReferencedTextHeader" xml:space="preserve">
+    <value>REFERENCED TEXT</value>
+    <comment>Header above the referenced-text cards (resolved fileReference content) in the Object Information panel.</comment>
   </data>
   <data name="Pick_NoAttributes" xml:space="preserve">
     <value>(no attributes)</value>
@@ -634,6 +635,9 @@
   </data>
   <data name="Tooltip_CopyIdentity" xml:space="preserve">
     <value>Copy this feature's name and identity to the clipboard</value>
+  </data>
+  <data name="Tooltip_CopyReferencedText" xml:space="preserve">
+    <value>Copy this referenced text to the clipboard</value>
   </data>
   <!-- Pick panel: station time-series chart -->
   <data name="Pick_Chart_Title_WaterLevel" xml:space="preserve">

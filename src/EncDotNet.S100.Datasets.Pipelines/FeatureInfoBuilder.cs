@@ -228,6 +228,97 @@ public static class FeatureInfoBuilder
         return result;
     }
 
+    /// <summary>
+    /// <c>true</c> when <paramref name="attr"/> is a file-reference leaf
+    /// (see <see cref="FileReferenceAttributeCodes"/>) whose external text
+    /// has already been resolved (<see cref="PickAttribute.HasExternalText"/>).
+    /// Such rows are surfaced as standalone "referenced text" blocks rather
+    /// than crammed into the key/value attribute table.
+    /// </summary>
+    public static bool IsResolvedFileReference(PickAttribute attr)
+    {
+        ArgumentNullException.ThrowIfNull(attr);
+        return FileReferenceAttributeCodes.Contains(attr.Code) && attr.HasExternalText;
+    }
+
+    /// <summary>
+    /// Walks <paramref name="attributes"/> (including complex-attribute
+    /// children) and returns every resolved file-reference leaf in document
+    /// order. Used by presentation layers to lift externally referenced text
+    /// out of the attribute table into a dedicated section.
+    /// </summary>
+    public static IReadOnlyList<PickAttribute> CollectResolvedFileReferences(
+        IReadOnlyList<PickAttribute> attributes)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+        var result = new List<PickAttribute>();
+        CollectResolvedFileReferences(attributes, result);
+        return result;
+    }
+
+    private static void CollectResolvedFileReferences(
+        IReadOnlyList<PickAttribute> attributes, List<PickAttribute> sink)
+    {
+        foreach (var attr in attributes)
+        {
+            if (IsResolvedFileReference(attr))
+                sink.Add(attr);
+            if (attr.Children.Count > 0)
+                CollectResolvedFileReferences(attr.Children, sink);
+        }
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="attributes"/> with every resolved
+    /// file-reference leaf (see <see cref="IsResolvedFileReference"/>)
+    /// removed. Complex-attribute parents whose children become empty after
+    /// pruning are dropped as well, so the attribute table never shows a
+    /// header with no rows beneath it. The input list is returned unchanged
+    /// when it contains no resolved file references.
+    /// </summary>
+    public static IReadOnlyList<PickAttribute> WithoutResolvedFileReferences(
+        IReadOnlyList<PickAttribute> attributes)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+
+        if (CollectResolvedFileReferences(attributes).Count == 0)
+            return attributes;
+
+        var result = new List<PickAttribute>(attributes.Count);
+        foreach (var attr in attributes)
+        {
+            if (IsResolvedFileReference(attr))
+                continue;
+
+            if (attr.Children.Count == 0)
+            {
+                result.Add(attr);
+                continue;
+            }
+
+            var prunedChildren = WithoutResolvedFileReferences(attr.Children);
+            if (prunedChildren.Count == 0)
+                continue;
+
+            result.Add(ReferenceEquals(prunedChildren, attr.Children)
+                ? attr
+                : new PickAttribute
+                {
+                    Code = attr.Code,
+                    Name = attr.Name,
+                    RawValue = attr.RawValue,
+                    DisplayValue = attr.DisplayValue,
+                    DateTimeValue = attr.DateTimeValue,
+                    DateTimeRangeValue = attr.DateTimeRangeValue,
+                    DepthMetresValue = attr.DepthMetresValue,
+                    ExternalText = attr.ExternalText,
+                    Children = prunedChildren,
+                });
+        }
+
+        return result;
+    }
+
     private static bool ContainsFileReference(IReadOnlyList<PickAttribute> attributes)
     {
         foreach (var attr in attributes)

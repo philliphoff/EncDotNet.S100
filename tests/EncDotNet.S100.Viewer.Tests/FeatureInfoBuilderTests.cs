@@ -247,4 +247,104 @@ public class FeatureInfoBuilderTests
             parent.Children, c => c.Code == "fileReference");
         Assert.Equal("Tidal stream data.", child.ExternalText);
     }
+
+    [Fact]
+    public void CollectResolvedFileReferences_ReturnsOnlyResolvedFileRefs()
+    {
+        var attrs = FeatureInfoBuilder.ResolveFileReferences(
+            FeatureInfoBuilder.BuildFlat(
+                new[]
+                {
+                    new KeyValuePair<string, string?>("objectName", "Caution Area"),
+                    new KeyValuePair<string, string?>("fileReference", "A.TXT"),
+                    new KeyValuePair<string, string?>("TXTDSC", "B.TXT"),
+                },
+                decoder: null),
+            name => name == "A.TXT" ? "Alpha." : name == "B.TXT" ? "Bravo." : null);
+
+        var refs = FeatureInfoBuilder.CollectResolvedFileReferences(attrs);
+
+        Assert.Equal(2, refs.Count);
+        Assert.Equal("A.TXT", refs[0].RawValue);
+        Assert.Equal("Alpha.", refs[0].ExternalText);
+        Assert.Equal("B.TXT", refs[1].RawValue);
+    }
+
+    [Fact]
+    public void WithoutResolvedFileReferences_RemovesResolvedFileRefLeaves()
+    {
+        var attrs = FeatureInfoBuilder.ResolveFileReferences(
+            FeatureInfoBuilder.BuildFlat(
+                new[]
+                {
+                    new KeyValuePair<string, string?>("objectName", "Caution Area"),
+                    new KeyValuePair<string, string?>("fileReference", "A.TXT"),
+                },
+                decoder: null),
+            _ => "Alpha.");
+
+        var pruned = FeatureInfoBuilder.WithoutResolvedFileReferences(attrs);
+
+        var row = Assert.Single(pruned);
+        Assert.Equal("objectName", row.Code);
+    }
+
+    [Fact]
+    public void WithoutResolvedFileReferences_KeepsUnresolvedFileRef()
+    {
+        var attrs = FeatureInfoBuilder.BuildFlat(
+            new[] { new KeyValuePair<string, string?>("fileReference", "MISSING.TXT") },
+            decoder: null);
+
+        var pruned = FeatureInfoBuilder.WithoutResolvedFileReferences(attrs);
+
+        Assert.Same(attrs, pruned);
+        Assert.Equal("fileReference", Assert.Single(pruned).Code);
+    }
+
+    [Fact]
+    public void WithoutResolvedFileReferences_DropsComplexParentLeftEmpty()
+    {
+        var complex = new[]
+        {
+            new FeatureInfoBuilder.ComplexAttributeRow(
+                "information",
+                new[] { new KeyValuePair<string, string>("fileReference", "PANEL.TXT") }),
+        };
+
+        var attrs = FeatureInfoBuilder.ResolveFileReferences(
+            FeatureInfoBuilder.Build(
+                System.Array.Empty<KeyValuePair<string, string>>(), complex, decoder: null),
+            _ => "Tidal stream data.");
+
+        var pruned = FeatureInfoBuilder.WithoutResolvedFileReferences(attrs);
+
+        Assert.Empty(pruned);
+    }
+
+    [Fact]
+    public void WithoutResolvedFileReferences_KeepsComplexParentWithSurvivingChildren()
+    {
+        var complex = new[]
+        {
+            new FeatureInfoBuilder.ComplexAttributeRow(
+                "information",
+                new[]
+                {
+                    new KeyValuePair<string, string>("headline", "Caution"),
+                    new KeyValuePair<string, string>("fileReference", "PANEL.TXT"),
+                }),
+        };
+
+        var attrs = FeatureInfoBuilder.ResolveFileReferences(
+            FeatureInfoBuilder.Build(
+                System.Array.Empty<KeyValuePair<string, string>>(), complex, decoder: null),
+            _ => "Tidal stream data.");
+
+        var pruned = FeatureInfoBuilder.WithoutResolvedFileReferences(attrs);
+
+        var parent = Assert.Single(pruned);
+        var child = Assert.Single(parent.Children);
+        Assert.Equal("headline", child.Code);
+    }
 }
