@@ -15,6 +15,11 @@ internal sealed class StubPickService : IPickService
     public void HandlePick(MapInfo? mapInfo) { }
     public void HandlePick(MapInfo? mapInfo, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) { }
 
+    public void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.Services.GeographicPickFeature> features) { }
+
     public bool NavigateToReference(EncDotNet.S100.Datasets.Pipelines.FeatureReference reference) => false;
 
     public bool OpenFeature(

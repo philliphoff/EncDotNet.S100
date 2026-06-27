@@ -29,6 +29,24 @@ internal interface IPickService
     void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
 
     /// <summary>
+    /// Publishes a pick at a geographic location whose features have already
+    /// been resolved elsewhere (the MCP <c>pick_features</c> path), updating
+    /// the pick report exactly as a user click would so the Object
+    /// Information panel and the pick highlight reflect it. Each entry is
+    /// re-queried against its owning dataset's processor so the panel shows
+    /// full FC-decoded attributes. Entries that no longer resolve are
+    /// skipped; when none resolve the pick is cleared. Must be called on the
+    /// UI thread.
+    /// </summary>
+    /// <param name="latitude">Pick latitude in WGS-84 decimal degrees.</param>
+    /// <param name="longitude">Pick longitude in WGS-84 decimal degrees.</param>
+    /// <param name="features">Resolved features under the pick, most-specific first.</param>
+    void PresentGeographicPick(
+        double latitude,
+        double longitude,
+        IReadOnlyList<GeographicPickFeature> features);
+
+    /// <summary>
     /// Resolves an xlink-style reference from the currently selected hit
     /// to its target feature within the same dataset and re-opens the
     /// Object Info panel on it. Returns <c>true</c> when navigation

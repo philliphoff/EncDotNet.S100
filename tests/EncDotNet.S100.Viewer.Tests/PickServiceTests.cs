@@ -557,4 +557,60 @@ public class PickServiceTests
         Assert.Equal("bathy-1", viewModel.PickReport.Hits[0].FeatureRef);
         Assert.Equal("BathymetryCoverage", viewModel.PickReport.FeatureType);
     }
+
+    [Fact]
+    public void PresentGeographicPick_ResolvesFeaturesByDisplayName_AndSetsLocation()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-101");
+        var processor = new StubProcessor(
+            "S-101",
+            new FeatureInfo
+            {
+                FeatureRef = "1", FeatureType = "DepthArea", FeatureTypeName = "Depth Area",
+                Attributes = Array.Empty<PickAttribute>(),
+            });
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>());
+
+        var service = CreatePickService(loader, viewModel);
+
+        // DisplayName is the file name (Path.GetFileName) of the entry.
+        service.PresentGeographicPick(
+            47.6, -122.3,
+            new[] { new GeographicPickFeature(entry.DisplayName, "1") });
+
+        Assert.True(viewModel.PickReport.HasPick);
+        Assert.Single(viewModel.PickReport.Hits);
+        Assert.Equal("1", viewModel.PickReport.FeatureRef);
+        Assert.True(viewModel.PickReport.HasLocation);
+        Assert.Equal(47.6, viewModel.PickReport.Location!.Value.Latitude, 6);
+        Assert.Equal(-122.3, viewModel.PickReport.Location!.Value.Longitude, 6);
+    }
+
+    [Fact]
+    public void PresentGeographicPick_NoResolvableFeatures_ClearsPick()
+    {
+        var viewModel = CreateMainViewModel();
+        var entry = new DatasetEntry("/tmp/test.gml", "S-101");
+        var processor = new StubProcessor("S-101");
+        var loader = new LoaderWithEntries(
+            new Dictionary<DatasetEntry, IDatasetProcessor> { [entry] = processor },
+            new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>());
+
+        var service = CreatePickService(loader, viewModel);
+        viewModel.PickReport.SetPick(
+            featureType: "DepthArea", featureTypeName: null, featureRef: "old",
+            datasetFileName: "test.gml", productSpec: "S-101",
+            attributes: Array.Empty<PickAttribute>());
+        Assert.True(viewModel.PickReport.HasPick);
+
+        // Unknown feature ref → nothing resolves → pick cleared.
+        service.PresentGeographicPick(
+            47.6, -122.3,
+            new[] { new GeographicPickFeature(entry.DisplayName, "missing") });
+
+        Assert.False(viewModel.PickReport.HasPick);
+    }
 }

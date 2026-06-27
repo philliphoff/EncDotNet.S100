@@ -30,7 +30,8 @@ internal sealed record PickFeaturesRequest(
     [property: Description("Height the pixel's source image was rendered at — pass the 'height' echoed by render_to_image when the pixel comes from a capture. Must be paired with imageWidth.")] int? ImageHeight = null,
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
-    [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20);
+    [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20,
+    [property: Description("When true, also show the pick on the live viewer: the resolved features populate the Object Information panel and the map draws a pick highlight (marker + selected-feature outline), exactly like a user click. Default false (read-only).")] bool Select = false);
 
 /// <summary>Result of <see cref="PickFeaturesTool"/>.</summary>
 [Description("Result of pick_features: the input form that resolved the pick (pixel or geo), the resolved WGS-84 point, and the ranked vector features under it (identical shape to identify_features).")]
@@ -40,7 +41,8 @@ internal sealed record PickFeaturesResult(
     [property: Description("Resolved pick longitude in decimal degrees, WGS-84.")] double Longitude,
     [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] System.Collections.Immutable.ImmutableArray<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
-    [property: Description("True when more features matched than were returned.")] bool Truncated);
+    [property: Description("True when more features matched than were returned.")] bool Truncated,
+    [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false);
 
 /// <summary>
 /// Resolves the vector features under a screen pixel (or a geographic
@@ -80,14 +82,26 @@ internal sealed class PickFeaturesTool
 
     private readonly IMapHostAccessor _accessor;
     private readonly IdentifyFeaturesTool _identify;
+    private readonly IGeographicPickPresenter? _presenter;
 
     /// <summary>Creates a new <see cref="PickFeaturesTool"/>.</summary>
     public PickFeaturesTool(IMapHostAccessor accessor, IDatasetCatalog catalog)
+        : this(accessor, catalog, presenter: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="PickFeaturesTool"/> with an optional
+    /// presenter used to honour <see cref="PickFeaturesRequest.Select"/> by
+    /// publishing the pick to the live viewer panel + highlight.
+    /// </summary>
+    public PickFeaturesTool(IMapHostAccessor accessor, IDatasetCatalog catalog, IGeographicPickPresenter? presenter)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         ArgumentNullException.ThrowIfNull(catalog);
         _accessor = accessor;
         _identify = new IdentifyFeaturesTool(catalog);
+        _presenter = presenter;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -153,13 +167,28 @@ internal sealed class PickFeaturesTool
             return ToolResult<PickFeaturesResult>.Err(err!);
         }
 
+        var selected = false;
+        if (request.Select && _presenter is not null && value.Features.Length > 0)
+        {
+            var refs = new GeographicPickFeature[value.Features.Length];
+            for (var i = 0; i < value.Features.Length; i++)
+            {
+                var match = value.Features[i];
+                refs[i] = new GeographicPickFeature(match.DatasetId.Value, match.FeatureId);
+            }
+
+            _presenter.Present(value.Point.Latitude, value.Point.Longitude, refs);
+            selected = true;
+        }
+
         return ToolResult<PickFeaturesResult>.Ok(new PickFeaturesResult(
             source,
             value.Point.Latitude,
             value.Point.Longitude,
             value.Features,
             value.TotalMatched,
-            value.Truncated));
+            value.Truncated,
+            selected));
     }
 
     private static ToolError? ResolvePixel(PickFeaturesRequest request)

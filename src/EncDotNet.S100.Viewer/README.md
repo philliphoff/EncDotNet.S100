@@ -207,6 +207,19 @@ click that misses every vector feature falls through to a per-cell
 coverage sample reporting the underlying gridded value (depth +
 uncertainty, water level + trend, current speed + direction).
 
+Every pick is **highlighted on the map** so it stays anchored as you
+pan and zoom away from the click point. The highlight has two parts: a
+screen-constant **position marker** (an accent ring with a centre dot,
+echoing the cursor pick) at the click location, and — when the picked
+feature has resolvable geometry — an **object outline** tracing the
+feature (area outline with a faint fill, curve stroke, or point ring).
+The highlight tracks your accent colour and the light/dark theme, and
+clears when the pick is dismissed. Because the highlight follows the
+shared pick state, an MCP agent that calls `pick_features` with
+`select: true` drives the same panel and highlight as a user click —
+letting an automated agent show a human operator exactly what it
+picked (see [docs/mcp-server.md](../../docs/mcp-server.md)).
+
 A **Search** field above the Datasets panel finds any feature
 across every loaded dataset by feature class, FC-resolved name, or
 identifier. Selecting a result jumps the pick report to the
