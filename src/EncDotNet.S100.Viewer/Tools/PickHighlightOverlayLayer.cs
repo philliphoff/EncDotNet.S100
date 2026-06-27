@@ -58,14 +58,18 @@ internal readonly record struct PickHighlightState(
 /// Immutable appearance bundle for the pick-highlight overlay.
 /// </summary>
 /// <param name="Accent">Primary accent colour as RGB bytes.</param>
-/// <param name="IsDarkTheme">True when the host application is using a dark chrome variant.</param>
+/// <param name="IsDarkBasemap">
+/// True when the active chart palette is dark (Dusk or Night). This drives
+/// the marker's casing colour, which must be dimmed against a dark basemap
+/// to avoid glare — it is independent of the application's chrome theme.
+/// </param>
 internal readonly record struct PickHighlightAppearance(
     (byte R, byte G, byte B) Accent,
-    bool IsDarkTheme)
+    bool IsDarkBasemap)
 {
-    /// <summary>Default appearance — application accent placeholder, light theme.</summary>
+    /// <summary>Default appearance — application accent placeholder, light (Day) basemap.</summary>
     public static PickHighlightAppearance Default { get; } =
-        new(PickHighlightOverlayLayer.DefaultAccent, IsDarkTheme: false);
+        new(PickHighlightOverlayLayer.DefaultAccent, IsDarkBasemap: false);
 }
 
 /// <summary>
@@ -129,10 +133,11 @@ internal static class PickHighlightOverlayLayer
         var accent = appearance.Accent;
         var accentColor = new MapsuiColor(accent.R, accent.G, accent.B);
         // The accent ring is cased in white so it reads against any basemap.
-        // Dusk/Night palettes dim the casing so the marker doesn't glare on a
-        // dark chart (a fully-white ring is too bright at night).
-        var casingColor = appearance.IsDarkTheme
-            ? new MapsuiColor(200, 200, 200, 230)
+        // Dusk/Night palettes dim the casing to a mid grey so the marker
+        // doesn't glare on a dark chart — a bright-white ring harms night
+        // vision, which the dark palettes exist to protect.
+        var casingColor = appearance.IsDarkBasemap
+            ? new MapsuiColor(150, 150, 150, 235)
             : new MapsuiColor(255, 255, 255, 255);
 
         // 1) Object outline (drawn first so the marker sits on top).

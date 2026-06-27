@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Spec;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
@@ -36,10 +37,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// behaviour.
 /// </para>
 /// <para>
-/// Appearance (accent colour + light/dark theme) comes from the shared
-/// <see cref="IMeasureOverlayAppearanceProvider"/> so the highlight tracks
-/// the user's accent choice and theme toggles, exactly like the measure
-/// overlay.
+/// Appearance combines the user's accent colour (from the shared
+/// <see cref="IMeasureOverlayAppearanceProvider"/>, so the highlight tracks
+/// accent changes exactly like the measure overlay) with the active chart
+/// palette (from <see cref="SettingsViewModel"/>): the marker's white casing
+/// is dimmed against a dark Dusk/Night basemap to avoid glare.
 /// </para>
 /// </remarks>
 internal sealed class PickHighlightController : IDisposable
@@ -48,6 +50,7 @@ internal sealed class PickHighlightController : IDisposable
     private readonly PickReportViewModel _pickReport;
     private readonly IDatasetCatalog _catalog;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
+    private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
     private bool _disposed;
@@ -62,6 +65,10 @@ internal sealed class PickHighlightController : IDisposable
     /// <param name="pickReport">The pick-report view model to observe.</param>
     /// <param name="catalog">Loaded-dataset catalog used to resolve feature geometry.</param>
     /// <param name="appearance">Accent/theme provider for the highlight colours.</param>
+    /// <param name="settings">
+    /// Settings view-model supplying the active chart palette, which drives the
+    /// marker's casing colour (dimmed against a dark Dusk/Night basemap).
+    /// </param>
     /// <param name="marshal">
     /// Optional UI-thread marshalling override. Defaults to
     /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
@@ -72,23 +79,27 @@ internal sealed class PickHighlightController : IDisposable
         PickReportViewModel pickReport,
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
+        SettingsViewModel settings,
         Action<Action>? marshal = null)
     {
         ArgumentNullException.ThrowIfNull(mapHost);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(appearance);
+        ArgumentNullException.ThrowIfNull(settings);
 
         _mapHost = mapHost;
         _pickReport = pickReport;
         _catalog = catalog;
         _appearance = appearance;
+        _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
 
         _layer = PickHighlightOverlayLayer.Create();
 
         _pickReport.PropertyChanged += OnPickReportChanged;
         _appearance.Changed += OnAppearanceChanged;
+        _settings.PaletteChanged += OnPaletteChanged;
 
         _marshal(() =>
         {
@@ -111,6 +122,8 @@ internal sealed class PickHighlightController : IDisposable
 
     private void OnAppearanceChanged(object? sender, EventArgs e) => _marshal(Rebuild);
 
+    private void OnPaletteChanged(PaletteType palette) => _marshal(Rebuild);
+
     private void Rebuild()
     {
         if (_disposed) return;
@@ -123,8 +136,11 @@ internal sealed class PickHighlightController : IDisposable
 
         var state = new PickHighlightState(location, geometry);
 
-        var a = _appearance.Current;
-        var appearance = new PickHighlightAppearance(a.Accent, a.IsDarkTheme);
+        // The marker's casing dims against a dark chart basemap. That is the
+        // chart *palette* (Dusk/Night), not the application chrome theme — a
+        // light-chrome app can still display a Night chart.
+        var darkBasemap = _settings.SelectedPalette is PaletteType.Dusk or PaletteType.Night;
+        var appearance = new PickHighlightAppearance(_appearance.Current.Accent, darkBasemap);
 
         PickHighlightOverlayLayer.Update(_layer, state, appearance);
     }
@@ -217,6 +233,7 @@ internal sealed class PickHighlightController : IDisposable
 
         _pickReport.PropertyChanged -= OnPickReportChanged;
         _appearance.Changed -= OnAppearanceChanged;
+        _settings.PaletteChanged -= OnPaletteChanged;
 
         _marshal(() => _mapHost.RemoveOverlayLayer(_layer));
     }

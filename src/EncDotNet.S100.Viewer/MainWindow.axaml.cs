@@ -376,7 +376,8 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<PickReportViewModel>(),
             App.Services.GetRequiredService<ViewerDatasetCatalog>(),
             App.Services.GetRequiredService<
-                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>());
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>());
 
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the

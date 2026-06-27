@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Viewer.Tools;
 using Mapsui.Layers;
+using Mapsui.Nts;
+using Mapsui.Styles;
 using Xunit;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -123,5 +125,29 @@ public class PickHighlightOverlayLayerTests
 
         // One ring per point.
         Assert.Equal(2, FeatureCount(layer));
+    }
+
+    [Theory]
+    [InlineData(false, 255, 255, 255)] // Day basemap: bright white casing.
+    [InlineData(true, 150, 150, 150)]  // Dusk/Night basemap: dimmed casing to avoid glare.
+    public void Update_MarkerCasing_DimsForDarkBasemap(bool darkBasemap, byte r, byte g, byte b)
+    {
+        var layer = PickHighlightOverlayLayer.Create();
+        var appearance = new PickHighlightAppearance((0, 122, 204), darkBasemap);
+
+        PickHighlightOverlayLayer.Update(
+            layer,
+            new PickHighlightState((47.6, -122.3), Geometry: null),
+            appearance);
+
+        // The casing ring is the first marker feature (drawn under the accent
+        // ring). Its outline colour is what changes with the basemap.
+        var casing = layer.Features!.First();
+        var style = (SymbolStyle)((GeometryFeature)casing).Styles.First();
+        var color = style.Outline!.Color!;
+
+        Assert.Equal(r, color.R);
+        Assert.Equal(g, color.G);
+        Assert.Equal(b, color.B);
     }
 }
