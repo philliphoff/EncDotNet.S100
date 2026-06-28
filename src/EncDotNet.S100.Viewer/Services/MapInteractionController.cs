@@ -341,14 +341,51 @@ internal sealed class MapInteractionController
             return;
         }
 
-        // Outside Pick Mode, plain single-tap is a no-op so it doesn't fight
-        // with double-tap-to-zoom (the first tap of a double-tap also fires
-        // here).
+        // Outside Pick Mode, a plain single-tap clears the current pick (and
+        // its map highlight) when there is one — the "click empty space to
+        // deselect" convention. With no pick to clear it stays a no-op so it
+        // doesn't fight with double-tap-to-zoom (the first tap of a double-tap
+        // also fires here; clearing on it is harmless). A tap while a map tool
+        // (e.g. Measure) is active is left for the tool and never clears.
         if (!_viewModel.IsPickModeActive)
+        {
+            if (ShouldClearPickOnTap(
+                    pickModeActive: false,
+                    toolActive: _toolController?.ActiveTool is not null,
+                    pickModifierActive: false,
+                    hasPick: _viewModel.PickReport.HasPick))
+            {
+                _viewModel.PickReport.Clear();
+            }
+
             return;
+        }
 
         PerformPickAt(e);
     }
+
+    /// <summary>
+    /// Decides whether a plain (unmodified) single-tap on the map should clear
+    /// the current pick. Extracted as a pure function so the rule can be unit
+    /// tested without an Avalonia <see cref="MapControl"/>.
+    /// </summary>
+    /// <param name="pickModeActive">Whether Pick Mode is active.</param>
+    /// <param name="toolActive">Whether a map tool (e.g. Measure) is active.</param>
+    /// <param name="pickModifierActive">
+    /// Whether the platform pick modifier (Cmd/Ctrl) was held — a modifier-click
+    /// is a one-shot pick, never a clear.
+    /// </param>
+    /// <param name="hasPick">Whether there is a current pick to clear.</param>
+    /// <returns>
+    /// <c>true</c> only when not in Pick Mode, no tool is active, no pick
+    /// modifier is held, and a pick is present.
+    /// </returns>
+    internal static bool ShouldClearPickOnTap(
+        bool pickModeActive,
+        bool toolActive,
+        bool pickModifierActive,
+        bool hasPick)
+        => !pickModeActive && !toolActive && !pickModifierActive && hasPick;
 
     /// <summary>
     /// Returns true when the modifier state captured at the most recent

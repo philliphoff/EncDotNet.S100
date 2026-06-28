@@ -7,6 +7,8 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Catalogs;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.ViewModels.Activities;
+using EncDotNet.S100.Viewer.Views;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -52,7 +54,9 @@ public class MainViewModelPickModeTests
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private static MainViewModel CreateViewModel()
+    private static MainViewModel CreateViewModel(
+        PickReportViewModel? pickReport = null,
+        IEnumerable<IActivityTab>? activityTabs = null)
     {
         // Construct in-memory settings (without invoking Save()) and a
         // throwaway catalogue manager. MainViewModel only touches the
@@ -71,7 +75,7 @@ public class MainViewModelPickModeTests
             layerStack: new LayerStackViewModel(new StubDatasetLoaderService()),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings),
-            pickReport: new PickReportViewModel(),
+            pickReport: pickReport ?? new PickReportViewModel(),
             timeline: new TimelineViewModel(new GlobalTimeService()),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
@@ -79,8 +83,29 @@ public class MainViewModelPickModeTests
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
-            notifications: Notifications.TestNotifications.Create());
+            notifications: Notifications.TestNotifications.Create(),
+            activityTabs: activityTabs);
     }
+
+    /// <summary>
+    /// Builds a Right-dock activity tab hosting the supplied pick report,
+    /// mirroring the real registration in <c>App</c> (auto-open on content
+    /// signal). The icon factory is never invoked by these tests.
+    /// </summary>
+    private static IActivityTab CreatePickReportTab(PickReportViewModel pickReport) =>
+        new ActivityTab<PickReportViewModel, PickReportView>(
+            id: "PickReport",
+            order: 10,
+            title: "Pick",
+            tooltip: "Pick",
+            iconFactory: static () => new Avalonia.Controls.Border(),
+            viewModel: pickReport,
+            persistAsLastSelected: false,
+            dock: TabDock.Right,
+            autoOpenOnContentSignal: true);
+
+    private static readonly System.Collections.Generic.IReadOnlyList<PickAttribute> NoAttrs =
+        Array.Empty<PickAttribute>();
 
     [Fact]
     public void IsPickModeActive_DefaultsToFalse()
@@ -170,5 +195,41 @@ public class MainViewModelPickModeTests
 
         vm.ToggleRouteEditModeCommand.Execute(null);
         Assert.True(vm.IsToolSummaryVisible);
+    }
+
+    [Fact]
+    public void CloseDockCommand_Right_ClearsPickWhenPickReportShown()
+    {
+        // issue #374: dismissing the Pick Report must also drop the pick (and
+        // its map highlight) so the report and overlay stay in sync.
+        var pickReport = new PickReportViewModel();
+        var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
+
+        pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
+        Assert.True(pickReport.HasPick);
+        Assert.True(vm.IsRightDockOpen);
+
+        vm.CloseDockCommand.Execute(TabDock.Right);
+
+        Assert.False(vm.IsRightDockOpen);
+        Assert.False(pickReport.HasPick);
+    }
+
+    [Fact]
+    public void CloseDockCommand_Right_ThenNewPick_ReopensDock()
+    {
+        // issue #374: after a manual close clears the pick, a fresh pick is a
+        // genuine HasPick false→true transition and re-opens the dock.
+        var pickReport = new PickReportViewModel();
+        var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
+
+        pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
+        vm.CloseDockCommand.Execute(TabDock.Right);
+        Assert.False(vm.IsRightDockOpen);
+
+        pickReport.SetPick("FT2", "FT2 name", "ref-2", "ds.000", "S-101", NoAttrs);
+
+        Assert.True(pickReport.HasPick);
+        Assert.True(vm.IsRightDockOpen);
     }
 }
