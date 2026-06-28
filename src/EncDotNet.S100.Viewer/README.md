@@ -422,6 +422,36 @@ viewer has a built-in **Report Feedback** experience:
 No data leaves your machine until you choose to create the GitHub
 issue, and nothing is uploaded by the viewer itself.
 
+## About and software updates
+
+The **Help → About EncDotNet.S100 Viewer** menu opens an About dialog
+that shows the running **version** (and the build's informational
+version + commit SHA + build date) and checks GitHub for a newer
+release:
+
+- The version comes from the assembly's informational version, which is
+  injected from the release git tag at build time (local/dev builds
+  report `0.0.0-dev`).
+- When opened, the dialog checks the repository's
+  [latest GitHub release](https://github.com/philliphoff/EncDotNet.S100/releases)
+  and reports either **"You're up to date"** or **"Update available —
+  X.Y.Z"** with release highlights, the publish date, and the asset
+  size. The check is non-blocking and fails silently when offline.
+- **Update now** opens the release page so you can download the build
+  for your platform (the viewer does not self-update). **Release notes**
+  opens the full notes on GitHub.
+- **Skip** mutes *proactive* notifications (toasts) for that release only
+  — the About dialog still truthfully shows the update so you can install
+  it later, and you're still notified of *later* releases. The skipped
+  version is remembered in your settings (`SkippedUpdateVersion`).
+- Update checks are throttled to roughly once per day and can be turned
+  off entirely; dev builds never check (so `0.0.0-dev` shows a neutral
+  "update checks unavailable" panel). To exercise the live check against
+  the real GitHub API from a dev build, launch with `S100_UPDATE_FORCE=1`
+  — it bypasses the dev-build gate for manual/agent verification only and
+  must never be set in shipped builds. See issue #379 for the broader
+  update-notification design.
+
 ### Crash recovery (next-startup reporting)
 
 Some crashes — a native fault in the GPU/SkiaSharp stack, an

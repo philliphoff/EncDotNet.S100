@@ -187,6 +187,42 @@ internal static class Strings
     public static string Menu_PickMode => Get(nameof(Menu_PickMode));
     public static string Menu_Help => Get(nameof(Menu_Help));
     public static string Menu_ReportFeedback => Get(nameof(Menu_ReportFeedback));
+    public static string Menu_About => Get(nameof(Menu_About));
+
+    // About dialog
+    public static string About_Title => Get(nameof(About_Title));
+    public static string About_CloseTooltip => Get(nameof(About_CloseTooltip));
+    public static string About_ProductName => Get(nameof(About_ProductName));
+    public static string About_ProductSubtitle => Get(nameof(About_ProductSubtitle));
+    public static string About_CopyrightFormat => Get(nameof(About_CopyrightFormat));
+    public static string About_BuiltWith => Get(nameof(About_BuiltWith));
+    public static string About_VersionFormat => Get(nameof(About_VersionFormat));
+    public static string About_BuildFormat => Get(nameof(About_BuildFormat));
+    public static string About_Checking => Get(nameof(About_Checking));
+    public static string About_UpToDate => Get(nameof(About_UpToDate));
+    public static string About_LastCheckedFormat => Get(nameof(About_LastCheckedFormat));
+    public static string About_LastCheckedNever => Get(nameof(About_LastCheckedNever));
+    public static string About_CheckNow => Get(nameof(About_CheckNow));
+    public static string About_CheckNowTooltip => Get(nameof(About_CheckNowTooltip));
+    public static string About_UpdateAvailableFormat => Get(nameof(About_UpdateAvailableFormat));
+    public static string About_ReleasedFormat => Get(nameof(About_ReleasedFormat));
+    public static string About_UpdateNow => Get(nameof(About_UpdateNow));
+    public static string About_UpdateNowTooltip => Get(nameof(About_UpdateNowTooltip));
+    public static string About_ReleaseNotes => Get(nameof(About_ReleaseNotes));
+    public static string About_ReleaseNotesTooltip => Get(nameof(About_ReleaseNotesTooltip));
+    public static string About_Skip => Get(nameof(About_Skip));
+    public static string About_SkipTooltip => Get(nameof(About_SkipTooltip));
+    public static string About_UpdateSkipped => Get(nameof(About_UpdateSkipped));
+    public static string About_CheckFailed => Get(nameof(About_CheckFailed));
+    public static string About_ChecksDisabled => Get(nameof(About_ChecksDisabled));
+    public static string About_License => Get(nameof(About_License));
+    public static string About_LicenseTooltip => Get(nameof(About_LicenseTooltip));
+    public static string About_ThirdPartyNotices => Get(nameof(About_ThirdPartyNotices));
+    public static string About_ThirdPartyNoticesTooltip => Get(nameof(About_ThirdPartyNoticesTooltip));
+    public static string About_Time_JustNow => Get(nameof(About_Time_JustNow));
+    public static string About_Time_MinutesAgo => Get(nameof(About_Time_MinutesAgo));
+    public static string About_Time_HoursAgo => Get(nameof(About_Time_HoursAgo));
+    public static string About_Time_DaysAgo => Get(nameof(About_Time_DaysAgo));
 
     // Feedback dialog
     public static string Feedback_DialogTitle => Get(nameof(Feedback_DialogTitle));

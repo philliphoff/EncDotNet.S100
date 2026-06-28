@@ -26,6 +26,7 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly RouteEditTool _routeEditTool;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
+    private readonly Func<AboutDialogViewModel>? _aboutDialogFactory;
 
     /// <summary>
     /// The persistent MCP port-conflict notification, held so the
@@ -682,6 +683,12 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public ICommand ShowFeedbackCommand { get; }
 
+    /// <summary>
+    /// Opens the "About" modal dialog (version info + update check).
+    /// Triggered from the Help menu.
+    /// </summary>
+    public ICommand ShowAboutCommand { get; }
+
     // ─── Exchange-set progress + banner (es3-progress) ────────────────────
 
     private bool _isExchangeSetLoading;
@@ -914,6 +921,7 @@ internal sealed class MainViewModel : ViewModelBase
         INotificationService notifications,
         ShadUI.DialogManager? dialogManager = null,
         Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
+        Func<AboutDialogViewModel>? aboutDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
         IStatusPresenter? statusPresenter = null,
@@ -946,6 +954,7 @@ internal sealed class MainViewModel : ViewModelBase
         // an unhosted manager to keep the DialogManager property non-null.
         _dialogManager = dialogManager ?? new ShadUI.DialogManager();
         _feedbackDialogFactory = feedbackDialogFactory;
+        _aboutDialogFactory = aboutDialogFactory;
         DialogManager = _dialogManager;
         _isDarkTheme = themeService.IsDarkTheme;
         _statusPresenter = statusPresenter;
@@ -1136,6 +1145,7 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
         ShowFeedbackCommand = new AsyncRelayCommand(ShowFeedbackAsync);
+        ShowAboutCommand = new AsyncRelayCommand(ShowAboutAsync);
 
         // Keep IsDarkTheme in sync when the theme is changed via paths
         // other than ToggleThemeCommand (e.g. the SettingsView chrome
@@ -1298,5 +1308,23 @@ internal sealed class MainViewModel : ViewModelBase
             .Dismissible()
             .WithMaxWidth(620)
             .Show();
+    }
+
+    private async Task ShowAboutAsync()
+    {
+        if (_aboutDialogFactory is null)
+        {
+            return;
+        }
+
+        var dialog = _aboutDialogFactory();
+        _dialogManager.CreateDialog(dialog)
+            .Dismissible()
+            .WithMaxWidth(480)
+            .Show();
+
+        // Kick off the (throttled) update check after the dialog is shown so
+        // the UI appears immediately and the network call resolves into it.
+        await dialog.InitializeAsync().ConfigureAwait(true);
     }
 }

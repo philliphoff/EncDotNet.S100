@@ -65,6 +65,20 @@ diffs across a code change.
 Use when you need to load → reframe → toggle palette/time-step → screenshot
 repeatedly within one process, or to read structured timing.
 
+### C. Hand-off to a human for manual GUI testing
+When you launch the viewer for the **user** to click through (e.g. to
+verify a dialog or interaction), it must outlive your shell session. A
+plain `nohup … & disown` from a sync/attached command is killed when the
+command's session is torn down — the GUI window dies seconds later.
+**Always launch detached** so the process is fully independent:
+
+- Use the `bash` tool with `mode: "async"` **and** `detach: true`. Do
+  *not* rely on `& disown` in a sync command for hand-off runs.
+- The process survives session shutdown; stop it explicitly with
+  `kill -9 <pid>` (never name-based kills) when the user is done.
+- Confirm it stayed up (`pgrep -f EncDotNet.S100.Viewer/bin`) before
+  telling the user it's ready.
+
 ## Procedure for mode B
 
 ### 1. Build, then launch the binary (not `dotnet run`)
@@ -77,6 +91,11 @@ nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer 
   --data-dir /tmp/eval/data --mcp --mcp-port-file /tmp/eval/mcp.url \
   >/tmp/eval/viewer.log 2>&1 & disown
 ```
+
+> For runs the **user** will interact with (or that must persist past
+> the current command), launch via the `bash` tool with
+> `mode: "async", detach: true` instead of `& disown` — an attached
+> launch is killed with the session and the window dies. See mode C.
 
 - `--data-dir <PATH>` → **fully isolated instance**: settings, crash
   markers, and all disk caches are re-rooted under the folder. Point it
