@@ -74,6 +74,34 @@ internal sealed class ViewerSettings
     public string ChromeTheme { get; set; } = "Light";
 
     /// <summary>
+    /// Whether the viewer checks GitHub for a newer release. Default
+    /// <see langword="true"/>; the user can turn it off from the About
+    /// dialog. See issue #379.
+    /// </summary>
+    public bool UpdateCheckEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The release version the user chose to "skip"; the update prompt stays
+    /// silent for it but still fires for any later release. <c>null</c> when
+    /// nothing has been skipped. Stored without the leading <c>v</c>.
+    /// </summary>
+    public string? SkippedUpdateVersion { get; set; }
+
+    /// <summary>
+    /// UTC timestamp of the last completed update check, used to throttle
+    /// network checks to roughly once per day. <c>null</c> until the first
+    /// check runs.
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>
+    /// The latest release version seen by the most recent check (tag without
+    /// the leading <c>v</c>), cached for display. <c>null</c> until a check
+    /// has succeeded.
+    /// </summary>
+    public string? LastKnownLatestVersion { get; set; }
+
+    /// <summary>
     /// Id of the last-selected left-dock activity tab, or <c>null</c> if
     /// none was open. Name kept for back-compat with pre-PR-M3 settings
     /// files; the corresponding right- and bottom-dock fields are

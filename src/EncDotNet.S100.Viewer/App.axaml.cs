@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -60,6 +61,44 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        ConfigureMacApplicationMenu();
+    }
+
+    /// <summary>
+    /// On macOS, replaces the auto-generated application-menu "About"
+    /// item (which would otherwise show Avalonia's built-in about box)
+    /// with one that opens this app's About dialog.
+    /// </summary>
+    /// <remarks>
+    /// The macOS application menu is read from
+    /// <see cref="NativeMenu.GetMenu(Avalonia.AvaloniaObject)"/> on the
+    /// <see cref="Application"/> exactly once, early during framework
+    /// setup (after <see cref="Initialize"/> but before the main window
+    /// exists). Setting it here ensures Avalonia adopts our menu instead
+    /// of synthesizing the default; the standard Services/Hide/Quit items
+    /// are appended to it automatically. The About item is wired on other
+    /// platforms through the Help menu instead (see
+    /// <see cref="Services.NativeMenuBuilder"/>).
+    /// </remarks>
+    private void ConfigureMacApplicationMenu()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        var aboutItem = new NativeMenuItem(Strings.Menu_About);
+        aboutItem.Click += (_, _) =>
+        {
+            try
+            {
+                Services.GetRequiredService<MainViewModel>().ShowAboutCommand.Execute(null);
+            }
+            catch (InvalidOperationException)
+            {
+                // Services not yet initialized; ignore the early click.
+            }
+        };
+
+        NativeMenu.SetMenu(this, new NativeMenu { aboutItem });
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -110,6 +149,8 @@ public partial class App : Application
         // dialog now that the singleton manager exists.
         s_services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.FeedbackDialogView, ViewModels.FeedbackDialogViewModel>();
+        s_services.GetRequiredService<ShadUI.DialogManager>()
+            .Register<Views.AboutDialogView, ViewModels.AboutDialogViewModel>();
 
         // Interpose the translation-invariant vector path cache (solid
         // polygons + solid-stroked, resolution-simplified lines) before
@@ -490,6 +531,25 @@ public partial class App : Application
         services.AddTransient<FeedbackDialogViewModel>();
         services.AddSingleton<Func<FeedbackDialogViewModel>>(sp =>
             sp.GetRequiredService<FeedbackDialogViewModel>);
+
+        // About dialog + GitHub-release update check (issue #379).
+        services.AddSingleton<IUrlOpener>(sp =>
+            new ProcessUrlOpener(sp.GetService<ILogger<ProcessUrlOpener>>()));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(
+            _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
+            new EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient(
+                new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) },
+                sp.GetService<ILogger<EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient>>()));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IUpdateService>(sp =>
+            new EncDotNet.S100.Viewer.Services.Updates.UpdateService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(),
+                sp.GetRequiredService<ViewerSettings>(),
+                sp.GetRequiredService<TimeProvider>()));
+        services.AddTransient<AboutDialogViewModel>();
+        services.AddSingleton<Func<AboutDialogViewModel>>(sp =>
+            sp.GetRequiredService<AboutDialogViewModel>);
 
         services.AddSingleton<IDatasetLoaderService, DatasetLoaderService>();
         services.AddSingleton<IPickService, PickService>();

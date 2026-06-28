@@ -1,0 +1,248 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.AboutDialogView"
+             x:DataType="vm:AboutDialogViewModel"
+             Width="460">
+
+    <UserControl.Styles>
+        <!-- Link-style button: no chrome, accent-coloured text that
+             underlines on hover. Used for the footer License and
+             third-party notices actions so they read as hyperlinks
+             rather than command buttons. -->
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Background="Transparent"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.linktext">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button.link:pointerover TextBlock.linktext">
+            <Setter Property="TextDecorations" Value="Underline" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Header: title only. The dialog host (ShadUI) supplies the
+             close button in the top-right corner, so the view must not
+             draw its own or two close buttons appear. The right margin
+             keeps the title clear of that host close button. -->
+        <TextBlock Grid.Row="0"
+                   Text="{x:Static loc:Strings.About_Title}"
+                   FontSize="15"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center"
+                   Margin="20,12,44,10" />
+
+        <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom"
+                Background="{DynamicResource BorderColor}" Opacity="0.6" />
+
+        <!-- Body -->
+        <StackPanel Grid.Row="1" Margin="20,14,20,8" Spacing="16" MinHeight="220">
+
+            <!-- Icon + product name -->
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <Image Source="avares://EncDotNet.S100.Viewer/Branding/AppIcon.png"
+                       Width="56" Height="56"
+                       VerticalAlignment="Center" />
+                <StackPanel VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{Binding ProductName}"
+                               FontSize="20"
+                               FontWeight="Bold" />
+                    <TextBlock Text="{Binding ProductSubtitle}"
+                               FontSize="13"
+                               Opacity="0.7" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Version -->
+            <StackPanel Spacing="2">
+                <TextBlock Text="{Binding VersionLine}"
+                           FontSize="26"
+                           FontWeight="Bold" />
+                <SelectableTextBlock Text="{Binding BuildLine}"
+                                     FontSize="12"
+                                     Opacity="0.6"
+                                     FontFamily="Menlo,Consolas,Courier New,monospace" />
+            </StackPanel>
+
+            <!-- Status: checking -->
+            <Border IsVisible="{Binding IsChecking}"
+                    MinHeight="60"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    CornerRadius="8"
+                    Padding="14,12">
+                <TextBlock Text="{x:Static loc:Strings.About_Checking}"
+                           VerticalAlignment="Center"
+                           Opacity="0.8" />
+            </Border>
+
+            <!-- Status: up to date -->
+            <Border IsVisible="{Binding ShowUpToDate}"
+                    MinHeight="60"
+                    Background="#1416A34A"
+                    BorderBrush="#5516A34A"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <ic:FluentIcon Grid.Column="0"
+                                   Icon="CheckmarkCircle" IconVariant="Filled" FontSize="28"
+                                   Foreground="#16A34A"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{x:Static loc:Strings.About_UpToDate}"
+                                   FontWeight="SemiBold"
+                                   Foreground="#16A34A" />
+                        <TextBlock Text="{Binding UpToDateLastChecked}"
+                                   FontSize="12"
+                                   Opacity="0.7" />
+                    </StackPanel>
+                    <Button Grid.Column="2"
+                            Classes="link"
+                            Command="{Binding CheckNowCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.About_CheckNowTooltip}">
+                        <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_CheckNow}" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Status: update available -->
+            <Border IsVisible="{Binding ShowUpdateAvailable}"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <StackPanel>
+                    <!-- Heading -->
+                    <Grid ColumnDefinitions="Auto,*" Background="#14007ACC" Margin="0">
+                        <ic:FluentIcon Grid.Column="0"
+                                       Icon="ArrowDownload" IconVariant="Filled" FontSize="28"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       VerticalAlignment="Center"
+                                       Margin="14,12,12,12" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1" Margin="0,12,14,12">
+                            <TextBlock Text="{Binding UpdateAvailableHeader}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}" />
+                            <TextBlock Text="{Binding UpdateReleasedLine}"
+                                       FontSize="12"
+                                       Opacity="0.7" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Actions -->
+                    <StackPanel Margin="14,12,14,14" Spacing="12">
+                        <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                            <Button Classes="Primary"
+                                    Command="{Binding UpdateNowCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.About_UpdateNowTooltip}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="ArrowDownload" IconVariant="Regular" FontSize="15"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.About_UpdateNow}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="link"
+                                    Command="{Binding ReleaseNotesCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.About_ReleaseNotesTooltip}">
+                                <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_ReleaseNotes}" />
+                            </Button>
+                            <Button Classes="link"
+                                    IsVisible="{Binding CanSkip}"
+                                    Command="{Binding SkipCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.About_SkipTooltip}">
+                                <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_Skip}" />
+                            </Button>
+                            <TextBlock Text="{x:Static loc:Strings.About_UpdateSkipped}"
+                                       IsVisible="{Binding IsUpdateSkipped}"
+                                       VerticalAlignment="Center"
+                                       FontSize="12"
+                                       Opacity="0.7" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Status: check failed -->
+            <Border IsVisible="{Binding ShowCheckFailed}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    CornerRadius="8"
+                    Padding="14,12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{x:Static loc:Strings.About_CheckFailed}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Opacity="0.8" />
+                    <Button Grid.Column="1"
+                            Classes="link"
+                            Command="{Binding CheckNowCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.About_CheckNowTooltip}">
+                        <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_CheckNow}" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Status: checks disabled -->
+            <Border IsVisible="{Binding ShowDisabled}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    CornerRadius="8"
+                    Padding="14,12">
+                <TextBlock Text="{x:Static loc:Strings.About_ChecksDisabled}"
+                           TextWrapping="Wrap"
+                           Opacity="0.8" />
+            </Border>
+
+            <!-- Built with -->
+            <TextBlock Text="{Binding BuiltWith}"
+                       FontSize="12"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Footer -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource MutedBackgroundColor}"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,Auto,Auto" Margin="20,8">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Copyright}"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Opacity="0.7" />
+                <Button Grid.Column="1"
+                        Classes="link"
+                        Command="{Binding LicenseCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.About_LicenseTooltip}">
+                    <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_License}" />
+                </Button>
+                <Button Grid.Column="2"
+                        Classes="link"
+                        Margin="16,0,0,0"
+                        Command="{Binding ThirdPartyNoticesCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.About_ThirdPartyNoticesTooltip}">
+                    <TextBlock Classes="linktext" Text="{x:Static loc:Strings.About_ThirdPartyNotices}" />
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

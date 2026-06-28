@@ -14,6 +14,18 @@
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
   </PropertyGroup>
 
+  <!--
+    Build date surfaced by the About dialog (issue #379). Defaults to the
+    UTC build date; CI may override with -p:BuildDate=YYYY-MM-DD. Embedded as
+    assembly metadata and read via AssemblyMetadataAttribute at runtime.
+  -->
+  <PropertyGroup>
+    <BuildDate Condition="'$(BuildDate)' == ''">$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd"))</BuildDate>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildDate" Value="$(BuildDate)" />
+  </ItemGroup>
+
   <ItemGroup>
     <!--
       Avalonia window icon. Loaded via avares://… in MainWindow.axaml.

@@ -116,9 +116,19 @@ internal sealed class NativeMenuBuilder
 
         var reportFeedbackItem = new NativeMenuItem(Strings.Menu_ReportFeedback);
         reportFeedbackItem.Click += (_, _) => _viewModel.ShowFeedbackCommand.Execute(null);
+
+        // On macOS the About item lives in the application menu (see
+        // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
+        var helpSubMenu = new NativeMenu { reportFeedbackItem };
+        if (!OperatingSystem.IsMacOS())
+        {
+            var aboutItem = new NativeMenuItem(Strings.Menu_About);
+            aboutItem.Click += (_, _) => _viewModel.ShowAboutCommand.Execute(null);
+            helpSubMenu.Add(aboutItem);
+        }
         var helpMenu = new NativeMenuItem(Strings.Menu_Help)
         {
-            Menu = new NativeMenu { reportFeedbackItem },
+            Menu = helpSubMenu,
         };
 
         var nativeMenu = new NativeMenu { fileMenu, viewMenu, helpMenu };
