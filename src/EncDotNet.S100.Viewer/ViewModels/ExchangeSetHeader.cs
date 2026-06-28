@@ -1,5 +1,9 @@
 using System;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -76,6 +80,30 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// registering service.</summary>
     public ICommand CloseCommand { get; }
 
+    /// <summary>
+    /// Member datasets contributed by this exchange set, in the same
+    /// relative order they occupy in
+    /// <see cref="DatasetsViewModel.Entries"/>. Maintained by the owning
+    /// <see cref="DatasetsViewModel"/> so the Exchange sets tab can nest
+    /// each source's datasets beneath it. This is a view (not a reorder
+    /// surface) — render order lives in the Datasets tab.
+    /// </summary>
+    public ObservableCollection<DatasetEntry> Datasets { get; } = new();
+
+    /// <summary>Number of loaded member datasets currently nested under
+    /// this source (the count badge in the Exchange sets tree).</summary>
+    public int MemberCount => Datasets.Count;
+
+    /// <summary>True when at least one member dataset is visible. Drives
+    /// the source row's show/hide (eye) icon. Toggling
+    /// <see cref="ToggleVisibilityCommand"/> hides all members when any
+    /// are visible, otherwise shows all.</summary>
+    public bool IsAnyDatasetVisible => Datasets.Any(d => d.IsVisible);
+
+    /// <summary>Shows or hides every member dataset in one shot: hides all
+    /// when any are currently visible, otherwise shows all.</summary>
+    public ICommand ToggleVisibilityCommand { get; }
+
     public ExchangeSetHeader(
         IAssetSource source,
         string sourcePath,
@@ -100,6 +128,48 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
         _loadedCount = datasetCount;
         _unsupportedCount = 0;
         CloseCommand = new RelayCommand(() => closeAction(this));
+        ToggleVisibilityCommand = new RelayCommand(ToggleVisibility);
+
+        Datasets.CollectionChanged += OnDatasetsCollectionChanged;
+    }
+
+    private void ToggleVisibility()
+    {
+        var hide = IsAnyDatasetVisible;
+        foreach (var dataset in Datasets)
+        {
+            dataset.IsVisible = !hide;
+        }
+    }
+
+    private void OnDatasetsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (var item in e.OldItems.OfType<DatasetEntry>())
+            {
+                item.PropertyChanged -= OnMemberPropertyChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (var item in e.NewItems.OfType<DatasetEntry>())
+            {
+                item.PropertyChanged += OnMemberPropertyChanged;
+            }
+        }
+
+        OnPropertyChanged(nameof(MemberCount));
+        OnPropertyChanged(nameof(IsAnyDatasetVisible));
+    }
+
+    private void OnMemberPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DatasetEntry.IsVisible))
+        {
+            OnPropertyChanged(nameof(IsAnyDatasetVisible));
+        }
     }
 
     private static string BuildMetadataSummary(int loadedCount, int unsupportedCount, string? producer, string? issueDate)
