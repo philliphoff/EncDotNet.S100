@@ -1042,7 +1042,16 @@ internal sealed class MainViewModel : ViewModelBase
             switch (dock)
             {
                 case TabDock.Left: IsLeftDockOpen = false; break;
-                case TabDock.Right: IsRightDockOpen = false; break;
+                case TabDock.Right:
+                    IsRightDockOpen = false;
+                    // Dismissing the Pick Report should also drop the map
+                    // highlight so the report and overlay stay in sync, and so
+                    // a subsequent pick re-fires HasPick false→true and
+                    // re-opens the dock. Only clear when the dock being closed
+                    // is actually showing the Pick Report.
+                    if (ReferenceEquals(_selectedRightTab?.ViewModel, PickReport))
+                        PickReport.Clear();
+                    break;
                 case TabDock.Bottom: IsBottomDockOpen = false; break;
             }
         });
