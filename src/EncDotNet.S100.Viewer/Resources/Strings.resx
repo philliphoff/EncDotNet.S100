@@ -243,6 +243,39 @@
   <data name="Tooltip_CloseExchangeSet" xml:space="preserve">
     <value>Close this exchange set and remove every dataset it contributed</value>
   </data>
+  <data name="Tooltip_ToggleExchangeSetVisibility" xml:space="preserve">
+    <value>Show or hide every dataset in this exchange set</value>
+  </data>
+  <data name="Tooltip_AddSource" xml:space="preserve">
+    <value>Open a dataset or exchange set</value>
+  </data>
+  <data name="Pane_Tab_ExchangeSets" xml:space="preserve">
+    <value>EXCHANGE SETS</value>
+  </data>
+  <data name="Pane_Tab_Datasets" xml:space="preserve">
+    <value>DATASETS</value>
+  </data>
+  <data name="Pane_ExchangeSets_Empty" xml:space="preserve">
+    <value>No exchange sets loaded. Open an exchange set to see its datasets here.</value>
+  </data>
+  <data name="Pane_InspectorSelectPlaceholder" xml:space="preserve">
+    <value>Select an exchange set or dataset to view its properties.</value>
+  </data>
+  <data name="Pane_ExchangeSetField_Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Pane_ExchangeSetField_Producer" xml:space="preserve">
+    <value>Producer</value>
+  </data>
+  <data name="Pane_ExchangeSetField_Issued" xml:space="preserve">
+    <value>Issued</value>
+  </data>
+  <data name="Pane_ExchangeSetField_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Pane_ExchangeSetField_Path" xml:space="preserve">
+    <value>Path</value>
+  </data>
   <data name="Tooltip_SignatureVerified" xml:space="preserve">
     <value>All digital signatures verified</value>
   </data>

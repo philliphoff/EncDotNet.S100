@@ -6,6 +6,7 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              xmlns:conv="using:EncDotNet.S100.Viewer"
+             xmlns:converters="using:Avalonia.Controls.Converters"
              xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
@@ -15,6 +16,35 @@
         <conv:SignatureStatusConverter x:Key="SignatureStatusUnsignedConverter" Match="Unsigned" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusInvalidConverter" Match="Invalid,Untrusted,Mixed,Error" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusCheckingConverter" Match="Checking,Unknown" />
+
+        <!-- Indent step for nested Exchange-sets tree rows (matches the
+             SimpleTheme default so the disclosure chevron lines up). -->
+        <x:Double x:Key="AccentTreeIndent">16</x:Double>
+
+        <!-- Disclosure chevron for the Exchange-sets tree: a small triangle
+             that rotates from pointing-right (collapsed) to pointing-down
+             (expanded), mirroring the SimpleTheme TreeViewItem chevron. -->
+        <ControlTheme x:Key="AccentTreeChevronTheme" TargetType="ToggleButton">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Width="14"
+                            Height="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="Transparent">
+                        <Path HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="M 0 2 L 4 6 L 0 10 Z"
+                              Fill="{DynamicResource ThemeForegroundBrush}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:checked">
+                <Setter Property="RenderTransform">
+                    <RotateTransform Angle="45" />
+                </Setter>
+            </Style>
+        </ControlTheme>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -36,19 +66,16 @@
         </Style>
 
         <!--
-          ShadUI's default TabControl template wraps the tab strip and
-          the content presenter in a StackPanel, which measures its
-          children with infinite height. That means a ScrollViewer
-          placed inside a TabItem never receives a bounded height and
-          so never scrolls — instead the StackPanel grows past the
-          available space and the bottom of the content is clipped.
-          We replace the template (only for `.CenteredTabs`) with a
-          DockPanel so the tab strip stays sticky at the top and the
-          ContentPresenter fills the remaining height, giving any
-          ScrollViewer inside a TabItem a bounded height to scroll
-          within. The inner Border centres the tab headers — replacing
-          the upstream HorizontalAlignment="Left" — without needing
-          the earlier `/template/ ... Border` selector workaround.
+          The inspector tabs (Dataset / Layers / Validation) share the
+          ShadUI pill styling used by the outer panel tabs: a rounded
+          track holding the tabs with an animated selection pill behind
+          the active tab. As with `OuterTabs`, we override only the
+          *template* (swapping ShadUI's outer StackPanel for a DockPanel
+          so a ScrollViewer inside a TabItem gets a bounded height and
+          scrolls rather than overflowing). The base ShadUI TabControl
+          ControlTheme still supplies the sliding-pill behavior
+          (UseSlidingPill) and the horizontal items panel; the default
+          ShadUI TabItem theme styles the individual tabs.
         -->
         <Style Selector="TabControl.CenteredTabs">
             <Setter Property="Template">
@@ -58,15 +85,41 @@
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{TemplateBinding CornerRadius}">
                         <DockPanel LastChildFill="True">
-                            <Border DockPanel.Dock="Top"
-                                    Background="{DynamicResource TabItemsBackgroundColor}"
-                                    CornerRadius="{DynamicResource LgCornerRadius}"
-                                    HorizontalAlignment="Center"
-                                    Padding="2,4,2,0"
-                                    Margin="0,0,0,8">
-                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                                Name="PART_ItemsPresenter" />
-                            </Border>
+                            <LayoutTransformControl DockPanel.Dock="Top"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,0,0,8"
+                                                    Name="LayoutTransform">
+                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
+                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                        HorizontalAlignment="Center"
+                                        Padding="2,4,2,0">
+                                    <Panel>
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border Background="{DynamicResource TabItemSelectedColor}"
+                                                    BoxShadow="{DynamicResource Shadow}"
+                                                    Canvas.Left="0"
+                                                    Canvas.Top="0"
+                                                    CornerRadius="{DynamicResource MdCornerRadius}"
+                                                    Height="0"
+                                                    Opacity="0"
+                                                    Width="0"
+                                                    x:Name="PART_SelectionPill">
+                                                <Border.Transitions>
+                                                    <Transitions>
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
+                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
+                                                    </Transitions>
+                                                </Border.Transitions>
+                                            </Border>
+                                        </Canvas>
+                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                        Name="PART_ItemsPresenter" />
+                                    </Panel>
+                                </Border>
+                            </LayoutTransformControl>
                             <ContentPresenter Content="{TemplateBinding SelectedContent}"
                                               ContentTemplate="{TemplateBinding SelectedContentTemplate}"
                                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -162,145 +215,406 @@
         <Style Selector="Button.FindingRow:not(:disabled)">
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+
+        <!--
+          Outer panel tabs (Exchange sets / Datasets) rendered with ShadUI's
+          pill styling: a rounded track holding the two tabs with an animated
+          selection pill behind the active tab. We override only the *template*
+          (swapping ShadUI's outer StackPanel for a DockPanel) so the inner
+          TreeView/ListBox in each tab gets a bounded height and scrolls rather
+          than overflowing and crowding the inspector below. The base ShadUI
+          TabControl ControlTheme still supplies the sliding-pill behavior
+          (UseSlidingPill) and the horizontal items panel, and the default
+          ShadUI TabItem theme styles the individual tabs.
+        -->
+        <Style Selector="TabControl.OuterTabs">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <DockPanel LastChildFill="True">
+                            <LayoutTransformControl DockPanel.Dock="Top"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,0,0,6"
+                                                    Name="LayoutTransform">
+                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
+                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                        HorizontalAlignment="Center"
+                                        Padding="2,4,2,0">
+                                    <Panel>
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border Background="{DynamicResource TabItemSelectedColor}"
+                                                    BoxShadow="{DynamicResource Shadow}"
+                                                    Canvas.Left="0"
+                                                    Canvas.Top="0"
+                                                    CornerRadius="{DynamicResource MdCornerRadius}"
+                                                    Height="0"
+                                                    Opacity="0"
+                                                    Width="0"
+                                                    x:Name="PART_SelectionPill">
+                                                <Border.Transitions>
+                                                    <Transitions>
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
+                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
+                                                    </Transitions>
+                                                </Border.Transitions>
+                                            </Border>
+                                        </Canvas>
+                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                        Name="PART_ItemsPresenter" />
+                                    </Panel>
+                                </Border>
+                            </LayoutTransformControl>
+                            <ContentPresenter Content="{TemplateBinding SelectedContent}"
+                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}"
+                                              Name="PART_SelectedContentHost"
+                                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!--
+          The outer panel tabs share the inspector tabs' title-strip
+          typography (see `CenteredTabs > TabItem`): small, normal
+          weight, and letter-spaced. LetterSpacing isn't a TabItem
+          property, so we apply it via a HeaderTemplate that wraps the
+          header string in a TextBlock.
+        -->
+        <Style Selector="TabControl.OuterTabs > TabItem">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HeaderTemplate">
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" LetterSpacing="1" />
+                </DataTemplate>
+            </Setter>
+        </Style>
+
+        <!--
+          Small monochrome count pill used on source rows in the Exchange
+          sets tree (the "2" / "1" badges in the mockup).
+        -->
+        <Style Selector="Border.CountBadge">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="MinWidth" Value="22" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+          Spec tag (e.g. "S-101") shown on nested dataset rows in the
+          Exchange sets tree.
+        -->
+        <Style Selector="Border.SpecTag">
+            <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundListLowBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+          Exchange-sets tree rows adopt the same selection treatment as the
+          app-wide `accentList` (a 3px accent bar at the row's left edge, a
+          low-opacity accent tint, and an accent-coloured title). SimpleTheme
+          (the base theme behind ShadUI) paints a solid `SelectionBorder`
+          fill on selection, so we retemplate TreeViewItem entirely: the focus
+          host is deliberately *not* named `SelectionBorder` to dodge the base
+          ControlTheme's solid highlight, the bar/tint live in our own parts,
+          and SimpleTheme's indent converter keeps nested rows aligned.
+        -->
+        <Style Selector="TreeView.accentTree TreeViewItem">
+            <Setter Property="IsExpanded" Value="True" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <StackPanel>
+                        <Grid ColumnDefinitions="3,*">
+                            <Border Name="PART_Bar"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    CornerRadius="1.5"
+                                    Background="Transparent" />
+                            <Panel Grid.Column="1">
+                                <Border Name="PART_Tint"
+                                        Background="{DynamicResource AccentBrush}"
+                                        Opacity="0"
+                                        CornerRadius="4" />
+                                <Border Background="Transparent"
+                                        Margin="6,0,0,0"
+                                        Focusable="True"
+                                        TemplatedControl.IsTemplateFocusTarget="True">
+                                    <Grid Name="PART_Header" ColumnDefinitions="16,*">
+                                        <Grid.Margin>
+                                            <MultiBinding Converter="{x:Static converters:TreeViewItemIndentConverter.Instance}">
+                                                <Binding Path="Level" RelativeSource="{RelativeSource TemplatedParent}" />
+                                                <DynamicResource ResourceKey="AccentTreeIndent" />
+                                            </MultiBinding>
+                                        </Grid.Margin>
+                                        <ToggleButton Name="PART_ExpandCollapseChevron"
+                                                      Focusable="False"
+                                                      Background="Transparent"
+                                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                                                      Theme="{StaticResource AccentTreeChevronTheme}" />
+                                        <ContentPresenter Name="PART_HeaderPresenter"
+                                                          Grid.Column="1"
+                                                          Background="Transparent"
+                                                          Padding="{TemplateBinding Padding}"
+                                                          HorizontalContentAlignment="Stretch"
+                                                          VerticalContentAlignment="Center"
+                                                          Content="{TemplateBinding Header}"
+                                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                          Focusable="False" />
+                                    </Grid>
+                                </Border>
+                            </Panel>
+                        </Grid>
+                        <ItemsPresenter Name="PART_ItemsPresenter"
+                                        IsVisible="{TemplateBinding IsExpanded}"
+                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:empty /template/ ToggleButton#PART_ExpandCollapseChevron">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:pointerover /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_Bar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- Recolour the selected row's primary text to the accent, mirroring
+             accentList's accentListTitle. Driven through inherited
+             TextElement.Foreground on this item's own header presenter (so it
+             never bleeds into nested rows); the secondary count badge and spec
+             tag pin their own foreground below to stay neutral. -->
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
     </UserControl.Styles>
 
-    <DockPanel>
-        <!-- Exchange-set header rows: one per loaded exchange set,
-             stacked above the bulk-action toolbar. Each row exposes a
-             Close button that removes every dataset contributed by
-             that set. -->
-        <ItemsControl DockPanel.Dock="Top"
-                      ItemsSource="{Binding ExchangeSetHeaders}"
-                      HorizontalAlignment="Stretch"
-                      Margin="8,4,8,0">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Vertical" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:ExchangeSetHeader">
-                    <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="8,6"
-                            Margin="0,0,0,4"
-                            HorizontalAlignment="Stretch">
-                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
-                            <TextBlock Grid.Column="0" Grid.Row="0"
-                                       Text="{Binding DisplayName}"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding SourcePath}" />
-                            <TextBlock Grid.Column="0" Grid.Row="1"
-                                       Classes="Caption"
-                                       Opacity="0.75"
-                                       Text="{Binding MetadataSummary}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding MetadataSummary}" />
-                            <!-- Signature verification badge -->
-                            <Panel Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
-                                   VerticalAlignment="Center"
-                                   Margin="4,0,0,0"
-                                   ToolTip.Tip="{Binding SignatureTooltip}"
-                                   IsVisible="{Binding SignatureStatus, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                <ic:FluentIcon FontSize="20"
-                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
-                                               Icon="ShieldCheckmark" IconVariant="Filled"
-                                               Foreground="#16a34a" />
-                                <ic:FluentIcon FontSize="20"
-                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
-                                               Icon="ShieldDismiss" IconVariant="Regular"
-                                               Opacity="0.5" />
-                                <ic:FluentIcon FontSize="20"
-                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
-                                               Icon="ShieldError" IconVariant="Filled"
-                                               Foreground="#dc2626" />
-                                <ic:FluentIcon FontSize="20"
-                                               IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
-                                               Icon="Shield" IconVariant="Regular"
-                                               Opacity="0.4" />
-                            </Panel>
-                            <Button Grid.Column="2" Grid.Row="0" Grid.RowSpan="2"
-                                    Classes="Icon"
-                                    VerticalAlignment="Center"
-                                    Margin="6,0,0,0"
-                                    Command="{Binding CloseCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
-                                <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
-                            </Button>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-            <ItemsControl.Styles>
-                <!-- Force each generated container to stretch the full
-                     pane width. Without this, ShadUI's default
-                     ContentPresenter sizing leaves the Border at
-                     intrinsic content width, which can let the inner
-                     Grid measure children with infinity and skip
-                     TextTrimming. -->
-                <Style Selector="ItemsControl > ContentPresenter">
-                    <Setter Property="HorizontalAlignment" Value="Stretch" />
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                </Style>
-            </ItemsControl.Styles>
-        </ItemsControl>
-
-        <!-- Bulk-action toolbar: applies to every loaded dataset.
-             "Isolate" is per-row (right-click context menu) because it
-             needs a target. -->
-        <StackPanel DockPanel.Dock="Top"
-                    Orientation="Horizontal"
-                    Spacing="4"
-                    Margin="8,4,8,0"
-                    IsVisible="{Binding !IsEmpty}">
-            <Button Classes="Icon"
-                    x:Name="ToolbarAddButton"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataset}">
-                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
-            </Button>
-            <Button Classes="Icon"
-                    Command="{Binding ShowAllCommand}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
-                <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14" />
-            </Button>
-            <Button Classes="Icon"
-                    Command="{Binding HideAllCommand}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_HideAllDatasets}">
-                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14" />
-            </Button>
-            <Button Classes="Icon"
-                    Command="{Binding ResetOpacityCommand}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
-                <ic:FluentIcon Icon="ArrowReset" IconVariant="Regular" FontSize="14" />
-            </Button>
+    <Panel>
+        <!-- Empty-state placeholder: shown across the whole panel when no
+             datasets are loaded. Hides the tabbed lists and the inspector
+             so the "Open Dataset" affordance is the sole focus. -->
+        <StackPanel IsVisible="{Binding IsEmpty}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="8">
+            <views:PlaceholderView Icon="Layer"
+                                   Header="{x:Static loc:Strings.Datasets_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.Datasets_EmptyDescription}" />
+            <Button x:Name="EmptyAddButton"
+                    Classes="Outline"
+                    Content="{x:Static loc:Strings.Button_OpenDataset}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
+                    HorizontalAlignment="Center" />
         </StackPanel>
 
-        <!-- Master/detail layout: the dataset list takes the top portion
-             and the Properties sub-panel docks at the bottom, separated
-             by the standard PaneSplitter. The sub-panel collapses when
-             nothing is selected so the list takes the full height. -->
-        <Grid>
+        <!-- Populated state: two tabs (Exchange sets / Datasets) above a
+             pinned inspector, separated by the standard PaneSplitter. The
+             inspector reflects the active tab's selection — an exchange set
+             or a dataset. Only one list shows at a time, so a long load
+             list never crowds the inspector's space below. -->
+        <Grid IsVisible="{Binding !IsEmpty}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="2*" MinHeight="80" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" MinHeight="80" />
             </Grid.RowDefinitions>
 
-            <!-- Dataset list (master). ListBox lets a row be selected so
-                 the Properties sub-panel can target it. Padding/margin
-                 zeroed on items so the entire row hit-tests for click-
-                 to-select and right-click. -->
-            <ListBox Grid.Row="0"
-                     x:Name="DatasetList"
+            <TabControl Grid.Row="0"
+                        Classes="OuterTabs"
+                        Padding="0"
+                        SelectedIndex="{Binding ActiveTabIndex, Mode=TwoWay}">
+
+                <!-- ── Exchange sets tab: source → dataset tree, no reorder. -->
+                <TabItem Header="{x:Static loc:Strings.Pane_Tab_ExchangeSets}">
+                    <DockPanel LastChildFill="True">
+                        <!-- Add-source affordance, left-aligned. -->
+                        <Grid DockPanel.Dock="Top"
+                              Margin="8,0,8,6">
+                            <Button x:Name="SourcesAddButton"
+                                    Classes="Icon"
+                                    HorizontalAlignment="Left"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddSource}">
+                                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </Grid>
+
+                        <!-- Empty message when no exchange sets are loaded
+                             (loose datasets live only in the Datasets tab). -->
+                        <TextBlock DockPanel.Dock="Top"
+                                   IsVisible="{Binding !HasExchangeSets}"
+                                   Text="{x:Static loc:Strings.Pane_ExchangeSets_Empty}"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap"
+                                   Margin="16"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center" />
+
+                        <!-- Two-level tree: each source expands to its
+                             datasets with per-item show/hide. Render order
+                             is a cross-source concern and lives in the
+                             Datasets tab, so there is no reordering here. -->
+                        <TreeView IsVisible="{Binding HasExchangeSets}"
+                                  Classes="accentTree"
+                                  ItemsSource="{Binding ExchangeSetHeaders}"
+                                  SelectedItem="{Binding SelectedSourceNode, Mode=TwoWay}"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Margin="4,0,4,0"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <TreeView.DataTemplates>
+                                <!-- Source row: name, count badge, signature,
+                                     per-source show/hide and close. -->
+                                <TreeDataTemplate DataType="vm:ExchangeSetHeader"
+                                                  ItemsSource="{Binding Datasets}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                                          ColumnSpacing="6">
+                                        <Button Grid.Column="0"
+                                                Classes="Icon"
+                                                Command="{Binding ToggleVisibilityCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
+                                                VerticalAlignment="Center">
+                                            <Panel>
+                                                <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="16"
+                                                               IsVisible="{Binding IsAnyDatasetVisible}" />
+                                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="16"
+                                                               IsVisible="{Binding !IsAnyDatasetVisible}" />
+                                            </Panel>
+                                        </Button>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding SourcePath}" />
+                                        <Border Grid.Column="2" Classes="CountBadge">
+                                            <TextBlock Text="{Binding MemberCount}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource ForegroundColor}"
+                                                       TextAlignment="Center" />
+                                        </Border>
+                                        <Panel Grid.Column="3"
+                                               VerticalAlignment="Center"
+                                               Margin="2,0,0,0"
+                                               ToolTip.Tip="{Binding SignatureTooltip}"
+                                               IsVisible="{Binding SignatureStatus, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
+                                                           Icon="ShieldCheckmark" IconVariant="Filled" Foreground="#16a34a" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
+                                                           Icon="ShieldDismiss" IconVariant="Regular" Opacity="0.5" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
+                                                           Icon="ShieldError" IconVariant="Filled" Foreground="#dc2626" />
+                                            <ic:FluentIcon FontSize="18"
+                                                           IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
+                                                           Icon="Shield" IconVariant="Regular" Opacity="0.4" />
+                                        </Panel>
+                                        <Button Grid.Column="4"
+                                                Classes="Icon"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding CloseCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
+                                            <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
+                                        </Button>
+                                    </Grid>
+                                </TreeDataTemplate>
+                                <!-- Nested dataset row: per-item show/hide + spec tag. -->
+                                <DataTemplate DataType="vm:DatasetEntry">
+                                    <Grid ColumnDefinitions="Auto,*,Auto"
+                                          ColumnSpacing="6">
+                                        <Button Grid.Column="0"
+                                                Classes="Icon"
+                                                Command="{Binding ToggleVisibilityCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
+                                                VerticalAlignment="Center">
+                                            <Panel>
+                                                <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14"
+                                                               IsVisible="{Binding IsVisible}" />
+                                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14"
+                                                               IsVisible="{Binding !IsVisible}" />
+                                            </Panel>
+                                        </Button>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   VerticalAlignment="Center"
+                                                   Opacity="{Binding RowOpacity}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <Border Grid.Column="2" Classes="SpecTag">
+                                            <TextBlock Text="{Binding ProductSpec}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource ForegroundColor}"
+                                                       Opacity="0.8" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </TreeView.DataTemplates>
+                        </TreeView>
+                    </DockPanel>
+                </TabItem>
+
+                <!-- ── Datasets tab: flat render-order list with reorder. -->
+                <TabItem Header="{x:Static loc:Strings.Pane_Tab_Datasets}">
+                    <DockPanel LastChildFill="True">
+                        <!-- Bulk-action toolbar: applies to every loaded
+                             dataset. "Isolate" is per-row (context menu). -->
+                        <StackPanel DockPanel.Dock="Top"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
+                                    Spacing="4"
+                                    Margin="8,0,8,4">
+                            <Button Classes="Icon"
+                                    x:Name="ToolbarAddButton"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataset}">
+                                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Classes="Icon"
+                                    Command="{Binding ShowAllCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
+                                <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Classes="Icon"
+                                    Command="{Binding HideAllCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_HideAllDatasets}">
+                                <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                            <Button Classes="Icon"
+                                    Command="{Binding ResetOpacityCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
+                                <ic:FluentIcon Icon="ArrowReset" IconVariant="Regular" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Flat dataset list (render order). Padding/margin
+                             zeroed on items so the entire row hit-tests for
+                             click-to-select and right-click. -->
+                        <ListBox x:Name="DatasetList"
                      ItemsSource="{Binding Entries}"
-                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                     SelectedItem="{Binding SelectedDataset, Mode=TwoWay}"
                      Classes="accentList"
                      Background="Transparent"
                      BorderThickness="0"
                      Padding="0"
-                     Margin="8,4,8,0"
+                     Margin="8,0,8,0"
                      DoubleTapped="OnDatasetDoubleTapped"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
@@ -401,8 +715,11 @@
                             </Grid>
                         </Border>
                     </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                        </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
 
             <!-- Splitter between list and properties. The 1px hairline is
                  a separate non-hit-testing border; the GridSplitter sits
@@ -429,15 +746,78 @@
                  from the list selection above; no header needed. -->
             <Border Grid.Row="2" ClipToBounds="True">
                 <Panel>
-                    <!-- Empty-state placeholder -->
-                    <TextBlock IsVisible="{Binding !HasSelection}"
-                               Text="{x:Static loc:Strings.Pane_DatasetSelectPlaceholder}"
+                    <!-- Empty-state placeholder (nothing selected in either tab). -->
+                    <TextBlock IsVisible="{Binding HasNoInspectorSelection}"
+                               Text="{x:Static loc:Strings.Pane_InspectorSelectPlaceholder}"
                                Opacity="0.6"
                                TextWrapping="Wrap"
                                Margin="16"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
                                TextAlignment="Center" />
+
+                    <!-- Exchange-set metadata view (source-node selection). -->
+                    <ScrollViewer IsVisible="{Binding HasExchangeSetSelection}"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto"
+                                  Margin="0,8,0,0">
+                        <StackPanel Spacing="12" Margin="8,8,8,8">
+                            <Grid ColumnDefinitions="Auto,*" RowSpacing="6" ColumnSpacing="12">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Opacity="0.6"
+                                           Text="{x:Static loc:Strings.Pane_ExchangeSetField_Source}" />
+                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                           Text="{Binding InspectedExchangeSet.DisplayName}"
+                                           TextWrapping="Wrap" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Opacity="0.6"
+                                           Text="{x:Static loc:Strings.Pane_ExchangeSetField_Producer}"
+                                           IsVisible="{Binding InspectedExchangeSet.Producer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Grid.Row="1" Grid.Column="1"
+                                           Text="{Binding InspectedExchangeSet.Producer}"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding InspectedExchangeSet.Producer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Opacity="0.6"
+                                           Text="{x:Static loc:Strings.Pane_ExchangeSetField_Issued}"
+                                           IsVisible="{Binding InspectedExchangeSet.IssueDate, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Grid.Row="2" Grid.Column="1"
+                                           Text="{Binding InspectedExchangeSet.IssueDate}"
+                                           IsVisible="{Binding InspectedExchangeSet.IssueDate, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Grid.Row="3" Grid.Column="0" Opacity="0.6"
+                                           Text="{x:Static loc:Strings.Pane_ExchangeSetField_Datasets}" />
+                                <TextBlock Grid.Row="3" Grid.Column="1"
+                                           Text="{Binding InspectedExchangeSet.MemberCount}" />
+                                <TextBlock Grid.Row="4" Grid.Column="0" Opacity="0.6"
+                                           Text="{x:Static loc:Strings.Pane_ExchangeSetField_Path}" />
+                                <TextBlock Grid.Row="4" Grid.Column="1"
+                                           Text="{Binding InspectedExchangeSet.SourcePath}"
+                                           TextWrapping="Wrap" FontSize="11" Opacity="0.8" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                        ToolTip.Tip="{Binding InspectedExchangeSet.SignatureTooltip}">
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusVerifiedConverter}}"
+                                               Icon="ShieldCheckmark" IconVariant="Filled" Foreground="#16a34a" />
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusUnsignedConverter}}"
+                                               Icon="ShieldDismiss" IconVariant="Regular" Opacity="0.5" />
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusInvalidConverter}}"
+                                               Icon="ShieldError" IconVariant="Filled" Foreground="#dc2626" />
+                                <ic:FluentIcon FontSize="18"
+                                               IsVisible="{Binding InspectedExchangeSet.SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
+                                               Icon="Shield" IconVariant="Regular" Opacity="0.4" />
+                                <TextBlock Text="{Binding InspectedExchangeSet.SignatureTooltip}"
+                                           VerticalAlignment="Center" FontSize="12" Opacity="0.8"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
 
                     <TabControl Classes="CenteredTabs"
                                 IsVisible="{Binding HasSelection}"
@@ -643,28 +1023,6 @@
                 </Panel>
             </Border>
 
-            <!-- Empty-state placeholder: shown in the master (list) row
-                 when no datasets are loaded, centered within that area so
-                 it doesn't drift over the Properties sub-panel below.
-                 Declared after the list so it sits above the (otherwise
-                 transparent) ListBox, keeping the inline "Open Dataset"
-                 button hit-testable. The button sits directly below the
-                 placeholder and disappears once a dataset is present (the
-                 menu, the toolbar "+" and drag-and-drop remain available). -->
-            <StackPanel Grid.Row="0"
-                        IsVisible="{Binding IsEmpty}"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Spacing="8">
-                <views:PlaceholderView Icon="Layer"
-                                       Header="{x:Static loc:Strings.Datasets_EmptyTitle}"
-                                       Description="{x:Static loc:Strings.Datasets_EmptyDescription}" />
-                <Button x:Name="EmptyAddButton"
-                        Classes="Outline"
-                        Content="{x:Static loc:Strings.Button_OpenDataset}"
-                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
-                        HorizontalAlignment="Center" />
-            </StackPanel>
         </Grid>
-    </DockPanel>
+    </Panel>
 </UserControl>

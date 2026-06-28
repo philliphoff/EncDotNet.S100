@@ -473,28 +473,188 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<ExchangeSetHeader> ExchangeSetHeaders { get; } = new();
 
-    private DatasetEntry? _selectedEntry;
+    private DatasetEntry? _selectedDataset;
     /// <summary>
-    /// The dataset row currently highlighted in the panel. Drives the
-    /// Properties sub-panel (opacity slider + sub-layer list).
+    /// The dataset row currently highlighted in the <b>Datasets</b> tab's
+    /// flat list. Bound TwoWay to that list's selection. When the Datasets
+    /// tab is active this drives the pinned inspector via
+    /// <see cref="SelectedEntry"/>.
     /// </summary>
-    public DatasetEntry? SelectedEntry
+    public DatasetEntry? SelectedDataset
     {
-        get => _selectedEntry;
+        get => _selectedDataset;
         set
         {
-            if (!ReferenceEquals(_selectedEntry, value))
+            if (!ReferenceEquals(_selectedDataset, value))
             {
-                _selectedEntry = value;
+                _selectedDataset = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(HasSelection));
+                RecomputeInspection();
             }
         }
     }
 
-    /// <summary>True when a dataset row is selected; controls visibility
-    /// of the Properties sub-panel.</summary>
-    public bool HasSelection => _selectedEntry is not null;
+    private object? _selectedSourceNode;
+    /// <summary>
+    /// The node selected in the <b>Exchange sets</b> tab's source tree.
+    /// Either an <see cref="ExchangeSetHeader"/> (a source) or a
+    /// <see cref="DatasetEntry"/> (a nested dataset). Bound TwoWay to the
+    /// tree's selection. When the Exchange sets tab is active this drives
+    /// the pinned inspector.
+    /// </summary>
+    public object? SelectedSourceNode
+    {
+        get => _selectedSourceNode;
+        set
+        {
+            if (!ReferenceEquals(_selectedSourceNode, value))
+            {
+                _selectedSourceNode = value;
+                OnPropertyChanged();
+                RecomputeInspection();
+            }
+        }
+    }
+
+    /// <summary>Tab index constant for the Exchange sets tab.</summary>
+    public const int ExchangeSetsTabIndex = 0;
+
+    /// <summary>Tab index constant for the Datasets tab.</summary>
+    public const int DatasetsTabIndex = 1;
+
+    private bool _suppressTabUserFlag;
+    private bool _userSelectedTab;
+    private int _activeTabIndex = ExchangeSetsTabIndex;
+    /// <summary>
+    /// Active tab in the panel: <see cref="ExchangeSetsTabIndex"/> (0) or
+    /// <see cref="DatasetsTabIndex"/> (1). Bound TwoWay to the
+    /// <c>TabControl.SelectedIndex</c>. A genuine user switch pins the
+    /// choice so the conditional default (see
+    /// <see cref="ApplyDefaultTab"/>) stops overriding it.
+    /// </summary>
+    public int ActiveTabIndex
+    {
+        get => _activeTabIndex;
+        set
+        {
+            if (_activeTabIndex == value) return;
+            _activeTabIndex = value;
+            if (!_suppressTabUserFlag) _userSelectedTab = true;
+            OnPropertyChanged();
+            RecomputeInspection();
+        }
+    }
+
+    private DatasetEntry? _inspectedDataset;
+    private ExchangeSetHeader? _inspectedExchangeSet;
+
+    /// <summary>
+    /// The dataset reflected in the pinned inspector (DATASET / LAYERS /
+    /// VALIDATION). Normally derived from the active tab's selection via
+    /// <see cref="RecomputeInspection"/>, but also directly settable so
+    /// hosts/tests can drive the inspector (and the on-map validation
+    /// overlay that <see cref="Services.ValidationOverlayService"/> keys
+    /// off it) without going through a selection control.
+    /// </summary>
+    public DatasetEntry? SelectedEntry
+    {
+        get => _inspectedDataset;
+        set
+        {
+            if (!ReferenceEquals(_inspectedDataset, value))
+            {
+                _inspectedDataset = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasSelection));
+                OnPropertyChanged(nameof(HasNoInspectorSelection));
+            }
+        }
+    }
+
+    /// <summary>The exchange set reflected in the pinned inspector when a
+    /// source node (not a dataset) is selected on the Exchange sets tab.</summary>
+    public ExchangeSetHeader? InspectedExchangeSet => _inspectedExchangeSet;
+
+    /// <summary>True when the inspector targets a dataset; controls
+    /// visibility of the dataset inspector variant.</summary>
+    public bool HasSelection => _inspectedDataset is not null;
+
+    /// <summary>True when the inspector targets an exchange set; controls
+    /// visibility of the exchange-set inspector variant.</summary>
+    public bool HasExchangeSetSelection => _inspectedExchangeSet is not null;
+
+    /// <summary>True when nothing is selected; shows the inspector's
+    /// "select an item" placeholder.</summary>
+    public bool HasNoInspectorSelection =>
+        _inspectedDataset is null && _inspectedExchangeSet is null;
+
+    /// <summary>True when at least one exchange set is loaded; lets the
+    /// Exchange sets tab swap its empty-state for the source tree.</summary>
+    public bool HasExchangeSets => ExchangeSetHeaders.Count > 0;
+
+    private void RecomputeInspection()
+    {
+        DatasetEntry? dataset;
+        ExchangeSetHeader? exchangeSet = null;
+
+        if (_activeTabIndex == DatasetsTabIndex)
+        {
+            dataset = _selectedDataset;
+        }
+        else
+        {
+            switch (_selectedSourceNode)
+            {
+                case ExchangeSetHeader header:
+                    exchangeSet = header;
+                    dataset = null;
+                    break;
+                case DatasetEntry entry:
+                    dataset = entry;
+                    break;
+                default:
+                    dataset = null;
+                    break;
+            }
+        }
+
+        var datasetChanged = !ReferenceEquals(_inspectedDataset, dataset);
+        var exchangeSetChanged = !ReferenceEquals(_inspectedExchangeSet, exchangeSet);
+        if (!datasetChanged && !exchangeSetChanged) return;
+
+        _inspectedDataset = dataset;
+        _inspectedExchangeSet = exchangeSet;
+
+        if (datasetChanged) OnPropertyChanged(nameof(SelectedEntry));
+        if (exchangeSetChanged) OnPropertyChanged(nameof(InspectedExchangeSet));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasExchangeSetSelection));
+        OnPropertyChanged(nameof(HasNoInspectorSelection));
+    }
+
+    /// <summary>
+    /// Applies the conditional default tab: the Exchange sets tab unless
+    /// only loose (non-exchange-set) datasets are loaded, in which case
+    /// the Datasets tab. A genuine user tab switch pins the choice and
+    /// suppresses this. The pin resets once the panel empties.
+    /// </summary>
+    private void ApplyDefaultTab()
+    {
+        if (IsEmpty)
+        {
+            _userSelectedTab = false;
+        }
+
+        if (_userSelectedTab) return;
+
+        var desired = HasExchangeSets ? ExchangeSetsTabIndex : DatasetsTabIndex;
+        if (_activeTabIndex != desired)
+        {
+            _suppressTabUserFlag = true;
+            ActiveTabIndex = desired;
+            _suppressTabUserFlag = false;
+        }
+    }
 
     /// <summary>
     /// True when no datasets are loaded. Drives the Datasets panel's
@@ -604,6 +764,35 @@ internal sealed class DatasetsViewModel : ViewModelBase
                         entry.ZoomDispatcher = _zoomDispatcher;
                 }
             }
+
+            RebuildExchangeSetGrouping();
+            ApplyDefaultTab();
+
+            // A removed dataset may have been the inspected one; drop the
+            // selection so the inspector doesn't dangle on a gone entry.
+            if (e.OldItems is not null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (ReferenceEquals(item, _selectedDataset)) SelectedDataset = null;
+                    if (ReferenceEquals(item, _selectedSourceNode)) SelectedSourceNode = null;
+                }
+            }
+        };
+
+        ExchangeSetHeaders.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(HasExchangeSets));
+            RebuildExchangeSetGrouping();
+            ApplyDefaultTab();
+
+            if (e.OldItems is not null)
+            {
+                foreach (var item in e.OldItems)
+                {
+                    if (ReferenceEquals(item, _selectedSourceNode)) SelectedSourceNode = null;
+                }
+            }
         };
 
         // Auto-unregister entries from the global time service when they
@@ -690,6 +879,40 @@ internal sealed class DatasetsViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(header);
         ExchangeSetHeaders.Remove(header);
+    }
+
+    /// <summary>
+    /// Reconciles each <see cref="ExchangeSetHeader.Datasets"/> child
+    /// collection so it contains exactly the <see cref="Entries"/> whose
+    /// <see cref="DatasetEntry.Source"/> matches that header, in the same
+    /// relative order they occupy in <see cref="Entries"/>. Loose entries
+    /// (no backing source) are not nested anywhere — they appear only in
+    /// the Datasets tab. Called whenever <see cref="Entries"/> or
+    /// <see cref="ExchangeSetHeaders"/> change.
+    /// </summary>
+    private void RebuildExchangeSetGrouping()
+    {
+        foreach (var header in ExchangeSetHeaders)
+        {
+            var members = Entries.Where(e => ReferenceEquals(e.Source, header.Source)).ToList();
+
+            // Fast path: already in sync (same items, same order).
+            if (header.Datasets.Count == members.Count)
+            {
+                var same = true;
+                for (var i = 0; i < members.Count; i++)
+                {
+                    if (!ReferenceEquals(header.Datasets[i], members[i])) { same = false; break; }
+                }
+                if (same) continue;
+            }
+
+            header.Datasets.Clear();
+            foreach (var member in members)
+            {
+                header.Datasets.Add(member);
+            }
+        }
     }
 
     /// <summary>

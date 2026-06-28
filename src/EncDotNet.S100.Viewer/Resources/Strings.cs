@@ -54,6 +54,17 @@ internal static class Strings
     public static string Pane_DatasetTab_Layers => Get(nameof(Pane_DatasetTab_Layers));
     public static string Pane_DatasetTab_NoLayers => Get(nameof(Pane_DatasetTab_NoLayers));
     public static string Pane_DatasetTab_Validation => Get(nameof(Pane_DatasetTab_Validation));
+
+    // Datasets panel — outer tabs, sources tree, and exchange-set inspector
+    public static string Pane_Tab_ExchangeSets => Get(nameof(Pane_Tab_ExchangeSets));
+    public static string Pane_Tab_Datasets => Get(nameof(Pane_Tab_Datasets));
+    public static string Pane_ExchangeSets_Empty => Get(nameof(Pane_ExchangeSets_Empty));
+    public static string Pane_InspectorSelectPlaceholder => Get(nameof(Pane_InspectorSelectPlaceholder));
+    public static string Pane_ExchangeSetField_Source => Get(nameof(Pane_ExchangeSetField_Source));
+    public static string Pane_ExchangeSetField_Producer => Get(nameof(Pane_ExchangeSetField_Producer));
+    public static string Pane_ExchangeSetField_Issued => Get(nameof(Pane_ExchangeSetField_Issued));
+    public static string Pane_ExchangeSetField_Datasets => Get(nameof(Pane_ExchangeSetField_Datasets));
+    public static string Pane_ExchangeSetField_Path => Get(nameof(Pane_ExchangeSetField_Path));
     public static string Pane_Validation_NoFindings => Get(nameof(Pane_Validation_NoFindings));
     public static string Pane_Validation_NoRulePack => Get(nameof(Pane_Validation_NoRulePack));
     public static string Pane_Validation_CountsSummaryFormat => Get(nameof(Pane_Validation_CountsSummaryFormat));
@@ -145,6 +156,8 @@ internal static class Strings
     public static string Pane_ExchangeSetHeader_Count => Get(nameof(Pane_ExchangeSetHeader_Count));
     public static string Pane_ExchangeSetHeader_Unsupported => Get(nameof(Pane_ExchangeSetHeader_Unsupported));
     public static string Tooltip_CloseExchangeSet => Get(nameof(Tooltip_CloseExchangeSet));
+    public static string Tooltip_ToggleExchangeSetVisibility => Get(nameof(Tooltip_ToggleExchangeSetVisibility));
+    public static string Tooltip_AddSource => Get(nameof(Tooltip_AddSource));
     public static string Tooltip_SignatureVerified => Get(nameof(Tooltip_SignatureVerified));
     public static string Tooltip_SignatureUnsigned => Get(nameof(Tooltip_SignatureUnsigned));
     public static string Tooltip_SignatureInvalid => Get(nameof(Tooltip_SignatureInvalid));

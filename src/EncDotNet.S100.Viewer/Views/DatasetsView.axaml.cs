@@ -16,6 +16,7 @@ public partial class DatasetsView : UserControl
         InitializeComponent();
         EmptyAddButton.Click += OnAddClick;
         ToolbarAddButton.Click += OnAddClick;
+        SourcesAddButton.Click += OnAddClick;
     }
 
     private async void OnAddClick(object? sender, RoutedEventArgs e)

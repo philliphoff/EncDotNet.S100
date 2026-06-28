@@ -92,10 +92,14 @@ nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/EncDotNet.S100.Viewer 
   >/tmp/eval/viewer.log 2>&1 & disown
 ```
 
-> For runs the **user** will interact with (or that must persist past
-> the current command), launch via the `bash` tool with
-> `mode: "async", detach: true` instead of `& disown` — an attached
-> launch is killed with the session and the window dies. See mode C.
+> **Always launch the viewer fully detached.** From the agent's bash
+> tool, use `mode: "async"` **with `detach: true`** (this `setsid`-wraps
+> the process so it survives the bash session). A plain sync call — even
+> with `nohup … & disown` — leaves the viewer parented to the bash
+> session, so it gets **reaped the moment that call returns** and the
+> window dies on its own with no error in the log. The `nohup …& disown`
+> form above is only correct inside an already-detached async shell. When
+> done, stop it explicitly with `kill -9 <pid>` (see below).
 
 - `--data-dir <PATH>` → **fully isolated instance**: settings, crash
   markers, and all disk caches are re-rooted under the folder. Point it
