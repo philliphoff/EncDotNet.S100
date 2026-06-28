@@ -23,7 +23,9 @@ dotnet run --project src/EncDotNet.S100.Viewer
 
 User settings (recent files, panel layout, ECDIS overrides, vessel
 geometry, …) are persisted per user; the viewer ignores or migrates
-older settings shapes silently rather than refusing to start.
+older settings shapes silently rather than refusing to start. Editable
+[routes](#routes) are persisted separately in `routes.json` (see that
+section).
 
 ## Linux runtime prerequisites
 
@@ -148,6 +150,14 @@ The active route is emphasised on the map; inactive routes recede so
 several routes can coexist legibly. The model mirrors the in-repo
 S-421 route schema (`Route` → `RouteWaypoint` → `RouteLeg`), keeping a
 future S-421 export a near-mechanical projection.
+
+Routes are **persisted across restarts**: the collection is saved to a
+`routes.json` file in the viewer data directory (alongside
+`settings.json`, and re-rooted under `--data-dir` / `S100_DATA_DIR`
+when one is in use). Saved routes load at startup and changes — from
+either the editor or an agent over MCP — are written back (debounced),
+with a final flush on exit. An `--ephemeral` run still loads any
+existing routes but never writes, leaving the persisted file untouched.
 
 ## Layer stack
 

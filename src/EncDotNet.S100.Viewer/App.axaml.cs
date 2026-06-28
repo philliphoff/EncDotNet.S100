@@ -283,6 +283,13 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Load persisted routes before the main window (and its route
+            // overlay / panel) are built so they observe the saved set on
+            // first render; the coordinator then writes changes back.
+            var routePersistence =
+                s_services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
+            routePersistence.Initialize();
+
             desktop.MainWindow = s_services.GetRequiredService<MainWindow>();
 
             // Drain the tiled renderer's background Skia workers before the
@@ -292,7 +299,12 @@ public partial class App : Application
             // alike. Without this, the managed runtime can begin destroying
             // libSkiaSharp while a worker is mid-rasterise → native SIGSEGV.
             desktop.ShutdownRequested += (_, _) =>
+            {
+                // Flush any pending debounced route save so the last edit is
+                // not lost to the debounce window.
+                routePersistence.Flush();
                 EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -396,6 +408,11 @@ public partial class App : Application
         services.AddSingleton<ScreenshotService>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
+        // Loads persisted routes at startup and writes them back (debounced)
+        // on change, so user/agent routes survive a restart. Eagerly
+        // initialized in OnFrameworkInitializationCompleted and flushed on
+        // ShutdownRequested.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
