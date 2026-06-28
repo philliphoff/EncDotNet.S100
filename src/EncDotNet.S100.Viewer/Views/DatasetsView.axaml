@@ -6,6 +6,7 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              xmlns:conv="using:EncDotNet.S100.Viewer"
+             xmlns:converters="using:Avalonia.Controls.Converters"
              xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.DatasetsView"
              x:DataType="vm:DatasetsViewModel">
@@ -15,6 +16,35 @@
         <conv:SignatureStatusConverter x:Key="SignatureStatusUnsignedConverter" Match="Unsigned" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusInvalidConverter" Match="Invalid,Untrusted,Mixed,Error" />
         <conv:SignatureStatusConverter x:Key="SignatureStatusCheckingConverter" Match="Checking,Unknown" />
+
+        <!-- Indent step for nested Exchange-sets tree rows (matches the
+             SimpleTheme default so the disclosure chevron lines up). -->
+        <x:Double x:Key="AccentTreeIndent">16</x:Double>
+
+        <!-- Disclosure chevron for the Exchange-sets tree: a small triangle
+             that rotates from pointing-right (collapsed) to pointing-down
+             (expanded), mirroring the SimpleTheme TreeViewItem chevron. -->
+        <ControlTheme x:Key="AccentTreeChevronTheme" TargetType="ToggleButton">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Width="14"
+                            Height="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="Transparent">
+                        <Path HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="M 0 2 L 4 6 L 0 10 Z"
+                              Fill="{DynamicResource ThemeForegroundBrush}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:checked">
+                <Setter Property="RenderTransform">
+                    <RotateTransform Angle="45" />
+                </Setter>
+            </Style>
+        </ControlTheme>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -254,19 +284,81 @@
 
         <!--
           Exchange-sets tree rows adopt the same selection treatment as the
-          app-wide `accentList` (a 3px accent bar plus a low-opacity accent
-          tint) so selecting a source or a nested dataset looks identical to
-          selecting a row in the flat Datasets list. The accent visuals live
-          in the row DataTemplates (bound to the owning TreeViewItem's
-          IsSelected); here we stretch rows full-width, expand sources by
-          default, and suppress Fluent's own selection fill to avoid a
-          double highlight.
+          app-wide `accentList` (a 3px accent bar at the row's left edge, a
+          low-opacity accent tint, and an accent-coloured title). SimpleTheme
+          (the base theme behind ShadUI) paints a solid `SelectionBorder`
+          fill on selection, so we retemplate TreeViewItem entirely: the focus
+          host is deliberately *not* named `SelectionBorder` to dodge the base
+          ControlTheme's solid highlight, the bar/tint live in our own parts,
+          and SimpleTheme's indent converter keeps nested rows aligned.
         -->
         <Style Selector="TreeView.accentTree TreeViewItem">
             <Setter Property="IsExpanded" Value="True" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <StackPanel>
+                        <Grid ColumnDefinitions="3,*">
+                            <Border Name="PART_Bar"
+                                    Grid.Column="0"
+                                    Width="3"
+                                    CornerRadius="1.5"
+                                    Background="Transparent" />
+                            <Panel Grid.Column="1">
+                                <Border Name="PART_Tint"
+                                        Background="{DynamicResource AccentBrush}"
+                                        Opacity="0"
+                                        CornerRadius="4" />
+                                <Border Background="Transparent"
+                                        Focusable="True"
+                                        TemplatedControl.IsTemplateFocusTarget="True">
+                                    <Grid Name="PART_Header" ColumnDefinitions="16,*">
+                                        <Grid.Margin>
+                                            <MultiBinding Converter="{x:Static converters:TreeViewItemIndentConverter.Instance}">
+                                                <Binding Path="Level" RelativeSource="{RelativeSource TemplatedParent}" />
+                                                <DynamicResource ResourceKey="AccentTreeIndent" />
+                                            </MultiBinding>
+                                        </Grid.Margin>
+                                        <ToggleButton Name="PART_ExpandCollapseChevron"
+                                                      Focusable="False"
+                                                      Background="Transparent"
+                                                      IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                                                      Theme="{StaticResource AccentTreeChevronTheme}" />
+                                        <ContentPresenter Name="PART_HeaderPresenter"
+                                                          Grid.Column="1"
+                                                          Background="Transparent"
+                                                          Padding="{TemplateBinding Padding}"
+                                                          HorizontalContentAlignment="Stretch"
+                                                          VerticalContentAlignment="Center"
+                                                          Content="{TemplateBinding Header}"
+                                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                          Focusable="False" />
+                                    </Grid>
+                                </Border>
+                            </Panel>
+                        </Grid>
+                        <ItemsPresenter Name="PART_ItemsPresenter"
+                                        IsVisible="{TemplateBinding IsExpanded}"
+                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter>
         </Style>
-        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="Transparent" />
+        <Style Selector="TreeView.accentTree TreeViewItem:empty /template/ ToggleButton#PART_ExpandCollapseChevron">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:pointerover /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_Bar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter TextBlock.accentTreeTitle">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
     </UserControl.Styles>
 
@@ -355,20 +447,8 @@
                                      per-source show/hide and close. -->
                                 <TreeDataTemplate DataType="vm:ExchangeSetHeader"
                                                   ItemsSource="{Binding Datasets}">
-                                    <Grid ColumnDefinitions="3,*">
-                                        <Border Grid.Column="0"
-                                                Width="3"
-                                                CornerRadius="1.5"
-                                                Background="{DynamicResource AccentBrush}"
-                                                IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
-                                        <Panel Grid.Column="1">
-                                            <Border Background="{DynamicResource AccentBrush}"
-                                                    Opacity="0.12"
-                                                    CornerRadius="4"
-                                                    IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
-                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
-                                                  ColumnSpacing="6"
-                                                  Margin="4,2">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                                          ColumnSpacing="6">
                                         <Button Grid.Column="0"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -382,6 +462,7 @@
                                             </Panel>
                                         </Button>
                                         <TextBlock Grid.Column="1"
+                                                   Classes="accentTreeTitle"
                                                    Text="{Binding DisplayName}"
                                                    FontWeight="SemiBold"
                                                    VerticalAlignment="Center"
@@ -417,26 +498,12 @@
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
                                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                                         </Button>
-                                            </Grid>
-                                        </Panel>
                                     </Grid>
                                 </TreeDataTemplate>
                                 <!-- Nested dataset row: per-item show/hide + spec tag. -->
                                 <DataTemplate DataType="vm:DatasetEntry">
-                                    <Grid ColumnDefinitions="3,*">
-                                        <Border Grid.Column="0"
-                                                Width="3"
-                                                CornerRadius="1.5"
-                                                Background="{DynamicResource AccentBrush}"
-                                                IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
-                                        <Panel Grid.Column="1">
-                                            <Border Background="{DynamicResource AccentBrush}"
-                                                    Opacity="0.12"
-                                                    CornerRadius="4"
-                                                    IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
-                                                  ColumnSpacing="6"
-                                                  Margin="4,2">
+                                    <Grid ColumnDefinitions="Auto,*,Auto"
+                                          ColumnSpacing="6">
                                         <Button Grid.Column="0"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -450,6 +517,7 @@
                                             </Panel>
                                         </Button>
                                         <TextBlock Grid.Column="1"
+                                                   Classes="accentTreeTitle"
                                                    Text="{Binding DisplayName}"
                                                    VerticalAlignment="Center"
                                                    Opacity="{Binding RowOpacity}"
@@ -460,8 +528,6 @@
                                                        FontWeight="SemiBold"
                                                        Opacity="0.8" />
                                         </Border>
-                                            </Grid>
-                                        </Panel>
                                     </Grid>
                                 </DataTemplate>
                             </TreeView.DataTemplates>
