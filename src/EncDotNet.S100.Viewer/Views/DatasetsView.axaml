@@ -311,6 +311,7 @@
                                         Opacity="0"
                                         CornerRadius="4" />
                                 <Border Background="Transparent"
+                                        Margin="6,0,0,0"
                                         Focusable="True"
                                         TemplatedControl.IsTemplateFocusTarget="True">
                                     <Grid Name="PART_Header" ColumnDefinitions="16,*">
@@ -357,8 +358,13 @@
         <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_Bar">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter TextBlock.accentTreeTitle">
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <!-- Recolour the selected row's primary text to the accent, mirroring
+             accentList's accentListTitle. Driven through inherited
+             TextElement.Foreground on this item's own header presenter (so it
+             never bleeds into nested rows); the secondary count badge and spec
+             tag pin their own foreground below to stay neutral. -->
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
     </UserControl.Styles>
 
@@ -462,7 +468,6 @@
                                             </Panel>
                                         </Button>
                                         <TextBlock Grid.Column="1"
-                                                   Classes="accentTreeTitle"
                                                    Text="{Binding DisplayName}"
                                                    FontWeight="SemiBold"
                                                    VerticalAlignment="Center"
@@ -471,6 +476,7 @@
                                         <Border Grid.Column="2" Classes="CountBadge">
                                             <TextBlock Text="{Binding MemberCount}"
                                                        FontSize="11"
+                                                       Foreground="{DynamicResource ForegroundColor}"
                                                        TextAlignment="Center" />
                                         </Border>
                                         <Panel Grid.Column="3"
@@ -517,7 +523,6 @@
                                             </Panel>
                                         </Button>
                                         <TextBlock Grid.Column="1"
-                                                   Classes="accentTreeTitle"
                                                    Text="{Binding DisplayName}"
                                                    VerticalAlignment="Center"
                                                    Opacity="{Binding RowOpacity}"
@@ -526,6 +531,7 @@
                                             <TextBlock Text="{Binding ProductSpec}"
                                                        FontSize="10"
                                                        FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource ForegroundColor}"
                                                        Opacity="0.8" />
                                         </Border>
                                     </Grid>
