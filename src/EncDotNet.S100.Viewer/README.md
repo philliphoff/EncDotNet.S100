@@ -107,6 +107,32 @@ and translated to the in-memory S-101 model so they render through
 the S-101 portrayal pipeline. This is best-effort, not an S-52
 implementation.
 
+## The Datasets panel
+
+Loaded data is organised in the **Datasets** activity panel as two
+tabs above a pinned **inspector**:
+
+- **Exchange sets** — a two-level tree that nests each dataset under
+  the exchange set (its *source*) it came from. Each source row carries
+  a member count, the set's signature/integrity badge, a per-source
+  show/hide toggle (which fans out to every member dataset), and a
+  close button that unloads the whole set. There is no reordering here —
+  render order is a cross-source concern and lives in the Datasets tab.
+  Loose, individually-loaded files do not appear on this tab.
+- **Datasets** — the flat render-order list of *every* loaded dataset
+  (exchange-set-backed and loose alike), with per-row visibility,
+  reorder (drag, the ▲/▼ buttons, or the context menu), isolate, and
+  remove, plus a bulk show-all / hide-all / reset-opacity toolbar.
+
+The **inspector** below the tabs reflects whichever item is selected.
+Selecting a dataset (in either tab) shows its **DATASET / LAYERS /
+VALIDATION** sub-tabs; selecting an exchange-set source row instead
+shows that set's metadata (producer, issue date, dataset count,
+signature, source path). The split between the tabs and the inspector
+is draggable and persisted. The panel opens on the Exchange sets tab,
+unless only loose datasets are loaded, in which case it opens on the
+Datasets tab.
+
 ## The map view
 
 A Mapsui-backed map fills the centre of the window with an
