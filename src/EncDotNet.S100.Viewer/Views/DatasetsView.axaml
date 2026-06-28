@@ -164,10 +164,15 @@
         </Style>
 
         <!--
-          Outer panel tabs (Exchange sets / Datasets). Same DockPanel
-          template trick as `.CenteredTabs` so a TreeView/ListBox inside a
-          TabItem gets a bounded height to scroll within, but rendered as a
-          full-width title strip with an underline rule rather than a pill.
+          Outer panel tabs (Exchange sets / Datasets) rendered with ShadUI's
+          pill styling: a rounded track holding the two tabs with an animated
+          selection pill behind the active tab. We override only the *template*
+          (swapping ShadUI's outer StackPanel for a DockPanel) so the inner
+          TreeView/ListBox in each tab gets a bounded height and scrolls rather
+          than overflowing and crowding the inspector below. The base ShadUI
+          TabControl ControlTheme still supplies the sliding-pill behavior
+          (UseSlidingPill) and the horizontal items panel, and the default
+          ShadUI TabItem theme styles the individual tabs.
         -->
         <Style Selector="TabControl.OuterTabs">
             <Setter Property="Template">
@@ -177,14 +182,41 @@
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{TemplateBinding CornerRadius}">
                         <DockPanel LastChildFill="True">
-                            <Border DockPanel.Dock="Top"
-                                    BorderBrush="{DynamicResource BorderColor}"
-                                    BorderThickness="0,0,0,1"
-                                    Margin="0,0,0,6">
-                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                                Name="PART_ItemsPresenter"
-                                                HorizontalAlignment="Center" />
-                            </Border>
+                            <LayoutTransformControl DockPanel.Dock="Top"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,0,0,6"
+                                                    Name="LayoutTransform">
+                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
+                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                        HorizontalAlignment="Center"
+                                        Padding="2,4,2,0">
+                                    <Panel>
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border Background="{DynamicResource TabItemSelectedColor}"
+                                                    BoxShadow="{DynamicResource Shadow}"
+                                                    Canvas.Left="0"
+                                                    Canvas.Top="0"
+                                                    CornerRadius="{DynamicResource MdCornerRadius}"
+                                                    Height="0"
+                                                    Opacity="0"
+                                                    Width="0"
+                                                    x:Name="PART_SelectionPill">
+                                                <Border.Transitions>
+                                                    <Transitions>
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
+                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
+                                                    </Transitions>
+                                                </Border.Transitions>
+                                            </Border>
+                                        </Canvas>
+                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                        Name="PART_ItemsPresenter" />
+                                    </Panel>
+                                </Border>
+                            </LayoutTransformControl>
                             <ContentPresenter Content="{TemplateBinding SelectedContent}"
                                               ContentTemplate="{TemplateBinding SelectedContentTemplate}"
                                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -195,10 +227,6 @@
                     </Border>
                 </ControlTemplate>
             </Setter>
-        </Style>
-        <Style Selector="TabControl.OuterTabs > TabItem">
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Padding" Value="14,6" />
         </Style>
 
         <!--
@@ -222,6 +250,23 @@
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="6,1" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
+          Exchange-sets tree rows adopt the same selection treatment as the
+          app-wide `accentList` (a 3px accent bar plus a low-opacity accent
+          tint) so selecting a source or a nested dataset looks identical to
+          selecting a row in the flat Datasets list. The accent visuals live
+          in the row DataTemplates (bound to the owning TreeViewItem's
+          IsSelected); here we stretch rows full-width, expand sources by
+          default, and suppress Fluent's own selection fill to avoid a
+          double highlight.
+        -->
+        <Style Selector="TreeView.accentTree TreeViewItem">
+            <Setter Property="IsExpanded" Value="True" />
+        </Style>
+        <Style Selector="TreeView.accentTree TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
     </UserControl.Styles>
 
@@ -298,6 +343,7 @@
                              is a cross-source concern and lives in the
                              Datasets tab, so there is no reordering here. -->
                         <TreeView IsVisible="{Binding HasExchangeSets}"
+                                  Classes="accentTree"
                                   ItemsSource="{Binding ExchangeSetHeaders}"
                                   SelectedItem="{Binding SelectedSourceNode, Mode=TwoWay}"
                                   Background="Transparent"
@@ -309,9 +355,20 @@
                                      per-source show/hide and close. -->
                                 <TreeDataTemplate DataType="vm:ExchangeSetHeader"
                                                   ItemsSource="{Binding Datasets}">
-                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
-                                          ColumnSpacing="6"
-                                          Background="Transparent">
+                                    <Grid ColumnDefinitions="3,*">
+                                        <Border Grid.Column="0"
+                                                Width="3"
+                                                CornerRadius="1.5"
+                                                Background="{DynamicResource AccentBrush}"
+                                                IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
+                                        <Panel Grid.Column="1">
+                                            <Border Background="{DynamicResource AccentBrush}"
+                                                    Opacity="0.12"
+                                                    CornerRadius="4"
+                                                    IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                                                  ColumnSpacing="6"
+                                                  Margin="4,2">
                                         <Button Grid.Column="0"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -360,13 +417,26 @@
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseExchangeSet}">
                                             <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="16" />
                                         </Button>
+                                            </Grid>
+                                        </Panel>
                                     </Grid>
                                 </TreeDataTemplate>
                                 <!-- Nested dataset row: per-item show/hide + spec tag. -->
                                 <DataTemplate DataType="vm:DatasetEntry">
-                                    <Grid ColumnDefinitions="Auto,*,Auto"
-                                          ColumnSpacing="6"
-                                          Background="Transparent">
+                                    <Grid ColumnDefinitions="3,*">
+                                        <Border Grid.Column="0"
+                                                Width="3"
+                                                CornerRadius="1.5"
+                                                Background="{DynamicResource AccentBrush}"
+                                                IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
+                                        <Panel Grid.Column="1">
+                                            <Border Background="{DynamicResource AccentBrush}"
+                                                    Opacity="0.12"
+                                                    CornerRadius="4"
+                                                    IsVisible="{Binding $parent[TreeViewItem].IsSelected}" />
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  ColumnSpacing="6"
+                                                  Margin="4,2">
                                         <Button Grid.Column="0"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -390,6 +460,8 @@
                                                        FontWeight="SemiBold"
                                                        Opacity="0.8" />
                                         </Border>
+                                            </Grid>
+                                        </Panel>
                                     </Grid>
                                 </DataTemplate>
                             </TreeView.DataTemplates>
