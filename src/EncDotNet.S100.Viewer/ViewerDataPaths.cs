@@ -70,6 +70,19 @@ internal sealed class ViewerDataPaths
         ?? (_baseDirectory is { } b ? Path.Combine(b, "settings.json")
             : Path.Combine(DefaultSettingsDirectory, "settings.json"));
 
+    /// <summary>
+    /// Absolute path of the persisted <c>routes.json</c> file holding the
+    /// user's editable routes. Re-rooted under the base directory when one
+    /// is in use (so an isolated <c>--data-dir</c> instance keeps its routes
+    /// self-contained) and sits alongside <see cref="SettingsFilePath"/>
+    /// otherwise. Unlike the settings file it is not affected by the
+    /// <c>--settings</c> override, which pins only the settings file.
+    /// </summary>
+    public string RoutesFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "routes.json")
+            : Path.Combine(DefaultSettingsDirectory, "routes.json");
+
     /// <summary>Directory holding unclean-shutdown crash markers.</summary>
     public string CrashMarkersDirectory =>
         _baseDirectory is { } b
