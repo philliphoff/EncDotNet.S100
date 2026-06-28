@@ -250,13 +250,10 @@
     <value>Open a dataset or exchange set</value>
   </data>
   <data name="Pane_Tab_ExchangeSets" xml:space="preserve">
-    <value>Exchange sets</value>
+    <value>EXCHANGE SETS</value>
   </data>
   <data name="Pane_Tab_Datasets" xml:space="preserve">
-    <value>Datasets</value>
-  </data>
-  <data name="Pane_Sources" xml:space="preserve">
-    <value>SOURCES</value>
+    <value>DATASETS</value>
   </data>
   <data name="Pane_ExchangeSets_Empty" xml:space="preserve">
     <value>No exchange sets loaded. Open an exchange set to see its datasets here.</value>

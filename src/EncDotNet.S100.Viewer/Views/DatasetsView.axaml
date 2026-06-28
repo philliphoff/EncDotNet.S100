@@ -66,19 +66,16 @@
         </Style>
 
         <!--
-          ShadUI's default TabControl template wraps the tab strip and
-          the content presenter in a StackPanel, which measures its
-          children with infinite height. That means a ScrollViewer
-          placed inside a TabItem never receives a bounded height and
-          so never scrolls — instead the StackPanel grows past the
-          available space and the bottom of the content is clipped.
-          We replace the template (only for `.CenteredTabs`) with a
-          DockPanel so the tab strip stays sticky at the top and the
-          ContentPresenter fills the remaining height, giving any
-          ScrollViewer inside a TabItem a bounded height to scroll
-          within. The inner Border centres the tab headers — replacing
-          the upstream HorizontalAlignment="Left" — without needing
-          the earlier `/template/ ... Border` selector workaround.
+          The inspector tabs (Dataset / Layers / Validation) share the
+          ShadUI pill styling used by the outer panel tabs: a rounded
+          track holding the tabs with an animated selection pill behind
+          the active tab. As with `OuterTabs`, we override only the
+          *template* (swapping ShadUI's outer StackPanel for a DockPanel
+          so a ScrollViewer inside a TabItem gets a bounded height and
+          scrolls rather than overflowing). The base ShadUI TabControl
+          ControlTheme still supplies the sliding-pill behavior
+          (UseSlidingPill) and the horizontal items panel; the default
+          ShadUI TabItem theme styles the individual tabs.
         -->
         <Style Selector="TabControl.CenteredTabs">
             <Setter Property="Template">
@@ -88,15 +85,41 @@
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{TemplateBinding CornerRadius}">
                         <DockPanel LastChildFill="True">
-                            <Border DockPanel.Dock="Top"
-                                    Background="{DynamicResource TabItemsBackgroundColor}"
-                                    CornerRadius="{DynamicResource LgCornerRadius}"
-                                    HorizontalAlignment="Center"
-                                    Padding="2,4,2,0"
-                                    Margin="0,0,0,8">
-                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
-                                                Name="PART_ItemsPresenter" />
-                            </Border>
+                            <LayoutTransformControl DockPanel.Dock="Top"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,0,0,8"
+                                                    Name="LayoutTransform">
+                                <Border Background="{DynamicResource TabItemsBackgroundColor}"
+                                        CornerRadius="{DynamicResource LgCornerRadius}"
+                                        HorizontalAlignment="Center"
+                                        Padding="2,4,2,0">
+                                    <Panel>
+                                        <Canvas IsHitTestVisible="False">
+                                            <Border Background="{DynamicResource TabItemSelectedColor}"
+                                                    BoxShadow="{DynamicResource Shadow}"
+                                                    Canvas.Left="0"
+                                                    Canvas.Top="0"
+                                                    CornerRadius="{DynamicResource MdCornerRadius}"
+                                                    Height="0"
+                                                    Opacity="0"
+                                                    Width="0"
+                                                    x:Name="PART_SelectionPill">
+                                                <Border.Transitions>
+                                                    <Transitions>
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
+                                                        <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
+                                                        <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
+                                                    </Transitions>
+                                                </Border.Transitions>
+                                            </Border>
+                                        </Canvas>
+                                        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                                        Name="PART_ItemsPresenter" />
+                                    </Panel>
+                                </Border>
+                            </LayoutTransformControl>
                             <ContentPresenter Content="{TemplateBinding SelectedContent}"
                                               ContentTemplate="{TemplateBinding SelectedContentTemplate}"
                                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -258,6 +281,22 @@
                 </ControlTemplate>
             </Setter>
         </Style>
+        <!--
+          The outer panel tabs share the inspector tabs' title-strip
+          typography (see `CenteredTabs > TabItem`): small, normal
+          weight, and letter-spaced. LetterSpacing isn't a TabItem
+          property, so we apply it via a HeaderTemplate that wraps the
+          header string in a TextBlock.
+        -->
+        <Style Selector="TabControl.OuterTabs > TabItem">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HeaderTemplate">
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" LetterSpacing="1" />
+                </DataTemplate>
+            </Setter>
+        </Style>
 
         <!--
           Small monochrome count pill used on source rows in the Exchange
@@ -406,20 +445,12 @@
                 <!-- ── Exchange sets tab: source → dataset tree, no reorder. -->
                 <TabItem Header="{x:Static loc:Strings.Pane_Tab_ExchangeSets}">
                     <DockPanel LastChildFill="True">
-                        <!-- SOURCES sub-header with an Add affordance. -->
+                        <!-- Add-source affordance, left-aligned. -->
                         <Grid DockPanel.Dock="Top"
-                              ColumnDefinitions="*,Auto"
                               Margin="8,0,8,6">
-                            <TextBlock Grid.Column="0"
-                                       Text="{x:Static loc:Strings.Pane_Sources}"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       LetterSpacing="1"
-                                       Opacity="0.6"
-                                       VerticalAlignment="Center" />
-                            <Button Grid.Column="1"
-                                    x:Name="SourcesAddButton"
+                            <Button x:Name="SourcesAddButton"
                                     Classes="Icon"
+                                    HorizontalAlignment="Left"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddSource}">
                                 <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
                             </Button>
@@ -548,6 +579,7 @@
                              dataset. "Isolate" is per-row (context menu). -->
                         <StackPanel DockPanel.Dock="Top"
                                     Orientation="Horizontal"
+                                    HorizontalAlignment="Left"
                                     Spacing="4"
                                     Margin="8,0,8,4">
                             <Button Classes="Icon"

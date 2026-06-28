@@ -58,7 +58,6 @@ internal static class Strings
     // Datasets panel — outer tabs, sources tree, and exchange-set inspector
     public static string Pane_Tab_ExchangeSets => Get(nameof(Pane_Tab_ExchangeSets));
     public static string Pane_Tab_Datasets => Get(nameof(Pane_Tab_Datasets));
-    public static string Pane_Sources => Get(nameof(Pane_Sources));
     public static string Pane_ExchangeSets_Empty => Get(nameof(Pane_ExchangeSets_Empty));
     public static string Pane_InspectorSelectPlaceholder => Get(nameof(Pane_InspectorSelectPlaceholder));
     public static string Pane_ExchangeSetField_Source => Get(nameof(Pane_ExchangeSetField_Source));
