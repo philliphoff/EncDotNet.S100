@@ -267,6 +267,16 @@
 
                 <!-- Tile-specific knobs — shown only in tiled scene mode -->
                 <StackPanel Spacing="12" IsVisible="{Binding TiledModeActive}">
+                    <StackPanel Spacing="6"
+                                IsEnabled="{Binding PerformanceProfileEditable}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_PerformanceProfile}">
+                        <TextBlock Text="{x:Static loc:Strings.Settings_PerformanceProfile}" FontSize="12" />
+                        <ComboBox ItemsSource="{Binding PerformanceProfiles}"
+                                  SelectedItem="{Binding SelectedPerformanceProfile}"
+                                  MinWidth="160" HorizontalAlignment="Left" />
+                        <TextBlock Text="{Binding ResolvedProfileLabel}" FontSize="11" Opacity="0.6" />
+                    </StackPanel>
+
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           IsEnabled="{Binding TilePredictionEditable}"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TilePredictionEnabled}">

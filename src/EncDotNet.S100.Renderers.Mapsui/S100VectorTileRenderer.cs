@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -240,6 +241,7 @@ public static class S100VectorTileRenderer
     /// <see cref="WorkerDrainGate"/>.
     /// </summary>
     private static readonly WorkerDrainGate s_drainGate = new();
+
 
     /// <summary>
     /// Signals every tile worker to stop and blocks until in-flight tile
@@ -820,6 +822,14 @@ public static class S100VectorTileRenderer
         // Target band visible tiles, and whether the band fully covers the
         // viewport (every visible tile already cached).
         var target = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
+
+        // Pin the visible set so neither the hot nor the GPU cache can evict a
+        // tile that is on screen this frame, no matter how small the budget is:
+        // a tile in active use must never be evicted by speculative/predicted
+        // inserts, or it would flicker between rendered and blank.
+        state.Cache.Protect(target);
+        gpuCache?.Protect(target);
+
         var targetComplete = target.Count > 0;
         foreach (var key in target)
         {
