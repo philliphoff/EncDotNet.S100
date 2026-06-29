@@ -76,8 +76,21 @@ internal static class StartupSettingsFactory
             settings.EcdisDisplayCategory =
                 NormalizeEnum<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(category, settings.EcdisDisplayCategory);
 
-        if (options.Basemap is { } basemapEnabled)
-            settings.BasemapEnabled = basemapEnabled;
+        if (options.Basemap is { } basemap && !string.IsNullOrWhiteSpace(basemap))
+            settings.BasemapMode = ParseBasemapMode(basemap, settings.BasemapMode);
+    }
+
+    /// <summary>
+    /// Parses the <c>--basemap</c> value into a <see cref="BasemapMode"/>,
+    /// accepting the legacy boolean form (true → Online, false → None)
+    /// for backward compatibility (issue #295).
+    /// </summary>
+    private static BasemapMode ParseBasemapMode(string value, BasemapMode fallback)
+    {
+        var v = value.Trim();
+        if (bool.TryParse(v, out var enabled))
+            return enabled ? BasemapMode.Online : BasemapMode.None;
+        return Enum.TryParse<BasemapMode>(v, ignoreCase: true, out var mode) ? mode : fallback;
     }
 
     private static string NormalizeEnum<TEnum>(string value, string fallback) where TEnum : struct, Enum =>

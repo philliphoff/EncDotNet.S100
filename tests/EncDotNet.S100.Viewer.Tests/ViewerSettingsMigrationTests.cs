@@ -71,4 +71,59 @@ public class ViewerSettingsMigrationTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    // ── Issue #295: BasemapEnabled bool → BasemapMode migration ──────
+
+    [Fact]
+    public void Load_LegacyBasemapEnabledTrue_MigratesToOnline()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Path.GetRandomFileName()}.json");
+        File.WriteAllText(path, "{\"BasemapEnabled\":true}");
+        try
+        {
+            var s = ViewerSettings.Load(path);
+            Assert.Equal(BasemapMode.Online, s.BasemapMode);
+            Assert.True(s.BasemapEnabled);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_LegacyBasemapEnabledFalse_MigratesToNone()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Path.GetRandomFileName()}.json");
+        File.WriteAllText(path, "{\"BasemapEnabled\":false}");
+        try
+        {
+            var s = ViewerSettings.Load(path);
+            Assert.Equal(BasemapMode.None, s.BasemapMode);
+            Assert.False(s.BasemapEnabled);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_NewBasemapModePresent_IsPreserved()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Path.GetRandomFileName()}.json");
+        File.WriteAllText(path, "{\"BasemapEnabled\":false,\"BasemapMode\":\"Offline\"}");
+        try
+        {
+            var s = ViewerSettings.Load(path);
+            Assert.Equal(BasemapMode.Offline, s.BasemapMode);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Default_BasemapMode_IsOffline()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"viewer-settings-{Path.GetRandomFileName()}.json");
+        try
+        {
+            var s = ViewerSettings.Load(path);
+            Assert.Equal(BasemapMode.Offline, s.BasemapMode);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

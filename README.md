@@ -103,8 +103,8 @@ an S-52 implementation.
 `EncDotNet.S100.Viewer` is a cross-platform desktop nautical chart
 viewer built on [Avalonia](https://avaloniaui.net/) and
 [Mapsui](https://mapsui.com/). It loads any combination of the
-supported products and renders them time-aligned over an
-OpenStreetMap basemap. Headline features:
+supported products and renders them time-aligned over a bundled
+offline basemap (Natural Earth land; OpenStreetMap optional). Headline features:
 
 - **Multi-product paint stack** driven by the S-98 interoperability
   authority (display planes, within-plane priority, inter-product

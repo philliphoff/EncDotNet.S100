@@ -433,6 +433,9 @@ internal static class Strings
     public static string Palette_Day => Get(nameof(Palette_Day));
     public static string Palette_Dusk => Get(nameof(Palette_Dusk));
     public static string Palette_Night => Get(nameof(Palette_Night));
+    public static string Basemap_None => Get(nameof(Basemap_None));
+    public static string Basemap_Offline => Get(nameof(Basemap_Offline));
+    public static string Basemap_Online => Get(nameof(Basemap_Online));
 
     // Status messages
     public static string Status_UnrecognizedFileType => Get(nameof(Status_UnrecognizedFileType));

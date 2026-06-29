@@ -362,6 +362,19 @@ internal sealed class ViewerSettings
     public bool BasemapEnabled { get; set; } = true;
 
     /// <summary>
+    /// Which basemap is drawn beneath the chart data: <see
+    /// cref="BasemapMode.None"/>, <see cref="BasemapMode.Offline"/>
+    /// (bundled Natural Earth land — the zero-network default), or
+    /// <see cref="BasemapMode.Online"/> (OpenStreetMap tiles). Replaces
+    /// the legacy boolean <see cref="BasemapEnabled"/>; defaults to
+    /// <see cref="BasemapMode.Offline"/> so a fresh install needs no
+    /// network. Can be overridden per-run with <c>--basemap</c> (issue
+    /// #295).
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public BasemapMode BasemapMode { get; set; } = BasemapMode.Offline;
+
+    /// <summary>
     /// Whether the own-ship overlay (PR-D2) is visible. The synthetic
     /// driver is always running; this flag controls whether the
     /// source publishes the glyph to the dynamic-source overlay tier.
@@ -536,6 +549,17 @@ internal sealed class ViewerSettings
                 var settings = JsonSerializer.Deserialize<ViewerSettings>(json) ?? new ViewerSettings();
                 settings.SettingsFilePath = path;
 
+                // Issue #295: migrate legacy boolean BasemapEnabled to
+                // the tri-state BasemapMode. Existing installs had an
+                // online OSM basemap when enabled, so map true → Online
+                // and false → None. Fresh installs (no key) keep the
+                // Offline default.
+                if (!json.Contains("\"BasemapMode\"", StringComparison.Ordinal))
+                {
+                    settings.BasemapMode = settings.BasemapEnabled ? BasemapMode.Online : BasemapMode.None;
+                }
+                settings.BasemapEnabled = settings.BasemapMode != BasemapMode.None;
+
                 // Migrate legacy single-path setting to S-102 entry
                 if (settings.PortrayalCataloguePath is { } legacy && !settings.CataloguePaths.ContainsKey("S-102"))
                 {
@@ -579,6 +603,10 @@ internal sealed class ViewerSettings
         {
             OwnShipVisible = ownShipVisible;
         }
+
+        // Keep legacy BasemapEnabled consistent with BasemapMode for
+        // forward/backward compatibility (issue #295).
+        BasemapEnabled = BasemapMode != BasemapMode.None;
 
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(SettingsFilePath, json);

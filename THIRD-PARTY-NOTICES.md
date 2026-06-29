@@ -6,6 +6,21 @@ license text appears at the end of this file.
 
 ---
 
+---
+
+## Natural Earth 1:10m land (vector data) — Public Domain
+
+- **License:** Public domain — no rights reserved. No attribution is
+  required, but credit is gratefully given.
+- **Source:** Natural Earth (https://www.naturalearthdata.com/), 1:10m
+  Physical "land" dataset. Version 5.1.1.
+- **Redistributed in this repository at:**
+  - `src/EncDotNet.S100.Viewer/Assets/Basemap/ne_10m_land.geojson`
+    (embedded resource of the **EncDotNet.S100.Viewer** app; simplified
+    to ~8% and used as the bundled offline basemap — issue #295).
+
+---
+
 ## Open Sans (font) — Apache License 2.0
 
 - **License:** Apache License, Version 2.0 (full text below).

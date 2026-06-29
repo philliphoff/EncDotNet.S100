@@ -836,29 +836,32 @@ internal sealed class SettingsViewModel : ViewModelBase
 
 
     /// <summary>
-    /// Raised when <see cref="BasemapEnabled"/> changes so the host can
-    /// add or remove the basemap tile layer live without a restart.
+    /// Raised when <see cref="SelectedBasemapMode"/> changes so the host
+    /// can swap the basemap layer live without a restart.
     /// </summary>
-    public event Action<bool>? BasemapEnabledChanged;
+    public event Action<BasemapMode>? BasemapModeChanged;
 
-    private bool _basemapEnabled;
+    /// <summary>Selectable basemap modes for the settings combo box.</summary>
+    public static BasemapMode[] AvailableBasemapModes { get; } =
+        [BasemapMode.None, BasemapMode.Offline, BasemapMode.Online];
+
+    private BasemapMode _basemapMode;
     /// <summary>
-    /// Whether the online OpenStreetMap basemap is shown beneath the
-    /// chart data (issue #295). Persisted to
-    /// <see cref="ViewerSettings.BasemapEnabled"/>; toggling raises
-    /// <see cref="BasemapEnabledChanged"/> so the map host adds/removes
-    /// the tile layer without a relaunch.
+    /// Which basemap is shown beneath the chart data (issue #295).
+    /// Persisted to <see cref="ViewerSettings.BasemapMode"/>; changing it
+    /// raises <see cref="BasemapModeChanged"/> so the map host swaps the
+    /// layer without a relaunch.
     /// </summary>
-    public bool BasemapEnabled
+    public BasemapMode SelectedBasemapMode
     {
-        get => _basemapEnabled;
+        get => _basemapMode;
         set
         {
-            if (SetProperty(ref _basemapEnabled, value))
+            if (SetProperty(ref _basemapMode, value))
             {
-                _settings.BasemapEnabled = value;
+                _settings.BasemapMode = value;
                 _settings.Save();
-                BasemapEnabledChanged?.Invoke(value);
+                BasemapModeChanged?.Invoke(value);
             }
         }
     }
@@ -1051,7 +1054,7 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
 
-        _basemapEnabled = settings.BasemapEnabled;
+        _basemapMode = settings.BasemapMode;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
         _mcpEnabled = settings.McpEnabled;
