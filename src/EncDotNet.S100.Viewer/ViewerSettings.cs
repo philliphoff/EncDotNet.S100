@@ -302,6 +302,14 @@ internal sealed class ViewerSettings
     /// </summary>
     public double? TileGpuBudgetMb { get; set; }
 
+    /// <summary>
+    /// Overall performance profile that sets the default tile budgets + worker
+    /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
+    /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors
+    /// <c>RenderingOptimizations.Profile</c> / <c>S100_PERF_PROFILE</c>.
+    /// </summary>
+    public string? PerformanceProfile { get; set; }
+
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
 

@@ -247,4 +247,58 @@ public class RenderingOptimizationsTests
             (long)(RenderingOptimizations.TileGpuBudgetMb * 1024 * 1024),
             S100VectorTileRenderer.GpuBudgetBytes);
     }
+
+    [Theory]
+    [InlineData(4, 32.0, PerformanceProfile.LowEnd)]   // too few cores
+    [InlineData(32, 8.0, PerformanceProfile.LowEnd)]   // too little RAM
+    [InlineData(8, 32.0, PerformanceProfile.Balanced)] // 8 cores caps to Balanced
+    [InlineData(32, 16.0, PerformanceProfile.Balanced)] // 16 GB caps to Balanced
+    [InlineData(16, 32.0, PerformanceProfile.HighEnd)] // generous on both axes
+    public void Resolve_Auto_DerivesTier_FromCoresAndRam(int cores, double ramGb, PerformanceProfile expected)
+    {
+        Assert.Equal(expected, MachineProfile.Resolve(PerformanceProfile.Auto, cores, ramGb));
+    }
+
+    [Theory]
+    [InlineData(PerformanceProfile.LowEnd)]
+    [InlineData(PerformanceProfile.Balanced)]
+    [InlineData(PerformanceProfile.HighEnd)]
+    public void Resolve_ExplicitTier_PassesThrough_RegardlessOfHardware(PerformanceProfile tier)
+    {
+        Assert.Equal(tier, MachineProfile.Resolve(tier, cores: 2, ramGb: 4.0));
+        Assert.Equal(tier, MachineProfile.Resolve(tier, cores: 64, ramGb: 256.0));
+    }
+
+    [Fact]
+    public void TierBudgets_Increase_LowToHigh()
+    {
+        Assert.True(MachineProfile.TileBudgetMb(PerformanceProfile.LowEnd)
+            < MachineProfile.TileBudgetMb(PerformanceProfile.Balanced));
+        Assert.True(MachineProfile.TileBudgetMb(PerformanceProfile.Balanced)
+            <= MachineProfile.TileBudgetMb(PerformanceProfile.HighEnd));
+        Assert.True(MachineProfile.TileDiskMb(PerformanceProfile.LowEnd)
+            < MachineProfile.TileDiskMb(PerformanceProfile.Balanced));
+    }
+
+    [Fact]
+    public void Profile_LowEnd_ShrinksBudgets_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.ProfileEnvExplicit ||
+            RenderingOptimizations.TileBudgetMbEnvExplicit)
+        {
+            return; // env-pinned; profile setter / budgets are no-ops
+        }
+
+        var originalProfile = RenderingOptimizations.Profile;
+        try
+        {
+            RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
+            Assert.Equal(PerformanceProfile.LowEnd, RenderingOptimizations.ResolvedProfile);
+            Assert.Equal(MachineProfile.TileBudgetMb(PerformanceProfile.LowEnd), RenderingOptimizations.TileBudgetMb);
+        }
+        finally
+        {
+            RenderingOptimizations.Profile = originalProfile;
+        }
+    }
 }

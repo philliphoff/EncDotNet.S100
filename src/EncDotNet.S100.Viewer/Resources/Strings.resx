@@ -987,6 +987,12 @@
   <data name="Settings_RenderKnob_RestartHint" xml:space="preserve">
     <value>Reload the dataset or restart to apply.</value>
   </data>
+  <data name="Settings_PerformanceProfile" xml:space="preserve">
+    <value>Performance profile</value>
+  </data>
+  <data name="Tooltip_PerformanceProfile" xml:space="preserve">
+    <value>Sizes the tile caches. Auto picks a tier from this machine's cores and RAM; Low/Balanced/High pin smaller-to-larger budgets. The detected tier is shown below. Applies on the next dataset reload.</value>
+  </data>
   <data name="Settings_MaintenanceSubsection" xml:space="preserve">
     <value>Maintenance</value>
   </data>
