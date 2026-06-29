@@ -26,6 +26,7 @@ internal sealed class TileCache : IDisposable
     private readonly object _sync = new();
     private readonly Dictionary<TileKey, LinkedListNode<Entry>> _map = new();
     private readonly LinkedList<Entry> _lru = new();
+    private readonly HashSet<TileKey> _protected = new();
     private readonly bool _deferDisposal;
     private List<SKImage>? _pendingDisposal;
     private long _residentBytes;
@@ -143,12 +144,25 @@ internal sealed class TileCache : IDisposable
             _map[key] = node;
             _residentBytes += bytes;
 
-            while (_residentBytes > BudgetBytes && _lru.Last is { } last && last != node)
+            // Evict least-recently-used tiles to fit the budget, but never the
+            // pinned (currently-visible) tiles or the just-inserted node: a tile
+            // in use must survive regardless of budget, or the compositor would
+            // blink between a rendered and a blank tile when the working set
+            // exceeds the cache size. Walk from the LRU end skipping protected
+            // keys; stop once the only remaining candidates are pinned.
+            var node2 = _lru.Last;
+            while (_residentBytes > BudgetBytes && node2 is not null)
             {
-                _lru.RemoveLast();
-                _map.Remove(last.Value.Key);
-                _residentBytes -= last.Value.Bytes;
-                RetireImage(last.Value.Image, ref evicted);
+                var prev = node2.Previous;
+                if (node2 != node && !_protected.Contains(node2.Value.Key))
+                {
+                    _lru.Remove(node2);
+                    _map.Remove(node2.Value.Key);
+                    _residentBytes -= node2.Value.Bytes;
+                    RetireImage(node2.Value.Image, ref evicted);
+                }
+
+                node2 = prev;
             }
         }
 
@@ -214,6 +228,27 @@ internal sealed class TileCache : IDisposable
     }
 
     /// <summary>
+    /// Replaces the set of <b>pinned</b> keys that <see cref="Put"/> must never
+    /// evict, regardless of budget. The compositor passes the current visible
+    /// (target-band) tiles each frame so a tile in active use cannot be evicted
+    /// by speculative/predicted inserts, which would otherwise flicker the tile
+    /// blank when the working set exceeds the cache size. Keys not currently
+    /// resident are harmless; they simply protect the tile once it lands.
+    /// </summary>
+    public void Protect(IReadOnlyCollection<TileKey> keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        lock (_sync)
+        {
+            _protected.Clear();
+            foreach (var k in keys)
+            {
+                _protected.Add(k);
+            }
+        }
+    }
+
+    /// <summary>
     /// Removes every resident tile. Images are disposed inline, or — for a
     /// deferred-disposal (GPU) cache — held for the next
     /// <see cref="DrainPendingDisposals"/> so a tile still referenced by the
@@ -231,6 +266,7 @@ internal sealed class TileCache : IDisposable
 
             _map.Clear();
             _lru.Clear();
+            _protected.Clear();
             _residentBytes = 0;
         }
 

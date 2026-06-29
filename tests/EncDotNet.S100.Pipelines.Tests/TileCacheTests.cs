@@ -95,6 +95,30 @@ public class TileCacheTests
     }
 
     [Fact]
+    public void Put_NeverEvictsPinnedVisibleTilesEvenOverBudget()
+    {
+        // Budget holds two tiles; pin three so the working set exceeds the
+        // budget. A pinned (on-screen) tile must never be evicted, or it would
+        // flicker between rendered and blank.
+        var tileBytes = 1024L * 1024 * 4;
+        using var cache = new TileCache(tileBytes * 2);
+
+        cache.Protect(new[] { Key(0), Key(1), Key(2) });
+        cache.Put(Key(0), MakeImage(1024));
+        cache.Put(Key(1), MakeImage(1024));
+        cache.Put(Key(2), MakeImage(1024));
+
+        Assert.True(cache.Contains(Key(0)));
+        Assert.True(cache.Contains(Key(1)));
+        Assert.True(cache.Contains(Key(2)));
+
+        // An unpinned tile is still evictable down to budget once pins are lifted.
+        cache.Protect(System.Array.Empty<TileKey>());
+        cache.Put(Key(3), MakeImage(1024));
+        Assert.True(cache.ResidentBytes <= cache.BudgetBytes);
+    }
+
+    [Fact]
     public void Put_ReplacingKeyDisposesPriorImageAndKeepsByteCount()
     {
         using var cache = new TileCache(TileCache.MinBudgetBytes);
