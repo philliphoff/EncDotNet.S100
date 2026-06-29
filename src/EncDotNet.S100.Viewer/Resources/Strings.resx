@@ -984,6 +984,12 @@
   <data name="Tooltip_TileGpuBudgetMb" xml:space="preserve">
     <value>Per-layer budget, in megabytes, for GPU-resident tile textures. Sized when the resident-texture cache is created — reload the dataset to apply a change.</value>
   </data>
+  <data name="Settings_TileWorkerCount" xml:space="preserve">
+    <value>Tile workers</value>
+  </data>
+  <data name="Tooltip_TileWorkerCount" xml:space="preserve">
+    <value>Number of concurrent tile-rasterisation workers per layer. More workers reduce cold pan/zoom stutter on multi-core machines; low-end profiles default to one. Reload the dataset to apply a change.</value>
+  </data>
   <data name="Settings_RenderKnob_RestartHint" xml:space="preserve">
     <value>Reload the dataset or restart to apply.</value>
   </data>

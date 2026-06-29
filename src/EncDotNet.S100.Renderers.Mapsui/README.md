@@ -583,11 +583,18 @@ thread-safe LRU `TileCache` bounded by a hard **native-byte budget**
 (`S100_VECTOR_TILE_BUDGET_MB`, default sized by the performance profile — see
 below) — decoded `SKImage` pixels are
 native memory; visible tiles are kept most-recently-used so they are never
-evicted mid-frame. A single coalescing worker per layer drains the visible-miss
-set (replaced every frame), and all cache access is serialised through the layer
-lock so the worker cannot dispose an image the compositor is blitting. Telemetry
-histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI
-composite pass) attribute the two halves. A rotated viewport (e.g. an incidental
+evicted mid-frame. A tier-sized pool of coalescing workers per layer drains the
+visible-miss set (replaced every frame), and all cache access is serialised
+through the layer lock so a worker cannot dispose an image the compositor is
+blitting. The pool size is `S100_VECTOR_TILE_WORKERS` (default sized by the
+performance profile — one on low-end hosts, scaling with cores on high-end), so a
+cold pan's visible misses rasterise in parallel instead of one at a time; a
+process-wide cap (logical-core count) stops *N* layers × *N* workers from
+oversubscribing the cores and starving the UI thread on a big exchange set.
+Telemetry histograms `TileRasterizeDuration` (worker) and `TileCompositeDuration`
+(UI composite pass) attribute the two halves, while `TileColdLatency` measures the
+end-to-end queue-wait-plus-rasterise a cold tile takes to appear. A rotated
+viewport (e.g. an incidental
 trackpad-pinch spin) is composited north-up into an off-screen surface and then
 that single image is rotated about the screen centre by an angle derived from
 Mapsui's own `WorldToScreenXY` projection (so the sign matches without
@@ -612,8 +619,11 @@ logical-core count and available RAM (`LowEnd` <=4 cores or <=8 GB; `Balanced`
 <=8 cores or <=16 GB; else `HighEnd`). This bounds total memory on a constrained
 VM or low-end laptop, where the old fixed 256 MB x *N* cells thrashed the cache.
 `S100_PERF_PROFILE` (`Auto`/`LowEnd`/`Balanced`/`HighEnd`) pins a tier; the
-individual `*_TILE_*_MB` knobs still override per-budget. The viewer surfaces the
-profile and detected tier in Settings.
+individual `*_TILE_*_MB` knobs still override per-budget. The same tier sizes the
+per-layer tile-worker pool (`S100_VECTOR_TILE_WORKERS`): `LowEnd` stays at the
+original single worker, `Balanced` uses two, `HighEnd` scales with cores (≈ one
+per four, capped at 8). The viewer surfaces the profile, detected tier, and the
+worker count in Settings.
 
 #### Constant-size symbol/sounding overlay
 
@@ -673,7 +683,14 @@ never delays a tile the user is looking at. The set is recomputed — and thereb
 cancelled — every frame; hysteresis comes from the velocity EMA. Speculative
 hits are counted via `s100.render.tile.prediction.hits` /
 `.rasterized`, and cold exposure via the `s100.render.tile.cold.exposure`
-histogram.
+histogram. Two further cold-path histograms isolate tiling stutter on the
+initial cold gesture: `s100.render.tile.cold.latency` (ms) is the
+**end-to-end** age of a visible tile — first frame it is seen cold to the
+worker publishing it — so it captures queue wait, not just the per-tile
+`s100.render.tile.rasterize.duration`; `s100.render.tile.visible.queue.depth`
+is the cold-miss burst depth a gesture creates. Read together they separate a
+slow tiling worker (high cold latency / deep queue, cheap Mapsui paints) from
+slow Mapsui paints (low cold latency, high map-paint duration).
 
 A published predicted tile must **not** request a repaint
 (`ShouldRequestRedraw` returns `true` only for a published *visible* tile).

@@ -400,6 +400,8 @@ internal static class Strings
     public static string Tooltip_TileGpuResidencyEnabled => Get(nameof(Tooltip_TileGpuResidencyEnabled));
     public static string Settings_TileGpuBudgetMb => Get(nameof(Settings_TileGpuBudgetMb));
     public static string Tooltip_TileGpuBudgetMb => Get(nameof(Tooltip_TileGpuBudgetMb));
+    public static string Settings_TileWorkerCount => Get(nameof(Settings_TileWorkerCount));
+    public static string Tooltip_TileWorkerCount => Get(nameof(Tooltip_TileWorkerCount));
     public static string Settings_RenderKnob_RestartHint => Get(nameof(Settings_RenderKnob_RestartHint));
     public static string Settings_MaintenanceSubsection => Get(nameof(Settings_MaintenanceSubsection));
     public static string Settings_MaintenanceSubsection_Help => Get(nameof(Settings_MaintenanceSubsection_Help));
