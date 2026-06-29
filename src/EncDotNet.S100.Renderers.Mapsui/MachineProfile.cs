@@ -65,6 +65,30 @@ public static class MachineProfile
     };
 
     /// <summary>
+    /// Number of concurrent tile-rasterisation workers per layer for each tier,
+    /// derived from the live host's logical-core count.
+    /// </summary>
+    public static int TileWorkers(PerformanceProfile tier) =>
+        TileWorkers(tier, Environment.ProcessorCount);
+
+    /// <summary>
+    /// Number of concurrent tile-rasterisation workers per layer for
+    /// <paramref name="tier"/>, given <paramref name="cores"/> logical cores.
+    /// LowEnd stays at the original single worker so constrained hosts are never
+    /// over-subscribed; Balanced gets two; HighEnd scales with cores (one worker
+    /// per ~4 cores) and is clamped to <see cref="RenderingOptimizations.MaxTileWorkers"/>.
+    /// A pan that exposes ~14–48 cold tiles is otherwise drained serially by a
+    /// single worker, so parallelism cuts the cold-tile queue wait roughly
+    /// proportionally on multi-core hosts.
+    /// </summary>
+    public static int TileWorkers(PerformanceProfile tier, int cores) => tier switch
+    {
+        PerformanceProfile.LowEnd => 1,
+        PerformanceProfile.Balanced => 2,
+        _ => Math.Clamp(cores / 4, 3, RenderingOptimizations.MaxTileWorkers),
+    };
+
+    /// <summary>
     /// Resolves <see cref="PerformanceProfile.Auto"/> to a concrete tier from the
     /// supplied core count and available RAM. The explicit tiers pass through.
     /// LowEnd: ≤4 cores or ≤8&#160;GB; Balanced: ≤8 cores or ≤16&#160;GB; else HighEnd.

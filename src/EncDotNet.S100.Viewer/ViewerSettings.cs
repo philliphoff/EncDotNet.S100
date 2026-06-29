@@ -303,6 +303,14 @@ internal sealed class ViewerSettings
     public double? TileGpuBudgetMb { get; set; }
 
     /// <summary>
+    /// Number of concurrent tile-rasterisation workers per layer.
+    /// <see langword="null"/> → best default for the resolved profile (one on
+    /// low-end hosts, scaling with cores on high-end). Mirrors
+    /// <c>RenderingOptimizations.TileWorkerCount</c> / <c>S100_VECTOR_TILE_WORKERS</c>.
+    /// </summary>
+    public int? TileWorkerCount { get; set; }
+
+    /// <summary>
     /// Overall performance profile that sets the default tile budgets + worker
     /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
     /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors

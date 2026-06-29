@@ -328,10 +328,10 @@ TiledScene seam (`S100_RENDER_SUBSYSTEM=tiledscene`):
   available* for every slot (cached fallback bands as a backdrop farthest-first,
   exact-band tiles on top), each hard-clipped to its core over a rendered
   **gutter** (default 64 DIP, `S100_VECTOR_TILE_GUTTER`) so strokes stay
-  continuous across seams. A single coalescing worker per layer drains the
-  visible-miss set (replaced every frame, so tiles panned out of view are
-  dropped before they render). All cache access is serialised through the layer
-  lock so no image is disposed mid-blit.
+  continuous across seams. A tier-sized pool of coalescing workers per layer
+  drains the visible-miss set (replaced every frame, so tiles panned out of view
+  are dropped before they render). All cache access is serialised through the
+  layer lock so no image is disposed mid-blit.
 
 Within the TiledScene subsystem, `S100_VECTOR_SCENE_MODE=single` selects the
 Phase-1 single-surface renderer for A/B comparison; the tiled renderer is the
@@ -382,8 +382,11 @@ the exact band lands. Accepted.
 
 - Pre-warm the z±1 bands and a velocity fan so zoom-out doesn't transiently
   blit a deep fallback stack (the ~37 ms frames in C.2).
-- Consider a small worker pool (design's "cores−1") if tile fill lags on denser
-  cells; Phase 2 uses one coalescing worker per layer.
+- A small per-layer worker pool (`S100_VECTOR_TILE_WORKERS`, sized by tier) now
+  drains the visible-miss queue in parallel, with a process-wide cap of the
+  logical-core count so multi-cell exchange sets don't oversubscribe; measured to
+  cut single-cell cold-tile latency ≈3× on a 16-core host. `LowEnd` keeps one
+  worker.
 - The Phase-1 B-side polish items (line dashes, label glyphs) still apply and
   are unchanged by tiling.
 
@@ -415,8 +418,11 @@ hysteresis comes from the velocity EMA, not from retaining stale predictions.
 
 Pending work is split into two queues: `PendingVisible` (on-screen exact-band
 misses, high priority) and `PendingPredicted` (the warm set, low priority). The
-single coalescing worker drains visible-first, so prediction always yields to
-tiles the user is actually looking at and never delays an on-screen fill.
+pool of coalescing workers drains visible-first, so prediction always yields to
+tiles the user is actually looking at and never delays an on-screen fill. The
+pool size is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
+`ActiveWorkers` count plus a process-wide `s_activeWorkerTotal` cap (core count)
+bound how many run at once.
 
 Speculatively-rasterised keys are tracked in `PredictedInCache`; when a later
 frame finds such a key in the visible set it counts a **prediction hit** and

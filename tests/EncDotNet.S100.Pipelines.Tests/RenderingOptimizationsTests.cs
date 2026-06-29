@@ -301,4 +301,79 @@ public class RenderingOptimizationsTests
             RenderingOptimizations.Profile = originalProfile;
         }
     }
+
+    [Fact]
+    public void TileWorkers_LowEndIsSingle_NeverDegradesConstrainedHosts()
+    {
+        // LowEnd must keep the original single-worker behaviour regardless of how
+        // many cores it nominally has — constrained hosts are never over-subscribed.
+        Assert.Equal(1, MachineProfile.TileWorkers(PerformanceProfile.LowEnd, cores: 2));
+        Assert.Equal(1, MachineProfile.TileWorkers(PerformanceProfile.LowEnd, cores: 64));
+        // Balanced stays modest (2) regardless of cores.
+        Assert.Equal(2, MachineProfile.TileWorkers(PerformanceProfile.Balanced, cores: 64));
+    }
+
+    [Theory]
+    [InlineData(4, 3)]    // low core count still floors at the HighEnd minimum
+    [InlineData(16, 4)]   // ~one worker per 4 cores
+    [InlineData(64, 8)]   // clamped to MaxTileWorkers
+    public void TileWorkers_HighEnd_ScalesWithCores_AndClamps(int cores, int expected)
+    {
+        Assert.Equal(expected, MachineProfile.TileWorkers(PerformanceProfile.HighEnd, cores));
+        Assert.InRange(MachineProfile.TileWorkers(PerformanceProfile.HighEnd, cores),
+            RenderingOptimizations.MinTileWorkers, RenderingOptimizations.MaxTileWorkers);
+    }
+
+    [Fact]
+    public void TileWorkers_NeverFewerThan_LowToHigh()
+    {
+        Assert.True(MachineProfile.TileWorkers(PerformanceProfile.LowEnd, 16)
+            <= MachineProfile.TileWorkers(PerformanceProfile.Balanced, 16));
+        Assert.True(MachineProfile.TileWorkers(PerformanceProfile.Balanced, 16)
+            <= MachineProfile.TileWorkers(PerformanceProfile.HighEnd, 16));
+    }
+
+    [Fact]
+    public void TileWorkerCount_Clamps_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileWorkerCountEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_TILE_WORKERS; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.TileWorkerCount;
+        try
+        {
+            RenderingOptimizations.TileWorkerCount = RenderingOptimizations.MinTileWorkers - 5;
+            Assert.Equal(RenderingOptimizations.MinTileWorkers, RenderingOptimizations.TileWorkerCount);
+
+            RenderingOptimizations.TileWorkerCount = RenderingOptimizations.MaxTileWorkers + 5;
+            Assert.Equal(RenderingOptimizations.MaxTileWorkers, RenderingOptimizations.TileWorkerCount);
+        }
+        finally
+        {
+            RenderingOptimizations.TileWorkerCount = original;
+        }
+    }
+
+    [Fact]
+    public void Profile_LowEnd_DropsWorkersToSingle_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.ProfileEnvExplicit ||
+            RenderingOptimizations.TileWorkerCountEnvExplicit)
+        {
+            return; // env-pinned; profile setter / worker count are no-ops
+        }
+
+        var originalProfile = RenderingOptimizations.Profile;
+        try
+        {
+            RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
+            Assert.Equal(1, RenderingOptimizations.TileWorkerCount);
+        }
+        finally
+        {
+            RenderingOptimizations.Profile = originalProfile;
+        }
+    }
 }

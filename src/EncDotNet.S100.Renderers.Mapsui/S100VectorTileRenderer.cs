@@ -42,11 +42,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// rasterisation and never blocks.
 /// </para>
 /// <para>
-/// <b>Workers.</b> A single coalescing worker per layer drains the visible-miss
-/// set (replaced every frame, so tiles panned out of view are dropped before
-/// they render). Each tile is rendered with a <b>gutter</b> (bleed beyond the
-/// tile bounds) and hard-clipped to its core on composite, so lines and area
-/// fills stay continuous across seams. Finished tiles enter the
+/// <b>Workers.</b> A tier-sized pool of coalescing workers per layer drains the
+/// visible-miss set (replaced every frame, so tiles panned out of view are
+/// dropped before they render) in parallel. The pool size is
+/// <see cref="RenderingOptimizations.TileWorkerCount"/> (one on low-end hosts,
+/// scaling with cores on high-end). Each tile is rendered with a <b>gutter</b>
+/// (bleed beyond the tile bounds) and hard-clipped to its core on composite, so
+/// lines and area fills stay continuous across seams. Finished tiles enter the
 /// native-byte-bounded <see cref="TileCache"/> and trigger a single repaint via
 /// <see cref="RequestRedraw"/>.
 /// </para>
@@ -241,6 +243,19 @@ public static class S100VectorTileRenderer
     /// <see cref="WorkerDrainGate"/>.
     /// </summary>
     private static readonly WorkerDrainGate s_drainGate = new();
+
+    /// <summary>
+    /// Process-wide cap on the total number of concurrent tile workers across
+    /// <em>all</em> layers. A single dense layer gets the full per-layer pool
+    /// (<see cref="RenderingOptimizations.TileWorkerCount"/>) to parallelise its
+    /// cold-miss burst, but N layers × N workers must not exceed the core count or
+    /// they oversubscribe the CPU/GPU and starve the UI paint thread (a paint-p95
+    /// blow-up on big multi-cell exchange sets). Read once at start-up.
+    /// </summary>
+    private static readonly int s_maxTotalWorkers =
+        Math.Max(RenderingOptimizations.TileWorkerCount, Environment.ProcessorCount);
+
+    private static int s_activeWorkerTotal;
 
 
     /// <summary>
@@ -610,7 +625,7 @@ public static class S100VectorTileRenderer
 
         var visible = TileGrid.VisibleTiles(centerX, centerY, coverWidth, coverHeight, resolution, band);
 
-        var startWorker = false;
+        var workersToStart = 0;
         var coldExposure = 0;
         var visibleQueueDepth = 0;
         var predictionHits = 0L;
@@ -704,10 +719,21 @@ public static class S100VectorTileRenderer
             {
                 state.PendingDeviceScale = deviceScale;
                 state.PendingGeneration = state.Generation;
-                if (!state.Rendering)
+                // Spin up enough workers to cover the pending tiles, capped at the
+                // tier's per-layer pool size, so a cold pan's misses rasterise in
+                // parallel instead of one at a time. A second cap on the total live
+                // workers across every layer keeps N layers × N workers from
+                // oversubscribing the cores (which would starve the UI thread on a
+                // big exchange set). Never start more than there is work for.
+                var perLayer = Math.Min(
+                    RenderingOptimizations.TileWorkerCount,
+                    state.PendingVisible.Count + state.PendingPredicted.Count);
+                var globalRoom = s_maxTotalWorkers - Volatile.Read(ref s_activeWorkerTotal);
+                workersToStart = Math.Min(perLayer - state.ActiveWorkers, globalRoom);
+                if (workersToStart > 0)
                 {
-                    state.Rendering = true;
-                    startWorker = true;
+                    state.ActiveWorkers += workersToStart;
+                    Interlocked.Add(ref s_activeWorkerTotal, workersToStart);
                 }
             }
 
@@ -727,10 +753,10 @@ public static class S100VectorTileRenderer
             // textures are never blitted.
             //
             // Guard the whole paint block: a throw here would escape the lock and
-            // skip the worker-start Task.Run below while state.Rendering stays
-            // true, permanently stalling tile production (a blank chart until the
-            // layer is rebuilt). A dropped frame is always recoverable; a stalled
-            // worker is not.
+            // skip the worker-start Task.Run below while ActiveWorkers stays
+            // elevated, permanently stalling tile production (a blank chart until
+            // the layer is rebuilt). A dropped frame is always recoverable; a
+            // stalled worker is not.
             try
             {
                 if (grContext is not null)
@@ -765,21 +791,35 @@ public static class S100VectorTileRenderer
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
         }
 
-        if (startWorker)
+        if (workersToStart > 0)
         {
-            // Honour a graceful shutdown: TryRegister refuses new Skia work once
-            // the process is tearing down. Release the rendering flag we set
-            // under the lock so the state is left consistent.
-            if (s_drainGate.TryRegister())
+            // Spawn the worker pool. Each worker is independently registered with
+            // the drain gate; ShutdownAndDrain waits for all of them. If a register
+            // is refused (process tearing down), give back the slot we reserved so
+            // ActiveWorkers reflects only the workers actually running, and undo the
+            // remaining reservations in one go.
+            var started = 0;
+            for (var i = 0; i < workersToStart; i++)
             {
-                _ = Task.Run(() => Worker(state));
+                if (s_drainGate.TryRegister())
+                {
+                    _ = Task.Run(() => Worker(state));
+                    started++;
+                }
+                else
+                {
+                    break;
+                }
             }
-            else
+
+            if (started < workersToStart)
             {
                 lock (state.Sync)
                 {
-                    state.Rendering = false;
+                    state.ActiveWorkers -= workersToStart - started;
                 }
+
+                Interlocked.Add(ref s_activeWorkerTotal, -(workersToStart - started));
             }
         }
     }
@@ -1413,10 +1453,10 @@ public static class S100VectorTileRenderer
                     if (state.Scene is null
                         || (state.PendingVisible.Count == 0 && state.PendingPredicted.Count == 0))
                     {
-                        // Drained: leave the loop and let the single finally clear
-                        // state.Rendering. Clearing here as well would open a race
-                        // where a frame restarts the worker between this point and
-                        // the finally, leaving two workers running.
+                        // Drained: leave the loop and let the finally decrement
+                        // ActiveWorkers. Decrementing here as well would open a race
+                        // where a frame restarts a worker between this point and the
+                        // finally, over-counting the pool.
                         return;
                     }
 
@@ -1529,19 +1569,22 @@ public static class S100VectorTileRenderer
         {
             // The inner rasterise has its own guard; this catches anything else on
             // the worker (disk I/O, cache, redraw callback). Never let the worker
-            // die with state.Rendering stuck true — that would permanently stall
-            // tile production (a blank chart until the layer is rebuilt).
+            // die without decrementing ActiveWorkers — that would permanently
+            // under-count the pool and starve tile production.
             S100Diag.Telemetry.RecordRenderFault(ex);
         }
         finally
         {
-            // Always release the rendering flag so the next frame can spin up a
-            // fresh worker for any still-pending tiles. Normal drain-exit already
-            // cleared it inside the loop; this covers the abnormal-exit path.
+            // Release this worker's pool slot so the next frame can spin up a fresh
+            // worker for any still-pending tiles. Both normal drain-exit and the
+            // abnormal-exit path land here. Mirror the per-layer slot in the
+            // process-wide total so other layers can reclaim the headroom.
             lock (state.Sync)
             {
-                state.Rendering = false;
+                state.ActiveWorkers--;
             }
+
+            Interlocked.Decrement(ref s_activeWorkerTotal);
 
             // Pair the TryRegister at the worker-start site. When the last
             // worker completes, this signals ShutdownAndDrain that Skia is idle.
@@ -1894,7 +1937,7 @@ public static class S100VectorTileRenderer
         public long LastCenterTimestamp;
         public bool HasLastCenter;
 
-        public bool Rendering;
+        public int ActiveWorkers;
         public float PendingDeviceScale = 1f;
         public long PendingGeneration;
 
