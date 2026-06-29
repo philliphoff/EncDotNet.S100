@@ -323,6 +323,19 @@ public sealed class S101VectorSource : IVectorSource
             }
         }
 
+        // Most S-101 cells store their extent in curve geometry, not isolated
+        // point records: a cell built entirely from curves/surfaces has no
+        // Point/MultiPoint records, so the boundary vertices live in each
+        // curve segment's intermediate coordinates. Fold those in too, or the
+        // extent collapses to (0,0,0,0) and callers fall back to world bounds.
+        foreach (var seg in doc.CurveSegments.Values)
+        {
+            foreach (var (y, x) in seg.IntermediateCoordinates)
+            {
+                UpdateBounds(y / cmfy, x / cmfx);
+            }
+        }
+
         if (!hasCoords)
         {
             return new BoundingBox(0, 0, 0, 0);
