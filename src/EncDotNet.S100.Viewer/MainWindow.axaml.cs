@@ -25,7 +25,6 @@ using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
-using Mapsui.Tiling;
 
 namespace EncDotNet.S100.Viewer;
 
@@ -247,16 +246,16 @@ public partial class MainWindow : ShadUI.Window
             }
         };
 
-        // Online OSM basemap (issue #295). Shown by default; the user can
-        // disable it from Settings (or via the --basemap CLI flag) for
-        // offline use or to exclude basemap tile activity from performance
-        // measurements. Keep a reference so toggling can add/remove it live.
-        if (_viewModel.Settings.BasemapEnabled)
+        // Basemap (issue #295). Default Offline (bundled Natural Earth
+        // land — zero network); the user can switch to None or Online in
+        // Settings (or via --basemap). Keep a reference so swapping mode
+        // can replace it live. Always sits at index 0, beneath datasets.
+        _basemapLayer = BasemapLayerFactory.Create(_viewModel.Settings.SelectedBasemapMode);
+        if (_basemapLayer is not null)
         {
-            _basemapLayer = OpenStreetMap.CreateTileLayer();
             MapControl.Map?.Layers.Add(_basemapLayer);
         }
-        _viewModel.Settings.BasemapEnabledChanged += OnBasemapEnabledChanged;
+        _viewModel.Settings.BasemapModeChanged += OnBasemapModeChanged;
 
         // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
         // background so the unrendered area outside the tile layer's
@@ -646,26 +645,26 @@ public partial class MainWindow : ShadUI.Window
         => DisplaySettingsButton.Flyout?.Hide();
 
     /// <summary>
-    /// Adds or removes the online basemap tile layer in response to the
-    /// Settings toggle (issue #295). The basemap always sits at the
-    /// bottom of the layer stack (index 0) beneath every dataset and
-    /// overlay layer; re-enabling re-inserts a fresh tile layer there.
+    /// Swaps the basemap layer in response to the Settings basemap-mode
+    /// selector (issue #295). The basemap always sits at the bottom of
+    /// the layer stack (index 0) beneath every dataset and overlay; a new
+    /// mode removes the old layer and inserts a fresh one (or none for
+    /// <see cref="BasemapMode.None"/>).
     /// </summary>
-    private void OnBasemapEnabledChanged(bool enabled)
+    private void OnBasemapModeChanged(BasemapMode mode)
     {
         if (MapControl.Map is not { } map) return;
 
-        if (enabled)
+        if (_basemapLayer is not null)
         {
-            if (_basemapLayer is not null) return;
-            _basemapLayer = OpenStreetMap.CreateTileLayer();
-            map.Layers.Insert(0, _basemapLayer);
-        }
-        else
-        {
-            if (_basemapLayer is null) return;
             map.Layers.Remove(_basemapLayer);
             _basemapLayer = null;
+        }
+
+        _basemapLayer = BasemapLayerFactory.Create(mode);
+        if (_basemapLayer is not null)
+        {
+            map.Layers.Insert(0, _basemapLayer);
         }
 
         MapControl.RefreshGraphics();

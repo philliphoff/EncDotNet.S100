@@ -135,8 +135,9 @@ Datasets tab.
 
 ## The map view
 
-A Mapsui-backed map fills the centre of the window with an
-OpenStreetMap basemap underlay. Standard pan / zoom gestures work
+A Mapsui-backed map fills the centre of the window with a basemap
+underlay (bundled offline Natural Earth land by default; see
+**Settings → Map**). Standard pan / zoom gestures work
 out of the box (mouse wheel, trackpad, touch). A **scale bar** at the
 bottom of the map updates with the viewport and respects the
 mariner's distance-unit choice (metres / kilometres, feet, nautical
@@ -708,12 +709,15 @@ zoom-to-extent so the framing is reproducible.
 capture before a screenshot. These override the persisted values for
 the run only.
 
-**Basemap.** `--basemap true|false` shows or hides the online
-OpenStreetMap basemap for the run, overriding the persisted setting
-(which is also exposed as a toggle in **Settings → Map**; default on).
-Disable it for offline operation, or for performance runs that want to
-measure only dataset rendering without basemap tile fetch / raster
-activity (issue #295).
+**Basemap.** `--basemap None|Offline|Online` selects the basemap for
+the run, overriding the persisted setting (also exposed as a selector
+in **Settings → Map**; default **Offline**). **Offline** draws bundled
+Natural Earth 1:10m land (public domain) with zero network access;
+**Online** uses OpenStreetMap tiles with a persistent on-disk cache;
+**None** shows only the ENC water background. Legacy `true`/`false`
+map to Online/None. Use None or Offline for offline operation, or for
+performance runs that want to measure only dataset rendering without
+basemap tile fetch / raster activity (issue #295).
 
 **Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course

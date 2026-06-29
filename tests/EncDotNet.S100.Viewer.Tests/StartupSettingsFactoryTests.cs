@@ -81,24 +81,29 @@ public class StartupSettingsFactoryTests
     }
 
     [Fact]
-    public void Basemap_defaults_to_enabled_when_not_overridden()
+    public void Basemap_defaults_to_offline_when_not_overridden()
     {
         var settings = StartupSettingsFactory.Create(new ViewerCommandSettings { SettingsPath = TempSettingsPath() });
+        Assert.Equal(BasemapMode.Offline, settings.BasemapMode);
         Assert.True(settings.BasemapEnabled);
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Basemap_flag_overrides_persisted_setting(bool enabled)
+    [InlineData("None", BasemapMode.None)]
+    [InlineData("Offline", BasemapMode.Offline)]
+    [InlineData("Online", BasemapMode.Online)]
+    [InlineData("online", BasemapMode.Online)]
+    [InlineData("true", BasemapMode.Online)]
+    [InlineData("false", BasemapMode.None)]
+    public void Basemap_flag_overrides_persisted_setting(string flag, BasemapMode expected)
     {
         var settings = StartupSettingsFactory.Create(new ViewerCommandSettings
         {
             SettingsPath = TempSettingsPath(),
-            Basemap = enabled,
+            Basemap = flag,
         });
 
-        Assert.Equal(enabled, settings.BasemapEnabled);
+        Assert.Equal(expected, settings.BasemapMode);
     }
 
     [Fact]

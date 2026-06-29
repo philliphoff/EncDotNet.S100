@@ -1039,10 +1039,19 @@
     <value>Cancel</value>
   </data>
   <data name="Settings_BasemapEnabled" xml:space="preserve">
-    <value>Show online basemap</value>
+    <value>Basemap</value>
   </data>
   <data name="Tooltip_BasemapEnabled" xml:space="preserve">
-    <value>Show the online OpenStreetMap basemap beneath the chart data. Disable for offline use or to exclude basemap tile activity from performance measurements.</value>
+    <value>Choose the basemap drawn beneath the chart: None (water-coloured background), Offline (bundled Natural Earth land, no network), or Online (OpenStreetMap tiles). Offline and None work with zero network access.</value>
+  </data>
+  <data name="Basemap_None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Basemap_Offline" xml:space="preserve">
+    <value>Offline (Natural Earth)</value>
+  </data>
+  <data name="Basemap_Online" xml:space="preserve">
+    <value>Online (OpenStreetMap)</value>
   </data>
   <data name="Settings_NationalLanguage" xml:space="preserve">
     <value>National Language</value>

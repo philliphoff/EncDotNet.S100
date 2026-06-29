@@ -20,7 +20,8 @@ fixture — clone the repo and `dotnet run` it.
 
 The **S-100 Viewer** is a cross-platform desktop application that loads any
 combination of supported products and renders them, time-aligned, on an
-interactive map over an OpenStreetMap basemap. It needs no .NET installation
+interactive map over a bundled offline basemap (Natural Earth land;
+OpenStreetMap optional). It needs no .NET installation
 and no commercial chart assets.
 
 ### 1. Download

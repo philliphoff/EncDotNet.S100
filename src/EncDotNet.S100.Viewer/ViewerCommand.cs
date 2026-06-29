@@ -96,9 +96,9 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("ECDIS display category: DisplayBase, Standard, OtherInformation, or All. Overrides the persisted category for this run.")]
     public string? DisplayCategory { get; set; }
 
-    [CommandOption("--basemap <ENABLED>")]
-    [Description("Show the online basemap: true or false. Overrides the persisted setting for this run; disable it for offline use or to exclude basemap tile activity from performance measurements.")]
-    public bool? Basemap { get; set; }
+    [CommandOption("--basemap <MODE>")]
+    [Description("Basemap mode: None, Offline (bundled Natural Earth land), or Online (OpenStreetMap). Overrides the persisted setting for this run; use None/Offline for offline operation. Legacy true/false are accepted (true=Online, false=None).")]
+    public string? Basemap { get; set; }
 
     [CommandOption("--time-step <STEP>")]
     [Description("For time-varying data, jump to this time step after loading — a zero-based index or an ISO-8601 UTC timestamp.")]
