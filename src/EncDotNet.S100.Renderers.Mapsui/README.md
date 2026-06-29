@@ -580,7 +580,8 @@ band is drawn on top; a backdrop of cached fallback tiles is drawn underneath
 nearest** cached band (one scale, never stacked) so transitional zoom frames do
 not ghost different-sized symbols. Finished tiles enter a
 thread-safe LRU `TileCache` bounded by a hard **native-byte budget**
-(`S100_VECTOR_TILE_BUDGET_MB`, default 256 MB) — decoded `SKImage` pixels are
+(`S100_VECTOR_TILE_BUDGET_MB`, default sized by the performance profile — see
+below) — decoded `SKImage` pixels are
 native memory; visible tiles are kept most-recently-used so they are never
 evicted mid-frame. A single coalescing worker per layer drains the visible-miss
 set (replaced every frame), and all cache access is serialised through the layer
@@ -601,6 +602,21 @@ banding/seams between tiles and bands (issue #330). See design Appendix F.8.
 bounded — p50 ≈ 7.7 ms, p90 ≈ 34 ms, max ≈ 37 ms (the worst frames are zoom-out
 backdrop blits) — versus the Mapsui arm's ~409 ms; pans held ~3–8 ms with no
 visible tile seams. Full numbers in Appendix C of the design doc.
+
+#### Performance profile (machine-aware budgets)
+
+The tile-cache budgets and worker concurrency that previously defaulted to fixed
+per-layer values now scale to the host through `MachineProfile`. The hot, GPU,
+and disk budgets and the **max concurrent tile workers** are seeded from a
+`PerformanceProfile` tier; the default `Auto` resolves a tier from logical-core
+count and available RAM (`LowEnd` ≤4 cores or ≤8 GB; `Balanced` ≤8 cores or
+≤16 GB; else `HighEnd`). This bounds total memory and the worker-thread storm a
+many-cell / multi-exchange-set chart would otherwise create on a constrained VM
+or low-end laptop — `LowEnd` caps the hot cache at 96 MB and 2 workers, where
+the old fixed 256 MB × *N* cells thrashed. `S100_PERF_PROFILE`
+(`Auto`/`LowEnd`/`Balanced`/`HighEnd`) pins a tier and
+`S100_VECTOR_TILE_WORKERS` pins the cap; the individual `*_TILE_*_MB` knobs still
+override per-budget. The viewer surfaces the profile and worker cap in Settings.
 
 #### Constant-size symbol/sounding overlay
 

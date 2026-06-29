@@ -247,4 +247,91 @@ public class RenderingOptimizationsTests
             (long)(RenderingOptimizations.TileGpuBudgetMb * 1024 * 1024),
             S100VectorTileRenderer.GpuBudgetBytes);
     }
+
+    [Theory]
+    [InlineData(4, 32.0, PerformanceProfile.LowEnd)]   // too few cores
+    [InlineData(32, 8.0, PerformanceProfile.LowEnd)]   // too little RAM
+    [InlineData(8, 32.0, PerformanceProfile.Balanced)] // 8 cores caps to Balanced
+    [InlineData(32, 16.0, PerformanceProfile.Balanced)] // 16 GB caps to Balanced
+    [InlineData(16, 32.0, PerformanceProfile.HighEnd)] // generous on both axes
+    public void Resolve_Auto_DerivesTier_FromCoresAndRam(int cores, double ramGb, PerformanceProfile expected)
+    {
+        Assert.Equal(expected, MachineProfile.Resolve(PerformanceProfile.Auto, cores, ramGb));
+    }
+
+    [Theory]
+    [InlineData(PerformanceProfile.LowEnd)]
+    [InlineData(PerformanceProfile.Balanced)]
+    [InlineData(PerformanceProfile.HighEnd)]
+    public void Resolve_ExplicitTier_PassesThrough_RegardlessOfHardware(PerformanceProfile tier)
+    {
+        Assert.Equal(tier, MachineProfile.Resolve(tier, cores: 2, ramGb: 4.0));
+        Assert.Equal(tier, MachineProfile.Resolve(tier, cores: 64, ramGb: 256.0));
+    }
+
+    [Fact]
+    public void TierBudgets_Increase_LowToHigh()
+    {
+        Assert.True(MachineProfile.TileBudgetMb(PerformanceProfile.LowEnd)
+            < MachineProfile.TileBudgetMb(PerformanceProfile.Balanced));
+        Assert.True(MachineProfile.TileBudgetMb(PerformanceProfile.Balanced)
+            <= MachineProfile.TileBudgetMb(PerformanceProfile.HighEnd));
+        Assert.True(MachineProfile.TileDiskMb(PerformanceProfile.LowEnd)
+            < MachineProfile.TileDiskMb(PerformanceProfile.Balanced));
+    }
+
+    [Fact]
+    public void MaxWorkers_AreBounded_AndLowEndStaysSmall()
+    {
+        Assert.Equal(2, MachineProfile.MaxWorkers(PerformanceProfile.LowEnd));
+        Assert.InRange(MachineProfile.MaxWorkers(PerformanceProfile.Balanced), 2, 4);
+        Assert.InRange(MachineProfile.MaxWorkers(PerformanceProfile.HighEnd), 4, 8);
+    }
+
+    [Fact]
+    public void TileWorkers_Clamps_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.TileWorkersEnvExplicit)
+        {
+            return; // pinned by S100_VECTOR_TILE_WORKERS; setter is a no-op
+        }
+
+        var original = RenderingOptimizations.MaxConcurrentTileWorkers;
+        try
+        {
+            RenderingOptimizations.MaxConcurrentTileWorkers = RenderingOptimizations.MinTileWorkers - 5;
+            Assert.Equal(RenderingOptimizations.MinTileWorkers, RenderingOptimizations.MaxConcurrentTileWorkers);
+
+            RenderingOptimizations.MaxConcurrentTileWorkers = RenderingOptimizations.MaxTileWorkers + 5;
+            Assert.Equal(RenderingOptimizations.MaxTileWorkers, RenderingOptimizations.MaxConcurrentTileWorkers);
+        }
+        finally
+        {
+            RenderingOptimizations.MaxConcurrentTileWorkers = original;
+        }
+    }
+
+    [Fact]
+    public void Profile_LowEnd_ShrinksBudgets_WhenNotEnvPinned()
+    {
+        if (RenderingOptimizations.ProfileEnvExplicit ||
+            RenderingOptimizations.TileBudgetMbEnvExplicit ||
+            RenderingOptimizations.TileWorkersEnvExplicit)
+        {
+            return; // env-pinned; profile setter / budgets are no-ops
+        }
+
+        var originalProfile = RenderingOptimizations.Profile;
+        try
+        {
+            RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
+            Assert.Equal(PerformanceProfile.LowEnd, RenderingOptimizations.ResolvedProfile);
+            Assert.Equal(MachineProfile.TileBudgetMb(PerformanceProfile.LowEnd), RenderingOptimizations.TileBudgetMb);
+            Assert.Equal(MachineProfile.MaxWorkers(PerformanceProfile.LowEnd), RenderingOptimizations.MaxConcurrentTileWorkers);
+        }
+        finally
+        {
+            RenderingOptimizations.Profile = originalProfile;
+        }
+    }
 }

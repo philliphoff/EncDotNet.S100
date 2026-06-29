@@ -768,6 +768,69 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>Whether the GPU-budget knob is user-editable (not env-pinned).</summary>
     public bool TileGpuBudgetMbEditable => !RenderingOptimizations.TileGpuBudgetMbEnvExplicit;
 
+    /// <summary>Selectable performance profiles for the profile dropdown.</summary>
+    public IReadOnlyList<PerformanceProfile> PerformanceProfiles { get; } =
+        new[] { PerformanceProfile.Auto, PerformanceProfile.HighEnd, PerformanceProfile.Balanced, PerformanceProfile.LowEnd };
+
+    private PerformanceProfile _performanceProfile;
+    /// <summary>
+    /// The performance profile. <see cref="PerformanceProfile.Auto"/> sizes tile
+    /// budgets + worker cap from detected cores + RAM; the explicit tiers pin
+    /// them. Switching recomputes any non-env-pinned budget default and applies
+    /// on the next dataset reload.
+    /// </summary>
+    public PerformanceProfile SelectedPerformanceProfile
+    {
+        get => _performanceProfile;
+        set
+        {
+            RenderingOptimizations.Profile = value;
+            if (SetProperty(ref _performanceProfile, value))
+            {
+                _settings.PerformanceProfile = value.ToString();
+                _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
+                _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
+                _tileDiskMb = RenderingOptimizations.TileDiskMb;
+                OnPropertyChanged(nameof(TileBudgetMb));
+                OnPropertyChanged(nameof(TileGpuBudgetMb));
+                OnPropertyChanged(nameof(TileDiskMb));
+                OnPropertyChanged(nameof(ResolvedProfileLabel));
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the profile dropdown is user-editable (not env-pinned).</summary>
+    public bool PerformanceProfileEditable => !RenderingOptimizations.ProfileEnvExplicit;
+
+    /// <summary>The concrete tier Auto resolves to on this host, for display.</summary>
+    public string ResolvedProfileLabel => RenderingOptimizations.ResolvedProfile.ToString();
+
+    private int _tileMaxWorkers;
+    /// <summary>
+    /// Maximum concurrent tile-rasterising workers across all layers. Bounds the
+    /// per-cell worker storm a many-cell chart creates. Applies on next reload.
+    /// </summary>
+    public int TileMaxWorkers
+    {
+        get => _tileMaxWorkers;
+        set
+        {
+            RenderingOptimizations.MaxConcurrentTileWorkers = value;
+            var effective = RenderingOptimizations.MaxConcurrentTileWorkers;
+            if (SetProperty(ref _tileMaxWorkers, effective))
+            {
+                _settings.TileMaxWorkers = effective;
+                RaiseMarinerChanged();
+            }
+        }
+    }
+
+    /// <summary>Whether the worker-cap knob is user-editable (not env-pinned).</summary>
+    public bool TileMaxWorkersEditable => !RenderingOptimizations.TileWorkersEnvExplicit;
+
+
+
     /// <summary>
     /// Raised when <see cref="BasemapEnabled"/> changes so the host can
     /// add or remove the basemap tile layer live without a restart.
@@ -919,6 +982,15 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         _sceneMode = RenderingOptimizations.SceneMode;
 
+        // Apply the performance profile first so its derived budgets become the
+        // baseline; an explicitly persisted budget/worker value below overrides.
+        if (Enum.TryParse<PerformanceProfile>(settings.PerformanceProfile, ignoreCase: true, out var profile))
+        {
+            RenderingOptimizations.Profile = profile;
+        }
+
+        _performanceProfile = RenderingOptimizations.Profile;
+
         if (settings.TileGutterDip is { } tileGutter)
         {
             RenderingOptimizations.TileGutterDip = tileGutter;
@@ -967,6 +1039,13 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
 
         _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
+
+        if (settings.TileMaxWorkers is { } tileWorkers)
+        {
+            RenderingOptimizations.MaxConcurrentTileWorkers = tileWorkers;
+        }
+
+        _tileMaxWorkers = RenderingOptimizations.MaxConcurrentTileWorkers;
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
