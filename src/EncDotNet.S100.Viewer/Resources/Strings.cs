@@ -392,8 +392,6 @@ internal static class Strings
     public static string Tooltip_TileBudgetMb => Get(nameof(Tooltip_TileBudgetMb));
     public static string Settings_PerformanceProfile => Get(nameof(Settings_PerformanceProfile));
     public static string Tooltip_PerformanceProfile => Get(nameof(Tooltip_PerformanceProfile));
-    public static string Settings_TileMaxWorkers => Get(nameof(Settings_TileMaxWorkers));
-    public static string Tooltip_TileMaxWorkers => Get(nameof(Tooltip_TileMaxWorkers));
     public static string Settings_TileDiskCacheEnabled => Get(nameof(Settings_TileDiskCacheEnabled));
     public static string Tooltip_TileDiskCacheEnabled => Get(nameof(Tooltip_TileDiskCacheEnabled));
     public static string Settings_TileDiskMb => Get(nameof(Settings_TileDiskMb));

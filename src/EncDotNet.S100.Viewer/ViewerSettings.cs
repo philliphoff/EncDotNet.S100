@@ -310,14 +310,6 @@ internal sealed class ViewerSettings
     /// </summary>
     public string? PerformanceProfile { get; set; }
 
-    /// <summary>
-    /// Maximum concurrent tile-rasterising workers across all layers.
-    /// <see langword="null"/> → profile default. Mirrors
-    /// <c>RenderingOptimizations.MaxConcurrentTileWorkers</c> /
-    /// <c>S100_VECTOR_TILE_WORKERS</c>.
-    /// </summary>
-    public int? TileMaxWorkers { get; set; }
-
     /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
     public string? NationalLanguage { get; set; }
 

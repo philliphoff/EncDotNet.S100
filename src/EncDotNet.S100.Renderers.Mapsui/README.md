@@ -605,18 +605,15 @@ visible tile seams. Full numbers in Appendix C of the design doc.
 
 #### Performance profile (machine-aware budgets)
 
-The tile-cache budgets and worker concurrency that previously defaulted to fixed
-per-layer values now scale to the host through `MachineProfile`. The hot, GPU,
-and disk budgets and the **max concurrent tile workers** are seeded from a
-`PerformanceProfile` tier; the default `Auto` resolves a tier from logical-core
-count and available RAM (`LowEnd` ≤4 cores or ≤8 GB; `Balanced` ≤8 cores or
-≤16 GB; else `HighEnd`). This bounds total memory and the worker-thread storm a
-many-cell / multi-exchange-set chart would otherwise create on a constrained VM
-or low-end laptop — `LowEnd` caps the hot cache at 96 MB and 2 workers, where
-the old fixed 256 MB × *N* cells thrashed. `S100_PERF_PROFILE`
-(`Auto`/`LowEnd`/`Balanced`/`HighEnd`) pins a tier and
-`S100_VECTOR_TILE_WORKERS` pins the cap; the individual `*_TILE_*_MB` knobs still
-override per-budget. The viewer surfaces the profile and worker cap in Settings.
+The tile-cache budgets that previously defaulted to fixed per-layer values now
+scale to the host through `MachineProfile`. The hot, GPU, and disk budgets are
+seeded from a `PerformanceProfile` tier; the default `Auto` resolves a tier from
+logical-core count and available RAM (`LowEnd` <=4 cores or <=8 GB; `Balanced`
+<=8 cores or <=16 GB; else `HighEnd`). This bounds total memory on a constrained
+VM or low-end laptop, where the old fixed 256 MB x *N* cells thrashed the cache.
+`S100_PERF_PROFILE` (`Auto`/`LowEnd`/`Balanced`/`HighEnd`) pins a tier; the
+individual `*_TILE_*_MB` knobs still override per-budget. The viewer surfaces the
+profile and detected tier in Settings.
 
 #### Constant-size symbol/sounding overlay
 

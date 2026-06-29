@@ -343,17 +343,6 @@
                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileGpuBudgetMb}"
                                        MinWidth="140"
                                        HorizontalAlignment="Left" />
-                        <TextBlock Text="{x:Static loc:Strings.Settings_TileMaxWorkers}"
-                                   FontSize="12" />
-                        <NumericUpDown Value="{Binding TileMaxWorkers}"
-                                       Minimum="1"
-                                       Maximum="32"
-                                       Increment="1"
-                                       FormatString="0"
-                                       IsEnabled="{Binding TileMaxWorkersEditable}"
-                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_TileMaxWorkers}"
-                                       MinWidth="140"
-                                       HorizontalAlignment="Left" />
                         <TextBlock Text="{x:Static loc:Strings.Settings_RenderKnob_RestartHint}"
                                    FontSize="11"
                                    Opacity="0.6"

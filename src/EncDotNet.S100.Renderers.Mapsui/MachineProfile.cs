@@ -4,27 +4,27 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// Selects how the tiled render subsystem's resource budgets (in-memory / GPU /
-/// disk tile caches and worker concurrency) default when no explicit
-/// environment variable or persisted user value pins them.
+/// disk tile caches) default when no explicit environment variable or persisted
+/// user value pins them.
 /// </summary>
 /// <remarks>
 /// <see cref="Auto"/> derives the tier from the host's logical-core count and
 /// total available RAM at start-up, so a constrained machine (small Parallels /
-/// cloud VM, low-RAM laptop) gets smaller per-layer caches and fewer concurrent
-/// tile workers — bounding total memory and the worker-thread storm a
-/// many-cell / multi-exchange-set chart would otherwise create. The explicit
-/// tiers exist so a user can pin a profile regardless of detected hardware; the
-/// individual budget/worker knobs remain independently overridable.
+/// cloud VM, low-RAM laptop) gets smaller per-layer caches — bounding total
+/// memory and fixing the tile-cache thrash a many-cell / multi-exchange-set
+/// chart created at a fixed 256&#160;MB ceiling. The explicit tiers exist so a
+/// user can pin a profile regardless of detected hardware; the individual
+/// budget knobs remain independently overridable.
 /// </remarks>
 public enum PerformanceProfile
 {
     /// <summary>Derive the tier from detected cores + RAM. The default.</summary>
     Auto = 0,
 
-    /// <summary>Generous caches and worker concurrency (workstation defaults).</summary>
+    /// <summary>Generous caches (workstation defaults).</summary>
     HighEnd = 1,
 
-    /// <summary>Mid-range caches and concurrency.</summary>
+    /// <summary>Mid-range caches.</summary>
     Balanced = 2,
 
     /// <summary>Small caches and minimal concurrency for low-RAM / low-core hosts.</summary>
@@ -63,22 +63,6 @@ public static class MachineProfile
         PerformanceProfile.Balanced => 384.0,
         _ => RenderingOptimizations.DefaultTileDiskMb,
     };
-
-    /// <summary>
-    /// Maximum number of tile-rasterising workers allowed to run at once across
-    /// all layers, for each resolved tier. Bounds the per-cell worker storm that
-    /// a many-cell chart creates (one worker per layer otherwise).
-    /// </summary>
-    public static int MaxWorkers(PerformanceProfile tier)
-    {
-        var cores = Math.Max(1, Environment.ProcessorCount);
-        return tier switch
-        {
-            PerformanceProfile.LowEnd => 2,
-            PerformanceProfile.Balanced => Math.Clamp(cores / 2, 2, 4),
-            _ => Math.Clamp(cores / 2, 4, 8),
-        };
-    }
 
     /// <summary>
     /// Resolves <see cref="PerformanceProfile.Auto"/> to a concrete tier from the

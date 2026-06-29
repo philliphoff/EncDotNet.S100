@@ -242,28 +242,6 @@ public static class S100VectorTileRenderer
     /// </summary>
     private static readonly WorkerDrainGate s_drainGate = new();
 
-    /// <summary>
-    /// Live count of tile workers running across all layers, capped by
-    /// <see cref="RenderingOptimizations.MaxConcurrentTileWorkers"/> so a
-    /// many-cell / multi-exchange-set chart cannot spawn one raster thread per
-    /// layer (the worker storm measured at ~62 threads on a 17-cell sweep).
-    /// </summary>
-    private static int s_activeWorkers;
-
-    /// <summary>Tries to reserve a worker slot under the concurrency cap.</summary>
-    private static bool TryAcquireWorkerSlot()
-    {
-        var cap = RenderingOptimizations.MaxConcurrentTileWorkers;
-        while (true)
-        {
-            var current = Volatile.Read(ref s_activeWorkers);
-            if (current >= cap) return false;
-            if (Interlocked.CompareExchange(ref s_activeWorkers, current + 1, current) == current) return true;
-        }
-    }
-
-    private static void ReleaseWorkerSlot() => Interlocked.Decrement(ref s_activeWorkers);
-
 
     /// <summary>
     /// Signals every tile worker to stop and blocks until in-flight tile
@@ -755,24 +733,10 @@ public static class S100VectorTileRenderer
         {
             // Honour a graceful shutdown: TryRegister refuses new Skia work once
             // the process is tearing down. Release the rendering flag we set
-            // under the lock so the state is left consistent. Also bound total
-            // worker concurrency: if every slot is taken, defer — a later frame
-            // restarts the worker (the pending set is replaced each frame, so no
-            // visible tile is lost).
-            if (TryAcquireWorkerSlot())
+            // under the lock so the state is left consistent.
+            if (s_drainGate.TryRegister())
             {
-                if (s_drainGate.TryRegister())
-                {
-                    _ = Task.Run(() => Worker(state));
-                }
-                else
-                {
-                    ReleaseWorkerSlot();
-                    lock (state.Sync)
-                    {
-                        state.Rendering = false;
-                    }
-                }
+                _ = Task.Run(() => Worker(state));
             }
             else
             {
@@ -1530,7 +1494,6 @@ public static class S100VectorTileRenderer
             // Pair the TryRegister at the worker-start site. When the last
             // worker completes, this signals ShutdownAndDrain that Skia is idle.
             s_drainGate.Complete();
-            ReleaseWorkerSlot();
         }
     }
 

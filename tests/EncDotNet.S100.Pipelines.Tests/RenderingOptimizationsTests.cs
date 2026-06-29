@@ -281,42 +281,10 @@ public class RenderingOptimizationsTests
     }
 
     [Fact]
-    public void MaxWorkers_AreBounded_AndLowEndStaysSmall()
-    {
-        Assert.Equal(2, MachineProfile.MaxWorkers(PerformanceProfile.LowEnd));
-        Assert.InRange(MachineProfile.MaxWorkers(PerformanceProfile.Balanced), 2, 4);
-        Assert.InRange(MachineProfile.MaxWorkers(PerformanceProfile.HighEnd), 4, 8);
-    }
-
-    [Fact]
-    public void TileWorkers_Clamps_WhenNotEnvPinned()
-    {
-        if (RenderingOptimizations.TileWorkersEnvExplicit)
-        {
-            return; // pinned by S100_VECTOR_TILE_WORKERS; setter is a no-op
-        }
-
-        var original = RenderingOptimizations.MaxConcurrentTileWorkers;
-        try
-        {
-            RenderingOptimizations.MaxConcurrentTileWorkers = RenderingOptimizations.MinTileWorkers - 5;
-            Assert.Equal(RenderingOptimizations.MinTileWorkers, RenderingOptimizations.MaxConcurrentTileWorkers);
-
-            RenderingOptimizations.MaxConcurrentTileWorkers = RenderingOptimizations.MaxTileWorkers + 5;
-            Assert.Equal(RenderingOptimizations.MaxTileWorkers, RenderingOptimizations.MaxConcurrentTileWorkers);
-        }
-        finally
-        {
-            RenderingOptimizations.MaxConcurrentTileWorkers = original;
-        }
-    }
-
-    [Fact]
     public void Profile_LowEnd_ShrinksBudgets_WhenNotEnvPinned()
     {
         if (RenderingOptimizations.ProfileEnvExplicit ||
-            RenderingOptimizations.TileBudgetMbEnvExplicit ||
-            RenderingOptimizations.TileWorkersEnvExplicit)
+            RenderingOptimizations.TileBudgetMbEnvExplicit)
         {
             return; // env-pinned; profile setter / budgets are no-ops
         }
@@ -327,7 +295,6 @@ public class RenderingOptimizationsTests
             RenderingOptimizations.Profile = PerformanceProfile.LowEnd;
             Assert.Equal(PerformanceProfile.LowEnd, RenderingOptimizations.ResolvedProfile);
             Assert.Equal(MachineProfile.TileBudgetMb(PerformanceProfile.LowEnd), RenderingOptimizations.TileBudgetMb);
-            Assert.Equal(MachineProfile.MaxWorkers(PerformanceProfile.LowEnd), RenderingOptimizations.MaxConcurrentTileWorkers);
         }
         finally
         {

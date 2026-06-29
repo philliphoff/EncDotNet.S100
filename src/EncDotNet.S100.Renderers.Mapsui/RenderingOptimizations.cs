@@ -69,14 +69,7 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinTileGpuBudgetMb"/>
     public const double MaxTileGpuBudgetMb = 4096.0;
 
-    /// <summary>Minimum / maximum accepted concurrent tile-worker cap.</summary>
-    public const int MinTileWorkers = 1;
-
-    /// <inheritdoc cref="MinTileWorkers"/>
-    public const int MaxTileWorkers = 32;
-
     private static PerformanceProfile s_resolvedProfile;
-    private static int s_tileWorkers;
     private static bool s_vectorSnapshotEnabled;
     private static bool s_vectorSnapshotPrebuildEnabled;
     private static bool s_vectorPathCacheEnabled;
@@ -112,9 +105,9 @@ public static class RenderingOptimizations
         (s_sceneMode, SceneModeEnvExplicit) = SeedSceneMode();
 
         // The performance profile sets the *defaults* for the per-layer tile
-        // budgets and worker cap; Auto derives the tier from cores + RAM so a
-        // constrained host gets smaller caches and fewer workers. Explicit env
-        // vars or persisted slider values still override any of these.
+        // budgets; Auto derives the tier from cores + RAM so a constrained host
+        // gets smaller caches. Explicit env vars or persisted slider values
+        // still override any of these.
         var tier = MachineProfile.Resolve(Profile);
         s_resolvedProfile = tier;
 
@@ -132,8 +125,6 @@ public static class RenderingOptimizations
             SeedBool("S100_VECTOR_TILE_GPU", defaultValue: true);
         (s_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_GPU_MB", MachineProfile.TileGpuBudgetMb(tier), MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
-        (s_tileWorkers, TileWorkersEnvExplicit) =
-            SeedInt("S100_VECTOR_TILE_WORKERS", MachineProfile.MaxWorkers(tier), MinTileWorkers, MaxTileWorkers);
 
         var diskDir = Environment.GetEnvironmentVariable("S100_VECTOR_TILE_DISK_DIR");
         TileDiskDirectoryEnvExplicit = !string.IsNullOrEmpty(diskDir);
@@ -377,22 +368,7 @@ public static class RenderingOptimizations
     public static PerformanceProfile ResolvedProfile => s_resolvedProfile;
 
     /// <summary>
-    /// Maximum number of tile-rasterising workers allowed to run concurrently
-    /// across all layers. Bounds the per-cell worker storm a many-cell chart
-    /// creates (one worker per layer otherwise). Seeded from
-    /// <c>S100_VECTOR_TILE_WORKERS</c>, otherwise the profile default.
-    /// </summary>
-    public static int MaxConcurrentTileWorkers
-    {
-        get => s_tileWorkers;
-        set { if (!TileWorkersEnvExplicit) s_tileWorkers = (int)Clamp(value, MinTileWorkers, MaxTileWorkers); }
-    }
-
-    /// <summary>True when <see cref="MaxConcurrentTileWorkers"/> is pinned by an explicit environment variable.</summary>
-    public static bool TileWorkersEnvExplicit { get; }
-
-    /// <summary>
-    /// Recomputes profile-derived budgets/worker cap for non-env-pinned knobs.
+    /// Recomputes profile-derived budgets for non-env-pinned knobs.
     /// </summary>
     private static void ApplyProfile(PerformanceProfile profile)
     {
@@ -401,7 +377,6 @@ public static class RenderingOptimizations
         if (!TileBudgetMbEnvExplicit) s_tileBudgetMb = MachineProfile.TileBudgetMb(tier);
         if (!TileGpuBudgetMbEnvExplicit) s_tileGpuBudgetMb = MachineProfile.TileGpuBudgetMb(tier);
         if (!TileDiskMbEnvExplicit) s_tileDiskMb = MachineProfile.TileDiskMb(tier);
-        if (!TileWorkersEnvExplicit) s_tileWorkers = MachineProfile.MaxWorkers(tier);
     }
 
 
@@ -482,17 +457,6 @@ public static class RenderingOptimizations
 
     private static double Clamp(double value, double min, double max) =>
         value < min ? min : value > max ? max : value;
-
-    private static (int value, bool envExplicit) SeedInt(string envName, int fallback, int min, int max)
-    {
-        var raw = Environment.GetEnvironmentVariable(envName);
-        if (!string.IsNullOrEmpty(raw) && int.TryParse(raw, out var v))
-        {
-            return ((int)Clamp(v, min, max), true);
-        }
-
-        return (fallback, false);
-    }
 
     private static (PerformanceProfile value, bool envExplicit) SeedProfile(string envName, PerformanceProfile fallback)
     {

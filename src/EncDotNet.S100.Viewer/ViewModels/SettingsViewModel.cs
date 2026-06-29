@@ -806,29 +806,6 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// <summary>The concrete tier Auto resolves to on this host, for display.</summary>
     public string ResolvedProfileLabel => RenderingOptimizations.ResolvedProfile.ToString();
 
-    private int _tileMaxWorkers;
-    /// <summary>
-    /// Maximum concurrent tile-rasterising workers across all layers. Bounds the
-    /// per-cell worker storm a many-cell chart creates. Applies on next reload.
-    /// </summary>
-    public int TileMaxWorkers
-    {
-        get => _tileMaxWorkers;
-        set
-        {
-            RenderingOptimizations.MaxConcurrentTileWorkers = value;
-            var effective = RenderingOptimizations.MaxConcurrentTileWorkers;
-            if (SetProperty(ref _tileMaxWorkers, effective))
-            {
-                _settings.TileMaxWorkers = effective;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    /// <summary>Whether the worker-cap knob is user-editable (not env-pinned).</summary>
-    public bool TileMaxWorkersEditable => !RenderingOptimizations.TileWorkersEnvExplicit;
-
 
 
     /// <summary>
@@ -1039,13 +1016,6 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
 
         _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
-
-        if (settings.TileMaxWorkers is { } tileWorkers)
-        {
-            RenderingOptimizations.MaxConcurrentTileWorkers = tileWorkers;
-        }
-
-        _tileMaxWorkers = RenderingOptimizations.MaxConcurrentTileWorkers;
 
         _basemapEnabled = settings.BasemapEnabled;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
