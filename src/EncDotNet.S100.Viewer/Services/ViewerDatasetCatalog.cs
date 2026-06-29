@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
@@ -274,7 +275,23 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
             new SpecRef("S-101", ResolveS101Edition(dataset)),
             bounds,
             null,
-            new S101DatasetData(dataset));
+            new S101DatasetData(dataset, BuildExternalTextResolver(entry)));
+    }
+
+    /// <summary>
+    /// Builds a file-name → text resolver for an S-101 cell's
+    /// <c>fileReference</c> attributes (S-101 Feature Catalogue, aliases
+    /// <c>TXTDSC</c> / <c>NTXTDS</c>) when the cell was loaded from an
+    /// exchange set, so MCP consumers (<c>identify_features</c> /
+    /// <c>pick_features</c>) can surface the referenced text. Returns
+    /// <c>null</c> for loose cells with no asset source.
+    /// </summary>
+    private static Func<string, string?>? BuildExternalTextResolver(DatasetEntry entry)
+    {
+        if (!entry.IsFromExchangeSet || entry.Source is null)
+            return null;
+
+        return new ExternalTextFileResolver(entry.Source, entry.RelativePath).AsDelegate();
     }
 
     /// <summary>

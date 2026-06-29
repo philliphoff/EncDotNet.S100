@@ -277,6 +277,13 @@ if (picked.TryGetValue(out var pick))
     foreach (var m in pick.Features)
     {
         Console.WriteLine($"{m.Spec} {m.FeatureType} {m.FeatureId} ({m.Geometry}, {m.Containment}).");
+        // S-101 features may reference external text files (fileReference /
+        // TXTDSC / NTXTDS); they are resolved from the exchange set so
+        // headless consumers see the same text the viewer shows.
+        foreach (var t in m.ReferencedTexts)
+        {
+            Console.WriteLine($"  referenced: {t.FileName} -> {t.Text}");
+        }
     }
 }
 

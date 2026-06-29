@@ -41,6 +41,7 @@ public sealed record IdentifyFeaturesRequest(
 /// <param name="Bounds">Bounding box of the feature's geometry.</param>
 /// <param name="Containment"><c>inside</c> when the pick is within an area feature; <c>near</c> when within the radius of a point/curve feature.</param>
 /// <param name="DistanceMeters">Approximate distance from the pick to the feature (0 for <c>inside</c>); <c>null</c> when not computed.</param>
+/// <param name="ReferencedTexts">Resolved external text files referenced by the feature's <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c> attributes; empty when none or unresolvable.</param>
 public sealed record IdentifyMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -49,7 +50,20 @@ public sealed record IdentifyMatch(
     [property: Description("Geometry primitive: point, curve, or surface.")] string Geometry,
     [property: Description("Bounding box of the feature's geometry.")] BoundingBox? Bounds,
     [property: Description("'inside' when the pick is within an area feature; 'near' when within the radius of a point/curve feature.")] string Containment,
-    [property: Description("Approximate distance from the pick to the feature in metres (0 for 'inside'); null when not computed.")] double? DistanceMeters);
+    [property: Description("Approximate distance from the pick to the feature in metres (0 for 'inside'); null when not computed.")] double? DistanceMeters,
+    [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes; empty when none or unresolvable.")] ImmutableArray<ReferencedText> ReferencedTexts = default);
+
+/// <summary>
+/// The resolved content of an external text file referenced by a feature's
+/// <c>fileReference</c> attribute (S-101 Feature Catalogue, aliases
+/// <c>TXTDSC</c> / <c>NTXTDS</c>) — the headless counterpart of the
+/// viewer's referenced-text cards.
+/// </summary>
+/// <param name="FileName">The referenced file name as written in the attribute.</param>
+/// <param name="Text">The resolved textual content of the referenced file.</param>
+public sealed record ReferencedText(
+    [property: Description("The referenced file name as written in the fileReference attribute.")] string FileName,
+    [property: Description("The resolved textual content of the referenced file.")] string Text);
 
 /// <summary>Result of <see cref="IdentifyFeaturesTool"/>.</summary>
 /// <param name="Point">The echoed pick point.</param>
@@ -88,6 +102,16 @@ public sealed class IdentifyFeaturesTool
     public const string Name = "identify_features";
 
     private const double MetersPerDegreeLatitude = 111_320.0;
+
+    /// <summary>
+    /// Attribute codes whose value names an externally referenced text file
+    /// (S-101 Feature Catalogue simple attribute <c>fileReference</c>, aliases
+    /// <c>TXTDSC</c> / <c>NTXTDS</c>). Mirrors
+    /// <c>FeatureInfoBuilder.FileReferenceAttributeCodes</c> without taking a
+    /// project dependency on the pipeline layer.
+    /// </summary>
+    private static readonly HashSet<string> FileReferenceAttributeCodes =
+        new(StringComparer.OrdinalIgnoreCase) { "fileReference", "TXTDSC", "NTXTDS" };
 
     private readonly IDatasetCatalog _catalog;
 
@@ -151,13 +175,15 @@ public sealed class IdentifyFeaturesTool
                 continue;
             }
 
+            var resolver = (dataset.Data as S101DatasetData)?.ExternalTextResolver;
+
             foreach (var feature in features)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (TryMatch(feature, point, latPad, lonPad, out var hit))
                 {
-                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec });
+                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature });
                 }
             }
         }
@@ -178,7 +204,8 @@ public sealed class IdentifyFeaturesTool
                 PrimitiveName(h.Specificity),
                 h.Bounds,
                 h.Inside ? "inside" : "near",
-                h.Inside ? 0.0 : h.DistanceMeters));
+                h.Inside ? 0.0 : h.DistanceMeters,
+                ResolveReferencedTexts(h.Feature, h.Resolver)));
         }
 
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(
@@ -321,6 +348,56 @@ public sealed class IdentifyFeaturesTool
         _ => "surface",
     };
 
+    /// <summary>
+    /// Resolves every <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c>
+    /// attribute (S-101 Feature Catalogue) carried by <paramref name="feature"/>
+    /// — across simple and complex (sub-)attributes — to its referenced text
+    /// content via <paramref name="resolver"/>, in first-seen order with
+    /// duplicate file names collapsed. Returns an empty array when no resolver
+    /// is available, the feature carries no file references, or none resolve.
+    /// </summary>
+    internal static ImmutableArray<ReferencedText> ResolveReferencedTexts(
+        IS100Feature? feature, Func<string, string?>? resolver)
+    {
+        if (feature is null || resolver is null)
+        {
+            return ImmutableArray<ReferencedText>.Empty;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        ImmutableArray<ReferencedText>.Builder? builder = null;
+
+        void Add(string code, string value)
+        {
+            if (!FileReferenceAttributeCodes.Contains(code)
+                || string.IsNullOrWhiteSpace(value)
+                || !seen.Add(value))
+            {
+                return;
+            }
+
+            if (resolver(value) is { Length: > 0 } text)
+            {
+                (builder ??= ImmutableArray.CreateBuilder<ReferencedText>()).Add(new ReferencedText(value, text));
+            }
+        }
+
+        foreach (var (code, value) in feature.Attributes)
+        {
+            Add(code, value);
+        }
+
+        foreach (var complex in feature.ComplexAttributes)
+        {
+            foreach (var (code, value) in complex.SubAttributes)
+            {
+                Add(code, value);
+            }
+        }
+
+        return builder is null ? ImmutableArray<ReferencedText>.Empty : builder.ToImmutable();
+    }
+
     private static ImmutableArray<GeoPoint> ToRing(ImmutableArray<(double Latitude, double Longitude)> ring)
     {
         var builder = ImmutableArray.CreateBuilder<GeoPoint>(ring.Length);
@@ -366,5 +443,7 @@ public sealed class IdentifyFeaturesTool
         public double Area { get; init; }
         public bool Inside { get; init; }
         public double DistanceMeters { get; init; }
+        public Func<string, string?>? Resolver { get; init; }
+        public IS100Feature? Feature { get; init; }
     }
 }

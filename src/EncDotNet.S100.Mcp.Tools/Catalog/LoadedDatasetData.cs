@@ -32,8 +32,17 @@ public abstract record LoadedDatasetData;
 /// <see cref="EncDotNet.S100.Mcp.Tools.SpecNotSupportedForTool"/> for
 /// S-101 today (see <c>S101FeatureDescriber</c>); the variant exists so
 /// <c>list_datasets</c> can surface ENCs loaded into the viewer.
+/// <para>
+/// <c>ExternalTextResolver</c> is an optional file-name → text delegate
+/// (backed by the dataset's exchange-set asset source) used to resolve a
+/// feature's <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c>
+/// attributes (S-101 Feature Catalogue) to their referenced text content,
+/// so headless consumers (<c>identify_features</c> / <c>pick_features</c>)
+/// see the same referenced text the viewer shows. <c>null</c> when the
+/// dataset was loaded outside an exchange set.
+/// </para>
 /// </remarks>
-public sealed record S101DatasetData(S101Dataset Dataset) : LoadedDatasetData;
+public sealed record S101DatasetData(S101Dataset Dataset, Func<string, string?>? ExternalTextResolver = null) : LoadedDatasetData;
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>
 public sealed record S122DatasetData(S122Dataset Model) : LoadedDatasetData;
