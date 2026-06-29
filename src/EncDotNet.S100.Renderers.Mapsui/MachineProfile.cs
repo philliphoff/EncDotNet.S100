@@ -43,16 +43,16 @@ public static class MachineProfile
     /// <summary>Per-layer hot (CPU) tile-cache budget, MB, for each resolved tier.</summary>
     public static double TileBudgetMb(PerformanceProfile tier) => tier switch
     {
-        PerformanceProfile.LowEnd => 96.0,
-        PerformanceProfile.Balanced => 192.0,
+        PerformanceProfile.LowEnd => 192.0,
+        PerformanceProfile.Balanced => 256.0,
         _ => RenderingOptimizations.DefaultTileBudgetMb,
     };
 
     /// <summary>Per-layer GPU-residency budget, MB, for each resolved tier.</summary>
     public static double TileGpuBudgetMb(PerformanceProfile tier) => tier switch
     {
-        PerformanceProfile.LowEnd => 96.0,
-        PerformanceProfile.Balanced => 192.0,
+        PerformanceProfile.LowEnd => 192.0,
+        PerformanceProfile.Balanced => 256.0,
         _ => RenderingOptimizations.DefaultTileGpuBudgetMb,
     };
 
