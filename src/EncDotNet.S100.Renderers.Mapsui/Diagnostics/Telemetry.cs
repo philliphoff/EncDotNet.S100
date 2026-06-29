@@ -315,6 +315,39 @@ internal static class Telemetry
             description: "Number of visible exact-band tiles absent from cache at one composite pass by the tiled TiledScene render subsystem (cold-tile exposure).");
 
     /// <summary>
+    /// End-to-end wall-clock latency of a <b>cold visible tile</b>: from the first
+    /// frame that enqueued it as a visible miss until the worker publishes it into
+    /// the hot cache (queue wait + disk read or rasterise). Unlike
+    /// <see cref="TileRasterizeDuration"/> (raster CPU cost alone), this includes
+    /// the time the tile spent waiting behind other visible misses, so it is the
+    /// signal that maps to user-felt stutter — how long a viewport slot shows a
+    /// scaled fallback band before the crisp tile lands. Read against
+    /// <see cref="TileColdExposure"/> (burst count) and the viewer's map-paint
+    /// interval: a high cold latency with cheap paints points at the tiling worker;
+    /// cheap latency with expensive paints points at Mapsui. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.3, §3.6.
+    /// </summary>
+    public static readonly Histogram<double> TileColdLatency =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.cold.latency",
+            unit: "ms",
+            description: "End-to-end latency of a cold visible tile (first enqueue to publish; queue wait + rasterise) in the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Count of visible cold tiles outstanding when the worker is spun up for a
+    /// frame — the cold-miss <b>burst depth</b> a gesture creates. A zoom that
+    /// crosses a band invalidates every visible tile, so this spikes; a constant-
+    /// zoom pan should be a small perimeter. Combined with
+    /// <see cref="TileColdLatency"/> it shows whether stutter is one slow tile or
+    /// a deep backlog draining serially. See §3.6.
+    /// </summary>
+    public static readonly Histogram<int> TileVisibleQueueDepth =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.visible.queue.depth",
+            unit: "{tile}",
+            description: "Visible cold tiles outstanding when the tiled TiledScene worker is spun up (cold-miss burst depth per gesture).");
+
+    /// <summary>
     /// Count of tiles rasterised <b>speculatively</b> (as part of the prediction
     /// warm set, not because they were visible) by the tiled <c>TiledScene</c>
     /// arm. The denominator of the prediction hit-rate. See §3.6.

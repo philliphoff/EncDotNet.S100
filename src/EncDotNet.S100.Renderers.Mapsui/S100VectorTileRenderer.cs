@@ -452,6 +452,7 @@ public static class S100VectorTileRenderer
             state.PendingVisible.Clear();
             state.PendingPredicted.Clear();
             state.PredictedInCache.Clear();
+            state.VisibleEnqueueTicks.Clear();
             // A new scene is a teleport for prediction: drop the stale velocity
             // anchor so the first frame doesn't fling the fan in a random
             // direction.
@@ -609,6 +610,7 @@ public static class S100VectorTileRenderer
 
         var startWorker = false;
         var coldExposure = 0;
+        var visibleQueueDepth = 0;
         var predictionHits = 0L;
         var compositeStart = Stopwatch.GetTimestamp();
         lock (state.Sync)
@@ -623,6 +625,7 @@ public static class S100VectorTileRenderer
             // Enqueue visible misses at high priority (replace the pending set
             // every frame so tiles panned out of view are dropped — cancellation).
             state.PendingVisible.Clear();
+            var frameTicks = Stopwatch.GetTimestamp();
             var visibleSet = new HashSet<TileKey>(visible.Count);
             foreach (var key in visible)
             {
@@ -639,10 +642,39 @@ public static class S100VectorTileRenderer
                 else
                 {
                     coldExposure++;
+                    // Stamp the first frame this tile was seen cold-visible so the
+                    // worker can report end-to-end cold latency (queue wait +
+                    // rasterise) on publish, not just raster CPU cost.
+                    if (!state.VisibleEnqueueTicks.ContainsKey(key))
+                    {
+                        state.VisibleEnqueueTicks[key] = frameTicks;
+                    }
+
                     if (!state.InFlight.Contains(key))
                     {
                         state.PendingVisible.Add(key);
                     }
+                }
+            }
+
+            visibleQueueDepth = state.PendingVisible.Count;
+
+            // Drop enqueue stamps for tiles no longer visible (panned away before
+            // they landed) so the dictionary stays bounded by the visible set.
+            if (state.VisibleEnqueueTicks.Count > visibleSet.Count)
+            {
+                state.EnqueuePruneScratch.Clear();
+                foreach (var k in state.VisibleEnqueueTicks.Keys)
+                {
+                    if (!visibleSet.Contains(k))
+                    {
+                        state.EnqueuePruneScratch.Add(k);
+                    }
+                }
+
+                foreach (var k in state.EnqueuePruneScratch)
+                {
+                    state.VisibleEnqueueTicks.Remove(k);
                 }
             }
 
@@ -722,6 +754,10 @@ public static class S100VectorTileRenderer
         S100Diag.Telemetry.TileCompositeDuration.Record(
             Stopwatch.GetElapsedTime(compositeStart).TotalMilliseconds);
         S100Diag.Telemetry.TileColdExposure.Record(coldExposure);
+        if (visibleQueueDepth > 0)
+        {
+            S100Diag.Telemetry.TileVisibleQueueDepth.Record(visibleQueueDepth);
+        }
         if (predictionHits > 0)
         {
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
@@ -1451,6 +1487,14 @@ public static class S100VectorTileRenderer
                             // Track so a later visible frame can score it as a hit.
                             state.PredictedInCache.Add(key);
                         }
+                        else if (state.VisibleEnqueueTicks.Remove(key, out var enqueuedAt))
+                        {
+                            // End-to-end cold latency: queue wait + this tile's
+                            // rasterise/disk read, from the frame it was first
+                            // seen visible-cold to landing in the hot cache.
+                            S100Diag.Telemetry.TileColdLatency.Record(
+                                Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds);
+                        }
                     }
                     else
                     {
@@ -1817,6 +1861,16 @@ public static class S100VectorTileRenderer
         // Visible misses drain before speculative (predicted) tiles.
         public readonly HashSet<TileKey> PendingVisible = new();
         public readonly HashSet<TileKey> PendingPredicted = new();
+
+        // First-enqueue Stopwatch ticks for each cold visible tile still awaiting
+        // publish, so the worker can record end-to-end cold latency (queue wait +
+        // rasterise) when it lands. Entry added the first frame a tile is enqueued
+        // visible-cold; removed on publish. Bounded by the visible tile count.
+        public readonly Dictionary<TileKey, long> VisibleEnqueueTicks = new();
+
+        // Reusable scratch for pruning VisibleEnqueueTicks without per-frame
+        // allocation (cannot mutate a dictionary while enumerating its keys).
+        public readonly List<TileKey> EnqueuePruneScratch = new();
 
         // Speculatively-rasterised tiles still resident and not yet shown; a
         // later visible frame that finds one scores a prediction hit.

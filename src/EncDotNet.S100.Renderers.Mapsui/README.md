@@ -660,7 +660,14 @@ never delays a tile the user is looking at. The set is recomputed — and thereb
 cancelled — every frame; hysteresis comes from the velocity EMA. Speculative
 hits are counted via `s100.render.tile.prediction.hits` /
 `.rasterized`, and cold exposure via the `s100.render.tile.cold.exposure`
-histogram.
+histogram. Two further cold-path histograms isolate tiling stutter on the
+initial cold gesture: `s100.render.tile.cold.latency` (ms) is the
+**end-to-end** age of a visible tile — first frame it is seen cold to the
+worker publishing it — so it captures queue wait, not just the per-tile
+`s100.render.tile.rasterize.duration`; `s100.render.tile.visible.queue.depth`
+is the cold-miss burst depth a gesture creates. Read together they separate a
+slow tiling worker (high cold latency / deep queue, cheap Mapsui paints) from
+slow Mapsui paints (low cold latency, high map-paint duration).
 
 A published predicted tile must **not** request a repaint
 (`ShouldRequestRedraw` returns `true` only for a published *visible* tile).

@@ -431,6 +431,16 @@ Three instruments (Meter `EncDotNet.S100.Renderers.Mapsui`):
 - `s100.render.tile.prediction.rasterized` (Counter) — speculative tiles built;
 - `s100.render.tile.prediction.hits` (Counter) — speculative tiles later shown.
 
+Two cold-path latency instruments quantify the user-felt cost of a cold
+gesture (zoom/pan starting from an empty cache):
+
+- `s100.render.tile.cold.latency` (Histogram, ms) — end-to-end age of a visible
+  tile, from the first frame it is seen cold-visible to the worker publishing
+  it (queue wait + disk read/rasterise). Distinguishes a slow worker from a
+  slow Mapsui paint;
+- `s100.render.tile.visible.queue.depth` (Histogram, tiles) — cold-miss burst
+  depth when the worker spins up.
+
 ### D.4 A/B result (reference cell `101AU005PDB01.000`)
 
 Prediction is a first-class A/B knob: `S100_VECTOR_TILE_PREDICT=0` reverts to
