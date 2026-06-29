@@ -1171,6 +1171,12 @@
   <data name="Tooltip_MouseLatLon" xml:space="preserve">
     <value>Latitude and longitude of the cursor on the map</value>
   </data>
+  <data name="Tooltip_MapScale" xml:space="preserve">
+    <value>Approximate map scale denominator (include this when reporting an issue)</value>
+  </data>
+  <data name="Status_ScaleLabel" xml:space="preserve">
+    <value>Scale</value>
+  </data>
 
   <!-- ECDIS Display Controls -->
   <data name="Pane_EcdisDisplay" xml:space="preserve">

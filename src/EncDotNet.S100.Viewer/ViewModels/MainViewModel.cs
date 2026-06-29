@@ -527,18 +527,56 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public ICommand ToggleTimelineCommand { get; }
 
-    private string _mouseLatLonText = LatLonFormatter.Placeholder;
+    private string _mouseLatText = LatLonFormatter.Placeholder;
     /// <summary>
-    /// Lat/long of the mouse cursor when it is over the map, formatted in
-    /// degrees-decimal-minutes (mariner-friendly). Set to
-    /// <see cref="LatLonFormatter.Placeholder"/> when the cursor is not over
-    /// the map.
+    /// Latitude component of the cursor readout (e.g. <c>"50°46.024'N"</c>),
+    /// shown in its own fixed-width status-bar cell so the longitude and the
+    /// adjacent scale text don't jitter as the value changes. Empty when the
+    /// cursor is not over the map.
     /// </summary>
-    public string MouseLatLonText
+    public string MouseLatText
     {
-        get => _mouseLatLonText;
-        set => SetProperty(ref _mouseLatLonText, value);
+        get => _mouseLatText;
+        set
+        {
+            if (SetProperty(ref _mouseLatText, value))
+                OnPropertyChanged(nameof(IsMouseLatLonVisible));
+        }
     }
+
+    private string _mouseLonText = LatLonFormatter.Placeholder;
+    /// <summary>
+    /// Longitude component of the cursor readout (e.g. <c>"001°15.558'W"</c>),
+    /// shown in its own fixed-width status-bar cell. Empty when the cursor is
+    /// not over the map.
+    /// </summary>
+    public string MouseLonText
+    {
+        get => _mouseLonText;
+        set => SetProperty(ref _mouseLonText, value);
+    }
+
+    /// <summary>True when the cursor is over the map and a lat/long is shown.</summary>
+    public bool IsMouseLatLonVisible => _mouseLatText.Length > 0;
+
+    private string _mapScaleText = string.Empty;
+    /// <summary>
+    /// The current map scale denominator, formatted as <c>"1:180 000"</c>,
+    /// shown in the status bar for issue-reporting and orientation. Empty
+    /// when no scale is available (e.g. before the first viewport update).
+    /// </summary>
+    public string MapScaleText
+    {
+        get => _mapScaleText;
+        set
+        {
+            if (SetProperty(ref _mapScaleText, value))
+                OnPropertyChanged(nameof(IsMapScaleVisible));
+        }
+    }
+
+    /// <summary>True when a map scale is available to display.</summary>
+    public bool IsMapScaleVisible => _mapScaleText.Length > 0;
 
     /// <summary>
     /// Toggles the right dock open/closed. Kept for the existing

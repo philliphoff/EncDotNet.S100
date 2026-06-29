@@ -174,6 +174,8 @@ internal static class Strings
     public static string Tooltip_TimelinePreviousStep => Get(nameof(Tooltip_TimelinePreviousStep));
     public static string Tooltip_TimelineNextStep => Get(nameof(Tooltip_TimelineNextStep));
     public static string Tooltip_MouseLatLon => Get(nameof(Tooltip_MouseLatLon));
+    public static string Tooltip_MapScale => Get(nameof(Tooltip_MapScale));
+    public static string Status_ScaleLabel => Get(nameof(Status_ScaleLabel));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));

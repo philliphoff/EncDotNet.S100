@@ -187,24 +187,65 @@
                            Text="{Binding McpStatusText}"
                            IsVisible="{Binding IsMcpRunning}"
                            FontSize="12"
-                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           FontFeatures="+tnum"
                            Opacity="0.7"
                            VerticalAlignment="Center"
                            Margin="12,0,0,0"
                            ToolTip.Tip="{Binding McpTooltipText}" />
-                <TextBlock DockPanel.Dock="Right"
-                           Text="{Binding MouseLatLonText}"
-                           FontSize="12"
-                           FontFamily="Menlo,Consolas,Courier New,monospace"
-                           Opacity="0.7"
-                           VerticalAlignment="Center"
-                           Margin="12,0,0,0"
-                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                <!-- Cursor lat/lon then scale, fixed to the right edge.
+                     Scale is right-most so it never shifts when the lat/lon
+                     readout disappears (cursor off the map). -->
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
+                                   Opacity="0.6"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0"
+                                   IsVisible="{Binding IsMouseLatLonVisible}"
+                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <TextBlock Text="{Binding MouseLatText}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="74"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <TextBlock Text="{Binding MouseLonText}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="80"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="10,0,0,0"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <Border Width="1" Height="13"
+                            Margin="12,0"
+                            Background="{DynamicResource BorderColor}"
+                            IsVisible="{Binding IsMapScaleVisible}" />
+                    <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
+                               FontSize="12"
+                               Opacity="0.5"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding IsMapScaleVisible}"
+                               Margin="0,0,6,0"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
+                    <TextBlock Text="{Binding MapScaleText}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="92"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
+                </StackPanel>
                 <TextBlock DockPanel.Dock="Right"
                            Text="{Binding MeasureSummary}"
                            IsVisible="{Binding IsToolSummaryVisible}"
                            FontSize="12"
-                           FontFamily="Menlo,Consolas,Courier New,monospace"
+                           FontFeatures="+tnum"
                            Opacity="0.85"
                            VerticalAlignment="Center"
                            Margin="12,0,0,0" />

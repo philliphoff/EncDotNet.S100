@@ -19,12 +19,17 @@ internal static class LatLonFormatter
 
     /// <summary>
     /// Formats a (latitude, longitude) pair in degrees-decimal-minutes form.
-    /// Degrees are space-padded (latitude to two characters, longitude to
-    /// three) so that the readout occupies a stable width without using
-    /// leading zeros.
+    /// Degrees are zero-padded (latitude to two digits, longitude to three)
+    /// so the readout keeps a stable width when rendered with tabular figures.
     /// </summary>
     public static string Format(double latitude, double longitude) =>
         $"{FormatDegMin(latitude, 'N', 'S', 2)}  {FormatDegMin(longitude, 'E', 'W', 3)}";
+
+    /// <summary>Formats just the latitude component, e.g. <c>"50°46.024'N"</c>.</summary>
+    public static string FormatLatitude(double latitude) => FormatDegMin(latitude, 'N', 'S', 2);
+
+    /// <summary>Formats just the longitude component, e.g. <c>"001°15.558'W"</c>.</summary>
+    public static string FormatLongitude(double longitude) => FormatDegMin(longitude, 'E', 'W', 3);
 
     /// <summary>
     /// Formats a (latitude, longitude) pair as signed decimal degrees,
@@ -50,7 +55,7 @@ internal static class LatLonFormatter
             min = 0.0;
         }
 
-        var degText = deg.ToString(CultureInfo.InvariantCulture).PadLeft(degWidth);
+        var degText = deg.ToString(CultureInfo.InvariantCulture).PadLeft(degWidth, '0');
         return string.Create(
             CultureInfo.InvariantCulture,
             $"{degText}°{min.ToString("00.000", CultureInfo.InvariantCulture)}'{hemi}");
