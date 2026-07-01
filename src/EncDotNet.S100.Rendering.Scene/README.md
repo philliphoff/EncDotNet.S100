@@ -11,11 +11,23 @@ Mapsui, or any GUI framework.
 | Type | Role |
 |---|---|
 | `VectorScene` / `PaintOp` (+ `PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | Ordered list of fully-resolved paint operations — world coords in EPSG:3857 m, sizes in logical display px, colours resolved to `RgbaColor`, SCAMIN carried per-op. |
+| `IVectorSceneRenderer<TSurface>` | The named **rendering-backend contract**: implement it to draw a `VectorScene` onto a backend-specific surface. `SkiaDisplayListRenderer` implements `IVectorSceneRenderer<SKCanvas>`; the Mapsui renderer is a conforming consumer of the IR rather than an implementer. |
+| `WorldToScreen` | Backend-neutral EPSG:3857 world → pixel affine derived from a `Viewport` (the `EPSG:3857 → pixels` half of the Part 9 projection). Lets a Skia-free backend project the IR's world coordinates. |
 | `ResolvedSymbol`, `SymbolAsset` | Resolved point-symbol content + pivot (S-100 Part 9 §11.5). |
 | `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles are supplied as PNG bytes through an injected `Func<string, byte[]?>` delegate, so the builder stays rasteriser-free. |
 | `ColorResolver` | S-100 colour-token → `RgbaColor` resolution. |
 | `ScaleVisibility` | S-100 Part 9 §11.1 scale-visibility semantics (SCAMIN inclusion). |
 | `WebMercator` | Spherical EPSG:3857 forward projection (the `lat/lon → 3857` half of the S-100 Part 9 projection). |
+
+## The rendering-backend seam
+
+Because every backend consumes the same `VectorScene`, the IR is the blessed
+**pluggable rendering-backend contract**: an embedder can implement
+`IVectorSceneRenderer<TSurface>` (or consume the IR directly, as Mapsui does) to
+render S-100 portrayal through a non-Skia/non-Mapsui backend — GPU, server-side
+raster, PDF, SVG. See [`docs/design/rendering-backend-contract.md`](../../docs/design/rendering-backend-contract.md)
+for the end-to-end seam, the IR guarantees, the two shipped backends as worked
+references, and an illustrative SVG backend.
 
 ## Who consumes it
 

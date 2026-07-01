@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// and text ops. Antimeridian crossing and Web-Mercator pole limits are out
 /// of scope.</para>
 /// </remarks>
-public sealed class SkiaDisplayListRenderer
+public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 {
     /// <summary>Background colour cleared before painting. Defaults to transparent.</summary>
     public RgbaColor Background { get; set; } = RgbaColor.Transparent;
@@ -223,6 +223,18 @@ public sealed class SkiaDisplayListRenderer
     /// <param name="viewport">The live viewport whose projection places the ops.</param>
     public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport)
         => RenderOnto(canvas, scene, viewport, pointCullBounds: null);
+
+    /// <summary>
+    /// Draws <paramref name="scene"/> onto <paramref name="surface"/> for the
+    /// pluggable <see cref="IVectorSceneRenderer{TSurface}"/> seam. Delegates to
+    /// <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>; the canvas is
+    /// neither cleared nor flushed.
+    /// </summary>
+    /// <param name="surface">The destination canvas.</param>
+    /// <param name="scene">The display list to draw, in Part 9 draw order.</param>
+    /// <param name="viewport">The viewport whose projection places the ops.</param>
+    void IVectorSceneRenderer<SKCanvas>.Render(SKCanvas surface, VectorScene scene, Viewport viewport)
+        => RenderOnto(surface, scene, viewport);
 
     /// <summary>
     /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>, but culls
@@ -866,42 +878,3 @@ public sealed class SkiaDisplayListRenderer
     }
 }
 
-/// <summary>
-/// A linear EPSG:3857-world → screen-pixel affine derived from a
-/// <see cref="Viewport"/>. The viewport's geographic bounds are projected to
-/// EPSG:3857 and mapped to the pixel rectangle (origin top-left, +Y down).
-/// </summary>
-internal readonly struct WorldToScreen
-{
-    private readonly double _minX;
-    private readonly double _maxY;
-    private readonly double _scaleX;
-    private readonly double _scaleY;
-
-    private WorldToScreen(double minX, double maxY, double scaleX, double scaleY)
-    {
-        _minX = minX;
-        _maxY = maxY;
-        _scaleX = scaleX;
-        _scaleY = scaleY;
-    }
-
-    public static WorldToScreen Create(Viewport viewport)
-    {
-        var (minX, minY) = WebMercator.FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
-        var (maxX, maxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
-
-        double spanX = maxX - minX;
-        double spanY = maxY - minY;
-        double scaleX = spanX != 0 ? viewport.WidthPixels / spanX : 0;
-        double scaleY = spanY != 0 ? viewport.HeightPixels / spanY : 0;
-        return new WorldToScreen(minX, maxY, scaleX, scaleY);
-    }
-
-    public (float X, float Y) Project((double X, double Y) world)
-    {
-        float sx = (float)((world.X - _minX) * _scaleX);
-        float sy = (float)((_maxY - world.Y) * _scaleY);
-        return (sx, sy);
-    }
-}
