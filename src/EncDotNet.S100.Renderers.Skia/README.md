@@ -8,7 +8,6 @@ This library renders S-100 coverage and vector data to SkiaSharp bitmaps. It han
 
 - **`SkiaCoverageRenderer`** — `ICoverageRenderer<SKBitmap>` implementation that maps coverage grid cells to pixel colors.
 - **`SkiaSvgRasterizer`** — rasterizes SVG portrayal symbols to tiled pattern bitmaps.
-- **`SkiaColorExtensions`** — helpers for converting between `RgbaColor` and `SKColor`.
 
 ### Shared vector rendering core (now `EncDotNet.S100.Rendering.Scene`)
 
@@ -96,6 +95,31 @@ to an `SKBitmap`:
 ```sh
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
+
+This pulls in [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md)
+(the scene IR) transitively. Together they let you **embed just the renderer +
+IR** — build or lower a `VectorScene` and rasterise it headlessly — without the
+batteries-included `EncDotNet.S100` facade or any Mapsui/GUI dependency. See the
+[Embedding the renderer](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/embedding-the-renderer.md)
+guide for the end-to-end path.
+
+## Stability & versioning
+
+The **stable, supported surface** of this package is the headless rendering
+entry points: `SkiaDisplayListRenderer` (incl. its `RenderOnto` overloads),
+`HeadlessVectorRenderer`, `CoverageHeadlessRenderer`, `HeadlessCompositeRenderer`,
+the `CompositeLayer` family (`VectorCompositeLayer`, `CoverageCompositeLayer`),
+`OverlayDrawOptions`, `LabelDeclutterer`, `SkiaCoverageRenderer`,
+`SkiaCoverageArrowRenderer`, and `SkiaSvgRasterizer`. Types that are `internal`
+or undocumented (e.g. colour/font helpers, diagnostics) are implementation
+detail and may change at any time.
+
+All `EncDotNet.S100.*` packages share **one version**, derived from the release
+git tag (there is no per-package version). Versioning follows
+[Semantic Versioning](https://semver.org/): once past `1.0.0`, a breaking change
+to the stable surface above lands only in a **major** bump. While the version is
+below `1.0.0`, the surface is still settling — breaking changes may occur in a
+minor bump and will be called out in the release notes.
 
 ## Linux arm64 native dependency
 
