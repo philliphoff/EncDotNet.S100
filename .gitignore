@@ -55,3 +55,5 @@ nunit-*.xml
 
 # Mac OS Files
 .DS_Store
+/.vs/EncDotNet.S100.slnx
+/.vs/EncDotNet.S100/CopilotIndices/18.7.1244.59975
