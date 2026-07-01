@@ -26,3 +26,32 @@ Mapsui, or any GUI framework.
 Because every backend consumes the same `VectorScene`, the IR is the A/B seam:
 identical portrayal can be driven through different rendering backends for
 apples-to-apples comparison.
+
+## Installation
+
+```sh
+dotnet add package EncDotNet.S100.Rendering.Scene
+```
+
+This package is Mapsui-free and GUI-free. Pair it with
+[`EncDotNet.S100.Renderers.Skia`](../EncDotNet.S100.Renderers.Skia/README.md) to
+rasterise a scene headlessly **without** taking the batteries-included
+`EncDotNet.S100` facade. See the
+[Embedding the renderer](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/embedding-the-renderer.md)
+guide for the end-to-end path.
+
+## Stability & versioning
+
+The **stable, supported surface** of this package is the set of types documented
+in [What lives here](#what-lives-here): `VectorScene`, the `PaintOp` hierarchy
+(`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`,
+`TextPaintOp`), `VectorSceneBuilder`, `ColorResolver`, `ScaleVisibility`, and
+`WebMercator`. Types that are `internal` or undocumented are implementation
+detail and may change at any time.
+
+All `EncDotNet.S100.*` packages share **one version**, derived from the release
+git tag (there is no per-package version). Versioning follows
+[Semantic Versioning](https://semver.org/): once past `1.0.0`, a breaking change
+to the stable surface above lands only in a **major** bump. While the version is
+below `1.0.0`, the surface is still settling — breaking changes may occur in a
+minor bump and will be called out in the release notes.
