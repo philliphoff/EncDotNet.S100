@@ -105,7 +105,7 @@ public class ExchangeSetServiceLoaderTests
         var header = Assert.Single(datasets.ExchangeSetHeaders);
         Assert.Equal("Synthetic Hydrographic Office", header.Producer);
         // Latest issueDate across the 3 datasets is 2026-01-12.
-        Assert.Equal("2026-01-12", header.IssueDate);
+        Assert.Equal(DateOnly.Parse("2026-01-12"), header.IssueDate);
         // Header reports the catalogue total, not the loaded count.
         Assert.Equal(3, header.DatasetCount);
         Assert.Equal("Synthetic-Mixed", header.DisplayName);

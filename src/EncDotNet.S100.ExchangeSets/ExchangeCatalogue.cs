@@ -8,9 +8,9 @@ public sealed class ExchangeCatalogue
 
     public ProductSpecification? ProductSpecification { get; init; }
 
-    public string? DefaultLocaleLanguage { get; init; }
+    public PT_Locale? DefaultLocale { get; init; }
 
-    public string? DefaultLocaleCharacterEncoding { get; init; }
+    public IReadOnlyList<PT_Locale> OtherLocales { get; init; } = [];
 
     public string? Description { get; init; }
 

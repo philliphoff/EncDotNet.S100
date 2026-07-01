@@ -7,4 +7,10 @@ public sealed class DataCoverage
     public int? MaximumDisplayScale { get; init; }
 
     public int? MinimumDisplayScale { get; init; }
+
+    public int? OptimumDisplayScale { get; init; }
+
+    public float? ApproximateGridResolution { get; init; }
+
+    public TemporalExtent? TemporalExtent { get; init; }
 }

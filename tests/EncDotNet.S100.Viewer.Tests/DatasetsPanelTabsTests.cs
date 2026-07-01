@@ -183,7 +183,7 @@ public class DatasetsPanelTabsTests
     {
         var vm = NewVm();
         var src = new StubAssetSource();
-        var header = vm.RegisterExchangeSetHeader(src, "/a", "ACME", "2024-01-01", 1, _ => { });
+        var header = vm.RegisterExchangeSetHeader(src, "/a", "ACME", DateOnly.Parse("2024-01-01"), 1, _ => { });
         vm.AddFromExchangeSet(src, "a/d1.000", "S-101");
 
         vm.ActiveTabIndex = DatasetsViewModel.ExchangeSetsTabIndex;

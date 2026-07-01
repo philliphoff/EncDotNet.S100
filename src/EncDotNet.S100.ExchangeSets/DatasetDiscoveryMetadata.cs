@@ -23,9 +23,13 @@ public sealed class DatasetDiscoveryMetadata
 
     public string? Description { get; init; }
 
+    public string? DatasetId { get; init; }
+
     public bool CompressionFlag { get; init; }
 
     public bool DataProtection { get; init; }
+
+    public string? ProtectionScheme { get; init; }
 
     public string? DigitalSignatureReference { get; init; }
 
@@ -52,7 +56,7 @@ public sealed class DatasetDiscoveryMetadata
 
     public string? Classification { get; init; }
 
-    public string? Purpose { get; init; }
+    public Purpose? Purpose { get; init; }
 
     public bool NotForNavigation { get; init; }
 
@@ -62,11 +66,17 @@ public sealed class DatasetDiscoveryMetadata
 
     public int? UpdateNumber { get; init; }
 
-    public string? UpdateApplicationDate { get; init; }
+    public DateOnly? UpdateApplicationDate { get; init; }
 
-    public string? IssueDate { get; init; }
+    public string? ReferenceId { get; set; }
+
+    public DateOnly? IssueDate { get; init; }
+
+    public TimeOnly? IssueTime { get; init; }
 
     public BoundingBox? BoundingBox { get; init; }
+
+    public TemporalExtent? TemporalExtent { get; set; }
 
     public ProductSpecification? ProductSpecification { get; init; }
 
@@ -76,11 +86,21 @@ public sealed class DatasetDiscoveryMetadata
 
     public IReadOnlyList<DataCoverage> DataCoverages { get; init; } = [];
 
-    public string? DefaultLocaleLanguage { get; init; }
+    public string? Comment { get; init; }
 
-    public string? DefaultLocaleCharacterEncoding { get; init; }
+    public PT_Locale? DefaultLocale { get; init; }
 
-    public string? MetadataDateStamp { get; init; }
+    public IReadOnlyList<PT_Locale> OtherLocales { get; init; } = [];
 
-    public string? NavigationPurpose { get; init; }
+
+    public string? MetadataPointOfContact { get; init; }
+    public DateOnly? MetadataDateStamp { get; init; }
+
+    public bool? ReplaceData { get; set; }
+
+    public string? DataReplacement { get; init; }
+
+    public NavigationPurpose? NavigationPurpose { get; init; }
+
+    public MaintenanceInformation? ResourceMaintenance { get; init; }
 }

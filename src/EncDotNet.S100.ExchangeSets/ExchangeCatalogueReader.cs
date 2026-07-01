@@ -31,12 +31,9 @@ public static class ExchangeCatalogueReader
     private static ExchangeCatalogue ReadCatalogue(XElement root)
     {
         XNamespace xc = root.Name.Namespace;
-        XNamespace lan = root.GetNamespaceOfPrefix("lan")
-            ?? "http://standards.iso.org/iso/19115/-3/lan/2.0";
+        XNamespace lan = root.GetNamespaceOfPrefix("lan") ?? "http://standards.iso.org/iso/19115/-3/lan/1.0";
 
         var identifierEl = root.Element(xc + "identifier")!;
-        var contactEl = root.Element(xc + "contact");
-        var defaultLocaleEl = root.Element(xc + "defaultLocale");
 
         return new ExchangeCatalogue
         {
@@ -45,10 +42,10 @@ public static class ExchangeCatalogueReader
                 Identifier = (string)identifierEl.Element(xc + "identifier")!,
                 DateTime = (string)identifierEl.Element(xc + "dateTime")!,
             },
-            Contact = ReadContact(contactEl, xc),
+            Contact = ReadContact(root.Element(xc + "contact"), xc),
             ProductSpecification = ReadProductSpecification(root.Element(xc + "productSpecification"), xc),
-            DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
-            DefaultLocaleCharacterEncoding = ReadLocaleCharacterEncoding(defaultLocaleEl, lan),
+            DefaultLocale = ReadPTLocale(root.Element(xc + "defaultLocale"), lan),
+            OtherLocales = root.Elements(xc + "otherLocale").Select(e => ReadPTLocales(e, lan)).ToList(),
             Description = ReadCharacterString(root.Element(xc + "exchangeCatalogueDescription")),
             Comment = ReadCharacterString(root.Element(xc + "exchangeCatalogueComment")),
             DataServerIdentifier = (string?)root.Element(xc + "dataServerIdentifier"),
@@ -92,27 +89,39 @@ public static class ExchangeCatalogueReader
         if (element is null) return null;
 
         var numberStr = (string?)element.Element(xc + "number");
-
+        CompliancyCategory? comp = null;
+        string? compStr = (string?)element.Element(xc + "compliancyCategory");
+        if (compStr != null)
+            comp = (CompliancyCategory)Enum.Parse(typeof(CompliancyCategory), compStr);
         return new ProductSpecification
         {
             Name = (string?)element.Element(xc + "name"),
             Version = (string?)element.Element(xc + "version"),
-            Date = (string?)element.Element(xc + "date"),
+            Date = ParseDate((string?)element.Element(xc + "date")),
             ProductIdentifier = (string?)element.Element(xc + "productIdentifier"),
             Number = int.TryParse(numberStr, CultureInfo.InvariantCulture, out var n) ? n : null,
-            CompliancyCategory = (string?)element.Element(xc + "compliancyCategory"),
+            CompliancyCategory = comp,
         };
     }
 
     private static DatasetDiscoveryMetadata ReadDatasetDiscovery(XElement element, XNamespace xc, XNamespace lan)
     {
-        var defaultLocaleEl = element.Element(xc + "defaultLocale");
+        Purpose? purpose = null;
+        string? purposeStr = (string?)element.Element(xc + "purpose");
+        if (purposeStr != null)
+            purpose = (Purpose)Enum.Parse(typeof(Purpose), purposeStr);
 
+
+        NavigationPurpose? navigationPurpose = null;
+        string? naxPurposeStr = (string?)element.Element(xc + "navigationPurpose");
+        if (naxPurposeStr != null)
+            navigationPurpose = (NavigationPurpose)Enum.Parse(typeof(NavigationPurpose), naxPurposeStr);
         return new DatasetDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
             FilePath = (string?)element.Element(xc + "filePath"),
             Description = ReadCharacterString(element.Element(xc + "description")),
+            DatasetId = (string?)element.Element(xc + "datasetID"),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
             DataProtection = ParseBool(element, "dataProtection", xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
@@ -121,14 +130,17 @@ public static class ExchangeCatalogueReader
             ExpectedHash = ReadExpectedHash(element),
             Copyright = ParseBool(element, "copyright", xc),
             Classification = ReadCodeListValue(element.Element(xc + "classification")),
-            Purpose = (string?)element.Element(xc + "purpose"),
+            Purpose = purpose,
             NotForNavigation = ParseBool(element, "notForNavigation", xc),
             SpecificUsage = ReadSpecificUsage(element.Element(xc + "specificUsage")),
             EditionNumber = ParseInt(element, "editionNumber", xc),
             UpdateNumber = ParseInt(element, "updateNumber", xc),
-            UpdateApplicationDate = (string?)element.Element(xc + "updateApplicationDate"),
-            IssueDate = (string?)element.Element(xc + "issueDate"),
+            UpdateApplicationDate = ParseDate((string?)element.Element(xc + "updateApplicationDate")),
+            ReferenceId = (string?)element.Element(xc + "referenceID"),
+            IssueDate = ParseDate((string?)element.Element(xc + "issueDate")),
+            IssueTime = ParseTime((string?)element.Element(xc + "issueTime")),
             BoundingBox = ReadBoundingBox(element.Element(xc + "boundingBox")),
+            TemporalExtent = ReadTempoalExtent(element, xc),
             ProductSpecification = ReadProductSpecification(element.Element(xc + "productSpecification"), xc),
             ProducingAgency = ReadProducingAgency(element.Element(xc + "producingAgency")),
             EncodingFormat = (string?)element.Element(xc + "encodingFormat"),
@@ -136,10 +148,32 @@ public static class ExchangeCatalogueReader
                 .Elements(xc + "dataCoverage")
                 .Select(e => ReadDataCoverage(e, xc))
                 .ToList(),
-            DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
-            DefaultLocaleCharacterEncoding = ReadLocaleCharacterEncoding(defaultLocaleEl, lan),
-            MetadataDateStamp = (string?)element.Element(xc + "metadataDateStamp"),
-            NavigationPurpose = (string?)element.Element(xc + "navigationPurpose"),
+            Comment = (string?)element.Element(xc + "comment"),
+            DefaultLocale = ReadPTLocale(element.Element(xc + "defaultLocale"), lan),
+            OtherLocales = element.Elements(xc + "otherLocale").Select(e => ReadPTLocales(e, lan)).ToList(),
+            MetadataDateStamp = ParseDate((string?)element.Element(xc + "metadataDateStamp")),
+            ReplaceData = ParseBool(element, "replaceData", xc),
+            NavigationPurpose = navigationPurpose,
+            ResourceMaintenance = ReadResourceMaintenance(element.Element("resourceMaintenance"))
+        };
+    }
+
+    private static TemporalExtent? ReadTempoalExtent(XElement element, XNamespace xc)
+    {
+        var timeInstantEl = element.Element(xc + "temporalExtent");
+        if (timeInstantEl is null) return null;
+        var beginStr = (string?)timeInstantEl.Element(xc + "timeInstantBegin");
+        var endStr = (string?)timeInstantEl.Element(xc + "timeInstantEnd");
+        DateTime? begin = null;
+        DateTime? end = null;
+        if (DateTime.TryParse(beginStr, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var b))
+            begin = b;
+        if (DateTime.TryParse(endStr, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var e))
+            end = e;
+        return new TemporalExtent
+        {
+            TimeInstantBegin = begin,
+            TimeInstantEnd = end
         };
     }
 
@@ -209,8 +243,6 @@ public static class ExchangeCatalogueReader
 
     private static CatalogueDiscoveryMetadata ReadCatalogueDiscovery(XElement element, XNamespace xc, XNamespace lan)
     {
-        var defaultLocaleEl = element.Element(xc + "defaultLocale");
-
         return new CatalogueDiscoveryMetadata
         {
             FileName = (string)element.Element(xc + "fileName")!,
@@ -219,15 +251,15 @@ public static class ExchangeCatalogueReader
             EditionNumber = ParseInt(element, "editionNumber", xc),
             Scope = (string?)element.Element(xc + "scope"),
             VersionNumber = (string?)element.Element(xc + "versionNumber"),
-            IssueDate = (string?)element.Element(xc + "issueDate"),
+            IssueDate = ParseDate((string?)element.Element(xc + "issueDate")),
             ProductSpecification = ReadProductSpecification(element.Element(xc + "productSpecification"), xc),
             DigitalSignatureReference = (string?)element.Element(xc + "digitalSignatureReference"),
             DigitalSignatureAlgorithm = ParseSignatureAlgorithm(element, xc),
             DigitalSignatureValue = ReadDigitalSignatureValue(element.Element(xc + "digitalSignatureValue")),
             ExpectedHash = ReadExpectedHash(element),
             CompressionFlag = ParseBool(element, "compressionFlag", xc),
-            DefaultLocaleLanguage = ReadLocaleLanguage(defaultLocaleEl, lan),
-            DefaultLocaleCharacterEncoding = ReadLocaleCharacterEncoding(defaultLocaleEl, lan),
+            DefaultLocale = ReadPTLocale(element.Element(xc + "defaultLocale"), lan),
+            OtherLocales = element.Elements(xc + "otherLocale").Select(e => ReadPTLocales(e, lan)).ToList(),
         };
     }
 
@@ -248,12 +280,18 @@ public static class ExchangeCatalogueReader
     {
         var maxStr = (string?)element.Element(xc + "maximumDisplayScale");
         var minStr = (string?)element.Element(xc + "minimumDisplayScale");
+        var optStr = (string?)element.Element(xc + "optimumDisplayScale");
+        var resStr = (string?)element.Element(xc + "approximateGridResolution");
+        TemporalExtent? temporalExtent = ReadTempoalExtent(element, xc);
 
         return new DataCoverage
         {
             BoundingPolygon = element.Element(xc + "boundingPolygon")?.ToString(),
             MaximumDisplayScale = int.TryParse(maxStr, CultureInfo.InvariantCulture, out var max) ? max : null,
             MinimumDisplayScale = int.TryParse(minStr, CultureInfo.InvariantCulture, out var min) ? min : null,
+            OptimumDisplayScale = int.TryParse(optStr, CultureInfo.InvariantCulture, out var opt) ? min : null,
+            ApproximateGridResolution = float.TryParse(resStr, CultureInfo.InvariantCulture, out var res) ? min : null,
+            TemporalExtent = temporalExtent
         };
     }
 
@@ -301,24 +339,6 @@ public static class ExchangeCatalogueReader
                    .Element(Cit + "party")?
                    .Element(Cit + "CI_Organisation")?
                    .Element(Cit + "name"));
-    }
-
-    private static string? ReadLocaleLanguage(XElement? localeElement, XNamespace lan)
-    {
-        var langCode = localeElement?
-            .Descendants(lan + "LanguageCode")
-            .FirstOrDefault();
-
-        return (string?)langCode?.Attribute("codeListValue");
-    }
-
-    private static string? ReadLocaleCharacterEncoding(XElement? localeElement, XNamespace lan)
-    {
-        var charCode = localeElement?
-            .Descendants(lan + "MD_CharacterSetCode")
-            .FirstOrDefault();
-
-        return (string?)charCode?.Attribute("codeListValue");
     }
 
     private static bool ParseBool(XElement parent, string localName, XNamespace xc)
@@ -448,5 +468,146 @@ public static class ExchangeCatalogueReader
             SchemeAdministratorId = saId,
             Certificates = certs!,
         };
+    }
+
+    private static MaintenanceInformation? ReadResourceMaintenance(XElement? wrapper)
+    {
+        if (wrapper is null) return null;
+
+        var sigEl = wrapper.Element(S100SE + "resourceMaintenance");
+        if (sigEl is null) return null;
+
+        var mfreq = (string?)sigEl.Attribute("maintenanceAndUpdateFrequency");
+        var date = (string?)sigEl.Attribute("maintenanceDate");
+        var ufreq = (string?)sigEl.Attribute("userDefinedMaintenanceFrequency");
+
+        MaintenanceFrequencyCode? maintFreq = null;
+        if (mfreq != null)
+            maintFreq = (MaintenanceFrequencyCode)Enum.Parse(typeof(MaintenanceFrequencyCode), mfreq);
+
+        return new MaintenanceInformation
+        {
+            MaintenanceAndUpdateFrequency = maintFreq,
+            MaintenanceDate = ParseDate(date),
+            UserDefinedMaintenanceFrequency = ufreq
+        };
+    }
+
+
+    private static PT_Locale? ReadPTLocale(XElement? localeElement, XNamespace lan)
+    {  
+        if (localeElement is null) return null;
+
+        XElement? moreLocal = localeElement.Element(lan + "PT_Locale");
+
+        var langCode = moreLocal?
+           .Elements(lan + "language")
+           .FirstOrDefault()?
+           .Elements(lan + "LanguageCode")
+           .FirstOrDefault();
+
+        var lang = (string?)langCode?.Attribute("codeListValue");
+        if (lang == null)
+            lang = "";
+
+
+        var countryCode = moreLocal?
+           .Elements(lan + "country")
+           .FirstOrDefault()?
+           .Elements(lan + "CountryCode")
+           .FirstOrDefault();
+
+        var country = (string?)langCode?.Attribute("codeListValue");
+        if (country == null)
+            country = "";
+
+        var charEncode = moreLocal?
+           .Elements(lan + "characterEncoding")
+           .FirstOrDefault()?
+           .Elements(lan + "MD_CharacterSetCode ")
+           .FirstOrDefault();
+
+        var encoding = (string?)langCode?.Attribute("codeListValue");
+        if (encoding == null)
+            encoding = "";
+       
+        return new PT_Locale
+        {
+            Language = lang,
+            Country = country,
+            CharacterEncoding =encoding,
+        };
+    }
+
+    private static PT_Locale ReadPTLocales(XElement localeElement, XNamespace lan)
+    {
+        XElement? moreLocal = localeElement.Element(lan + "PT_Locale");
+
+        var langCode = moreLocal?
+           .Elements(lan + "language")
+           .FirstOrDefault()?
+           .Elements(lan + "LanguageCode")
+           .FirstOrDefault();
+
+        var lang = (string?)langCode?.Attribute("codeListValue");
+        if (lang == null)
+            lang = "";
+
+
+        var countryCode = moreLocal?
+           .Elements(lan + "country")
+           .FirstOrDefault()?
+           .Elements(lan + "CountryCode")
+           .FirstOrDefault();
+
+        var country = (string?)langCode?.Attribute("codeListValue");
+        if (country == null)
+            country = "";
+
+        var charEncode = moreLocal?
+           .Elements(lan + "characterEncoding")
+           .FirstOrDefault()?
+           .Elements(lan + "MD_CharacterSetCode ")
+           .FirstOrDefault();
+
+        var encoding = (string?)langCode?.Attribute("codeListValue");
+        if (encoding == null)
+            encoding = "";
+
+        return new PT_Locale
+        {
+            Language = lang,
+            Country = country,
+            CharacterEncoding = encoding,
+        };
+    }
+
+    private static DateOnly? ParseDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        // Permit dates are xs:date and may carry a trailing 'Z' (e.g. 2018-03-20Z).
+        string trimmed = value.Trim().TrimEnd('Z', 'z');
+        return DateOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly date)
+            ? date
+            : null;
+    }
+
+
+    private static TimeOnly? ParseTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        // Permit dates are xs:date and may carry a trailing 'Z' (e.g. 2018-03-20Z).
+        string trimmed = value.Trim().TrimEnd('Z', 'z');
+        return TimeOnly.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly time)
+            ? time
+            : null;
     }
 }

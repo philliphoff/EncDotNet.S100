@@ -859,7 +859,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         IAssetSource source,
         string sourcePath,
         string? producer,
-        string? issueDate,
+        DateOnly? issueDate,
         int datasetCount,
         Action<ExchangeSetHeader> closeAction)
     {

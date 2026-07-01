@@ -47,7 +47,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// <summary>Catalogue-derived issue date string (the latest
     /// <c>DatasetDiscoveryMetadata.IssueDate</c> across the set), or
     /// <c>null</c> if unknown.</summary>
-    public string? IssueDate { get; }
+    public DateOnly? IssueDate { get; }
 
     /// <summary>Total number of catalogued datasets.</summary>
     public int DatasetCount { get; }
@@ -108,7 +108,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
         IAssetSource source,
         string sourcePath,
         string? producer,
-        string? issueDate,
+        DateOnly? issueDate,
         int datasetCount,
         Action<ExchangeSetHeader> closeAction)
     {
@@ -172,7 +172,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
         }
     }
 
-    private static string BuildMetadataSummary(int loadedCount, int unsupportedCount, string? producer, string? issueDate)
+    private static string BuildMetadataSummary(int loadedCount, int unsupportedCount, string? producer, DateOnly? issueDate)
     {
         var parts = new System.Collections.Generic.List<string>(4)
         {
@@ -189,7 +189,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
             parts.Add(string.Format(Strings.Pane_ExchangeSetHeader_Producer, producer));
         }
 
-        if (!string.IsNullOrWhiteSpace(issueDate))
+        if (issueDate != null)
         {
             parts.Add(string.Format(Strings.Pane_ExchangeSetHeader_Issued, issueDate));
         }

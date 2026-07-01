@@ -703,15 +703,15 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// date strings sort correctly under ordinal comparison, so no
     /// parsing is needed for the common case.
     /// </summary>
-    private static string? ResolveLatestIssueDate(
+    private static DateOnly? ResolveLatestIssueDate(
         IReadOnlyList<DatasetDiscoveryMetadata> datasets)
     {
-        string? latest = null;
+        DateOnly? latest = null;
         foreach (var d in datasets)
         {
             var s = d.IssueDate;
-            if (string.IsNullOrEmpty(s)) continue;
-            if (latest is null || string.CompareOrdinal(s, latest) > 0)
+            if (s == null) continue;
+            if (latest is null || ((DateOnly)s).CompareTo((DateOnly)latest) > 0)
                 latest = s;
         }
         return latest;

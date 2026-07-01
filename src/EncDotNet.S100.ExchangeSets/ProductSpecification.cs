@@ -6,11 +6,11 @@ public sealed class ProductSpecification
 
     public string? Version { get; init; }
 
-    public string? Date { get; init; }
+    public DateOnly? Date { get; init; }
 
     public string? ProductIdentifier { get; init; }
 
     public int? Number { get; init; }
 
-    public string? CompliancyCategory { get; init; }
+    public CompliancyCategory? CompliancyCategory { get; init; }
 }

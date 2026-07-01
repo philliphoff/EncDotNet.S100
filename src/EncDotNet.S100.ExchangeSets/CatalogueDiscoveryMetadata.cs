@@ -25,7 +25,7 @@ public sealed class CatalogueDiscoveryMetadata
 
     public string? VersionNumber { get; init; }
 
-    public string? IssueDate { get; init; }
+    public DateOnly? IssueDate { get; init; }
 
     public ProductSpecification? ProductSpecification { get; init; }
 
@@ -52,7 +52,7 @@ public sealed class CatalogueDiscoveryMetadata
 
     public bool CompressionFlag { get; init; }
 
-    public string? DefaultLocaleLanguage { get; init; }
+    public PT_Locale? DefaultLocale { get; init; }
 
-    public string? DefaultLocaleCharacterEncoding { get; init; }
+    public IReadOnlyList<PT_Locale> OtherLocales { get; init; } = [];
 }

@@ -53,12 +53,12 @@ public class DatasetsViewModelExchangeSetHeaderTests
         var src = new StubAssetSource();
 
         var header = vm.RegisterExchangeSetHeader(
-            src, "/tmp/eset", "ACME", "2024-05-01", 7, _ => { });
+            src, "/tmp/eset", "ACME", DateOnly.Parse("2024-05-01"), 7, _ => { });
 
         Assert.Single(vm.ExchangeSetHeaders);
         Assert.Same(header, vm.ExchangeSetHeaders[0]);
         Assert.Equal("ACME", header.Producer);
-        Assert.Equal("2024-05-01", header.IssueDate);
+        Assert.Equal(DateOnly.Parse("2024-05-01"), header.IssueDate);
         Assert.Equal(7, header.DatasetCount);
         Assert.Equal("/tmp/eset", header.SourcePath);
     }
