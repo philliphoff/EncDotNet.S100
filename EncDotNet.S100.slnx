@@ -41,6 +41,7 @@
     <Project Path="tests/EncDotNet.S100.Diagnostics.Export.Tests/EncDotNet.S100.Diagnostics.Export.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.ExchangeSets.Tests/EncDotNet.S100.ExchangeSets.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Pipelines.Tests/EncDotNet.S100.Pipelines.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Rendering.Scene.Tests/EncDotNet.S100.Rendering.Scene.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.VisualRegression.Tests/EncDotNet.S100.VisualRegression.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.VisualRegression/EncDotNet.S100.VisualRegression.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S101.Tests/EncDotNet.S100.Datasets.S101.Tests.csproj" />

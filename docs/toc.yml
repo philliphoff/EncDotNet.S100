@@ -24,3 +24,5 @@
       href: design/ais-zoom-gated-subscription.md
     - name: S-98 interoperability
       href: design/s98-interoperability.md
+    - name: Rendering-backend contract
+      href: design/rendering-backend-contract.md
