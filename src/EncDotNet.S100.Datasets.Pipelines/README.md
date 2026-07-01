@@ -228,15 +228,30 @@ needing to know the spec-specific rule namespaces.
 
 ## S-98 interoperability
 
-`Interoperability/` houses the S-98 inter-product plumbing
+`Interoperability/` houses the renderer-neutral S-98 inter-product plumbing
 (`InteroperabilityAuthority`, `LayerStackBuilder`, `S98RuleContext`,
-`S98DefaultRules`, plus the load-order `LoadOrderInteroperabilityAuthority`
-fallback). The authority assigns each layer a display plane (Under
-Radar / Standard / Over Radar / Dynamic Arrows) and a within-plane
-priority, then evaluates a set of inter-product rules (R-101-102,
-R-101-124, R-104, R-111) to drop or transform layers that other
-loaded products supersede. The viewer consumes the resulting
-ordered `LayerStackEntry` list to compose its paint stack.
+`S98DefaultRules`, `S98SuppressionPolicy`, plus the load-order
+`LoadOrderInteroperabilityAuthority` fallback). The engine operates on
+Mapsui-free `SubLayerStackItem` / `StackPayload` values: the authority assigns
+each sub-layer a display plane (Under Radar / Standard / Over Radar / Dynamic
+Arrows) and a within-plane priority, then evaluates a set of inter-product
+rules (R-101-102, R-101-124, R-104, R-111) to drop or transform sub-layers that
+other loaded products supersede. Suppression filters encoding-neutral
+`DrawingInstruction`s (matched to their `VectorFeatureTag`) rather than Mapsui
+`IFeature`s, so the *same* decision drives both renderers.
+
+Two consumers share this single source of truth:
+
+- The **Mapsui viewer** re-platforms onto it — `DatasetLoaderService` sorts and
+  suppresses `SubLayerStackItem`s, then maps the ruled items back to prebuilt
+  `ILayer`s.
+- The **headless `HeadlessCompositor`** (top-level namespace) drives the same
+  engine and lowers each ordered vector / coverage sub-layer into a Skia
+  `CompositeLayer`, painting all datasets against one shared viewport with no
+  Mapsui dependency — reproducing the viewer's cross-dataset draw order and
+  depth suppression (e.g. the S-101-under-S-102 interleave, S-98 Annex A
+  §A-6.9.1). The `EncDotNet.S100` facade's `IReadOnlyList<S100Layer>` overload
+  is the public on-ramp.
 
 See [`docs/design/s98-interoperability.md`](../../docs/design/s98-interoperability.md)
 for the full design rationale.
