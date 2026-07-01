@@ -1,7 +1,8 @@
 # Command-line rendering (`s100`)
 
 `EncDotNet.S100.Cli` is a cross-platform .NET console tool, invoked as **`s100`**,
-that renders any supported S-100 dataset to a PNG, JPEG, or WebP image, and
+that renders any supported S-100 dataset — or a **composite** of several — to a
+PNG, JPEG, or WebP image, and
 **validates** datasets and exchange sets against the normative rule packs. It
 drives the same portrayal and validation pipelines as the Avalonia viewer, but
 rasterises through the Mapsui-free Skia *headless* renderers so it can run
@@ -12,7 +13,7 @@ It offers four subcommands:
 
 | Command | Purpose |
 |---|---|
-| `s100 render <dataset> <output>` | Render a dataset to an image (PNG, JPEG, or WebP). |
+| `s100 render <dataset> <output>`<br>`s100 render --layer … <output>` | Render one dataset — or composite several with `--layer` — to an image (PNG, JPEG, or WebP). |
 | `s100 validate <dataset-or-exchange-set>` | Validate against the spec's normative rule pack (plus exchange-set signature/checksum integrity), with compiler-style output and suppression. |
 | `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
 | `s100 list-specs` | List the supported product specifications and which support headless rendering. |
@@ -61,6 +62,10 @@ dotnet run --project tools/EncDotNet.S100.Cli -- validate exchange-set/
 # Render the 7th time step at night-palette, larger canvas
 dotnet run --project tools/EncDotNet.S100.Cli -- \
     render currents.h5 currents.png --time-step 6 --palette night -w 2048 -h 1536
+
+# Composite several products into one chart (repeated --layer + output)
+dotnet run --project tools/EncDotNet.S100.Cli -- \
+    render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
 ```
 
 ## How it works
@@ -87,6 +92,43 @@ stack is involved, so it runs anywhere .NET does.
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
 | `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
 | `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
+
+## Compositing multiple datasets
+
+Pass a dataset per `--layer` (repeatable) to stack several products into one
+image via the renderer-neutral **S-98 interoperability** engine. The output path
+is the trailing positional argument or `-o|--output`:
+
+```bash
+s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
+s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
+s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
+```
+
+The `--palette`, `--symbol-scale`, `--text-scale`, `--time-step`,
+`--background`, `--width`/`--height`, `--format`/`--quality`, and
+`--hide`/`--no-text` options apply as in the single-dataset form; suppression
+(`--hide`/`--no-text`) is **global** — it applies to every layer.
+
+| Composite-only option | Default | Description |
+|---|---|---|
+| `--layer <path>` | _none_ | Add a dataset as a layer (repeatable). Any `--layer` selects the composite form. |
+| `-o`, `--output <path>` | _positional_ | Output image path (alternative to the positional `<output>`). |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | Explicit shared viewport as a WGS-84 bounding box. Mutually exclusive with `--center`/`--scale`. |
+| `--center <lon,lat>` + `--scale <denominator>` | union auto-fit | Explicit shared viewport by centre + scale denominator (e.g. `--center -1.25,50.25 --scale 50000`). |
+
+Two behaviours differ from the single-dataset form:
+
+- **Ordering.** The S-98 authority orders layers by display plane, so the
+  `--layer` order is only a **within-plane tiebreak** — hand-ordering layers
+  generally has no visible effect (an S-102 surface is already placed above an
+  S-101 chart by its plane).
+- **S-101 updates.** The composite form does **not** apply S-101
+  sequential/sibling updates; `--no-updates` applies to the single-dataset form
+  only. Render an S-101 cell singly if you need its updates folded in.
+
+When no `--bbox` / `--center`+`--scale` is supplied, the compositor auto-fits
+the union extent of all layers to the requested `--width` × `--height`.
 
 ## Capabilities
 

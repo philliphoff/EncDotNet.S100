@@ -1,10 +1,10 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
-using EncDotNet.S100.Datasets.Pipelines;
 using SkiaSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -12,20 +12,62 @@ using Spectre.Console.Cli;
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 render &lt;dataset&gt; &lt;output&gt;</c> — detects the dataset's product
-/// specification, runs its portrayal pipeline through the Mapsui-free Skia
-/// headless renderer, and writes a PNG image.
+/// <c>s100 render</c> renders one or more S-100 datasets to an image. Two
+/// grammars are supported:
+/// <list type="bullet">
+///   <item><description>
+///     <c>render &lt;dataset&gt; &lt;output&gt;</c> — the single-dataset form:
+///     detects the dataset's product specification and rasterises it through the
+///     Mapsui-free Skia headless renderer.
+///   </description></item>
+///   <item><description>
+///     <c>render --layer A --layer B … &lt;output&gt;</c> — the composite form:
+///     stacks several products into one image via the renderer-neutral S-98
+///     interoperability engine (<see cref="IS100CompositeRenderer{TResult}"/>).
+///   </description></item>
+/// </list>
 /// </summary>
+/// <remarks>
+/// Two behaviours differ between the forms and are surfaced in <c>--help</c>:
+/// (1) the composite form does <b>not</b> apply S-101 sequential/sibling updates
+/// (the single-dataset form still does); and (2) the S-98 authority orders
+/// layers by display plane, so <c>--layer</c> order is only a within-plane
+/// tiebreak — hand-ordering layers generally has no effect.
+/// </remarks>
 internal sealed class RenderCommand : Command<RenderCommand.Settings>
 {
     /// <summary>Maximum supported output dimension (per axis), to guard against OOM.</summary>
     private const int MaxDimension = 16384;
 
-    internal sealed class Settings : DatasetCommandSettings
+    internal sealed class Settings : CommandSettings
     {
-        [CommandArgument(1, "<output>")]
-        [Description("Path of the image to write. The format is inferred from the file extension unless --format is given.")]
-        public string OutputPath { get; init; } = string.Empty;
+        [CommandArgument(0, "[input]")]
+        [Description("Single-dataset form: the dataset to render. Composite form (with --layer and no -o): the output image path.")]
+        public string? Input { get; init; }
+
+        [CommandArgument(1, "[output]")]
+        [Description("Single-dataset form: the output image path. The format is inferred from the file extension unless --format is given.")]
+        public string? OutputArgument { get; init; }
+
+        [CommandOption("--layer <PATH>")]
+        [Description("Add a dataset as a composite layer (repeatable). When any --layer is given, several products are composited into one image. Note: the S-98 authority orders layers by display plane, so --layer order is only a within-plane tiebreak.")]
+        public string[] Layers { get; init; } = [];
+
+        [CommandOption("-o|--output <PATH>")]
+        [Description("Output image path. Required (or given positionally) for the composite form; optional alternative to the positional <output> for the single-dataset form.")]
+        public string? OutputOption { get; init; }
+
+        [CommandOption("--bbox <BBOX>")]
+        [Description("Composite only: explicit shared viewport as a WGS-84 bounding box 'minLon,minLat,maxLon,maxLat' (e.g. --bbox -1.5,50.0,-1.0,50.5). Mutually exclusive with --center/--scale. When omitted, the compositor auto-fits the union of all layers.")]
+        public string? BoundingBox { get; init; }
+
+        [CommandOption("--center <CENTER>")]
+        [Description("Composite only: explicit shared viewport centre 'lon,lat' (e.g. --center -1.25,50.25). Must be used with --scale.")]
+        public string? Center { get; init; }
+
+        [CommandOption("--scale <DENOMINATOR>")]
+        [Description("Composite only: explicit shared viewport scale denominator (e.g. --scale 50000 for 1:50000). Must be used with --center.")]
+        public double? Scale { get; init; }
 
         [CommandOption("--format")]
         [Description("Output image format: png, jpeg (jpg), or webp. Default: inferred from the output file extension, falling back to png.")]
@@ -71,26 +113,42 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         public string? Background { get; init; }
 
         [CommandOption("--no-text")]
-        [Description("Suppress text/label drawing instructions. Equivalent to --hide text.")]
+        [Description("Suppress text/label drawing instructions. Equivalent to --hide text. In the composite form the suppression is global (applies to every layer).")]
         [DefaultValue(false)]
         public bool NoText { get; init; }
 
         [CommandOption("--hide")]
-        [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text.")]
+        [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text. In the composite form the suppression is global (applies to every layer).")]
         public string? Hide { get; init; }
+
+        [CommandOption("--debug")]
+        [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
+        public bool Debug { get; init; }
+
+        [CommandOption("--no-updates")]
+        [Description("Single-dataset form only: do not apply sibling S-101 sequential updates (.001, .002, …) found alongside an .000 base cell. By default they are applied best-effort. The composite form never applies updates.")]
+        [DefaultValue(false)]
+        public bool NoUpdates { get; init; }
+
+        /// <summary>Whether this invocation composites multiple layers.</summary>
+        public bool IsComposite => Layers.Length > 0;
+
+        /// <summary>
+        /// Resolves the output path for the current grammar, or <c>null</c> when
+        /// none is determinable. Mirrors the resolution enforced by
+        /// <see cref="Validate"/>.
+        /// </summary>
+        public string? ResolveOutputPath()
+        {
+            if (OutputOption is not null)
+                return OutputOption;
+            if (IsComposite)
+                return string.IsNullOrWhiteSpace(OutputArgument) ? Input : null;
+            return OutputArgument;
+        }
 
         public override ValidationResult Validate()
         {
-            var baseResult = base.Validate();
-            if (!baseResult.Successful)
-                return baseResult;
-
-            if (string.IsNullOrWhiteSpace(OutputPath))
-                return ValidationResult.Error("An output path is required.");
-
-            if (!TryResolveFormat(Format, OutputPath, out _, out var formatError))
-                return ValidationResult.Error(formatError);
-
             if (Quality is < 1 or > 100)
                 return ValidationResult.Error("--quality must be between 1 and 100.");
 
@@ -113,9 +171,93 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return ValidationResult.Error(
                     $"Invalid --hide value '{badToken}'. Use a comma-separated list of: text, points, lines, areas.");
 
-            var dir = Path.GetDirectoryName(Path.GetFullPath(OutputPath));
+            string? output;
+            if (IsComposite)
+            {
+                foreach (var layer in Layers)
+                {
+                    if (string.IsNullOrWhiteSpace(layer))
+                        return ValidationResult.Error("A --layer value cannot be empty.");
+                    if (!File.Exists(layer))
+                        return ValidationResult.Error($"Layer file not found: {layer}");
+                }
+
+                if (OutputOption is not null)
+                {
+                    if (!string.IsNullOrWhiteSpace(Input) || !string.IsNullOrWhiteSpace(OutputArgument))
+                        return ValidationResult.Error(
+                            "With --layer and --output, do not also pass a positional argument.");
+                    output = OutputOption;
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(OutputArgument))
+                        return ValidationResult.Error(
+                            "With --layer, pass a single output path (or use -o|--output); two positional arguments were given.");
+                    output = Input;
+                }
+
+                if (string.IsNullOrWhiteSpace(output))
+                    return ValidationResult.Error(
+                        "An output path is required (positional <output> or -o|--output).");
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(Input))
+                    return ValidationResult.Error("A dataset path is required (or use --layer to composite).");
+                if (!File.Exists(Input))
+                    return ValidationResult.Error($"Dataset file not found: {Input}");
+
+                output = OutputOption ?? OutputArgument;
+                if (string.IsNullOrWhiteSpace(output))
+                    return ValidationResult.Error("An output path is required.");
+            }
+
+            if (!TryResolveFormat(Format, output, out _, out var formatError))
+                return ValidationResult.Error(formatError);
+
+            var viewportResult = ValidateViewport();
+            if (!viewportResult.Successful)
+                return viewportResult;
+
+            var dir = Path.GetDirectoryName(Path.GetFullPath(output));
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 return ValidationResult.Error($"Output directory does not exist: {dir}");
+
+            return ValidationResult.Success();
+        }
+
+        private ValidationResult ValidateViewport()
+        {
+            bool hasBbox = !string.IsNullOrWhiteSpace(BoundingBox);
+            bool hasCenter = !string.IsNullOrWhiteSpace(Center);
+            bool hasScale = Scale is not null;
+
+            if ((hasBbox || hasCenter || hasScale) && !IsComposite)
+                return ValidationResult.Error(
+                    "--bbox, --center, and --scale apply only to the composite form (use --layer).");
+
+            if (hasBbox && (hasCenter || hasScale))
+                return ValidationResult.Error("--bbox cannot be combined with --center/--scale.");
+
+            if (hasCenter != hasScale)
+                return ValidationResult.Error("--center and --scale must be used together.");
+
+            if (hasBbox)
+            {
+                if (!CompositeViewportBuilder.TryParseDoubles(BoundingBox!, 4, out var bb))
+                    return ValidationResult.Error(
+                        "--bbox must be four numbers: minLon,minLat,maxLon,maxLat.");
+                if (bb[0] >= bb[2] || bb[1] >= bb[3])
+                    return ValidationResult.Error(
+                        "--bbox requires minLon < maxLon and minLat < maxLat.");
+            }
+
+            if (hasCenter && !CompositeViewportBuilder.TryParseDoubles(Center!, 2, out _))
+                return ValidationResult.Error("--center must be two numbers: lon,lat.");
+
+            if (hasScale && Scale <= 0)
+                return ValidationResult.Error("--scale must be a positive denominator.");
 
             return ValidationResult.Success();
         }
@@ -123,19 +265,28 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
     public override int Execute(CommandContext context, Settings settings)
     {
+        return settings.IsComposite
+            ? ExecuteComposite(settings)
+            : ExecuteSingle(settings);
+    }
+
+    private static int ExecuteSingle(Settings settings)
+    {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
+        var datasetPath = settings.Input!;
+        var outputPath = settings.ResolveOutputPath()!;
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
         try
         {
-            var spec = DatasetPipelineFactory.DetectProductSpec(settings.DatasetPath);
+            var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath);
             if (spec is null)
             {
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[red]Could not detect an S-100 product specification for:[/] {settings.DatasetPath}");
+                    $"[red]Could not detect an S-100 product specification for:[/] {datasetPath}");
                 return 2;
             }
 
-            var processor = DatasetProcessorLoader.Create(factory, spec, settings);
+            var processor = DatasetProcessorLoader.Create(factory, spec, datasetPath, settings.NoUpdates);
 
             // Non-blocking: warn (on stderr) when the dataset's declared
             // edition diverges from what this build implements. Rendering still
@@ -153,16 +304,8 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             }
 
             TryParsePalette(settings.Palette, out var palette);
-            RgbaColor? background = null;
-            if (settings.Background is not null && TryParseHexColor(settings.Background, out var bg))
-                background = bg;
-
-            var hidden = DrawingInstructionCategory.None;
-            if (settings.Hide is not null
-                && TryParseHideCategories(settings.Hide, out var parsedHide, out _))
-                hidden |= parsedHide;
-            if (settings.NoText)
-                hidden |= DrawingInstructionCategory.Text;
+            RgbaColor? background = ResolveBackground(settings);
+            var hidden = ResolveHiddenCategories(settings);
 
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden);
@@ -171,50 +314,143 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
                 .GetAwaiter().GetResult();
 
-            TryResolveFormat(settings.Format, settings.OutputPath, out var format, out _);
-            WriteImage(bitmap, settings.OutputPath, format, settings.Quality);
+            TryResolveFormat(settings.Format, outputPath, out var format, out _);
+            WriteImage(bitmap, outputPath, format, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {settings.OutputPath} ([grey]{spec}, {format}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {outputPath} ([grey]{spec}, {format}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
-        }
-        catch (NotSupportedException ex)
-        {
-            AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
-            if (settings.Debug)
-                AnsiConsole.WriteException(ex);
-            return 4;
-        }
-        catch (S100DatasetNotSupportedException ex)
-        {
-            // Distinct from NotSupportedException (e.g. the dcf8 headless path):
-            // readers raise this for recognised-but-not-yet-implemented spec
-            // features such as data coding format 1 (irregular fixed-station
-            // time series). It does not derive from NotSupportedException, so it
-            // needs its own catch to avoid falling through to the generic exit-1
-            // path. See issue #253.
-            AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
-            if (settings.Debug)
-                AnsiConsole.WriteException(ex);
-            return 4;
-        }
-        catch (S100DatasetSchemaException ex)
-        {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");
-            if (settings.Debug)
-                AnsiConsole.WriteException(ex);
-            return 5;
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLineInterpolated($"[red]Error:[/] {ex.Message}");
-            if (settings.Debug)
-                AnsiConsole.WriteException(ex);
-            return 1;
+            return HandleException(ex, settings.Debug);
         }
         finally
         {
             catalogueManager.Dispose();
+        }
+    }
+
+    private static int ExecuteComposite(Settings settings)
+    {
+        using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
+        var outputPath = settings.ResolveOutputPath()!;
+
+        var datasets = new List<S100Dataset>(settings.Layers.Length);
+        try
+        {
+            var specNames = new List<string>(settings.Layers.Length);
+            var layers = new List<S100Layer>(settings.Layers.Length);
+            foreach (var layerPath in settings.Layers)
+            {
+                var dataset = S100Dataset.Open(layerPath);
+                datasets.Add(dataset);
+                layers.Add(new S100Layer { Dataset = dataset });
+                specNames.Add(DatasetPipelineFactory.DetectProductSpec(layerPath) ?? "unknown");
+            }
+
+            TryParsePalette(settings.Palette, out var palette);
+            var options = new S100CompositeOptions
+            {
+                Width = settings.Width,
+                Height = settings.Height,
+                Palette = palette,
+                SymbolScale = settings.SymbolScale,
+                TextScale = settings.TextScale,
+                TimeStep = settings.TimeStep,
+                Background = ResolveBackground(settings),
+                HiddenCategories = ResolveHiddenCategories(settings),
+                Viewport = ResolveViewport(settings),
+            };
+
+            using var renderer = new PngS100DatasetRenderer();
+            byte[] png = renderer.RenderAsync(layers, options).GetAwaiter().GetResult();
+
+            TryResolveFormat(settings.Format, outputPath, out var format, out _);
+            using var bitmap = SKBitmap.Decode(png)
+                ?? throw new NotSupportedException("The composite renderer produced an image that could not be decoded.");
+            WriteImage(bitmap, outputPath, format, settings.Quality);
+
+            AnsiConsole.MarkupLineInterpolated(
+                $"[green]Wrote[/] {outputPath} ([grey]composite of {layers.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, settings.Debug);
+        }
+        finally
+        {
+            foreach (var dataset in datasets)
+                dataset.Dispose();
+        }
+    }
+
+    private static RgbaColor? ResolveBackground(Settings settings)
+    {
+        if (settings.Background is not null && TryParseHexColor(settings.Background, out var bg))
+            return bg;
+        return null;
+    }
+
+    private static DrawingInstructionCategory ResolveHiddenCategories(Settings settings)
+    {
+        var hidden = DrawingInstructionCategory.None;
+        if (settings.Hide is not null
+            && TryParseHideCategories(settings.Hide, out var parsedHide, out _))
+            hidden |= parsedHide;
+        if (settings.NoText)
+            hidden |= DrawingInstructionCategory.Text;
+        return hidden;
+    }
+
+    private static Viewport? ResolveViewport(Settings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.BoundingBox)
+            && CompositeViewportBuilder.TryParseDoubles(settings.BoundingBox, 4, out var bb))
+        {
+            return CompositeViewportBuilder.FromBoundingBox(
+                bb[0], bb[1], bb[2], bb[3], settings.Width, settings.Height);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.Center) && settings.Scale is { } scale
+            && CompositeViewportBuilder.TryParseDoubles(settings.Center, 2, out var c))
+        {
+            return CompositeViewportBuilder.FromCenterScale(
+                c[0], c[1], scale, settings.Width, settings.Height);
+        }
+
+        return null;
+    }
+
+    private static int HandleException(Exception ex, bool debug)
+    {
+        switch (ex)
+        {
+            case NotSupportedException:
+                AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
+                if (debug) AnsiConsole.WriteException(ex);
+                return 4;
+
+            // Distinct from NotSupportedException (e.g. the dcf8 headless path):
+            // readers raise this for recognised-but-not-yet-implemented spec
+            // features such as data coding format 1 (irregular fixed-station
+            // time series). It does not derive from NotSupportedException, so it
+            // needs its own case to avoid the generic exit-1 path. See issue #253.
+            case S100DatasetNotSupportedException:
+                AnsiConsole.MarkupLineInterpolated($"[red]Not supported:[/] {ex.Message}");
+                if (debug) AnsiConsole.WriteException(ex);
+                return 4;
+
+            case S100DatasetSchemaException:
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Non-conforming dataset:[/] {ex.Message}");
+                if (debug) AnsiConsole.WriteException(ex);
+                return 5;
+
+            default:
+                AnsiConsole.MarkupLineInterpolated($"[red]Error:[/] {ex.Message}");
+                if (debug) AnsiConsole.WriteException(ex);
+                return 1;
         }
     }
 

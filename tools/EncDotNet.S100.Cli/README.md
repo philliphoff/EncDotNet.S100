@@ -1,7 +1,8 @@
 # EncDotNet.S100.Cli (`s100`)
 
 A small, cross-platform command-line tool for working with S-100 datasets. Its
-primary command renders any supported dataset to a PNG, JPEG, or WebP image by
+primary command renders any supported dataset — or a composite of several,
+via repeated `--layer` — to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
 it can also report a dataset's product specification (`info`) and validate a
 dataset against its specification's normative rule pack (`validate`). It is
@@ -86,14 +87,28 @@ same step that signs the viewer, so it runs without Gatekeeper prompts.
 
 ## Commands
 
-### `s100 render <dataset> <output>`
+### `s100 render <dataset> <output>` (single dataset)
+### `s100 render --layer <dataset> … <output>` (composite)
 
-Detects the product specification of `<dataset>`, runs its portrayal pipeline,
-and writes an image to `<output>`. The output format (PNG, JPEG, or WebP) is
-inferred from the file extension unless `--format` is given.
+Detects the product specification of each input, runs its portrayal pipeline,
+and writes an image. Two grammars are supported:
+
+- **Single dataset** — `s100 render <dataset> <output>` renders one dataset.
+- **Composite** — `s100 render --layer A --layer B … <output>` stacks several
+  products into one image via the renderer-neutral S-98 interoperability
+  engine. `--layer` is repeatable; the output path is either the trailing
+  positional argument or `-o|--output`.
+
+The output format (PNG, JPEG, or WebP) is inferred from the file extension
+unless `--format` is given.
 
 | Option | Default | Description |
 |---|---|---|
+| `--layer <path>` | _none_ | Add a dataset as a composite layer (repeatable). When any `--layer` is given, the composite grammar is used. |
+| `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite form; an alternative to the positional `<output>` for the single form. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | **Composite only.** Explicit shared viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. |
+| `--center <lon,lat>` | union auto-fit | **Composite only.** Explicit shared viewport centre. Must be used with `--scale`. |
+| `--scale <denominator>` | union auto-fit | **Composite only.** Explicit shared viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. |
 | `-w`, `--width` | `1024` | Output image width in pixels. |
 | `-h`, `--height` | `768` | Output image height in pixels. |
 | `--palette` | `day` | Colour palette: `day`, `dusk`, or `night`. |
@@ -103,9 +118,9 @@ inferred from the file extension unless `--format` is given.
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--format <fmt>` | inferred from extension, else `png` | Output image format: `png`, `jpeg` (`jpg`), or `webp`. When omitted, the format is inferred from the output file extension; an unrecognised extension falls back to `png`. An explicit `--format` that conflicts with a recognised output extension is rejected. |
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
-| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. |
-| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
-| `--no-updates` | off | Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
+| `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. In the composite form the suppression is global (applies to every layer). |
+| `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. In the composite form the suppression is global. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
+| `--no-updates` | off | **Single form only.** Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
@@ -117,11 +132,30 @@ s100 render NL4NZ110.000 cell.png                          # applies .001/.002/�
 s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
 s100 render warnings.gml warnings.jpg --quality 85         # JPEG (format inferred from .jpg)
 s100 render warnings.gml preview.webp                      # WebP preview
+
+# Composite several products into one chart:
+s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
+s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
+s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
 ```
 
+> **Composite ordering.** The S-98 authority orders layers by display plane,
+> so the order in which you pass `--layer` is only a **within-plane tiebreak** —
+> hand-ordering layers generally has no visible effect. Explicitly ordering an
+> S-102 bathymetry surface above an S-101 chart, for example, is unnecessary:
+> the plane assignment already places it correctly.
+>
+> **Composite viewport.** When no `--bbox` / `--center`+`--scale` is given the
+> compositor auto-fits the union extent of all layers to the requested
+> `--width` × `--height`.
+>
+> **Composite and S-101 updates.** The composite form does **not** apply S-101
+> sequential/sibling updates — `--no-updates` applies to the single-dataset
+> form only. Render an S-101 cell singly if you need its updates folded in.
+
 > **S-101 sequential updates.** When pointed at an S-101 base cell
-> (`….000`), `render` and `info` discover sibling update files
-> (`….001`, `….002`, …) in the same directory and apply them in order
+> (`….000`), the single-dataset `render` and `info` discover sibling update
+> files (`….001`, `….002`, …) in the same directory and apply them in order
 > before processing the cell, mirroring how an exchange set is loaded
 > in the viewer. Application is best-effort: a missing, out-of-order, or
 > unreadable update is reported but never blocks the command. Pass
