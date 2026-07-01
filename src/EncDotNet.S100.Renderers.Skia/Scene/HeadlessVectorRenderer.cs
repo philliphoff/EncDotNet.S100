@@ -85,6 +85,55 @@ public static class HeadlessVectorRenderer
         if (hiddenCategories != DrawingInstructionCategory.None)
             instructions = FilterInstructions(instructions, hiddenCategories);
 
+        var scene = BuildScene(
+            instructions,
+            geometryProvider,
+            palette,
+            symbolProvider,
+            lineStyleProvider,
+            symbolScale,
+            textScale,
+            areaFillProvider);
+        var viewport = FitViewport(scene, widthPixels, heightPixels);
+
+        var renderer = new SkiaDisplayListRenderer
+        {
+            Background = background,
+            HonorScaleVisibility = false,
+        };
+        return renderer.Render(scene, viewport);
+    }
+
+    /// <summary>
+    /// Lowers a Part 9 display list into a resolved <see cref="VectorScene"/>
+    /// (EPSG:3857 world geometry with paint state) without rasterising it. This
+    /// is the reusable lowering seam shared by the single-dataset
+    /// <see cref="Render"/> path and the multi-layer headless compositor, which
+    /// needs the scene to draw it against a <em>shared</em> viewport rather than
+    /// an auto-fitted one.
+    /// </summary>
+    /// <param name="instructions">The Part 9 display list to lower.</param>
+    /// <param name="geometryProvider">Resolves feature geometry referenced by the instructions.</param>
+    /// <param name="palette">Active colour palette for token resolution.</param>
+    /// <param name="symbolProvider">Resolves a symbol name to raw SVG content (pre-processing), or null.</param>
+    /// <param name="lineStyleProvider">Resolves a line-style name to its catalogue definition, or null.</param>
+    /// <param name="symbolScale">Global symbol scale factor.</param>
+    /// <param name="textScale">Global text scale factor.</param>
+    /// <param name="areaFillProvider">Optional resolver for area-fill catalogue entries (tiled patterns).</param>
+    /// <returns>The resolved vector scene.</returns>
+    public static VectorScene BuildScene(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider,
+        ColorPalette palette,
+        Func<string, string?>? symbolProvider,
+        Func<string, LineStyle?>? lineStyleProvider,
+        double symbolScale,
+        double textScale,
+        Func<string, AreaFill?>? areaFillProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+
         var builder = new VectorSceneBuilder
         {
             ResolveColor = ColorResolver.Create(palette),
@@ -97,15 +146,7 @@ public static class HeadlessVectorRenderer
             TextScale = textScale,
         };
 
-        var scene = builder.Build(instructions, geometryProvider);
-        var viewport = FitViewport(scene, widthPixels, heightPixels);
-
-        var renderer = new SkiaDisplayListRenderer
-        {
-            Background = background,
-            HonorScaleVisibility = false,
-        };
-        return renderer.Render(scene, viewport);
+        return builder.Build(instructions, geometryProvider);
     }
 
     /// <summary>
@@ -247,9 +288,10 @@ public static class HeadlessVectorRenderer
     /// <summary>
     /// Computes the EPSG:3857 bounding box spanning every resolved paint op's
     /// world geometry. Returns <see langword="false"/> when the scene has no
-    /// geometry to bound.
+    /// geometry to bound. Exposed so the multi-layer compositor can union each
+    /// vector layer's projected extent into a shared viewport.
     /// </summary>
-    private static bool TryGetWorldBounds(
+    public static bool TryGetWorldBounds(
         VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
     {
         double loX = double.MaxValue, loY = double.MaxValue;

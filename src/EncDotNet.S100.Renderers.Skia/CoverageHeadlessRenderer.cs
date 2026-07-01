@@ -91,6 +91,81 @@ public sealed class CoverageHeadlessRenderer
             return (px, py);
         }
 
+        var dest = new SKRect(
+            (float)offsetX,
+            (float)offsetY,
+            (float)(offsetX + drawW),
+            (float)(offsetY + drawH));
+        DrawCore(canvas, layer, dest, Project);
+
+        canvas.Flush();
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Draws the styled coverage layer onto an existing canvas, projecting the
+    /// coverage's geographic extent into a <em>shared</em> <see cref="Viewport"/>'s
+    /// pixel space rather than auto-fitting a centred rectangle. This is the
+    /// entry point used by the multi-layer headless compositor, where every
+    /// layer must share one viewport so that overlaid datasets register.
+    /// </summary>
+    /// <param name="canvas">Target canvas (already cleared to the composite background).</param>
+    /// <param name="viewport">The shared composite viewport defining the pixel space.</param>
+    /// <param name="layer">The styled coverage layer (colour scheme and/or symbol scheme).</param>
+    /// <param name="westLongitude">Western extent edge in WGS84 degrees.</param>
+    /// <param name="eastLongitude">Eastern extent edge in WGS84 degrees.</param>
+    /// <param name="southLatitude">Southern extent edge in WGS84 degrees.</param>
+    /// <param name="northLatitude">Northern extent edge in WGS84 degrees.</param>
+    public void DrawOnto(
+        SKCanvas canvas,
+        Viewport viewport,
+        StyledCoverageLayer layer,
+        double westLongitude,
+        double eastLongitude,
+        double southLatitude,
+        double northLatitude)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(layer);
+
+        // Project the shared viewport's geographic bounds to EPSG:3857 and map
+        // world coordinates to the viewport pixel rectangle (origin top-left,
+        // +Y down) — identical convention to the vector renderer's WorldToScreen.
+        var (vpMinX, vpMinY) = WebMercator.FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
+        var (vpMaxX, vpMaxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
+        double vpSpanX = vpMaxX - vpMinX;
+        double vpSpanY = vpMaxY - vpMinY;
+        if (vpSpanX <= 0 || vpSpanY <= 0)
+            return;
+
+        double vpScaleX = viewport.WidthPixels / vpSpanX;
+        double vpScaleY = viewport.HeightPixels / vpSpanY;
+
+        (float X, float Y) Project((double X, double Y) world)
+        {
+            float px = (float)((world.X - vpMinX) * vpScaleX);
+            float py = (float)((vpMaxY - world.Y) * vpScaleY);
+            return (px, py);
+        }
+
+        // Destination rectangle for the colour raster: the coverage's own extent
+        // corners projected into the shared viewport's pixel space.
+        var (cMinX, cMinY) = WebMercator.FromLonLat(westLongitude, southLatitude);
+        var (cMaxX, cMaxY) = WebMercator.FromLonLat(eastLongitude, northLatitude);
+        var (leftPx, topPx) = Project((cMinX, cMaxY));   // NW → top-left
+        var (rightPx, bottomPx) = Project((cMaxX, cMinY)); // SE → bottom-right
+        var dest = new SKRect(leftPx, topPx, rightPx, bottomPx);
+
+        DrawCore(canvas, layer, dest, Project);
+    }
+
+    private void DrawCore(
+        SKCanvas canvas,
+        StyledCoverageLayer layer,
+        SKRect colorDest,
+        Func<(double X, double Y), (float X, float Y)> project)
+    {
         if (layer.ColorScheme is not null)
         {
             var rasterRenderer = new SkiaCoverageRenderer { NoDataColor = NoDataColor };
@@ -98,30 +173,22 @@ public sealed class CoverageHeadlessRenderer
             // viewport pixel size, so the viewport here only carries the extent.
             var nativeViewport = new Viewport
             {
-                MinLongitude = westLongitude,
-                MaxLongitude = eastLongitude,
-                MinLatitude = southLatitude,
-                MaxLatitude = northLatitude,
+                MinLongitude = 0,
+                MaxLongitude = 1,
+                MinLatitude = 0,
+                MaxLatitude = 1,
                 WidthPixels = 1,
                 HeightPixels = 1,
                 ScaleDenominator = 1.0,
             };
             using var raster = rasterRenderer.Render(layer, nativeViewport);
             using var rasterImage = SKImage.FromBitmap(raster);
-            var dest = new SKRect(
-                (float)offsetX,
-                (float)offsetY,
-                (float)(offsetX + drawW),
-                (float)(offsetY + drawH));
-            canvas.DrawImage(rasterImage, dest, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
+            canvas.DrawImage(rasterImage, colorDest, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
         }
 
         if (layer.SymbolScheme is not null && ArrowRenderer is not null)
         {
-            ArrowRenderer.Draw(canvas, layer, NativeToWgs84, Project);
+            ArrowRenderer.Draw(canvas, layer, NativeToWgs84, project);
         }
-
-        canvas.Flush();
-        return bitmap;
     }
 }
