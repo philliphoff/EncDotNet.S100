@@ -517,17 +517,17 @@ public static class ExchangeCatalogueReader
            .Elements(lan + "CountryCode")
            .FirstOrDefault();
 
-        var country = (string?)langCode?.Attribute("codeListValue");
+        var country = (string?)countryCode?.Attribute("codeListValue");
         if (country == null)
             country = "";
 
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
            .FirstOrDefault()?
-           .Elements(lan + "MD_CharacterSetCode ")
+           .Elements(lan + "MD_CharacterSetCode")
            .FirstOrDefault();
 
-        var encoding = (string?)langCode?.Attribute("codeListValue");
+        var encoding = (string?)charEncode?.Attribute("codeListValue");
         if (encoding == null)
             encoding = "";
        
