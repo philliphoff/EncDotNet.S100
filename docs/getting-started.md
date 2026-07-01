@@ -139,6 +139,33 @@ Not every dataset shape can be rasterised headlessly (for example, fixed-station
 time series). Guard with `dataset.CanRenderHeadless` before rendering, and use
 `dataset.AvailableTimes` to discover the time steps of S-104 / S-111 products.
 
+### 4. Composite multiple datasets
+
+Pass an ordered list of layers (bottom-most first) to render several datasets
+into a single image. The facade drives the renderer-neutral **S-98
+interoperability engine** — the same cross-dataset ordering and depth
+suppression the interactive viewer applies (S-98 Annex A §A-6.9.1) — so an
+S-101 ENC and an S-102 bathymetric surface interleave correctly and the S-101
+depth shading is suppressed where S-102 supersedes it (R-101-102-B).
+
+```csharp
+using var enc = S100Dataset.Open("enc-cell.000");   // S-101
+using var bathy = S100Dataset.Open("bathy.h5");      // S-102
+
+byte[] png = await renderer.RenderAsync(
+    new[]
+    {
+        new S100Layer { Dataset = enc },
+        new S100Layer { Dataset = bathy },
+    },
+    new S100CompositeOptions { Width = 2048, Height = 1536 });
+```
+
+When no `Viewport` is supplied the compositor fits a shared viewport to the
+**union** extent of all active layers; pass an explicit `S100CompositeOptions.Viewport`
+to pin the framing. This path is entirely Mapsui-free — see the
+[headless compositing design note](design/s98-interoperability.md).
+
 For custom catalogues and the full API, see the
 [`EncDotNet.S100` README](../src/EncDotNet.S100/README.md).
 

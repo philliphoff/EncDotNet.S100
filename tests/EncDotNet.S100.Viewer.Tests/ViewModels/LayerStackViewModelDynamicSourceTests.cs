@@ -107,7 +107,7 @@ public class LayerStackViewModelDynamicSourceTests
     }
 
     private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority)
-        => new(new MemoryLayer(id), plane, priority, id);
+        => new(new MemoryLayer(id), new SubLayerStackItem(new SyntheticStackPayload(id), plane, priority, id));
 
     private sealed class FakeRegistry : IDynamicFeatureSourceRegistry
     {

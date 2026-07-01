@@ -6,6 +6,25 @@
 > §8; every claim derived from the spec cites a section number, and
 > every claim that could not be verified is tagged `**TBD**`.
 
+> **Update (issue #398 — headless multi-layer composite).** The S-98
+> ordering + suppression engine has since been **extracted off Mapsui** and is
+> now the single, renderer-neutral source of truth. It lives in
+> `EncDotNet.S100.Datasets.Pipelines.Interoperability` and operates on
+> `SubLayerStackItem` / `StackPayload` values (not Mapsui `ILayer`s):
+> suppression filters encoding-neutral `DrawingInstruction`s via their
+> `VectorFeatureTag` rather than Mapsui `IFeature`s. Two consumers share it:
+> the **Mapsui viewer** (`DatasetLoaderService` sorts + suppresses items, then
+> maps the ruled items back to prebuilt `ILayer`s — validated byte-identical by
+> the VisualRegression baselines) and a new **headless `HeadlessCompositor`**
+> that lowers each ordered vector / coverage sub-layer into a Skia
+> `CompositeLayer` and paints all datasets against one shared viewport with no
+> Mapsui dependency. The `EncDotNet.S100` facade exposes it via the
+> `IReadOnlyList<S100Layer>` overload on `PngS100DatasetRenderer`. The rule set
+> (R-101-102-A/B, R-101-124-A, R-104-A, R-111-A) and the S-101-under-S-102
+> interleave (S-98 Annex A §A-6.9.1) are unchanged; only their host moved.
+> Pre-projected point-glyph coverage sub-layers (S-104 / S-111 fixed-station
+> variants) are not yet supported in the headless composite path.
+
 ## 0. Scope of this note
 
 The viewer currently composes a multi-product display by stacking

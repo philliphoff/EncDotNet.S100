@@ -866,13 +866,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         // top), preserving the prior behaviour for single-plane
         // dataset stacks.
         //
+        // Issue #398: the S-98 engine now operates on renderer-neutral
+        // SubLayerStackItem values (in the Mapsui-free Datasets.Pipelines
+        // assembly). We feed it each dataset's items, then project the
+        // ordered / suppressed result back onto the prebuilt Mapsui
+        // layers via LayerStackProjector (reusing cached ILayers and
+        // filtering only suppressed features — no re-rasterisation).
+        //
         // PR-L3: we keep building the FULL plane-sorted list of
         // entries (including inactive datasets) so the Layer Stack
         // panel can still show their rows and let the user re-enable
         // them. Only the rendered layer list (returned to the map
         // host) is filtered to active entries; the snapshot stored
         // in <see cref="_currentStackEntries"/> retains every entry.
-        var perDataset = new List<IReadOnlyList<LayerStackEntry>>(_entryOrder.Count);
+        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(_entryOrder.Count);
+        var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
         for (int i = 0; i < _entryOrder.Count; i++)
         {
             var entry = _entryOrder[i];
@@ -882,7 +890,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
 
             if (_entryStackEntries.TryGetValue(entry, out var stack) && stack.Count > 0)
             {
-                perDataset.Add(stack);
+                var items = new List<SubLayerStackItem>(stack.Count);
+                foreach (var se in stack)
+                {
+                    items.Add(se.Item);
+                    prebuilt[LayerStackProjector.KeyOf(se.Item)] = se;
+                }
+                perDataset.Add(items);
             }
             else
             {
@@ -893,14 +907,22 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                     ? proc.Spec.Name
                     : "unknown";
                 var plane = _authorityProvider.Current.GetDefaultPlane(specName);
-                var synth = new List<LayerStackEntry>(layers.Count);
-                foreach (var l in layers)
+                var synth = new List<SubLayerStackItem>(layers.Count);
+                for (int li = 0; li < layers.Count; li++)
                 {
-                    synth.Add(new LayerStackEntry(
-                        Layer: l,
-                        Plane: plane,
+                    // Synthesise a stable key so the projector can recover the
+                    // layer; there is no portrayal payload for these legacy
+                    // fallbacks so we key by dataset + ordinal.
+                    var layerKey = string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"__synth__{li}");
+                    var item = new SubLayerStackItem(
+                        new SyntheticStackPayload(layerKey),
+                        plane,
                         WithinPlanePriority: 0,
-                        SourceDatasetId: datasetId));
+                        SourceDatasetId: datasetId);
+                    synth.Add(item);
+                    prebuilt[(datasetId, layerKey)] = new LayerStackEntry(layers[li], item);
                 }
                 perDataset.Add(synth);
             }
@@ -919,22 +941,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var loaded = BuildLoadedDatasetInfos();
         var ruled = authority.ApplyRules(sorted, loaded, _marinerSettings.Current);
 
-        // Cache the FULL ruled list (including inactive datasets) for
-        // the Layer Stack panel.
-        _currentStackEntries = ruled;
+        // Project the ordered / suppressed neutral items back onto the
+        // prebuilt Mapsui layers (reusing cached ILayers; filtering only
+        // suppressed features). Cache the FULL projected list (including
+        // inactive datasets) for the Layer Stack panel.
+        var projected = LayerStackProjector.Project(ruled, prebuilt);
+        _currentStackEntries = projected;
 
         // PR-L3: filter inactive datasets out of the rendered layer
         // list handed back to the map host. The active flag is the
         // single source of truth: inactive entries don't paint and
         // don't influence pick.
-        var renderEntries = new List<LayerStackEntry>(ruled.Count);
-        foreach (var e in ruled)
+        var renderEntries = new List<LayerStackEntry>(projected.Count);
+        foreach (var e in projected)
         {
             if (!GetActive(e.SourceDatasetId)) continue;
             renderEntries.Add(e);
         }
 
-        var list = LayerStackBuilder.ToLayerList(renderEntries);
+        var list = LayerStackProjector.ToLayerList(renderEntries);
         _currentStackedLayers = list;
         LayerStackChanged?.Invoke();
         return list;

@@ -66,6 +66,31 @@ ops. Pattern fills, antimeridian crossing, and Web-Mercator pole limits are not
 yet represented in the IR — pattern fills remain handled by the Mapsui renderer's
 dedicated pattern collection / priority-clip / insert phase.
 
+### Headless rendering & compositing (`…Renderers.Skia.Scene`)
+
+Standalone, Mapsui-free entry points that rasterise a whole dataset (or several)
+to an `SKBitmap`:
+
+- **`HeadlessVectorRenderer`** — lowers a Part 9 display list to a `VectorScene`
+  and rasterises it, auto-fitting the viewport to the scene extent. Its
+  `BuildScene(...)` and `TryGetWorldBounds(...)` seams are reused by the
+  compositor to lower a sub-layer and union its bounds against a *shared*
+  viewport.
+- **`CoverageHeadlessRenderer`** — rasterises a `StyledCoverageLayer` (S-102/104/111).
+  `Render(...)` auto-fits; `DrawOnto(canvas, sharedViewport, layer, w,e,s,n)`
+  projects the grid (and arrows) into a shared viewport's pixel space so coverage
+  registers with vector layers in a composite.
+- **`CompositeLayer`** — an ordered draw unit painted against one explicit
+  `Viewport`: `VectorCompositeLayer` (draws a `VectorScene` via
+  `SkiaDisplayListRenderer.RenderOnto`) and `CoverageCompositeLayer` (draws via
+  `CoverageHeadlessRenderer.DrawOnto`), both on a transparent background so they
+  layer.
+- **`HeadlessCompositeRenderer`** — clears the background once, then paints an
+  ordered `IReadOnlyList<CompositeLayer>` against the shared viewport. The
+  cross-dataset ordering / suppression *decision* is made upstream by the S-98
+  engine in `EncDotNet.S100.Datasets.Pipelines` (`HeadlessCompositor`); this
+  renderer only paints the resolved stack.
+
 ## Installation
 
 ```sh

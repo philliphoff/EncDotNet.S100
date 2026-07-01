@@ -183,11 +183,13 @@ public sealed class MapsuiDatasetRenderer
 
             layers.Add(layer);
             stackEntries.Add(new LayerStackEntry(
-                Layer: layer,
-                Plane: sub.Plane,
-                WithinPlanePriority: sub.WithinPlanePriority,
-                SourceDatasetId: result.SourceDatasetId,
-                SourceFeatureType: sub.SourceFeatureType));
+                layer,
+                new SubLayerStackItem(
+                    new VectorStackPayload(result, sub),
+                    sub.Plane,
+                    sub.WithinPlanePriority,
+                    result.SourceDatasetId,
+                    sub.SourceFeatureType)));
 
             union = Union(union, layer.Extent);
         }
@@ -266,11 +268,13 @@ public sealed class MapsuiDatasetRenderer
             layers.Add(layer);
             layerNames.Add(sub.LayerKey);
             stackEntries.Add(new LayerStackEntry(
-                Layer: layer,
-                Plane: sub.Plane,
-                WithinPlanePriority: sub.WithinPlanePriority,
-                SourceDatasetId: result.SourceDatasetId,
-                SourceFeatureType: sub.SourceFeatureType));
+                layer,
+                new SubLayerStackItem(
+                    new CoverageStackPayload(result, sub),
+                    sub.Plane,
+                    sub.WithinPlanePriority,
+                    result.SourceDatasetId,
+                    sub.SourceFeatureType)));
 
             union = Union(union, layer.Extent);
         }

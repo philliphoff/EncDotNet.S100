@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
-using Mapsui.Layers;
+
 using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -92,7 +92,7 @@ public class InteroperabilityAuthorityTests
         var topUi = new[] { Entry("top", S98DisplayPlane.OtherChartOverlays) };
         var bottomUi = new[] { Entry("bottom", S98DisplayPlane.OtherChartOverlays) };
 
-        var sorted = LayerStackBuilder.Build(_auth, new IReadOnlyList<LayerStackEntry>[] { topUi, bottomUi });
+        var sorted = LayerStackBuilder.Build(_auth, new IReadOnlyList<SubLayerStackItem>[] { topUi, bottomUi });
 
         Assert.Equal(new[] { "bottom", "top" }, sorted.Select(e => e.SourceDatasetId).ToArray());
     }
@@ -108,7 +108,7 @@ public class InteroperabilityAuthorityTests
         var s101 = new[] { s101areas, s101lines };
 
         // s101 at top of UI, s102 below.
-        var sorted = LayerStackBuilder.Build(_auth, new IReadOnlyList<LayerStackEntry>[] { s101, s102 });
+        var sorted = LayerStackBuilder.Build(_auth, new IReadOnlyList<SubLayerStackItem>[] { s101, s102 });
 
         Assert.Equal(new[] { "s101a", "s102", "s101l" }, sorted.Select(e => e.SourceDatasetId).ToArray());
     }
@@ -127,7 +127,7 @@ public class InteroperabilityAuthorityTests
 
         var sorted = LayerStackBuilder.Build(
             new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority()),
-            new IReadOnlyList<LayerStackEntry>[] { s101, s102 });
+            new IReadOnlyList<SubLayerStackItem>[] { s101, s102 });
 
         // Bottom-of-UI dataset (s102) paints first, then s101's two
         // layers in processor-emitted order (areas first, lines on top).
@@ -146,6 +146,6 @@ public class InteroperabilityAuthorityTests
         Assert.Equal(S98DisplayPlane.BaseChartUnder, lo.GetDefaultPlane("S-101", "area"));
     }
 
-    private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority = 0)
-        => new(new MemoryLayer(id), plane, priority, id);
+    private static SubLayerStackItem Entry(string id, S98DisplayPlane plane, int priority = 0)
+        => new(new SyntheticStackPayload(id), plane, priority, id);
 }

@@ -59,7 +59,7 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
         => DefaultDisplayPlaneAuthority.Instance.GetDefaultPlane(productSpec, featureTypeOrLayerKind);
 
     /// <inheritdoc />
-    public IReadOnlyList<LayerStackEntry> Sort(IEnumerable<LayerStackEntry> entries)
+    public IReadOnlyList<SubLayerStackItem> Sort(IEnumerable<SubLayerStackItem> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
 
@@ -74,8 +74,8 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<LayerStackEntry> ApplyRules(
-        IReadOnlyList<LayerStackEntry> sortedStack,
+    public IReadOnlyList<SubLayerStackItem> ApplyRules(
+        IReadOnlyList<SubLayerStackItem> sortedStack,
         IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
         EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
         IReadOnlyCollection<S98InteroperabilityRule>? rules = null)
@@ -90,7 +90,7 @@ public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
         }
 
         var context = new S98RuleContext(loadedDatasets, mariner);
-        IReadOnlyList<LayerStackEntry> current = sortedStack;
+        IReadOnlyList<SubLayerStackItem> current = sortedStack;
         foreach (var rule in ruleSet)
         {
             if (rule.Condition(context))

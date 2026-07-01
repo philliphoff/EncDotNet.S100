@@ -48,4 +48,4 @@ public sealed record S98InteroperabilityRule(
     string RuleId,
     string SpecCitation,
     Func<S98RuleContext, bool> Condition,
-    Func<IReadOnlyList<LayerStackEntry>, S98RuleContext, IReadOnlyList<LayerStackEntry>> Effect);
+    Func<IReadOnlyList<SubLayerStackItem>, S98RuleContext, IReadOnlyList<SubLayerStackItem>> Effect);
