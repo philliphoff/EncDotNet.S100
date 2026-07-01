@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// display.
 /// </summary>
 /// <param name="DatasetId">
-/// Stable identifier matching <see cref="LayerStackEntry.SourceDatasetId"/>
+/// Stable identifier matching <see cref="SubLayerStackItem.SourceDatasetId"/>
 /// (typically the dataset's file name or exchange-set relative path).
 /// </param>
 /// <param name="ProductSpec">

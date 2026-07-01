@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <summary>
 /// Cross-dataset interoperability decision point: assigns a default
 /// S-98 display plane to a (product, feature-or-layer-kind) pair and
-/// sorts the global stack of <see cref="LayerStackEntry"/> values
+/// sorts the global stack of <see cref="SubLayerStackItem"/> values
 /// into S-98-shaped paint order.
 /// </summary>
 /// <remarks>
@@ -70,7 +70,7 @@ public interface IInteroperabilityAuthority
     /// which the caller (the dataset loader) sets to its
     /// load-order tiebreaker.
     /// </remarks>
-    IReadOnlyList<LayerStackEntry> Sort(IEnumerable<LayerStackEntry> entries);
+    IReadOnlyList<SubLayerStackItem> Sort(IEnumerable<SubLayerStackItem> entries);
 
     /// <summary>
     /// Applies S-98 inter-product rules to a sorted layer stack.
@@ -109,8 +109,8 @@ public interface IInteroperabilityAuthority
     /// features removed) but the count is monotonic per rule —
     /// rules cannot add new entries in v1.
     /// </returns>
-    IReadOnlyList<LayerStackEntry> ApplyRules(
-        IReadOnlyList<LayerStackEntry> sortedStack,
+    IReadOnlyList<SubLayerStackItem> ApplyRules(
+        IReadOnlyList<SubLayerStackItem> sortedStack,
         IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
         EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
         IReadOnlyCollection<S98InteroperabilityRule>? rules = null);

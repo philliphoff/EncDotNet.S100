@@ -28,7 +28,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// <para>
 /// Tiebreaker semantics inside a single dataset: entries are emitted
 /// in the order the processor produced them, then by
-/// <see cref="LayerStackEntry.WithinPlanePriority"/>. The
+/// <see cref="SubLayerStackItem.WithinPlanePriority"/>. The
 /// <c>WithinPlanePriority</c> still serves to express the
 /// "areas underneath line work" ordering within e.g. S-101 so the
 /// dataset's own visual integrity is preserved.
@@ -56,13 +56,13 @@ public sealed class LoadOrderInteroperabilityAuthority : IInteroperabilityAuthor
 
     /// <inheritdoc />
     /// <remarks>
-    /// Stable sort on <see cref="LayerStackEntry.WithinPlanePriority"/>
+    /// Stable sort on <see cref="SubLayerStackItem.WithinPlanePriority"/>
     /// alone. The cross-dataset paint order is the order in which
     /// <see cref="LayerStackBuilder"/> hands the entries to this
     /// method — bottom-of-UI dataset first. The OrderBy stability
     /// guarantees we preserve that interleaving.
     /// </remarks>
-    public IReadOnlyList<LayerStackEntry> Sort(IEnumerable<LayerStackEntry> entries)
+    public IReadOnlyList<SubLayerStackItem> Sort(IEnumerable<SubLayerStackItem> entries)
     {
         System.ArgumentNullException.ThrowIfNull(entries);
         return entries.OrderBy(e => e.WithinPlanePriority).ToList();
@@ -77,8 +77,8 @@ public sealed class LoadOrderInteroperabilityAuthority : IInteroperabilityAuthor
     /// collection is supplied. Hosts that want S-98 rules should use
     /// <see cref="InteroperabilityAuthority"/> instead.
     /// </remarks>
-    public IReadOnlyList<LayerStackEntry> ApplyRules(
-        IReadOnlyList<LayerStackEntry> sortedStack,
+    public IReadOnlyList<SubLayerStackItem> ApplyRules(
+        IReadOnlyList<SubLayerStackItem> sortedStack,
         IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
         EncDotNet.S100.Pipelines.MarinerSettings? mariner = null,
         IReadOnlyCollection<S98InteroperabilityRule>? rules = null)
