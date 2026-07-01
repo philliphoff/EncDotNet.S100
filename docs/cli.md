@@ -92,6 +92,7 @@ stack is involved, so it runs anywhere .NET does.
 | `--quality <1-100>` | `90` | Encoder quality for lossy formats (`jpeg`, `webp`). Ignored for `png`. |
 | `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
 | `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
+| `--basemap <mode>` | `none` | Draw a basemap beneath the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain, parchment tone `238,232,220`) under all chart layers, projected with the chart's own viewport. Applies to both forms. Online tile basemaps are not available headlessly. |
 
 ## Compositing multiple datasets
 
@@ -106,9 +107,10 @@ s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --sc
 ```
 
 The `--palette`, `--symbol-scale`, `--text-scale`, `--time-step`,
-`--background`, `--width`/`--height`, `--format`/`--quality`, and
-`--hide`/`--no-text` options apply as in the single-dataset form; suppression
-(`--hide`/`--no-text`) is **global** — it applies to every layer.
+`--background`, `--width`/`--height`, `--format`/`--quality`,
+`--hide`/`--no-text`, and `--basemap` options apply as in the single-dataset
+form; suppression (`--hide`/`--no-text`) is **global** — it applies to every
+layer, and `--basemap offline` draws the shared land layer beneath all layers.
 
 | Composite-only option | Default | Description |
 |---|---|---|
@@ -139,6 +141,9 @@ the union extent of all layers to the requested `--width` × `--height`.
   controls the encoder quality for the lossy formats.
 - **Text and category suppression** via `--no-text` / `--hide` for cleaner
   previews of label-dense products.
+- **Offline land basemap** via `--basemap offline` — composites the bundled
+  Natural Earth 1:10m land layer beneath the chart data (headless; no online
+  tiles).
 - **Fixed-station coverage** (S-104 / S-111 data coding format 3 / 8) is not
   rendered headlessly; the CLI returns a descriptive error.
 - **S-57 is not supported** by the headless path.

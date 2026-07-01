@@ -43,4 +43,13 @@ public sealed class S100RendererOptions
     /// </summary>
     public DrawingInstructionCategory HiddenCategories { get; init; }
         = DrawingInstructionCategory.None;
+
+    /// <summary>
+    /// Basemap drawn beneath the chart data (issue #411). When
+    /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth 1:10m land
+    /// layer is composited under the dataset, projected with the dataset's own
+    /// auto-fitted viewport. Default <see cref="BasemapKind.None"/> (no basemap;
+    /// output unchanged).
+    /// </summary>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
 }

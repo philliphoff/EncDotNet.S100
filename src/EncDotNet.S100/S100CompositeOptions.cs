@@ -64,4 +64,12 @@ public sealed class S100CompositeOptions
     /// <c>null</c>, <see cref="MarinerSettings.Default"/> is used.
     /// </summary>
     public MarinerSettings? Mariner { get; init; }
+
+    /// <summary>
+    /// Basemap composited beneath every chart layer (issue #411). When
+    /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth 1:10m land
+    /// layer is drawn bottom-most against the shared viewport. Default
+    /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </summary>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
 }

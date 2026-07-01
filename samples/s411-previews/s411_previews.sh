@@ -21,7 +21,9 @@
 #   PALETTE       day | dusk | night (default day).
 #   EXTRA_OPTS    Extra flags passed verbatim to `s100 render` after the
 #                 standard --width/--height/--palette (e.g. --no-text for
-#                 BSIS-style clean fills, or --hide text,points).
+#                 BSIS-style clean fills, --hide text,points, or
+#                 --basemap offline to draw the bundled Natural Earth land
+#                 layer beneath the ice so floes read against the coastline).
 #
 set -euo pipefail
 

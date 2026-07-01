@@ -121,12 +121,14 @@ unless `--format` is given.
 | `--no-text` | off | Suppress text/label drawing instructions. Shorthand for `--hide text`. In the composite form the suppression is global (applies to every layer). |
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. In the composite form the suppression is global. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
 | `--no-updates` | off | **Single form only.** Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
+| `--basemap <mode>` | `none` | Draw a basemap **beneath** the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain) under all chart layers in the muted parchment tone `238,232,220`, projected with the chart's own Web-Mercator viewport so it registers exactly. Works in both the single-dataset and `--layer` composite forms. Online tile basemaps (e.g. OSM) are **not** available in the headless renderer — only the offline land layer. |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
 s100 render currents.h5 currents.png --time-step 6 --palette night
 s100 render warnings.gml warnings.png --width 2048 --height 1536
 s100 render seaice.gml seaice.png --no-text                # clean fill preview
+s100 render seaice.gml seaice.png --basemap offline        # land under the chart
 s100 render chart.gml chart.png --hide text,points         # hide text + symbols
 s100 render NL4NZ110.000 cell.png                          # applies .001/.002/… updates
 s100 render NL4NZ110.000 base.png --no-updates             # render the base cell only
@@ -137,6 +139,7 @@ s100 render warnings.gml preview.webp                      # WebP preview
 s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
 s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
 s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
+s100 render --layer enc.000 --layer warnings.gml chart.png --basemap offline
 ```
 
 > **Composite ordering.** The S-98 authority orders layers by display plane,

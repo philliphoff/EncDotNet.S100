@@ -320,7 +320,8 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             background: bg,
             areaFillProvider: name => prewarm.ResolveAreaFill(name),
             hiddenCategories: context?.HiddenInstructionCategories
-                ?? DrawingInstructionCategory.None);
+                ?? DrawingInstructionCategory.None,
+            basemap: context?.Basemap ?? BasemapKind.None);
     }
 
     /// <inheritdoc/>

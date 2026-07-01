@@ -94,6 +94,60 @@ public sealed class RenderCompositeCommandTests
     }
 
     [SkippableFact]
+    public void Composite_offline_basemap_differs_from_none_over_land()
+    {
+        Skip.IfNot(File.Exists(S124), "S-124 fixture not present.");
+
+        // A bounding box over the Texas coast (Galveston) so the Natural Earth
+        // 1:10m land layer certainly covers part of the frame, making the
+        // offline basemap visibly change the output regardless of where the
+        // chart feature itself sits.
+        string[] bbox = ["--bbox", "-95.5,29.0,-94.0,30.0"];
+
+        var none = Path.Combine(Path.GetTempPath(), $"s100-cli-bm-none-{Guid.NewGuid():N}.png");
+        var offline = Path.Combine(Path.GetTempPath(), $"s100-cli-bm-off-{Guid.NewGuid():N}.png");
+        try
+        {
+            int exitNone = CliApp.Build().Run(
+                ["render", "--layer", S124, none, "--width", "256", "--height", "256",
+                 .. bbox, "--basemap", "none"]);
+            int exitOffline = CliApp.Build().Run(
+                ["render", "--layer", S124, offline, "--width", "256", "--height", "256",
+                 .. bbox, "--basemap", "offline"]);
+
+            Assert.Equal(0, exitNone);
+            Assert.Equal(0, exitOffline);
+            Assert.True(File.Exists(none));
+            Assert.True(File.Exists(offline));
+
+            var noneBytes = File.ReadAllBytes(none);
+            var offlineBytes = File.ReadAllBytes(offline);
+            Assert.Equal(PngSignature, offlineBytes[..PngSignature.Length]);
+
+            // The offline basemap paints land beneath the chart, so the two
+            // encodings must differ.
+            Assert.NotEqual(noneBytes, offlineBytes);
+        }
+        finally
+        {
+            if (File.Exists(none))
+                File.Delete(none);
+            if (File.Exists(offline))
+                File.Delete(offline);
+        }
+    }
+
+    [Fact]
+    public void Render_with_invalid_basemap_returns_nonzero()
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"s100-cli-bm-{Guid.NewGuid():N}.png");
+        int exit = CliApp.Build().Run(
+            ["render", "--layer", S124, output, "--basemap", "satellite"]);
+        Assert.NotEqual(0, exit);
+        Assert.False(File.Exists(output));
+    }
+
+    [SkippableFact]
     public void Composite_with_missing_layer_returns_nonzero()
     {
         Skip.IfNot(File.Exists(S124), "S-124 fixture not present.");

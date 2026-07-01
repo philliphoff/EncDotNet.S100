@@ -249,7 +249,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             south,
             north,
             widthPixels,
-            heightPixels);
+            heightPixels,
+            context?.Basemap ?? BasemapKind.None);
     }
 
     /// <summary>

@@ -81,6 +81,14 @@ public sealed class HeadlessCompositeOptions
     /// </summary>
     public DrawingInstructionCategory HiddenCategories { get; init; }
         = DrawingInstructionCategory.None;
+
+    /// <summary>
+    /// Basemap drawn beneath all chart layers (issue #411). When
+    /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth land layer is
+    /// composited bottom-most against the shared viewport. Defaults to
+    /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </summary>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
 }
 
 /// <summary>
@@ -214,6 +222,15 @@ public sealed class HeadlessCompositor
         // 4. Resolve the shared viewport: explicit wins; otherwise fit the union.
         var viewport = options.Viewport
             ?? BuildUnionViewport(hasBounds, minX, minY, maxX, maxY, options.Width, options.Height);
+
+        // 4a. Prepend the land basemap (issue #411) as the bottom-most layer so
+        //     it draws under every chart layer, registered with the shared
+        //     viewport. The land scene is viewport-independent world geometry.
+        if (options.Basemap == BasemapKind.Offline)
+        {
+            lowered.Insert(0, new VectorCompositeLayer(
+                NaturalEarthBasemap.LandScene, honorScaleVisibility: false));
+        }
 
         // 5. Paint.
         var renderer = new HeadlessCompositeRenderer { Background = options.Background };
