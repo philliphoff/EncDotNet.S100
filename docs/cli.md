@@ -13,7 +13,7 @@ It offers four subcommands:
 
 | Command | Purpose |
 |---|---|
-| `s100 render <dataset> <output>`<br>`s100 render --layer … <output>` | Render one dataset — or composite several with `--layer` — to an image (PNG, JPEG, or WebP). |
+| `s100 render <dataset> <output>`<br>`s100 render --layer … <output>`<br>`s100 render <exchange-set> <output>` | Render one dataset — or composite several with `--layer`, or a whole exchange set / directory — to an image (PNG, JPEG, or WebP). |
 | `s100 validate <dataset-or-exchange-set>` | Validate against the spec's normative rule pack (plus exchange-set signature/checksum integrity), with compiler-style output and suppression. |
 | `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
 | `s100 list-specs` | List the supported product specifications and which support headless rendering. |
@@ -66,6 +66,10 @@ dotnet run --project tools/EncDotNet.S100.Cli -- \
 # Composite several products into one chart (repeated --layer + output)
 dotnet run --project tools/EncDotNet.S100.Cli -- \
     render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
+
+# Composite an entire exchange set / directory (auto-detected)
+dotnet run --project tools/EncDotNet.S100.Cli -- \
+    render exchange-set/ chart.png
 ```
 
 ## How it works
@@ -129,6 +133,45 @@ Two behaviours differ from the single-dataset form:
 
 When no `--bbox` / `--center`+`--scale` is supplied, the compositor auto-fits
 the union extent of all layers to the requested `--width` × `--height`.
+
+### Compositing a whole exchange set / directory
+
+Rather than listing every `--layer` by hand, point `render` at an **exchange
+set** and composite everything discoverable in it (issue #407). The source may
+be a directory containing a top-level `CATALOG.XML`, a `CATALOG.XML` file, or a
+`.zip` archive whose root holds one — passed positionally (auto-detected) or via
+`--exchange-set` / `--from`:
+
+```bash
+s100 render exchange-set/ chart.png                     # positional directory
+s100 render exchange-set/CATALOG.XML chart.png          # positional catalogue
+s100 render --exchange-set set.zip -o chart.png         # explicit, ZIP
+s100 render --from set/ chart.png --only S101,S102      # restrict to some specs
+```
+
+The datasets are discovered with the same exchange-set reader the viewer and
+`validate` use, then composited through the identical S-98 engine — so every
+option above (`--bbox`/`--center`/`--scale`, palette, `--hide`/`--no-text`,
+etc.) applies unchanged. `--exchange-set`/`--from` is mutually exclusive with
+`--layer`.
+
+| Exchange-set option | Default | Description |
+|---|---|---|
+| `--exchange-set`, `--from <path>` | _positional_ | The exchange set to composite (directory / `CATALOG.XML` / `.zip`). A directory / `CATALOG.XML` / `.zip` passed positionally is auto-detected. |
+| `--only <specs>` | _all_ | Restrict compositing to a comma-separated list of product specifications (e.g. `--only S101,S128`; hyphenation and case are ignored). |
+
+Discovery notes:
+
+- **No S-101 updates.** Like the `--layer` form, the exchange-set form applies
+  **no** S-101 sequential/sibling updates: only base and single cells are
+  composited; update files (and orphan updates with no in-set base) are skipped.
+- **Partial sets.** Datasets whose product specification is unsupported, whose
+  file is missing, or that declare data protection (encryption — this CLI has no
+  decryption keys) are **skipped with a warning on stderr** rather than failing
+  the whole render. If nothing renderable remains, `render` exits non-zero.
+- **ZIP archives** are extracted to a uniquely-named temporary directory (cleaned
+  up after rendering, even on failure); a large exchange set therefore needs
+  transient temporary disk space of roughly its uncompressed size.
 
 ## Capabilities
 
