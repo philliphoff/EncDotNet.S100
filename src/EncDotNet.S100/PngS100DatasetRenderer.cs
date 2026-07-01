@@ -180,6 +180,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
                 Background = options.Background ?? new RgbaColor(255, 255, 255, 255),
                 Viewport = options.Viewport,
                 Mariner = mariner,
+                HiddenCategories = options.HiddenCategories,
             };
 
             using var bitmap = compositor.Render(inputs, compositeOptions);
@@ -229,6 +230,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             TextScale = options.TextScale,
             TimeStep = options.TimeStep,
             Background = options.Background,
+            HiddenCategories = options.HiddenCategories,
         };
         return FacadeRenderContextBuilder.Build(processor, rendererOptions) with { Mariner = mariner };
     }

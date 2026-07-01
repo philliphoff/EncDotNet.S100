@@ -161,6 +161,43 @@ public sealed class FacadeTests
             () => renderer.RenderAsync(Array.Empty<S100Layer>(), new S100CompositeOptions()));
     }
 
+    [SkippableFact]
+    public async Task PngRenderer_Composite_HiddenCategories_ChangesOutput()
+    {
+        Skip.IfNot(File.Exists(S124Surface) && File.Exists(S125Point),
+            "S-124 and S-125 fixtures not both present.");
+
+        using var a = S100Dataset.Open(S124Surface);
+        using var b = S100Dataset.Open(S125Point);
+        using var renderer = new PngS100DatasetRenderer();
+
+        var layers = new[]
+        {
+            new S100Layer { Dataset = a },
+            new S100Layer { Dataset = b },
+        };
+
+        byte[] shown = await renderer.RenderAsync(
+            layers, new S100CompositeOptions { Width = 256, Height = 256 });
+
+        // Suppressing every drawing-instruction category must reach each layer's
+        // pipeline in the composite (the option is applied globally), yielding a
+        // different image than the fully-drawn composite.
+        var allHidden = EncDotNet.S100.Pipelines.Vector.DrawingInstructionCategory.Areas
+            | EncDotNet.S100.Pipelines.Vector.DrawingInstructionCategory.Lines
+            | EncDotNet.S100.Pipelines.Vector.DrawingInstructionCategory.Points
+            | EncDotNet.S100.Pipelines.Vector.DrawingInstructionCategory.Text;
+
+        byte[] hidden = await renderer.RenderAsync(
+            layers,
+            new S100CompositeOptions { Width = 256, Height = 256, HiddenCategories = allHidden });
+
+        AssertIsPng(shown);
+        AssertIsPng(hidden);
+        Assert.False(shown.SequenceEqual(hidden),
+            "Hiding all categories should change the composited output.");
+    }
+
     private static void AssertIsPng(byte[] bytes)
     {
         Assert.NotNull(bytes);

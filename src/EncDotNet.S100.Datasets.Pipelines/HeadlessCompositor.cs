@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -72,6 +73,14 @@ public sealed class HeadlessCompositeOptions
     /// <see cref="MarinerSettings.Default"/>.
     /// </summary>
     public MarinerSettings? Mariner { get; init; }
+
+    /// <summary>
+    /// Drawing-instruction categories (areas, lines, points, text) to suppress
+    /// globally across every vector layer in the composite. Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (draw everything).
+    /// </summary>
+    public DrawingInstructionCategory HiddenCategories { get; init; }
+        = DrawingInstructionCategory.None;
 }
 
 /// <summary>
@@ -183,7 +192,7 @@ public sealed class HeadlessCompositor
             {
                 case VectorStackPayload vector:
                 {
-                    var scene = LowerVector(vector);
+                    var scene = LowerVector(vector, options.HiddenCategories);
                     lowered.Add(new VectorCompositeLayer(scene, honorScaleVisibility: false));
                     if (HeadlessVectorRenderer.TryGetWorldBounds(scene, out var vx0, out var vy0, out var vx1, out var vy1))
                         Expand(vx0, vy0, vx1, vy1);
@@ -249,7 +258,7 @@ public sealed class HeadlessCompositor
             nameof(input));
     }
 
-    private static VectorScene LowerVector(VectorStackPayload payload)
+    private static VectorScene LowerVector(VectorStackPayload payload, DrawingInstructionCategory hiddenCategories)
     {
         var result = payload.Result;
         var sub = payload.SubLayer;
@@ -261,7 +270,8 @@ public sealed class HeadlessCompositor
             result.LineStyleProvider,
             result.SymbolScale,
             result.TextScale,
-            result.AreaFillProvider);
+            result.AreaFillProvider,
+            hiddenCategories);
     }
 
     private bool TryLowerCoverage(

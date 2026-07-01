@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100;
 
@@ -37,6 +38,15 @@ public sealed class S100CompositeOptions
     /// Background fill colour. When <c>null</c>, an opaque white background is used.
     /// </summary>
     public RgbaColor? Background { get; init; }
+
+    /// <summary>
+    /// Drawing-instruction categories (areas, lines, points, text) to suppress
+    /// from every layer in the composite. Applied globally — the same suppression
+    /// is passed to each layer's portrayal pipeline. Default
+    /// <see cref="DrawingInstructionCategory.None"/>.
+    /// </summary>
+    public DrawingInstructionCategory HiddenCategories { get; init; }
+        = DrawingInstructionCategory.None;
 
     /// <summary>
     /// Explicit shared viewport for all layers. When <c>null</c> the compositor

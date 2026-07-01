@@ -120,6 +120,12 @@ public static class HeadlessVectorRenderer
     /// <param name="symbolScale">Global symbol scale factor.</param>
     /// <param name="textScale">Global text scale factor.</param>
     /// <param name="areaFillProvider">Optional resolver for area-fill catalogue entries (tiled patterns).</param>
+    /// <param name="hiddenCategories">
+    /// Drawing-instruction categories (areas, lines, points, text) to omit from
+    /// the lowered scene. Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (lower everything). Used by
+    /// the multi-layer compositor to apply a global suppression across layers.
+    /// </param>
     /// <returns>The resolved vector scene.</returns>
     public static VectorScene BuildScene(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -129,10 +135,14 @@ public static class HeadlessVectorRenderer
         Func<string, LineStyle?>? lineStyleProvider,
         double symbolScale,
         double textScale,
-        Func<string, AreaFill?>? areaFillProvider = null)
+        Func<string, AreaFill?>? areaFillProvider = null,
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
+
+        if (hiddenCategories != DrawingInstructionCategory.None)
+            instructions = FilterInstructions(instructions, hiddenCategories);
 
         var builder = new VectorSceneBuilder
         {

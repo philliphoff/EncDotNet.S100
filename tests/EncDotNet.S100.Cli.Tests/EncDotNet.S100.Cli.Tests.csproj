@@ -31,6 +31,8 @@
   <ItemGroup>
     <Content Include="..\datasets\S127\marine_curve.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\marine_curve.gml" />
     <Content Include="..\datasets\S57\US5MA1BO\US5MA1BO.000" CopyToOutputDirectory="PreserveNewest" Link="TestData\US5MA1BO.000" />
+    <Content Include="..\datasets\S124\navwarn_surface.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\navwarn_surface.gml" />
+    <Content Include="..\datasets\S125\aton_point.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\aton_point.gml" />
   </ItemGroup>
 
 </Project>
