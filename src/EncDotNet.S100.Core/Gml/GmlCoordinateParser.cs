@@ -12,10 +12,25 @@ namespace EncDotNet.S100.Features;
 /// longitude second) as required by S-100 Part 10b §6.2. Separator handling
 /// tolerates both standard whitespace and comma-separated tokens (a
 /// producer-bug compensation seen in some real-world S-122 and S-128 datasets).
+/// A second producer-bug compensation auto-corrects longitude-first axis order
+/// (seen in the US NWS S-411 sea-ice product) using the physical latitude bound
+/// of ±90° — see <see cref="NormalizeAxisOrder"/>.
 /// </remarks>
 public static class GmlCoordinateParser
 {
     private static readonly char[] Separators = [' ', '\t', '\n', '\r', ','];
+
+    /// <summary>
+    /// Corrects a parsed ordinate pair for producer axis-order violations.
+    /// S-100 Part 10b §6.2 mandates latitude-first for <c>EPSG:4326</c>, but some
+    /// real-world datasets (e.g. the US NWS S-411 sea-ice product) encode
+    /// longitude first. Latitude is physically bounded to ±90°, so when the
+    /// first ordinate's magnitude exceeds 90° while the second's does not, the
+    /// pair is unambiguously longitude-first and is swapped. This is a strict
+    /// no-op for all conformant latitude-first data (which never has |lat| &gt; 90°).
+    /// </summary>
+    private static (double Latitude, double Longitude) NormalizeAxisOrder(double first, double second)
+        => Math.Abs(first) > 90.0 && Math.Abs(second) <= 90.0 ? (second, first) : (first, second);
 
     /// <summary>
     /// Parses a <c>gml:pos</c> value into a single coordinate pair.
@@ -25,10 +40,10 @@ public static class GmlCoordinateParser
     {
         var parts = posValue.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length >= 2 &&
-            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var lat) &&
-            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var lon))
+            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var first) &&
+            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var second))
         {
-            return (lat, lon);
+            return NormalizeAxisOrder(first, second);
         }
         return null;
     }
@@ -43,10 +58,10 @@ public static class GmlCoordinateParser
 
         for (int i = 0; i + 1 < parts.Length; i += 2)
         {
-            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var lat) &&
-                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var lon))
+            if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var first) &&
+                double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var second))
             {
-                coords.Add((lat, lon));
+                coords.Add(NormalizeAxisOrder(first, second));
             }
         }
 
