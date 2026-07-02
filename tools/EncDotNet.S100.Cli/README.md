@@ -2,7 +2,8 @@
 
 A small, cross-platform command-line tool for working with S-100 datasets. Its
 primary command renders any supported dataset — or a composite of several,
-via repeated `--layer` — to a PNG, JPEG, or WebP image by
+via repeated `--layer` or by pointing at an entire exchange set / directory —
+to a PNG, JPEG, or WebP image by
 running the dataset's portrayal pipeline through the Mapsui-free Skia *headless*
 it can also report a dataset's product specification (`info`) and validate a
 dataset against its specification's normative rule pack (`validate`). It is
@@ -89,15 +90,22 @@ same step that signs the viewer, so it runs without Gatekeeper prompts.
 
 ### `s100 render <dataset> <output>` (single dataset)
 ### `s100 render --layer <dataset> … <output>` (composite)
+### `s100 render <exchange-set> <output>` (exchange-set composite)
 
 Detects the product specification of each input, runs its portrayal pipeline,
-and writes an image. Two grammars are supported:
+and writes an image. Three grammars are supported:
 
 - **Single dataset** — `s100 render <dataset> <output>` renders one dataset.
 - **Composite** — `s100 render --layer A --layer B … <output>` stacks several
   products into one image via the renderer-neutral S-98 interoperability
   engine. `--layer` is repeatable; the output path is either the trailing
   positional argument or `-o|--output`.
+- **Exchange set** — `s100 render <exchange-set> <output>` (or
+  `--exchange-set`/`--from`) discovers and composites **every** renderable
+  dataset in a directory / `CATALOG.XML` / exchange-set `.zip`, so you don't have
+  to enumerate each `--layer`. Auto-detected when the positional input is a
+  directory, a `CATALOG.XML`, or an exchange-set `.zip`. Mutually exclusive with
+  `--layer`.
 
 The output format (PNG, JPEG, or WebP) is inferred from the file extension
 unless `--format` is given.
@@ -105,10 +113,12 @@ unless `--format` is given.
 | Option | Default | Description |
 |---|---|---|
 | `--layer <path>` | _none_ | Add a dataset as a composite layer (repeatable). When any `--layer` is given, the composite grammar is used. |
-| `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite form; an alternative to the positional `<output>` for the single form. |
-| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | **Composite only.** Explicit shared viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. |
-| `--center <lon,lat>` | union auto-fit | **Composite only.** Explicit shared viewport centre. Must be used with `--scale`. |
-| `--scale <denominator>` | union auto-fit | **Composite only.** Explicit shared viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. |
+| `--exchange-set`, `--from <path>` | _none_ | Composite an entire exchange set (directory / `CATALOG.XML` / `.zip`). A directory / `CATALOG.XML` / `.zip` passed positionally is also auto-detected. Mutually exclusive with `--layer`. |
+| `--only <specs>` | _all_ | **Exchange-set only.** Restrict compositing to a comma-separated list of product specifications (e.g. `--only S101,S128`; hyphenation and case are ignored). |
+| `-o`, `--output <path>` | _positional_ | Output image path. Required (or given positionally) for the composite forms; an alternative to the positional `<output>` for the single form. |
+| `--bbox <minLon,minLat,maxLon,maxLat>` | union auto-fit | **Composite forms only.** Explicit shared viewport as a WGS-84 bounding box (e.g. `--bbox -1.5,50.0,-1.0,50.5`). Mutually exclusive with `--center`/`--scale`. |
+| `--center <lon,lat>` | union auto-fit | **Composite forms only.** Explicit shared viewport centre. Must be used with `--scale`. |
+| `--scale <denominator>` | union auto-fit | **Composite forms only.** Explicit shared viewport scale denominator (e.g. `--scale 50000` for 1:50 000). Must be used with `--center`. |
 | `-w`, `--width` | `1024` | Output image width in pixels. |
 | `-h`, `--height` | `768` | Output image height in pixels. |
 | `--palette` | `day` | Colour palette: `day`, `dusk`, or `night`. |
@@ -140,6 +150,12 @@ s100 render --layer enc.000 --layer bathy.h5 --layer warnings.gml chart.png
 s100 render --layer enc.000 --layer bathy.h5 -o chart.png --bbox -1.5,50.0,-1.0,50.5
 s100 render --layer enc.000 --layer bathy.h5 chart.png --center -1.25,50.25 --scale 50000
 s100 render --layer enc.000 --layer warnings.gml chart.png --basemap offline
+
+# Composite an entire exchange set / directory / .zip:
+s100 render exchange-set/ chart.png                         # auto-detected directory
+s100 render exchange-set/CATALOG.XML chart.png              # auto-detected catalogue
+s100 render --exchange-set exchange-set.zip -o chart.png    # explicit, ZIP archive
+s100 render --from exchange-set/ chart.png --only S101,S102 # restrict to some specs
 ```
 
 > **Composite ordering.** The S-98 authority orders layers by display plane,
@@ -152,9 +168,20 @@ s100 render --layer enc.000 --layer warnings.gml chart.png --basemap offline
 > compositor auto-fits the union extent of all layers to the requested
 > `--width` × `--height`.
 >
-> **Composite and S-101 updates.** The composite form does **not** apply S-101
+> **Composite and S-101 updates.** Neither composite form applies S-101
 > sequential/sibling updates — `--no-updates` applies to the single-dataset
 > form only. Render an S-101 cell singly if you need its updates folded in.
+>
+> **Exchange-set discovery.** The exchange-set form reuses the same
+> exchange-set reader the viewer and `validate` use. Only base and single cells
+> are composited (S-101 update files and orphan updates are skipped). Datasets
+> whose product specification is unsupported, whose file is missing, or that
+> declare data protection (encryption — this CLI has no decryption keys) are
+> **skipped with a warning on stderr** rather than failing the whole render; if
+> nothing renderable remains, `render` exits non-zero. A `.zip` exchange set is
+> extracted to a uniquely-named temporary directory (cleaned up after rendering,
+> even on failure), so a large set needs transient temporary disk space of
+> roughly its uncompressed size.
 
 > **S-101 sequential updates.** When pointed at an S-101 base cell
 > (`….000`), the single-dataset `render` and `info` discover sibling update
@@ -240,7 +267,7 @@ headless render path.
 |---|---|
 | `0` | Success. |
 | `1` | Unhandled error (use `--debug` for a stack trace). |
-| `2` | Product specification could not be detected. |
+| `2` | Product specification could not be detected (single dataset), or no renderable datasets were discovered in an exchange set. |
 | `3` | The detected spec does not support headless rendering. |
 | `4` | The dataset is recognised but its shape or encoding is unsupported — e.g. a fixed-station coverage, or a data coding format the reader does not yet implement (such as dcf1, irregular time series at fixed stations). |
 | `5` | The dataset is recognised but non-conforming (a required attribute, dataset, or group is missing or malformed). |

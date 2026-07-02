@@ -12,7 +12,7 @@ using Spectre.Console.Cli;
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 render</c> renders one or more S-100 datasets to an image. Two
+/// <c>s100 render</c> renders one or more S-100 datasets to an image. Three
 /// grammars are supported:
 /// <list type="bullet">
 ///   <item><description>
@@ -25,14 +25,23 @@ namespace EncDotNet.S100.Cli.Commands;
 ///     stacks several products into one image via the renderer-neutral S-98
 ///     interoperability engine (<see cref="IS100CompositeRenderer{TResult}"/>).
 ///   </description></item>
+///   <item><description>
+///     <c>render &lt;exchange-set&gt; &lt;output&gt;</c> (or
+///     <c>--exchange-set &lt;path&gt;</c>) — the exchange-set form: discovers
+///     every renderable dataset in a directory / <c>CATALOG.XML</c> /
+///     exchange-set <c>.zip</c> and composites them through the same engine.
+///   </description></item>
 /// </list>
 /// </summary>
 /// <remarks>
-/// Two behaviours differ between the forms and are surfaced in <c>--help</c>:
-/// (1) the composite form does <b>not</b> apply S-101 sequential/sibling updates
-/// (the single-dataset form still does); and (2) the S-98 authority orders
-/// layers by display plane, so <c>--layer</c> order is only a within-plane
-/// tiebreak — hand-ordering layers generally has no effect.
+/// Two behaviours differ between the single form and the two composite forms and
+/// are surfaced in <c>--help</c>: (1) the composite forms do <b>not</b> apply
+/// S-101 sequential/sibling updates (the single-dataset form still does); and
+/// (2) the S-98 authority orders layers by display plane, so <c>--layer</c>
+/// order is only a within-plane tiebreak — hand-ordering layers generally has no
+/// effect. In the exchange-set form, datasets whose product specification is
+/// unsupported, whose file is missing, or that declare data protection
+/// (encryption) are skipped with a warning on stderr rather than failing the set.
 /// </remarks>
 internal sealed class RenderCommand : Command<RenderCommand.Settings>
 {
@@ -52,6 +61,14 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [CommandOption("--layer <PATH>")]
         [Description("Add a dataset as a composite layer (repeatable). When any --layer is given, several products are composited into one image. Note: the S-98 authority orders layers by display plane, so --layer order is only a within-plane tiebreak.")]
         public string[] Layers { get; init; } = [];
+
+        [CommandOption("--exchange-set|--from <PATH>")]
+        [Description("Composite every discoverable dataset in an exchange set: a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip archive whose root holds one. A directory/CATALOG.XML/.zip passed positionally is also auto-detected. Mutually exclusive with --layer. The composite applies no S-101 updates; data-protected and unsupported datasets are skipped with a warning.")]
+        public string? ExchangeSet { get; init; }
+
+        [CommandOption("--only <SPECS>")]
+        [Description("Exchange-set form only: restrict compositing to a comma-separated list of product specifications (e.g. --only S101,S128; hyphenation and case are ignored). Datasets of other specs discovered in the set are omitted.")]
+        public string? Only { get; init; }
 
         [CommandOption("-o|--output <PATH>")]
         [Description("Output image path. Required (or given positionally) for the composite form; optional alternative to the positional <output> for the single-dataset form.")]
@@ -135,8 +152,32 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue("none")]
         public string Basemap { get; init; } = "none";
 
-        /// <summary>Whether this invocation composites multiple layers.</summary>
+        /// <summary>Whether this invocation composites explicit <c>--layer</c> datasets.</summary>
         public bool IsComposite => Layers.Length > 0;
+
+        /// <summary>Whether an exchange set was named explicitly via <c>--exchange-set</c>/<c>--from</c>.</summary>
+        public bool IsExplicitExchangeSet => !string.IsNullOrWhiteSpace(ExchangeSet);
+
+        /// <summary>
+        /// Whether the positional <see cref="Input"/> is (auto-detected as) an
+        /// exchange set — a directory / <c>CATALOG.XML</c> / exchange-set
+        /// <c>.zip</c> — rather than a single dataset. Suppressed when
+        /// <c>--layer</c> or <c>--exchange-set</c> is in play.
+        /// </summary>
+        public bool IsPositionalExchangeSet =>
+            !IsComposite
+            && !IsExplicitExchangeSet
+            && !string.IsNullOrWhiteSpace(Input)
+            && ExchangeSetInput.LooksLikeExchangeSet(Input);
+
+        /// <summary>Whether this invocation composites an exchange set / directory.</summary>
+        public bool IsExchangeSetComposite => IsExplicitExchangeSet || IsPositionalExchangeSet;
+
+        /// <summary>Whether the composite viewport flags (<c>--bbox</c>/<c>--center</c>/<c>--scale</c>) apply.</summary>
+        public bool AllowsViewport => IsComposite || IsExchangeSetComposite;
+
+        /// <summary>The exchange-set source path for the exchange-set form.</summary>
+        public string? ExchangeSetSource => IsExplicitExchangeSet ? ExchangeSet : Input;
 
         /// <summary>
         /// Resolves the output path for the current grammar, or <c>null</c> when
@@ -147,8 +188,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         {
             if (OutputOption is not null)
                 return OutputOption;
-            if (IsComposite)
+            if (IsComposite || IsExplicitExchangeSet)
                 return string.IsNullOrWhiteSpace(OutputArgument) ? Input : null;
+            if (IsPositionalExchangeSet)
+                return OutputArgument;
             return OutputArgument;
         }
 
@@ -180,8 +223,56 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 return ValidationResult.Error(
                     $"Invalid --basemap value '{Basemap}'. Use none or offline.");
 
+            if (IsComposite && IsExplicitExchangeSet)
+                return ValidationResult.Error(
+                    "--layer and --exchange-set/--from cannot be combined. Use one or the other.");
+
+            if (Only is not null && !IsExchangeSetComposite)
+                return ValidationResult.Error(
+                    "--only applies only to the exchange-set form (use --exchange-set/--from or a positional exchange set).");
+
+            if (Only is not null && !TryParseOnlySpecs(Only, out _))
+                return ValidationResult.Error(
+                    "--only must be a comma-separated list of product specifications (e.g. S101,S128).");
+
             string? output;
-            if (IsComposite)
+            if (IsExchangeSetComposite)
+            {
+                var source = ExchangeSetSource;
+                if (string.IsNullOrWhiteSpace(source))
+                    return ValidationResult.Error("An exchange-set path is required.");
+                if (!ExchangeSetInput.LooksLikeExchangeSet(source))
+                    return ValidationResult.Error(
+                        $"Not an S-100 exchange set (expected a directory with CATALOG.XML, a CATALOG.XML, or an exchange-set .zip): {source}");
+
+                if (IsExplicitExchangeSet)
+                {
+                    if (OutputOption is not null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(Input) || !string.IsNullOrWhiteSpace(OutputArgument))
+                            return ValidationResult.Error(
+                                "With --exchange-set and --output, do not also pass a positional argument.");
+                        output = OutputOption;
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrWhiteSpace(OutputArgument))
+                            return ValidationResult.Error(
+                                "With --exchange-set, pass a single output path (or use -o|--output); two positional arguments were given.");
+                        output = Input;
+                    }
+                }
+                else
+                {
+                    // Positional exchange set: <exchange-set> is Input, output is arg1 or -o.
+                    output = OutputOption ?? OutputArgument;
+                }
+
+                if (string.IsNullOrWhiteSpace(output))
+                    return ValidationResult.Error(
+                        "An output path is required (positional <output> or -o|--output).");
+            }
+            else if (IsComposite)
             {
                 foreach (var layer in Layers)
                 {
@@ -242,9 +333,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             bool hasCenter = !string.IsNullOrWhiteSpace(Center);
             bool hasScale = Scale is not null;
 
-            if ((hasBbox || hasCenter || hasScale) && !IsComposite)
+            if ((hasBbox || hasCenter || hasScale) && !AllowsViewport)
                 return ValidationResult.Error(
-                    "--bbox, --center, and --scale apply only to the composite form (use --layer).");
+                    "--bbox, --center, and --scale apply only to the composite forms (--layer or --exchange-set).");
 
             if (hasBbox && (hasCenter || hasScale))
                 return ValidationResult.Error("--bbox cannot be combined with --center/--scale.");
@@ -274,6 +365,8 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
 
     public override int Execute(CommandContext context, Settings settings)
     {
+        if (settings.IsExchangeSetComposite)
+            return ExecuteExchangeSetComposite(settings);
         return settings.IsComposite
             ? ExecuteComposite(settings)
             : ExecuteSingle(settings);
@@ -346,17 +439,75 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         var outputPath = settings.ResolveOutputPath()!;
 
-        var datasets = new List<S100Dataset>(settings.Layers.Length);
+        var resolved = new List<(string Path, string Spec)>(settings.Layers.Length);
+        foreach (var layerPath in settings.Layers)
+            resolved.Add((layerPath, DatasetPipelineFactory.DetectProductSpec(layerPath) ?? "unknown"));
+
+        return RenderComposite(resolved, settings, outputPath, "composite");
+    }
+
+    private static int ExecuteExchangeSetComposite(Settings settings)
+    {
+        using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
+        var source = settings.ExchangeSetSource!;
+        var outputPath = settings.ResolveOutputPath()!;
+
+        IReadOnlySet<string>? only = null;
+        if (settings.Only is not null && TryParseOnlySpecs(settings.Only, out var onlySpecs))
+            only = onlySpecs;
+
         try
         {
-            var specNames = new List<string>(settings.Layers.Length);
-            var layers = new List<S100Layer>(settings.Layers.Length);
-            foreach (var layerPath in settings.Layers)
+            using var resolution = ExchangeSetLayerResolution.Resolve(source, only);
+
+            // Surface discovery-time skips (unsupported spec, missing file,
+            // orphan update, data protection) on stderr so they are visible
+            // without polluting the success line on stdout.
+            foreach (var warning in resolution.Warnings)
+                Console.Error.WriteLine(warning);
+
+            if (resolution.Layers.Count == 0)
             {
-                var dataset = S100Dataset.Open(layerPath);
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[red]No renderable datasets were discovered in exchange set:[/] {source}");
+                return 2;
+            }
+
+            var resolved = resolution.Layers
+                .Select(l => (l.Path, l.Spec))
+                .ToList();
+
+            return RenderComposite(resolved, settings, outputPath, "exchange-set composite");
+        }
+        catch (Exception ex)
+        {
+            return HandleException(ex, settings.Debug);
+        }
+    }
+
+    /// <summary>
+    /// Opens each resolved dataset as a composite layer and renders them through
+    /// the renderer-neutral S-98 interoperability engine, writing the encoded
+    /// image to <paramref name="outputPath"/>. Shared by the <c>--layer</c> and
+    /// exchange-set forms.
+    /// </summary>
+    private static int RenderComposite(
+        IReadOnlyList<(string Path, string Spec)> resolved,
+        Settings settings,
+        string outputPath,
+        string label)
+    {
+        var datasets = new List<S100Dataset>(resolved.Count);
+        try
+        {
+            var specNames = new List<string>(resolved.Count);
+            var layers = new List<S100Layer>(resolved.Count);
+            foreach (var (path, spec) in resolved)
+            {
+                var dataset = S100Dataset.Open(path);
                 datasets.Add(dataset);
                 layers.Add(new S100Layer { Dataset = dataset });
-                specNames.Add(DatasetPipelineFactory.DetectProductSpec(layerPath) ?? "unknown");
+                specNames.Add(spec);
             }
 
             TryParsePalette(settings.Palette, out var palette);
@@ -383,7 +534,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             WriteImage(bitmap, outputPath, format, settings.Quality);
 
             AnsiConsole.MarkupLineInterpolated(
-                $"[green]Wrote[/] {outputPath} ([grey]composite of {layers.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
+                $"[green]Wrote[/] {outputPath} ([grey]{label} of {layers.Count} layer(s): {string.Join(", ", specNames)}; {format}, {bitmap.Width}x{bitmap.Height}[/])");
             return 0;
         }
         catch (Exception ex)
@@ -650,5 +801,21 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Parses the <c>--only</c> value into a set of normalized product
+    /// specification tokens (hyphenation and case removed, e.g. <c>S-101</c> and
+    /// <c>s101</c> both normalize to <c>S101</c>). Returns <see langword="false"/>
+    /// when the value contains no non-empty tokens.
+    /// </summary>
+    internal static bool TryParseOnlySpecs(string value, out IReadOnlySet<string> specs)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            set.Add(ExchangeSetLayerResolution.NormalizeSpec(raw));
+
+        specs = set;
+        return set.Count > 0;
     }
 }

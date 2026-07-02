@@ -17,12 +17,14 @@ internal static class CliApp
             config.SetApplicationName("s100");
 
             config.AddCommand<RenderCommand>("render")
-                .WithDescription("Render one S-100 dataset — or composite several with --layer — to an image (PNG, JPEG, or WebP).")
+                .WithDescription("Render one S-100 dataset — or composite several (with --layer, or an entire exchange set) — to an image (PNG, JPEG, or WebP).")
                 .WithExample("render", "dataset.h5", "out.png")
                 .WithExample("render", "warnings.gml", "out.png", "--width", "2048", "--height", "1536")
                 .WithExample("render", "currents.h5", "out.png", "--time-step", "2", "--palette", "night")
                 .WithExample("render", "--layer", "enc.000", "--layer", "bathy.h5", "--layer", "warnings.gml", "chart.png")
-                .WithExample("render", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.png", "--bbox", "-1.5,50.0,-1.0,50.5");
+                .WithExample("render", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.png", "--bbox", "-1.5,50.0,-1.0,50.5")
+                .WithExample("render", "exchange-set/", "chart.png")
+                .WithExample("render", "--exchange-set", "exchange-set.zip", "-o", "chart.png", "--only", "S101,S102");
 
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
