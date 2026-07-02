@@ -178,18 +178,7 @@ public sealed class HeadlessCompositor
             StringComparer.Ordinal);
 
         var lowered = new List<CompositeLayer>(ruled.Count);
-        bool hasBounds = false;
-        double minX = double.MaxValue, minY = double.MaxValue;
-        double maxX = double.MinValue, maxY = double.MinValue;
-
-        void Expand(double loX, double loY, double hiX, double hiY)
-        {
-            hasBounds = true;
-            if (loX < minX) minX = loX;
-            if (loY < minY) minY = loY;
-            if (hiX > maxX) maxX = hiX;
-            if (hiY > maxY) maxY = hiY;
-        }
+        var bounds = new SeamAwareBoundsAccumulator();
 
         foreach (var item in ruled)
         {
@@ -202,26 +191,26 @@ public sealed class HeadlessCompositor
                 {
                     var scene = LowerVector(vector, options.HiddenCategories);
                     lowered.Add(new VectorCompositeLayer(scene, honorScaleVisibility: false));
-                    if (HeadlessVectorRenderer.TryGetWorldBounds(scene, out var vx0, out var vy0, out var vx1, out var vy1))
-                        Expand(vx0, vy0, vx1, vy1);
+                    bounds.AddScene(scene);
                     break;
                 }
 
                 case CoverageStackPayload coverage:
                 {
-                    if (TryLowerCoverage(coverage, out var layer, out var cx0, out var cy0, out var cx1, out var cy1))
+                    if (TryLowerCoverage(coverage, out var layer, out var west, out var east, out var south, out var north))
                     {
                         lowered.Add(layer);
-                        Expand(cx0, cy0, cx1, cy1);
+                        bounds.AddLonLatBox(west, east, south, north);
                     }
                     break;
                 }
             }
         }
 
-        // 4. Resolve the shared viewport: explicit wins; otherwise fit the union.
+        // 4. Resolve the shared viewport: explicit wins; otherwise seam-aware
+        //    auto-fit of the union extent.
         var viewport = options.Viewport
-            ?? BuildUnionViewport(hasBounds, minX, minY, maxX, maxY, options.Width, options.Height);
+            ?? BuildUnionViewport(bounds, options.Width, options.Height);
 
         // 4a. Prepend the land basemap (issue #411) as the bottom-most layer so
         //     it draws under every chart layer, registered with the shared
@@ -294,31 +283,31 @@ public sealed class HeadlessCompositor
     private bool TryLowerCoverage(
         CoverageStackPayload payload,
         out CompositeLayer layer,
-        out double minX, out double minY, out double maxX, out double maxY)
+        out double west, out double east, out double south, out double north)
     {
         layer = null!;
-        minX = minY = maxX = maxY = 0;
+        west = east = south = north = 0;
 
         switch (payload.SubLayer)
         {
             case GridCoverageSubLayer grid:
             {
-                var (west, east, south, north, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
-                layer = new CoverageCompositeLayer(grid.Coverage, west, east, south, north, nativeToWgs84: nativeToWgs84);
-                (minX, minY, maxX, maxY) = MercatorBoundsOf(west, east, south, north);
+                var (w, e, s, n, nativeToWgs84) = ReprojectExtent(grid.Coverage, grid.Viewport);
+                layer = new CoverageCompositeLayer(grid.Coverage, w, e, s, n, nativeToWgs84: nativeToWgs84);
+                west = w; east = e; south = s; north = n;
                 return true;
             }
 
             case ArrowCoverageSubLayer arrow:
             {
-                var (west, east, south, north, nativeToWgs84) = ReprojectExtent(arrow.Coverage, arrow.Viewport);
+                var (w, e, s, n, nativeToWgs84) = ReprojectExtent(arrow.Coverage, arrow.Viewport);
                 var arrowRenderer = new SkiaCoverageArrowRenderer
                 {
                     SymbolProvider = arrow.SymbolProvider,
                     BaseSymbolScale = arrow.BaseSymbolScale,
                 };
-                layer = new CoverageCompositeLayer(arrow.Coverage, west, east, south, north, arrowRenderer, nativeToWgs84);
-                (minX, minY, maxX, maxY) = MercatorBoundsOf(west, east, south, north);
+                layer = new CoverageCompositeLayer(arrow.Coverage, w, e, s, n, arrowRenderer, nativeToWgs84);
+                west = w; east = e; south = s; north = n;
                 return true;
             }
 
@@ -349,21 +338,13 @@ public sealed class HeadlessCompositor
         return (west, east, south, north, nativeToWgs84);
     }
 
-    private static (double MinX, double MinY, double MaxX, double MaxY) MercatorBoundsOf(
-        double west, double east, double south, double north)
-    {
-        var (minX, minY) = WebMercator.FromLonLat(west, south);
-        var (maxX, maxY) = WebMercator.FromLonLat(east, north);
-        return (Math.Min(minX, maxX), Math.Min(minY, maxY), Math.Max(minX, maxX), Math.Max(minY, maxY));
-    }
-
     private static Viewport BuildUnionViewport(
-        bool hasBounds, double minX, double minY, double maxX, double maxY, int widthPixels, int heightPixels)
+        SeamAwareBoundsAccumulator bounds, int widthPixels, int heightPixels)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
 
-        if (!hasBounds)
+        if (!bounds.TryResolve(out double minX, out double minY, out double maxX, out double maxY))
         {
             minX = -1000; minY = -1000; maxX = 1000; maxY = 1000;
         }

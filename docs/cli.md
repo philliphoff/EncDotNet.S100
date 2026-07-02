@@ -134,7 +134,12 @@ Two behaviours differ from the single-dataset form:
   only. Render an S-101 cell singly if you need its updates folded in.
 
 When no `--bbox` / `--center`+`--scale` is supplied, the compositor auto-fits
-the union extent of all layers to the requested `--width` × `--height`.
+the union extent of all layers to the requested `--width` × `--height`. The
+auto-fit is **antimeridian-aware**: datasets whose geometry straddles the ±180°
+seam (e.g. an S-411 Alaska product spanning ~175°E → ~225°E) are framed on their
+true, narrow extent instead of collapsing to a near-global viewport (issue #413).
+This applies to both single-dataset renders and `--layer` / exchange-set
+composites.
 
 ### Compositing a whole exchange set / directory
 

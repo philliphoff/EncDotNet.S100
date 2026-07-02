@@ -61,9 +61,12 @@ exactly one place:
 - **`ColorResolver`** — S-100 colour-token resolution (palette + inline hex).
 
 **Scope (spike):** the IR currently covers point, line, solid-area, and text
-ops. Pattern fills, antimeridian crossing, and Web-Mercator pole limits are not
-yet represented in the IR — pattern fills remain handled by the Mapsui renderer's
-dedicated pattern collection / priority-clip / insert phase.
+ops. Pattern fills and Web-Mercator pole limits are not yet represented in the
+IR — pattern fills remain handled by the Mapsui renderer's dedicated pattern
+collection / priority-clip / insert phase. Antimeridian (±180°) crossing **is**
+handled for the headless auto-fit: `SeamAwareBoundsAccumulator` (in
+`Rendering.Scene`) frames dateline-spanning datasets on their true extent and
+`WorldToScreen` wraps ops into the shifted window at draw time (issue #413).
 
 ### Headless rendering & compositing (`…Renderers.Skia.Scene`)
 
@@ -71,7 +74,8 @@ Standalone, Mapsui-free entry points that rasterise a whole dataset (or several)
 to an `SKBitmap`:
 
 - **`HeadlessVectorRenderer`** — lowers a Part 9 display list to a `VectorScene`
-  and rasterises it, auto-fitting the viewport to the scene extent. Its
+  and rasterises it, auto-fitting the viewport to the scene extent (seam-aware
+  across the ±180° antimeridian via `TryGetSeamAwareWorldBounds`). Its
   `BuildScene(...)` and `TryGetWorldBounds(...)` seams are reused by the
   compositor to lower a sub-layer and union its bounds against a *shared*
   viewport.
