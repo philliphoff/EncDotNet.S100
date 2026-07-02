@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using System.Text.Json;
 using BruTile.Cache;
 using BruTile.Predefined;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using Mapsui.Layers;
 using Mapsui.Nts;
-using Mapsui.Projections;
 using Mapsui.Styles;
 using Mapsui.Tiling;
 using Mapsui.Tiling.Layers;
@@ -22,11 +20,11 @@ namespace EncDotNet.S100.Viewer;
 /// </summary>
 internal static class BasemapLayerFactory
 {
-    private const string LandGeoJsonResource =
-        "EncDotNet.S100.Viewer.Assets.Basemap.ne_10m_land.geojson";
-
     /// <summary>Land fill — a muted, parchment-like tone over the ENC water back-colour.</summary>
-    private static readonly Color LandFill = new(238, 232, 220);
+    private static readonly Color LandFill = new(
+        NaturalEarthBasemap.LandFill.R,
+        NaturalEarthBasemap.LandFill.G,
+        NaturalEarthBasemap.LandFill.B);
 
     /// <summary>
     /// Creates the basemap layer for <paramref name="mode"/>, or null for
@@ -76,74 +74,40 @@ internal static class BasemapLayerFactory
 
     private static List<GeometryFeature> LoadLandFeatures()
     {
+        // Reuse the shared headless loader so the viewer and the Mapsui-free
+        // render path consume the same embedded Natural Earth asset and the
+        // same projection (issue #411). The loader already projects rings to
+        // EPSG:3857 metres — identical to Mapsui's SphericalMercator — so the
+        // world coordinates map straight onto NTS geometry.
         var features = new List<GeometryFeature>();
-        var stream = typeof(BasemapLayerFactory).Assembly
-            .GetManifestResourceStream(LandGeoJsonResource);
-        if (stream is null)
-            return features;
-
-        using var doc = JsonDocument.Parse(stream);
-        if (!doc.RootElement.TryGetProperty("features", out var arr))
-            return features;
-
-        foreach (var feature in arr.EnumerateArray())
+        foreach (var polygon in NaturalEarthBasemap.LandPolygons)
         {
-            if (!feature.TryGetProperty("geometry", out var geom)) continue;
-            var polygon = ReadGeometry(geom);
-            if (polygon is not null)
-                features.Add(new GeometryFeature(polygon));
+            var shell = ToLinearRing(polygon.WorldShell);
+            if (shell is null)
+                continue;
+
+            var holes = new List<LinearRing>(polygon.WorldHoles.Count);
+            foreach (var hole in polygon.WorldHoles)
+            {
+                var ring = ToLinearRing(hole);
+                if (ring is not null)
+                    holes.Add(ring);
+            }
+
+            features.Add(new GeometryFeature(new Polygon(shell, holes.ToArray())));
         }
 
         return features;
     }
 
-    private static Geometry? ReadGeometry(JsonElement geom)
+    private static LinearRing? ToLinearRing(IReadOnlyList<(double X, double Y)> world)
     {
-        var type = geom.GetProperty("type").GetString();
-        var coords = geom.GetProperty("coordinates");
-        return type switch
-        {
-            "Polygon" => ReadPolygon(coords),
-            "MultiPolygon" => ReadMultiPolygon(coords),
-            _ => null,
-        };
-    }
+        if (world.Count < 4)
+            return null;
 
-    private static MultiPolygon ReadMultiPolygon(JsonElement coords)
-    {
-        var polygons = new List<Polygon>();
-        foreach (var poly in coords.EnumerateArray())
-        {
-            var p = ReadPolygon(poly);
-            if (p is not null) polygons.Add(p);
-        }
-        return new MultiPolygon(polygons.ToArray());
-    }
-
-    private static Polygon? ReadPolygon(JsonElement rings)
-    {
-        LinearRing? shell = null;
-        var holes = new List<LinearRing>();
-        foreach (var ring in rings.EnumerateArray())
-        {
-            var r = ReadRing(ring);
-            if (r is null) continue;
-            if (shell is null) shell = r;
-            else holes.Add(r);
-        }
-        return shell is null ? null : new Polygon(shell, holes.ToArray());
-    }
-
-    private static LinearRing? ReadRing(JsonElement ring)
-    {
-        var pts = new List<Coordinate>();
-        foreach (var pt in ring.EnumerateArray())
-        {
-            var lon = pt[0].GetDouble();
-            var lat = pt[1].GetDouble();
-            var (x, y) = SphericalMercator.FromLonLat(lon, lat);
-            pts.Add(new Coordinate(x, y));
-        }
-        return pts.Count >= 4 ? new LinearRing(pts.ToArray()) : null;
+        var coordinates = new Coordinate[world.Count];
+        for (int i = 0; i < world.Count; i++)
+            coordinates[i] = new Coordinate(world[i].X, world[i].Y);
+        return new LinearRing(coordinates);
     }
 }

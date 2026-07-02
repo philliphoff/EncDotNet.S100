@@ -19,7 +19,7 @@ internal static class FacadeRenderContextBuilder
         var hidden = options.HiddenCategories;
         DateTime? timeStep = ResolveTimeStep(processor, options.TimeStep);
 
-        return processor.Spec.Name switch
+        RenderContext context = processor.Spec.Name switch
         {
             "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
             "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
@@ -34,6 +34,8 @@ internal static class FacadeRenderContextBuilder
             "S-411" => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
             _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
         };
+
+        return context with { Basemap = options.Basemap };
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

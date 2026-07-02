@@ -181,6 +181,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
                 Viewport = options.Viewport,
                 Mariner = mariner,
                 HiddenCategories = options.HiddenCategories,
+                Basemap = options.Basemap,
             };
 
             using var bitmap = compositor.Render(inputs, compositeOptions);

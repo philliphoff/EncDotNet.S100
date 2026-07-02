@@ -80,6 +80,40 @@ public sealed class OptionParsingTests
     }
 
     [Theory]
+    [InlineData("none", BasemapKind.None)]
+    [InlineData("None", BasemapKind.None)]
+    [InlineData("off", BasemapKind.None)]
+    [InlineData("offline", BasemapKind.Offline)]
+    [InlineData("OFFLINE", BasemapKind.Offline)]
+    [InlineData(" offline ", BasemapKind.Offline)]
+    [InlineData("land", BasemapKind.Offline)]
+    public void TryParseBasemap_accepts_known_tokens(string input, BasemapKind expected)
+    {
+        Assert.True(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(expected, basemap);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryParseBasemap_treats_blank_as_none(string? input)
+    {
+        Assert.True(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(BasemapKind.None, basemap);
+    }
+
+    [Theory]
+    [InlineData("osm")]
+    [InlineData("online")]
+    [InlineData("satellite")]
+    public void TryParseBasemap_rejects_unknown(string input)
+    {
+        Assert.False(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(BasemapKind.None, basemap);
+    }
+
+    [Theory]
     [InlineData("S101-R-1.2", new[] { "S101-R-1.2" })]
     [InlineData(" S101-R-1.2 , S101-R-3.2 ", new[] { "S101-R-1.2", "S101-R-3.2" })]
     [InlineData("S101-*,,S102-*", new[] { "S101-*", "S102-*" })]

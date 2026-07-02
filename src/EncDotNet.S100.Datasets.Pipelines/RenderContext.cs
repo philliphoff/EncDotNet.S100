@@ -57,6 +57,21 @@ public abstract record RenderContext
     /// </remarks>
     public DrawingInstructionCategory HiddenInstructionCategories { get; init; }
         = DrawingInstructionCategory.None;
+
+    /// <summary>
+    /// Basemap drawn beneath the chart data in the headless render path (issue
+    /// #411). When <see cref="BasemapKind.Offline"/>, the bundled Natural Earth
+    /// 1:10m land layer is composited under the dataset, projected with the
+    /// dataset's own auto-fitted viewport so it registers exactly. Defaults to
+    /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the headless render path (<c>HeadlessVectorRenderer.Render</c>
+    /// for vector products and <c>CoverageHeadlessRenderer.Render</c> for
+    /// coverage products); the Mapsui viewer path selects its basemap
+    /// independently via <c>BasemapMode</c>.
+    /// </remarks>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
 }
 
 public sealed record S101RenderContext : RenderContext;

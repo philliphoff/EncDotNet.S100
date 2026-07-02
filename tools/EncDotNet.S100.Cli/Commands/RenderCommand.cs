@@ -147,6 +147,11 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue(false)]
         public bool NoUpdates { get; init; }
 
+        [CommandOption("--basemap <MODE>")]
+        [Description("Draw a basemap beneath the chart data: none (default) or offline. 'offline' composites the bundled Natural Earth 1:10m land layer (public domain) under all chart layers, registered with the chart's own viewport. Online tile basemaps are not supported in the headless renderer. Applies to both the single-dataset and --layer composite forms.")]
+        [DefaultValue("none")]
+        public string Basemap { get; init; } = "none";
+
         /// <summary>Whether this invocation composites explicit <c>--layer</c> datasets.</summary>
         public bool IsComposite => Layers.Length > 0;
 
@@ -213,6 +218,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (Hide is not null && !TryParseHideCategories(Hide, out _, out var badToken))
                 return ValidationResult.Error(
                     $"Invalid --hide value '{badToken}'. Use a comma-separated list of: text, points, lines, areas.");
+
+            if (!TryParseBasemap(Basemap, out _))
+                return ValidationResult.Error(
+                    $"Invalid --basemap value '{Basemap}'. Use none or offline.");
 
             if (IsComposite && IsExplicitExchangeSet)
                 return ValidationResult.Error(
@@ -401,7 +410,8 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             var hidden = ResolveHiddenCategories(settings);
 
             var renderContext = RenderContextBuilder.Build(
-                processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden);
+                processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
+                ResolveBasemap(settings));
 
             using var bitmap = headless
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
@@ -512,6 +522,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 Background = ResolveBackground(settings),
                 HiddenCategories = ResolveHiddenCategories(settings),
                 Viewport = ResolveViewport(settings),
+                Basemap = ResolveBasemap(settings),
             };
 
             using var renderer = new PngS100DatasetRenderer();
@@ -554,6 +565,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             hidden |= DrawingInstructionCategory.Text;
         return hidden;
     }
+
+    private static BasemapKind ResolveBasemap(Settings settings)
+        => TryParseBasemap(settings.Basemap, out var basemap) ? basemap : BasemapKind.None;
 
     private static Viewport? ResolveViewport(Settings settings)
     {
@@ -761,6 +775,32 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             }
         }
         return true;
+    }
+
+    /// <summary>
+    /// Parses the <c>--basemap</c> token (case-insensitive) into a
+    /// <see cref="BasemapKind"/>. Accepts <c>none</c> and <c>offline</c>; a
+    /// <c>null</c>/empty value maps to <see cref="BasemapKind.None"/>.
+    /// </summary>
+    internal static bool TryParseBasemap(string? value, out BasemapKind basemap)
+    {
+        basemap = BasemapKind.None;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "none":
+            case "off":
+                basemap = BasemapKind.None;
+                return true;
+            case "offline":
+            case "land":
+                basemap = BasemapKind.Offline;
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

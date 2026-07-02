@@ -58,7 +58,7 @@ portal.
 | `S100` | runs the Release DLL via `dotnet` | Command used to invoke the CLI (e.g. a published `s100` binary). |
 | `WIDTH` / `HEIGHT` | `1600` | Output size in pixels. |
 | `PALETTE` | `day` | `day` \| `dusk` \| `night`. |
-| `EXTRA_OPTS` | _empty_ | Extra flags forwarded verbatim to `s100 render` (e.g. `--no-text`). |
+| `EXTRA_OPTS` | _empty_ | Extra flags forwarded verbatim to `s100 render` (e.g. `--no-text`, `--basemap offline`). |
 | `COMPARE` | `0` | When `1`, also download the BSIS quicklook(s) for each region to `previews/<key>.bsis-conc.png` / `.bsis-sod.png`. If ImageMagick's `montage` is on `PATH`, a combined `previews/<key>.compare.png` contact sheet is produced. |
 
 ```bash
@@ -98,6 +98,14 @@ S100="s100" WIDTH=2048 HEIGHT=2048 PALETTE=night \
   This suppresses the S-411 egg-code labels at the renderer level while
   leaving the fills, ice-edge lines, and symbols untouched. Use
   `--hide text,points` to also drop point symbols.
+- **Offline land basemap:** pass `--basemap offline` (headless; no online
+  tiles) to composite the bundled Natural Earth 1:10m land layer beneath the
+  ice, so floes and ice edges read against the coastline instead of a bare
+  background. Combine with `--no-text` for a clean, geo-referenced quicklook:
+
+  ```bash
+  EXTRA_OPTS="--no-text --basemap offline" samples/s411-previews/s411_previews.sh
+  ```
 - This is sample/PoC code, not a supported product. Generated output under the
   chosen directory is intentionally not committed.
 - Data © the respective ice services (CIS, DMI, Met.no, US NWS/NIC, AARI, SHN,

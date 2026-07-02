@@ -89,6 +89,16 @@ to an `SKBitmap`:
   cross-dataset ordering / suppression *decision* is made upstream by the S-98
   engine in `EncDotNet.S100.Datasets.Pipelines` (`HeadlessCompositor`); this
   renderer only paints the resolved stack.
+- **`NaturalEarthBasemap`** — the bundled, offline, public-domain **Natural
+  Earth 1:10m land** basemap (issues #295, #411) as a single, Mapsui-free source
+  of land geometry. The embedded GeoJSON (`Assets/Basemap/ne_10m_land.geojson`)
+  is parsed once and each ring projected `lon/lat → EPSG:3857` via `WebMercator`.
+  `LandPolygons` exposes the world-metre rings; `LandScene` is a cached,
+  viewport-independent `VectorScene` of parchment-filled (`238,232,220`)
+  `AreaPaintOp`s. Both the headless render paths (`HeadlessVectorRenderer.Render`
+  and `CoverageHeadlessRenderer.Render` take a `BasemapKind`; `HeadlessCompositor`
+  prepends the land scene) and the interactive Avalonia viewer's offline basemap
+  consume this same asset, so land is never duplicated.
 
 ## Installation
 

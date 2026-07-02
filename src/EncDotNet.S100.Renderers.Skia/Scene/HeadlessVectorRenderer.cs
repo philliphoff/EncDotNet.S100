@@ -62,6 +62,13 @@ public static class HeadlessVectorRenderer
     /// extent. The auto-fitted viewport is computed from the filtered scene,
     /// matching what the user actually sees.
     /// </param>
+    /// <param name="basemap">
+    /// Optional basemap drawn <em>beneath</em> the dataset (issue #411). When
+    /// <see cref="BasemapKind.Offline"/>, the bundled Natural Earth land layer
+    /// (<see cref="NaturalEarthBasemap.LandScene"/>) is painted first, against
+    /// the same auto-fitted viewport, so it registers exactly with the chart.
+    /// Defaults to <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
     public static SKBitmap Render(
         IReadOnlyList<DrawingInstruction> instructions,
@@ -75,7 +82,8 @@ public static class HeadlessVectorRenderer
         int heightPixels,
         RgbaColor background,
         Func<string, AreaFill?>? areaFillProvider = null,
-        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None)
+        DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
+        BasemapKind basemap = BasemapKind.None)
     {
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
@@ -95,6 +103,20 @@ public static class HeadlessVectorRenderer
             textScale,
             areaFillProvider);
         var viewport = FitViewport(scene, widthPixels, heightPixels);
+
+        if (basemap == BasemapKind.Offline)
+        {
+            // Paint the land basemap under the dataset against the SAME fitted
+            // viewport so the two register exactly. The compositor clears the
+            // background once, then draws each transparent layer bottom-first.
+            var compositeRenderer = new HeadlessCompositeRenderer { Background = background };
+            var layers = new CompositeLayer[]
+            {
+                new VectorCompositeLayer(NaturalEarthBasemap.LandScene, honorScaleVisibility: false),
+                new VectorCompositeLayer(scene, honorScaleVisibility: false),
+            };
+            return compositeRenderer.Render(viewport, layers);
+        }
 
         var renderer = new SkiaDisplayListRenderer
         {
