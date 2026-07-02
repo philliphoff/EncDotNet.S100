@@ -18,6 +18,19 @@ It offers four subcommands:
 | `s100 info <dataset>` | Show the detected spec, edition, headless-render capability, and (for time-series datasets) the available time steps. |
 | `s100 list-specs` | List the supported product specifications and which support headless rendering. |
 
+## Why it matters
+
+Use `s100` when you need repeatable, headless rendering and validation in local
+automation or CI pipelines.
+
+## Quick win
+
+```bash
+s100 render dataset.h5 out.png
+```
+
+Expected result: one rendered image (`out.png`) and zero UI dependencies.
+
 ## Install (standalone download)
 
 Each [GitHub Release](https://github.com/philliphoff/EncDotNet.S100/releases)
@@ -188,3 +201,19 @@ Discovery notes:
 
 See the project README under `tools/EncDotNet.S100.Cli/README.md` for the full
 option reference and exit codes.
+
+## Troubleshooting
+
+> [!WARNING]
+> If rendering fails on S-104/S-111 fixed-station encodings, that's expected for
+> headless mode; inspect with `s100 info` first.
+
+> [!TIP]
+> If output layering looks surprising in composite renders, remember S-98
+> interoperability rules determine cross-product ordering.
+
+## Next step
+
+- [Scenario: Render S-102 to PNG](scenarios/render-s102-to-png.md)
+- [Scenario: Compose S-101 + S-102](scenarios/compose-s101-s102.md)
+- [Top APIs](top-apis.md)
