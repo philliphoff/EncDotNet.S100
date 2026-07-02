@@ -154,7 +154,7 @@ public static class ExchangeCatalogueReader
             MetadataDateStamp = ParseDate((string?)element.Element(xc + "metadataDateStamp")),
             ReplaceData = ParseBool(element, "replaceData", xc),
             NavigationPurpose = navigationPurpose,
-            ResourceMaintenance = ReadResourceMaintenance(element.Element("resourceMaintenance"))
+            ResourceMaintenance = ReadResourceMaintenance(element.Element(xc + "resourceMaintenance"))
         };
     }
 
