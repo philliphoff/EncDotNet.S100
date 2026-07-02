@@ -1,13 +1,27 @@
 - name: Documentation
   href: index.md
+- name: Start here
+  href: start-here.md
 - name: Getting started
   href: getting-started.md
+- name: Scenario guides
+  items:
+    - name: Render S-102 to PNG
+      href: scenarios/render-s102-to-png.md
+    - name: Inspect S-124 warnings
+      href: scenarios/inspect-s124-warnings.md
+    - name: Compose S-101 + S-102
+      href: scenarios/compose-s101-s102.md
+- name: Top APIs
+  href: top-apis.md
 - name: Typed data models
   href: typed-data-models.md
 - name: Observability
   href: observability.md
 - name: MCP server
   href: mcp-server.md
+- name: What's new
+  href: whats-new.md
 - name: Command-line rendering
   href: cli.md
 - name: Embedding the renderer

@@ -15,6 +15,19 @@ Neither package references Mapsui, Avalonia, or any GUI framework, so this is th
 seam to embed into a tile-serving web API, a batch image job, or the library half
 of a future web/WASM target.
 
+## Why it matters
+
+This is the smallest seam for teams that already own portrayal outputs or want
+direct control over rendering without the full facade package.
+
+## Quick win
+
+```sh
+dotnet add package EncDotNet.S100.Renderers.Skia
+```
+
+Expected result: headless rasterization support in your app with no Mapsui/Avalonia dependency.
+
 ```sh
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
@@ -133,3 +146,14 @@ When you publish a `linux-arm64` executable that uses the Skia renderer, referen
 the self-contained SkiaSharp native in your **application** project — see the
 [`Renderers.Skia` README](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Skia/README.md#linux-arm64-native-dependency)
 ([issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23)).
+
+## Troubleshooting
+
+> [!IMPORTANT]
+> If your output is blank or clipped, verify your viewport extent and scale-visibility handling (`HonorScaleVisibility`).
+
+## Next step
+
+- [Top APIs](top-apis.md)
+- [Command-line rendering](cli.md)
+- [S-98 interoperability design note](design/s98-interoperability.md)

@@ -1,11 +1,29 @@
 # Documentation
 
-Conceptual guides, design notes, and per-product reference material for
-**EncDotNet.S100** — a managed, cross-platform implementation of the
-IHO [S-100](https://iho.int/en/s-100-edition-5-2-0) Universal
-Hydrographic Data Model for .NET, together with a cross-platform
-desktop viewer. Every supported product ships a reader, a portrayal
-pipeline, and a normative validation rule pack.
+## Why it matters
+
+EncDotNet.S100 combines multiple S-100 products, portrayals, and renderers in one
+stack. This documentation is organized to get you to a visible success quickly,
+then guide you into deeper API and architecture detail.
+
+## Quick win
+
+<div class="badge-row">
+  <img alt="Docs" src="https://img.shields.io/badge/docs-DocFX-blue" />
+  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4" />
+  <img alt="S-100" src="https://img.shields.io/badge/IHO-S--100-0a4a7a" />
+</div>
+
+<div class="hero-brand">
+  <strong>Start here:</strong> choose your path and get a result in minutes.
+  <div class="quick-links">
+    <a href="start-here.md">🧭 Audience paths: Viewer / Library / Contributor</a>
+    <a href="getting-started.md">⚡ First success in minutes</a>
+    <a href="top-apis.md">📚 Curated top APIs by package</a>
+  </div>
+</div>
+
+## Deep dive
 
 ## Supported products
 
@@ -29,20 +47,53 @@ pipeline, and a normative validation rule pack.
 
 ## Guides
 
-- [Getting started](getting-started.md) — get S-100 data in front of you in a few minutes: download the desktop viewer, or render a dataset to PNG via the `EncDotNet.S100` facade or the standalone `s100` CLI.
-- [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's full feature tour: loading data, the layer stack, picking/identifying features, ECDIS display controls, palettes, and the timeline.
-- [Command-line rendering](cli.md) — the `s100` console tool for headless and batch PNG rendering.
-- [Typed data models](typed-data-models.md) — strongly-typed object-graph projections layered on top of the schema-agnostic feature bags exposed by each dataset reader.
-- [Observability](observability.md) — span tree, metrics catalogue, and OpenTelemetry / Aspire recipes for inspecting pipeline activity.
-- [MCP server](mcp-server.md) — Model Context Protocol surface (`list_datasets`, `describe_feature`, `sample_coverage`, `render_to_image`) used by AI agents to query loaded datasets.
+- [Start here](start-here.md) — audience-based entry page.
+- [Getting started](getting-started.md) — first rendered output via Viewer, library, or CLI.
+- [Scenario guides](scenarios/render-s102-to-png.md) — task-focused workflows.
+- [Top APIs](top-apis.md) — curated API entry points per package.
+- [Command-line rendering](cli.md) — full `s100` command and option guide.
+- [Embedding the renderer](embedding-the-renderer.md) — scene/rendering integration seam.
+- [Typed data models](typed-data-models.md) — strongly-typed projections on feature bags.
+- [Observability](observability.md) — logs, traces, and metrics.
+- [MCP server](mcp-server.md) — AI-agent tool surface.
+- [What's new](whats-new.md) — docs and experience highlights.
+
+## Visual gallery
+
+| S-101 ENC | S-102 Bathymetry |
+|---|---|
+| <img class="docs-shot" alt="S-101 viewer" src="images/gallery/S101Screenshot.png" /> | <img class="docs-shot" alt="S-102 viewer" src="images/gallery/S102Screenshot.png" /> |
+
+### Portrayal comparison (before/after workflow)
+
+| Before (base chart context) | After (with temporal/overlay analysis) |
+|---|---|
+| <img class="docs-shot" alt="S-101 base view" src="images/gallery/S101Screenshot.png" /> | <img class="docs-shot" alt="timeline and overlays" src="images/gallery/TimelineScreenshot.png" /> |
+
+```mermaid
+flowchart LR
+  A[Reader] --> B[Portrayal]
+  B --> C[Drawing instructions / coverage]
+  C --> D[Renderer]
+  D --> E[Viewer / CLI / PNG]
+```
 
 ## Design notes
 
-The `design/` folder collects the contracts that shipped implementations
-were built against. They cover rationale and open questions rather
-than current-state behaviour (which lives in the per-library READMEs).
+The `design/` folder collects shipped implementation contracts and rationale.
 
-- [Dynamic feature sources](design/dynamic-feature-source.md) — push-driven point/track/area features (own-ship, AIS, route preview, sensor overlays) that sit alongside static datasets in the rendering surface.
-- [Own-ship vessel symbology](design/own-ship-symbology.md) — true-scale hull + arrowhead + CCRP cross renderer that consumes the dynamic-feature-source abstraction.
-- [AIS dynamic feature source](design/ais-source.md) — three-layer split (driver → `IAisMessageSource` → `AisDynamicFeatureSource`), aisstream.io WebSocket driver, and per-class AIS target rendering.
-- [S-98 interoperability](design/s98-interoperability.md) — display-plane plumbing and inter-product rules that make multi-product paint stacks deterministic and spec-driven.
+- [Dynamic feature sources](design/dynamic-feature-source.md)
+- [Own-ship vessel symbology](design/own-ship-symbology.md)
+- [AIS dynamic feature source](design/ais-source.md)
+- [S-98 interoperability](design/s98-interoperability.md)
+
+## Troubleshooting
+
+> [!IMPORTANT]
+> If the site looks unstyled, verify `docs/styles/main.css` is included as a DocFX resource in `docfx.json`.
+
+## Next step
+
+- [Start here](start-here.md)
+- [Getting started](getting-started.md)
+- [Top APIs](top-apis.md)
