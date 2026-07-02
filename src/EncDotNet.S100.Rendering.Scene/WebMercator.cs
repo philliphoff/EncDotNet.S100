@@ -17,6 +17,14 @@ public static class WebMercator
     /// <summary>EPSG:3857 sphere radius (WGS-84 semi-major axis), in metres.</summary>
     public const double EarthRadius = 6378137.0;
 
+    /// <summary>
+    /// The full EPSG:3857 world width (and height at the projection limits), in
+    /// metres: one 360° trip around the equator (<c>2·π·<see cref="EarthRadius"/></c>
+    /// ≈ 4.0075×10⁷ m). Used by seam-aware auto-fit to shift longitudes that wrap
+    /// the ±180° antimeridian into a contiguous world-X window.
+    /// </summary>
+    public const double Circumference = 2.0 * Math.PI * EarthRadius;
+
     private const double DegToRad = Math.PI / 180.0;
 
     /// <summary>

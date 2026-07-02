@@ -240,7 +240,7 @@ public static class HeadlessVectorRenderer
     {
         ArgumentNullException.ThrowIfNull(scene);
 
-        if (!TryGetWorldBounds(scene, out double minX, out double minY, out double maxX, out double maxY))
+        if (!TryGetSeamAwareWorldBounds(scene, out double minX, out double minY, out double maxX, out double maxY))
         {
             // No geometry — fall back to a small extent around the origin.
             minX = -1000; minY = -1000; maxX = 1000; maxY = 1000;
@@ -296,11 +296,37 @@ public static class HeadlessVectorRenderer
     }
 
     /// <summary>
+    /// Computes a <em>seam-aware</em> EPSG:3857 bounding box for the scene: when
+    /// the geometry straddles the ±180° antimeridian the returned window is
+    /// shifted into a contiguous longitude frame (its <paramref name="maxX"/> may
+    /// exceed +½ <see cref="WebMercator.Circumference"/>), so the fitted viewport
+    /// frames the data on its true extent instead of collapsing to a near-global
+    /// span (issue #413). Delegates the detection to
+    /// <see cref="SeamAwareBoundsAccumulator"/>. Returns <see langword="false"/>
+    /// when the scene has no geometry to bound.
+    /// </summary>
+    public static bool TryGetSeamAwareWorldBounds(
+        VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+
+        var accumulator = new SeamAwareBoundsAccumulator();
+        accumulator.AddScene(scene);
+        return accumulator.TryResolve(out minX, out minY, out maxX, out maxY);
+    }
+
+    /// <summary>
     /// Computes the EPSG:3857 bounding box spanning every resolved paint op's
     /// world geometry. Returns <see langword="false"/> when the scene has no
     /// geometry to bound. Exposed so the multi-layer compositor can union each
     /// vector layer's projected extent into a shared viewport.
     /// </summary>
+    /// <remarks>
+    /// This is the <em>naive</em> min/max — it does not account for the ±180°
+    /// antimeridian seam. Use <see cref="TryGetSeamAwareWorldBounds"/> (or feed
+    /// the scene to a <see cref="SeamAwareBoundsAccumulator"/>) when fitting an
+    /// auto-viewport so datasets crossing the dateline are framed correctly.
+    /// </remarks>
     public static bool TryGetWorldBounds(
         VectorScene scene, out double minX, out double minY, out double maxX, out double maxY)
     {

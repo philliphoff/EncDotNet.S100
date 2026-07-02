@@ -131,6 +131,54 @@ public class HeadlessCompositorTests
         Assert.Equal(new SKColor(0xFF, 0xFF, 0xFF), center);
     }
 
+    [Fact]
+    public void Render_fits_union_across_antimeridian_without_collapsing()
+    {
+        // Two datasets on opposite sides of the ±180° seam (near +179° and
+        // −179°). A naive min/max union would frame a near-global extent and
+        // render blank; the seam-aware union auto-fit must frame the true
+        // (~4°) extent so both layers paint (issue #413).
+        var compositor = NewCompositor();
+        var east = VectorLayer(
+            datasetId: "east.000",
+            plane: S98DisplayPlane.BaseChartUnder,
+            fillHex: "#FF0000",
+            west: 178.0, east: 179.5, south: 64.0, north: 66.0);
+        var west = VectorLayer(
+            datasetId: "west.000",
+            plane: S98DisplayPlane.BaseChartUnder,
+            fillHex: "#FF0000",
+            west: -179.5, east: -178.0, south: 64.0, north: 66.0);
+
+        using var bitmap = compositor.Render(
+            new[] { east, west },
+            new HeadlessCompositeOptions
+            {
+                Width = 400,
+                Height = 400,
+                Background = new RgbaColor(255, 255, 255, 255),
+            });
+
+        // Both clusters must paint — one on each half of the canvas — proving
+        // the union fit did not collapse to a near-global viewport.
+        Assert.True(HasRedPixel(bitmap, 0, bitmap.Width / 2),
+            "Expected a painted feature in the left half of the composite.");
+        Assert.True(HasRedPixel(bitmap, bitmap.Width / 2, bitmap.Width),
+            "Expected a painted feature in the right half of the composite.");
+    }
+
+    private static bool HasRedPixel(SKBitmap bitmap, int xStart, int xEnd)
+    {
+        for (int y = 0; y < bitmap.Height; y++)
+        for (int x = xStart; x < xEnd; x++)
+        {
+            var p = bitmap.GetPixel(x, y);
+            if (p.Red > 200 && p.Green < 80 && p.Blue < 80)
+                return true;
+        }
+        return false;
+    }
+
     // ----------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------

@@ -12,7 +12,8 @@ Mapsui, or any GUI framework.
 |---|---|
 | `VectorScene` / `PaintOp` (+ `PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | Ordered list of fully-resolved paint operations — world coords in EPSG:3857 m, sizes in logical display px, colours resolved to `RgbaColor`, SCAMIN carried per-op. |
 | `IVectorSceneRenderer<TSurface>` | The named **rendering-backend contract**: implement it to draw a `VectorScene` onto a backend-specific surface. `SkiaDisplayListRenderer` implements `IVectorSceneRenderer<SKCanvas>`; the Mapsui renderer is a conforming consumer of the IR rather than an implementer. |
-| `WorldToScreen` | Backend-neutral EPSG:3857 world → pixel affine derived from a `Viewport` (the `EPSG:3857 → pixels` half of the Part 9 projection). Lets a Skia-free backend project the IR's world coordinates. |
+| `WorldToScreen` | Backend-neutral EPSG:3857 world → pixel affine derived from a `Viewport` (the `EPSG:3857 → pixels` half of the Part 9 projection). Lets a Skia-free backend project the IR's world coordinates. Wraps ops across the ±180° antimeridian when the viewport is a seam-shifted frame (issue #413). |
+| `SeamAwareBoundsAccumulator` | Computes a seam-aware EPSG:3857 auto-fit extent: detects geometry straddling the ±180° antimeridian (via a longitude-occupancy histogram + largest-empty-arc heuristic) and shifts the western cluster into a contiguous world-X window so dateline-spanning datasets are framed on their true extent (issue #413). |
 | `ResolvedSymbol`, `SymbolAsset` | Resolved point-symbol content + pivot (S-100 Part 9 §11.5). |
 | `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles are supplied as PNG bytes through an injected `Func<string, byte[]?>` delegate, so the builder stays rasteriser-free. |
 | `ColorResolver` | S-100 colour-token → `RgbaColor` resolution. |
