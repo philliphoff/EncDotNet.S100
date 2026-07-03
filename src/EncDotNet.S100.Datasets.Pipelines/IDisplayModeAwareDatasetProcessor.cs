@@ -14,9 +14,9 @@ public interface IDisplayModeAwareDatasetProcessor
 {
     /// <summary>
     /// The set of display-mode ids declared by the dataset's portrayal
-    /// catalogue, in the catalogue's declared order. Empty when the catalogue
-    /// declares no display modes (the common case; portrayal then always uses
-    /// the single default look).
+    /// catalogue, in no particular order. Empty when the catalogue declares no
+    /// display modes (the common case; portrayal then always uses the single
+    /// default look).
     /// </summary>
     IReadOnlyCollection<string> DeclaredDisplayModeIds { get; }
 }

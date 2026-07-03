@@ -340,12 +340,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         if (string.IsNullOrEmpty(modeId))
             return;
 
-        if (catalogue.DisplayModes.DeclaredModeIds.Contains(modeId))
-            catalogue.DisplayModes.SetActive(modeId);
+        var canonical = catalogue.DisplayModes.DeclaredModeIds
+            .FirstOrDefault(id => string.Equals(id, modeId, StringComparison.OrdinalIgnoreCase));
+        if (canonical is not null)
+            catalogue.DisplayModes.SetActive(canonical);
     }
 
     /// <inheritdoc/>
-    public IReadOnlyCollection<string> DeclaredDisplayModeIds => _catalogue.DisplayModes.DeclaredModeIds.ToList();
+    public IReadOnlyCollection<string> DeclaredDisplayModeIds => _catalogue.DisplayModes.DeclaredModeIds;
 
     /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfo(string featureRef)
