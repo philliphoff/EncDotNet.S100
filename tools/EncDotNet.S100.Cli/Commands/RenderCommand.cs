@@ -152,6 +152,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue("none")]
         public string Basemap { get; init; } = "none";
 
+        [CommandOption("--display-mode <MODE>")]
+        [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod (stage of development) or ice-navigational (PROVISIONAL preview derived from total concentration — NOT a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data can be shown in any mode. Ignored (must be omitted or ice-concentration) for other product specifications.")]
+        public string? DisplayMode { get; init; }
+
         /// <summary>Whether this invocation composites explicit <c>--layer</c> datasets.</summary>
         public bool IsComposite => Layers.Length > 0;
 
@@ -222,6 +226,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (!TryParseBasemap(Basemap, out _))
                 return ValidationResult.Error(
                     $"Invalid --basemap value '{Basemap}'. Use none or offline.");
+
+            if (DisplayMode is not null && !TryParseDisplayMode(DisplayMode, out _))
+                return ValidationResult.Error(
+                    $"Invalid --display-mode value '{DisplayMode}'. Use ice-concentration, ice-sod or ice-navigational.");
 
             if (IsComposite && IsExplicitExchangeSet)
                 return ValidationResult.Error(
@@ -409,9 +417,15 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             RgbaColor? background = ResolveBackground(settings);
             var hidden = ResolveHiddenCategories(settings);
 
+            if (!TryResolveDisplayModeId(settings, processor.Spec.Name, out var displayModeId, out var displayModeError))
+            {
+                AnsiConsole.MarkupLineInterpolated($"[red]{displayModeError}[/]");
+                return 2;
+            }
+
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
-                ResolveBasemap(settings));
+                ResolveBasemap(settings), displayModeId);
 
             using var bitmap = headless
                 .RenderHeadlessAsync(settings.Width, settings.Height, renderContext, background)
@@ -511,6 +525,16 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             }
 
             TryParsePalette(settings.Palette, out var palette);
+
+            if (!string.IsNullOrWhiteSpace(settings.DisplayMode) &&
+                !specNames.Any(s => s.Equals("S-411", StringComparison.OrdinalIgnoreCase)))
+            {
+                AnsiConsole.MarkupLine(
+                    "[red]--display-mode is only supported for S-411 sea-ice datasets; none of the composited layers is S-411.[/]");
+                return 2;
+            }
+            TryParseDisplayMode(settings.DisplayMode, out var displayModeId);
+
             var options = new S100CompositeOptions
             {
                 Width = settings.Width,
@@ -523,6 +547,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 HiddenCategories = ResolveHiddenCategories(settings),
                 Viewport = ResolveViewport(settings),
                 Basemap = ResolveBasemap(settings),
+                DisplayModeId = displayModeId,
             };
 
             using var renderer = new PngS100DatasetRenderer();
@@ -774,6 +799,65 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                     return false;
             }
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Parses the <c>--display-mode</c> token (case-insensitive) into the
+    /// spec-native S-411 display-mode id declared in the portrayal catalogue.
+    /// Accepts <c>ice-concentration</c>, <c>ice-sod</c> and
+    /// <c>ice-navigational</c> (plus the bare <c>concentration</c>/<c>sod</c>/
+    /// <c>navigational</c> aliases). A <c>null</c>/empty value maps to
+    /// <see langword="null"/> (each catalogue's default mode). Note:
+    /// <c>ice-navigational</c> is a provisional concentration-derived preview,
+    /// not a POLARIS/RIO navigational-risk computation.
+    /// </summary>
+    internal static bool TryParseDisplayMode(string? value, out string? displayModeId)
+    {
+        displayModeId = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "ice-concentration":
+            case "concentration":
+                displayModeId = "IceScientificIceactDisplayMode";
+                return true;
+            case "ice-sod":
+            case "sod":
+                displayModeId = "IceScientificIcesodDisplayMode";
+                return true;
+            case "ice-navigational":
+            case "navigational":
+                displayModeId = "IceNavigationalDisplayMode";
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses the <c>--display-mode</c> option for a single dataset. Enforces
+    /// that the option is only meaningful for S-411 (issue #416): supplying it
+    /// for any other product is a user error. Returns <see langword="false"/>
+    /// with <paramref name="error"/> set on rejection.
+    /// </summary>
+    private static bool TryResolveDisplayModeId(
+        Settings settings, string specName, out string? displayModeId, out string? error)
+    {
+        displayModeId = null;
+        error = null;
+        if (string.IsNullOrWhiteSpace(settings.DisplayMode))
+            return true;
+
+        if (!specName.Equals("S-411", StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"--display-mode is only supported for S-411 sea-ice datasets, not {specName}.";
+            return false;
+        }
+
+        TryParseDisplayMode(settings.DisplayMode, out displayModeId);
         return true;
     }
 

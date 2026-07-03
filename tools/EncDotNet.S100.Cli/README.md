@@ -132,6 +132,7 @@ unless `--format` is given.
 | `--hide <list>` | _none_ | Comma-separated list of drawing-instruction categories to suppress: `text`, `points`, `lines`, `areas` (e.g. `--hide text,points`). Combines additively with `--no-text`. In the composite form the suppression is global. Useful for label-dense products such as S-411 sea-ice, where the egg-code text overlaps fills at preview scales — `--no-text` yields a BSIS-style "clean fill" preview. |
 | `--no-updates` | off | **Single form only.** Do not apply S-101 sequential updates. By default, when the dataset is an S-101 base cell (`….000`), any sibling update files (`….001`, `….002`, …) in the same directory are applied best-effort before rendering so the cell is drawn at its up-to-date state (S-100 Part 10a). |
 | `--basemap <mode>` | `none` | Draw a basemap **beneath** the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain) under all chart layers in the muted parchment tone `238,232,220`, projected with the chart's own Web-Mercator viewport so it registers exactly. Works in both the single-dataset and `--layer` composite forms. Online tile basemaps (e.g. OSM) are **not** available in the headless renderer — only the offline land layer. |
+| `--display-mode <mode>` | `ice-concentration` | **S-411 only.** Sea-ice portrayal display mode: `ice-concentration` (total concentration, default), `ice-sod` (stage of development) or `ice-navigational` (**provisional** preview derived from total concentration — **not** a POLARIS/RIO navigational-risk computation). One dataset carries the full WMO egg code, so the same data renders in any mode; the concentration and stage-of-development colours are held inline in the adapter, mirrored from the bundled upstream WMO tables and guarded against drift by an xunit parity test. Applies to both forms (any S-411 layer in a composite reacts). Supplying it for a non-S-411 dataset is an error. Run `s100 info <dataset>` to list the supported modes. |
 | `--debug` | off | Print full stack traces on error. |
 
 ```bash
@@ -195,7 +196,9 @@ s100 render --from exchange-set/ chart.png --only S101,S102 # restrict to some s
 
 Prints the detected specification, edition, whether the dataset supports
 headless rendering, and — for time-series datasets — the available time steps
-with their indices (use the index with `render --time-step`). For an S-101
+with their indices (use the index with `render --time-step`). For datasets
+whose portrayal catalogue declares display modes (e.g. S-411 sea-ice) it also
+lists the available `render --display-mode` tokens. For an S-101
 base cell, sibling sequential updates are applied first (see `--no-updates`)
 so the reported model reflects the up-to-date cell.
 

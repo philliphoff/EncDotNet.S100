@@ -232,6 +232,7 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             TimeStep = options.TimeStep,
             Background = options.Background,
             HiddenCategories = options.HiddenCategories,
+            DisplayModeId = options.DisplayModeId,
         };
         return FacadeRenderContextBuilder.Build(processor, rendererOptions) with { Mariner = mariner };
     }

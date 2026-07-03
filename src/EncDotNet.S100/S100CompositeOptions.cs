@@ -72,4 +72,13 @@ public sealed class S100CompositeOptions
     /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
     /// </summary>
     public BasemapKind Basemap { get; init; } = BasemapKind.None;
+
+    /// <summary>
+    /// Optional spec-native portrayal display-mode id (S-100 Part 9 §11.7)
+    /// applied to every layer in the composite; only catalogues declaring the
+    /// mode react (e.g. an S-411 sea-ice layer selecting concentration,
+    /// stage-of-development or navigational, issue #416). <c>null</c> keeps each
+    /// catalogue's default mode.
+    /// </summary>
+    public string? DisplayModeId { get; init; }
 }

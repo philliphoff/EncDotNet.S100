@@ -43,6 +43,125 @@
 
     <xsl:output method="xml" indent="yes" omit-xml-declaration="yes"/>
 
+    <!--
+        Active S-100 Part 9 §11.7 display mode, threaded in by the vector
+        engine (XsltRuleExecutor) from the catalogue's DisplayModeController.
+        Empty when no mode is active. The three S-411 modes declared in
+        pc/portrayal_catalogue.xml select which colour ramp `emit-ice-area`
+        applies:
+          * IceScientificIceactDisplayMode  — total concentration (default)
+          * IceScientificIcesodDisplayMode  — stage of development
+          * IceNavigationalDisplayMode      — PROVISIONAL navigational preview
+                                              (derived from total concentration;
+                                              NOT a POLARIS/RIO risk computation)
+    -->
+    <xsl:param name="displayMode" select="''"/>
+
+    <!--
+        WMO colour tables (issue #416).
+
+        The concentration (iceact) and stage-of-development (icesod) colours are
+        held INLINE here as pre-converted #RRGGBB literals rather than read from
+        the upstream stylesheets at run time. The upstream files
+        (pc/Rules/seaice_wmo_iceact.xsl, seaice_wmo_icesod.xsl) remain the
+        canonical source of the values and stay byte-identical to upstream; the
+        S411 xunit parity test (S411WmoColourParityTests) parses those files,
+        converts each `number($iceX)=N -> colorToken` "R G B" entry to #RRGGBB
+        and asserts equality with the two templates below — so any upstream drift
+        fails the build LOUDLY instead of silently degrading at render time.
+
+        Values were converted with the WMO "R G B" decimal triples mapped to
+        hex; the single malformed upstream entry '255-125-007' (dash-separated)
+        is sanitised to 255 125 7 -> #FF7D07. The display-list reader accepts
+        #RRGGBB hex but not the upstream space-separated "R G B" form.
+
+        Each template returns an #RRGGBB literal for a tabulated integer egg
+        code, or the empty string when the code is not tabulated (letting the
+        caller fall back to an adapter-authored ramp).
+    -->
+    <xsl:template name="iceact-fill-hex">
+        <xsl:param name="code"/>
+        <xsl:choose>
+            <xsl:when test="$code=1">#0064FF</xsl:when>
+            <xsl:when test="$code=2">#96C8FF</xsl:when>
+            <xsl:when test="$code=3">#96C8FF</xsl:when>
+            <xsl:when test="$code=10">#8CFFA0</xsl:when>
+            <xsl:when test="$code=12">#8CFFA0</xsl:when>
+            <xsl:when test="$code=13">#8CFFA0</xsl:when>
+            <xsl:when test="$code=20">#8CFFA0</xsl:when>
+            <xsl:when test="$code=23">#8CFFA0</xsl:when>
+            <xsl:when test="$code=24">#FFFF00</xsl:when>
+            <xsl:when test="$code=30">#8CFFA0</xsl:when>
+            <xsl:when test="$code=34">#FFFF00</xsl:when>
+            <xsl:when test="$code=35">#FFFF00</xsl:when>
+            <xsl:when test="$code=40">#FFFF00</xsl:when>
+            <xsl:when test="$code=45">#FFFF00</xsl:when>
+            <xsl:when test="$code=46">#FFFF00</xsl:when>
+            <xsl:when test="$code=50">#FFFF00</xsl:when>
+            <xsl:when test="$code=56">#FFFF00</xsl:when>
+            <xsl:when test="$code=57">#FF7D07</xsl:when>
+            <xsl:when test="$code=60">#FFFF00</xsl:when>
+            <xsl:when test="$code=67">#FF7D07</xsl:when>
+            <xsl:when test="$code=68">#FF7D07</xsl:when>
+            <xsl:when test="$code=70">#FF7D07</xsl:when>
+            <xsl:when test="$code=78">#FF7D07</xsl:when>
+            <xsl:when test="$code=79">#FF0000</xsl:when>
+            <xsl:when test="$code=80">#FF7D07</xsl:when>
+            <xsl:when test="$code=81">#FF0000</xsl:when>
+            <xsl:when test="$code=89">#FF0000</xsl:when>
+            <xsl:when test="$code=90">#FF0000</xsl:when>
+            <xsl:when test="$code=91">#FF0000</xsl:when>
+            <xsl:when test="$code=92">#910000</xsl:when>
+            <xsl:otherwise/>
+        </xsl:choose>
+    </xsl:template>
+
+    <xsl:template name="icesod-fill-hex">
+        <xsl:param name="code"/>
+        <xsl:choose>
+            <xsl:when test="$code=1">#96C8FF</xsl:when>
+            <xsl:when test="$code=70">#96C8FF</xsl:when>
+            <xsl:when test="$code=80">#96C8FF</xsl:when>
+            <xsl:when test="$code=81">#F0D2FA</xsl:when>
+            <xsl:when test="$code=82">#FF64FF</xsl:when>
+            <xsl:when test="$code=83">#AA28F0</xsl:when>
+            <xsl:when test="$code=84">#873CD7</xsl:when>
+            <xsl:when test="$code=85">#DC50EB</xsl:when>
+            <xsl:when test="$code=86">#FFFF00</xsl:when>
+            <xsl:when test="$code=87">#9BD200</xsl:when>
+            <xsl:when test="$code=88">#D7FA82</xsl:when>
+            <xsl:when test="$code=89">#AFFA00</xsl:when>
+            <xsl:when test="$code=91">#00C814</xsl:when>
+            <xsl:when test="$code=93">#007800</xsl:when>
+            <xsl:when test="$code=94">#007800</xsl:when>
+            <xsl:when test="$code=95">#B46432</xsl:when>
+            <xsl:when test="$code=96">#FF780A</xsl:when>
+            <xsl:when test="$code=97">#C80000</xsl:when>
+            <xsl:otherwise/>
+        </xsl:choose>
+    </xsl:template>
+
+    <!--
+        Reduces a WMO egg attribute to its first integer code.
+
+        DMI / CIS operational S-411 encode the egg attributes not as a bare
+        scalar but as a JSON-style list, thickest-first, e.g.
+        <ice:icesod>[95, 93, 91, 98]</ice:icesod> or <ice:iceact>[80, 60]</ice:iceact>.
+        The WMO egg keys its fill colour off the leading (thickest / dominant)
+        element, so this template strips the brackets and whitespace and returns
+        the first comma-separated token as a floored integer. Returns the empty
+        string when the value is absent or its first token is non-numeric.
+        A bare scalar ("80") passes through unchanged.
+    -->
+    <xsl:template name="first-egg-code">
+        <xsl:param name="raw"/>
+        <xsl:variable name="stripped" select="translate($raw, '[] ', '')"/>
+        <xsl:variable name="first" select="substring-before(concat($stripped, ','), ',')"/>
+        <xsl:if test="string($first) != '' and number($first) = number($first)">
+            <xsl:value-of select="floor(number($first))"/>
+        </xsl:if>
+    </xsl:template>
+
     <!-- ───────── Entry points for the two GML shapes ───────── -->
 
     <xsl:template match="/ice:IceDataSet">
@@ -276,35 +395,105 @@
         <xsl:param name="featureId"/>
 
         <!--
-            CIS / S-411 simplified concentration colour ramp keyed off the
-            leading digit of `iceact` (which is the dominant total
-            concentration in tenths). This matches the shape of the upstream
-            `seaice_wmo_iceact.xsl` mapping but keeps a single ramp instead
-            of separate per-class palettes (the upstream class-specific
-            entry-point stylesheets are empty in 1.2.1, so there is no
-            authoritative class-aware fallback to inherit).
+            Fill colour depends on the active display mode ($displayMode):
+              * IceScientificIcesodDisplayMode — stage-of-development palette
+                (inline `icesod-fill-hex`, mirrored from upstream
+                `seaice_wmo_icesod.xsl` and guarded by the parity test).
+              * IceNavigationalDisplayMode — PROVISIONAL traffic-light preview
+                derived from total concentration (no upstream navigational
+                colours ship in 1.2.1). This is a placeholder only; it is NOT
+                a POLARIS/RIO navigational-risk computation.
+              * default / IceScientificIceactDisplayMode / empty — total
+                concentration palette (inline `iceact-fill-hex`, mirrored from
+                upstream `seaice_wmo_iceact.xsl` and guarded by the parity test).
+            When a code is not tabulated upstream (real CIS data uses tenths /
+            list-style codes) the concentration branch falls back to an
+            adapter-authored leading-digit ramp so a fill is always produced.
         -->
         <xsl:variable name="iceact" select="ice:iceact | iceact"/>
         <xsl:variable name="iceapc" select="ice:iceapc | iceapc"/>
         <xsl:variable name="icesod" select="ice:icesod | icesod"/>
         <xsl:variable name="icelso" select="ice:icelso | icelso"/>
         <xsl:variable name="iceflz" select="ice:iceflz | iceflz"/>
-        <xsl:variable name="iceactNum" select="number($iceact)"/>
+
+        <!-- Integer egg codes used to key the WMO colour tables. Egg attributes
+             may be a bare scalar ("80") or a WMO list ("[95, 93, 91, 98]", as
+             DMI/CIS encode partial concentrations / stages thickest-first); the
+             egg keys its colour off the leading element, so reduce each to its
+             first integer code (empty when absent or non-numeric). -->
+        <xsl:variable name="iceactCode">
+            <xsl:call-template name="first-egg-code">
+                <xsl:with-param name="raw" select="string($iceact)"/>
+            </xsl:call-template>
+        </xsl:variable>
+        <xsl:variable name="icesodCode">
+            <xsl:call-template name="first-egg-code">
+                <xsl:with-param name="raw" select="string($icesod)"/>
+            </xsl:call-template>
+        </xsl:variable>
+
+        <!-- Leading concentration digit (tenths) for the ramp fallbacks; -1
+             when no numeric concentration code is present. -->
         <xsl:variable name="lead">
             <xsl:choose>
-                <xsl:when test="$iceactNum &gt;= 10"><xsl:value-of select="floor($iceactNum div 10)"/></xsl:when>
-                <xsl:otherwise><xsl:value-of select="$iceactNum"/></xsl:otherwise>
+                <xsl:when test="string($iceactCode) = ''">-1</xsl:when>
+                <xsl:when test="number($iceactCode) &gt;= 10"><xsl:value-of select="floor(number($iceactCode) div 10)"/></xsl:when>
+                <xsl:otherwise><xsl:value-of select="number($iceactCode)"/></xsl:otherwise>
             </xsl:choose>
         </xsl:variable>
+
         <xsl:variable name="fillColor">
             <xsl:choose>
-                <xsl:when test="$lead = 0 or $lead = 1">#E6F2FF</xsl:when>
-                <xsl:when test="$lead = 2">#F5F5DC</xsl:when>
-                <xsl:when test="$lead = 3 or $lead = 4">#FFFFCC</xsl:when>
-                <xsl:when test="$lead = 5 or $lead = 6">#FFCC99</xsl:when>
-                <xsl:when test="$lead = 7 or $lead = 8">#FF9966</xsl:when>
-                <xsl:when test="$lead = 9">#FFFAF0</xsl:when>
-                <xsl:otherwise>#DDDDDD</xsl:otherwise>
+                <!-- Stage of development: inline WMO icesod table. -->
+                <xsl:when test="$displayMode = 'IceScientificIcesodDisplayMode'">
+                    <xsl:variable name="hex">
+                        <xsl:if test="string($icesodCode) != ''">
+                            <xsl:call-template name="icesod-fill-hex">
+                                <xsl:with-param name="code" select="$icesodCode"/>
+                            </xsl:call-template>
+                        </xsl:if>
+                    </xsl:variable>
+                    <xsl:choose>
+                        <xsl:when test="string($hex) != ''"><xsl:value-of select="$hex"/></xsl:when>
+                        <xsl:otherwise>#DDDDDD</xsl:otherwise>
+                    </xsl:choose>
+                </xsl:when>
+
+                <!-- Navigational: PROVISIONAL adapter-authored traffic light
+                     keyed off total concentration (no upstream navigational
+                     colours ship in 1.2.1). Placeholder only — NOT a
+                     POLARIS/RIO navigational-risk computation. -->
+                <xsl:when test="$displayMode = 'IceNavigationalDisplayMode'">
+                    <xsl:choose>
+                        <xsl:when test="string($iceactCode) = ''">#DDDDDD</xsl:when>
+                        <xsl:when test="$lead &lt;= 1">#00C800</xsl:when>
+                        <xsl:when test="$lead &lt;= 3">#9ACD32</xsl:when>
+                        <xsl:when test="$lead &lt;= 6">#FFD000</xsl:when>
+                        <xsl:otherwise>#E00000</xsl:otherwise>
+                    </xsl:choose>
+                </xsl:when>
+
+                <!-- Concentration (default): inline WMO iceact table with an
+                     adapter-authored leading-digit fallback ramp. -->
+                <xsl:otherwise>
+                    <xsl:variable name="hex">
+                        <xsl:if test="string($iceactCode) != ''">
+                            <xsl:call-template name="iceact-fill-hex">
+                                <xsl:with-param name="code" select="$iceactCode"/>
+                            </xsl:call-template>
+                        </xsl:if>
+                    </xsl:variable>
+                    <xsl:choose>
+                        <xsl:when test="string($hex) != ''"><xsl:value-of select="$hex"/></xsl:when>
+                        <xsl:when test="$lead = 0 or $lead = 1">#E6F2FF</xsl:when>
+                        <xsl:when test="$lead = 2">#F5F5DC</xsl:when>
+                        <xsl:when test="$lead = 3 or $lead = 4">#FFFFCC</xsl:when>
+                        <xsl:when test="$lead = 5 or $lead = 6">#FFCC99</xsl:when>
+                        <xsl:when test="$lead = 7 or $lead = 8">#FF9966</xsl:when>
+                        <xsl:when test="$lead = 9">#FFFAF0</xsl:when>
+                        <xsl:otherwise>#DDDDDD</xsl:otherwise>
+                    </xsl:choose>
+                </xsl:otherwise>
             </xsl:choose>
         </xsl:variable>
 

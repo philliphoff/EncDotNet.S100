@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <typeparam name="TFeature">
 /// The concrete feature type constrained to <see cref="IS100Feature"/>.
 /// </typeparam>
-public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor
     where TFeature : IS100Feature
 {
     private readonly GmlPortrayalCatalogueBase _catalogue;
@@ -193,6 +193,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
             var catalogue = _catalogue;
             context?.EcdisDisplay?.ApplyTo(catalogue);
+            ApplyDisplayMode(catalogue, context);
             await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
             var featureSource = CreateFeatureXmlSource();
@@ -295,6 +296,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
         var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
+        ApplyDisplayMode(catalogue, context);
         await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         var featureSource = CreateFeatureXmlSource();
@@ -323,6 +325,27 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 ?? DrawingInstructionCategory.None,
             basemap: context?.Basemap ?? BasemapKind.None);
     }
+
+    /// <summary>
+    /// Applies the context's explicit S-100 Part 9 §11.7 display-mode
+    /// selection to the catalogue, when set and declared. Called after
+    /// <see cref="EcdisDisplayExtensions.ApplyTo"/> so an explicit spec-native
+    /// mode id (e.g. an S-411 concentration / stage-of-development /
+    /// navigational selection) wins over the ECDIS-category-derived mode. A
+    /// null or undeclared id leaves the catalogue's current mode untouched.
+    /// </summary>
+    private void ApplyDisplayMode(GmlPortrayalCatalogueBase catalogue, RenderContext? context)
+    {
+        var modeId = context?.DisplayModeId;
+        if (string.IsNullOrEmpty(modeId))
+            return;
+
+        if (catalogue.DisplayModes.DeclaredModeIds.Contains(modeId))
+            catalogue.DisplayModes.SetActive(modeId);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> DeclaredDisplayModeIds => _catalogue.DisplayModes.DeclaredModeIds.ToList();
 
     /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfo(string featureRef)
