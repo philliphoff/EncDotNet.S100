@@ -35,7 +35,7 @@ internal static class FacadeRenderContextBuilder
             _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hidden },
         };
 
-        return context with { Basemap = options.Basemap };
+        return context with { Basemap = options.Basemap, DisplayModeId = options.DisplayModeId };
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

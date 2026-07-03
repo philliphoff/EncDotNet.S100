@@ -114,6 +114,40 @@ public sealed class OptionParsingTests
     }
 
     [Theory]
+    [InlineData("ice-concentration", "IceScientificIceactDisplayMode")]
+    [InlineData("concentration", "IceScientificIceactDisplayMode")]
+    [InlineData("ICE-CONCENTRATION", "IceScientificIceactDisplayMode")]
+    [InlineData("ice-sod", "IceScientificIcesodDisplayMode")]
+    [InlineData("sod", "IceScientificIcesodDisplayMode")]
+    [InlineData(" ice-navigational ", "IceNavigationalDisplayMode")]
+    [InlineData("navigational", "IceNavigationalDisplayMode")]
+    public void TryParseDisplayMode_accepts_known_tokens(string input, string expected)
+    {
+        Assert.True(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Equal(expected, modeId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryParseDisplayMode_treats_blank_as_default(string? input)
+    {
+        Assert.True(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Null(modeId);
+    }
+
+    [Theory]
+    [InlineData("ice")]
+    [InlineData("polaris")]
+    [InlineData("stage")]
+    public void TryParseDisplayMode_rejects_unknown(string input)
+    {
+        Assert.False(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Null(modeId);
+    }
+
+    [Theory]
     [InlineData("S101-R-1.2", new[] { "S101-R-1.2" })]
     [InlineData(" S101-R-1.2 , S101-R-3.2 ", new[] { "S101-R-1.2", "S101-R-3.2" })]
     [InlineData("S101-*,,S102-*", new[] { "S101-*", "S102-*" })]

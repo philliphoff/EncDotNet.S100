@@ -52,4 +52,13 @@ public sealed class S100RendererOptions
     /// output unchanged).
     /// </summary>
     public BasemapKind Basemap { get; init; } = BasemapKind.None;
+
+    /// <summary>
+    /// Optional spec-native portrayal display-mode id (S-100 Part 9 §11.7)
+    /// selecting among a catalogue's declared display modes; e.g. S-411 sea-ice
+    /// offers concentration, stage-of-development and navigational modes over a
+    /// single dataset (issue #416). <c>null</c> keeps each catalogue's default
+    /// mode. Ignored by catalogues that do not declare the given mode.
+    /// </summary>
+    public string? DisplayModeId { get; init; }
 }

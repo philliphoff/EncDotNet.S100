@@ -20,7 +20,8 @@ internal static class RenderContextBuilder
         double textScale,
         int timeStepIndex,
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
-        BasemapKind basemap = BasemapKind.None)
+        BasemapKind basemap = BasemapKind.None,
+        string? displayModeId = null)
     {
         DateTime? timeStep = ResolveTimeStep(processor, timeStepIndex);
 
@@ -40,7 +41,7 @@ internal static class RenderContextBuilder
             _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
         };
 
-        return context with { Basemap = basemap };
+        return context with { Basemap = basemap, DisplayModeId = displayModeId };
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

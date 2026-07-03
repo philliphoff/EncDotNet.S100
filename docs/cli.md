@@ -110,6 +110,7 @@ stack is involved, so it runs anywhere .NET does.
 | `--no-text` | off | Suppress text/label drawing instructions (shorthand for `--hide text`). |
 | `--hide <list>` | _none_ | Suppress drawing-instruction categories — any of `text`, `points`, `lines`, `areas` — useful for clean fills on label-dense products such as S-411 sea-ice. |
 | `--basemap <mode>` | `none` | Draw a basemap beneath the chart data: `none` (default) or `offline`. `offline` composites the bundled Natural Earth 1:10m land layer (public domain, parchment tone `238,232,220`) under all chart layers, projected with the chart's own viewport. Applies to both forms. Online tile basemaps are not available headlessly. |
+| `--display-mode <mode>` | `ice-concentration` | **S-411 only.** Select the sea-ice portrayal display mode: `ice-concentration` (total concentration, default), `ice-sod` (stage of development) or `ice-navigational` (**provisional** preview derived from total concentration — **not** a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data renders in any mode. Supplying the option for a non-S-411 dataset is an error; `s100 info <dataset>` lists the modes a dataset supports. |
 
 ## Compositing multiple datasets
 

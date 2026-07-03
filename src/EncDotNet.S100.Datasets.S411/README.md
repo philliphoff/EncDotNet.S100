@@ -126,6 +126,39 @@ substitutes the adapter for the catalogue's `mainRule` only; all other rule
 references (sub-templates, simple-symbol templates, etc.) are loaded from
 the unmodified PC. The adapter handles both GML shapes described above.
 
+### Selectable display modes (issue #416)
+
+A single S-411 dataset carries the full WMO egg code per polygon (`iceact`,
+`iceapc`, `icesod`, `iceflz`), and the upstream PC declares three display
+modes (S-100 Part 9 §11.7). The adapter honours the active mode via an
+`<xsl:param name="displayMode"/>` threaded in by the vector engine from the
+catalogue's `DisplayModeController`:
+
+| Display-mode id | CLI `--display-mode` token | Fill |
+|---|---|---|
+| `IceScientificIceactDisplayMode` (default) | `ice-concentration` | Total concentration — WMO `iceact` colours |
+| `IceScientificIcesodDisplayMode` | `ice-sod` | Stage of development — WMO `icesod` colours |
+| `IceNavigationalDisplayMode` | `ice-navigational` | **Provisional** preview derived from total concentration (adapter-authored) — **not** a POLARIS/RIO navigational-risk computation |
+
+The concentration and stage-of-development colours are held **inline** in the
+adapter as pre-converted `#RRGGBB` literals, mirrored from the bundled upstream
+tables (`pc/Rules/seaice_wmo_iceact.xsl` / `seaice_wmo_icesod.xsl`). Those
+upstream files remain the canonical source of the values and stay
+byte-identical to upstream; the `S411WmoColourParityTests` xunit test parses
+them, converts each `number($iceX)=N -> colorToken` "R G B" entry to `#RRGGBB`,
+and asserts equality with the adapter's inline tables — so any upstream drift
+fails the build **loudly** rather than silently degrading at render time. This
+keeps the single-source guarantee without runtime `document()` plumbing or
+per-render parse cost. When an egg code is absent from the upstream table
+(real CIS feeds use tenths / list-style codes) the concentration branch falls
+back to an adapter-authored leading-digit ramp. The navigational mode has no
+upstream colours in 1.2.1, so it uses a **provisional** adapter-authored
+traffic-light mapping derived from total concentration; this is a placeholder
+preview only and is **not** a POLARIS/RIO navigational-risk computation. Select
+the mode from the CLI with
+`s100 render <dataset> --display-mode <token>`; the available modes are listed
+by `s100 info <dataset>`.
+
 ### Other
 
 - S-411 has no information types (`<imember>` elements); only feature wrappers.
