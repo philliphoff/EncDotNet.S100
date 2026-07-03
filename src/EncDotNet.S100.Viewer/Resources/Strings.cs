@@ -579,6 +579,15 @@ internal static class Strings
     public static string Segment_TextOther => Get(nameof(Segment_TextOther));
     public static string Segment_TextAll => Get(nameof(Segment_TextAll));
 
+    // S-411 sea-ice display-mode selector (issue #416)
+    public static string DisplayMode_Header => Get(nameof(DisplayMode_Header));
+    public static string DisplayMode_Concentration => Get(nameof(DisplayMode_Concentration));
+    public static string DisplayMode_StageOfDevelopment => Get(nameof(DisplayMode_StageOfDevelopment));
+    public static string DisplayMode_Navigational => Get(nameof(DisplayMode_Navigational));
+    public static string Tooltip_DisplayMode_Concentration => Get(nameof(Tooltip_DisplayMode_Concentration));
+    public static string Tooltip_DisplayMode_StageOfDevelopment => Get(nameof(Tooltip_DisplayMode_StageOfDevelopment));
+    public static string Tooltip_DisplayMode_Navigational => Get(nameof(Tooltip_DisplayMode_Navigational));
+
     // Toast notification titles
     public static string Toast_Error => Get(nameof(Toast_Error));
     public static string Toast_Warning => Get(nameof(Toast_Warning));

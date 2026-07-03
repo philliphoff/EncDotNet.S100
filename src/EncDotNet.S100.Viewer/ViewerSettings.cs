@@ -337,6 +337,16 @@ internal sealed class ViewerSettings
     public string EcdisHiddenDisplayPlanes { get; set; } = "";
 
     /// <summary>
+    /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
+    /// are spec codes (e.g. "S-411"); values are the spec-native mode id
+    /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset
+    /// display-mode selector for products declaring more than one mode.
+    /// Empty by default (each catalogue renders its default mode).
+    /// </summary>
+    public Dictionary<string, string> EcdisActiveDisplayModes { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether the viewer's default ECDIS viewing-group visibility has
     /// been seeded into <see cref="EcdisHiddenViewingGroups"/>. Applied
     /// once per profile (see

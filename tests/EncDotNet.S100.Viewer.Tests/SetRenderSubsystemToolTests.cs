@@ -29,6 +29,9 @@ public class SetRenderSubsystemToolTests
             CurrentRenderSubsystem = subsystem;
             return Task.CompletedTask;
         }
+
+        public string? GetDisplayMode(string spec) => null;
+        public Task SetDisplayModeAsync(string spec, string? modeId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class FakeAccessor : IRenderStateControllerAccessor

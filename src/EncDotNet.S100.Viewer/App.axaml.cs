@@ -495,7 +495,15 @@ public partial class App : Application
                 if (Enum.TryParse<EncDotNet.S100.Pipelines.Vector.DisplayPlane>(token, ignoreCase: true, out var plane))
                     hiddenPlanes.Add(plane);
             }
-            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null);
+            // Hydrate explicit per-spec display-mode selections (§11.7).
+            var displayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in settings.EcdisActiveDisplayModes)
+            {
+                if (!string.IsNullOrWhiteSpace(kv.Value))
+                    displayModes[kv.Key] = kv.Value;
+            }
+            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
+                displayModes.Count > 0 ? displayModes : null);
 
             // Persist on every change so a crash doesn't lose the user's
             // ECDIS preferences. Cheap because settings.json is small.
@@ -511,6 +519,12 @@ public partial class App : Application
                 }
                 settings.EcdisHiddenDisplayPlanes =
                     string.Join(",", snap.HiddenDisplayPlanes.OrderBy(p => p));
+                settings.EcdisActiveDisplayModes.Clear();
+                foreach (var kv in snap.ActiveDisplayModes)
+                {
+                    if (!string.IsNullOrEmpty(kv.Value))
+                        settings.EcdisActiveDisplayModes[kv.Key] = kv.Value;
+                }
                 try { settings.Save(); } catch { /* best-effort */ }
             };
             return state;
@@ -709,6 +723,7 @@ public partial class App : Application
         services.AddSingleton<TimelineViewModel>();
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();
+        services.AddSingleton<DisplayModeToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();

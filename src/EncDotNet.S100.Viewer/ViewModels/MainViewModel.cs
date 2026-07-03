@@ -46,6 +46,7 @@ internal sealed class MainViewModel : ViewModelBase
     public TimelineViewModel Timeline { get; }
     public DisplayToolbarViewModel DisplayToolbar { get; }
     public TextGroupToolbarViewModel TextToolbar { get; }
+    public DisplayModeToolbarViewModel DisplayModeToolbar { get; }
     public EcdisDisplayPanelViewModel EcdisDisplayPanel { get; }
 
     /// <summary>
@@ -952,6 +953,7 @@ internal sealed class MainViewModel : ViewModelBase
         TimelineViewModel timeline,
         DisplayToolbarViewModel displayToolbar,
         TextGroupToolbarViewModel textToolbar,
+        DisplayModeToolbarViewModel displayModeToolbar,
         EcdisDisplayPanelViewModel ecdisDisplayPanel,
         IThemeService themeService,
         IRecentFilesService recentFiles,
@@ -977,6 +979,7 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(displayToolbar);
         ArgumentNullException.ThrowIfNull(textToolbar);
+        ArgumentNullException.ThrowIfNull(displayModeToolbar);
         ArgumentNullException.ThrowIfNull(ecdisDisplayPanel);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
@@ -1038,6 +1041,7 @@ internal sealed class MainViewModel : ViewModelBase
         Timeline = timeline;
         DisplayToolbar = displayToolbar;
         TextToolbar = textToolbar;
+        DisplayModeToolbar = displayModeToolbar;
         EcdisDisplayPanel = ecdisDisplayPanel;
         Timeline.CloseRequested += () => IsBottomDockOpen = false;
 

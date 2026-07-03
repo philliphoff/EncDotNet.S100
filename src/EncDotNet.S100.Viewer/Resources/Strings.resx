@@ -1495,6 +1495,36 @@
     <comment>Compact segment label for the All text viewing group.</comment>
   </data>
 
+  <!-- S-411 sea-ice display-mode selector (issue #416) -->
+  <data name="DisplayMode_Header" xml:space="preserve">
+    <value>Ice display mode</value>
+    <comment>Header for the S-411 sea-ice portrayal display-mode selector in the display-settings overlay.</comment>
+  </data>
+  <data name="DisplayMode_Concentration" xml:space="preserve">
+    <value>Concentration</value>
+    <comment>Label for the S-411 total ice-concentration portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Label for the S-411 stage-of-development (ice thickness/age) portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_Navigational" xml:space="preserve">
+    <value>Navigational (provisional)</value>
+    <comment>Label for the provisional S-411 navigational portrayal mode; the "(provisional)" suffix marks it as a concentration-derived preview, not a POLARIS/RIO risk product.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Concentration" xml:space="preserve">
+    <value>Portray sea ice by total concentration (WMO egg-code concentration ramp).</value>
+    <comment>Tooltip for the S-411 concentration display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Portray sea ice by stage of development (WMO egg-code thickness/age ramp).</value>
+    <comment>Tooltip for the S-411 stage-of-development display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Navigational" xml:space="preserve">
+    <value>Provisional navigational preview derived from total concentration. Not a POLARIS/RIO navigational-risk computation.</value>
+    <comment>Tooltip for the provisional S-411 navigational display mode.</comment>
+  </data>
+
   <!-- Toast notification titles -->
   <data name="Toast_Error" xml:space="preserve">
     <value>Error</value>
