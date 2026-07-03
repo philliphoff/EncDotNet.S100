@@ -153,7 +153,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         public string Basemap { get; init; } = "none";
 
         [CommandOption("--display-mode <MODE>")]
-        [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod (stage of development) or ice-navigational (PROVISIONAL preview derived from total concentration — NOT a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data can be shown in any mode. Ignored (must be omitted or ice-concentration) for other product specifications.")]
+        [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod (stage of development) or ice-navigational (PROVISIONAL preview derived from total concentration — NOT a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data can be shown in any mode. Supplying this option for any other product specification is a validation error.")]
         public string? DisplayMode { get; init; }
 
         /// <summary>Whether this invocation composites explicit <c>--layer</c> datasets.</summary>

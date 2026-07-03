@@ -10,9 +10,10 @@
       * icesod = 87  -> upstream seaice_wmo_icesod.xsl colorToken '155 210 000'
                         => stage-of-development fill #9BD200.
 
-    Scalar (not list-style) codes are used deliberately so number() succeeds and
-    the adapter's document() lookup into the bundled upstream tables fires,
-    proving colours are read from pc/Rules/ rather than copied into the adapter.
+    Scalar (not list-style) codes are used deliberately so number() succeeds.
+    The adapter holds the WMO iceact/icesod colour tables inline, and an xunit
+    parity test guards those inline tables against the bundled upstream
+    seaice_wmo_iceact.xsl and seaice_wmo_icesod.xsl tables.
 -->
 <ice:IceDataSet xmlns:gml="http://www.opengis.net/gml/3.2"
                 xmlns:ice="http://www.jcomm.info/ice">
