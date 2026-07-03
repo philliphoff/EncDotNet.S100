@@ -1,14 +1,10 @@
-﻿
+namespace EncDotNet.S100.ExchangeSets;
 
-using System.Diagnostics.Metrics;
-
-namespace EncDotNet.S100.ExchangeSets
+public sealed class PT_Locale
 {
-    public class PT_Locale
-    {
+    public required string Language { get; init; }
 
-        public required string Language { get; init; }
-        public string? Country { get; init; }
-        public required string CharacterEncoding { get; init; }
-    }
+    public string? Country { get; init; }
+
+    public required string CharacterEncoding { get; init; }
 }
