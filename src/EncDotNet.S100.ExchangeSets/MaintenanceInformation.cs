@@ -7,7 +7,7 @@ namespace EncDotNet.S100.ExchangeSets
     {
         asNeeded = 1,
         irregular = 2
-    };
+    }
 
     public class MaintenanceInformation
     {

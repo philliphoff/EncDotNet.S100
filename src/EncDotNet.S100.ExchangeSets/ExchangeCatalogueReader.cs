@@ -108,7 +108,7 @@ public static class ExchangeCatalogueReader
     {
         Purpose? purpose = null;
         string? purposeStr = (string?)element.Element(xc + "purpose");
-        if (purposeStr != null)
+        if (!string.IsNullOrWhiteSpace(purposeStr) &&  Enum.TryParse<Purpose>(purposeStr, ignoreCase: true, out var parsedPurpose))
             purpose = (Purpose)Enum.Parse(typeof(Purpose), purposeStr);
 
 
@@ -154,7 +154,7 @@ public static class ExchangeCatalogueReader
             MetadataDateStamp = ParseDate((string?)element.Element(xc + "metadataDateStamp")),
             ReplaceData = ParseBool(element, "replaceData", xc),
             NavigationPurpose = navigationPurpose,
-            ResourceMaintenance = ReadResourceMaintenance(element.Element("resourceMaintenance"))
+            ResourceMaintenance = ReadResourceMaintenance(element.Element(xc + "resourceMaintenance"))
         };
     }
 
@@ -289,8 +289,8 @@ public static class ExchangeCatalogueReader
             BoundingPolygon = element.Element(xc + "boundingPolygon")?.ToString(),
             MaximumDisplayScale = int.TryParse(maxStr, CultureInfo.InvariantCulture, out var max) ? max : null,
             MinimumDisplayScale = int.TryParse(minStr, CultureInfo.InvariantCulture, out var min) ? min : null,
-            OptimumDisplayScale = int.TryParse(optStr, CultureInfo.InvariantCulture, out var opt) ? min : null,
-            ApproximateGridResolution = float.TryParse(resStr, CultureInfo.InvariantCulture, out var res) ? min : null,
+            OptimumDisplayScale = int.TryParse(optStr, CultureInfo.InvariantCulture, out var opt) ? opt : null,
+            ApproximateGridResolution = float.TryParse(resStr, CultureInfo.InvariantCulture, out var res) ? res : null,
             TemporalExtent = temporalExtent
         };
     }
@@ -560,17 +560,17 @@ public static class ExchangeCatalogueReader
            .Elements(lan + "CountryCode")
            .FirstOrDefault();
 
-        var country = (string?)langCode?.Attribute("codeListValue");
+        var country = (string?)countryCode?.Attribute("codeListValue");
         if (country == null)
             country = "";
 
         var charEncode = moreLocal?
            .Elements(lan + "characterEncoding")
            .FirstOrDefault()?
-           .Elements(lan + "MD_CharacterSetCode ")
+           .Elements(lan + "MD_CharacterSetCode")
            .FirstOrDefault();
 
-        var encoding = (string?)langCode?.Attribute("codeListValue");
+        var encoding = (string?)charEncode?.Attribute("codeListValue");
         if (encoding == null)
             encoding = "";
 

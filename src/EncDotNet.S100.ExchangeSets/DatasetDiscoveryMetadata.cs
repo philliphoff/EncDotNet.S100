@@ -68,7 +68,7 @@ public sealed class DatasetDiscoveryMetadata
 
     public DateOnly? UpdateApplicationDate { get; init; }
 
-    public string? ReferenceId { get; set; }
+    public string? ReferenceId { get; init; }
 
     public DateOnly? IssueDate { get; init; }
 
@@ -76,7 +76,7 @@ public sealed class DatasetDiscoveryMetadata
 
     public BoundingBox? BoundingBox { get; init; }
 
-    public TemporalExtent? TemporalExtent { get; set; }
+    public TemporalExtent? TemporalExtent { get; init; }
 
     public ProductSpecification? ProductSpecification { get; init; }
 

@@ -44,7 +44,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// <c>null</c> if unknown.</summary>
     public string? Producer { get; }
 
-    /// <summary>Catalogue-derived issue date string (the latest
+    /// <summary>Catalogue-derived issue date (the latest
     /// <c>DatasetDiscoveryMetadata.IssueDate</c> across the set), or
     /// <c>null</c> if unknown.</summary>
     public DateOnly? IssueDate { get; }
@@ -191,7 +191,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
 
         if (issueDate != null)
         {
-            parts.Add(string.Format(Strings.Pane_ExchangeSetHeader_Issued, issueDate));
+            parts.Add(string.Format(Strings.Pane_ExchangeSetHeader_Issued, issueDate.Value.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)));
         }
 
         return string.Join(" · ", parts);

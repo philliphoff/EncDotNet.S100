@@ -1,7 +1,4 @@
 ﻿
-
-using System.Diagnostics.Metrics;
-
 namespace EncDotNet.S100.ExchangeSets
 {
     public class PT_Locale

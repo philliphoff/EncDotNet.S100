@@ -699,9 +699,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// <summary>
     /// Returns the lexically-greatest non-null
     /// <see cref="DatasetDiscoveryMetadata.IssueDate"/> across the
-    /// catalogue, or <c>null</c> if no dataset declared one. ISO-8601
-    /// date strings sort correctly under ordinal comparison, so no
-    /// parsing is needed for the common case.
+    /// catalogue, or <c>null</c> if no dataset declared one. 
     /// </summary>
     private static DateOnly? ResolveLatestIssueDate(
         IReadOnlyList<DatasetDiscoveryMetadata> datasets)
