@@ -1,19 +1,16 @@
-﻿
+namespace EncDotNet.S100.ExchangeSets;
 
-namespace EncDotNet.S100.ExchangeSets
+public enum MaintenanceFrequencyCode
 {
-   
-    public enum MaintenanceFrequencyCode
-    {
-        asNeeded = 1,
-        irregular = 2
-    }
+    asNeeded = 1,
+    irregular = 2,
+}
 
-    public class MaintenanceInformation
-    {
-        public MaintenanceFrequencyCode? MaintenanceAndUpdateFrequency { get; init; }
+public class MaintenanceInformation
+{
+    public MaintenanceFrequencyCode? MaintenanceAndUpdateFrequency { get; init; }
 
-        public DateOnly? MaintenanceDate { get; init; }
-        public string? UserDefinedMaintenanceFrequency { get; init; }
-    }
+    public DateOnly? MaintenanceDate { get; init; }
+
+    public string? UserDefinedMaintenanceFrequency { get; init; }
 }
