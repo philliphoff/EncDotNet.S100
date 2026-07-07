@@ -47,6 +47,7 @@ public class SetDisplayModeToolTests
     [InlineData("sod", S411DisplayModes.StageOfDevelopmentModeId)]
     [InlineData("ICE-NAVIGATIONAL", S411DisplayModes.NavigationalModeId)]
     [InlineData(S411DisplayModes.StageOfDevelopmentModeId, S411DisplayModes.StageOfDevelopmentModeId)]
+    [InlineData("icescientificicesoddisplaymode", S411DisplayModes.StageOfDevelopmentModeId)]
     public async Task Sets_mode_from_token_or_raw_id(string input, string expected)
     {
         var ctrl = new FakeController();
@@ -164,6 +165,9 @@ public class SetDisplayModeToolTests
         var result = await tool.InvokeAsync(new SetDisplayModeRequest("ice-sod", "S411"));
 
         Assert.True(result.TryGetValue(out var ok));
+        Assert.Equal("S-411", ok!.Spec);
         Assert.Equal(S411DisplayModes.StageOfDevelopmentModeId, ok!.Mode);
+        Assert.Equal(S411DisplayModes.StageOfDevelopmentModeId, ctrl.GetDisplayMode("S-411"));
+        Assert.Null(ctrl.GetDisplayMode("S411"));
     }
 }

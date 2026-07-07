@@ -54,18 +54,18 @@ internal sealed class SetDisplayModeTool
                 + "(or the bare 'concentration' / 'sod' / 'navigational' aliases)"));
         }
 
-        var spec = string.IsNullOrWhiteSpace(request.Spec) ? DefaultSpec : request.Spec.Trim();
+        var rawSpec = string.IsNullOrWhiteSpace(request.Spec) ? DefaultSpec : request.Spec.Trim();
         var raw = request.Mode.Trim();
 
         // The friendly mode tokens are S-411-specific and S-411 is the only
         // product that declares more than one display mode today, so reject a
         // spec that declares none — keeping this path consistent with the CLI,
         // which hard-errors on `--display-mode` for non-S-411 products.
-        if (!IsMultiModeSpec(spec))
+        if (!TryCanonicalizeSpec(rawSpec, out var spec))
         {
             return ToolResult<SetDisplayModeResult>.Err(new InvalidArgument(
                 "spec",
-                $"product '{spec}' declares no selectable display modes; only 'S-411' does today"));
+                $"product '{rawSpec}' declares no selectable display modes; only 'S-411' does today"));
         }
 
         // Prefer the shared friendly-token map; fall back to a recognised
@@ -75,11 +75,9 @@ internal sealed class SetDisplayModeTool
         {
             modeId = parsed;
         }
-        else if (raw.Equals(S411DisplayModes.ConcentrationModeId, StringComparison.OrdinalIgnoreCase)
-            || raw.Equals(S411DisplayModes.StageOfDevelopmentModeId, StringComparison.OrdinalIgnoreCase)
-            || raw.Equals(S411DisplayModes.NavigationalModeId, StringComparison.OrdinalIgnoreCase))
+        else if (TryCanonicalizeModeId(raw, out var canonicalModeId))
         {
-            modeId = raw;
+            modeId = canonicalModeId;
         }
         else
         {
@@ -102,13 +100,39 @@ internal sealed class SetDisplayModeTool
     }
 
     /// <summary>
-    /// Whether <paramref name="spec"/> declares more than one selectable
-    /// display mode. Tolerates the hyphen-less <c>S411</c> form and casing.
-    /// Today only S-411 sea ice qualifies.
+    /// Canonicalizes a product specifier that declares more than one
+    /// selectable display mode. Tolerates the hyphen-less <c>S411</c> form and
+    /// casing. Today only S-411 sea ice qualifies.
     /// </summary>
-    private static bool IsMultiModeSpec(string spec)
+    private static bool TryCanonicalizeSpec(string spec, out string canonicalSpec)
     {
         var normalized = spec.Replace("-", string.Empty).Trim();
-        return normalized.Equals("S411", StringComparison.OrdinalIgnoreCase);
+        if (normalized.Equals("S411", StringComparison.OrdinalIgnoreCase))
+        {
+            canonicalSpec = DefaultSpec;
+            return true;
+        }
+
+        canonicalSpec = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Canonicalizes a recognised S-411 spec-native display-mode id.
+    /// </summary>
+    private static bool TryCanonicalizeModeId(string raw, out string? modeId)
+    {
+        modeId = raw switch
+        {
+            var value when value.Equals(S411DisplayModes.ConcentrationModeId, StringComparison.OrdinalIgnoreCase)
+                => S411DisplayModes.ConcentrationModeId,
+            var value when value.Equals(S411DisplayModes.StageOfDevelopmentModeId, StringComparison.OrdinalIgnoreCase)
+                => S411DisplayModes.StageOfDevelopmentModeId,
+            var value when value.Equals(S411DisplayModes.NavigationalModeId, StringComparison.OrdinalIgnoreCase)
+                => S411DisplayModes.NavigationalModeId,
+            _ => null
+        };
+
+        return modeId is not null;
     }
 }
