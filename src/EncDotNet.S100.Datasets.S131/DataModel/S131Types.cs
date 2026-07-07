@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -194,18 +193,18 @@ public sealed class S131Geometry
     public required S131GeometryType GeometryType { get; init; }
 
     /// <summary>Point coordinates (non-empty when <see cref="GeometryType"/> is <see cref="S131GeometryType.Point"/>).</summary>
-    public ImmutableArray<GeoPosition> Points { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve coordinate sequences (one inner array per curve segment chain).</summary>
-    public ImmutableArray<ImmutableArray<GeoPosition>> Curves { get; init; } =
-        ImmutableArray<ImmutableArray<GeoPosition>>.Empty;
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } =
+        [];
 
     /// <summary>Exterior ring of a surface (empty for non-surface geometries).</summary>
-    public ImmutableArray<GeoPosition> ExteriorRing { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Interior rings (holes) of a surface (empty for non-surface geometries).</summary>
-    public ImmutableArray<ImmutableArray<GeoPosition>> InteriorRings { get; init; } =
-        ImmutableArray<ImmutableArray<GeoPosition>>.Empty;
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } =
+        [];
 
     /// <summary>Convenience: <c>true</c> when the feature has no geometry.</summary>
     public bool IsEmpty => GeometryType == S131GeometryType.None;

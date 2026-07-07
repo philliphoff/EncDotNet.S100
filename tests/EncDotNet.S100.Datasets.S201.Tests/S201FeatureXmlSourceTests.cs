@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Linq;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
@@ -18,25 +17,25 @@ public class S201FeatureXmlSourceTests
                 Id = "f1",
                 FeatureType = "LateralBuoy",
                 GeometryType = S100GeometryType.Point,
-                Points = ImmutableArray.Create((36.95, -76.0)),
-                Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-                ExteriorRing = ImmutableArray<(double, double)>.Empty,
-                InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-                Attributes = ImmutableDictionary.CreateRange(new Dictionary<string, string>
+                Points = [(36.95, -76.0)],
+                Curves = [],
+                ExteriorRing = [],
+                InteriorRings = [],
+                Attributes = new Dictionary<string, string>
                 {
                     ["categoryOfLateralMark"] = "1",
-                }),
-                ComplexAttributes = ImmutableArray<S201ComplexAttribute>.Empty,
-                InformationReferences = ImmutableArray.Create(new S201InformationReference
+                },
+                ComplexAttributes = [],
+                InformationReferences = [new S201InformationReference
                 {
                     Role = "AtoNStatus",
                     InformationRef = "info1",
-                }),
-                FeatureReferences = ImmutableArray.Create(new S201FeatureReference
+                }],
+                FeatureReferences = [new S201FeatureReference
                 {
                     Role = "theParentFeature",
                     TargetRef = "structure1",
-                }),
+                }],
             },
         ],
         InformationTypes =
@@ -45,11 +44,11 @@ public class S201FeatureXmlSourceTests
             {
                 Id = "info1",
                 TypeCode = "AtonStatusInformation",
-                Attributes = ImmutableDictionary.CreateRange(new Dictionary<string, string>
+                Attributes = new Dictionary<string, string>
                 {
                     ["changeTypes"] = "1",
-                }),
-                ComplexAttributes = ImmutableArray<S201ComplexAttribute>.Empty,
+                },
+                ComplexAttributes = [],
             },
         ],
     };

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Datasets.S128;
@@ -26,7 +25,7 @@ internal sealed class S128DatasetCatalogSource : IDatasetCatalogSource
         new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
 
-    private ImmutableArray<DatasetCatalogEntry> _entries = ImmutableArray<DatasetCatalogEntry>.Empty;
+    private IReadOnlyList<DatasetCatalogEntry> _entries = [];
 
     /// <summary>Initializes a new source.</summary>
     /// <param name="id">Stable id (used by the aggregator).</param>
@@ -102,19 +101,19 @@ internal sealed class S128DatasetCatalogSource : IDatasetCatalogSource
         {
             changed = _datasets.Count > 0;
             _datasets.Clear();
-            _entries = ImmutableArray<DatasetCatalogEntry>.Empty;
+            _entries = [];
         }
 
         if (changed)
             Changed?.Invoke(this, new DatasetCatalogChangedEventArgs(this));
     }
 
-    private ImmutableArray<DatasetCatalogEntry> Rebuild()
+    private IReadOnlyList<DatasetCatalogEntry> Rebuild()
     {
         if (_datasets.Count == 0)
-            return ImmutableArray<DatasetCatalogEntry>.Empty;
+            return [];
 
-        var builder = ImmutableArray.CreateBuilder<DatasetCatalogEntry>();
+        var builder = new List<DatasetCatalogEntry>();
         foreach (var (label, ds) in _datasets)
         {
             foreach (var entry in ds.Entries)
@@ -123,14 +122,14 @@ internal sealed class S128DatasetCatalogSource : IDatasetCatalogSource
             }
         }
 
-        return builder.ToImmutable();
+        return builder;
     }
 
     private DatasetCatalogEntry Map(string sourceLabel, S128ProductEntry entry)
     {
         var feature = entry.Feature;
 
-        var ext = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ext = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         ext["sourceLabel"] = sourceLabel;
         ext["featureType"] = entry.FeatureType;
         if (feature.Attributes.TryGetValue("serviceStatus", out var svc))
@@ -156,7 +155,7 @@ internal sealed class S128DatasetCatalogSource : IDatasetCatalogSource
             Classification = entry.Classification,
             NotForNavigation = entry.NotForNavigation,
             Coverage = DatasetCatalogCoverage.FromRing(entry.CoverageRing),
-            ExtendedProperties = ext.ToImmutable(),
+            ExtendedProperties = ext,
         };
     }
 

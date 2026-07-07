@@ -1,7 +1,7 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines.Vector;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
@@ -75,38 +75,38 @@ public sealed class S101SurfaceInteriorRingTests
         var exterior = new S101CurveSegmentRecord
         {
             RecordId = 10,
-            PointAssociations = ImmutableArray.Create(
+            PointAssociations = [
                 new S101PointAssociation(RcnmPoint, 1, TopologyBegin),
-                new S101PointAssociation(RcnmPoint, 1, TopologyEnd)),
-            IntermediateCoordinates = ImmutableArray.Create((0, 10), (10, 10), (10, 0)),
+                new S101PointAssociation(RcnmPoint, 1, TopologyEnd)],
+            IntermediateCoordinates = [(0, 10), (10, 10), (10, 0)],
         };
 
         var interior = new S101CurveSegmentRecord
         {
             RecordId = 11,
-            PointAssociations = ImmutableArray.Create(
+            PointAssociations = [
                 new S101PointAssociation(RcnmPoint, 2, TopologyBegin),
-                new S101PointAssociation(RcnmPoint, 2, TopologyEnd)),
-            IntermediateCoordinates = ImmutableArray.Create((2, 4), (4, 4), (4, 2)),
+                new S101PointAssociation(RcnmPoint, 2, TopologyEnd)],
+            IntermediateCoordinates = [(2, 4), (4, 4), (4, 2)],
         };
 
         var surface = new S101SurfaceRecord
         {
             RecordId = 20,
-            RingAssociations = ImmutableArray.Create(
+            RingAssociations = [
                 new S101RingAssociation(RcnmCurveSegment, 10, OrientForward, UsageExterior),
-                new S101RingAssociation(RcnmCurveSegment, 11, OrientForward, UsageInterior)),
+                new S101RingAssociation(RcnmCurveSegment, 11, OrientForward, UsageInterior)],
         };
 
         var feature = new S101FeatureRecord
         {
             RecordId = 100,
             FeatureTypeCode = 42,
-            Attributes = ImmutableArray<S101Attribute>.Empty,
-            SpatialAssociations = ImmutableArray.Create(
-                new S101SpatialAssociation(RcnmSurface, 20, OrientForward)),
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            Attributes = [],
+            SpatialAssociations = [
+                new S101SpatialAssociation(RcnmSurface, 20, OrientForward)],
+            FeatureAssociations = [],
+            InformationAssociations = [],
         };
 
         return new S101Document
@@ -118,18 +118,18 @@ public sealed class S101SurfaceInteriorRingTests
                 CoordinateMultiplicationFactorY = 1,
                 CoordinateMultiplicationFactorZ = 1,
             },
-            FeatureTypeCatalogue = new Dictionary<ushort, string> { [42] = "DepthArea" }.ToImmutableDictionary(),
-            AttributeTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            Points = points.ToImmutableDictionary(p => p.RecordId),
-            CurveSegments = new[] { exterior, interior }.ToImmutableDictionary(c => c.RecordId),
-            CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = new[] { surface }.ToImmutableDictionary(s => s.RecordId),
-            Features = ImmutableArray.Create(feature),
-            InformationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = new Dictionary<ushort, string> { [42] = "DepthArea" }.ToDictionary(),
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = points.ToDictionary(p => p.RecordId),
+            CurveSegments = new[] { exterior, interior }.ToDictionary(c => c.RecordId),
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = new[] { surface }.ToDictionary(s => s.RecordId),
+            Features = [feature],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
     }
 }

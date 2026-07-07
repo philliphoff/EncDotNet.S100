@@ -480,7 +480,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.IsDefaultOrEmpty
+                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.Count == 0
                     ? Array.Empty<string>()
                     : cell.UpdateRelativePaths;
 

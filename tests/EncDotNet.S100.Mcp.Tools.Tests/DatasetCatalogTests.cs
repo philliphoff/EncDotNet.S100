@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
@@ -29,7 +28,7 @@ public class DatasetCatalogTests
         catalog.Add(LoadedDatasetFactory.S124("a"));
         var before = catalog.Datasets;
 
-        catalog.Replace(ImmutableArray<LoadedDataset>.Empty);
+        catalog.Replace([]);
 
         Assert.Single(before);
         Assert.Empty(catalog.Datasets);

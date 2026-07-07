@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using System.Xml.Linq;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S122.Diagnostics;
 
@@ -80,8 +80,8 @@ internal static class S122DatasetReader
         // containing one feature) or a single <members>/<imembers> container
         // holding all features as direct children. Walk descendants of the
         // root and collect anything whose local name matches a known type.
-        var features = ImmutableArray.CreateBuilder<S122Feature>();
-        var informationTypes = ImmutableArray.CreateBuilder<S122InformationType>();
+        var features = new List<S122Feature>();
+        var informationTypes = new List<S122InformationType>();
 
         foreach (var element in root.Descendants())
         {
@@ -110,7 +110,7 @@ internal static class S122DatasetReader
         var envelope = ParseEnvelope(root);
         if (envelope is not null && ShouldSwapAxes(features, envelope.Value))
         {
-            var swapped = ImmutableArray.CreateBuilder<S122Feature>();
+            var swapped = new List<S122Feature>();
             foreach (var f in features)
                 swapped.Add(SwapFeatureAxes(f));
             features = swapped;
@@ -121,8 +121,8 @@ internal static class S122DatasetReader
             ProductIdentifier = productId ?? "S-122",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = informationTypes,
         };
     }
 
@@ -205,21 +205,21 @@ internal static class S122DatasetReader
         ComplexAttributes = f.ComplexAttributes,
     };
 
-    private static ImmutableArray<(double, double)> SwapMany(ImmutableArray<(double, double)> src)
+    private static IReadOnlyList<(double, double)> SwapMany(IReadOnlyList<(double, double)> src)
     {
-        if (src.IsDefaultOrEmpty) return src;
-        var b = ImmutableArray.CreateBuilder<(double, double)>(src.Length);
+        if (src.Count == 0) return src;
+        var b = new List<(double, double)>(src.Count);
         foreach (var (a, c) in src) b.Add((c, a));
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<ImmutableArray<(double, double)>> SwapRings(
-        ImmutableArray<ImmutableArray<(double, double)>> src)
+    private static IReadOnlyList<IReadOnlyList<(double, double)>> SwapRings(
+        IReadOnlyList<IReadOnlyList<(double, double)>> src)
     {
-        if (src.IsDefaultOrEmpty) return src;
-        var b = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>(src.Length);
+        if (src.Count == 0) return src;
+        var b = new List<IReadOnlyList<(double, double)>>(src.Count);
         foreach (var ring in src) b.Add(SwapMany(ring));
-        return b.ToImmutable();
+        return b;
     }
 
     private static XNamespace DetectS100Namespace(XElement root)
@@ -289,12 +289,12 @@ internal static class S122DatasetReader
         };
     }
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<(double, double)> points = [];
+        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
+        IReadOnlyList<(double, double)> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<(double, double)>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         // Look for geometry in the "geometry" child element or directly under the feature.
@@ -336,11 +336,11 @@ internal static class S122DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var curveBuilder = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>();
+            var curveBuilder = new List<IReadOnlyList<(double, double)>>();
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            if (coords.Length > 0)
+            if (coords.Count > 0)
                 curveBuilder.Add(coords);
-            curves = curveBuilder.ToImmutable();
+            curves = curveBuilder;
         }
 
         // S-100 Part 10b surface property.
@@ -354,11 +354,13 @@ internal static class S122DatasetReader
         }
 
         return (geometryType, points, curves, exteriorRing, interiorRings);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S122ComplexAttribute>, ImmutableArray<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }
+
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S122ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S122ComplexAttribute>();
-        var refs = ImmutableArray.CreateBuilder<GmlReference>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S122ComplexAttribute>();
+        var refs = new List<GmlReference>();
 
         foreach (var child in element.Elements())
         {
@@ -387,7 +389,7 @@ internal static class S122DatasetReader
 
             if (child.HasElements)
             {
-                var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
+                var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
                     if (!sub.HasElements && sub.Attribute(XLinkNs + "href") is null)
@@ -400,7 +402,7 @@ internal static class S122DatasetReader
                     complex.Add(new S122ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = subAttrs.ToImmutable(),
+                        SubAttributes = subAttrs,
                     });
                 }
             }
@@ -411,7 +413,7 @@ internal static class S122DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), refs.ToImmutable());
+        return (simple, complex, refs);
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)

@@ -11,7 +11,7 @@ using MapsuiColor = Mapsui.Styles.Color;
 namespace EncDotNet.S100.Viewer.Tools;
 
 /// <summary>
-/// Immutable geometry of the feature a pick currently refers to, expressed
+/// Read-only geometry of the feature a pick currently refers to, expressed
 /// in WGS-84 lat/lon. Mirrors the primitive shape exposed by
 /// <see cref="EncDotNet.S100.Features.IS100Feature"/> so the controller can
 /// project a picked feature into the overlay without leaking the feature
@@ -55,7 +55,7 @@ internal readonly record struct PickHighlightState(
 }
 
 /// <summary>
-/// Immutable appearance bundle for the pick-highlight overlay.
+/// Read-only appearance bundle for the pick-highlight overlay.
 /// </summary>
 /// <param name="Accent">Primary accent colour as RGB bytes.</param>
 /// <param name="IsDarkBasemap">

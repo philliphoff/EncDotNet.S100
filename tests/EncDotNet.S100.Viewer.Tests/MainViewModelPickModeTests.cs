@@ -10,6 +10,7 @@ using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using EncDotNet.S100.Viewer.Views;
 using Mapsui.Layers;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

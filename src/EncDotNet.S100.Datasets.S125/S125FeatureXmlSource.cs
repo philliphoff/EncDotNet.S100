@@ -28,7 +28,7 @@ public sealed class S125FeatureXmlSource : GmlFeatureXmlSource<S125Feature>
     /// <inheritdoc/>
     protected override void WriteFeatureExtensions(S125Feature feature, XElement featureElement)
     {
-        if (!feature.InformationReferences.IsDefaultOrEmpty)
+        if (feature.InformationReferences.Count > 0)
         {
             foreach (var infoRef in feature.InformationReferences)
             {

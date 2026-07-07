@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
@@ -6,6 +5,7 @@ using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Features;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S129.Fusion.Tests.Helpers;
 
@@ -20,7 +20,7 @@ internal static class SyntheticDatasets
     public static S129Feature MakeControlPoint(
         string id, double lat, double lon, DateTimeOffset? time, double? ukcMargin = 1.5)
     {
-        var attrs = ImmutableDictionary.CreateBuilder<string, string>();
+        var attrs = new Dictionary<string, string>();
         if (time.HasValue)
             attrs["expectedPassingTime"] = time.Value.ToString("o");
         if (ukcMargin.HasValue)
@@ -31,12 +31,12 @@ internal static class SyntheticDatasets
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((lat, lon)),
-            ExteriorRing = ImmutableArray<(double, double)>.Empty,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = attrs.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            Points = [(lat, lon)],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Curves = [],
+            Attributes = attrs,
+            ComplexAttributes = [],
         };
     }
 
@@ -45,7 +45,7 @@ internal static class SyntheticDatasets
         string? sourceRouteName = "ROUTE_A",
         string? sourceRouteVersion = "1")
     {
-        var attrs = ImmutableDictionary.CreateBuilder<string, string>();
+        var attrs = new Dictionary<string, string>();
         attrs["vesselID"] = "123456789";
         if (sourceRouteName is not null) attrs["sourceRouteName"] = sourceRouteName;
         if (sourceRouteVersion is not null) attrs["sourceRouteVersion"] = sourceRouteVersion;
@@ -55,12 +55,12 @@ internal static class SyntheticDatasets
             Id = id,
             FeatureType = "UnderKeelClearancePlan",
             GeometryType = S100GeometryType.None,
-            Points = ImmutableArray<(double, double)>.Empty,
-            ExteriorRing = ImmutableArray<(double, double)>.Empty,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = attrs.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            Points = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Curves = [],
+            Attributes = attrs,
+            ComplexAttributes = [],
         };
     }
 
@@ -69,7 +69,7 @@ internal static class SyntheticDatasets
         string? sourceRouteName = "ROUTE_A",
         string? sourceRouteVersion = "1")
     {
-        var features = ImmutableArray.CreateBuilder<S129Feature>();
+        var features = new List<S129Feature>();
         features.Add(MakePlanMetadata("PLAN_1", sourceRouteName, sourceRouteVersion));
         if (extraFeatures is not null) features.AddRange(extraFeatures);
 
@@ -77,7 +77,7 @@ internal static class SyntheticDatasets
         {
             ProductIdentifier = "S-129",
             DatasetIdentifier = "TEST_DS_1",
-            Features = features.ToImmutable(),
+            Features = features.ToArray(),
         };
         return S129UnderKeelClearancePlan.From(dataset, out _);
     }
@@ -174,34 +174,34 @@ internal static class SyntheticDatasets
             Id = "WP1",
             WaypointNumber = 1,
             Position = new GeoPosition(50.005, 5.001),
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
         var wp2 = new S421Waypoint
         {
             Id = "WP2",
             WaypointNumber = 2,
             Position = new GeoPosition(50.005, 5.005),
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
         var wp3 = new S421Waypoint
         {
             Id = "WP3",
             WaypointNumber = 3,
             Position = new GeoPosition(50.005, 5.009),
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
 
         var leg12 = new S421Leg
         {
             Id = "LEG12",
-            Coordinates = ImmutableArray.Create(wp1.Position, wp2.Position),
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            Coordinates = [wp1.Position, wp2.Position],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
         var leg23 = new S421Leg
         {
             Id = "LEG23",
-            Coordinates = ImmutableArray.Create(wp2.Position, wp3.Position),
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            Coordinates = [wp2.Position, wp3.Position],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
 
         // StartWaypoint / EndWaypoint use internal setters on S421Leg;
@@ -213,11 +213,11 @@ internal static class SyntheticDatasets
             Id = routeId,
             RouteId = routeId,
             EditionNumber = editionNumber,
-            Waypoints = ImmutableArray.Create(wp1, wp2, wp3),
-            Legs = ImmutableArray.Create(leg12, leg23),
-            ActionPoints = ImmutableArray<S421ActionPoint>.Empty,
-            Schedules = ImmutableArray<S421Schedule>.Empty,
-            ExtraAttributes = ImmutableDictionary<string, string>.Empty,
+            Waypoints = [wp1, wp2, wp3],
+            Legs = [leg12, leg23],
+            ActionPoints = [],
+            Schedules = [],
+            ExtraAttributes = ReadOnlyDictionary<string, string>.Empty,
         };
     }
 }

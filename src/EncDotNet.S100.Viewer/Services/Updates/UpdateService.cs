@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,7 +64,7 @@ internal enum UpdateAvailability
 
 /// <summary>
 /// The result of an update check, including the latest release when one was
-/// found. Immutable so it can be handed straight to the About view-model.
+/// found. Read-only so it can be handed straight to the About view-model.
 /// </summary>
 internal sealed record UpdateStatus
 {

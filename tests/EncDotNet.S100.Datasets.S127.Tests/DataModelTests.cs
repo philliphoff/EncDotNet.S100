@@ -22,7 +22,7 @@ public class DataModelTests
 
         Assert.Equal("S-127", typed.ProductIdentifier);
         Assert.Equal("DS_S127_Mixed_Test", typed.DatasetIdentifier);
-        Assert.Equal(5, typed.Features.Length);
+        Assert.Equal(5, typed.Features.Count);
         Assert.Empty(diagnostics);
 
         var pbp = Assert.IsType<S127PilotBoardingPlace>(typed.Features.Single(f => f is S127PilotBoardingPlace));
@@ -35,7 +35,7 @@ public class DataModelTests
 
         var routeing = Assert.IsType<S127RouteingMeasure>(typed.Features.Single(f => f is S127RouteingMeasure));
         Assert.Equal(S127GeometryKind.Curve, routeing.GeometryKind);
-        Assert.Equal(3, routeing.Coordinates.Length);
+        Assert.Equal(3, routeing.Coordinates.Count);
 
         var restricted = Assert.IsType<S127RegulatedArea>(typed.Features.Single(f => f is S127RegulatedArea));
         Assert.Equal(S127RegulatedAreaKind.RestrictedArea, restricted.Kind);
@@ -112,8 +112,8 @@ public class DataModelTests
         {
             ProductIdentifier = "S-127",
             DatasetIdentifier = "empty",
-            Features = System.Collections.Immutable.ImmutableArray<S127Feature>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableArray<S127InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
 
         Assert.Throws<InvalidOperationException>(() =>

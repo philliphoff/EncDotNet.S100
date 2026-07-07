@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
 
@@ -22,5 +21,5 @@ namespace EncDotNet.S100.Mcp.Tools.Geometry;
 /// the underlying spec bounding boxes.
 /// </remarks>
 public sealed record GeoPolyline(
-    ImmutableArray<GeoPoint> Vertices,
+    IReadOnlyList<GeoPoint> Vertices,
     double? CorridorWidthMeters = null);

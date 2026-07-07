@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S57;
 
@@ -51,32 +50,28 @@ internal static class DefaultRules
             Objl = 30,
             S57Acronym = "COALNE",
             DefaultS101Code = "Coastline",
-            AttributeOverrides = ImmutableDictionary.CreateRange(
-                StringComparer.OrdinalIgnoreCase,
-                new[]
+            AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CATCOA"] = new S57AttributeOverride
                 {
-                    new KeyValuePair<string, S57AttributeOverride>(
-                        "CATCOA",
-                        new S57AttributeOverride
-                        {
-                            S101CodeByValue = ImmutableDictionary.CreateRange(new[]
-                            {
-                                new KeyValuePair<string, string>("3", "natureOfSurface"),
-                                new KeyValuePair<string, string>("4", "natureOfSurface"),
-                                new KeyValuePair<string, string>("5", "natureOfSurface"),
-                                new KeyValuePair<string, string>("9", "natureOfSurface"),
-                                new KeyValuePair<string, string>("11", "natureOfSurface"),
-                            }),
-                            ValueRemap = ImmutableDictionary.CreateRange(new[]
-                            {
-                                new KeyValuePair<string, string?>("3", "4"),   // sandy → sand
-                                new KeyValuePair<string, string?>("4", "5"),   // stony → stone
-                                new KeyValuePair<string, string?>("5", "7"),   // shingly → pebbles
-                                new KeyValuePair<string, string?>("9", "14"),  // coral reef → coral
-                                new KeyValuePair<string, string?>("11", "17"), // shelly → shells
-                            }),
-                        }),
-                }),
+                    S101CodeByValue = new Dictionary<string, string>
+                    {
+                        ["3"] = "natureOfSurface",
+                        ["4"] = "natureOfSurface",
+                        ["5"] = "natureOfSurface",
+                        ["9"] = "natureOfSurface",
+                        ["11"] = "natureOfSurface",
+                    },
+                    ValueRemap = new Dictionary<string, string?>
+                    {
+                        ["3"] = "4",   // sandy → sand
+                        ["4"] = "5",   // stony → stone
+                        ["5"] = "7",   // shingly → pebbles
+                        ["9"] = "14",  // coral reef → coral
+                        ["11"] = "17", // shelly → shells
+                    },
+                },
+            },
         };
         // CTRPNT — IHO Conversion Guidance § 4.3: drop in general; redirect
         // CATCTR ∈ {1, 5} to Landmark with value-remapped categoryOfLandmark.
@@ -85,28 +80,24 @@ internal static class DefaultRules
             Objl = 33,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null,
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1", "5"),
+                ConditionValues = ["1", "5"],
                 TargetS101Code = "Landmark",
-                AttributeOverrides = ImmutableDictionary.CreateRange(
-                    StringComparer.OrdinalIgnoreCase,
-                    new[]
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATCTR"] = new S57AttributeOverride
                     {
-                        new KeyValuePair<string, S57AttributeOverride>(
-                            "CATCTR",
-                            new S57AttributeOverride
-                            {
-                                S101Code = "categoryOfLandmark",
-                                ValueRemap = ImmutableDictionary.CreateRange(new[]
-                                {
-                                    new KeyValuePair<string, string?>("1", "22"), // triangulation mark
-                                    new KeyValuePair<string, string?>("5", "23"), // boundary mark
-                                }),
-                            }),
-                    }),
-            }),
+                        S101Code = "categoryOfLandmark",
+                        ValueRemap = new Dictionary<string, string?>
+                        {
+                            ["1"] = "22", // triangulation mark
+                            ["5"] = "23", // boundary mark
+                        },
+                    },
+                },
+            }],
         };
         yield return F(35, "CRANES", "Crane");
         yield return F(42, "DEPARE", "DepthArea");

@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using System.Globalization;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
@@ -366,7 +366,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private object? HostFeatureGetSpatialAssociations(double featureId)
     {
         var feat = GetFeature((uint)featureId);
-        if (feat.SpatialAssociations.Length == 0) return null;
+        if (feat.SpatialAssociations.Count == 0) return null;
 
         // Return raw spatial association data as a List<object> (marshals to
         // a 1-indexed Lua table). Each element is a dictionary with string
@@ -605,7 +605,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
     /// Returns the sub-attributes within the specified complex attribute scope.
     /// </summary>
-    private ImmutableArray<S101Attribute> ResolveAttributeScope(ImmutableArray<S101Attribute> attributes, string attributePath)
+    private IReadOnlyList<S101Attribute> ResolveAttributeScope(IReadOnlyList<S101Attribute> attributes, string attributePath)
     {
         if (string.IsNullOrEmpty(attributePath))
             return attributes;
@@ -630,11 +630,11 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 }
             }
 
-            if (numericCode is null) return ImmutableArray<S101Attribute>.Empty;
+            if (numericCode is null) return [];
 
             // Find the nth instance of this complex attribute and collect sub-attributes
             int found = 0;
-            var subAttrs = ImmutableArray.CreateBuilder<S101Attribute>();
+            var subAttrs = new List<S101Attribute>();
             bool collecting = false;
             foreach (var attr in current)
             {
@@ -661,13 +661,13 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 }
             }
 
-            current = subAttrs.ToImmutable();
+            current = subAttrs;
         }
 
         return current;
     }
 
-    private List<object> GetSimpleAttributeValues(ImmutableArray<S101Attribute> attributes, string attributeCode)
+    private List<object> GetSimpleAttributeValues(IReadOnlyList<S101Attribute> attributes, string attributeCode)
     {
         // Resolve attribute code from name to numeric code
         ushort? numericCode = null;
@@ -694,7 +694,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         return result;
     }
 
-    private double CountComplexAttributes(ImmutableArray<S101Attribute> attributes, string attributeCode)
+    private double CountComplexAttributes(IReadOnlyList<S101Attribute> attributes, string attributeCode)
     {
         // For complex attributes, count instances with the matching code
         ushort? numericCode = null;
@@ -775,7 +775,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
         if (rcnm == RcnmMultiPoint && _doc.MultiPoints.TryGetValue(rcid, out var mp))
         {
-            var points = new List<object>(mp.Points.Length);
+            var points = new List<object>(mp.Points.Count);
             foreach (var (y, x, z) in mp.Points)
             {
                 points.Add(new Dictionary<string, object?>

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Immutable;
 using System.Threading;
 using System.Threading.Tasks;
 using EncDotNet.S100.Core;
@@ -25,9 +24,9 @@ internal sealed record FakeLoadedData : LoadedDatasetData;
 internal sealed class FakeDatasetCatalog : IDatasetCatalog
 {
     private readonly object _gate = new();
-    private ImmutableArray<LoadedDataset> _datasets = ImmutableArray<LoadedDataset>.Empty;
+    private IReadOnlyList<LoadedDataset> _datasets = [];
 
-    public ImmutableArray<LoadedDataset> Datasets
+    public IReadOnlyList<LoadedDataset> Datasets
     {
         get { lock (_gate) { return _datasets; } }
     }
@@ -42,7 +41,7 @@ internal sealed class FakeDatasetCatalog : IDatasetCatalog
             bounds ?? new BoundingBox(50.0, -1.5, 50.5, -1.0),
             TimeRange: null,
             new FakeLoadedData());
-        lock (_gate) { _datasets = _datasets.Add(dataset); }
+        lock (_gate) { _datasets = [.. _datasets, dataset]; }
         Changed?.Invoke(this, new DatasetCatalogChangedEventArgs
         {
             Kind = DatasetCatalogChangeKind.Added,
@@ -56,7 +55,7 @@ internal sealed class FakeDatasetCatalog : IDatasetCatalog
         var removed = 0;
         lock (_gate)
         {
-            var next = ImmutableArray.CreateBuilder<LoadedDataset>();
+            var next = new List<LoadedDataset>();
             foreach (var d in _datasets)
             {
                 if (string.Equals(d.Id.Value, id, StringComparison.Ordinal))
@@ -68,7 +67,7 @@ internal sealed class FakeDatasetCatalog : IDatasetCatalog
                     next.Add(d);
                 }
             }
-            _datasets = next.ToImmutable();
+            _datasets = next.ToArray();
         }
         if (removed > 0)
         {

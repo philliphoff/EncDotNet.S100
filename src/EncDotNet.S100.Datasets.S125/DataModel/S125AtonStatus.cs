@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S125.DataModel;
 
@@ -65,8 +65,8 @@ public sealed class S125AtonStatusInformation
     public S125DateRange? FixedDateRange { get; init; }
 
     /// <summary>Periodic validity ranges, when present (§periodicDateRange).</summary>
-    public ImmutableArray<S125DateRange> PeriodicDateRanges { get; init; } =
-        ImmutableArray<S125DateRange>.Empty;
+    public IReadOnlyList<S125DateRange> PeriodicDateRanges { get; init; } =
+        [];
 
     /// <summary>
     /// Convenience derived flag indicating whether the bound aid is judged
@@ -92,8 +92,8 @@ public sealed class S125AtonStatusInformation
     };
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -125,6 +125,6 @@ public sealed class S125AtonStatusIndication
     public S125AtonStatusInformation? Status { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

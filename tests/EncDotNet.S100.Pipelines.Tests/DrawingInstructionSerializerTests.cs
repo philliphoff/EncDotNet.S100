@@ -42,7 +42,7 @@ public class DrawingInstructionSerializerTests
         LineWidth = 0.32,
         LineColor = "CHBLK",
         Dashes = [(0.0, 1.0), (1.0, 2.0)],
-        DashOnLengthMm = 1.0,
+        DashOnLength = 1.0,
         CoordinatesOverride = [(50.1, -1.1), (50.2, -1.2), (50.3, -1.3)],
     };
 
@@ -79,8 +79,8 @@ public class DrawingInstructionSerializerTests
         LinePlacementPosition = 0.75,
         HorizontalAlignment = TextHorizontalAlignment.End,
         VerticalAlignment = TextVerticalAlignment.Top,
-        OffsetXmm = 0.6,
-        OffsetYmm = -0.6,
+        OffsetX = 0.6,
+        OffsetY = -0.6,
         LineStartOffset = 0.1,
         LineEndOffset = 0.9,
         LineOffsetMode = LinePlacementMode.Absolute,
@@ -187,7 +187,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LineWidth, al.LineWidth);
                 Assert.Equal(e.LineColor, al.LineColor);
                 Assert.Equal(e.Dashes, al.Dashes);
-                Assert.Equal(e.DashOnLengthMm, al.DashOnLengthMm);
+                Assert.Equal(e.DashOnLength, al.DashOnLength);
                 Assert.Equal(e.CoordinatesOverride, al.CoordinatesOverride);
                 break;
 
@@ -212,8 +212,8 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LinePlacementPosition, at.LinePlacementPosition);
                 Assert.Equal(e.HorizontalAlignment, at.HorizontalAlignment);
                 Assert.Equal(e.VerticalAlignment, at.VerticalAlignment);
-                Assert.Equal(e.OffsetXmm, at.OffsetXmm);
-                Assert.Equal(e.OffsetYmm, at.OffsetYmm);
+                Assert.Equal(e.OffsetX, at.OffsetX);
+                Assert.Equal(e.OffsetY, at.OffsetY);
                 Assert.Equal(e.LineStartOffset, at.LineStartOffset);
                 Assert.Equal(e.LineEndOffset, at.LineEndOffset);
                 Assert.Equal(e.LineOffsetMode, at.LineOffsetMode);

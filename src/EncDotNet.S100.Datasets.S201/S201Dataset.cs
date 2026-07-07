@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S201;
@@ -32,10 +32,10 @@ public sealed class S201Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>Feature instances contained in the dataset.</summary>
-    public required ImmutableArray<S201Feature> Features { get; init; }
+    public required IReadOnlyList<S201Feature> Features { get; init; }
 
     /// <summary>Information type instances contained in the dataset.</summary>
-    public required ImmutableArray<S201InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<S201InformationType> InformationTypes { get; init; }
 
     /// <summary>Opens an S-201 dataset from a file path.</summary>
     public static S201Dataset Open(string path)
@@ -67,7 +67,7 @@ public sealed class S201Dataset
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentException.ThrowIfNullOrEmpty(role);
 
-        if (feature.FeatureReferences.IsDefaultOrEmpty) yield break;
+        if (feature.FeatureReferences.Count == 0) yield break;
 
         foreach (var reference in feature.FeatureReferences)
         {
@@ -95,7 +95,7 @@ public sealed class S201Dataset
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentException.ThrowIfNullOrEmpty(role);
 
-        if (feature.InformationReferences.IsDefaultOrEmpty) yield break;
+        if (feature.InformationReferences.Count == 0) yield break;
 
         foreach (var reference in feature.InformationReferences)
         {
@@ -134,25 +134,25 @@ public sealed class S201Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<(double Latitude, double Longitude)> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<(double Latitude, double Longitude)> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
-    public required ImmutableArray<S201ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S201ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes;
 
     /// <summary>
     /// Information-type association references (e.g. <c>AtoNStatus</c>
@@ -161,7 +161,7 @@ public sealed class S201Feature : IS100Feature
     /// <c>SpatialQuality</c>, <c>AtoNFixingMethod</c>). Preserved so XSLT
     /// portrayal rules can resolve cross-references.
     /// </summary>
-    public required ImmutableArray<S201InformationReference> InformationReferences { get; init; }
+    public required IReadOnlyList<S201InformationReference> InformationReferences { get; init; }
 
     /// <summary>
     /// Feature-to-feature association references (e.g.
@@ -170,7 +170,7 @@ public sealed class S201Feature : IS100Feature
     /// Annex A). Preserved so callers and portrayal rules can navigate
     /// equipment-on-structure or aggregation relationships.
     /// </summary>
-    public required ImmutableArray<S201FeatureReference> FeatureReferences { get; init; }
+    public required IReadOnlyList<S201FeatureReference> FeatureReferences { get; init; }
 }
 
 /// <summary>
@@ -187,10 +187,10 @@ public sealed class S201InformationType : IS100InformationType
     public required string TypeCode { get; init; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups.</summary>
-    public required ImmutableArray<S201ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S201ComplexAttribute> ComplexAttributes { get; init; }
 }
 
 /// <summary>
@@ -202,7 +202,7 @@ public sealed class S201ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 }
 
 /// <summary>

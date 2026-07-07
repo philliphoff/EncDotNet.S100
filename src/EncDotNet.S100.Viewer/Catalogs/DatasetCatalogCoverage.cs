@@ -1,5 +1,4 @@
-using System.Collections.Immutable;
-
+using System.Collections.Generic;
 namespace EncDotNet.S100.Viewer.Catalogs;
 
 /// <summary>
@@ -14,7 +13,7 @@ namespace EncDotNet.S100.Viewer.Catalogs;
 /// </para>
 /// </remarks>
 internal sealed record DatasetCatalogCoverage(
-    ImmutableArray<(double Latitude, double Longitude)> Ring,
+    IReadOnlyList<(double Latitude, double Longitude)> Ring,
     double MinLatitude,
     double MinLongitude,
     double MaxLatitude,
@@ -26,9 +25,9 @@ internal sealed record DatasetCatalogCoverage(
     /// ring is empty.
     /// </summary>
     public static DatasetCatalogCoverage? FromRing(
-        ImmutableArray<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<(double Latitude, double Longitude)> ring)
     {
-        if (ring.IsDefaultOrEmpty)
+        if (ring.Count == 0)
             return null;
 
         double minLat = double.MaxValue, maxLat = double.MinValue;

@@ -1861,7 +1861,7 @@ public static class S100VectorTileRenderer
         // Spatial index over the base-plane op extents (#332 cold tile-gen,
         // perf line under #347), built once when a scene is bound so each
         // off-thread RasterizeTile walk can be scoped to the ops intersecting
-        // the tile (+ gutter) instead of the whole cell. Immutable after
+        // the tile (+ gutter) instead of the whole cell. Stable after
         // construction, so it is safe to query from the multiple worker threads
         // that rasterise tiles concurrently. Null until a scene is bound.
         public BaseSpatialIndex? BaseIndex;

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 
@@ -92,13 +91,13 @@ internal static class GeoQueryJsonReader
         return new GeoQuery.Polygon(new GeoPolygon(ring));
     }
 
-    private static ImmutableArray<GeoPoint> ReadVertexArray(JsonElement el)
+    private static IReadOnlyList<GeoPoint> ReadVertexArray(JsonElement el)
     {
         if (el.ValueKind != JsonValueKind.Array)
         {
             throw new ArgumentException("Vertex array must be a JSON array of [lat,lon] pairs.");
         }
-        var builder = ImmutableArray.CreateBuilder<GeoPoint>(el.GetArrayLength());
+        var builder = new List<GeoPoint>(el.GetArrayLength());
         foreach (var item in el.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 2)
@@ -109,6 +108,6 @@ internal static class GeoQueryJsonReader
             var lon = item[1].GetDouble();
             builder.Add(new GeoPoint(lat, lon));
         }
-        return builder.MoveToImmutable();
+        return builder;
     }
 }

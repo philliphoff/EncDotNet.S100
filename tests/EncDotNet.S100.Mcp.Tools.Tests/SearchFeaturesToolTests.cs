@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S122;
@@ -20,24 +20,24 @@ public class SearchFeaturesToolTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((lat, lon)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            Points = [(lat, lon)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [new S122ComplexAttribute
             {
                 Code = "featureName",
-                SubAttributes = ImmutableDictionary<string, string>.Empty.Add("name", name),
-            }),
+                SubAttributes = new Dictionary<string, string> { ["name"] = name },
+            }],
         };
 
     private static LoadedDataset S122With(string id, BoundingBox? bounds, params S122Feature[] features)
     {
         var model = new S122Dataset
         {
-            Features = features.ToImmutableArray(),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = features.ToArray(),
+            InformationTypes = [],
         };
         return new LoadedDataset(
             new DatasetId(id),
@@ -60,10 +60,10 @@ public class SearchFeaturesToolTests
         };
         var dataset = S101Synth.Dataset(
             id,
-            ImmutableArray.Create(feature),
-            featureTypes: new Dictionary<ushort, string> { [lightsCode] = "LIGHTS" }.ToImmutableDictionary(),
-            attributeTypes: new Dictionary<ushort, string> { [ObjnamCode] = "OBJNAM" }.ToImmutableDictionary(),
-            points: new Dictionary<uint, S101PointRecord> { [rcid] = point }.ToImmutableDictionary());
+            [feature],
+            featureTypes: new Dictionary<ushort, string> { [lightsCode] = "LIGHTS" }.ToDictionary(),
+            attributeTypes: new Dictionary<ushort, string> { [ObjnamCode] = "OBJNAM" }.ToDictionary(),
+            points: new Dictionary<uint, S101PointRecord> { [rcid] = point }.ToDictionary());
         return LoadedDatasetFactory.S101(id, dataset, LoadedDatasetFactory.Box(-1, -1, 10, 10));
     }
 
@@ -208,7 +208,7 @@ public class SearchFeaturesToolTests
         var first = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 0, PageSize: 2));
         Assert.True(first.TryGetValue(out var fv));
         Assert.Equal(3, fv.TotalCount);
-        Assert.Equal(2, fv.Features.Length);
+        Assert.Equal(2, fv.Features.Count);
         Assert.True(fv.HasMore);
 
         var second = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 1, PageSize: 2));
@@ -225,13 +225,13 @@ public class SearchFeaturesToolTests
             Id = "a",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Attributes = ImmutableDictionary<string, string>.Empty.Add("objectName", "Channel Marker"),
-            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            Points = [(5.0, 5.0)],
+            Attributes = new Dictionary<string, string> { ["objectName"] = "Channel Marker" },
+            ComplexAttributes = [new S122ComplexAttribute
             {
                 Code = "featureName",
-                SubAttributes = ImmutableDictionary<string, string>.Empty.Add("name", "Channel Marker"),
-            }),
+                SubAttributes = new Dictionary<string, string> { ["name"] = "Channel Marker" },
+            }],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(S122With("mpa", null, feature));

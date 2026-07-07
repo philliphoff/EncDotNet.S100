@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace EncDotNet.S100.Validation;
 
 /// <summary>
@@ -12,13 +10,13 @@ namespace EncDotNet.S100.Validation;
 public sealed class ValidationRuleSet<TModel>
 {
     /// <summary>The rules in this set, in evaluation order.</summary>
-    public ImmutableArray<IValidationRule<TModel>> Rules { get; }
+    public IReadOnlyList<IValidationRule<TModel>> Rules { get; }
 
     /// <summary>Creates a rule set from the supplied rules.</summary>
     public ValidationRuleSet(IEnumerable<IValidationRule<TModel>> rules)
     {
         ArgumentNullException.ThrowIfNull(rules);
-        Rules = rules.ToImmutableArray();
+        Rules = rules.ToArray();
     }
 
     /// <summary>Creates a rule set from the supplied rules.</summary>
@@ -32,7 +30,7 @@ public sealed class ValidationRuleSet<TModel>
     public ValidationRuleSet<TModel> Add(IValidationRule<TModel> rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
-        return new ValidationRuleSet<TModel>(Rules.Add(rule));
+        return new ValidationRuleSet<TModel>([.. Rules, rule]);
     }
 
     /// <summary>
@@ -60,7 +58,7 @@ public sealed class ValidationRuleSet<TModel>
             throw new ArgumentNullException(nameof(model));
 
         var ctx = context ?? ValidationContext.Default;
-        var findings = ImmutableArray.CreateBuilder<ValidationFinding>();
+        var findings = new List<ValidationFinding>();
         var rulesWithFindings = 0;
 
         foreach (var rule in Rules)
@@ -88,6 +86,6 @@ public sealed class ValidationRuleSet<TModel>
                 rulesWithFindings++;
         }
 
-        return new ValidationReport(findings.ToImmutable(), Rules.Length, rulesWithFindings);
+        return new ValidationReport(findings, Rules.Count, rulesWithFindings);
     }
 }

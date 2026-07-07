@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -45,22 +45,22 @@ public sealed class S122MarineProtectedAreaDataset
     public string? ProductIdentifier { get; init; }
 
     /// <summary>All typed features in the dataset (every concrete S-122 feature type).</summary>
-    public required ImmutableArray<IS122Feature> Features { get; init; }
+    public required IReadOnlyList<IS122Feature> Features { get; init; }
 
     /// <summary>All typed information types in the dataset.</summary>
-    public required ImmutableArray<IS122InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<IS122InformationType> InformationTypes { get; init; }
 
     /// <summary>Typed Marine Protected Area features (S-122 FC §MarineProtectedArea).</summary>
-    public ImmutableArray<S122MarineProtectedArea> MarineProtectedAreas =>
-        Features.OfType<S122MarineProtectedArea>().ToImmutableArray();
+    public IReadOnlyList<S122MarineProtectedArea> MarineProtectedAreas =>
+        Features.OfType<S122MarineProtectedArea>().ToArray();
 
     /// <summary>Typed Restricted Area features (S-122 FC §RestrictedArea).</summary>
-    public ImmutableArray<S122RestrictedArea> RestrictedAreas =>
-        Features.OfType<S122RestrictedArea>().ToImmutableArray();
+    public IReadOnlyList<S122RestrictedArea> RestrictedAreas =>
+        Features.OfType<S122RestrictedArea>().ToArray();
 
     /// <summary>Typed Vessel Traffic Service Area features (S-122 FC §VesselTrafficServiceArea).</summary>
-    public ImmutableArray<S122VesselTrafficServiceArea> VesselTrafficServiceAreas =>
-        Features.OfType<S122VesselTrafficServiceArea>().ToImmutableArray();
+    public IReadOnlyList<S122VesselTrafficServiceArea> VesselTrafficServiceAreas =>
+        Features.OfType<S122VesselTrafficServiceArea>().ToArray();
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S122Dataset Source { get; init; }
@@ -86,7 +86,7 @@ public sealed class S122MarineProtectedAreaDataset
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         // Project information types first (without resolved references) so the
@@ -95,9 +95,9 @@ public sealed class S122MarineProtectedAreaDataset
         var emptyResolver = XlinkResolver.Build(Array.Empty<KeyValuePair<string, object>>());
         var preCtx = new ProjectionContext(emptyResolver);
 
-        var infoTypes = ImmutableArray.CreateBuilder<IS122InformationType>();
+        var infoTypes = new List<IS122InformationType>();
         var infoTypesById = new Dictionary<string, IS122InformationType>(StringComparer.OrdinalIgnoreCase);
-        foreach (var i in dataset.InformationTypes.IsDefault ? ImmutableArray<S122InformationType>.Empty : dataset.InformationTypes)
+        foreach (var i in dataset.InformationTypes.Count == 0 ? [] : dataset.InformationTypes)
         {
             var typed = ProjectInformationType(i, preCtx);
             infoTypes.Add(typed);
@@ -107,9 +107,9 @@ public sealed class S122MarineProtectedAreaDataset
 
         // Project features (without resolved references) so feature ⇄ feature
         // bindings can be resolved in pass 2.
-        var features = ImmutableArray.CreateBuilder<IS122Feature>();
+        var features = new List<IS122Feature>();
         var featuresById = new Dictionary<string, IS122Feature>(StringComparer.OrdinalIgnoreCase);
-        foreach (var f in dataset.Features.IsDefault ? ImmutableArray<S122Feature>.Empty : dataset.Features)
+        foreach (var f in dataset.Features.Count == 0 ? [] : dataset.Features)
         {
             var typed = ProjectFeature(f, preCtx);
             features.Add(typed);
@@ -140,13 +140,13 @@ public sealed class S122MarineProtectedAreaDataset
             }
         }
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S122MarineProtectedAreaDataset
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
-            Features = features.ToImmutable(),
-            InformationTypes = infoTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = infoTypes,
             Source = dataset,
         };
     }
@@ -165,16 +165,16 @@ public sealed class S122MarineProtectedAreaDataset
         return XlinkResolver.Build(All());
     }
 
-    private static (ImmutableArray<S122InformationReference> infoRefs,
-                    ImmutableArray<S122FeatureReference> featRefs)
-        ResolveReferences(string referrerId, ImmutableArray<GmlReference> refs, ProjectionContext ctx)
+    private static (IReadOnlyList<S122InformationReference> infoRefs,
+                    IReadOnlyList<S122FeatureReference> featRefs)
+        ResolveReferences(string referrerId, IReadOnlyList<GmlReference> refs, ProjectionContext ctx)
     {
-        if (refs.IsDefaultOrEmpty)
-            return (ImmutableArray<S122InformationReference>.Empty,
-                    ImmutableArray<S122FeatureReference>.Empty);
+        if (refs.Count == 0)
+            return ([],
+                    []);
 
-        var infos = ImmutableArray.CreateBuilder<S122InformationReference>();
-        var feats = ImmutableArray.CreateBuilder<S122FeatureReference>();
+        var infos = new List<S122InformationReference>();
+        var feats = new List<S122FeatureReference>();
         foreach (var r in refs)
         {
             var target = ctx.Xlinks.ResolveAny(r.Href, r.Role, ctx, referrerId);
@@ -188,7 +188,7 @@ public sealed class S122MarineProtectedAreaDataset
                     break;
             }
         }
-        return (infos.ToImmutable(), feats.ToImmutable());
+        return (infos, feats);
     }
 
     private static IS122Feature ProjectFeature(S122Feature f, ProjectionContext ctx)
@@ -572,24 +572,24 @@ public sealed class S122MarineProtectedAreaDataset
         });
     }
 
-    private static (S122GeometryKind, ImmutableArray<GeoPosition>) ProjectGeometry(S122Feature f)
+    private static (S122GeometryKind, IReadOnlyList<GeoPosition>) ProjectGeometry(S122Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                return (S122GeometryKind.Point, f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S122GeometryKind.Point, f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Curve:
-                return (S122GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S122GeometryKind.Curve, f.Curves.Count == 0
+                    ? []
+                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Surface:
-                return (S122GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S122GeometryKind.Surface, f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             default:
-                return (S122GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S122GeometryKind.None, []);
         }
     }
 }

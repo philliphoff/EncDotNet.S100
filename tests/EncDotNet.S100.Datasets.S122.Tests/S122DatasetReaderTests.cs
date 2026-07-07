@@ -39,7 +39,7 @@ public class S122DatasetReaderTests
     public void Sample_HasFourFeatures()
     {
         var ds = LoadSample();
-        Assert.Equal(4, ds.Features.Length);
+        Assert.Equal(4, ds.Features.Count);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class S122DatasetReaderTests
 
         Assert.Equal("MarineProtectedArea", f.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.Equal(5, f.ExteriorRing.Count);
         // S-100 Part 10b convention: lat lon for EPSG:4326.
         Assert.Equal(-32.5215215, f.ExteriorRing[0].Latitude, 5);
         Assert.Equal(60.9745257, f.ExteriorRing[0].Longitude, 5);
@@ -75,7 +75,7 @@ public class S122DatasetReaderTests
 
         Assert.Equal("RestrictedArea", f.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.Equal(5, f.ExteriorRing.Count);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class S122DatasetReaderTests
         Assert.Equal("MarineProtectedArea", f.FeatureType);
         Assert.Equal(S100GeometryType.Curve, f.GeometryType);
         Assert.Single(f.Curves);
-        Assert.Equal(4, f.Curves[0].Length);
+        Assert.Equal(4, f.Curves[0].Count);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class S122DatasetReaderTests
 
         Assert.Equal("VesselTrafficServiceArea", f.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f.GeometryType);
-        Assert.Equal(5, f.ExteriorRing.Length);
+        Assert.Equal(5, f.ExteriorRing.Count);
     }
 
     [Fact]
@@ -218,7 +218,7 @@ public class S122DatasetReaderTests
         var ds = S122Dataset.Open(stream);
 
         var ring = ds.Features.Single().ExteriorRing;
-        Assert.Equal(5, ring.Length);
+        Assert.Equal(5, ring.Count);
         // After axis-swap (lon,lat token order is detected as wrong vs the
         // lat-lon envelope), each point ends up in (lat, lon) form.
         Assert.All(ring, p =>

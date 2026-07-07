@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Features;
 
@@ -14,7 +14,7 @@ internal static class S129Synth
     {
         ProductIdentifier = "S-129",
         DatasetIdentifier = "TEST_DATASET",
-        Features = features.ToImmutableArray(),
+        Features = features.ToArray(),
     };
 
     public static S129Feature Plan(
@@ -29,7 +29,7 @@ internal static class S129Synth
         string? underKeelClearancePurpose = "passage planning",
         IDictionary<string, string>? extra = null)
     {
-        var attrs = ImmutableDictionary.CreateBuilder<string, string>();
+        var attrs = new Dictionary<string, string>();
         if (vesselId is not null) attrs["vesselID"] = vesselId;
         if (sourceRouteName is not null) attrs["sourceRouteName"] = sourceRouteName;
         if (sourceRouteVersion is not null) attrs["sourceRouteVersion"] = sourceRouteVersion;
@@ -43,17 +43,17 @@ internal static class S129Synth
             foreach (var kv in extra) attrs[kv.Key] = kv.Value;
         }
 
-        var complex = ImmutableArray<S129ComplexAttribute>.Empty;
+        IReadOnlyList<S129ComplexAttribute> complex = [];
         if (timeStart is not null || timeEnd is not null)
         {
-            var sub = ImmutableDictionary.CreateBuilder<string, string>();
+            var sub = new Dictionary<string, string>();
             if (timeStart is not null) sub["timeStart"] = timeStart;
             if (timeEnd is not null) sub["timeEnd"] = timeEnd;
-            complex = ImmutableArray.Create(new S129ComplexAttribute
+            complex = [new S129ComplexAttribute
             {
                 Code = "fixedTimeRange",
-                SubAttributes = sub.ToImmutable(),
-            });
+                SubAttributes = sub.ToDictionary(),
+            }];
         }
 
         return new S129Feature
@@ -61,11 +61,11 @@ internal static class S129Synth
             Id = id,
             FeatureType = "UnderKeelClearancePlan",
             GeometryType = S100GeometryType.None,
-            Points = default,
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = attrs.ToImmutable(),
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = attrs.ToDictionary(),
             ComplexAttributes = complex,
         };
     }
@@ -75,18 +75,18 @@ internal static class S129Synth
         IEnumerable<(double Lat, double Lon)>? ring = null)
     {
         var ext = (ring ?? new[] { (47.0, -122.0), (47.0, -121.0), (48.0, -121.0), (47.0, -122.0) })
-            .Select(p => (p.Lat, p.Lon)).ToImmutableArray();
+            .Select(p => (p.Lat, p.Lon)).ToArray();
         return new S129Feature
         {
             Id = id,
             FeatureType = "UnderKeelClearancePlanArea",
             GeometryType = S100GeometryType.Surface,
-            Points = default,
-            Curves = default,
+            Points = [],
+            Curves = [],
             ExteriorRing = ext,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -97,12 +97,12 @@ internal static class S129Synth
             Id = id,
             FeatureType = "UnderKeelClearancePlanArea",
             GeometryType = S100GeometryType.None,
-            Points = default,
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -111,24 +111,24 @@ internal static class S129Synth
         int? scaleMinimum = 50000,
         IEnumerable<(double Lat, double Lon)>? ring = null)
     {
-        var attrs = ImmutableDictionary.CreateBuilder<string, string>();
+        var attrs = new Dictionary<string, string>();
         if (scaleMinimum is { } sm)
             attrs["scaleMinimum"] = sm.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         var ext = (ring ?? new[] { (47.1, -121.9), (47.1, -121.8), (47.2, -121.8), (47.1, -121.9) })
-            .Select(p => (p.Lat, p.Lon)).ToImmutableArray();
+            .Select(p => (p.Lat, p.Lon)).ToArray();
 
         return new S129Feature
         {
             Id = id,
             FeatureType = "UnderKeelClearanceNonNavigableArea",
             GeometryType = S100GeometryType.Surface,
-            Points = default,
-            Curves = default,
+            Points = [],
+            Curves = [],
             ExteriorRing = ext,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = attrs.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            InteriorRings = [],
+            Attributes = attrs.ToDictionary(),
+            ComplexAttributes = [],
         };
     }
 
@@ -140,7 +140,7 @@ internal static class S129Synth
         double? expectedPassingSpeed = 6.0,
         double? distanceAboveUkcLimit = 0.113)
     {
-        var attrs = ImmutableDictionary.CreateBuilder<string, string>();
+        var attrs = new Dictionary<string, string>();
         if (expectedPassingTime is not null) attrs["expectedPassingTime"] = expectedPassingTime;
         if (expectedPassingSpeed is { } sp)
             attrs["expectedPassingSpeed"] = sp.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -152,12 +152,12 @@ internal static class S129Synth
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create<(double, double)>((latitude, longitude)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = attrs.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S129ComplexAttribute>.Empty,
+            Points = [(latitude, longitude)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = attrs.ToDictionary(),
+            ComplexAttributes = [],
         };
     }
 }

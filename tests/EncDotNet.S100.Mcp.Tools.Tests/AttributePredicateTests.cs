@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
 
@@ -8,7 +7,7 @@ public class AttributePredicateTests
 {
     private static IS100Feature FeatureWith(params (string Key, string Value)[] attributes)
     {
-        var builder = ImmutableDictionary.CreateBuilder<string, string>();
+        var builder = new Dictionary<string, string>();
         foreach (var (key, value) in attributes)
         {
             builder[key] = value;
@@ -19,9 +18,9 @@ public class AttributePredicateTests
             Id = "f1",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Attributes = builder.ToImmutable(),
-            ComplexAttributes = ImmutableArray<S122ComplexAttribute>.Empty,
+            Points = [(5.0, 5.0)],
+            Attributes = builder.ToDictionary(),
+            ComplexAttributes = [],
         };
     }
 
@@ -31,7 +30,7 @@ public class AttributePredicateTests
         var predicates = AttributePredicateJsonReader.Parse(
             "{\"categoryOfLateralMark\":\"1\",\"objectName\":\"Foo\"}");
 
-        Assert.Equal(2, predicates.Length);
+        Assert.Equal(2, predicates.Count);
         Assert.All(predicates, p => Assert.Equal(AttributeOperator.Eq, p.Op));
         Assert.Contains(predicates, p => p.Attribute == "categoryOfLateralMark" && p.Value == "1");
         Assert.Contains(predicates, p => p.Attribute == "objectName" && p.Value == "Foo");
@@ -54,7 +53,7 @@ public class AttributePredicateTests
             "[{\"attribute\":\"valueOfDepth\",\"op\":\"ge\",\"value\":\"10\"}," +
             "{\"attribute\":\"objectName\",\"op\":\"exists\"}]");
 
-        Assert.Equal(2, predicates.Length);
+        Assert.Equal(2, predicates.Count);
         Assert.Equal(AttributeOperator.Ge, predicates[0].Op);
         Assert.Equal("10", predicates[0].Value);
         Assert.Equal(AttributeOperator.Exists, predicates[1].Op);
@@ -99,15 +98,15 @@ public class AttributePredicateTests
     public void Empty_predicate_set_matches_everything()
     {
         var feature = FeatureWith(("objectName", "Foo"));
-        Assert.True(AttributePredicateEvaluator.Matches(feature, ImmutableArray<AttributePredicate>.Empty));
-        Assert.True(AttributePredicateEvaluator.Matches(feature, default));
+        Assert.True(AttributePredicateEvaluator.Matches(feature, []));
+        Assert.True(AttributePredicateEvaluator.Matches(feature, []));
     }
 
     [Fact]
     public void Eq_is_case_insensitive_on_key_and_value()
     {
         var feature = FeatureWith(("ObjectName", "Foo"));
-        var predicates = ImmutableArray.Create(new AttributePredicate("objectname", AttributeOperator.Eq, "foo"));
+        IReadOnlyList<AttributePredicate> predicates = [new AttributePredicate("objectname", AttributeOperator.Eq, "foo")];
         Assert.True(AttributePredicateEvaluator.Matches(feature, predicates));
     }
 
@@ -116,11 +115,11 @@ public class AttributePredicateTests
     {
         var feature = FeatureWith(("a", "1"));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("missing", AttributeOperator.Ne, "1"))));
+            [new AttributePredicate("missing", AttributeOperator.Ne, "1")]));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("a", AttributeOperator.Ne, "2"))));
+            [new AttributePredicate("a", AttributeOperator.Ne, "2")]));
         Assert.False(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("a", AttributeOperator.Ne, "1"))));
+            [new AttributePredicate("a", AttributeOperator.Ne, "1")]));
     }
 
     [Fact]
@@ -128,11 +127,11 @@ public class AttributePredicateTests
     {
         var feature = FeatureWith(("a", "1"));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("a", AttributeOperator.Exists, null))));
+            [new AttributePredicate("a", AttributeOperator.Exists, null)]));
         Assert.False(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("b", AttributeOperator.Exists, null))));
+            [new AttributePredicate("b", AttributeOperator.Exists, null)]));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("b", AttributeOperator.NotExists, null))));
+            [new AttributePredicate("b", AttributeOperator.NotExists, null)]));
     }
 
     [Fact]
@@ -140,11 +139,11 @@ public class AttributePredicateTests
     {
         var feature = FeatureWith(("objectName", "North Channel Buoy"));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("objectName", AttributeOperator.Contains, "channel"))));
+            [new AttributePredicate("objectName", AttributeOperator.Contains, "channel")]));
         Assert.True(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("objectName", AttributeOperator.StartsWith, "north"))));
+            [new AttributePredicate("objectName", AttributeOperator.StartsWith, "north")]));
         Assert.False(AttributePredicateEvaluator.Matches(feature,
-            ImmutableArray.Create(new AttributePredicate("objectName", AttributeOperator.StartsWith, "south"))));
+            [new AttributePredicate("objectName", AttributeOperator.StartsWith, "south")]));
     }
 
     [Theory]
@@ -157,7 +156,7 @@ public class AttributePredicateTests
     public void Numeric_operators_compare_invariant(AttributeOperator op, string operand, bool expected)
     {
         var feature = FeatureWith(("valueOfDepth", "12.5"));
-        var predicates = ImmutableArray.Create(new AttributePredicate("valueOfDepth", op, operand));
+        IReadOnlyList<AttributePredicate> predicates = [new AttributePredicate("valueOfDepth", op, operand)];
         Assert.Equal(expected, AttributePredicateEvaluator.Matches(feature, predicates));
     }
 
@@ -165,7 +164,7 @@ public class AttributePredicateTests
     public void Numeric_operator_on_non_numeric_value_does_not_match()
     {
         var feature = FeatureWith(("objectName", "Foo"));
-        var predicates = ImmutableArray.Create(new AttributePredicate("objectName", AttributeOperator.Gt, "1"));
+        IReadOnlyList<AttributePredicate> predicates = [new AttributePredicate("objectName", AttributeOperator.Gt, "1")];
         Assert.False(AttributePredicateEvaluator.Matches(feature, predicates));
     }
 
@@ -173,12 +172,12 @@ public class AttributePredicateTests
     public void Multiple_predicates_are_anded()
     {
         var feature = FeatureWith(("valueOfDepth", "12.5"), ("objectName", "Foo"));
-        var pass = ImmutableArray.Create(
+        IReadOnlyList<AttributePredicate> pass = [
             new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10"),
-            new AttributePredicate("objectName", AttributeOperator.Eq, "Foo"));
-        var fail = ImmutableArray.Create(
+            new AttributePredicate("objectName", AttributeOperator.Eq, "Foo")];
+        IReadOnlyList<AttributePredicate> fail = [
             new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10"),
-            new AttributePredicate("objectName", AttributeOperator.Eq, "Bar"));
+            new AttributePredicate("objectName", AttributeOperator.Eq, "Bar")];
         Assert.True(AttributePredicateEvaluator.Matches(feature, pass));
         Assert.False(AttributePredicateEvaluator.Matches(feature, fail));
     }

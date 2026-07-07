@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S101;
@@ -109,7 +108,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             context.Dataset.Spec,
             acronym,
             attributes,
-            ImmutableArray<FeatureReference>.Empty));
+            []));
     }
 
     /// <summary>
@@ -170,7 +169,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     private static IReadOnlyList<double>? ResolveMultiPointDepths(
         S101FeatureRecord feature, S101Document document)
     {
-        if (feature.SpatialAssociations.IsDefaultOrEmpty)
+        if (feature.SpatialAssociations.Count == 0)
         {
             return null;
         }
@@ -185,7 +184,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             if (spa.RecordName != MultiPointRcnm) continue;
             if (!document.MultiPoints.TryGetValue(spa.RecordId, out var mp)) continue;
 
-            depths ??= new List<double>(mp.Points.Length);
+            depths ??= new List<double>(mp.Points.Count);
             foreach (var (_, _, z) in mp.Points)
             {
                 depths.Add(z / cmfz);
@@ -451,7 +450,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
     /// </summary>
     private static string ClassifyGeometry(S101FeatureRecord feature, S101Document document)
     {
-        if (feature.SpatialAssociations.IsDefaultOrEmpty) return "None";
+        if (feature.SpatialAssociations.Count == 0) return "None";
         // S-101 features carry a homogeneous geometry primitive — every
         // SPAS row references a record of the same RCNM — so the first
         // entry is representative.

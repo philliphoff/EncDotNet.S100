@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -39,25 +38,25 @@ public sealed class S125AtonDataset
     public string? ProductIdentifier { get; init; }
 
     /// <summary>All typed aids to navigation in the dataset (buoys, beacons, lights, AIS aids, structures, equipment).</summary>
-    public required ImmutableArray<IS125Aid> Aids { get; init; }
+    public required IReadOnlyList<IS125Aid> Aids { get; init; }
 
     /// <summary>All <c>AtonStatusInformation</c> info types in the dataset, keyed by GML id.</summary>
-    public required ImmutableArray<S125AtonStatusInformation> StatusInformation { get; init; }
+    public required IReadOnlyList<S125AtonStatusInformation> StatusInformation { get; init; }
 
     /// <summary>All <c>AtonStatusIndication</c> features in the dataset.</summary>
-    public required ImmutableArray<S125AtonStatusIndication> StatusIndications { get; init; }
+    public required IReadOnlyList<S125AtonStatusIndication> StatusIndications { get; init; }
 
     /// <summary>All <c>SpatialQuality</c> info types in the dataset.</summary>
-    public required ImmutableArray<S125SpatialQuality> SpatialQualities { get; init; }
+    public required IReadOnlyList<S125SpatialQuality> SpatialQualities { get; init; }
 
     /// <summary>All AtoN aggregations / associations in the dataset.</summary>
-    public required ImmutableArray<S125Aggregation> Aggregations { get; init; }
+    public required IReadOnlyList<S125Aggregation> Aggregations { get; init; }
 
     /// <summary>
     /// All other S-125 features that are not modeled as typed aids
     /// (lines, areas, metadata features — see <see cref="S125OtherFeature"/>).
     /// </summary>
-    public required ImmutableArray<S125OtherFeature> OtherFeatures { get; init; }
+    public required IReadOnlyList<S125OtherFeature> OtherFeatures { get; init; }
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S125Dataset Source { get; init; }
@@ -82,7 +81,7 @@ public sealed class S125AtonDataset
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         // Project supporting info types up-front so xlink resolution can
@@ -118,7 +117,7 @@ public sealed class S125AtonDataset
         // Aids are added lazily through a feature-id → feature lookup; the
         // typed aids are constructed in two passes so HostStructure can
         // reference fully-constructed peers.
-        var featureById = dataset.Features.ToImmutableDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
+        var featureById = dataset.Features.ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
         var resolver = BuildXlinkResolver(featureById, statusInfoById, spatialQualityById);
         var ctx = new ProjectionContext(resolver);
         foreach (var d in preCtx.Diagnostics) ctx.Report(d);
@@ -126,10 +125,10 @@ public sealed class S125AtonDataset
         // Pass 1: project every feature into a typed shape, but with
         // HostStructure left null so we don't depend on construction order.
         var aidsById = new Dictionary<string, IS125Aid>(StringComparer.OrdinalIgnoreCase);
-        var aidsList = ImmutableArray.CreateBuilder<IS125Aid>();
-        var indications = ImmutableArray.CreateBuilder<S125AtonStatusIndication>();
-        var aggregations = ImmutableArray.CreateBuilder<S125Aggregation>();
-        var otherFeatures = ImmutableArray.CreateBuilder<S125OtherFeature>();
+        var aidsList = new List<IS125Aid>();
+        var indications = new List<S125AtonStatusIndication>();
+        var aggregations = new List<S125Aggregation>();
+        var otherFeatures = new List<S125OtherFeature>();
 
         foreach (var f in dataset.Features)
         {
@@ -161,7 +160,7 @@ public sealed class S125AtonDataset
 
         // Pass 2: walk aids and aggregations again to resolve feature-to-
         // feature xlinks now that every aid has been constructed.
-        var aidsFinal = ImmutableArray.CreateBuilder<IS125Aid>(aidsList.Count);
+        var aidsFinal = new List<IS125Aid>(aidsList.Count);
         foreach (var aid in aidsList)
         {
             var src = featureById.GetValueOrDefault(aid.Id);
@@ -185,17 +184,17 @@ public sealed class S125AtonDataset
             };
         }
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S125AtonDataset
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
-            Aids = aidsFinal.ToImmutable(),
-            StatusInformation = statusInfoById.Values.ToImmutableArray(),
-            StatusIndications = indications.ToImmutable(),
-            SpatialQualities = spatialQualityById.Values.ToImmutableArray(),
-            Aggregations = aggregations.ToImmutable(),
-            OtherFeatures = otherFeatures.ToImmutable(),
+            Aids = aidsFinal,
+            StatusInformation = statusInfoById.Values.ToArray(),
+            StatusIndications = indications,
+            SpatialQualities = spatialQualityById.Values.ToArray(),
+            Aggregations = aggregations,
+            OtherFeatures = otherFeatures,
             Source = dataset,
         };
     }
@@ -203,7 +202,7 @@ public sealed class S125AtonDataset
     // ── Xlink resolver build ──────────────────────────────────────────
 
     private static XlinkResolver BuildXlinkResolver(
-        ImmutableDictionary<string, S125Feature> featureById,
+        IReadOnlyDictionary<string, S125Feature> featureById,
         IReadOnlyDictionary<string, S125AtonStatusInformation> statusById,
         IReadOnlyDictionary<string, S125SpatialQuality> spatialQualityById)
     {
@@ -241,7 +240,7 @@ public sealed class S125AtonDataset
             .Select(c => BuildDateRange(c, ctx, i.Id))
             .Where(r => r is not null)
             .Select(r => r!)
-            .ToImmutableArray();
+            .ToArray();
 
         return new S125AtonStatusInformation
         {
@@ -267,14 +266,14 @@ public sealed class S125AtonDataset
     }
 
     private static S125DateRange? TryProjectDateRange(
-        ImmutableArray<S125ComplexAttribute> complex, string code,
+        IReadOnlyList<IS100ComplexAttribute> complex, string code,
         ProjectionContext ctx, string relatedId)
     {
         var block = complex.FirstOrDefault(c => string.Equals(c.Code, code, StringComparison.OrdinalIgnoreCase));
         return block is null ? null : BuildDateRange(block, ctx, relatedId);
     }
 
-    private static S125DateRange? BuildDateRange(S125ComplexAttribute block, ProjectionContext ctx, string relatedId)
+    private static S125DateRange? BuildDateRange(IS100ComplexAttribute block, ProjectionContext ctx, string relatedId)
     {
         var start = AttributeParser.TryParseDateTimeOffset(
             block.SubAttributes.GetValueOrDefault("dateStart"), ctx, relatedId, "dateStart");
@@ -550,13 +549,13 @@ public sealed class S125AtonDataset
         return null;
     }
 
-    private static ImmutableArray<IS125Aid> ResolveAggregationMembers(
+    private static IReadOnlyList<IS125Aid> ResolveAggregationMembers(
         S125Feature f,
         IReadOnlyDictionary<string, IS125Aid> aidsById,
         ProjectionContext ctx)
     {
-        if (f.FeatureReferences.IsDefaultOrEmpty) return ImmutableArray<IS125Aid>.Empty;
-        var b = ImmutableArray.CreateBuilder<IS125Aid>();
+        if (f.FeatureReferences.Count == 0) return [];
+        var b = new List<IS125Aid>();
         foreach (var r in f.FeatureReferences)
         {
             if (aidsById.TryGetValue(r.FeatureRef, out var aid))
@@ -572,37 +571,37 @@ public sealed class S125AtonDataset
                     relatedAttribute: r.Role);
             }
         }
-        return b.ToImmutable();
+        return b;
     }
 
     // ── Geometry helpers ──────────────────────────────────────────────
 
     private static GeoPosition? ExtractPoint(S125Feature f)
     {
-        if (f.GeometryType != S100GeometryType.Point || f.Points.IsDefaultOrEmpty)
+        if (f.GeometryType != S100GeometryType.Point || f.Points.Count == 0)
             return null;
         var (lat, lon) = f.Points[0];
         return new GeoPosition(lat, lon);
     }
 
-    private static (S125GeometryKind, ImmutableArray<GeoPosition>) ProjectGeometry(S125Feature f)
+    private static (S125GeometryKind, IReadOnlyList<GeoPosition>) ProjectGeometry(S125Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                return (S125GeometryKind.Point, f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S125GeometryKind.Point, f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Curve:
-                return (S125GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S125GeometryKind.Curve, f.Curves.Count == 0
+                    ? []
+                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Surface:
-                return (S125GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S125GeometryKind.Surface, f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             default:
-                return (S125GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S125GeometryKind.None, []);
         }
     }
 

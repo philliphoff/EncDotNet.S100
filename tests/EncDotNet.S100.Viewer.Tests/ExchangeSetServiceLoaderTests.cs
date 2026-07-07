@@ -13,6 +13,7 @@ using ExchangeSetProgress = EncDotNet.S100.Viewer.Services.ExchangeSetProgress;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

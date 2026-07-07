@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
@@ -335,19 +334,19 @@ public class S102ValidationTests
     public void ConcatReports_Sums_Counters_And_Preserves_Order()
     {
         var a = new ValidationReport(
-            ImmutableArray.Create(new ValidationFinding
+            [new ValidationFinding
             {
                 RuleId = "A-1",
                 Severity = ValidationSeverity.Error,
                 Message = "first",
-            }),
+            }],
             RulesEvaluated: 2,
             RulesWithFindings: 1);
 
         var b = new ValidationReport(
-            ImmutableArray.Create(
+            [
                 new ValidationFinding { RuleId = "B-1", Severity = ValidationSeverity.Warning, Message = "second" },
-                new ValidationFinding { RuleId = "B-2", Severity = ValidationSeverity.Info, Message = "third" }),
+                new ValidationFinding { RuleId = "B-2", Severity = ValidationSeverity.Info, Message = "third" }],
             RulesEvaluated: 3,
             RulesWithFindings: 2);
 
@@ -362,22 +361,22 @@ public class S102ValidationTests
     public void ConcatReports_Rebadges_Second_Reports_Rule_Ids()
     {
         var a = new ValidationReport(
-            ImmutableArray.Create(new ValidationFinding
+            [new ValidationFinding
             {
                 RuleId = "S57-R-1.1",
                 Severity = ValidationSeverity.Error,
                 Message = "from pre",
-            }),
+            }],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
 
         var b = new ValidationReport(
-            ImmutableArray.Create(new ValidationFinding
+            [new ValidationFinding
             {
                 RuleId = "S101-R-2.1",
                 Severity = ValidationSeverity.Warning,
                 Message = "from translated",
-            }),
+            }],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
 

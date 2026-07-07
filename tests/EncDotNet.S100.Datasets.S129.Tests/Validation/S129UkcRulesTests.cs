@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S129.DataModel;
@@ -19,7 +18,7 @@ public class S129UkcRulesTests
 
     private static readonly S129Dataset EmptyDataset = new()
     {
-        Features = ImmutableArray<S129Feature>.Empty,
+        Features = [],
     };
 
     private static S129UkcPlanMetadata PlanMeta(
@@ -53,47 +52,47 @@ public class S129UkcRulesTests
 
     private static S129UkcPlanArea PlanArea(
         string id,
-        ImmutableArray<GeoPosition> coords,
-        ImmutableArray<ImmutableArray<GeoPosition>>? holes = null) => new()
+        IReadOnlyList<GeoPosition> coords,
+        IReadOnlyList<IReadOnlyList<GeoPosition>>? holes = null) => new()
     {
         Id = id,
         GeometryKind = S129GeometryKind.Surface,
         Coordinates = coords,
-        InteriorRings = holes ?? ImmutableArray<ImmutableArray<GeoPosition>>.Empty,
+        InteriorRings = holes ?? [],
     };
 
     private static S129NonNavigableArea NonNav(
         string id,
-        ImmutableArray<GeoPosition> coords) => new()
+        IReadOnlyList<GeoPosition> coords) => new()
     {
         Id = id,
         GeometryKind = S129GeometryKind.Surface,
         Coordinates = coords,
-        InteriorRings = ImmutableArray<ImmutableArray<GeoPosition>>.Empty,
+        InteriorRings = [],
     };
 
     private static S129AlmostNonNavigableArea AlmostNonNav(
         string id,
-        ImmutableArray<GeoPosition> coords) => new()
+        IReadOnlyList<GeoPosition> coords) => new()
     {
         Id = id,
         GeometryKind = S129GeometryKind.Surface,
         Coordinates = coords,
-        InteriorRings = ImmutableArray<ImmutableArray<GeoPosition>>.Empty,
+        InteriorRings = [],
     };
 
     private static S129UnderKeelClearancePlan Plan(
         S129UkcPlanMetadata? meta = null,
         S129UkcPlanArea? area = null,
-        ImmutableArray<S129ControlPoint>? controlPoints = null,
-        ImmutableArray<S129NonNavigableArea>? nonNav = null,
-        ImmutableArray<S129AlmostNonNavigableArea>? almostNonNav = null) => new()
+        IReadOnlyList<S129ControlPoint>? controlPoints = null,
+        IReadOnlyList<S129NonNavigableArea>? nonNav = null,
+        IReadOnlyList<S129AlmostNonNavigableArea>? almostNonNav = null) => new()
     {
         Plan = meta,
         PlanArea = area,
-        ControlPoints = controlPoints ?? ImmutableArray<S129ControlPoint>.Empty,
-        NonNavigableAreas = nonNav ?? ImmutableArray<S129NonNavigableArea>.Empty,
-        AlmostNonNavigableAreas = almostNonNav ?? ImmutableArray<S129AlmostNonNavigableArea>.Empty,
+        ControlPoints = controlPoints ?? [],
+        NonNavigableAreas = nonNav ?? [],
+        AlmostNonNavigableAreas = almostNonNav ?? [],
         Source = EmptyDataset,
     };
 
@@ -146,29 +145,29 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointTimeMonotonic_Passes_OnStrictlyIncreasing()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1", time: T(0)),
             ControlPoint("CP2", time: T(5)),
-            ControlPoint("CP3", time: T(10))));
+            ControlPoint("CP3", time: T(10))]);
         Assert.Empty(S129UkcRules.ControlPointTimeMonotonic.Evaluate(plan, ValidationContext.Default));
     }
 
     [Fact]
     public void ControlPointTimeMonotonic_Passes_WhenSomeHaveNoTime()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1", time: T(0)),
             ControlPoint("CP2"),
-            ControlPoint("CP3", time: T(10))));
+            ControlPoint("CP3", time: T(10))]);
         Assert.Empty(S129UkcRules.ControlPointTimeMonotonic.Evaluate(plan, ValidationContext.Default));
     }
 
     [Fact]
     public void ControlPointTimeMonotonic_Fails_OnDuplicateTime()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1", time: T(5)),
-            ControlPoint("CP2", time: T(5))));
+            ControlPoint("CP2", time: T(5))]);
         var f = Assert.Single(
             S129UkcRules.ControlPointTimeMonotonic.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("S129-R-2.1", f.RuleId);
@@ -178,9 +177,9 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointTimeMonotonic_Fails_OnBackwardsStep()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1", time: T(10)),
-            ControlPoint("CP2", time: T(5))));
+            ControlPoint("CP2", time: T(5))]);
         var f = Assert.Single(
             S129UkcRules.ControlPointTimeMonotonic.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Contains("CP1", f.Message);
@@ -193,19 +192,19 @@ public class S129UkcRulesTests
     public void CoordinatesInWgs84Range_Passes_OnValidCoordinates()
     {
         var plan = Plan(
-            controlPoints: ImmutableArray.Create(
+            controlPoints: [
                 ControlPoint("CP1", lat: 10, lon: 20),
-                ControlPoint("CP2", lat: -45, lon: 178)),
-            area: PlanArea("PA", ImmutableArray.Create(
-                new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1))));
+                ControlPoint("CP2", lat: -45, lon: 178)],
+            area: PlanArea("PA", [
+                new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1)]));
         Assert.Empty(S129UkcRules.CoordinatesInWgs84Range.Evaluate(plan, ValidationContext.Default));
     }
 
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnControlPointOutOfRange()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
-            ControlPoint("CP1", lat: 91, lon: 0)));
+        var plan = Plan(controlPoints: [
+            ControlPoint("CP1", lat: 91, lon: 0)]);
         var f = Assert.Single(
             S129UkcRules.CoordinatesInWgs84Range.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("S129-R-3.1", f.RuleId);
@@ -215,8 +214,8 @@ public class S129UkcRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnPlanAreaOutOfRange()
     {
-        var plan = Plan(area: PlanArea("PA", ImmutableArray.Create(
-            new GeoPosition(0, 0), new GeoPosition(0, 200), new GeoPosition(1, 1))));
+        var plan = Plan(area: PlanArea("PA", [
+            new GeoPosition(0, 0), new GeoPosition(0, 200), new GeoPosition(1, 1)]));
         var findings = S129UkcRules.CoordinatesInWgs84Range
             .Evaluate(plan, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -226,9 +225,9 @@ public class S129UkcRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnNonNavigableAreaOutOfRange()
     {
-        var plan = Plan(nonNav: ImmutableArray.Create(
-            NonNav("NN1", ImmutableArray.Create(
-                new GeoPosition(-95, 0), new GeoPosition(0, 0), new GeoPosition(1, 1)))));
+        var plan = Plan(nonNav: [
+            NonNav("NN1", [
+                new GeoPosition(-95, 0), new GeoPosition(0, 0), new GeoPosition(1, 1)])]);
         var f = Assert.Single(
             S129UkcRules.CoordinatesInWgs84Range.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("NN1", f.RelatedFeatureId);
@@ -237,9 +236,9 @@ public class S129UkcRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnAlmostNonNavigableAreaOutOfRange()
     {
-        var plan = Plan(almostNonNav: ImmutableArray.Create(
-            AlmostNonNav("AN1", ImmutableArray.Create(
-                new GeoPosition(0, -181), new GeoPosition(0, 0), new GeoPosition(1, 1)))));
+        var plan = Plan(almostNonNav: [
+            AlmostNonNav("AN1", [
+                new GeoPosition(0, -181), new GeoPosition(0, 0), new GeoPosition(1, 1)])]);
         var f = Assert.Single(
             S129UkcRules.CoordinatesInWgs84Range.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("AN1", f.RelatedFeatureId);
@@ -248,12 +247,12 @@ public class S129UkcRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnInteriorRingOutOfRange()
     {
-        var holes = ImmutableArray.Create(
-            ImmutableArray.Create(
-                new GeoPosition(0, 0), new GeoPosition(0, 0.5), new GeoPosition(95, 0.5)));
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes = [
+            [
+                new GeoPosition(0, 0), new GeoPosition(0, 0.5), new GeoPosition(95, 0.5)]];
         var plan = Plan(area: PlanArea(
             "PA",
-            ImmutableArray.Create(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1)),
+            [new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1)],
             holes));
         var f = Assert.Single(
             S129UkcRules.CoordinatesInWgs84Range.Evaluate(plan, ValidationContext.Default).ToList());
@@ -272,15 +271,15 @@ public class S129UkcRulesTests
     [Fact]
     public void PlanAreaGeometryPopulated_Passes_WhenThreeDistinctVertices()
     {
-        var plan = Plan(area: PlanArea("PA", ImmutableArray.Create(
-            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0))));
+        var plan = Plan(area: PlanArea("PA", [
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)]));
         Assert.Empty(S129UkcRules.PlanAreaGeometryPopulated.Evaluate(plan, ValidationContext.Default));
     }
 
     [Fact]
     public void PlanAreaGeometryPopulated_Fails_WhenEmpty()
     {
-        var plan = Plan(area: PlanArea("PA", ImmutableArray<GeoPosition>.Empty));
+        var plan = Plan(area: PlanArea("PA", []));
         var f = Assert.Single(
             S129UkcRules.PlanAreaGeometryPopulated.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("S129-R-3.2", f.RuleId);
@@ -290,8 +289,8 @@ public class S129UkcRulesTests
     [Fact]
     public void PlanAreaGeometryPopulated_Fails_WhenAllVerticesIdentical()
     {
-        var plan = Plan(area: PlanArea("PA", ImmutableArray.Create(
-            new GeoPosition(0, 0), new GeoPosition(0, 0), new GeoPosition(0, 0))));
+        var plan = Plan(area: PlanArea("PA", [
+            new GeoPosition(0, 0), new GeoPosition(0, 0), new GeoPosition(0, 0)]));
         var f = Assert.Single(
             S129UkcRules.PlanAreaGeometryPopulated.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Contains("1 distinct", f.Message);
@@ -339,9 +338,9 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointMeasurementsFinite_Passes_OnFiniteValues()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1", distance: 1.5, speed: 10.0),
-            ControlPoint("CP2", distance: -0.2, speed: 0.0)));
+            ControlPoint("CP2", distance: -0.2, speed: 0.0)]);
         Assert.Empty(
             S129UkcRules.ControlPointMeasurementsFinite.Evaluate(plan, ValidationContext.Default));
     }
@@ -349,7 +348,7 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointMeasurementsFinite_Passes_WhenMeasurementsAbsent()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(ControlPoint("CP1")));
+        var plan = Plan(controlPoints: [ControlPoint("CP1")]);
         Assert.Empty(
             S129UkcRules.ControlPointMeasurementsFinite.Evaluate(plan, ValidationContext.Default));
     }
@@ -357,8 +356,8 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointMeasurementsFinite_Fails_OnNaNDistance()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
-            ControlPoint("CP-NAN", distance: double.NaN)));
+        var plan = Plan(controlPoints: [
+            ControlPoint("CP-NAN", distance: double.NaN)]);
         var f = Assert.Single(
             S129UkcRules.ControlPointMeasurementsFinite
                 .Evaluate(plan, ValidationContext.Default).ToList());
@@ -370,8 +369,8 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointMeasurementsFinite_Fails_OnInfiniteSpeed()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
-            ControlPoint("CP-INF", speed: double.PositiveInfinity)));
+        var plan = Plan(controlPoints: [
+            ControlPoint("CP-INF", speed: double.PositiveInfinity)]);
         var f = Assert.Single(
             S129UkcRules.ControlPointMeasurementsFinite
                 .Evaluate(plan, ValidationContext.Default).ToList());
@@ -381,8 +380,8 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointMeasurementsFinite_ReportsBothMeasurementsSeparately()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
-            ControlPoint("CP-BAD", distance: double.NaN, speed: double.NegativeInfinity)));
+        var plan = Plan(controlPoints: [
+            ControlPoint("CP-BAD", distance: double.NaN, speed: double.NegativeInfinity)]);
         var findings = S129UkcRules.ControlPointMeasurementsFinite
             .Evaluate(plan, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
@@ -393,17 +392,17 @@ public class S129UkcRulesTests
     [Fact]
     public void ControlPointHasPosition_Passes_WhenAllHavePositions()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
-            ControlPoint("CP1"), ControlPoint("CP2", lat: 1, lon: 2)));
+        var plan = Plan(controlPoints: [
+            ControlPoint("CP1"), ControlPoint("CP2", lat: 1, lon: 2)]);
         Assert.Empty(S129UkcRules.ControlPointHasPosition.Evaluate(plan, ValidationContext.Default));
     }
 
     [Fact]
     public void ControlPointHasPosition_Fails_WhenMissing()
     {
-        var plan = Plan(controlPoints: ImmutableArray.Create(
+        var plan = Plan(controlPoints: [
             ControlPoint("CP1"),
-            ControlPoint("CP-NOPOS", withPosition: false)));
+            ControlPoint("CP-NOPOS", withPosition: false)]);
         var f = Assert.Single(
             S129UkcRules.ControlPointHasPosition.Evaluate(plan, ValidationContext.Default).ToList());
         Assert.Equal("S129-R-5.2", f.RuleId);
@@ -416,7 +415,7 @@ public class S129UkcRulesTests
     [Fact]
     public void Default_ContainsSevenRules()
     {
-        Assert.Equal(7, S129UkcRules.Default.Rules.Length);
+        Assert.Equal(7, S129UkcRules.Default.Rules.Count);
         Assert.Equal(
             new[]
             {
@@ -431,11 +430,11 @@ public class S129UkcRulesTests
     {
         var plan = Plan(
             meta: PlanMeta(start: T(0), end: T(60), maximumDraught: 10.0),
-            area: PlanArea("PA", ImmutableArray.Create(
-                new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1))),
-            controlPoints: ImmutableArray.Create(
+            area: PlanArea("PA", [
+                new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1)]),
+            controlPoints: [
                 ControlPoint("CP1", time: T(5), lat: 0.1, lon: 0.1, distance: 2.0, speed: 8.0),
-                ControlPoint("CP2", time: T(15), lat: 0.2, lon: 0.2, distance: 1.5, speed: 8.0)));
+                ControlPoint("CP2", time: T(15), lat: 0.2, lon: 0.2, distance: 1.5, speed: 8.0)]);
 
         var report = S129UkcRules.Validate(plan);
 
@@ -447,9 +446,9 @@ public class S129UkcRulesTests
     {
         var plan = Plan(
             meta: PlanMeta(start: T(60), end: T(0), maximumDraught: -1.0),
-            controlPoints: ImmutableArray.Create(
+            controlPoints: [
                 ControlPoint("CP-NOPOS", withPosition: false),
-                ControlPoint("CP1", time: T(5), lat: 0, lon: 0, distance: double.NaN)));
+                ControlPoint("CP1", time: T(5), lat: 0, lon: 0, distance: double.NaN)]);
 
         var report = S129UkcRules.Validate(plan);
 

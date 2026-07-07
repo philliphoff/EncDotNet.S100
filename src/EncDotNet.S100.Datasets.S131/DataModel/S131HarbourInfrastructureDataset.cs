@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -43,38 +42,38 @@ public sealed class S131HarbourInfrastructureDataset
     public string? ProductIdentifier { get; init; }
 
     /// <summary>Every typed feature in the dataset, in source order.</summary>
-    public required ImmutableArray<IS131Feature> Features { get; init; }
+    public required IReadOnlyList<IS131Feature> Features { get; init; }
 
     /// <summary>Every typed information type in the dataset, in source order.</summary>
-    public required ImmutableArray<IS131InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<IS131InformationType> InformationTypes { get; init; }
 
     /// <summary>Typed view of <see cref="Features"/> filtered to <see cref="S131HarbourInfrastructure"/>.</summary>
-    public ImmutableArray<S131HarbourInfrastructure> HarbourInfrastructure { get; init; } =
-        ImmutableArray<S131HarbourInfrastructure>.Empty;
+    public IReadOnlyList<S131HarbourInfrastructure> HarbourInfrastructure { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="Features"/> filtered to <see cref="S131LayoutFeature"/>.</summary>
-    public ImmutableArray<S131LayoutFeature> LayoutFeatures { get; init; } =
-        ImmutableArray<S131LayoutFeature>.Empty;
+    public IReadOnlyList<S131LayoutFeature> LayoutFeatures { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="Features"/> filtered to <see cref="S131MetadataFeature"/>.</summary>
-    public ImmutableArray<S131MetadataFeature> MetadataFeatures { get; init; } =
-        ImmutableArray<S131MetadataFeature>.Empty;
+    public IReadOnlyList<S131MetadataFeature> MetadataFeatures { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="Features"/> filtered to <see cref="S131OtherFeature"/> (FC misses).</summary>
-    public ImmutableArray<S131OtherFeature> OtherFeatures { get; init; } =
-        ImmutableArray<S131OtherFeature>.Empty;
+    public IReadOnlyList<S131OtherFeature> OtherFeatures { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="InformationTypes"/> filtered to <see cref="S131Authority"/>.</summary>
-    public ImmutableArray<S131Authority> Authorities { get; init; } =
-        ImmutableArray<S131Authority>.Empty;
+    public IReadOnlyList<S131Authority> Authorities { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="InformationTypes"/> filtered to <see cref="S131ContactDetails"/>.</summary>
-    public ImmutableArray<S131ContactDetails> ContactDetails { get; init; } =
-        ImmutableArray<S131ContactDetails>.Empty;
+    public IReadOnlyList<S131ContactDetails> ContactDetails { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="InformationTypes"/> filtered to <see cref="S131RxNInformation"/>.</summary>
-    public ImmutableArray<S131RxNInformation> RxNInformation { get; init; } =
-        ImmutableArray<S131RxNInformation>.Empty;
+    public IReadOnlyList<S131RxNInformation> RxNInformation { get; init; } =
+        [];
 
     /// <summary>The originating raw feature-bag dataset.</summary>
     public required S131Dataset Source { get; init; }
@@ -102,7 +101,7 @@ public sealed class S131HarbourInfrastructureDataset
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         // Pre-pass: project every information type into a stub (without
@@ -112,7 +111,7 @@ public sealed class S131HarbourInfrastructureDataset
         var emptyResolver = XlinkResolver.Build(Array.Empty<KeyValuePair<string, object>>());
         var preCtx = new ProjectionContext(emptyResolver);
         var infoTypeById = new Dictionary<string, IS131InformationType>(StringComparer.OrdinalIgnoreCase);
-        var infoTypeList = ImmutableArray.CreateBuilder<IS131InformationType>();
+        var infoTypeList = new List<IS131InformationType>();
 
         var infoIdsSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var i in dataset.InformationTypes)
@@ -158,7 +157,7 @@ public sealed class S131HarbourInfrastructureDataset
         // either information types (already projected) or other
         // features (resolved against featureById; we attach typed
         // feature peers in a final back-fill pass).
-        var typedFeatures = ImmutableArray.CreateBuilder<IS131Feature>(dataset.Features.Length);
+        var typedFeatures = new List<IS131Feature>(dataset.Features.Count);
         var typedById = new Dictionary<string, IS131Feature>(StringComparer.OrdinalIgnoreCase);
         foreach (var f in dataset.Features)
         {
@@ -170,7 +169,7 @@ public sealed class S131HarbourInfrastructureDataset
 
         // Final pass: back-fill any ResolvedReference whose target was
         // a feature (we constructed those after the resolver was built).
-        var finalFeatures = ImmutableArray.CreateBuilder<IS131Feature>(typedFeatures.Count);
+        var finalFeatures = new List<IS131Feature>(typedFeatures.Count);
         foreach (var typed in typedFeatures)
         {
             finalFeatures.Add(BackfillFeatureReferences(typed, typedById));
@@ -180,30 +179,30 @@ public sealed class S131HarbourInfrastructureDataset
         // types (e.g. Authority → ContactDetails / Applicability) now
         // that every typed info type has been built. Authority's typed
         // shortcuts (ContactDetails / Applicability) are populated here.
-        var finalInfoTypes = ImmutableArray.CreateBuilder<IS131InformationType>(infoTypeList.Count);
+        var finalInfoTypes = new List<IS131InformationType>(infoTypeList.Count);
         foreach (var typed in infoTypeList)
         {
             finalInfoTypes.Add(BackfillInformationTypeReferences(typed, infoTypeById, ctx));
         }
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
 
-        var finalFeaturesImm = finalFeatures.ToImmutable();
-        var finalInfoTypesImm = finalInfoTypes.ToImmutable();
+        var finalFeaturesSnapshot = finalFeatures.ToArray();
+        var finalInfoTypesSnapshot = finalInfoTypes.ToArray();
 
         return new S131HarbourInfrastructureDataset
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
-            Features = finalFeaturesImm,
-            InformationTypes = finalInfoTypesImm,
-            HarbourInfrastructure = finalFeaturesImm.OfType<S131HarbourInfrastructure>().ToImmutableArray(),
-            LayoutFeatures = finalFeaturesImm.OfType<S131LayoutFeature>().ToImmutableArray(),
-            MetadataFeatures = finalFeaturesImm.OfType<S131MetadataFeature>().ToImmutableArray(),
-            OtherFeatures = finalFeaturesImm.OfType<S131OtherFeature>().ToImmutableArray(),
-            Authorities = finalInfoTypesImm.OfType<S131Authority>().ToImmutableArray(),
-            ContactDetails = finalInfoTypesImm.OfType<S131ContactDetails>().ToImmutableArray(),
-            RxNInformation = finalInfoTypesImm.OfType<S131RxNInformation>().ToImmutableArray(),
+            Features = finalFeaturesSnapshot,
+            InformationTypes = finalInfoTypesSnapshot,
+            HarbourInfrastructure = finalFeaturesSnapshot.OfType<S131HarbourInfrastructure>().ToArray(),
+            LayoutFeatures = finalFeaturesSnapshot.OfType<S131LayoutFeature>().ToArray(),
+            MetadataFeatures = finalFeaturesSnapshot.OfType<S131MetadataFeature>().ToArray(),
+            OtherFeatures = finalFeaturesSnapshot.OfType<S131OtherFeature>().ToArray(),
+            Authorities = finalInfoTypesSnapshot.OfType<S131Authority>().ToArray(),
+            ContactDetails = finalInfoTypesSnapshot.OfType<S131ContactDetails>().ToArray(),
+            RxNInformation = finalInfoTypesSnapshot.OfType<S131RxNInformation>().ToArray(),
             Source = dataset,
         };
     }
@@ -407,15 +406,15 @@ public sealed class S131HarbourInfrastructureDataset
 
     // ── Reference resolution ──────────────────────────────────────────
 
-    private static ImmutableArray<S131ResolvedReference> ResolveReferences(
+    private static IReadOnlyList<S131ResolvedReference> ResolveReferences(
         S131Feature f,
         IReadOnlyDictionary<string, IS131InformationType> infoTypesById,
         ProjectionContext ctx)
     {
-        if (f.References.IsDefaultOrEmpty)
-            return ImmutableArray<S131ResolvedReference>.Empty;
+        if (f.References.Count == 0)
+            return [];
 
-        var b = ImmutableArray.CreateBuilder<S131ResolvedReference>(f.References.Length);
+        var b = new List<S131ResolvedReference>(f.References.Count);
         foreach (var r in f.References)
         {
             // Prefer typed info-type peers; the back-fill pass swaps in
@@ -448,17 +447,17 @@ public sealed class S131HarbourInfrastructureDataset
                 Target = target,
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
     private static IS131Feature BackfillFeatureReferences(
         IS131Feature typed,
         IReadOnlyDictionary<string, IS131Feature> typedById)
     {
-        if (typed.ResolvedReferences.IsDefaultOrEmpty)
+        if (typed.ResolvedReferences.Count == 0)
             return typed;
 
-        var b = ImmutableArray.CreateBuilder<S131ResolvedReference>(typed.ResolvedReferences.Length);
+        var b = new List<S131ResolvedReference>(typed.ResolvedReferences.Count);
         var changed = false;
         foreach (var r in typed.ResolvedReferences)
         {
@@ -483,7 +482,7 @@ public sealed class S131HarbourInfrastructureDataset
 
         if (!changed) return typed;
 
-        var resolved = b.ToImmutable();
+        var resolved = b.ToArray();
         return typed switch
         {
             S131HarbourInfrastructure h => new S131HarbourInfrastructure
@@ -520,10 +519,10 @@ public sealed class S131HarbourInfrastructureDataset
         ProjectionContext ctx)
     {
         var src = typed.Source;
-        if (src.References.IsDefaultOrEmpty)
+        if (src.References.Count == 0)
             return typed;
 
-        var resolved = ImmutableArray.CreateBuilder<S131ResolvedReference>(src.References.Length);
+        var resolved = new List<S131ResolvedReference>(src.References.Count);
         S131ContactDetails? contactShortcut = null;
         S131Applicability? applicabilityShortcut = null;
 
@@ -558,7 +557,7 @@ public sealed class S131HarbourInfrastructureDataset
             applicabilityShortcut ??= target as S131Applicability;
         }
 
-        var resolvedImm = resolved.ToImmutable();
+        var resolvedSnapshot = resolved.ToArray();
         return typed switch
         {
             S131Authority a => new S131Authority
@@ -566,55 +565,55 @@ public sealed class S131HarbourInfrastructureDataset
                 Id = a.Id,
                 ContactDetails = contactShortcut,
                 Applicability = applicabilityShortcut,
-                ResolvedReferences = resolvedImm,
+                ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = a.ExtraAttributes,
                 Source = a.Source,
             },
             S131ContactDetails c => new S131ContactDetails
             {
-                Id = c.Id, ResolvedReferences = resolvedImm,
+                Id = c.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = c.ExtraAttributes, Source = c.Source,
             },
             S131Applicability ap => new S131Applicability
             {
-                Id = ap.Id, ResolvedReferences = resolvedImm,
+                Id = ap.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = ap.ExtraAttributes, Source = ap.Source,
             },
             S131AvailablePortServices aps => new S131AvailablePortServices
             {
-                Id = aps.Id, ResolvedReferences = resolvedImm,
+                Id = aps.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = aps.ExtraAttributes, Source = aps.Source,
             },
             S131Entrance e => new S131Entrance
             {
-                Id = e.Id, ResolvedReferences = resolvedImm,
+                Id = e.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = e.ExtraAttributes, Source = e.Source,
             },
             S131ServiceHours s => new S131ServiceHours
             {
-                Id = s.Id, ResolvedReferences = resolvedImm,
+                Id = s.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = s.ExtraAttributes, Source = s.Source,
             },
             S131NonStandardWorkingDay n => new S131NonStandardWorkingDay
             {
-                Id = n.Id, ResolvedReferences = resolvedImm,
+                Id = n.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = n.ExtraAttributes, Source = n.Source,
             },
             S131SpatialQuality q => new S131SpatialQuality
             {
-                Id = q.Id, ResolvedReferences = resolvedImm,
+                Id = q.Id, ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = q.ExtraAttributes, Source = q.Source,
             },
             S131RxNInformation rx => new S131RxNInformation
             {
                 Id = rx.Id, TypeCode = rx.TypeCode, Kind = rx.Kind,
-                ResolvedReferences = resolvedImm,
+                ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = rx.ExtraAttributes, Source = rx.Source,
             },
             S131OtherInformationType o => new S131OtherInformationType
             {
                 Id = o.Id, TypeCode = o.TypeCode,
-                ResolvedReferences = resolvedImm,
+                ResolvedReferences = resolvedSnapshot,
                 ExtraAttributes = o.ExtraAttributes, Source = o.Source,
             },
             _ => typed,
@@ -633,36 +632,36 @@ public sealed class S131HarbourInfrastructureDataset
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Point,
-                    Points = f.Points.IsDefaultOrEmpty
-                        ? ImmutableArray<GeoPosition>.Empty
-                        : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray(),
+                    Points = f.Points.Count == 0
+                        ? []
+                        : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray(),
                 };
             case S100GeometryType.Curve:
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Curve,
-                    Curves = f.Curves.IsDefaultOrEmpty
-                        ? ImmutableArray<ImmutableArray<GeoPosition>>.Empty
+                    Curves = f.Curves.Count == 0
+                        ? []
                         : f.Curves.Select(c =>
-                            c.IsDefaultOrEmpty
-                                ? ImmutableArray<GeoPosition>.Empty
-                                : c.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray())
-                            .ToImmutableArray(),
+                            c.Count == 0
+                                ? []
+                                : c.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray())
+                            .ToArray(),
                 };
             case S100GeometryType.Surface:
                 return new S131Geometry
                 {
                     GeometryType = S131GeometryType.Surface,
-                    ExteriorRing = f.ExteriorRing.IsDefaultOrEmpty
-                        ? ImmutableArray<GeoPosition>.Empty
-                        : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray(),
-                    InteriorRings = f.InteriorRings.IsDefaultOrEmpty
-                        ? ImmutableArray<ImmutableArray<GeoPosition>>.Empty
+                    ExteriorRing = f.ExteriorRing.Count == 0
+                        ? []
+                        : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray(),
+                    InteriorRings = f.InteriorRings.Count == 0
+                        ? []
                         : f.InteriorRings.Select(r =>
-                            r.IsDefaultOrEmpty
-                                ? ImmutableArray<GeoPosition>.Empty
-                                : r.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray())
-                            .ToImmutableArray(),
+                            r.Count == 0
+                                ? []
+                                : r.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray())
+                            .ToArray(),
                 };
             default:
                 return S131Geometry.Empty;

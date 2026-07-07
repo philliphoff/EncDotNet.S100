@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
 
@@ -50,7 +49,7 @@ public sealed class S411Dataset
     public DateTime? IssueDate { get; init; }
 
     /// <summary>Feature instances contained in the dataset.</summary>
-    public required ImmutableArray<S411Feature> Features { get; init; }
+    public required IReadOnlyList<S411Feature> Features { get; init; }
 
     /// <summary>
     /// The original GML document the dataset was parsed from. Preserved so
@@ -96,25 +95,26 @@ public sealed class S411Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<(double Latitude, double Longitude)> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<(double Latitude, double Longitude)> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
-    public required ImmutableArray<S411ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S411ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes =>
+        ComplexAttributes.Cast<IS100ComplexAttribute>().ToArray();
 }
 
 /// <summary>
@@ -126,5 +126,5 @@ public sealed class S411ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 }

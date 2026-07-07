@@ -42,9 +42,9 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
 
     private static FeatureGeometry? BuildGeometry(TFeature feature)
     {
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
-            var holes = feature.InteriorRings.IsDefaultOrEmpty
+            var holes = feature.InteriorRings.Count == 0
                 ? Array.Empty<IReadOnlyList<(double Latitude, double Longitude)>>()
                 : feature.InteriorRings.Select(r => (IReadOnlyList<(double, double)>)r.ToArray()).ToArray();
 
@@ -56,7 +56,7 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
             };
         }
 
-        if (!feature.Curves.IsDefaultOrEmpty && feature.Curves.Length > 0)
+        if (feature.Curves.Count > 0)
         {
             var coords = new List<(double Latitude, double Longitude)>();
             foreach (var curve in feature.Curves)
@@ -68,7 +68,7 @@ public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
             };
         }
 
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             return new FeatureGeometry
             {

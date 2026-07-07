@@ -260,23 +260,23 @@ internal sealed class DatasetEntry : ViewModelBase
 
     /// <summary>Total findings across all severities.</summary>
     public int ValidationFindingCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false ? _validation.Findings.Length : 0;
+        _validation?.Findings.Count > 0 ? _validation.Findings.Count : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Error"/> findings.</summary>
     public int ValidationErrorCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Error)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Warning"/> findings.</summary>
     public int ValidationWarningCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Warning)
             : 0;
 
     /// <summary>Number of <see cref="ValidationSeverity.Info"/> findings.</summary>
     public int ValidationInfoCount =>
-        _validation?.Findings.IsDefaultOrEmpty == false
+        _validation?.Findings.Count > 0
             ? _validation.Findings.Count(f => f.Severity == ValidationSeverity.Info)
             : 0;
 
@@ -354,7 +354,7 @@ internal sealed class DatasetEntry : ViewModelBase
     public void SetValidationReport(ValidationReport? report)
     {
         _validation = report;
-        Findings = report is null || report.Findings.IsDefaultOrEmpty
+        Findings = report is null || report.Findings.Count == 0
             ? Array.Empty<ValidationFindingViewModel>()
             : report.Findings.Select(f => new ValidationFindingViewModel(f, ZoomDispatcher)).ToArray();
 

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -56,7 +55,7 @@ public sealed record FeatureTypeTally(
 /// <param name="DistinctTypeCount">Number of distinct (dataset, feature-type) tallies returned.</param>
 /// <param name="DatasetCount">Number of datasets that contributed at least one feature.</param>
 public sealed record CountFeaturesResult(
-    [property: Description("Per-dataset, per-feature-type tallies, ordered by dataset then descending count then feature type.")] ImmutableArray<FeatureTypeTally> Types,
+    [property: Description("Per-dataset, per-feature-type tallies, ordered by dataset then descending count then feature type.")] IReadOnlyList<FeatureTypeTally> Types,
     [property: Description("Total number of features counted across every tally.")] int TotalFeatures,
     [property: Description("Number of distinct (dataset, feature-type) tallies returned.")] int DistinctTypeCount,
     [property: Description("Number of datasets that contributed at least one feature.")] int DatasetCount);
@@ -111,7 +110,7 @@ public sealed class CountFeaturesTool
         }
 
         var snapshot = _catalog.Datasets;
-        var tallies = ImmutableArray.CreateBuilder<FeatureTypeTally>();
+        var tallies = new List<FeatureTypeTally>();
         var totalFeatures = 0;
         var datasetCount = 0;
 
@@ -185,7 +184,7 @@ public sealed class CountFeaturesTool
 
         return Task.FromResult(ToolResult<CountFeaturesResult>.Ok(
             new CountFeaturesResult(
-                tallies.ToImmutable(),
+                tallies,
                 totalFeatures,
                 tallies.Count,
                 datasetCount)));

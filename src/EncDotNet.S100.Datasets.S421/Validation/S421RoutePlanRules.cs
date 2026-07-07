@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Validation;
@@ -40,7 +39,7 @@ public static class S421RoutePlanRules
             .WithSeverity(ValidationSeverity.Error)
             .Yield((plan, _) =>
             {
-                var count = plan.Route.Waypoints.Length;
+                var count = plan.Route.Waypoints.Count;
                 if (count >= 2)
                     return Array.Empty<ValidationFinding>();
 
@@ -76,11 +75,11 @@ public static class S421RoutePlanRules
             {
                 const double tolerance = 1e-9;
                 var waypoints = plan.Route.Waypoints;
-                if (waypoints.Length < 2)
+                if (waypoints.Count < 2)
                     return Array.Empty<ValidationFinding>();
 
                 var findings = new List<ValidationFinding>();
-                for (int i = 1; i < waypoints.Length; i++)
+                for (int i = 1; i < waypoints.Count; i++)
                 {
                     var a = waypoints[i - 1].Position;
                     var b = waypoints[i].Position;
@@ -253,7 +252,7 @@ public static class S421RoutePlanRules
                 var findings = new List<ValidationFinding>();
                 foreach (var ap in plan.Route.ActionPoints)
                 {
-                    if (!ap.Coordinates.IsDefaultOrEmpty) continue;
+                    if (ap.Coordinates.Count > 0) continue;
 
                     findings.Add(new ValidationFinding
                     {

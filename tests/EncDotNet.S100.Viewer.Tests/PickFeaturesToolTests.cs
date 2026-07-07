@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -26,7 +25,7 @@ public class PickFeaturesToolTests
 
     private sealed class FakeCatalog : IDatasetCatalog
     {
-        public ImmutableArray<LoadedDataset> Datasets { get; set; } = ImmutableArray<LoadedDataset>.Empty;
+        public IReadOnlyList<LoadedDataset> Datasets { get; set; } = [];
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
         public void Raise() => Changed?.Invoke(this, null!);
     }
@@ -276,7 +275,7 @@ public class PickFeaturesToolTests
     public void Adapter_translates_success_to_non_error_content()
     {
         var value = new PickFeaturesResult(
-            "geo", 47.6, -122.3, ImmutableArray<IdentifyMatch>.Empty, 0, false);
+            "geo", 47.6, -122.3, [], 0, false);
 
         var translated = PickFeaturesMcpAdapter.TranslateResult(ToolResult<PickFeaturesResult>.Ok(value));
 

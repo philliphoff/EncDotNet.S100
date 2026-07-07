@@ -30,8 +30,8 @@ public class S101DrawingInstructionParserTests
         var parsed = DrawingInstructionParser.Parse("F1", s);
 
         var text = Assert.Single(parsed.OfType<TextInstruction>());
-        Assert.Equal(3.51, text.OffsetXmm);
-        Assert.Equal(-3.51, text.OffsetYmm);
+        Assert.Equal(3.51, text.OffsetX);
+        Assert.Equal(-3.51, text.OffsetY);
         Assert.Equal(TextHorizontalAlignment.Center, text.HorizontalAlignment);
     }
 
@@ -60,8 +60,8 @@ public class S101DrawingInstructionParserTests
         var parsed = DrawingInstructionParser.Parse("F1", s);
 
         var text = Assert.Single(parsed.OfType<TextInstruction>());
-        Assert.Null(text.OffsetXmm);
-        Assert.Null(text.OffsetYmm);
+        Assert.Null(text.OffsetX);
+        Assert.Null(text.OffsetY);
     }
 
     [Fact]

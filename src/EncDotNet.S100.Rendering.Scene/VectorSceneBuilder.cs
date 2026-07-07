@@ -280,8 +280,8 @@ public sealed class VectorSceneBuilder
         bool defaultDash = false;
         if (dashed && instruction.Dashes is { Count: > 0 })
         {
-            var onMm = instruction.DashOnLengthMm > 0
-                ? instruction.DashOnLengthMm
+            var onMm = instruction.DashOnLength > 0
+                ? instruction.DashOnLength
                 : instruction.Dashes[0].Length;
             var gapMm = instruction.Dashes[0].Length;
             var onPx = (float)(onMm / S100PixelSizeMm);
@@ -403,8 +403,8 @@ public sealed class VectorSceneBuilder
             BackColor = backColor,
             HorizontalAlignment = instruction.HorizontalAlignment,
             VerticalAlignment = instruction.VerticalAlignment,
-            OffsetXpx = (instruction.OffsetXmm ?? 0) / S100PixelSizeMm,
-            OffsetYpx = (instruction.OffsetYmm ?? 0) / S100PixelSizeMm,
+            OffsetXpx = (instruction.OffsetX ?? 0) / S100PixelSizeMm,
+            OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
         };
     }
 

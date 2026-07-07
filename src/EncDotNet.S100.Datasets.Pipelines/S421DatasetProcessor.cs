@@ -91,7 +91,7 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
     }
 
     protected override string BuildInfoSuffix() =>
-        $"Information types: {_dataset.InformationTypes.Length}";
+        $"Information types: {_dataset.InformationTypes.Count}";
 
     /// <inheritdoc />
     public override ValidationReport? Validate()

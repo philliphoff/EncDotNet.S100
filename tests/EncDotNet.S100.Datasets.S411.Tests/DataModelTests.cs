@@ -107,7 +107,7 @@ public class DataModelTests
 
         var iceEdge = Assert.Single(inventory.IceFeatures.OfType<S411IceEdge>());
         Assert.Equal(S411GeometryKind.Curve, iceEdge.GeometryKind);
-        Assert.True(iceEdge.Coordinates.Length >= 2);
+        Assert.True(iceEdge.Coordinates.Count >= 2);
 
         var iceLead = Assert.Single(inventory.IceFeatures.OfType<S411IceLead>());
         Assert.Equal(2, iceLead.IceLeadStatusCode);

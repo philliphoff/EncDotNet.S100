@@ -336,7 +336,7 @@ internal static class UncleanShutdownSentinel
 }
 
 /// <summary>
-/// Immutable details of a previous viewer session that terminated without
+/// Read-only details of a previous viewer session that terminated without
 /// a clean shutdown.
 /// </summary>
 /// <param name="StartedUtc">When the previous session started (UTC).</param>

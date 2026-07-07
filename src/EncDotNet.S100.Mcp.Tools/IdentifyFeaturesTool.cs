@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
@@ -51,7 +50,7 @@ public sealed record IdentifyMatch(
     [property: Description("Bounding box of the feature's geometry.")] BoundingBox? Bounds,
     [property: Description("'inside' when the pick is within an area feature; 'near' when within the radius of a point/curve feature.")] string Containment,
     [property: Description("Approximate distance from the pick to the feature in metres (0 for 'inside'); null when not computed.")] double? DistanceMeters,
-    [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes; empty when none or unresolvable.")] ImmutableArray<ReferencedText> ReferencedTexts = default);
+    [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes; empty when none or unresolvable.")] IReadOnlyList<ReferencedText>? ReferencedTexts = null);
 
 /// <summary>
 /// The resolved content of an external text file referenced by a feature's
@@ -72,7 +71,7 @@ public sealed record ReferencedText(
 /// <param name="Truncated"><c>true</c> when more features matched than were returned.</param>
 public sealed record IdentifyFeaturesResult(
     [property: Description("The echoed pick point.")] GeoPoint Point,
-    [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] ImmutableArray<IdentifyMatch> Features,
+    [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated);
 
@@ -192,7 +191,7 @@ public sealed class IdentifyFeaturesTool
 
         var total = hits.Count;
         var take = Math.Min(maxResults, total);
-        var builder = ImmutableArray.CreateBuilder<IdentifyMatch>(take);
+        var builder = new List<IdentifyMatch>(take);
         for (var i = 0; i < take; i++)
         {
             var h = hits[i];
@@ -211,7 +210,7 @@ public sealed class IdentifyFeaturesTool
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(
             new IdentifyFeaturesResult(
                 point,
-                builder.MoveToImmutable(),
+                builder,
                 total,
                 take < total)));
     }
@@ -232,18 +231,18 @@ public sealed class IdentifyFeaturesTool
         }
 
         // Area: exact point-in-polygon, honouring interior-ring holes.
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
             if (!SpatialPredicates.ContainsPoint(ToRing(feature.ExteriorRing), point))
             {
                 return false;
             }
 
-            if (!feature.InteriorRings.IsDefaultOrEmpty)
+            if (feature.InteriorRings.Count > 0)
             {
                 foreach (var hole in feature.InteriorRings)
                 {
-                    if (!hole.IsDefaultOrEmpty && SpatialPredicates.ContainsPoint(ToRing(hole), point))
+                    if (hole.Count > 0 && SpatialPredicates.ContainsPoint(ToRing(hole), point))
                     {
                         return false;
                     }
@@ -264,7 +263,7 @@ public sealed class IdentifyFeaturesTool
         }
 
         // Curve: nearest-vertex distance within the radius pre-filter.
-        if (!feature.Curves.IsDefaultOrEmpty && feature.Curves.Length > 0)
+        if (feature.Curves.Count > 0)
         {
             if (!SpatialPredicates.Contains(Inflated(bounds, latPad, lonPad), point))
             {
@@ -294,7 +293,7 @@ public sealed class IdentifyFeaturesTool
         }
 
         // Point: nearest-point distance within the radius pre-filter.
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             if (!SpatialPredicates.Contains(Inflated(bounds, latPad, lonPad), point))
             {
@@ -356,16 +355,16 @@ public sealed class IdentifyFeaturesTool
     /// duplicate file names collapsed. Returns an empty array when no resolver
     /// is available, the feature carries no file references, or none resolve.
     /// </summary>
-    internal static ImmutableArray<ReferencedText> ResolveReferencedTexts(
+    internal static IReadOnlyList<ReferencedText> ResolveReferencedTexts(
         IS100Feature? feature, Func<string, string?>? resolver)
     {
         if (feature is null || resolver is null)
         {
-            return ImmutableArray<ReferencedText>.Empty;
+            return [];
         }
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        ImmutableArray<ReferencedText>.Builder? builder = null;
+        List<ReferencedText>? builder = null;
 
         void Add(string code, string value)
         {
@@ -378,7 +377,7 @@ public sealed class IdentifyFeaturesTool
 
             if (resolver(value) is { Length: > 0 } text)
             {
-                (builder ??= ImmutableArray.CreateBuilder<ReferencedText>()).Add(new ReferencedText(value, text));
+                (builder ??= new List<ReferencedText>()).Add(new ReferencedText(value, text));
             }
         }
 
@@ -395,17 +394,17 @@ public sealed class IdentifyFeaturesTool
             }
         }
 
-        return builder is null ? ImmutableArray<ReferencedText>.Empty : builder.ToImmutable();
+        return builder is null ? [] : builder;
     }
 
-    private static ImmutableArray<GeoPoint> ToRing(ImmutableArray<(double Latitude, double Longitude)> ring)
+    private static IReadOnlyList<GeoPoint> ToRing(IReadOnlyList<(double Latitude, double Longitude)> ring)
     {
-        var builder = ImmutableArray.CreateBuilder<GeoPoint>(ring.Length);
+        var builder = new List<GeoPoint>(ring.Count);
         foreach (var (lat, lon) in ring)
         {
             builder.Add(new GeoPoint(lat, lon));
         }
-        return builder.MoveToImmutable();
+        return builder;
     }
 
     private static double Area(BoundingBox b) =>

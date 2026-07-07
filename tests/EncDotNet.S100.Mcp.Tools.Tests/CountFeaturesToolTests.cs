@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Geometry;
@@ -8,8 +8,8 @@ namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 public class CountFeaturesToolTests
 {
-    private static readonly ImmutableDictionary<ushort, string> SolentTypes =
-        new Dictionary<ushort, string> { [75] = "LIGHTS", [17] = "BOYLAT" }.ToImmutableDictionary();
+    private static readonly IReadOnlyDictionary<ushort, string> SolentTypes =
+        new Dictionary<ushort, string> { [75] = "LIGHTS", [17] = "BOYLAT" }.ToDictionary();
 
     private static LoadedDataset SolentCell(string id) =>
         LoadedDatasetFactory.S101(id, S101Synth.DatasetWithPointFeatures(

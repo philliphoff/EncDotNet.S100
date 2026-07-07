@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
@@ -58,14 +57,14 @@ public static class S129RouteBinder
         ArgumentNullException.ThrowIfNull(route);
 
         var opts = options ?? S129RouteBindingOptions.Default;
-        var mappings = ImmutableArray.CreateBuilder<(S129ControlPoint, S129ControlPointRouteMapping)>(plan.ControlPoints.Length);
+        var mappings = new List<(S129ControlPoint, S129ControlPointRouteMapping)>(plan.ControlPoints.Count);
 
         foreach (var cp in plan.ControlPoints)
         {
             mappings.Add((cp, MapOne(cp, route, opts)));
         }
 
-        return new S129RouteBinding(plan, route, mappings.ToImmutable());
+        return new S129RouteBinding(plan, route, mappings);
     }
 
     private static S129ControlPointRouteMapping MapOne(
@@ -117,7 +116,7 @@ public static class S129RouteBinder
 
     private static IReadOnlyList<GeoPosition> BuildLegPolyline(S421Leg leg)
     {
-        if (!leg.Coordinates.IsDefaultOrEmpty && leg.Coordinates.Length >= 2)
+        if (leg.Coordinates.Count >= 2)
             return leg.Coordinates;
 
         if (leg.StartWaypoint is not null && leg.EndWaypoint is not null)

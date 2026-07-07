@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -33,7 +32,7 @@ public sealed record QueryFeaturesRequest(
     [property: Description("Optional spec filter; null matches every spec. A default edition matches every edition of the same spec name.")] SpecRef? Spec = null,
     [property: Description("Optional case-sensitive feature-type filter (the GML element local name, e.g. \"NavwarnPart\", \"BuoyLateral\"; for S-101 the feature-type acronym, e.g. \"LIGHTS\"); null returns every feature type.")] string? FeatureType = null,
     [property: Description("Optional temporal filter. When supplied, features whose fixedDateRange/periodicDateRange validity window is disjoint from the query window are excluded; features without validity metadata are always included.")] TimeQuery? Times = null,
-    [property: Description("Optional attribute-value predicates; a feature must satisfy all of them (logical AND). Discover valid attributes and enumerated values with describe_feature_type.")] ImmutableArray<AttributePredicate> Attributes = default,
+    [property: Description("Optional attribute-value predicates; a feature must satisfy all of them (logical AND). Discover valid attributes and enumerated values with describe_feature_type.")] IReadOnlyList<AttributePredicate>? Attributes = null,
     [property: Description("When true, replaces the default bounding-box intersection test with true full-geometry intersection: point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing — e.g. \"which features does this route leg actually cross?\". Slightly more expensive; default false.")] bool Precise = false,
     [property: Description("Zero-based page index into the result set.")] int Page = 0,
     [property: Description("Maximum features per page; clamped to the range 1..500.")] int PageSize = 50,
@@ -67,12 +66,12 @@ public sealed record FeatureTypeBreakdown(
 
 /// <summary>Result of <see cref="QueryFeaturesTool"/>.</summary>
 public sealed record QueryFeaturesResult(
-    [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] ImmutableArray<FeatureMatch> Features,
+    [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] IReadOnlyList<FeatureMatch> Features,
     [property: Description("Echoed (and floored) zero-based page index.")] int Page,
     [property: Description("Echoed (and clamped) page size.")] int PageSize,
     [property: Description("Total number of matching features across all pages.")] int TotalCount,
     [property: Description("True if additional pages remain after the current one.")] bool HasMore,
-    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] ImmutableArray<FeatureTypeBreakdown> TypeBreakdown);
+    [property: Description("Per-feature-type tally of the full (all-pages) match set, ordered by descending count then feature type. Lets a caller gauge the result shape before paging.")] IReadOnlyList<FeatureTypeBreakdown> TypeBreakdown);
 
 
 /// <summary>
@@ -142,7 +141,7 @@ public sealed class QueryFeaturesTool
         var page = Math.Max(0, request.Page);
 
         var snapshot = _catalog.Datasets;
-        var matched = ImmutableArray.CreateBuilder<FeatureMatch>();
+        var matched = new List<FeatureMatch>();
 
         foreach (var dataset in snapshot)
         {
@@ -195,7 +194,7 @@ public sealed class QueryFeaturesTool
                     continue;
                 }
 
-                if (!AttributePredicateEvaluator.Matches(feature, request.Attributes))
+                if (!AttributePredicateEvaluator.Matches(feature, request.Attributes ?? []))
                 {
                     continue;
                 }
@@ -212,7 +211,7 @@ public sealed class QueryFeaturesTool
         var totalCount = matched.Count;
         var skip = page * pageSize;
         var take = Math.Max(0, Math.Min(pageSize, totalCount - skip));
-        var pageBuilder = ImmutableArray.CreateBuilder<FeatureMatch>(take);
+        var pageBuilder = new List<FeatureMatch>(take);
         for (var i = 0; i < take; i++)
         {
             pageBuilder.Add(matched[skip + i]);
@@ -233,7 +232,7 @@ public sealed class QueryFeaturesTool
             byType[match.FeatureType] = n + 1;
         }
 
-        var breakdown = ImmutableArray.CreateBuilder<FeatureTypeBreakdown>(typeOrder.Count);
+        var breakdown = new List<FeatureTypeBreakdown>(typeOrder.Count);
         foreach (var type in typeOrder
                      .OrderByDescending(t => byType[t])
                      .ThenBy(t => t, StringComparer.Ordinal))
@@ -243,12 +242,12 @@ public sealed class QueryFeaturesTool
 
         return Task.FromResult(ToolResult<QueryFeaturesResult>.Ok(
             new QueryFeaturesResult(
-                pageBuilder.MoveToImmutable(),
+                pageBuilder,
                 page,
                 pageSize,
                 totalCount,
                 hasMore,
-                breakdown.MoveToImmutable())));
+                breakdown)));
     }
 
     private static bool SpecMatches(SpecRef actual, SpecRef filter)

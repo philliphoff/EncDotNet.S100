@@ -1,8 +1,8 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S125.DataModel;
 using EncDotNet.S100.Datasets.S125.Validation;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S125.Tests.Validation;
 
@@ -38,8 +38,8 @@ public class S125AtonRulesTests
         Kind = kind,
         Position = new GeoPosition(0, 0),
         ExtraAttributes = mmsi is null
-            ? ImmutableDictionary<string, string>.Empty
-            : ImmutableDictionary<string, string>.Empty.Add("mMSICode", mmsi),
+            ? ReadOnlyDictionary<string, string>.Empty
+            : new Dictionary<string, string> { ["mMSICode"] = mmsi },
     };
 
     private static S125AtonStatusInformation Status(
@@ -47,13 +47,13 @@ public class S125AtonRulesTests
         int? code = 1,
         S125ChangeType type = S125ChangeType.AdvanceNoticeOfChange,
         S125DateRange? fixedRange = null,
-        ImmutableArray<S125DateRange>? periodic = null) => new()
+        IReadOnlyList<S125DateRange>? periodic = null) => new()
     {
         Id = id,
         ChangeTypeCode = code,
         ChangeType = type,
         FixedDateRange = fixedRange,
-        PeriodicDateRanges = periodic ?? ImmutableArray<S125DateRange>.Empty,
+        PeriodicDateRanges = periodic ?? [],
     };
 
     private static S125AtonStatusIndication Indication(string id, GeoPosition? pos) => new()
@@ -66,33 +66,33 @@ public class S125AtonRulesTests
     {
         Id = id,
         Kind = S125AggregationKind.Aggregation,
-        Members = members.ToImmutableArray(),
+        Members = members.ToArray(),
     };
 
     private static S125AtonDataset Dataset(
-        ImmutableArray<IS125Aid>? aids = null,
-        ImmutableArray<S125AtonStatusInformation>? statusInfo = null,
-        ImmutableArray<S125AtonStatusIndication>? indications = null,
-        ImmutableArray<S125Aggregation>? aggregations = null,
+        IReadOnlyList<IS125Aid>? aids = null,
+        IReadOnlyList<S125AtonStatusInformation>? statusInfo = null,
+        IReadOnlyList<S125AtonStatusIndication>? indications = null,
+        IReadOnlyList<S125Aggregation>? aggregations = null,
         string? datasetId = "DS-1")
     {
         var source = new S125Dataset
         {
             DatasetIdentifier = datasetId,
             ProductIdentifier = "S-125",
-            Features = ImmutableArray<S125Feature>.Empty,
-            InformationTypes = ImmutableArray<S125InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         return new S125AtonDataset
         {
             DatasetIdentifier = datasetId,
             ProductIdentifier = "S-125",
-            Aids = aids ?? ImmutableArray<IS125Aid>.Empty,
-            StatusInformation = statusInfo ?? ImmutableArray<S125AtonStatusInformation>.Empty,
-            StatusIndications = indications ?? ImmutableArray<S125AtonStatusIndication>.Empty,
-            SpatialQualities = ImmutableArray<S125SpatialQuality>.Empty,
-            Aggregations = aggregations ?? ImmutableArray<S125Aggregation>.Empty,
-            OtherFeatures = ImmutableArray<S125OtherFeature>.Empty,
+            Aids = aids ?? [],
+            StatusInformation = statusInfo ?? [],
+            StatusIndications = indications ?? [],
+            SpatialQualities = [],
+            Aggregations = aggregations ?? [],
+            OtherFeatures = [],
             Source = source,
         };
     }
@@ -102,22 +102,22 @@ public class S125AtonRulesTests
     [Fact]
     public void AidLatLonInRange_Passes_OnValidPositions()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(
-            Buoy("B1", -89.9, -179.9), Buoy("B2", 89.9, 179.9), Buoy("B3", 0, 0)));
+        var ds = Dataset(aids: [
+            Buoy("B1", -89.9, -179.9), Buoy("B2", 89.9, 179.9), Buoy("B3", 0, 0)]);
         Assert.Empty(S125AtonRules.AidLatLonInRange.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AidLatLonInRange_IgnoresAidsWithoutPosition()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Buoy("B1", lat: null, lon: null)));
+        var ds = Dataset(aids: [Buoy("B1", lat: null, lon: null)]);
         Assert.Empty(S125AtonRules.AidLatLonInRange.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AidLatLonInRange_Fails_OnOutOfRangeLatitude()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Buoy("BAD", 95.0, 0)));
+        var ds = Dataset(aids: [Buoy("BAD", 95.0, 0)]);
         var f = Assert.Single(S125AtonRules.AidLatLonInRange.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-1.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -129,7 +129,7 @@ public class S125AtonRulesTests
     [Fact]
     public void AidLatLonInRange_Fails_OnOutOfRangeLongitude()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Buoy("BAD", 0, 181.0)));
+        var ds = Dataset(aids: [Buoy("BAD", 0, 181.0)]);
         var f = Assert.Single(S125AtonRules.AidLatLonInRange.Evaluate(ds, ValidationContext.Default));
         Assert.Contains("longitude", f.Message);
     }
@@ -137,7 +137,7 @@ public class S125AtonRulesTests
     [Fact]
     public void AidLatLonInRange_Fails_OnBothOutOfRange()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Buoy("BAD", 91.0, 181.0)));
+        var ds = Dataset(aids: [Buoy("BAD", 91.0, 181.0)]);
         var f = Assert.Single(S125AtonRules.AidLatLonInRange.Evaluate(ds, ValidationContext.Default));
         Assert.Contains("both out of range", f.Message);
     }
@@ -147,16 +147,16 @@ public class S125AtonRulesTests
     [Fact]
     public void AidIdsUnique_Passes_OnDistinctIds()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(
-            Buoy("B1"), Buoy("B2"), Buoy("B3")));
+        var ds = Dataset(aids: [
+            Buoy("B1"), Buoy("B2"), Buoy("B3")]);
         Assert.Empty(S125AtonRules.AidIdsUnique.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AidIdsUnique_Fails_OnDuplicate()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(
-            Buoy("B1"), Buoy("B1"), Buoy("B2")));
+        var ds = Dataset(aids: [
+            Buoy("B1"), Buoy("B1"), Buoy("B2")]);
         var f = Assert.Single(S125AtonRules.AidIdsUnique.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-1.2", f.RuleId);
         Assert.Equal("B1", f.RelatedFeatureId);
@@ -165,16 +165,16 @@ public class S125AtonRulesTests
     [Fact]
     public void AidIdsUnique_CaseInsensitive()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(
-            Buoy("Aid-1"), Buoy("aid-1")));
+        var ds = Dataset(aids: [
+            Buoy("Aid-1"), Buoy("aid-1")]);
         Assert.Single(S125AtonRules.AidIdsUnique.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AidIdsUnique_EmitsOneFindingPerDuplicateId()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(
-            Buoy("A"), Buoy("A"), Buoy("A"), Buoy("B"), Buoy("B")));
+        var ds = Dataset(aids: [
+            Buoy("A"), Buoy("A"), Buoy("A"), Buoy("B"), Buoy("B")]);
         var findings = S125AtonRules.AidIdsUnique.Evaluate(ds, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
         var ids = findings.Select(f => f.RelatedFeatureId).ToHashSet();
@@ -190,21 +190,21 @@ public class S125AtonRulesTests
     [InlineData(S125AisKind.Virtual)]
     public void AisAidHasMmsi_Passes_OnNineDigitMmsi(S125AisKind kind)
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Ais("A1", kind, "992341001")));
+        var ds = Dataset(aids: [Ais("A1", kind, "992341001")]);
         Assert.Empty(S125AtonRules.AisAidHasMmsi.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AisAidHasMmsi_IgnoresNonAisAids()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Buoy("B1")));
+        var ds = Dataset(aids: [Buoy("B1")]);
         Assert.Empty(S125AtonRules.AisAidHasMmsi.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AisAidHasMmsi_Fails_WhenMissing()
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Ais("AIS1", mmsi: null)));
+        var ds = Dataset(aids: [Ais("AIS1", mmsi: null)]);
         var f = Assert.Single(S125AtonRules.AisAidHasMmsi.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-2.1", f.RuleId);
         Assert.Contains("missing", f.Message);
@@ -218,7 +218,7 @@ public class S125AtonRulesTests
     [InlineData("12345-789")]  // punctuation
     public void AisAidHasMmsi_Fails_WhenMalformed(string mmsi)
     {
-        var ds = Dataset(aids: ImmutableArray.Create<IS125Aid>(Ais("AIS1", mmsi: mmsi)));
+        var ds = Dataset(aids: [Ais("AIS1", mmsi: mmsi)]);
         var f = Assert.Single(S125AtonRules.AisAidHasMmsi.Evaluate(ds, ValidationContext.Default));
         Assert.Contains("malformed", f.Message);
         Assert.Contains(mmsi, f.Message);
@@ -229,7 +229,7 @@ public class S125AtonRulesTests
     [Fact]
     public void ChangeTypeCodeInEnumeration_Passes_WhenNoCode()
     {
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1", code: null, type: S125ChangeType.Unknown)));
+        var ds = Dataset(statusInfo: [Status("S1", code: null, type: S125ChangeType.Unknown)]);
         Assert.Empty(S125AtonRules.ChangeTypeCodeInEnumeration.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -241,7 +241,7 @@ public class S125AtonRulesTests
     [InlineData(5, S125ChangeType.PermanentChange)]
     public void ChangeTypeCodeInEnumeration_Passes_OnListedValue(int code, S125ChangeType type)
     {
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1", code: code, type: type)));
+        var ds = Dataset(statusInfo: [Status("S1", code: code, type: type)]);
         Assert.Empty(S125AtonRules.ChangeTypeCodeInEnumeration.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -252,7 +252,7 @@ public class S125AtonRulesTests
     public void ChangeTypeCodeInEnumeration_Fails_OnOutOfRangeCode(int code)
     {
         // The projection would set ChangeType=Unknown for any out-of-range numeric code.
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1", code: code, type: S125ChangeType.Unknown)));
+        var ds = Dataset(statusInfo: [Status("S1", code: code, type: S125ChangeType.Unknown)]);
         var f = Assert.Single(S125AtonRules.ChangeTypeCodeInEnumeration.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-3.1", f.RuleId);
         Assert.Equal("S1", f.RelatedFeatureId);
@@ -264,7 +264,7 @@ public class S125AtonRulesTests
     [Fact]
     public void StatusDateRangeOrdered_Passes_WhenAbsent()
     {
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1")));
+        var ds = Dataset(statusInfo: [Status("S1")]);
         Assert.Empty(S125AtonRules.StatusDateRangeOrdered.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -273,9 +273,9 @@ public class S125AtonRulesTests
     {
         var startOnly = new S125DateRange { Start = DateTimeOffset.UtcNow };
         var endOnly = new S125DateRange { End = DateTimeOffset.UtcNow };
-        var ds = Dataset(statusInfo: ImmutableArray.Create(
+        var ds = Dataset(statusInfo: [
             Status("S1", fixedRange: startOnly),
-            Status("S2", fixedRange: endOnly)));
+            Status("S2", fixedRange: endOnly)]);
         Assert.Empty(S125AtonRules.StatusDateRangeOrdered.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -284,7 +284,7 @@ public class S125AtonRulesTests
     {
         var t = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
         var range = new S125DateRange { Start = t, End = t };
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1", fixedRange: range)));
+        var ds = Dataset(statusInfo: [Status("S1", fixedRange: range)]);
         Assert.Empty(S125AtonRules.StatusDateRangeOrdered.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -296,7 +296,7 @@ public class S125AtonRulesTests
             Start = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
             End = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
         };
-        var ds = Dataset(statusInfo: ImmutableArray.Create(Status("S1", fixedRange: range)));
+        var ds = Dataset(statusInfo: [Status("S1", fixedRange: range)]);
         var f = Assert.Single(S125AtonRules.StatusDateRangeOrdered.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-3.2", f.RuleId);
         Assert.Equal("S1", f.RelatedFeatureId);
@@ -311,8 +311,8 @@ public class S125AtonRulesTests
             Start = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
             End = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
         };
-        var ds = Dataset(statusInfo: ImmutableArray.Create(
-            Status("S1", periodic: ImmutableArray.Create(range))));
+        var ds = Dataset(statusInfo: [
+            Status("S1", periodic: [range])]);
         var f = Assert.Single(S125AtonRules.StatusDateRangeOrdered.Evaluate(ds, ValidationContext.Default));
         Assert.Contains("periodicDateRange", f.Message);
     }
@@ -323,15 +323,15 @@ public class S125AtonRulesTests
     public void AggregationHasMembers_Passes_OnNonEmpty()
     {
         var ds = Dataset(
-            aids: ImmutableArray.Create<IS125Aid>(Buoy("B1")),
-            aggregations: ImmutableArray.Create(Aggregation("AGG1", Buoy("B1"))));
+            aids: [Buoy("B1")],
+            aggregations: [Aggregation("AGG1", Buoy("B1"))]);
         Assert.Empty(S125AtonRules.AggregationHasMembers.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void AggregationHasMembers_Fails_OnEmpty()
     {
-        var ds = Dataset(aggregations: ImmutableArray.Create(Aggregation("AGG1")));
+        var ds = Dataset(aggregations: [Aggregation("AGG1")]);
         var f = Assert.Single(S125AtonRules.AggregationHasMembers.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-4.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Warning, f.Severity);
@@ -343,14 +343,14 @@ public class S125AtonRulesTests
     [Fact]
     public void StatusIndicationHasPosition_Passes_WhenPositioned()
     {
-        var ds = Dataset(indications: ImmutableArray.Create(Indication("I1", new GeoPosition(10, 20))));
+        var ds = Dataset(indications: [Indication("I1", new GeoPosition(10, 20))]);
         Assert.Empty(S125AtonRules.StatusIndicationHasPosition.Evaluate(ds, ValidationContext.Default));
     }
 
     [Fact]
     public void StatusIndicationHasPosition_Fails_WhenMissing()
     {
-        var ds = Dataset(indications: ImmutableArray.Create(Indication("I1", null)));
+        var ds = Dataset(indications: [Indication("I1", null)]);
         var f = Assert.Single(S125AtonRules.StatusIndicationHasPosition.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S125-R-5.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Warning, f.Severity);
@@ -362,7 +362,7 @@ public class S125AtonRulesTests
     [Fact]
     public void Default_ContainsAllSevenRules()
     {
-        Assert.Equal(7, S125AtonRules.Default.Rules.Length);
+        Assert.Equal(7, S125AtonRules.Default.Rules.Count);
         var ids = S125AtonRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S125-R-1.1", ids);
         Assert.Contains("S125-R-1.2", ids);
@@ -377,12 +377,12 @@ public class S125AtonRulesTests
     public void Validate_OnValidDataset_ProducesNoFindings()
     {
         var ds = Dataset(
-            aids: ImmutableArray.Create<IS125Aid>(
+            aids: [
                 Buoy("B1", 10, 20),
-                Ais("AIS1", S125AisKind.Virtual, "992341001")),
-            statusInfo: ImmutableArray.Create(Status("S1", code: 1, type: S125ChangeType.AdvanceNoticeOfChange)),
-            indications: ImmutableArray.Create(Indication("I1", new GeoPosition(10, 20))),
-            aggregations: ImmutableArray.Create(Aggregation("AGG1", Buoy("B1", 10, 20))));
+                Ais("AIS1", S125AisKind.Virtual, "992341001")],
+            statusInfo: [Status("S1", code: 1, type: S125ChangeType.AdvanceNoticeOfChange)],
+            indications: [Indication("I1", new GeoPosition(10, 20))],
+            aggregations: [Aggregation("AGG1", Buoy("B1", 10, 20))]);
 
         var report = S125AtonRules.Validate(ds);
         Assert.True(report.IsValid);
@@ -402,15 +402,15 @@ public class S125AtonRulesTests
             End = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero),
         };
         var ds = Dataset(
-            aids: ImmutableArray.Create<IS125Aid>(
+            aids: [
                 Buoy("B1", 200, 0),
                 Buoy("B1", 0, 0),
-                Ais("AIS-NoMmsi", S125AisKind.Virtual, mmsi: null)),
-            statusInfo: ImmutableArray.Create(
+                Ais("AIS-NoMmsi", S125AisKind.Virtual, mmsi: null)],
+            statusInfo: [
                 Status("S1", code: 42, type: S125ChangeType.Unknown),
-                Status("S2", code: 1, type: S125ChangeType.AdvanceNoticeOfChange, fixedRange: inverted)),
-            indications: ImmutableArray.Create(Indication("I1", null)),
-            aggregations: ImmutableArray.Create(Aggregation("AGG1")));
+                Status("S2", code: 1, type: S125ChangeType.AdvanceNoticeOfChange, fixedRange: inverted)],
+            indications: [Indication("I1", null)],
+            aggregations: [Aggregation("AGG1")]);
 
         var report = S125AtonRules.Validate(ds);
         Assert.False(report.IsValid);
@@ -434,7 +434,7 @@ public class S125AtonRulesTests
     public void Validate_PropagatesDatasetIdOntoFindings()
     {
         var ds = Dataset(
-            aids: ImmutableArray.Create<IS125Aid>(Buoy("BAD", 95, 0)),
+            aids: [Buoy("BAD", 95, 0)],
             datasetId: "MY-DATASET");
         var report = S125AtonRules.Validate(ds);
         Assert.All(report.Findings, f => Assert.Equal("MY-DATASET", f.DatasetId));

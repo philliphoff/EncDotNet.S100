@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S129.DataModel;
@@ -85,7 +84,7 @@ public static class S129CrossProductResolver
     {
         ArgumentNullException.ThrowIfNull(plan);
 
-        var unresolved = ImmutableArray.CreateBuilder<S129UnresolvedReference>();
+        var unresolved = new List<S129UnresolvedReference>();
 
         S129ResolvedReference<S421Route>? resolvedRoute = ResolveRoute(plan, route, unresolved);
         S129ResolvedReference<S102Dataset>? resolvedBathymetry = ResolveBathymetry(plan, bathymetry, unresolved);
@@ -95,13 +94,13 @@ public static class S129CrossProductResolver
             Bathymetry: resolvedBathymetry,
             WaterLevel: resolvedWaterLevel,
             Route: resolvedRoute,
-            Unresolved: unresolved.ToImmutable());
+            Unresolved: unresolved);
     }
 
     private static S129ResolvedReference<S421Route>? ResolveRoute(
         S129UnderKeelClearancePlan plan,
         S421Route? candidate,
-        ImmutableArray<S129UnresolvedReference>.Builder unresolved)
+        List<S129UnresolvedReference> unresolved)
     {
         const string kind = "S-421 route";
         var reference = plan.Plan?.SourceRoute;
@@ -164,7 +163,7 @@ public static class S129CrossProductResolver
     private static S129ResolvedReference<S102Dataset>? ResolveBathymetry(
         S129UnderKeelClearancePlan plan,
         S102Dataset? candidate,
-        ImmutableArray<S129UnresolvedReference>.Builder unresolved)
+        List<S129UnresolvedReference> unresolved)
     {
         const string kind = "S-102 bathymetry";
         if (candidate is null)
@@ -190,7 +189,7 @@ public static class S129CrossProductResolver
     private static S129ResolvedReference<S104Dataset>? ResolveWaterLevel(
         S129UnderKeelClearancePlan plan,
         S104Dataset? candidate,
-        ImmutableArray<S129UnresolvedReference>.Builder unresolved)
+        List<S129UnresolvedReference> unresolved)
     {
         const string kind = "S-104 water level";
         if (candidate is null)

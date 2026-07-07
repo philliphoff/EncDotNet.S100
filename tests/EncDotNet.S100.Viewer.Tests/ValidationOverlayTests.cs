@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
@@ -65,7 +64,7 @@ public class ValidationOverlayTests
         };
 
     private static ValidationReport ReportOf(params ValidationFinding[] findings)
-        => new(findings.ToImmutableArray(), RulesEvaluated: findings.Length,
+        => new(findings.ToArray(), RulesEvaluated: findings.Length,
             RulesWithFindings: findings.Length);
 
     // ── ValidationFindingViewModel.HasSpatialLocation truth table ────

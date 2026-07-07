@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Core;
@@ -83,7 +84,7 @@ public sealed class S101VectorSource : IVectorSource
     private static (GeometryType, IReadOnlyList<(double Latitude, double Longitude)>) ResolveSpatialGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
-        if (feature.SpatialAssociations.Length == 0)
+        if (feature.SpatialAssociations.Count == 0)
             return (GeometryType.Point, []);
 
         var first = feature.SpatialAssociations[0];

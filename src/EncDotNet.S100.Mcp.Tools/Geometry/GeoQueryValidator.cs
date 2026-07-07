@@ -88,7 +88,7 @@ public static class GeoQueryValidator
 
     private static ToolError? ValidatePolygon(GeoPolygon polygon, string parameterName)
     {
-        if (polygon.Ring.IsDefaultOrEmpty || polygon.Ring.Length < 4)
+        if (polygon.Ring.Count == 0 || polygon.Ring.Count < 4)
         {
             return new GeometryInvalid(
                 parameterName,
@@ -117,7 +117,7 @@ public static class GeoQueryValidator
 
     private static ToolError? ValidatePolyline(GeoPolyline polyline, string parameterName)
     {
-        if (polyline.Vertices.IsDefaultOrEmpty || polyline.Vertices.Length < 2)
+        if (polyline.Vertices.Count == 0 || polyline.Vertices.Count < 2)
         {
             return new GeometryInvalid(
                 parameterName,

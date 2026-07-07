@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Pipelines;
@@ -42,23 +41,23 @@ public static class FeatureGeometryQuery
             if (p.Longitude > east) east = p.Longitude;
         }
 
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
             foreach (var p in feature.ExteriorRing) Accumulate(p);
         }
 
-        if (!feature.Curves.IsDefaultOrEmpty)
+        if (feature.Curves.Count > 0)
         {
             foreach (var curve in feature.Curves)
             {
-                if (!curve.IsDefaultOrEmpty)
+                if (curve.Count > 0)
                 {
                     foreach (var p in curve) Accumulate(p);
                 }
             }
         }
 
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             foreach (var p in feature.Points) Accumulate(p);
         }

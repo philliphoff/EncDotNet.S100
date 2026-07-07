@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
@@ -14,24 +14,24 @@ public class NearestFeaturesToolTests
         Id = id,
         FeatureType = type,
         GeometryType = S100GeometryType.Point,
-        Points = ImmutableArray.Create((lat, lon)),
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Points = [(lat, lon)],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
     private static S124Feature Square(string id, double half)
     {
-        var ring = ImmutableArray.Create<(double, double)>(
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half));
+        IReadOnlyList<(double, double)> ring = [
+            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
         return new S124Feature
         {
             Id = id,
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = ring,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -121,7 +121,7 @@ public class NearestFeaturesToolTests
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.TotalMatched);
         Assert.True(value.Truncated);
-        Assert.Equal(2, value.Features.Length);
+        Assert.Equal(2, value.Features.Count);
     }
 
     [Fact]

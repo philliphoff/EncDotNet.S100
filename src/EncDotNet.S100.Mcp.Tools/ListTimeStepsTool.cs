@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S104;
@@ -34,7 +33,7 @@ public sealed record ListTimeStepsRequest(
 public sealed record ListTimeStepsResult(
     [property: Description("The dataset that was introspected, echoed back.")] DatasetId DatasetId,
     [property: Description("Spec of the dataset that was introspected.")] SpecRef Spec,
-    [property: Description("All UTC time-step instants in ascending order. ISO-8601 with explicit UTC offset.")] ImmutableArray<DateTimeOffset> Times,
+    [property: Description("All UTC time-step instants in ascending order. ISO-8601 with explicit UTC offset.")] IReadOnlyList<DateTimeOffset> Times,
     [property: Description("Regular interval between consecutive samples when the series is strictly uniform; otherwise null. Callers must not rely on this being set.")] TimeSpan? Cadence,
     [property: Description("First time step in Times, or null when empty.")] DateTimeOffset? FirstTime,
     [property: Description("Last time step in Times, or null when empty.")] DateTimeOffset? LastTime);
@@ -115,14 +114,14 @@ public sealed class ListTimeStepsTool
     private static ToolResult<ListTimeStepsResult> Empty(LoadedDataset dataset) =>
         ToolResult<ListTimeStepsResult>.Ok(new ListTimeStepsResult(
             dataset.Id, dataset.Spec,
-            ImmutableArray<DateTimeOffset>.Empty,
+            [],
             Cadence: null, FirstTime: null, LastTime: null));
 
     private static ToolResult<ListTimeStepsResult> FromGridded(
         LoadedDataset dataset,
         IEnumerable<DateTimeOffset> times)
     {
-        var ordered = times.OrderBy(t => t).ToImmutableArray();
+        var ordered = times.OrderBy(t => t).ToArray();
         var cadence = DetectCadence(ordered);
         return ToolResult<ListTimeStepsResult>.Ok(new ListTimeStepsResult(
             dataset.Id, dataset.Spec, ordered, cadence,
@@ -140,17 +139,17 @@ public sealed class ListTimeStepsTool
         }
 
         var (start, interval, count) = series.Value;
-        var builder = ImmutableArray.CreateBuilder<DateTimeOffset>(count);
+        var builder = new List<DateTimeOffset>(count);
         for (int i = 0; i < count; i++)
         {
             builder.Add(start + TimeSpan.FromTicks(interval.Ticks * i));
         }
-        var times = builder.MoveToImmutable();
+        var times = builder;
         return ToolResult<ListTimeStepsResult>.Ok(new ListTimeStepsResult(
             dataset.Id, dataset.Spec, times,
             Cadence: interval > TimeSpan.Zero ? interval : null,
-            FirstTime: times.Length == 0 ? null : times[0],
-            LastTime: times.Length == 0 ? null : times[^1]));
+            FirstTime: times.Count == 0 ? null : times[0],
+            LastTime: times.Count == 0 ? null : times[^1]));
     }
 
     private static IEnumerable<DateTimeOffset> ExtractWaterLevelTimes(S104CoverageData payload)
@@ -195,12 +194,12 @@ public sealed class ListTimeStepsTool
 
     // Returns the common cadence if every adjacent pair is equally
     // spaced; null otherwise. Single-element series returns null.
-    private static TimeSpan? DetectCadence(ImmutableArray<DateTimeOffset> times)
+    private static TimeSpan? DetectCadence(IReadOnlyList<DateTimeOffset> times)
     {
-        if (times.Length < 2) return null;
+        if (times.Count < 2) return null;
         var first = times[1] - times[0];
         if (first <= TimeSpan.Zero) return null;
-        for (int i = 2; i < times.Length; i++)
+        for (int i = 2; i < times.Count; i++)
         {
             if (times[i] - times[i - 1] != first) return null;
         }

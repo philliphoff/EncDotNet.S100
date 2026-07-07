@@ -1,5 +1,3 @@
-using System.Collections.Immutable;
-
 namespace EncDotNet.S100.Datasets.S57;
 
 /// <summary>
@@ -23,25 +21,25 @@ namespace EncDotNet.S100.Datasets.S57;
 /// </remarks>
 public sealed class S57S101Mapping
 {
-    private readonly ImmutableDictionary<string, ushort> _attlByAcronym;
+    private readonly IReadOnlyDictionary<string, ushort> _attlByAcronym;
 
     /// <summary>Feature-class rules keyed by S-57 OBJL.</summary>
-    public ImmutableDictionary<ushort, S57FeatureRule> FeatureRules { get; }
+    public IReadOnlyDictionary<ushort, S57FeatureRule> FeatureRules { get; }
 
     /// <summary>Attribute rules keyed by S-57 ATTL.</summary>
-    public ImmutableDictionary<ushort, S57AttributeRule> AttributeRules { get; }
+    public IReadOnlyDictionary<ushort, S57AttributeRule> AttributeRules { get; }
 
     private S57S101Mapping(
-        ImmutableDictionary<ushort, S57FeatureRule> featureRules,
-        ImmutableDictionary<ushort, S57AttributeRule> attributeRules)
+        IReadOnlyDictionary<ushort, S57FeatureRule> featureRules,
+        IReadOnlyDictionary<ushort, S57AttributeRule> attributeRules)
     {
         FeatureRules = featureRules;
         AttributeRules = attributeRules;
 
-        var byAcronym = ImmutableDictionary.CreateBuilder<string, ushort>(StringComparer.OrdinalIgnoreCase);
+        var byAcronym = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var (attl, rule) in attributeRules)
             byAcronym[rule.S57Acronym] = attl;
-        _attlByAcronym = byAcronym.ToImmutable();
+        _attlByAcronym = byAcronym;
     }
 
     /// <summary>
@@ -164,16 +162,16 @@ public sealed class S57S101Mapping
     /// suitable for passing to <see cref="ResolveFeature"/>. Values for
     /// attributes whose ATTL is unknown to this mapping are omitted.
     /// </summary>
-    public ImmutableDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
+    public IReadOnlyDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
-        var b = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        var b = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in attributes)
         {
             if (AttributeRules.TryGetValue((ushort)a.AttributeCode, out var rule))
                 b[rule.S57Acronym] = a.Value;
         }
-        return b.ToImmutable();
+        return b;
     }
 
     /// <summary>
@@ -182,30 +180,30 @@ public sealed class S57S101Mapping
     public bool TryGetAttl(string s57Acronym, out ushort attl)
         => _attlByAcronym.TryGetValue(s57Acronym, out attl);
 
-    private static ImmutableDictionary<string, S57AttributeOverride> MergeOverrides(
-        ImmutableDictionary<string, S57AttributeOverride> ruleLevel,
-        ImmutableDictionary<string, S57AttributeOverride> redirectLevel)
+    private static IReadOnlyDictionary<string, S57AttributeOverride> MergeOverrides(
+        IReadOnlyDictionary<string, S57AttributeOverride> ruleLevel,
+        IReadOnlyDictionary<string, S57AttributeOverride> redirectLevel)
     {
-        if (redirectLevel.IsEmpty) return ruleLevel;
-        if (ruleLevel.IsEmpty) return redirectLevel;
+        if (redirectLevel.Count == 0) return ruleLevel;
+        if (ruleLevel.Count == 0) return redirectLevel;
 
-        var b = ruleLevel.ToBuilder();
+        var b = new Dictionary<string, S57AttributeOverride>(ruleLevel, StringComparer.OrdinalIgnoreCase);
         foreach (var kv in redirectLevel)
             b[kv.Key] = kv.Value; // redirect-level wins
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableDictionary<string, string?> MergeValueRemap(
-        ImmutableDictionary<string, string?> defaultRemap,
-        ImmutableDictionary<string, string?> overrideRemap)
+    private static IReadOnlyDictionary<string, string?> MergeValueRemap(
+        IReadOnlyDictionary<string, string?> defaultRemap,
+        IReadOnlyDictionary<string, string?> overrideRemap)
     {
-        if (overrideRemap.IsEmpty) return defaultRemap;
-        if (defaultRemap.IsEmpty) return overrideRemap;
+        if (overrideRemap.Count == 0) return defaultRemap;
+        if (defaultRemap.Count == 0) return overrideRemap;
 
-        var b = defaultRemap.ToBuilder();
+        var b = new Dictionary<string, string?>(defaultRemap);
         foreach (var kv in overrideRemap)
             b[kv.Key] = kv.Value;
-        return b.ToImmutable();
+        return b;
     }
 
     // ── Builder ─────────────────────────────────────────────────────────
@@ -213,10 +211,8 @@ public sealed class S57S101Mapping
     /// <summary>Builder for composing custom mapping tables.</summary>
     public sealed class Builder
     {
-        private readonly ImmutableDictionary<ushort, S57FeatureRule>.Builder _features
-            = ImmutableDictionary.CreateBuilder<ushort, S57FeatureRule>();
-        private readonly ImmutableDictionary<ushort, S57AttributeRule>.Builder _attributes
-            = ImmutableDictionary.CreateBuilder<ushort, S57AttributeRule>();
+        private readonly Dictionary<ushort, S57FeatureRule> _features = new();
+        private readonly Dictionary<ushort, S57AttributeRule> _attributes = new();
 
         /// <summary>Adds or replaces a feature-class rule.</summary>
         public Builder AddFeatureRule(S57FeatureRule rule)
@@ -292,21 +288,21 @@ public sealed class S57S101Mapping
 
         /// <summary>Builds an immutable mapping.</summary>
         public S57S101Mapping Build()
-            => new(_features.ToImmutable(), _attributes.ToImmutable());
+            => new(new Dictionary<ushort, S57FeatureRule>(_features), new Dictionary<ushort, S57AttributeRule>(_attributes));
     }
 
     // ── Default rule data (compiled-in) ─────────────────────────────────
 
     private static S57S101Mapping BuildDefault()
     {
-        var features = ImmutableDictionary.CreateBuilder<ushort, S57FeatureRule>();
+        var features = new Dictionary<ushort, S57FeatureRule>();
         foreach (var rule in DefaultRules.FeatureRules())
             features[rule.Objl] = rule;
 
-        var attributes = ImmutableDictionary.CreateBuilder<ushort, S57AttributeRule>();
+        var attributes = new Dictionary<ushort, S57AttributeRule>();
         foreach (var rule in DefaultRules.AttributeRules())
             attributes[rule.Attl] = rule;
 
-        return new S57S101Mapping(features.ToImmutable(), attributes.ToImmutable());
+        return new S57S101Mapping(features, attributes);
     }
 }

@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
 using Xunit;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Tests;
 
@@ -37,8 +37,8 @@ public sealed class S101VectorSourceExtentTests
         var curve = new S101CurveSegmentRecord
         {
             RecordId = 10,
-            PointAssociations = ImmutableArray<S101PointAssociation>.Empty,
-            IntermediateCoordinates = ImmutableArray.Create((0, 0), (0, 10), (10, 10), (10, 0)),
+            PointAssociations = [],
+            IntermediateCoordinates = [(0, 0), (0, 10), (10, 10), (10, 0)],
         };
 
         return new S101Document
@@ -50,18 +50,18 @@ public sealed class S101VectorSourceExtentTests
                 CoordinateMultiplicationFactorY = 1,
                 CoordinateMultiplicationFactorZ = 1,
             },
-            FeatureTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            Points = ImmutableDictionary<uint, S101PointRecord>.Empty,
-            CurveSegments = new[] { curve }.ToImmutableDictionary(c => c.RecordId),
-            CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
-            Features = ImmutableArray<S101FeatureRecord>.Empty,
-            InformationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = ImmutableDictionary<ushort, string>.Empty,
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = new[] { curve }.ToDictionary(c => c.RecordId),
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features = [],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
         };
     }
 }

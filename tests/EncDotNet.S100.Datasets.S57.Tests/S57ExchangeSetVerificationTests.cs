@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S57.ExchangeSets;
@@ -95,7 +94,7 @@ public sealed class S57ExchangeSetVerificationTests
     {
         var s57 = new S57ExchangeSetVerificationResult
         {
-            FileResults = ImmutableArray.Create(
+            FileResults = [
                 new S57FileVerificationResult
                 {
                     FileName = "CATALOG.031",
@@ -109,7 +108,7 @@ public sealed class S57ExchangeSetVerificationTests
                     ChecksumOutcome = S57Outcome.Ok,
                     ExpectedCrc = "1234ABCD",
                     ActualCrc = "1234ABCD",
-                }),
+                }],
         };
 
         ExchangeSetVerificationResult mapped = S57ExchangeSetVerification.Map(s57);
@@ -129,7 +128,7 @@ public sealed class S57ExchangeSetVerificationTests
     {
         var s57 = new S57ExchangeSetVerificationResult
         {
-            FileResults = ImmutableArray.Create(
+            FileResults = [
                 new S57FileVerificationResult
                 {
                     FileName = "CELL.000",
@@ -137,7 +136,7 @@ public sealed class S57ExchangeSetVerificationTests
                     ChecksumOutcome = S57Outcome.ChecksumMismatch,
                     ExpectedCrc = "AAAA",
                     ActualCrc = "BBBB",
-                }),
+                }],
         };
 
         ExchangeSetVerificationResult mapped = S57ExchangeSetVerification.Map(s57);

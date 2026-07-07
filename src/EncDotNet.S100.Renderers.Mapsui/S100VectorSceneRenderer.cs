@@ -450,7 +450,7 @@ public static class S100VectorSceneRenderer
 
     /// <summary>
     /// The parameters of one whole-viewport raster request, captured on the
-    /// render thread and handed to the worker. Immutable so the worker never sees
+    /// render thread and handed to the worker. Stable so the worker never sees
     /// a torn read.
     /// </summary>
     internal readonly record struct RasterRequest(

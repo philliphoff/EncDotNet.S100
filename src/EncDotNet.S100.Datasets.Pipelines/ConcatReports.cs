@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Validation;
 
@@ -50,12 +49,12 @@ internal static class ConcatReports
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
 
-        var builder = ImmutableArray.CreateBuilder<ValidationFinding>();
+        var builder = new List<ValidationFinding>();
 
-        if (!a.Findings.IsDefaultOrEmpty)
+        if (a.Findings.Count > 0)
             builder.AddRange(a.Findings);
 
-        if (!b.Findings.IsDefaultOrEmpty)
+        if (b.Findings.Count > 0)
         {
             foreach (var finding in b.Findings)
             {
@@ -71,7 +70,7 @@ internal static class ConcatReports
         }
 
         return new ValidationReport(
-            builder.ToImmutable(),
+            builder,
             RulesEvaluated: a.RulesEvaluated + b.RulesEvaluated,
             RulesWithFindings: a.RulesWithFindings + b.RulesWithFindings);
     }

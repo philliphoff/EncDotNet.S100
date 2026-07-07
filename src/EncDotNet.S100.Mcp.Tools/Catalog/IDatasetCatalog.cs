@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Mcp.Tools.Catalog;
 
@@ -11,7 +10,7 @@ namespace EncDotNet.S100.Mcp.Tools.Catalog;
 /// The catalog exposes state as a property — <see cref="Datasets"/> — rather
 /// than as a method, because "what is loaded right now" reads more
 /// naturally as state than as an operation. Implementations must publish
-/// a fresh <see cref="ImmutableArray{T}"/> on every change so that
+/// a fresh <see cref="IReadOnlyList{T}"/> on every change so that
 /// consumers can capture the reference once and use it for the duration
 /// of a single tool invocation without taking any lock.
 /// </para>
@@ -32,7 +31,7 @@ public interface IDatasetCatalog
     /// may capture the reference for the duration of an operation
     /// without locking.
     /// </summary>
-    ImmutableArray<LoadedDataset> Datasets { get; }
+    IReadOnlyList<LoadedDataset> Datasets { get; }
 
     /// <summary>
     /// Raised after <see cref="Datasets"/> has been updated. The event

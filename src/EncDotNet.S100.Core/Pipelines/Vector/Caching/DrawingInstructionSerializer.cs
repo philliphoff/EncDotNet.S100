@@ -118,7 +118,7 @@ public static class DrawingInstructionSerializer
                 w.Write(l.LineWidth);
                 WriteString(w, l.LineColor);
                 WriteOffsetLengthList(w, l.Dashes);
-                w.Write(l.DashOnLengthMm);
+                w.Write(l.DashOnLength);
                 WriteCoordinateList(w, l.CoordinatesOverride);
                 break;
 
@@ -145,8 +145,8 @@ public static class DrawingInstructionSerializer
                 WriteNullableDouble(w, t.LinePlacementPosition);
                 w.Write((int)t.HorizontalAlignment);
                 w.Write((int)t.VerticalAlignment);
-                WriteNullableDouble(w, t.OffsetXmm);
-                WriteNullableDouble(w, t.OffsetYmm);
+                WriteNullableDouble(w, t.OffsetX);
+                WriteNullableDouble(w, t.OffsetY);
                 WriteNullableDouble(w, t.LineStartOffset);
                 WriteNullableDouble(w, t.LineEndOffset);
                 WriteNullableInt(w, t.LineOffsetMode is { } mode ? (int)mode : null);
@@ -208,7 +208,7 @@ public static class DrawingInstructionSerializer
             LineWidth = r.ReadDouble(),
             LineColor = ReadString(r),
             Dashes = ReadOffsetLengthList(r),
-            DashOnLengthMm = r.ReadDouble(),
+            DashOnLength = r.ReadDouble(),
             CoordinatesOverride = ReadCoordinateList(r),
         };
     }
@@ -253,8 +253,8 @@ public static class DrawingInstructionSerializer
             LinePlacementPosition = ReadNullableDouble(r),
             HorizontalAlignment = (TextHorizontalAlignment)r.ReadInt32(),
             VerticalAlignment = (TextVerticalAlignment)r.ReadInt32(),
-            OffsetXmm = ReadNullableDouble(r),
-            OffsetYmm = ReadNullableDouble(r),
+            OffsetX = ReadNullableDouble(r),
+            OffsetY = ReadNullableDouble(r),
             LineStartOffset = ReadNullableDouble(r),
             LineEndOffset = ReadNullableDouble(r),
             LineOffsetMode = ReadNullableInt(r) is { } mode ? (LinePlacementMode)mode : null,

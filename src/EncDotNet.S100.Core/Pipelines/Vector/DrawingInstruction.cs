@@ -168,7 +168,7 @@ public sealed class LineInstruction : DrawingInstruction
     /// Used with <see cref="Dashes"/> to form the full [on, gap] dash array.
     /// Zero means no explicit dash-on length was specified.
     /// </summary>
-    public double DashOnLengthMm { get; init; }
+    public double DashOnLength { get; init; }
 
     /// <summary>
     /// Optional explicit coordinate sequence that overrides the feature's
@@ -267,10 +267,10 @@ public sealed class TextInstruction : DrawingInstruction
     public TextVerticalAlignment VerticalAlignment { get; init; } = TextVerticalAlignment.Center;
 
     /// <summary>Optional X offset (millimetres on the nominal display surface) from the anchor.</summary>
-    public double? OffsetXmm { get; init; }
+    public double? OffsetX { get; init; }
 
     /// <summary>Optional Y offset (millimetres on the nominal display surface) from the anchor.</summary>
-    public double? OffsetYmm { get; init; }
+    public double? OffsetY { get; init; }
 
     /// <summary>
     /// Optional line-placement start offset (S-100 Part 9 §11.4.2). Interpretation

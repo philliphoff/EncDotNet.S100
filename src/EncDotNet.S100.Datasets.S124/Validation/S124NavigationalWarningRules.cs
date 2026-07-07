@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S124.DataModel;
 using EncDotNet.S100.Validation;
@@ -38,10 +37,11 @@ public static class S124NavigationalWarningRules
     /// Feature Catalogue restricts the <c>NAVAREA</c> attribute on
     /// <c>NavwarnPreamble</c> to this enumerated set.
     /// </summary>
-    private static readonly ImmutableHashSet<string> NavareaCodes = ImmutableHashSet.Create(
-        StringComparer.OrdinalIgnoreCase,
+    private static readonly HashSet<string> NavareaCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
         "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-        "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI");
+        "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX", "XXI",
+    };
 
     /// <summary>
     /// <c>S124-R-1.1</c> — A navigational warning must contain at least
@@ -59,7 +59,7 @@ public static class S124NavigationalWarningRules
             .WithSeverity(ValidationSeverity.Error)
             .Yield((warning, _) =>
             {
-                if (warning.Parts.Length > 0)
+                if (warning.Parts.Count > 0)
                     return Array.Empty<ValidationFinding>();
 
                 return new[]
@@ -220,7 +220,7 @@ public static class S124NavigationalWarningRules
                     {
                         if (tp.Position is { } pos)
                             EmitOutOfRange(findings, warning.DatasetIdentifier, tp.Id, "TextPlacement",
-                                ImmutableArray.Create(pos));
+                                [pos]);
                     }
                 }
 
@@ -231,10 +231,10 @@ public static class S124NavigationalWarningRules
                     string? datasetId,
                     string featureId,
                     string featureType,
-                    ImmutableArray<GeoPosition> coords)
+                    IReadOnlyList<GeoPosition> coords)
                 {
-                    if (coords.IsDefaultOrEmpty) return;
-                    for (int i = 0; i < coords.Length; i++)
+                    if (coords.Count == 0) return;
+                    for (int i = 0; i < coords.Count; i++)
                     {
                         var pos = coords[i];
                         bool latOk = pos.Latitude is >= -90 and <= 90;
@@ -300,9 +300,9 @@ public static class S124NavigationalWarningRules
                     string? datasetId,
                     string featureId,
                     string featureType,
-                    ImmutableArray<GeoPosition> coords)
+                    IReadOnlyList<GeoPosition> coords)
                 {
-                    if (coords.IsDefaultOrEmpty || coords.Length < 4)
+                    if (coords.Count == 0 || coords.Count < 4)
                     {
                         sink.Add(new ValidationFinding
                         {
@@ -310,7 +310,7 @@ public static class S124NavigationalWarningRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"{featureType} '{featureId}' surface ring has " +
-                                $"{(coords.IsDefaultOrEmpty ? 0 : coords.Length)} position(s); a closed ring requires at least four.",
+                                $"{(coords.Count == 0 ? 0 : coords.Count)} position(s); a closed ring requires at least four.",
                             DatasetId = datasetId,
                             RelatedFeatureId = featureId,
                         });

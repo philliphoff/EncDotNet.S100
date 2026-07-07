@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Geometry;
@@ -7,19 +7,19 @@ namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 public class GeometryIntersectionTests
 {
-    private static S124Feature Square(string id, double half, params ImmutableArray<(double Lat, double Lon)>[] holes)
+    private static S124Feature Square(string id, double half, params IReadOnlyList<(double Lat, double Lon)>[] holes)
     {
-        var ring = ImmutableArray.Create<(double, double)>(
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half));
+        IReadOnlyList<(double, double)> ring = [
+            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
         return new S124Feature
         {
             Id = id,
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = ring,
-            InteriorRings = holes.ToImmutableArray(),
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            InteriorRings = holes.ToArray(),
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -28,9 +28,9 @@ public class GeometryIntersectionTests
         Id = id,
         FeatureType = "Fairway",
         GeometryType = S100GeometryType.Curve,
-        Curves = ImmutableArray.Create(vertices.ToImmutableArray()),
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Curves = [vertices.ToArray()],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
     private static S124Feature Point(string id, double lat, double lon) => new()
@@ -38,14 +38,14 @@ public class GeometryIntersectionTests
         Id = id,
         FeatureType = "Light",
         GeometryType = S100GeometryType.Point,
-        Points = ImmutableArray.Create((lat, lon)),
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+        Points = [(lat, lon)],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
     private static GeoQuery.Polyline Leg(double? corridor, params (double Lat, double Lon)[] vertices)
         => new(new GeoPolyline(
-            vertices.Select(v => new GeoPoint(v.Lat, v.Lon)).ToImmutableArray(),
+            vertices.Select(v => new GeoPoint(v.Lat, v.Lon)).ToArray(),
             corridor));
 
     [Fact]
@@ -65,11 +65,11 @@ public class GeometryIntersectionTests
             Id = "tri",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
-            ExteriorRing = ImmutableArray.Create<(double, double)>(
-                (0, 0), (2, 0), (0, 2), (0, 0)),
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            ExteriorRing = [
+                (0, 0), (2, 0), (0, 2), (0, 0)],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
 
         // (1.5, 1.5) is in the bbox [0,2]x[0,2] but outside the lower-left
@@ -80,8 +80,8 @@ public class GeometryIntersectionTests
     [Fact]
     public void Point_inside_hole_does_not_intersect()
     {
-        var hole = ImmutableArray.Create<(double, double)>(
-            (-0.2, -0.2), (-0.2, 0.2), (0.2, 0.2), (0.2, -0.2), (-0.2, -0.2));
+        IReadOnlyList<(double, double)> hole = [
+            (-0.2, -0.2), (-0.2, 0.2), (0.2, 0.2), (0.2, -0.2), (-0.2, -0.2)];
         var donut = Square("d", 1.0, hole);
         Assert.False(GeometryIntersection.Intersects(donut, new GeoQuery.Point(new GeoPoint(0, 0))));
     }
@@ -141,8 +141,8 @@ public class GeometryIntersectionTests
             Id = "empty",
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.None,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S124ComplexAttribute>.Empty,
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
 
         Assert.False(GeometryIntersection.Intersects(empty, new GeoQuery.Point(new GeoPoint(0, 0))));

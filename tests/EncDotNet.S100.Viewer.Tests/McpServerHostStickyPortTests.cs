@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Immutable;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -20,7 +19,7 @@ public class McpServerHostStickyPortTests
 {
     private sealed class EmptyCatalog : IDatasetCatalog
     {
-        public ImmutableArray<LoadedDataset> Datasets => ImmutableArray<LoadedDataset>.Empty;
+        public IReadOnlyList<LoadedDataset> Datasets => [];
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
     }
 

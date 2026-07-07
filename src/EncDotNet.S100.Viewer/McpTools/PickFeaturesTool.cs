@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.ComponentModel;
 using System.Threading;
@@ -39,7 +40,7 @@ internal sealed record PickFeaturesResult(
     [property: Description("\"pixel\" when the pick resolved through the x/y form; \"geo\" when it resolved through latitude/longitude.")] string Source,
     [property: Description("Resolved pick latitude in decimal degrees, WGS-84.")] double Latitude,
     [property: Description("Resolved pick longitude in decimal degrees, WGS-84.")] double Longitude,
-    [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] System.Collections.Immutable.ImmutableArray<IdentifyMatch> Features,
+    [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
     [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false);
@@ -168,10 +169,10 @@ internal sealed class PickFeaturesTool
         }
 
         var selected = false;
-        if (request.Select && _presenter is not null && value.Features.Length > 0)
+        if (request.Select && _presenter is not null && value.Features.Count > 0)
         {
-            var refs = new GeographicPickFeature[value.Features.Length];
-            for (var i = 0; i < value.Features.Length; i++)
+            var refs = new GeographicPickFeature[value.Features.Count];
+            for (var i = 0; i < value.Features.Count; i++)
             {
                 var match = value.Features[i];
                 refs[i] = new GeographicPickFeature(match.DatasetId.Value, match.FeatureId);

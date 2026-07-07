@@ -51,9 +51,9 @@ public class SampleCoverageToolWindowedTests
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);
-        Assert.Equal(2, v.Series!.Value.Length); // 1:00 and 2:00
-        Assert.Equal(HourlyTimes[1], v.Series.Value[0].SampleTime);
-        Assert.Equal(HourlyTimes[2], v.Series.Value[1].SampleTime);
+        Assert.Equal(2, v.Series!.Count); // 1:00 and 2:00
+        Assert.Equal(HourlyTimes[1], v.Series[0].SampleTime);
+        Assert.Equal(HourlyTimes[2], v.Series[1].SampleTime);
     }
 
     [Fact]
@@ -76,10 +76,10 @@ public class SampleCoverageToolWindowedTests
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);
-        Assert.Equal(7, v.Series!.Value.Length);
+        Assert.Equal(7, v.Series!.Count);
         // The requested-time echo preserves each enumerated instant.
         Assert.Equal(new DateTimeOffset(2024, 1, 1, 0, 30, 0, TimeSpan.Zero),
-            v.Series.Value[1].RequestedTime);
+            v.Series[1].RequestedTime);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class SampleCoverageToolWindowedTests
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);
-        Assert.Equal(4, v.Series!.Value.Length);
-        Assert.All(v.Series.Value, e => Assert.IsType<SurfaceCurrentSample>(e.Value));
+        Assert.Equal(4, v.Series!.Count);
+        Assert.All(v.Series, e => Assert.IsType<SurfaceCurrentSample>(e.Value));
     }
 }

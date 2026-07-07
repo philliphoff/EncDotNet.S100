@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
@@ -13,7 +13,7 @@ public class QueryFeaturesToolValidityTests
 {
     private static S122Feature MpaWithFixedRange(string id, string? start, string? end)
     {
-        var sub = ImmutableDictionary.CreateBuilder<string, string>();
+        var sub = new Dictionary<string, string>();
         if (start is not null) sub["dateStart"] = start;
         if (end is not null) sub["dateEnd"] = end;
 
@@ -22,16 +22,16 @@ public class QueryFeaturesToolValidityTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray.Create(new S122ComplexAttribute
+            Points = [(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [new S122ComplexAttribute
             {
                 Code = "fixedDateRange",
-                SubAttributes = sub.ToImmutable(),
-            }),
+                SubAttributes = sub.ToDictionary(),
+            }],
         };
     }
 
@@ -42,12 +42,12 @@ public class QueryFeaturesToolValidityTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((5.0, 5.0)),
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = ImmutableArray<S122ComplexAttribute>.Empty,
+            Points = [(5.0, 5.0)],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = [],
         };
     }
 
@@ -55,8 +55,8 @@ public class QueryFeaturesToolValidityTests
     {
         var dataset = new S122Dataset
         {
-            Features = features.ToImmutableArray(),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = features.ToArray(),
+            InformationTypes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(new LoadedDataset(

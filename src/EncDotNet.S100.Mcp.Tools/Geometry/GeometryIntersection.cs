@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
@@ -39,17 +38,17 @@ public static class GeometryIntersection
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentNullException.ThrowIfNull(query);
 
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
             return SurfaceIntersects(feature.ExteriorRing, feature.InteriorRings, query);
         }
 
-        if (!feature.Curves.IsDefaultOrEmpty && feature.Curves.Length > 0)
+        if (feature.Curves.Count > 0)
         {
             return CurveIntersects(feature.Curves, query);
         }
 
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             return PointFeatureIntersects(feature.Points, query);
         }
@@ -58,8 +57,8 @@ public static class GeometryIntersection
     }
 
     private static bool SurfaceIntersects(
-        ImmutableArray<(double Latitude, double Longitude)> ring,
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<(double Latitude, double Longitude)> ring,
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
         GeoQuery query)
     {
         switch (query)
@@ -120,7 +119,7 @@ public static class GeometryIntersection
     }
 
     private static bool CurveIntersects(
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves,
         GeoQuery query)
     {
         switch (query)
@@ -171,7 +170,7 @@ public static class GeometryIntersection
     }
 
     private static bool PointFeatureIntersects(
-        ImmutableArray<(double Latitude, double Longitude)> points,
+        IReadOnlyList<(double Latitude, double Longitude)> points,
         GeoQuery query)
     {
         switch (query)
@@ -220,8 +219,8 @@ public static class GeometryIntersection
     }
 
     private static bool ContainsArea(
-        ImmutableArray<(double Latitude, double Longitude)> ring,
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<(double Latitude, double Longitude)> ring,
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
         GeoPoint point)
     {
         if (!GeometryDistance.ContainsPoint(ring, point))
@@ -229,7 +228,7 @@ public static class GeometryIntersection
             return false;
         }
 
-        if (!holes.IsDefaultOrEmpty)
+        if (holes.Count > 0)
         {
             foreach (var hole in holes)
             {
@@ -245,8 +244,8 @@ public static class GeometryIntersection
 
     private static bool WithinCorridor(
         GeoPolyline polyline,
-        ImmutableArray<(double Latitude, double Longitude)> ring,
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> holes)
+        IReadOnlyList<(double Latitude, double Longitude)> ring,
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes)
     {
         if (polyline.CorridorWidthMeters is not { } half || half <= 0)
         {
@@ -270,7 +269,7 @@ public static class GeometryIntersection
             }
         }
 
-        if (!holes.IsDefaultOrEmpty)
+        if (holes.Count > 0)
         {
             foreach (var hole in holes)
             {
@@ -285,7 +284,7 @@ public static class GeometryIntersection
     }
 
     private static bool CurvesWithinCorridor(
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves,
         GeoPolyline polyline)
     {
         if (polyline.CorridorWidthMeters is not { } half || half <= 0)
@@ -319,8 +318,8 @@ public static class GeometryIntersection
     }
 
     private static bool AnyVertexWithin(
-        ImmutableArray<(double Latitude, double Longitude)> vertices,
-        ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
+        IReadOnlyList<(double Latitude, double Longitude)> vertices,
+        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
         double half)
     {
         foreach (var v in vertices)
@@ -340,10 +339,10 @@ public static class GeometryIntersection
 
     private static double MinDistanceToRing(
         GeoPoint point,
-        ImmutableArray<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<(double Latitude, double Longitude)> ring)
     {
         var best = double.PositiveInfinity;
-        for (var i = 0; i < ring.Length - 1; i++)
+        for (var i = 0; i < ring.Count - 1; i++)
         {
             var d = GeometryDistance.PointToSegment(point, ring[i], ring[i + 1]).Distance;
             if (d < best)
@@ -355,66 +354,68 @@ public static class GeometryIntersection
         return best;
     }
 
-    private static ImmutableArray<(double Latitude, double Longitude)> QueryRing(GeoQuery query) => query switch
+    private static IReadOnlyList<(double Latitude, double Longitude)> QueryRing(GeoQuery query) => query switch
     {
-        GeoQuery.Box b => ImmutableArray.Create<(double, double)>(
+        GeoQuery.Box b =>
+        [
             (b.Value.SouthLatitude, b.Value.WestLongitude),
             (b.Value.SouthLatitude, b.Value.EastLongitude),
             (b.Value.NorthLatitude, b.Value.EastLongitude),
             (b.Value.NorthLatitude, b.Value.WestLongitude),
-            (b.Value.SouthLatitude, b.Value.WestLongitude)),
+            (b.Value.SouthLatitude, b.Value.WestLongitude),
+        ],
         GeoQuery.Polygon p => p.Value.Ring
             .Select(v => (v.Latitude, v.Longitude))
-            .ToImmutableArray(),
-        _ => ImmutableArray<(double, double)>.Empty,
+            .ToArray(),
+        _ => [],
     };
 
-    private static ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
-        ImmutableArray<GeoPoint> vertices)
+    private static IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
+        IReadOnlyList<GeoPoint> vertices)
     {
-        if (vertices.IsDefaultOrEmpty || vertices.Length < 2)
+        if (vertices.Count == 0 || vertices.Count < 2)
         {
-            return ImmutableArray<((double, double), (double, double))>.Empty;
+            return [];
         }
 
-        var builder = ImmutableArray.CreateBuilder<((double, double), (double, double))>(vertices.Length - 1);
-        for (var i = 0; i < vertices.Length - 1; i++)
+        var builder = new List<((double, double), (double, double))>(vertices.Count - 1);
+        for (var i = 0; i < vertices.Count - 1; i++)
         {
             builder.Add((
                 (vertices[i].Latitude, vertices[i].Longitude),
                 (vertices[i + 1].Latitude, vertices[i + 1].Longitude)));
         }
 
-        return builder.MoveToImmutable();
+        return builder;
     }
 
-    private static ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
-        ImmutableArray<(double Latitude, double Longitude)> vertices)
+    private static IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
+        IReadOnlyList<(double Latitude, double Longitude)> vertices)
     {
-        if (vertices.IsDefaultOrEmpty || vertices.Length < 2)
+        if (vertices.Count == 0 || vertices.Count < 2)
         {
-            return ImmutableArray<((double, double), (double, double))>.Empty;
+            return [];
         }
 
-        var builder = ImmutableArray.CreateBuilder<((double, double), (double, double))>(vertices.Length - 1);
-        for (var i = 0; i < vertices.Length - 1; i++)
+        var builder = new List<((double, double), (double, double))>(vertices.Count - 1);
+        for (var i = 0; i < vertices.Count - 1; i++)
         {
             builder.Add((vertices[i], vertices[i + 1]));
         }
 
-        return builder.MoveToImmutable();
+        return builder;
     }
 
     private static bool RingsCross(
-        ImmutableArray<(double Latitude, double Longitude)> ringA,
-        ImmutableArray<(double Latitude, double Longitude)> ringB)
+        IReadOnlyList<(double Latitude, double Longitude)> ringA,
+        IReadOnlyList<(double Latitude, double Longitude)> ringB)
         => SegmentsCross(Segments(ringA), Segments(ringB));
 
     private static bool HolesCross(
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> holes,
-        ImmutableArray<(double Latitude, double Longitude)> ringB)
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<(double Latitude, double Longitude)> ringB)
     {
-        if (holes.IsDefaultOrEmpty)
+        if (holes.Count == 0)
         {
             return false;
         }
@@ -431,15 +432,15 @@ public static class GeometryIntersection
     }
 
     private static bool SegmentsCrossRing(
-        ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
-        ImmutableArray<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
+        IReadOnlyList<(double Latitude, double Longitude)> ring)
         => SegmentsCross(segments, Segments(ring));
 
     private static bool HolesCrossSegments(
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> holes,
-        ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments)
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments)
     {
-        if (holes.IsDefaultOrEmpty)
+        if (holes.Count == 0)
         {
             return false;
         }
@@ -456,8 +457,8 @@ public static class GeometryIntersection
     }
 
     private static bool SegmentsCross(
-        ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> a,
-        ImmutableArray<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> b)
+        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> a,
+        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> b)
     {
         foreach (var (a1, a2) in a)
         {

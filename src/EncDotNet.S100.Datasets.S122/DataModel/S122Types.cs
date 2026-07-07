@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -41,19 +41,19 @@ public interface IS122Feature
     S122GeometryKind GeometryKind { get; }
 
     /// <summary>Coordinates whose semantics depend on <see cref="GeometryKind"/>.</summary>
-    ImmutableArray<GeoPosition> Coordinates { get; }
+    IReadOnlyList<GeoPosition> Coordinates { get; }
 
     /// <summary>The raw <c>xlink:href</c> cross-references from the source feature.</summary>
-    ImmutableArray<GmlReference> References { get; }
+    IReadOnlyList<GmlReference> References { get; }
 
     /// <summary>Information-type bindings resolved from <see cref="References"/>.</summary>
-    ImmutableArray<S122InformationReference> InformationReferences { get; }
+    IReadOnlyList<S122InformationReference> InformationReferences { get; }
 
     /// <summary>Feature-to-feature bindings resolved from <see cref="References"/>.</summary>
-    ImmutableArray<S122FeatureReference> FeatureReferences { get; }
+    IReadOnlyList<S122FeatureReference> FeatureReferences { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 }
 
 /// <summary>
@@ -69,13 +69,13 @@ public interface IS122InformationType
     string TypeCode { get; }
 
     /// <summary>The raw <c>xlink:href</c> cross-references.</summary>
-    ImmutableArray<GmlReference> References { get; }
+    IReadOnlyList<GmlReference> References { get; }
 
     /// <summary>Information-type bindings resolved from <see cref="References"/>.</summary>
-    ImmutableArray<S122InformationReference> InformationReferences { get; }
+    IReadOnlyList<S122InformationReference> InformationReferences { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 }
 
 /// <summary>
@@ -128,13 +128,13 @@ public abstract class S122AbstractRxN : IS122InformationType
     public string? TextContent { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GmlReference> References { get; init; } = ImmutableArray<GmlReference>.Empty;
+    public IReadOnlyList<GmlReference> References { get; init; } = [];
 
     /// <inheritdoc/>
-    public ImmutableArray<S122InformationReference> InformationReferences { get; internal set; } =
-        ImmutableArray<S122InformationReference>.Empty;
+    public IReadOnlyList<S122InformationReference> InformationReferences { get; internal set; } =
+        [];
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
@@ -13,21 +13,21 @@ namespace EncDotNet.S100.Mcp.Tools.Tests;
 public class IdentifyFeaturesReferencedTextTests
 {
     private static S124Feature Feature(
-        ImmutableDictionary<string, string>? attributes = null,
+        IReadOnlyDictionary<string, string>? attributes = null,
         params S124ComplexAttribute[] complex) => new()
         {
             Id = "f1",
             FeatureType = "Light",
             GeometryType = S100GeometryType.Point,
-            Points = ImmutableArray.Create((0.0, 0.0)),
-            Attributes = attributes ?? ImmutableDictionary<string, string>.Empty,
-            ComplexAttributes = complex.ToImmutableArray(),
+            Points = [(0.0, 0.0)],
+            Attributes = attributes ?? ReadOnlyDictionary<string, string>.Empty,
+            ComplexAttributes = complex.ToArray(),
         };
 
     [Fact]
     public void Resolves_simple_file_reference()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty.Add("TXTDSC", "note.txt");
+        var attrs = new Dictionary<string, string> { ["TXTDSC"] = "note.txt" };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(
             Feature(attrs), name => name == "note.txt" ? "caution text" : null);
 
@@ -42,7 +42,7 @@ public class IdentifyFeaturesReferencedTextTests
         var complex = new S124ComplexAttribute
         {
             Code = "information",
-            SubAttributes = ImmutableDictionary<string, string>.Empty.Add("fileReference", "info.txt"),
+            SubAttributes = new Dictionary<string, string> { ["fileReference"] = "info.txt" },
         };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(
             Feature(complex: complex), name => "body");
@@ -55,11 +55,11 @@ public class IdentifyFeaturesReferencedTextTests
     [Fact]
     public void Deduplicates_repeated_file_names()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty.Add("NTXTDS", "dup.txt");
+        var attrs = new Dictionary<string, string> { ["NTXTDS"] = "dup.txt" };
         var complex = new S124ComplexAttribute
         {
             Code = "information",
-            SubAttributes = ImmutableDictionary<string, string>.Empty.Add("fileReference", "dup.txt"),
+            SubAttributes = new Dictionary<string, string> { ["fileReference"] = "dup.txt" },
         };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(
             Feature(attrs, complex), _ => "x");
@@ -70,7 +70,7 @@ public class IdentifyFeaturesReferencedTextTests
     [Fact]
     public void Empty_when_file_missing()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty.Add("TXTDSC", "gone.txt");
+        var attrs = new Dictionary<string, string> { ["TXTDSC"] = "gone.txt" };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), _ => null);
 
         Assert.Empty(result);
@@ -79,7 +79,7 @@ public class IdentifyFeaturesReferencedTextTests
     [Fact]
     public void Empty_when_no_resolver()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty.Add("TXTDSC", "note.txt");
+        var attrs = new Dictionary<string, string> { ["TXTDSC"] = "note.txt" };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), resolver: null);
 
         Assert.Empty(result);
@@ -88,7 +88,7 @@ public class IdentifyFeaturesReferencedTextTests
     [Fact]
     public void Empty_when_no_file_reference_attribute()
     {
-        var attrs = ImmutableDictionary<string, string>.Empty.Add("OBJNAM", "Light A");
+        var attrs = new Dictionary<string, string> { ["OBJNAM"] = "Light A" };
         var result = IdentifyFeaturesTool.ResolveReferencedTexts(Feature(attrs), _ => "x");
 
         Assert.Empty(result);

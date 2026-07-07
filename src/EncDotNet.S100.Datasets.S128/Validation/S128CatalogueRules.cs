@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128.DataModel;
 using EncDotNet.S100.Validation;
@@ -121,10 +120,10 @@ public static class S128CatalogueRules
                 var findings = new List<ValidationFinding>();
                 foreach (var entry in catalogue.Products)
                 {
-                    if (entry.Coordinates.IsDefaultOrEmpty)
+                    if (entry.Coordinates.Count == 0)
                         continue;
 
-                    for (int i = 0; i < entry.Coordinates.Length; i++)
+                    for (int i = 0; i < entry.Coordinates.Count; i++)
                     {
                         var pos = entry.Coordinates[i];
                         bool latOk = pos.Latitude is >= -90 and <= 90;
@@ -180,7 +179,7 @@ public static class S128CatalogueRules
                         continue;
 
                     var ring = entry.Coordinates;
-                    if (ring.IsDefaultOrEmpty || ring.Length < 4)
+                    if (ring.Count == 0 || ring.Count < 4)
                     {
                         findings.Add(new ValidationFinding
                         {
@@ -188,7 +187,7 @@ public static class S128CatalogueRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"Product '{entry.Id}' surface ring has " +
-                                $"{(ring.IsDefault ? 0 : ring.Length)} vertices; ≥4 required.",
+                                $"{(ring.Count == 0 ? 0 : ring.Count)} vertices; ≥4 required.",
                             DatasetId = catalogue.DatasetIdentifier,
                             RelatedFeatureId = entry.Id,
                         });
@@ -276,10 +275,10 @@ public static class S128CatalogueRules
                 var findings = new List<ValidationFinding>();
                 foreach (var entry in catalogue.Products)
                 {
-                    if (entry.OnlineResources.IsDefaultOrEmpty)
+                    if (entry.OnlineResources.Count == 0)
                         continue;
 
-                    for (int i = 0; i < entry.OnlineResources.Length; i++)
+                    for (int i = 0; i < entry.OnlineResources.Count; i++)
                     {
                         var linkage = entry.OnlineResources[i].Linkage;
                         if (string.IsNullOrWhiteSpace(linkage))
@@ -323,10 +322,10 @@ public static class S128CatalogueRules
             .WithSeverity(ValidationSeverity.Warning)
             .Yield((catalogue, _) =>
             {
-                bool hasProducer = !catalogue.Producers.IsDefaultOrEmpty
-                    && catalogue.Producers.Length > 0;
-                bool hasDistributor = !catalogue.Distributors.IsDefaultOrEmpty
-                    && catalogue.Distributors.Length > 0;
+                bool hasProducer = catalogue.Producers.Count > 0
+                    && catalogue.Producers.Count > 0;
+                bool hasDistributor = catalogue.Distributors.Count > 0
+                    && catalogue.Distributors.Count > 0;
                 if (hasProducer || hasDistributor)
                     return Array.Empty<ValidationFinding>();
 

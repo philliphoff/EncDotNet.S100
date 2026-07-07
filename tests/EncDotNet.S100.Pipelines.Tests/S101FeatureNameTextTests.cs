@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
@@ -6,6 +5,7 @@ using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -142,7 +142,7 @@ public class S101FeatureNameTextTests
         var namedPoints = new Dictionary<uint, string>();
         foreach (var feat in doc.Features)
         {
-            if (feat.SpatialAssociations.Length == 0) continue;
+            if (feat.SpatialAssociations.Count == 0) continue;
             if (!feat.Attributes.Any(a => a.NumericCode == featureNameCode))
                 continue;
 

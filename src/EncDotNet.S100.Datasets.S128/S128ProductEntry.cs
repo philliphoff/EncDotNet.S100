@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -134,8 +133,8 @@ public sealed class S128ProductEntry
     /// Coverage exterior ring of the entry's first surface geometry, or an
     /// empty array if the feature is geometry-less.
     /// </summary>
-    public ImmutableArray<(double Latitude, double Longitude)> CoverageRing =>
-        Feature.ExteriorRing.IsDefault ? [] : Feature.ExteriorRing;
+    public IReadOnlyList<(double Latitude, double Longitude)> CoverageRing =>
+        Feature.ExteriorRing.Count == 0 ? [] : Feature.ExteriorRing;
 
     /// <summary>
     /// Outgoing references that mark this entry as superseded by another

@@ -1,10 +1,10 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S411.Tests.Validation;
 
@@ -20,7 +20,7 @@ public class S411SeaIceRulesTests
 
     private static readonly S411Dataset EmptyDataset = new()
     {
-        Features = ImmutableArray<S411Feature>.Empty,
+        Features = [],
         SourceDocument = new System.Xml.Linq.XDocument(),
     };
 
@@ -28,24 +28,24 @@ public class S411SeaIceRulesTests
     {
         Id = "_dummy",
         FeatureType = "SeaIce",
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S411ComplexAttribute>.Empty,
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
     };
 
-    private static ImmutableArray<GeoPosition> Coords(params (double lat, double lon)[] pts) =>
-        pts.Select(p => new GeoPosition(p.lat, p.lon)).ToImmutableArray();
+    private static IReadOnlyList<GeoPosition> Coords(params (double lat, double lon)[] pts) =>
+        pts.Select(p => new GeoPosition(p.lat, p.lon)).ToArray();
 
     private static S411SeaIce SeaIce(
         string id,
         S411GeometryKind kind = S411GeometryKind.Surface,
-        ImmutableArray<GeoPosition>? coordinates = null,
+        IReadOnlyList<GeoPosition>? coordinates = null,
         S411EggCode? eggCode = null) => new()
     {
         Id = id,
         NormalizedFeatureType = "SeaIce",
         SourceFeatureType = "SeaIce",
         GeometryKind = kind,
-        Coordinates = coordinates ?? ImmutableArray<GeoPosition>.Empty,
+        Coordinates = coordinates ?? [],
         EggCode = eggCode,
         Source = DummySource,
     };
@@ -72,7 +72,7 @@ public class S411SeaIceRulesTests
         Source = DummySource,
     };
 
-    private static S411IceEdge IceEdge(string id, ImmutableArray<GeoPosition> coords) => new()
+    private static S411IceEdge IceEdge(string id, IReadOnlyList<GeoPosition> coords) => new()
     {
         Id = id,
         NormalizedFeatureType = "IceEdge",
@@ -93,7 +93,7 @@ public class S411SeaIceRulesTests
         Source = DummySource,
     };
 
-    private static S411DataCoverage DataCoverage(string id, ImmutableArray<GeoPosition> coords) => new()
+    private static S411DataCoverage DataCoverage(string id, IReadOnlyList<GeoPosition> coords) => new()
     {
         Id = id,
         NormalizedFeatureType = "DataCoverage",
@@ -103,7 +103,7 @@ public class S411SeaIceRulesTests
         Source = DummySource,
     };
 
-    private static ImmutableArray<GeoPosition> ClosedSquare() =>
+    private static IReadOnlyList<GeoPosition> ClosedSquare() =>
         Coords((0, 0), (0, 1), (1, 1), (1, 0), (0, 0));
 
     private static S411SeaIceInventory Inventory(
@@ -111,9 +111,9 @@ public class S411SeaIceRulesTests
         IEnumerable<S411DataCoverage>? coverages = null,
         IEnumerable<S411OtherFeature>? others = null) => new()
     {
-        IceFeatures = ice?.ToImmutableArray() ?? ImmutableArray<S411IceFeature>.Empty,
-        DataCoverages = coverages?.ToImmutableArray() ?? ImmutableArray<S411DataCoverage>.Empty,
-        OtherFeatures = others?.ToImmutableArray() ?? ImmutableArray<S411OtherFeature>.Empty,
+        IceFeatures = ice?.ToArray() ?? [],
+        DataCoverages = coverages?.ToArray() ?? [],
+        OtherFeatures = others?.ToArray() ?? [],
         Source = EmptyDataset,
     };
 
@@ -231,7 +231,7 @@ public class S411SeaIceRulesTests
     [InlineData(1)]
     public void CurveHasMinimumVertices_Fails_WhenFewerThanTwo(int n)
     {
-        var coords = Enumerable.Range(0, n).Select(i => new GeoPosition(i, i)).ToImmutableArray();
+        var coords = Enumerable.Range(0, n).Select(i => new GeoPosition(i, i)).ToArray();
         var inv = Inventory(ice: new[] { (S411IceFeature)IceEdge("E1", coords) });
         var findings = S411SeaIceRules.CurveHasMinimumVertices
             .Evaluate(inv, ValidationContext.Default).ToList();

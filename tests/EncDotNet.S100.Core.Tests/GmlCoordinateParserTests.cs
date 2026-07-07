@@ -47,7 +47,7 @@ public class GmlCoordinateParserTests
     {
         var coords = GmlCoordinateParser.ParsePosList("205.86 70.77 210.00 71.50 225.00 66.00");
 
-        Assert.Equal(3, coords.Length);
+        Assert.Equal(3, coords.Count);
         Assert.All(coords, c => Assert.InRange(c.Latitude, -90.0, 90.0));
         Assert.Equal(205.86, coords[0].Longitude, 6);
         Assert.Equal(70.77, coords[0].Latitude, 6);
@@ -60,7 +60,7 @@ public class GmlCoordinateParserTests
     {
         var coords = GmlCoordinateParser.ParsePosList("62.1414 -67.3632 66.3292 -65.5028");
 
-        Assert.Equal(2, coords.Length);
+        Assert.Equal(2, coords.Count);
         Assert.Equal(62.1414, coords[0].Latitude, 6);
         Assert.Equal(-67.3632, coords[0].Longitude, 6);
         Assert.Equal(66.3292, coords[1].Latitude, 6);

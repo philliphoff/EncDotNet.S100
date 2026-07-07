@@ -1,10 +1,10 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S201.DataModel;
 using EncDotNet.S100.Datasets.S201.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S201.Tests.Validation;
 
@@ -28,14 +28,14 @@ public class S201AtonRulesTests
         Id = id,
         FeatureType = featureType,
         GeometryType = S100GeometryType.Point,
-        Points = ImmutableArray<(double, double)>.Empty,
-        Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-        ExteriorRing = ImmutableArray<(double, double)>.Empty,
-        InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S201ComplexAttribute>.Empty,
-        InformationReferences = ImmutableArray<S201InformationReference>.Empty,
-        FeatureReferences = featureReferences.ToImmutableArray(),
+        Points = [],
+        Curves = [],
+        ExteriorRing = [],
+        InteriorRings = [],
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
+        InformationReferences = [],
+        FeatureReferences = featureReferences.ToArray(),
     };
 
     private static S201StructureObject Structure(
@@ -46,15 +46,15 @@ public class S201AtonRulesTests
         S201DateRange? fixedRange = null,
         S201DateRange? periodicRange = null)
     {
-        var coords = (lat is null || lon is null)
-            ? ImmutableArray<GeoPosition>.Empty
-            : ImmutableArray.Create(new GeoPosition(lat.Value, lon.Value));
+        IReadOnlyList<GeoPosition> coords = (lat is null || lon is null)
+            ? []
+            : [new GeoPosition(lat.Value, lon.Value)];
         return new S201StructureObject
         {
             Id = id,
             FeatureClass = featureClass,
             Source = SourceFeature(id, featureClass),
-            GeometryKind = coords.IsEmpty ? S201GeometryKind.None : S201GeometryKind.Point,
+            GeometryKind = coords.Count == 0 ? S201GeometryKind.None : S201GeometryKind.Point,
             Coordinates = coords,
             FixedDateRange = fixedRange,
             PeriodicDateRange = periodicRange,
@@ -68,15 +68,15 @@ public class S201AtonRulesTests
         double? lon = 0,
         S201StructureObject? host = null)
     {
-        var coords = (lat is null || lon is null)
-            ? ImmutableArray<GeoPosition>.Empty
-            : ImmutableArray.Create(new GeoPosition(lat.Value, lon.Value));
+        IReadOnlyList<GeoPosition> coords = (lat is null || lon is null)
+            ? []
+            : [new GeoPosition(lat.Value, lon.Value)];
         var eq = new S201Equipment
         {
             Id = id,
             FeatureClass = featureClass,
             Source = SourceFeature(id, featureClass),
-            GeometryKind = coords.IsEmpty ? S201GeometryKind.None : S201GeometryKind.Point,
+            GeometryKind = coords.Count == 0 ? S201GeometryKind.None : S201GeometryKind.Point,
             Coordinates = coords,
         };
         if (host is not null)
@@ -108,9 +108,9 @@ public class S201AtonRulesTests
             AisAtonKind.Virtual => "VirtualAISAidToNavigation",
             _ => "VirtualAISAidToNavigation",
         };
-        var coords = (lat is null || lon is null)
-            ? ImmutableArray<GeoPosition>.Empty
-            : ImmutableArray.Create(new GeoPosition(lat.Value, lon.Value));
+        IReadOnlyList<GeoPosition> coords = (lat is null || lon is null)
+            ? []
+            : [new GeoPosition(lat.Value, lon.Value)];
         return new S201ElectronicAtoN
         {
             Id = id,
@@ -118,7 +118,7 @@ public class S201AtonRulesTests
             Source = SourceFeature(id, featureClass),
             Kind = kind,
             MmsiCode = mmsi,
-            GeometryKind = coords.IsEmpty ? S201GeometryKind.None : S201GeometryKind.Point,
+            GeometryKind = coords.Count == 0 ? S201GeometryKind.None : S201GeometryKind.Point,
             Coordinates = coords,
         };
     }
@@ -132,13 +132,13 @@ public class S201AtonRulesTests
     private static S201AtonAggregation Aggregation(string id, params S201AtonObject[] peers) => new()
     {
         Id = id,
-        Peers = peers.ToImmutableArray(),
+        Peers = peers.ToArray(),
     };
 
     private static S201AtonAssociation Association(string id, params S201AtonObject[] peers) => new()
     {
         Id = id,
-        Peers = peers.ToImmutableArray(),
+        Peers = peers.ToArray(),
     };
 
     /// <summary>
@@ -155,26 +155,26 @@ public class S201AtonRulesTests
     }
 
     private static S201AtonInventory Inventory(
-        ImmutableArray<S201AtonObject>? atons = null,
-        ImmutableArray<S201AtonStatusInformation>? statusInfo = null,
-        ImmutableArray<S201AtonAggregation>? aggregations = null,
-        ImmutableArray<S201AtonAssociation>? associations = null,
-        ImmutableArray<S201Feature>? sourceFeatures = null)
+        IReadOnlyList<S201AtonObject>? atons = null,
+        IReadOnlyList<S201AtonStatusInformation>? statusInfo = null,
+        IReadOnlyList<S201AtonAggregation>? aggregations = null,
+        IReadOnlyList<S201AtonAssociation>? associations = null,
+        IReadOnlyList<S201Feature>? sourceFeatures = null)
     {
-        var atonArray = atons ?? ImmutableArray<S201AtonObject>.Empty;
-        var structures = atonArray.OfType<S201StructureObject>().ToImmutableArray();
-        var equipment = atonArray.OfType<S201Equipment>().ToImmutableArray();
-        var electronic = atonArray.OfType<S201ElectronicAtoN>().ToImmutableArray();
+        var atonArray = atons ?? [];
+        var structures = atonArray.OfType<S201StructureObject>().ToArray();
+        var equipment = atonArray.OfType<S201Equipment>().ToArray();
+        var electronic = atonArray.OfType<S201ElectronicAtoN>().ToArray();
 
         var sourceFeatureArray = sourceFeatures
-            ?? atonArray.Select(a => a.Source).ToImmutableArray();
+            ?? atonArray.Select(a => a.Source).ToArray();
 
         var source = new S201Dataset
         {
             DatasetIdentifier = DatasetId,
             ProductIdentifier = "S-201",
             Features = sourceFeatureArray,
-            InformationTypes = ImmutableArray<S201InformationType>.Empty,
+            InformationTypes = [],
         };
 
         return new S201AtonInventory
@@ -185,9 +185,9 @@ public class S201AtonRulesTests
             Structures = structures,
             Equipment = equipment,
             ElectronicAtoNs = electronic,
-            Aggregations = aggregations ?? ImmutableArray<S201AtonAggregation>.Empty,
-            Associations = associations ?? ImmutableArray<S201AtonAssociation>.Empty,
-            StatusInformation = statusInfo ?? ImmutableArray<S201AtonStatusInformation>.Empty,
+            Aggregations = aggregations ?? [],
+            Associations = associations ?? [],
+            StatusInformation = statusInfo ?? [],
             Source = source,
         };
     }
@@ -197,25 +197,25 @@ public class S201AtonRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Passes_OnValidPositions()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
+        var inv = Inventory(atons: [
             Structure("S1", lat: -89.9, lon: -179.9),
-            Structure("S2", lat: 89.9, lon: 179.9)));
+            Structure("S2", lat: 89.9, lon: 179.9)]);
         Assert.Empty(S201AtonRules.CoordinatesInWgs84Range.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void CoordinatesInWgs84Range_IgnoresGeometrylessAtoNs()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", lat: null, lon: null)));
+        var inv = Inventory(atons: [
+            Structure("S1", lat: null, lon: null)]);
         Assert.Empty(S201AtonRules.CoordinatesInWgs84Range.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnOutOfRangeLatitude()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("BAD", lat: 95.0, lon: 0)));
+        var inv = Inventory(atons: [
+            Structure("BAD", lat: 95.0, lon: 0)]);
         var f = Assert.Single(S201AtonRules.CoordinatesInWgs84Range.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-1.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -227,8 +227,8 @@ public class S201AtonRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnOutOfRangeLongitude()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("BAD", lat: 0, lon: 181.0)));
+        var inv = Inventory(atons: [
+            Structure("BAD", lat: 0, lon: 181.0)]);
         var f = Assert.Single(S201AtonRules.CoordinatesInWgs84Range.Evaluate(inv, ValidationContext.Default));
         Assert.Contains("longitude", f.Message);
     }
@@ -239,16 +239,16 @@ public class S201AtonRulesTests
     public void GmlIdsUnique_Passes_OnDistinctIds()
     {
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(Structure("S1"), Structure("S2")),
-            statusInfo: ImmutableArray.Create(StatusInfo("I1")));
+            atons: [Structure("S1"), Structure("S2")],
+            statusInfo: [StatusInfo("I1")]);
         Assert.Empty(S201AtonRules.GmlIdsUnique.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void GmlIdsUnique_Fails_OnDuplicateAtonIds()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1"), Structure("S1"), Structure("S2")));
+        var inv = Inventory(atons: [
+            Structure("S1"), Structure("S1"), Structure("S2")]);
         var f = Assert.Single(S201AtonRules.GmlIdsUnique.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-1.2", f.RuleId);
         Assert.Equal("S1", f.RelatedFeatureId);
@@ -258,8 +258,8 @@ public class S201AtonRulesTests
     public void GmlIdsUnique_Fails_AcrossAtonAndInformationType()
     {
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(Structure("X1")),
-            statusInfo: ImmutableArray.Create(StatusInfo("X1")));
+            atons: [Structure("X1")],
+            statusInfo: [StatusInfo("X1")]);
         var f = Assert.Single(S201AtonRules.GmlIdsUnique.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("X1", f.RelatedFeatureId);
     }
@@ -267,8 +267,8 @@ public class S201AtonRulesTests
     [Fact]
     public void GmlIdsUnique_CaseInsensitive()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("Aid-1"), Structure("aid-1")));
+        var inv = Inventory(atons: [
+            Structure("Aid-1"), Structure("aid-1")]);
         Assert.Single(S201AtonRules.GmlIdsUnique.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -277,16 +277,16 @@ public class S201AtonRulesTests
     [Fact]
     public void NavigableAtoNHasGeometry_Passes_WhenStructureHasGeometry()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", lat: 10, lon: 20)));
+        var inv = Inventory(atons: [
+            Structure("S1", lat: 10, lon: 20)]);
         Assert.Empty(S201AtonRules.NavigableAtoNHasGeometry.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void NavigableAtoNHasGeometry_Fails_WhenStructureHasNoGeometry()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S-NOPOS", lat: null, lon: null)));
+        var inv = Inventory(atons: [
+            Structure("S-NOPOS", lat: null, lon: null)]);
         var f = Assert.Single(S201AtonRules.NavigableAtoNHasGeometry.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-1.3", f.RuleId);
         Assert.Equal(ValidationSeverity.Warning, f.Severity);
@@ -296,16 +296,16 @@ public class S201AtonRulesTests
     [Fact]
     public void NavigableAtoNHasGeometry_IgnoresVirtualAis()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("V1", AisAtonKind.Virtual, lat: null, lon: null)));
+        var inv = Inventory(atons: [
+            Ais("V1", AisAtonKind.Virtual, lat: null, lon: null)]);
         Assert.Empty(S201AtonRules.NavigableAtoNHasGeometry.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void NavigableAtoNHasGeometry_FiresForPhysicalAisWithoutPosition()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("P1", AisAtonKind.Physical, lat: null, lon: null)));
+        var inv = Inventory(atons: [
+            Ais("P1", AisAtonKind.Physical, lat: null, lon: null)]);
         Assert.Single(S201AtonRules.NavigableAtoNHasGeometry.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -316,31 +316,31 @@ public class S201AtonRulesTests
     [InlineData(AisAtonKind.Synthetic)]
     public void PhysicalAisHasMmsi_Passes_OnNineDigitMmsi(AisAtonKind kind)
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("A1", kind, "992341001")));
+        var inv = Inventory(atons: [
+            Ais("A1", kind, "992341001")]);
         Assert.Empty(S201AtonRules.PhysicalAisHasMmsi.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void PhysicalAisHasMmsi_IgnoresVirtualAis()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("V1", AisAtonKind.Virtual, mmsi: null)));
+        var inv = Inventory(atons: [
+            Ais("V1", AisAtonKind.Virtual, mmsi: null)]);
         Assert.Empty(S201AtonRules.PhysicalAisHasMmsi.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void PhysicalAisHasMmsi_IgnoresNonAis()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(Structure("S1")));
+        var inv = Inventory(atons: [Structure("S1")]);
         Assert.Empty(S201AtonRules.PhysicalAisHasMmsi.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void PhysicalAisHasMmsi_Fails_OnMissingMmsi()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("P1", AisAtonKind.Physical, mmsi: null)));
+        var inv = Inventory(atons: [
+            Ais("P1", AisAtonKind.Physical, mmsi: null)]);
         var f = Assert.Single(S201AtonRules.PhysicalAisHasMmsi.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-2.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -353,8 +353,8 @@ public class S201AtonRulesTests
     [InlineData("12345678X")]
     public void PhysicalAisHasMmsi_Fails_OnMalformedMmsi(string mmsi)
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("P1", AisAtonKind.Physical, mmsi)));
+        var inv = Inventory(atons: [
+            Ais("P1", AisAtonKind.Physical, mmsi)]);
         var f = Assert.Single(S201AtonRules.PhysicalAisHasMmsi.Evaluate(inv, ValidationContext.Default));
         Assert.Contains("malformed", f.Message);
     }
@@ -364,24 +364,24 @@ public class S201AtonRulesTests
     [Fact]
     public void VirtualAisMmsiFormat_PassesWhenMissing()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("V1", AisAtonKind.Virtual, mmsi: null)));
+        var inv = Inventory(atons: [
+            Ais("V1", AisAtonKind.Virtual, mmsi: null)]);
         Assert.Empty(S201AtonRules.VirtualAisMmsiFormat.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void VirtualAisMmsiFormat_PassesOnNineDigitMmsi()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("V1", AisAtonKind.Virtual, "992341001")));
+        var inv = Inventory(atons: [
+            Ais("V1", AisAtonKind.Virtual, "992341001")]);
         Assert.Empty(S201AtonRules.VirtualAisMmsiFormat.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void VirtualAisMmsiFormat_FailsOnMalformedMmsi()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Ais("V1", AisAtonKind.Virtual, "12345")));
+        var inv = Inventory(atons: [
+            Ais("V1", AisAtonKind.Virtual, "12345")]);
         var f = Assert.Single(S201AtonRules.VirtualAisMmsiFormat.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-2.2", f.RuleId);
         Assert.Equal(ValidationSeverity.Warning, f.Severity);
@@ -396,14 +396,14 @@ public class S201AtonRulesTests
     [InlineData(4)]
     public void ChangeTypesInEnumeration_PassesOnValidCodes(int code)
     {
-        var inv = Inventory(statusInfo: ImmutableArray.Create(StatusInfo("I1", code)));
+        var inv = Inventory(statusInfo: [StatusInfo("I1", code)]);
         Assert.Empty(S201AtonRules.ChangeTypesInEnumeration.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void ChangeTypesInEnumeration_IgnoresNullCode()
     {
-        var inv = Inventory(statusInfo: ImmutableArray.Create(StatusInfo("I1", null)));
+        var inv = Inventory(statusInfo: [StatusInfo("I1", null)]);
         Assert.Empty(S201AtonRules.ChangeTypesInEnumeration.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -413,7 +413,7 @@ public class S201AtonRulesTests
     [InlineData(99)]
     public void ChangeTypesInEnumeration_FailsOnOutOfRangeCode(int code)
     {
-        var inv = Inventory(statusInfo: ImmutableArray.Create(StatusInfo("I1", code)));
+        var inv = Inventory(statusInfo: [StatusInfo("I1", code)]);
         var f = Assert.Single(S201AtonRules.ChangeTypesInEnumeration.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-3.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -430,8 +430,8 @@ public class S201AtonRulesTests
             Start = DateTimeOffset.Parse("2025-01-01T00:00:00Z"),
             End = DateTimeOffset.Parse("2025-12-31T00:00:00Z"),
         };
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", fixedRange: range)));
+        var inv = Inventory(atons: [
+            Structure("S1", fixedRange: range)]);
         Assert.Empty(S201AtonRules.DateRangeOrdered.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -439,8 +439,8 @@ public class S201AtonRulesTests
     public void DateRangeOrdered_IgnoresPartialRange()
     {
         var range = new S201DateRange { Start = DateTimeOffset.Parse("2025-01-01T00:00:00Z") };
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", fixedRange: range)));
+        var inv = Inventory(atons: [
+            Structure("S1", fixedRange: range)]);
         Assert.Empty(S201AtonRules.DateRangeOrdered.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -452,8 +452,8 @@ public class S201AtonRulesTests
             Start = DateTimeOffset.Parse("2025-12-31T00:00:00Z"),
             End = DateTimeOffset.Parse("2025-01-01T00:00:00Z"),
         };
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", fixedRange: range)));
+        var inv = Inventory(atons: [
+            Structure("S1", fixedRange: range)]);
         var f = Assert.Single(S201AtonRules.DateRangeOrdered.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-4.1", f.RuleId);
         Assert.Contains("fixedDateRange", f.Message);
@@ -467,8 +467,8 @@ public class S201AtonRulesTests
             Start = DateTimeOffset.Parse("2025-08-01T00:00:00Z"),
             End = DateTimeOffset.Parse("2025-06-01T00:00:00Z"),
         };
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Structure("S1", periodicRange: range)));
+        var inv = Inventory(atons: [
+            Structure("S1", periodicRange: range)]);
         var f = Assert.Single(S201AtonRules.DateRangeOrdered.Evaluate(inv, ValidationContext.Default));
         Assert.Contains("periodicDateRange", f.Message);
     }
@@ -480,15 +480,15 @@ public class S201AtonRulesTests
     {
         var host = Structure("S1");
         var eq = Equipment("E1", host: host);
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(host, eq));
+        var inv = Inventory(atons: [host, eq]);
         Assert.Empty(S201AtonRules.EquipmentHasHostStructure.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void EquipmentHasHostStructure_FailsWhenHostMissing()
     {
-        var inv = Inventory(atons: ImmutableArray.Create<S201AtonObject>(
-            Equipment("E1", host: null)));
+        var inv = Inventory(atons: [
+            Equipment("E1", host: null)]);
         var f = Assert.Single(S201AtonRules.EquipmentHasHostStructure.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-5.1", f.RuleId);
         Assert.Equal(ValidationSeverity.Warning, f.Severity);
@@ -504,15 +504,15 @@ public class S201AtonRulesTests
         var b = Structure("B");
         var agg = Aggregation("AGG1", a, b);
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(a, b),
-            aggregations: ImmutableArray.Create(agg));
+            atons: [a, b],
+            aggregations: [agg]);
         Assert.Empty(S201AtonRules.AggregationHasMembers.Evaluate(inv, ValidationContext.Default));
     }
 
     [Fact]
     public void AggregationHasMembers_FailsOnEmpty()
     {
-        var inv = Inventory(aggregations: ImmutableArray.Create(Aggregation("AGG1")));
+        var inv = Inventory(aggregations: [Aggregation("AGG1")]);
         var f = Assert.Single(S201AtonRules.AggregationHasMembers.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-6.1", f.RuleId);
         Assert.Equal("AGG1", f.RelatedFeatureId);
@@ -523,8 +523,8 @@ public class S201AtonRulesTests
     {
         var a = Structure("A");
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(a),
-            associations: ImmutableArray.Create(Association("ASOC1", a)));
+            atons: [a],
+            associations: [Association("ASOC1", a)]);
         Assert.Single(S201AtonRules.AggregationHasMembers.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -537,12 +537,12 @@ public class S201AtonRulesTests
         var b = Structure("B");
         var agg = Aggregation("AGG1", a, b);
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(a, b),
-            aggregations: ImmutableArray.Create(agg),
-            sourceFeatures: ImmutableArray.Create(
+            atons: [a, b],
+            aggregations: [agg],
+            sourceFeatures: [
                 a.Source,
                 b.Source,
-                AggregationSource("AGG1", "AtonAggregation", peerCount: 2)));
+                AggregationSource("AGG1", "AtonAggregation", peerCount: 2)]);
         Assert.Empty(S201AtonRules.AggregationMembersResolved.Evaluate(inv, ValidationContext.Default));
     }
 
@@ -553,12 +553,12 @@ public class S201AtonRulesTests
         var b = Structure("B");
         var agg = Aggregation("AGG1", a, b);
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(a, b),
-            aggregations: ImmutableArray.Create(agg),
-            sourceFeatures: ImmutableArray.Create(
+            atons: [a, b],
+            aggregations: [agg],
+            sourceFeatures: [
                 a.Source,
                 b.Source,
-                AggregationSource("AGG1", "AtonAggregation", peerCount: 4)));
+                AggregationSource("AGG1", "AtonAggregation", peerCount: 4)]);
         var f = Assert.Single(S201AtonRules.AggregationMembersResolved.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("S201-R-6.2", f.RuleId);
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -572,11 +572,11 @@ public class S201AtonRulesTests
         var a = Structure("A");
         var asoc = Association("ASOC1", a);
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(a),
-            associations: ImmutableArray.Create(asoc),
-            sourceFeatures: ImmutableArray.Create(
+            atons: [a],
+            associations: [asoc],
+            sourceFeatures: [
                 a.Source,
-                AggregationSource("ASOC1", "AtonAssociation", peerCount: 3)));
+                AggregationSource("ASOC1", "AtonAssociation", peerCount: 3)]);
         var f = Assert.Single(S201AtonRules.AggregationMembersResolved.Evaluate(inv, ValidationContext.Default));
         Assert.Equal("ASOC1", f.RelatedFeatureId);
     }
@@ -611,10 +611,10 @@ public class S201AtonRulesTests
         var status = StatusInfo("STAT1", changeTypes: 2);
 
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(host, eq, ais),
-            statusInfo: ImmutableArray.Create(status),
-            aggregations: ImmutableArray.Create(agg),
-            sourceFeatures: ImmutableArray.Create(host.Source, eq.Source, ais.Source, aggSource));
+            atons: [host, eq, ais],
+            statusInfo: [status],
+            aggregations: [agg],
+            sourceFeatures: [host.Source, eq.Source, ais.Source, aggSource]);
 
         var report = S201AtonRules.Validate(inv);
         Assert.Empty(report.Findings);
@@ -630,8 +630,8 @@ public class S201AtonRulesTests
         var badStatus = StatusInfo("STAT1", changeTypes: 99);
 
         var inv = Inventory(
-            atons: ImmutableArray.Create<S201AtonObject>(bad, dup, orphanEq, badAis),
-            statusInfo: ImmutableArray.Create(badStatus));
+            atons: [bad, dup, orphanEq, badAis],
+            statusInfo: [badStatus]);
 
         var report = S201AtonRules.Validate(inv);
         var ruleIds = report.Findings.Select(f => f.RuleId).ToHashSet();

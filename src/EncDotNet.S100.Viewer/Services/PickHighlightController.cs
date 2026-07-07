@@ -202,19 +202,19 @@ internal sealed class PickHighlightController : IDisposable
     }
 
     private static IReadOnlyList<(double Lat, double Lon)> ToList(
-        System.Collections.Immutable.ImmutableArray<(double Latitude, double Longitude)> source)
+        IReadOnlyList<(double Latitude, double Longitude)> source)
     {
-        if (source.IsDefaultOrEmpty) return Array.Empty<(double, double)>();
-        var list = new List<(double Lat, double Lon)>(source.Length);
+        if (source.Count == 0) return Array.Empty<(double, double)>();
+        var list = new List<(double Lat, double Lon)>(source.Count);
         foreach (var (lat, lon) in source) list.Add((lat, lon));
         return list;
     }
 
     private static IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> ToRings(
-        System.Collections.Immutable.ImmutableArray<System.Collections.Immutable.ImmutableArray<(double Latitude, double Longitude)>> source)
+        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> source)
     {
-        if (source.IsDefaultOrEmpty) return Array.Empty<IReadOnlyList<(double, double)>>();
-        var list = new List<IReadOnlyList<(double Lat, double Lon)>>(source.Length);
+        if (source.Count == 0) return Array.Empty<IReadOnlyList<(double, double)>>();
+        var list = new List<IReadOnlyList<(double Lat, double Lon)>>(source.Count);
         foreach (var ring in source) list.Add(ToList(ring));
         return list;
     }

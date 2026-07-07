@@ -37,7 +37,7 @@ public class S124DatasetReaderTests
     public void PointDataset_HasThreeFeatures()
     {
         var ds = LoadTestData("navwarn_point.gml");
-        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(3, ds.Features.Count);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class S124DatasetReaderTests
     public void CurveDataset_HasTwoFeatures()
     {
         var ds = LoadTestData("navwarn_curve.gml");
-        Assert.Equal(2, ds.Features.Length);
+        Assert.Equal(2, ds.Features.Count);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class S124DatasetReaderTests
 
         Assert.Equal(S100GeometryType.Curve, f1.GeometryType);
         Assert.Single(f1.Curves);
-        Assert.Equal(4, f1.Curves[0].Length);
+        Assert.Equal(4, f1.Curves[0].Count);
         Assert.Equal(29.31, f1.Curves[0][0].Latitude, 4);
         Assert.Equal(-94.78, f1.Curves[0][0].Longitude, 4);
     }
@@ -137,7 +137,7 @@ public class S124DatasetReaderTests
 
         Assert.Equal(S100GeometryType.Curve, f2.GeometryType);
         Assert.Single(f2.Curves);
-        Assert.Equal(3, f2.Curves[0].Length);
+        Assert.Equal(3, f2.Curves[0].Count);
     }
 
     // ── Surface dataset ──────────────────────────────────────────
@@ -146,14 +146,14 @@ public class S124DatasetReaderTests
     public void SurfaceDataset_HasThreeFeatures()
     {
         var ds = LoadTestData("navwarn_surface.gml");
-        Assert.Equal(3, ds.Features.Length);
+        Assert.Equal(3, ds.Features.Count);
     }
 
     [Fact]
     public void SurfaceDataset_HasTwoInformationTypes()
     {
         var ds = LoadTestData("navwarn_surface.gml");
-        Assert.Equal(2, ds.InformationTypes.Length);
+        Assert.Equal(2, ds.InformationTypes.Count);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class S124DatasetReaderTests
 
         Assert.Equal("NavwarnAreaAffected", f1.FeatureType);
         Assert.Equal(S100GeometryType.Surface, f1.GeometryType);
-        Assert.Equal(5, f1.ExteriorRing.Length); // Closed ring: 5 coordinate pairs
+        Assert.Equal(5, f1.ExteriorRing.Count); // Closed ring: 5 coordinate pairs
         Assert.Equal(51.05, f1.ExteriorRing[0].Latitude, 4);
         Assert.Equal(1.20, f1.ExteriorRing[0].Longitude, 4);
     }
@@ -176,9 +176,9 @@ public class S124DatasetReaderTests
         var f3 = ds.Features.First(f => f.Id == "f3");
 
         Assert.Equal(S100GeometryType.Surface, f3.GeometryType);
-        Assert.Equal(5, f3.ExteriorRing.Length);
+        Assert.Equal(5, f3.ExteriorRing.Count);
         Assert.Single(f3.InteriorRings);
-        Assert.Equal(5, f3.InteriorRings[0].Length);
+        Assert.Equal(5, f3.InteriorRings[0].Count);
     }
 
     [Fact]
@@ -199,14 +199,14 @@ public class S124DatasetReaderTests
     public void MixedDataset_HasFiveFeatures()
     {
         var ds = LoadTestData("navwarn_mixed.gml");
-        Assert.Equal(5, ds.Features.Length);
+        Assert.Equal(5, ds.Features.Count);
     }
 
     [Fact]
     public void MixedDataset_HasThreeInformationTypes()
     {
         var ds = LoadTestData("navwarn_mixed.gml");
-        Assert.Equal(3, ds.InformationTypes.Length);
+        Assert.Equal(3, ds.InformationTypes.Count);
     }
 
     [Fact]
@@ -249,8 +249,8 @@ public class S124DatasetReaderTests
         var f5 = ds.Features.First(f => f.Id == "f5");
 
         Assert.Equal(S100GeometryType.None, f5.GeometryType);
-        Assert.True(f5.Points.IsDefaultOrEmpty);
-        Assert.True(f5.Curves.IsDefaultOrEmpty);
-        Assert.True(f5.ExteriorRing.IsDefaultOrEmpty);
+        Assert.True(f5.Points.Count == 0);
+        Assert.True(f5.Curves.Count == 0);
+        Assert.True(f5.ExteriorRing.Count == 0);
     }
 }

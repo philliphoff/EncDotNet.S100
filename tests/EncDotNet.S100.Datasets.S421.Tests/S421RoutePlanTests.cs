@@ -1,8 +1,8 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Features;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S421.Tests;
 
@@ -80,7 +80,7 @@ public class S421RoutePlanTests
     public void Minimal_ResolvesWaypointsInDocumentOrder()
     {
         var plan = Project("RTE-TEST-GMIN.s421.gml", out _);
-        Assert.Equal(2, plan.Route.Waypoints.Length);
+        Assert.Equal(2, plan.Route.Waypoints.Count);
 
         var wp1 = plan.Route.Waypoints[0];
         Assert.Equal("RTE.WPT.1", wp1.Id);
@@ -173,7 +173,7 @@ public class S421RoutePlanTests
         Assert.Equal(1, schedule.ScheduleNumber);
         Assert.Equal("Excel", schedule.Name);
 
-        Assert.Equal(3, schedule.Variants.Length);
+        Assert.Equal(3, schedule.Variants.Count);
         var kinds = schedule.Variants.Select(v => v.Kind).ToArray();
         Assert.Contains(S421ScheduleVariantKind.Manual, kinds);
         Assert.Contains(S421ScheduleVariantKind.Calculated, kinds);
@@ -229,8 +229,8 @@ public class S421RoutePlanTests
         {
             ProductIdentifier = "S-421",
             DatasetIdentifier = "test",
-            Features = ImmutableArray<S421Feature>.Empty,
-            InformationTypes = ImmutableArray<S421InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         Assert.Throws<InvalidOperationException>(() =>
             S421RoutePlan.From(empty, out _));
@@ -266,10 +266,10 @@ public class S421RoutePlanTests
         if (waypointCount < 2)
             throw new ArgumentOutOfRangeException(nameof(waypointCount));
 
-        var emptyAttrs = ImmutableDictionary<string, string>.Empty;
-        var emptyComplex = ImmutableArray<S421ComplexAttribute>.Empty;
+        var emptyAttrs = ReadOnlyDictionary<string, string>.Empty;
+        IReadOnlyList<S421ComplexAttribute> emptyComplex = [];
 
-        var features = ImmutableArray.CreateBuilder<S421Feature>();
+        var features = new List<S421Feature>();
 
         // Route → routeWaypoints container.
         features.Add(new S421Feature
@@ -277,21 +277,21 @@ public class S421RoutePlanTests
             Id = "RTE",
             FeatureType = "Route",
             GeometryType = S100GeometryType.None,
-            Points = ImmutableArray<(double, double)>.Empty,
-            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            ExteriorRing = ImmutableArray<(double, double)>.Empty,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
             Attributes = emptyAttrs,
             ComplexAttributes = emptyComplex,
-            References = ImmutableArray.Create(new GmlReference
+            References = [new GmlReference
             {
                 Role = "routeWaypoints",
                 Href = "#RTE.WPTS",
-            }),
+            }],
         });
 
         // RouteWaypoints container with routeWaypoint xlinks.
-        var containerRefs = ImmutableArray.CreateBuilder<GmlReference>();
+        var containerRefs = new List<GmlReference>();
         for (int i = 1; i <= waypointCount; i++)
         {
             containerRefs.Add(new GmlReference { Role = "routeWaypoint", Href = $"#RTE.WPT.{i}" });
@@ -301,13 +301,13 @@ public class S421RoutePlanTests
             Id = "RTE.WPTS",
             FeatureType = "RouteWaypoints",
             GeometryType = S100GeometryType.None,
-            Points = ImmutableArray<(double, double)>.Empty,
-            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            ExteriorRing = ImmutableArray<(double, double)>.Empty,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
             Attributes = emptyAttrs,
             ComplexAttributes = emptyComplex,
-            References = containerRefs.ToImmutable(),
+            References = containerRefs.ToArray(),
         });
 
         // Waypoints + legs. Each waypoint except the last gets an outgoing
@@ -315,7 +315,7 @@ public class S421RoutePlanTests
         int legCount = waypointCount - 1 + (referenceLegBeyondLastWaypoint ? 1 : 0);
         for (int i = 1; i <= waypointCount; i++)
         {
-            var refs = ImmutableArray.CreateBuilder<GmlReference>();
+            var refs = new List<GmlReference>();
             bool hasOutgoing = i < waypointCount || referenceLegBeyondLastWaypoint;
             if (hasOutgoing)
             {
@@ -331,13 +331,13 @@ public class S421RoutePlanTests
                 Id = $"RTE.WPT.{i}",
                 FeatureType = "RouteWaypoint",
                 GeometryType = S100GeometryType.Point,
-                Points = ImmutableArray.Create((60.0 + 0.01 * i, 25.0 + 0.01 * i)),
-                Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-                ExteriorRing = ImmutableArray<(double, double)>.Empty,
-                InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-                Attributes = ImmutableDictionary<string, string>.Empty.Add("routeWaypointID", i.ToString()),
+                Points = [(60.0 + 0.01 * i, 25.0 + 0.01 * i)],
+                Curves = [],
+                ExteriorRing = [],
+                InteriorRings = [],
+                Attributes = new Dictionary<string, string> { ["routeWaypointID"] = i.ToString() },
                 ComplexAttributes = emptyComplex,
-                References = refs.ToImmutable(),
+                References = refs.ToArray(),
             });
         }
 
@@ -348,16 +348,16 @@ public class S421RoutePlanTests
                 Id = $"RTE.WPT.LEG.{i}",
                 FeatureType = "RouteWaypointLeg",
                 GeometryType = S100GeometryType.Curve,
-                Points = ImmutableArray<(double, double)>.Empty,
-                Curves = ImmutableArray.Create(
-                    ImmutableArray.Create(
+                Points = [],
+                Curves = [
+                    [
                         (60.0 + 0.01 * i, 25.0 + 0.01 * i),
-                        (60.0 + 0.01 * (i + 1), 25.0 + 0.01 * (i + 1)))),
-                ExteriorRing = ImmutableArray<(double, double)>.Empty,
-                InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+                        (60.0 + 0.01 * (i + 1), 25.0 + 0.01 * (i + 1))]],
+                ExteriorRing = [],
+                InteriorRings = [],
                 Attributes = emptyAttrs,
                 ComplexAttributes = emptyComplex,
-                References = ImmutableArray<GmlReference>.Empty,
+                References = [],
             });
         }
 
@@ -365,8 +365,8 @@ public class S421RoutePlanTests
         {
             ProductIdentifier = "S-421",
             DatasetIdentifier = "synthetic",
-            Features = features.ToImmutable(),
-            InformationTypes = ImmutableArray<S421InformationType>.Empty,
+            Features = features.ToArray(),
+            InformationTypes = [],
         };
     }
 
@@ -374,10 +374,10 @@ public class S421RoutePlanTests
     public void Synthetic_LegStartWaypointMatchesOriginatingWaypoint()
     {
         var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
-        Assert.Equal(4, plan.Route.Waypoints.Length);
-        Assert.Equal(3, plan.Route.Legs.Length);
+        Assert.Equal(4, plan.Route.Waypoints.Count);
+        Assert.Equal(3, plan.Route.Legs.Count);
 
-        for (int i = 0; i < plan.Route.Waypoints.Length - 1; i++)
+        for (int i = 0; i < plan.Route.Waypoints.Count - 1; i++)
         {
             var wp = plan.Route.Waypoints[i];
             Assert.NotNull(wp.OutgoingLeg);
@@ -390,7 +390,7 @@ public class S421RoutePlanTests
     {
         var plan = S421RoutePlan.From(BuildSyntheticRoute(4), out _);
 
-        for (int i = 0; i < plan.Route.Waypoints.Length - 1; i++)
+        for (int i = 0; i < plan.Route.Waypoints.Count - 1; i++)
         {
             var wp = plan.Route.Waypoints[i];
             var next = plan.Route.Waypoints[i + 1];
@@ -406,7 +406,7 @@ public class S421RoutePlanTests
         // First waypoint has no incoming leg.
         Assert.Null(plan.Route.Waypoints[0].IncomingLeg);
 
-        for (int i = 1; i < plan.Route.Waypoints.Length; i++)
+        for (int i = 1; i < plan.Route.Waypoints.Count; i++)
         {
             var prev = plan.Route.Waypoints[i - 1];
             var current = plan.Route.Waypoints[i];

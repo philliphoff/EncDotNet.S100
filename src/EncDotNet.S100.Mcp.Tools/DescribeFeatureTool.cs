@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Text.Json;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -22,7 +21,7 @@ public sealed record DescribeFeatureResult(
     [property: Description("Product specification and edition the feature was parsed from.")] Core.SpecRef Spec,
     [property: Description("Spec-defined feature type code (e.g. \"NavwarnPart\").")] string FeatureTypeName,
     [property: Description("Serialised attribute payload as a JSON object; structure follows the spec's Feature Catalogue.")] JsonElement Attributes,
-    [property: Description("xlink-style cross references projected against the catalog snapshot.")] ImmutableArray<FeatureReference> References);
+    [property: Description("xlink-style cross references projected against the catalog snapshot.")] IReadOnlyList<FeatureReference> References);
 
 /// <summary>
 /// A cross-reference from one feature to another, projected from the

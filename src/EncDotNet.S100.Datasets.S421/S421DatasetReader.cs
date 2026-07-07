@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S421.Diagnostics;
@@ -44,7 +43,7 @@ internal static class S421DatasetReader
             productId = dsInfo.Element(s100Ns + "productIdentifier")?.Value;
         }
 
-        var features = ImmutableArray.CreateBuilder<S421Feature>();
+        var features = new List<S421Feature>();
         foreach (var member in EnumerateMembers(root, datasetNs, "member"))
         {
             var element = member.Elements().FirstOrDefault();
@@ -52,7 +51,7 @@ internal static class S421DatasetReader
             features.Add(ParseFeature(element, s100Ns));
         }
 
-        var informationTypes = ImmutableArray.CreateBuilder<S421InformationType>();
+        var informationTypes = new List<S421InformationType>();
         foreach (var imember in EnumerateMembers(root, datasetNs, "imember"))
         {
             var element = imember.Elements().FirstOrDefault();
@@ -65,8 +64,8 @@ internal static class S421DatasetReader
             ProductIdentifier = productId ?? "S-421",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = informationTypes,
         };
     }
 
@@ -116,12 +115,12 @@ internal static class S421DatasetReader
         };
     }
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exterior = ImmutableArray<(double, double)>.Empty;
-        var interiors = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<(double, double)> points = [];
+        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
+        IReadOnlyList<(double, double)> exterior = [];
+        IReadOnlyList<IReadOnlyList<(double, double)>> interiors = [];
         var geomType = S100GeometryType.None;
 
         var geometry = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -145,7 +144,7 @@ internal static class S421DatasetReader
         if (curveProp is not null)
         {
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            if (coords.Length > 0)
+            if (coords.Count > 0)
             {
                 geomType = S100GeometryType.Curve;
                 curves = [coords];
@@ -156,7 +155,7 @@ internal static class S421DatasetReader
         if (surfaceProp is not null)
         {
             var (ext, ints) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
-            if (ext.Length > 0)
+            if (ext.Count > 0)
             {
                 geomType = S100GeometryType.Surface;
                 exterior = ext;
@@ -165,11 +164,11 @@ internal static class S421DatasetReader
         }
 
         return (geomType, points, curves, exterior, interiors);
-    }    private static (ImmutableDictionary<string, string>, ImmutableArray<S421ComplexAttribute>, ImmutableArray<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
+    }    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S421ComplexAttribute>, IReadOnlyList<GmlReference>) ParseAttributes(XElement element, XNamespace s100Ns)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S421ComplexAttribute>();
-        var refs = ImmutableArray.CreateBuilder<GmlReference>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S421ComplexAttribute>();
+        var refs = new List<GmlReference>();
 
         foreach (var child in element.Elements())
         {
@@ -196,7 +195,7 @@ internal static class S421DatasetReader
 
             if (child.HasElements)
             {
-                var sub = ImmutableDictionary.CreateBuilder<string, string>();
+                var sub = new Dictionary<string, string>();
                 foreach (var s in child.Elements())
                 {
                     if (!s.HasElements && s.Attribute(XLinkNs + "href") is null)
@@ -209,7 +208,7 @@ internal static class S421DatasetReader
                     complex.Add(new S421ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = sub.ToImmutable(),
+                        SubAttributes = sub,
                     });
                 }
             }
@@ -219,7 +218,7 @@ internal static class S421DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), refs.ToImmutable());
+        return (simple, complex, refs);
     }
 
     /// <summary>

@@ -35,7 +35,7 @@ internal interface ILastErrorTracker
 }
 
 /// <summary>
-/// Immutable snapshot of a single recorded error.
+/// Read-only snapshot of a single recorded error.
 /// </summary>
 /// <param name="TimestampUtc">When the error was recorded (UTC).</param>
 /// <param name="Source">Short origin label.</param>

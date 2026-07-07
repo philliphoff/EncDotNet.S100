@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
@@ -19,18 +19,17 @@ public class DescribeFeatureGmlBackfillTests
             Id = "mpa-1",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Surface,
-            Points = default,
-            Curves = default,
-            ExteriorRing = ImmutableArray.Create<(double, double)>((0, 0), (0, 1), (1, 1), (0, 0)),
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty
-                .Add("categoryOfMarineProtectedArea", "nature reserve"),
-            ComplexAttributes = ImmutableArray<S122ComplexAttribute>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [(0, 0), (0, 1), (1, 1), (0, 0)],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["categoryOfMarineProtectedArea"] = "nature reserve" },
+            ComplexAttributes = [],
         };
         var model = new S122Dataset
         {
-            Features = ImmutableArray.Create(feature),
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = [feature],
+            InformationTypes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(new LoadedDataset(
@@ -64,19 +63,18 @@ public class DescribeFeatureGmlBackfillTests
             Id = "auth-1",
             FeatureType = "Authority",
             GeometryType = S100GeometryType.None,
-            Points = default,
-            Curves = default,
-            ExteriorRing = default,
-            InteriorRings = default,
-            Attributes = ImmutableDictionary<string, string>.Empty
-                .Add("authorityName", "Port of Test"),
-            ComplexAttributes = ImmutableArray<S131ComplexAttribute>.Empty,
-            References = ImmutableArray<S131Reference>.Empty,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["authorityName"] = "Port of Test" },
+            ComplexAttributes = [],
+            References = [],
         };
         var model = new S131Dataset
         {
-            Features = ImmutableArray.Create(authority),
-            InformationTypes = ImmutableArray<S131InformationType>.Empty,
+            Features = [authority],
+            InformationTypes = [],
         };
         var catalog = new FakeDatasetCatalog();
         catalog.Add(new LoadedDataset(

@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S411.DataModel;
 
@@ -27,11 +27,11 @@ public abstract class S411IceFeature : IS411IceFeature
     public S411GeometryKind GeometryKind { get; init; }
 
     /// <inheritdoc/>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <inheritdoc/>
     public required S411Feature Source { get; init; }

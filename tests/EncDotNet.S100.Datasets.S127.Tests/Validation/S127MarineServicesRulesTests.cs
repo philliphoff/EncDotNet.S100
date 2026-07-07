@@ -1,10 +1,10 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S127;
 using EncDotNet.S100.Datasets.S127.DataModel;
 using EncDotNet.S100.Datasets.S127.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S127.Tests.Validation;
 
@@ -30,15 +30,15 @@ public class S127MarineServicesRulesTests
             FeatureType = featureType,
             GeometryType = geometryType,
             Attributes = attributes is null
-                ? ImmutableDictionary<string, string>.Empty
-                : attributes.ToImmutableDictionary(),
+                ? ReadOnlyDictionary<string, string>.Empty
+                : attributes.ToDictionary(),
             ComplexAttributes = complex is null
-                ? ImmutableArray<S127ComplexAttribute>.Empty
-                : complex.ToImmutableArray(),
-            Points = ImmutableArray<(double, double)>.Empty,
-            Curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
-            ExteriorRing = ImmutableArray<(double, double)>.Empty,
-            InteriorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty,
+                ? []
+                : complex.ToArray(),
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
         };
 
     private static S127PilotBoardingPlace Pbp(
@@ -49,7 +49,7 @@ public class S127MarineServicesRulesTests
         {
             Id = id,
             GeometryKind = kind,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray(),
+            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
             Source = SourceFeature(id, "PilotBoardingPlace"),
         };
 
@@ -63,7 +63,7 @@ public class S127MarineServicesRulesTests
             FeatureType = "RestrictedArea",
             Kind = S127RegulatedAreaKind.RestrictedArea,
             GeometryKind = kind,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray(),
+            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
             Source = SourceFeature(id, "RestrictedArea"),
         };
 
@@ -74,7 +74,7 @@ public class S127MarineServicesRulesTests
         {
             Id = id,
             GeometryKind = S127GeometryKind.Curve,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray(),
+            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
             Source = SourceFeature(id, "RouteingMeasure"),
         };
 
@@ -87,7 +87,7 @@ public class S127MarineServicesRulesTests
         {
             Id = id,
             GeometryKind = coords.Length > 0 ? S127GeometryKind.Surface : S127GeometryKind.None,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToImmutableArray(),
+            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
             Source = SourceFeature(
                 id, "VesselTrafficServiceArea",
                 geometryType: coords.Length > 0 ? S100GeometryType.Surface : S100GeometryType.None,
@@ -110,21 +110,21 @@ public class S127MarineServicesRulesTests
 
     private static S127MarineServicesDataset Dataset(params IS127Feature[] features)
     {
-        var array = features.ToImmutableArray();
+        var array = features.ToArray();
         var source = new S127Dataset
         {
             DatasetIdentifier = "TEST",
             ProductIdentifier = "S-127",
-            Features = ImmutableArray<S127Feature>.Empty,
-            InformationTypes = ImmutableArray<S127InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         return new S127MarineServicesDataset
         {
             DatasetIdentifier = "TEST",
             ProductIdentifier = "S-127",
             Features = array,
-            Authorities = array.OfType<S127Authority>().ToImmutableArray(),
-            OtherFeatures = array.OfType<S127OtherFeature>().ToImmutableArray(),
+            Authorities = array.OfType<S127Authority>().ToArray(),
+            OtherFeatures = array.OfType<S127OtherFeature>().ToArray(),
             Source = source,
         };
     }
@@ -380,7 +380,7 @@ public class S127MarineServicesRulesTests
         => new()
         {
             Code = "availability",
-            SubAttributes = subs.ToImmutableDictionary(),
+            SubAttributes = subs.ToDictionary(),
         };
 
     [Fact]
@@ -524,7 +524,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void Default_ContainsAllEightRules()
     {
-        Assert.Equal(8, S127MarineServicesRules.Default.Rules.Length);
+        Assert.Equal(8, S127MarineServicesRules.Default.Rules.Count);
         var ids = S127MarineServicesRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S127-R-12.1", ids);
         Assert.Contains("S127-R-12.2", ids);

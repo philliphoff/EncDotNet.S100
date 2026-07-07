@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -37,7 +36,7 @@ public sealed record DatasetSummary(
 /// <param name="TotalCount">Total number of datasets matching the filter, across all pages.</param>
 /// <param name="HasMore">True when more pages exist beyond the one returned.</param>
 public sealed record ListDatasetsResult(
-    [property: Description("Page of dataset summaries, in catalog order.")] ImmutableArray<DatasetSummary> Datasets,
+    [property: Description("Page of dataset summaries, in catalog order.")] IReadOnlyList<DatasetSummary> Datasets,
     [property: Description("Zero-based page index actually returned (post-clamp).")] int Page,
     [property: Description("Page size actually applied (post-clamp to 1..500).")] int PageSize,
     [property: Description("Total number of datasets matching the filter, across all pages.")] int TotalCount,
@@ -73,7 +72,7 @@ public sealed class ListDatasetsTool
         var page = Math.Max(0, request.Page);
 
         var snapshot = _catalog.Datasets;
-        var filtered = ImmutableArray.CreateBuilder<DatasetSummary>();
+        var filtered = new List<DatasetSummary>();
         foreach (var dataset in snapshot)
         {
             if (request.Spec is { } spec && !SpecMatches(dataset.Spec, spec))
@@ -92,7 +91,7 @@ public sealed class ListDatasetsTool
         var totalCount = filtered.Count;
         var skip = page * pageSize;
         var take = Math.Max(0, Math.Min(pageSize, totalCount - skip));
-        var pageBuilder = ImmutableArray.CreateBuilder<DatasetSummary>(take);
+        var pageBuilder = new List<DatasetSummary>(take);
         for (var i = 0; i < take; i++)
         {
             pageBuilder.Add(filtered[skip + i]);
@@ -100,7 +99,7 @@ public sealed class ListDatasetsTool
 
         var hasMore = skip + take < totalCount;
         var result = new ListDatasetsResult(
-            pageBuilder.MoveToImmutable(),
+            pageBuilder,
             page,
             pageSize,
             totalCount,

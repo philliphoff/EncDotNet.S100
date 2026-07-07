@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -48,7 +47,7 @@ public class ListDatasetsToolTests
         var result = await tool.InvokeAsync(new ListDatasetsRequest());
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Datasets.Length);
+        Assert.Equal(3, value.Datasets.Count);
     }
 
     [Fact]
@@ -63,7 +62,7 @@ public class ListDatasetsToolTests
         var result = await tool.InvokeAsync(new ListDatasetsRequest(Spec: LoadedDatasetFactory.S124Spec));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(2, value.Datasets.Length);
+        Assert.Equal(2, value.Datasets.Count);
         Assert.All(value.Datasets, s => Assert.Equal("S-124", s.Spec.Name));
     }
 
@@ -121,7 +120,7 @@ public class ListDatasetsToolTests
 
         var page0 = await tool.InvokeAsync(new ListDatasetsRequest(Page: 0, PageSize: 3));
         Assert.True(page0.TryGetValue(out var v0));
-        Assert.Equal(3, v0.Datasets.Length);
+        Assert.Equal(3, v0.Datasets.Count);
         Assert.True(v0.HasMore);
         Assert.Equal(7, v0.TotalCount);
 
