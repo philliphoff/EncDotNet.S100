@@ -580,10 +580,15 @@ internal static class Strings
     public static string Segment_TextAll => Get(nameof(Segment_TextAll));
 
     // S-411 sea-ice display-mode selector (issue #416)
+    public static string DisplayMode_SectionLabel => Get(nameof(DisplayMode_SectionLabel));
+    public static string DisplayMode_SectionDescription => Get(nameof(DisplayMode_SectionDescription));
     public static string DisplayMode_Header => Get(nameof(DisplayMode_Header));
     public static string DisplayMode_Concentration => Get(nameof(DisplayMode_Concentration));
+    public static string DisplayMode_Concentration_Description => Get(nameof(DisplayMode_Concentration_Description));
     public static string DisplayMode_StageOfDevelopment => Get(nameof(DisplayMode_StageOfDevelopment));
+    public static string DisplayMode_StageOfDevelopment_Description => Get(nameof(DisplayMode_StageOfDevelopment_Description));
     public static string DisplayMode_Navigational => Get(nameof(DisplayMode_Navigational));
+    public static string DisplayMode_Navigational_Description => Get(nameof(DisplayMode_Navigational_Description));
     public static string Tooltip_DisplayMode_Concentration => Get(nameof(Tooltip_DisplayMode_Concentration));
     public static string Tooltip_DisplayMode_StageOfDevelopment => Get(nameof(Tooltip_DisplayMode_StageOfDevelopment));
     public static string Tooltip_DisplayMode_Navigational => Get(nameof(Tooltip_DisplayMode_Navigational));

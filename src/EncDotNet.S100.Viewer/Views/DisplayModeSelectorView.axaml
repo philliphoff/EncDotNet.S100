@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
+             x:Class="EncDotNet.S100.Viewer.Views.DisplayModeSelectorView"
+             x:Name="Root"
+             x:DataType="vm:DisplayModeToolbarViewModel">
+    <!--
+      Reusable S-411 sea-ice display-mode selector (issue #416). A
+      SEPARATE axis from the ECDIS display category: it selects an
+      alternative portrayal (concentration / stage of development /
+      provisional navigational) over the same sea-ice data rather than a
+      viewing-group filter. The DataContext is a
+      DisplayModeToolbarViewModel; the same singleton instance backs both
+      hosts (the map Display Settings flyout and the docked ECDIS Display
+      Controls panel), so a selection made in one is reflected in the
+      other. The whole block hides itself unless a loaded dataset declares
+      more than one mode (S-411 today), and collapses to nothing when the
+      DataContext is absent (FallbackValue=False).
+    -->
+    <StackPanel Spacing="10"
+                IsVisible="{Binding IsVisible, FallbackValue=False}">
+        <Border Height="1"
+                Background="{DynamicResource BorderColor30}"
+                IsVisible="{Binding #Root.ShowDivider}" />
+        <TextBlock Text="{Binding Source={x:Static loc:Strings.DisplayMode_SectionLabel}, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                   FontSize="11"
+                   FontWeight="SemiBold"
+                   LetterSpacing="0.8"
+                   Foreground="{DynamicResource ForegroundColor}"
+                   Opacity="0.85" />
+        <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static loc:Strings.DisplayMode_Header}"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource ForegroundColor}" />
+            <TextBlock Text="{x:Static loc:Strings.DisplayMode_SectionDescription}"
+                       FontSize="12"
+                       Opacity="0.65"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource ForegroundColor}" />
+        </StackPanel>
+        <ItemsControl ItemsSource="{Binding Options}"
+                      IsEnabled="{Binding IsEnabled}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="12" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DisplayModeOption">
+                    <RadioButton GroupName="DisplaySettingsIceMode"
+                                 IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                 Command="{Binding SelectCommand}"
+                                 ToolTip.Tip="{Binding Tooltip}"
+                                 VerticalContentAlignment="Center">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding Label}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource ForegroundColor}" />
+                            <TextBlock Text="{Binding Description}"
+                                       FontSize="12"
+                                       Opacity="0.6"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource ForegroundColor}" />
+                        </StackPanel>
+                    </RadioButton>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

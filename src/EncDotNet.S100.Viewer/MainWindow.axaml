@@ -662,43 +662,6 @@
                                     </StackPanel>
 
                                     <!--
-                                      S-411 sea-ice display mode (issue #416) —
-                                      a SEPARATE axis from the ECDIS category
-                                      above. Selects an alternative portrayal
-                                      (concentration / stage of development /
-                                      provisional navigational) over the same
-                                      data. Only shown when a loaded dataset
-                                      declares more than one mode (S-411 today).
-                                    -->
-                                    <StackPanel Spacing="6"
-                                                IsVisible="{Binding DisplayModeToolbar.IsVisible}">
-                                        <TextBlock Text="{x:Static loc:Strings.DisplayMode_Header}"
-                                                   FontSize="12"
-                                                   FontWeight="Medium"
-                                                   Opacity="0.8" />
-                                        <Border Classes="segmentTrack"
-                                                IsEnabled="{Binding DisplayModeToolbar.IsEnabled}">
-                                            <ItemsControl ItemsSource="{Binding DisplayModeToolbar.Options}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <UniformGrid Rows="1" />
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:DisplayModeOption">
-                                                        <RadioButton Classes="segment"
-                                                                     GroupName="DisplaySettingsIceMode"
-                                                                     Content="{Binding Label}"
-                                                                     IsChecked="{Binding IsSelected, Mode=OneWay}"
-                                                                     Command="{Binding SelectCommand}"
-                                                                     ToolTip.Tip="{Binding Tooltip}" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </Border>
-                                    </StackPanel>
-
-                                    <!--
                                       S-100 map palette (PR-N1) — Day/Dusk/Night
                                       switch for the chart S-100 colour profile.
                                       Bound to SettingsViewModel.SelectedPalette
@@ -730,6 +693,17 @@
                                             </UniformGrid>
                                         </Border>
                                     </StackPanel>
+
+                                    <!--
+                                      S-411 sea-ice display mode (issue #416) —
+                                      a SEPARATE axis from the ECDIS display base
+                                      above, placed last. The reusable selector
+                                      is shared (same view model instance) with
+                                      the docked ECDIS Display Controls panel and
+                                      self-hides unless a loaded dataset declares
+                                      more than one mode (S-411 today).
+                                    -->
+                                    <views:DisplayModeSelectorView DataContext="{Binding DisplayModeToolbar}" />
                                 </StackPanel>
                                 </Border>
                             </Flyout>

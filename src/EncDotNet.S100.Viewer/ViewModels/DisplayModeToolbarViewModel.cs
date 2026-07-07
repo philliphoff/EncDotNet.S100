@@ -89,6 +89,7 @@ internal sealed class DisplayModeToolbarViewModel : ViewModelBase, IDisposable
                     Options.Add(new DisplayModeOption(
                         modeId,
                         LabelFor(modeId),
+                        DescriptionFor(modeId),
                         TooltipFor(modeId),
                         S411DisplayModes.IsProvisional(modeId),
                         new RelayCommand(() => Select(modeId))));
@@ -156,6 +157,14 @@ internal sealed class DisplayModeToolbarViewModel : ViewModelBase, IDisposable
         _ => modeId,
     };
 
+    private static string DescriptionFor(string modeId) => modeId switch
+    {
+        S411DisplayModes.ConcentrationModeId => Strings.DisplayMode_Concentration_Description,
+        S411DisplayModes.StageOfDevelopmentModeId => Strings.DisplayMode_StageOfDevelopment_Description,
+        S411DisplayModes.NavigationalModeId => Strings.DisplayMode_Navigational_Description,
+        _ => string.Empty,
+    };
+
     private static string TooltipFor(string modeId) => modeId switch
     {
         S411DisplayModes.ConcentrationModeId => Strings.Tooltip_DisplayMode_Concentration,
@@ -178,19 +187,20 @@ internal sealed class DisplayModeToolbarViewModel : ViewModelBase, IDisposable
 
 /// <summary>
 /// A single selectable display-mode option shown in the selector. Exposes a
-/// localized <see cref="Label"/>, a <see cref="Tooltip"/>, whether the mode
-/// is a provisional preview, its checked state, and the command that
-/// activates it.
+/// localized <see cref="Label"/>, a one-line <see cref="Description"/>, a
+/// <see cref="Tooltip"/>, whether the mode is a provisional preview, its
+/// checked state, and the command that activates it.
 /// </summary>
 internal sealed class DisplayModeOption : ViewModelBase
 {
     private bool _isSelected;
 
-    public DisplayModeOption(string id, string label, string tooltip, bool isProvisional, ICommand selectCommand)
+    public DisplayModeOption(string id, string label, string description, string tooltip, bool isProvisional, ICommand selectCommand)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         Id = id;
         Label = label;
+        Description = description;
         Tooltip = tooltip;
         IsProvisional = isProvisional;
         SelectCommand = selectCommand;
@@ -201,6 +211,9 @@ internal sealed class DisplayModeOption : ViewModelBase
 
     /// <summary>Localized, human-readable label.</summary>
     public string Label { get; }
+
+    /// <summary>Localized one-line description shown beneath the label.</summary>
+    public string Description { get; }
 
     /// <summary>Localized tooltip (provisional wording for the navigational mode).</summary>
     public string Tooltip { get; }

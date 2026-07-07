@@ -24,6 +24,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly DatasetsViewModel _datasets;
     private readonly EcdisLabelOverrideProvider _labelOverrides;
+    private readonly DisplayModeToolbarViewModel? _displayModeToolbar;
 
     /// <summary>
     /// Spec codes for coverage products that have no viewing-group
@@ -38,7 +39,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         EcdisDisplayState state,
         PortrayalCatalogueManager catalogueManager,
         DatasetsViewModel datasets,
-        EcdisLabelOverrideProvider? labelOverrides = null)
+        EcdisLabelOverrideProvider? labelOverrides = null,
+        DisplayModeToolbarViewModel? displayModeToolbar = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -48,6 +50,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _catalogueManager = catalogueManager;
         _datasets = datasets;
         _labelOverrides = labelOverrides ?? new EcdisLabelOverrideProvider();
+        _displayModeToolbar = displayModeToolbar;
 
         ResetAllOverridesCommand = new RelayCommand(() => _state.ClearAllOverrides());
         SetDisplayBaseCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.DisplayBase);
@@ -63,6 +66,14 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Per-spec sections shown in the panel.</summary>
     public ObservableCollection<EcdisSpecViewModel> Specs { get; } = new();
+
+    /// <summary>
+    /// The shared S-411 sea-ice display-mode selector, surfaced so the panel
+    /// can host the same reusable selector shown in the map Display Settings
+    /// flyout. Null in unit-test contexts where it is not injected; the view
+    /// binds defensively (the selector self-hides when absent).
+    /// </summary>
+    public DisplayModeToolbarViewModel? DisplayModeToolbar => _displayModeToolbar;
 
     /// <summary>True when there are no loaded vector specs.</summary>
     public bool IsEmpty => Specs.Count == 0;
