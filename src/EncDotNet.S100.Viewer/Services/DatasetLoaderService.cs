@@ -1031,7 +1031,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
         var ecdis = _ecdisDisplay.Snapshot();
         var mariner = _marinerSettings.Current;
 
-        return processor switch
+        RenderContext context = processor switch
         {
             S104DatasetProcessor when timeStep is not null
                 => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
@@ -1063,6 +1063,33 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService
                 => new S411RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
             _ => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, EcdisDisplay = ecdis, Mariner = mariner },
         };
+
+        // Thread the explicit per-spec S-100 Part 9 §11.7 display-mode
+        // selection (only S-411 declares >1 mode today). Applied generically
+        // via a record `with`; a null id leaves the catalogue's default mode
+        // in place (GmlDatasetProcessorBase.ApplyDisplayMode).
+        return ApplyDisplayMode(context, ecdis, processor.Spec.Name);
+    }
+
+    /// <summary>
+    /// Copies <paramref name="context"/> with the explicit S-100 Part 9
+    /// §11.7 display-mode id selected for <paramref name="specName"/> in
+    /// <paramref name="ecdis"/>, or returns it unchanged when the spec has no
+    /// explicit selection (so the catalogue's default mode stands). Extracted
+    /// as a pure helper so the threading contract is unit-testable without
+    /// constructing the full loader.
+    /// </summary>
+    internal static RenderContext ApplyDisplayMode(
+        RenderContext context, EcdisDisplaySettings ecdis, string specName)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(ecdis);
+        ArgumentNullException.ThrowIfNull(specName);
+
+        var displayModeId = ecdis.ActiveDisplayModes.GetValueOrDefault(specName);
+        return string.IsNullOrEmpty(displayModeId)
+            ? context
+            : context with { DisplayModeId = displayModeId };
     }
 
     private void ReplaceLayers(

@@ -127,4 +127,35 @@ public class EcdisDisplayPanelViewModelTests
         vm.SetAllCommand.Execute(null);
         Assert.Equal(EcdisDisplayCategory.All, state.Category);
     }
+
+    [Fact]
+    public void DisplayModeToolbar_IsNull_WhenNotInjected()
+    {
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+
+        Assert.Null(vm.DisplayModeToolbar);
+    }
+
+    [Fact]
+    public void DisplayModeToolbar_ReturnsInjectedInstance()
+    {
+        var state = new EcdisDisplayState();
+        var catalogues = new PortrayalCatalogueManager();
+        var loader = new StubDatasetLoaderService();
+        var datasets = new DatasetsViewModel(loader);
+        using var toolbar = new DisplayModeToolbarViewModel(state, loader);
+
+        using var vm = new EcdisDisplayPanelViewModel(
+            state,
+            catalogues,
+            datasets,
+            labelOverrides: null,
+            displayModeToolbar: toolbar);
+
+        Assert.Same(toolbar, vm.DisplayModeToolbar);
+    }
 }

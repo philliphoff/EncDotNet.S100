@@ -320,6 +320,15 @@ and from a pair of compact pill buttons on the map toolbar:
 - **Text groups** — quick toggles for the three S-101 text
   viewing-group layers (Important Text / Other Text / All Other
   Chart Text).
+- **Ice display mode** *(S-411 sea ice)* — a per-dataset selector,
+  shown only when an S-411 dataset is loaded, that switches the
+  sea-ice portrayal between **Concentration** (total concentration),
+  **Stage of development**, and a **Navigational** preview
+  (S-100 Part 9 §11.7). This axis is independent of the ECDIS display
+  category above. The navigational option is *provisional* — a
+  concentration-derived preview, not a POLARIS/RIO navigational-risk
+  product — and is labelled as such in its tooltip. The selection
+  persists between sessions.
 - **Per-spec viewing groups** — the **ECDIS** activity-bar panel
   lists each loaded vector product's viewing groups individually so
   power users can hide or reveal specific symbol families. Labels
@@ -644,13 +653,16 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Twenty-one viewer-only tools
+bound port back to the user's `settings.json`. Twenty-two viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
 centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
-OtherInformation / All), `set_time_step` (mutating — drives the
+OtherInformation / All), `set_display_mode` (mutating — explicit
+per-spec S-100 Part 9 §11.7 mode; today only S-411 sea ice, switching
+`ice-concentration` / `ice-sod` / provisional `ice-navigational`),
+`set_time_step` (mutating — drives the
 global time clock to a sample by index or timestamp),
 `set_own_ship` (mutating — positions and steers the simulated
 own-ship: WGS-84 `lat`/`lon`, `cog`, `sog`, `heading`, and

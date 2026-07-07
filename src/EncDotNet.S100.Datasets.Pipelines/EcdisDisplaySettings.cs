@@ -62,6 +62,24 @@ public sealed record EcdisDisplaySettings
     /// </summary>
     public IReadOnlySet<DisplayPlane> HiddenDisplayPlanes { get; init; }
         = new HashSet<DisplayPlane>();
+
+    /// <summary>
+    /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections
+    /// (spec code → mode id, e.g. <c>"S-411"</c> →
+    /// <c>"IceScientificIcesodDisplayMode"</c>). Populated by the viewer's
+    /// per-dataset display-mode selector for products whose portrayal
+    /// catalogue declares more than one mode. Unlike <see cref="Category"/>
+    /// (which maps to a viewing-group filter), an entry here selects an
+    /// alternate <em>portrayal</em> and, when present, wins over the
+    /// ECDIS-category-derived mode in
+    /// <c>GmlDatasetProcessorBase.ApplyDisplayMode</c>. Empty by default
+    /// (each catalogue renders its default mode). A <c>null</c> value is
+    /// equivalent to no entry. Keyed case-insensitively so a producer that
+    /// populates the map with a different spec casing (e.g. <c>s-411</c>)
+    /// still matches the canonical lookup key.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> ActiveDisplayModes { get; init; }
+        = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

@@ -99,4 +99,29 @@ public class EcdisViewingGroupSectionTests
         Assert.False(section.HasTitle);
         Assert.Equal(2, section.ViewingGroups.Count);
     }
+
+    [Fact]
+    public void SpecViewModel_HasViewingGroups_TrueWhenGroupsPresent()
+    {
+        var catalogue = CatalogueWith("31010", "31020");
+
+        var vm = new EcdisSpecViewModel(
+            new EcdisDisplayState(), "S-124", catalogue, new EcdisLabelOverrideProvider());
+
+        Assert.True(vm.HasViewingGroups);
+    }
+
+    [Fact]
+    public void SpecViewModel_HasViewingGroups_FalseWhenCatalogueDeclaresNone()
+    {
+        // S-411's display is driven by the sea-ice display-mode selector, not
+        // viewing-group filters; its catalogue declares no viewing groups, so
+        // the per-spec panel entry is hidden.
+        var catalogue = CatalogueWith();
+
+        var vm = new EcdisSpecViewModel(
+            new EcdisDisplayState(), "S-411", catalogue, new EcdisLabelOverrideProvider());
+
+        Assert.False(vm.HasViewingGroups);
+    }
 }
