@@ -83,7 +83,12 @@ internal sealed class SetDisplayModeTool
         {
             return ToolResult<SetDisplayModeResult>.Err(new InvalidArgument(
                 "mode",
-                $"value '{request.Mode}' is not one of: ice-concentration, ice-sod, ice-navigational"));
+                $"value '{request.Mode}' is not one of: 'ice-concentration', 'ice-sod', 'ice-navigational' "
+                + "(or the bare 'concentration' / 'sod' / 'navigational' aliases), "
+                + "or a raw S-411 mode id (case-insensitive): "
+                + $"'{S411DisplayModes.ConcentrationModeId}', "
+                + $"'{S411DisplayModes.StageOfDevelopmentModeId}', "
+                + $"'{S411DisplayModes.NavigationalModeId}'"));
         }
 
         var controller = _accessor.Current;

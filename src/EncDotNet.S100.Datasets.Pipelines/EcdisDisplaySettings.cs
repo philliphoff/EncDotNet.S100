@@ -74,10 +74,12 @@ public sealed record EcdisDisplaySettings
     /// ECDIS-category-derived mode in
     /// <c>GmlDatasetProcessorBase.ApplyDisplayMode</c>. Empty by default
     /// (each catalogue renders its default mode). A <c>null</c> value is
-    /// equivalent to no entry.
+    /// equivalent to no entry. Keyed case-insensitively so a producer that
+    /// populates the map with a different spec casing (e.g. <c>s-411</c>)
+    /// still matches the canonical lookup key.
     /// </summary>
     public IReadOnlyDictionary<string, string?> ActiveDisplayModes { get; init; }
-        = new Dictionary<string, string?>();
+        = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

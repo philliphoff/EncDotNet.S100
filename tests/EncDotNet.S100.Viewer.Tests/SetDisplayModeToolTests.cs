@@ -118,6 +118,26 @@ public class SetDisplayModeToolTests
     }
 
     [Fact]
+    public async Task Invalid_mode_message_lists_all_accepted_inputs()
+    {
+        var ctrl = new FakeController();
+        var tool = new SetDisplayModeTool(new FakeAccessor { Current = ctrl });
+
+        var result = await tool.InvokeAsync(new SetDisplayModeRequest("polaris", null));
+
+        Assert.True(result.TryGetError(out var err));
+        var invalid = Assert.IsType<InvalidArgument>(err);
+        // The message must advertise the bare aliases and the raw spec-native
+        // mode ids, both of which are actually accepted by the tool.
+        Assert.Contains("concentration", invalid.Reason);
+        Assert.Contains("sod", invalid.Reason);
+        Assert.Contains("navigational", invalid.Reason);
+        Assert.Contains(S411DisplayModes.ConcentrationModeId, invalid.Reason);
+        Assert.Contains(S411DisplayModes.StageOfDevelopmentModeId, invalid.Reason);
+        Assert.Contains(S411DisplayModes.NavigationalModeId, invalid.Reason);
+    }
+
+    [Fact]
     public async Task Honours_explicit_spec()
     {
         var ctrl = new FakeController();
