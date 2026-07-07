@@ -1,5 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 
 namespace EncDotNet.S100.Viewer.Tests.DynamicSources.OwnShip;
@@ -16,7 +17,10 @@ public class OwnShipSourceVesselGeometryTests
     private static OwnShipPosition Fix(
         double lat = 50.8, double lon = -1.3,
         double? cog = 90.0, double? sogMs = 5.0)
-        => new(lat, lon, cog, sogMs, DateTimeOffset.UnixEpoch);
+        => new(lat, lon,
+            cog is { } c ? Angle.FromDegrees(c) : null,
+            sogMs is { } s ? Speed.FromMetresPerSecond(s) : null,
+            DateTimeOffset.UnixEpoch);
 
     [Fact]
     public void PublishedFeature_CarriesVesselGeometryFromProvider()

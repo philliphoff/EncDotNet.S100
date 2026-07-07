@@ -838,10 +838,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var c = System.Globalization.CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
         sb.Append("m:");
-        sb.Append(mariner.SafetyContour.ToString(c)).Append('|');
-        sb.Append(mariner.SafetyDepth.ToString(c)).Append('|');
-        sb.Append(mariner.ShallowContour.ToString(c)).Append('|');
-        sb.Append(mariner.DeepContour.ToString(c)).Append('|');
+        sb.Append(mariner.SafetyContour.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.SafetyDepth.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.ShallowContour.TotalMetres.ToString(c)).Append('|');
+        sb.Append(mariner.DeepContour.TotalMetres.ToString(c)).Append('|');
         sb.Append((int)mariner.DepthUnit).Append('|');
         sb.Append(mariner.FourShades ? '1' : '0');
         sb.Append(mariner.ShallowWaterDangers ? '1' : '0');

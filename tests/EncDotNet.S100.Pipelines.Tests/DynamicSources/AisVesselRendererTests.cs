@@ -1,5 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui.Nts;
 using Mapsui.Styles;
@@ -21,7 +22,7 @@ public class AisVesselRendererTests
         Coordinates = new[] { (lat, lon) },
         Motion = headingDeg is null && sogKn == 0
             ? null
-            : new DynamicMotion { HeadingDeg = headingDeg, SpeedOverGroundKn = sogKn },
+            : new DynamicMotion { Heading = headingDeg is { } h ? Angle.FromDegrees(h) : null, SpeedOverGround = Speed.FromKnots(sogKn) },
         VesselGeometry = geometry,
         LastUpdated = DateTimeOffset.UtcNow,
     };

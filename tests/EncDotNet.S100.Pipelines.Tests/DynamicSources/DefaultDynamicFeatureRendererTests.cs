@@ -1,5 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using Mapsui.Nts;
 using NetTopologySuite.Geometries;
@@ -43,7 +44,7 @@ public class DefaultDynamicFeatureRendererTests
             Id = "ownship",
             GeometryType = GeometryType.Point,
             Coordinates = new[] { (47.6, -122.3) },
-            Motion = new DynamicMotion { HeadingDeg = 0, SpeedOverGroundKn = 10 },
+            Motion = new DynamicMotion { Heading = Angle.FromDegrees(0), SpeedOverGround = Speed.FromKnots(10) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
 
@@ -62,7 +63,7 @@ public class DefaultDynamicFeatureRendererTests
             Id = "stopped",
             GeometryType = GeometryType.Point,
             Coordinates = new[] { (47.6, -122.3) },
-            Motion = new DynamicMotion { HeadingDeg = 90, SpeedOverGroundKn = 0 },
+            Motion = new DynamicMotion { Heading = Angle.FromDegrees(90), SpeedOverGround = Speed.FromKnots(0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
 

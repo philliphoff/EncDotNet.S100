@@ -87,9 +87,10 @@ public sealed class DefaultDynamicFeatureRenderer : IDynamicFeatureRenderer
         var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
 
         // Optional heading vector first so the disc paints on top.
-        if (feature.Motion is { HeadingDeg: { } heading })
+        if (feature.Motion?.Heading is { } headingAngle)
         {
-            var sog = feature.Motion.SpeedOverGroundKn ?? 0.0;
+            var heading = headingAngle.TotalDegrees;
+            var sog = feature.Motion?.SpeedOverGround?.TotalKnots ?? 0.0;
             if (sog > 0.0)
             {
                 var distanceMetres = Math.Min(

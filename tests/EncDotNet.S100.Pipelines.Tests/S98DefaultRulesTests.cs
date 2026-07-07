@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using System.Globalization;
 using System.Linq;
 using EncDotNet.S100.Core;
@@ -113,7 +114,7 @@ public class S98DefaultRulesTests
         var s102 = SynthItem("s102-tile.h5", S98DisplayPlane.Bathymetry);
         var stack = new[] { areaItem, s102, lineItem };
 
-        var mariner = MarinerSettings.Default with { SafetyContour = 10.0 };
+        var mariner = MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) };
         var ruled = _auth.ApplyRules(
             stack,
             new[]

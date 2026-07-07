@@ -1,4 +1,5 @@
 using System.Threading;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 
@@ -80,9 +81,9 @@ internal sealed class SteerableOwnShipPositionProvider
         _time = time ?? TimeProvider.System;
         _lat = start.Latitude;
         _lon = start.Longitude;
-        _courseDeg = Normalize360(start.CourseOverGroundDeg ?? 0.0);
-        _speedMs = Math.Max(0.0, start.SpeedOverGroundMs ?? 0.0);
-        _headingDeg = start.HeadingDeg is { } h ? Normalize360(h) : null;
+        _courseDeg = Normalize360(start.CourseOverGround?.TotalDegrees ?? 0.0);
+        _speedMs = Math.Max(0.0, start.SpeedOverGround?.TotalMetresPerSecond ?? 0.0);
+        _headingDeg = start.Heading is { } h ? Normalize360(h.TotalDegrees) : null;
         _resumeSpeedMs = _speedMs;
         _current = Snapshot(start.Timestamp);
         _lastAdvanceUtc = start.Timestamp;
@@ -205,10 +206,10 @@ internal sealed class SteerableOwnShipPositionProvider
         => new(
             Latitude: _lat,
             Longitude: _lon,
-            CourseOverGroundDeg: _courseDeg,
-            SpeedOverGroundMs: _speedMs,
+            CourseOverGround: Angle.FromDegrees(_courseDeg),
+            SpeedOverGround: Speed.FromMetresPerSecond(_speedMs),
             Timestamp: timestamp,
-            HeadingDeg: _headingDeg);
+            Heading: _headingDeg is { } h ? Angle.FromDegrees(h) : null);
 
     // ---- IOwnShipHelm -------------------------------------------------
 

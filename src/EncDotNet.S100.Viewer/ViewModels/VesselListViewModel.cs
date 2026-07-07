@@ -512,7 +512,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         item.ShipTypeClass = AisShipTypeClass.Unknown;
         item.ShipTypeText = string.Empty;
 
-        var sogKn = ownFeature.Motion?.SpeedOverGroundKn;
+        var sogKn = ownFeature.Motion?.SpeedOverGround?.TotalKnots;
         UpdateMotion(item, ownFeature, sogKn);
         UpdateOwnShipHelmLabel(item);
 
@@ -600,7 +600,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         item.ShipTypeText = ResolveShipType(item.ShipTypeClass);
 
         var navStatus = GetAttribute<AisNavigationStatus>(feature, "navigationStatus");
-        var sogKn = feature.Motion?.SpeedOverGroundKn;
+        var sogKn = feature.Motion?.SpeedOverGround?.TotalKnots;
         item.StateText = ResolveState(navStatus, sogKn);
         item.HeaderSubtitle = string.Format(
             CultureInfo.CurrentCulture,
@@ -639,13 +639,13 @@ internal sealed class VesselListViewModel : ViewModelBase
 
     private static void UpdateMotion(VesselListItem item, DynamicFeature feature, double? sogKn)
     {
-        var heading = feature.Motion?.HeadingDeg;
+        var heading = feature.Motion?.Heading?.TotalDegrees;
         item.HasHeading = heading is { } h && !double.IsNaN(h);
         item.HeadingText = item.HasHeading
             ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_BearingFormat, NormaliseDegrees(heading!.Value))
             : null;
 
-        var course = feature.Motion?.CourseOverGroundDeg;
+        var course = feature.Motion?.CourseOverGround?.TotalDegrees;
         item.HasCourse = course is { } c && !double.IsNaN(c);
         item.CourseText = item.HasCourse
             ? string.Format(CultureInfo.CurrentCulture, Strings.Vessels_BearingFormat, NormaliseDegrees(course!.Value))

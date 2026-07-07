@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EncDotNet.S100.Quantities;
 using System.Globalization;
 using System.Linq;
 using EncDotNet.S100.DynamicSources;
@@ -77,9 +78,9 @@ public class VesselListViewModelTests
         {
             motion = new DynamicMotion
             {
-                SpeedOverGroundKn = sogKn,
-                HeadingDeg = headingDeg,
-                CourseOverGroundDeg = courseDeg,
+                SpeedOverGround = sogKn is { } s ? Speed.FromKnots(s) : null,
+                Heading = headingDeg is { } h ? Angle.FromDegrees(h) : null,
+                CourseOverGround = courseDeg is { } c ? Angle.FromDegrees(c) : null,
             };
         }
 

@@ -1,5 +1,6 @@
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
@@ -144,7 +145,7 @@ public class DynamicSourceHitTesterTests
                 BowOffsetMetres = 0,
                 PortOffsetMetres = 15,
             },
-            Motion = new DynamicMotion { HeadingDeg = 0 }, // bow north
+            Motion = new DynamicMotion { Heading = Angle.FromDegrees(0) }, // bow north
             LastUpdated = DateTimeOffset.UtcNow,
         };
         // 100 m south of antenna → mid-hull, well inside polygon, far

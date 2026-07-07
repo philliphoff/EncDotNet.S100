@@ -88,10 +88,9 @@ internal static class VesselSymbology
         var (ax, ay) = SphericalMercator.FromLonLat(lon, lat);
 
         var headingDeg =
-            feature.Motion?.HeadingDeg
-            ?? feature.Motion?.CourseOverGroundDeg;
+            (feature.Motion?.Heading ?? feature.Motion?.CourseOverGround)?.TotalDegrees;
 
-        var sogKn = feature.Motion?.SpeedOverGroundKn ?? 0.0;
+        var sogKn = feature.Motion?.SpeedOverGround?.TotalKnots ?? 0.0;
 
         // 1. Course / speed vector + arrowhead.
         if (headingDeg is { } heading && sogKn > 0.0)

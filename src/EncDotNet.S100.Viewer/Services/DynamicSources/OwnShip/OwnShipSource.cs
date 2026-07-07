@@ -35,11 +35,12 @@ namespace EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip;
 /// take effect without waiting for the next fix.
 /// </para>
 /// <para>
-/// Speed conversion: the provider supplies SOG in metres per second
-/// (the SI convention). The published
-/// <c>DynamicMotion.SpeedOverGroundKn</c> field is in knots —
-/// converted with the maritime factor 1 m/s ≈ 1.9438444924406
-/// kn (3600 / 1852).
+/// Motion units are carried end to end by strongly typed quantities
+/// (<see cref="EncDotNet.S100.Quantities.Angle"/>,
+/// <see cref="EncDotNet.S100.Quantities.Speed"/>): the provider's
+/// <c>OwnShipPosition</c> and the published <c>DynamicMotion</c> both
+/// use them, so this source forwards course, heading, and speed with
+/// no unit conversion.
 /// </para>
 /// <para>
 /// <see cref="IsEnabled"/> is the toggle backing the viewer toolbar
@@ -56,9 +57,6 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
 
     /// <summary>Renderer-dispatch hint published on the feature.</summary>
     public const string FeatureKind = "ownship";
-
-    /// <summary>1 m/s expressed in knots (3600 / 1852).</summary>
-    internal const double MetresPerSecondToKnots = 3600.0 / 1852.0;
 
     private static readonly IReadOnlyList<DynamicFeature> EmptyFeatures = Array.Empty<DynamicFeature>();
 
@@ -249,18 +247,16 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
         // provider supplies no heading we mirror COG → Heading so the
         // default renderer's predictor line still draws — a COG-only
         // driver behaves exactly as before.
-        var headingDeg = fix.HeadingDeg ?? fix.CourseOverGroundDeg;
+        var heading = fix.Heading ?? fix.CourseOverGround;
         var motion =
-            fix.CourseOverGroundDeg is null && fix.SpeedOverGroundMs is null
-                && fix.HeadingDeg is null
+            fix.CourseOverGround is null && fix.SpeedOverGround is null
+                && fix.Heading is null
                 ? null
                 : new DynamicMotion
                 {
-                    CourseOverGroundDeg = fix.CourseOverGroundDeg,
-                    HeadingDeg = headingDeg,
-                    SpeedOverGroundKn = fix.SpeedOverGroundMs is { } ms
-                        ? ms * MetresPerSecondToKnots
-                        : null,
+                    CourseOverGround = fix.CourseOverGround,
+                    Heading = heading,
+                    SpeedOverGround = fix.SpeedOverGround,
                 };
 
         return new DynamicFeature

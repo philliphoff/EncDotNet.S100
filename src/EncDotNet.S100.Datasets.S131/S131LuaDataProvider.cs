@@ -63,7 +63,7 @@ public sealed class S131LuaDataProvider : ILuaDataProvider
     /// The FC code on success, or <see langword="null"/> when
     /// <paramref name="featureRef"/> cannot be resolved.
     /// </returns>
-    public string? TryGetFeatureTypeCode(string featureRef)
+    public string? GetFeatureTypeCode(string featureRef)
     {
         if (string.IsNullOrEmpty(featureRef)) return null;
 

@@ -575,8 +575,8 @@ public partial class App : Application
                 start: new EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipPosition(
                     Latitude: 50.8,
                     Longitude: -1.3,
-                    CourseOverGroundDeg: 90.0,
-                    SpeedOverGroundMs: 5.0,
+                    CourseOverGround: EncDotNet.S100.Quantities.Angle.FromDegrees(90.0),
+                    SpeedOverGround: EncDotNet.S100.Quantities.Speed.FromMetresPerSecond(5.0),
                     Timestamp: DateTimeOffset.UtcNow),
                 cadence: TimeSpan.FromSeconds(1)));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(sp =>

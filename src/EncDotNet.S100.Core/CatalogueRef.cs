@@ -77,5 +77,14 @@ public readonly record struct CatalogueRef
     }
 
     /// <summary>Returns the canonical <c>"S-NNN@M.m.c"</c> form.</summary>
+    /// <remarks>
+    /// The <c>@</c> separator is chosen deliberately to distinguish a
+    /// <see cref="CatalogueRef"/> string from a <see cref="SpecRef"/> string,
+    /// which uses <c>/</c> (see <see cref="SpecRef.ToString"/>). Keeping the two
+    /// forms visually distinct makes log lines and diagnostics unambiguous even
+    /// though both <see cref="Parse"/> methods tolerate either separator on
+    /// input. Do not align these separators without also updating the
+    /// "distinguish from SpecRef" round-trip tests.
+    /// </remarks>
     public override string ToString() => $"{Name}@{Version}";
 }

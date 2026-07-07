@@ -228,7 +228,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// when <paramref name="featureRef"/> cannot be parsed or the
     /// record is not present.
     /// </returns>
-    public string? TryGetFeatureTypeCode(string featureRef)
+    public string? GetFeatureTypeCode(string featureRef)
     {
         if (string.IsNullOrEmpty(featureRef)) return null;
         // Lua marshals doubles as e.g. "12345" or "12345.0"; trim the
