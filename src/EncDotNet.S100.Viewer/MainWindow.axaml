@@ -30,6 +30,7 @@
 
     <shadui:Window.Resources>
         <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
+        <SolidColorBrush x:Key="AccentSubtleBrush" Color="#33007ACC" />
     </shadui:Window.Resources>
 
     <shadui:Window.DataTemplates>

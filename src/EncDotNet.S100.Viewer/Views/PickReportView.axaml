@@ -182,14 +182,14 @@
              see exactly which token they are inspecting for its tooltip. The
              base Background is set via a style (not a local value) so the
              :pointerover setter can override it — in Avalonia a locally-set
-             property beats a style setter. A literal semi-transparent accent
-             is used because the AccentBrush resource is scoped to the window,
-             not this control. -->
+             property beats a style setter. The highlight uses the
+             window-scoped AccentSubtleBrush so it tracks the user's
+             configurable accent, including the muted Dusk/Night variants. -->
         <Style Selector="Border.eggCell">
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.eggCell:pointerover">
-            <Setter Property="Background" Value="#33007ACC" />
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
     </UserControl.Styles>
 
