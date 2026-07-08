@@ -1,6 +1,10 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -64,5 +68,45 @@ public partial class PickReportView : UserControl
         {
             // Best-effort; clipboard access can fail on some Linux WMs.
         }
+    }
+
+    // Egg-code value hover: surface the value's meaning in the description
+    // region below the egg instead of a per-cell tooltip (which would obscure
+    // neighbouring values the mariner may want to compare).
+    private void OnEggCellPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: IceEggValue value }
+            && DataContext is PickReportViewModel { SelectedEggCode: { } egg })
+        {
+            egg.HoveredDescription = BuildEggValueDescription(value);
+        }
+    }
+
+    private void OnEggCellPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is PickReportViewModel { SelectedEggCode: { } egg })
+            egg.HoveredDescription = null;
+    }
+
+    private static string BuildEggValueDescription(IceEggValue value)
+    {
+        // Compose "symbol value — meaning", e.g. "Sb 85 — Grey-White Ice" or,
+        // for a value with no Feature-Catalogue definition, "Ct 90 — Total
+        // concentration". The positional symbol carries the WMO subscript so
+        // the role label stays terse.
+        var meaning = value.Definition;
+        if (string.IsNullOrWhiteSpace(meaning))
+        {
+            meaning = EggCodeRoleTooltipConverter.Instance.Convert(
+                value.Role, typeof(string), null, Strings.Culture) as string;
+        }
+
+        var head = string.IsNullOrEmpty(value.Symbol)
+            ? value.Text
+            : $"{value.Symbol} {value.Text}";
+
+        return string.IsNullOrWhiteSpace(meaning)
+            ? head
+            : $"{head} — {meaning}";
     }
 }

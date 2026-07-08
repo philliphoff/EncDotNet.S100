@@ -171,6 +171,9 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
             PartialConcentrations = DefineRow(egg.PartialConcentrations),
             StagesOfDevelopment = DefineRow(egg.StagesOfDevelopment),
             FormsOfIce = DefineRow(egg.FormsOfIce),
+            TrailingPartialConcentrations = DefineRow(egg.TrailingPartialConcentrations),
+            TrailingStagesOfDevelopment = DefineRow(egg.TrailingStagesOfDevelopment),
+            TrailingFormsOfIce = DefineRow(egg.TrailingFormsOfIce),
             Annotations = DefineRow(egg.Annotations),
         };
     }

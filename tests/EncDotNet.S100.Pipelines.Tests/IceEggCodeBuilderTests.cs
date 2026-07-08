@@ -28,11 +28,12 @@ public class IceEggCodeBuilderTests
         Assert.Equal(new[] { "91", "87", "85" }, Texts(egg.StagesOfDevelopment));
         Assert.Equal(new[] { "5", "4", "4" }, Texts(egg.FormsOfIce));
 
-        // Fourth thinner class reported outside: Sd 95 and partial 4.
-        var stageOut = egg.Annotations.Single(a => a.Role == IceEggValueRole.ThinnerStage);
-        var partialOut = egg.Annotations.Single(a => a.Role == IceEggValueRole.ThinnerPartial);
-        Assert.Equal("95", stageOut.Text);
-        Assert.Equal("4", partialOut.Text);
+        // Fourth thinner class reported outside the oval to the right: Sd 95,
+        // Se 99; Cd 4, Ce 4.
+        Assert.Equal(new[] { "95", "99" }, Texts(egg.TrailingStagesOfDevelopment));
+        Assert.Equal(new[] { "4", "4" }, Texts(egg.TrailingPartialConcentrations));
+        Assert.Equal(new[] { "4", "5" }, Texts(egg.TrailingFormsOfIce));
+        Assert.Empty(egg.Annotations);
         Assert.False(egg.ConcentrationRowFolded);
     }
 
@@ -72,17 +73,20 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
-    public void Build_MaxThreeTypes_CallsOutFourthStageOutside()
+    public void Build_MaxThreeTypes_FlanksFourthClassOutside()
     {
-        // Variation C: 4th thinner class exists; only 3 ride in the oval, Sd outside.
+        // Variation C: 4th thinner class exists; only 3 ride in the oval, the
+        // 4th (Sd/Cd) flanks the row outside on the right.
         var egg = IceEggCodeBuilder.Build("7", "[1, 1, 3, 2]", "[7, 5, 4, 1]", "[3, 3, 2]");
 
         Assert.NotNull(egg);
         Assert.Equal(new[] { "1", "1", "3" }, Texts(egg!.PartialConcentrations));
         Assert.Equal(new[] { "7", "5", "4" }, Texts(egg.StagesOfDevelopment));
         Assert.Equal(new[] { "3", "3", "2" }, Texts(egg.FormsOfIce));
-        Assert.Equal("1", egg.Annotations.Single(a => a.Role == IceEggValueRole.ThinnerStage).Text);
-        Assert.Equal("2", egg.Annotations.Single(a => a.Role == IceEggValueRole.ThinnerPartial).Text);
+        Assert.Equal(new[] { "1" }, Texts(egg.TrailingStagesOfDevelopment));
+        Assert.Equal(new[] { "2" }, Texts(egg.TrailingPartialConcentrations));
+        Assert.Empty(egg.TrailingFormsOfIce);
+        Assert.Empty(egg.Annotations);
     }
 
     [Theory]
@@ -142,12 +146,44 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
-    public void Build_SnowDepth_SurfacesAsAnnotation()
+    public void Build_QuotedListTokens_StripsSurroundingQuotes()
     {
-        var egg = IceEggCodeBuilder.Build("7", "[7]", "[7]", "[5]", snowDepthCm: 12.5);
+        // Python-list-style producers quote non-numeric SIGRID-3 tokens; the
+        // quotes are serialisation artefacts and must not reach the diagram.
+        var egg = IceEggCodeBuilder.Build("9", "['9+', 'X']", "[91, 95]", "['4-6', \"7\"]");
 
         Assert.NotNull(egg);
-        var snow = egg!.Annotations.Single(a => a.Role == IceEggValueRole.SnowDepth);
-        Assert.Equal("12.5", snow.Text);
+        Assert.Equal(new[] { "9+", "X" }, Texts(egg!.PartialConcentrations));
+        Assert.Equal(new[] { "4-6", "7" }, Texts(egg.FormsOfIce));
+    }
+
+    [Fact]
+    public void Build_AssignsWmoPositionalSymbols()
+    {
+        var egg = IceEggCodeBuilder.Build("90", "[30, 30, 20, 10]", "[87, 85, 84, 99]", "[7, 6, 5]");
+
+        Assert.NotNull(egg);
+        Assert.Equal("Ct", egg!.TotalConcentration!.Symbol);
+        Assert.Equal(new[] { "Ca", "Cb", "Cc" }, egg.PartialConcentrations.Select(v => v.Symbol));
+        Assert.Equal(new[] { "Sa", "Sb", "Sc" }, egg.StagesOfDevelopment.Select(v => v.Symbol));
+        Assert.Equal(new[] { "Fa", "Fb", "Fc" }, egg.FormsOfIce.Select(v => v.Symbol));
+        Assert.Equal(new[] { "Sd" }, egg.TrailingStagesOfDevelopment.Select(v => v.Symbol));
+        Assert.Equal(new[] { "Cd" }, egg.TrailingPartialConcentrations.Select(v => v.Symbol));
+    }
+
+    [Fact]
+    public void Build_FifthClass_FlanksWithEForAllRows()
+    {
+        // Five ice types: 4th and 5th (d, e) flank each row on the right.
+        var egg = IceEggCodeBuilder.Build(
+            "90", "[40, 30, 20, 7, 3]", "[87, 85, 84, 91, 95]", "[7, 6, 5, 4, 2]");
+
+        Assert.NotNull(egg);
+        Assert.Equal(new[] { "Cd", "Ce" }, egg!.TrailingPartialConcentrations.Select(v => v.Symbol));
+        Assert.Equal(new[] { "7", "3" }, Texts(egg.TrailingPartialConcentrations));
+        Assert.Equal(new[] { "Sd", "Se" }, egg.TrailingStagesOfDevelopment.Select(v => v.Symbol));
+        Assert.Equal(new[] { "91", "95" }, Texts(egg.TrailingStagesOfDevelopment));
+        Assert.Equal(new[] { "Fd", "Fe" }, egg.TrailingFormsOfIce.Select(v => v.Symbol));
+        Assert.Equal(new[] { "4", "2" }, Texts(egg.TrailingFormsOfIce));
     }
 }

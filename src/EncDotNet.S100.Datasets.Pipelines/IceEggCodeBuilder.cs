@@ -19,10 +19,12 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </para>
 /// <para>
 /// The oval carries at most three ice types (ordered by decreasing thickness as
-/// supplied); a fourth, thinner class surfaces as
-/// <see cref="IceEggValueRole.ThinnerStage"/> /
-/// <see cref="IceEggValueRole.ThinnerPartial"/> annotations. Any values beyond
-/// the fourth are dropped, matching WMO / SIGRID-3 egg-code conventions
+/// supplied); thinner fourth and fifth classes surface as trailing values
+/// rendered outside the oval, to the right of their row
+/// (<see cref="IceEggCode.TrailingPartialConcentrations"/>,
+/// <see cref="IceEggCode.TrailingStagesOfDevelopment"/>,
+/// <see cref="IceEggCode.TrailingFormsOfIce"/>) with WMO subscripts
+/// <c>d</c>/<c>e</c>, matching WMO / SIGRID-3 egg-code conventions
 /// (S-411 Edition 1.2.1 Annex A).
 /// </para>
 /// </remarks>
@@ -61,7 +63,7 @@ public static class IceEggCodeBuilder
 
         var totalValue = total is null
             ? null
-            : new IceEggValue { Text = total, Role = IceEggValueRole.TotalConcentration, SourceCode = "iceact" };
+            : new IceEggValue { Text = total, Role = IceEggValueRole.TotalConcentration, SourceCode = "iceact", Symbol = "Ct" };
 
         // Open water / no ice: total is zero and nothing else is present. By
         // convention the oval is omitted and only Ct (0) is shown.
@@ -84,17 +86,18 @@ public static class IceEggCodeBuilder
         // merely repeat Ct); otherwise carry up to three partials in the oval.
         var partialRow = singleType
             ? ImmutableArray<IceEggValue>.Empty
-            : TakeRow(partials, IceEggValueRole.PartialConcentration, "iceapc");
+            : TakeRow(partials, IceEggValueRole.PartialConcentration, "iceapc", 'C');
 
-        var stageRow = TakeRow(stages, IceEggValueRole.StageOfDevelopment, "icesod");
-        var formRow = TakeRow(forms, IceEggValueRole.FormOfIce, "iceflz");
+        var stageRow = TakeRow(stages, IceEggValueRole.StageOfDevelopment, "icesod", 'S');
+        var formRow = TakeRow(forms, IceEggValueRole.FormOfIce, "iceflz", 'F');
 
-        // The fourth, thinner class cannot ride in the oval; surface its stage
-        // and partial concentration as outside annotations.
-        if (stages.Count > MaxOvalTypes)
-            annotations.Add(new IceEggValue { Text = stages[MaxOvalTypes], Role = IceEggValueRole.ThinnerStage, SourceCode = "icesod" });
-        if (partials.Count > MaxOvalTypes)
-            annotations.Add(new IceEggValue { Text = partials[MaxOvalTypes], Role = IceEggValueRole.ThinnerPartial, SourceCode = "iceapc" });
+        // The thinner fourth / fifth classes cannot ride in the oval; surface
+        // them to the right of their respective rows (Cd/Ce, Sd/Se, Fd/Fe).
+        var partialTrailing = singleType
+            ? ImmutableArray<IceEggValue>.Empty
+            : TakeTrailing(partials, IceEggValueRole.PartialConcentration, "iceapc", 'C');
+        var stageTrailing = TakeTrailing(stages, IceEggValueRole.StageOfDevelopment, "icesod", 'S');
+        var formTrailing = TakeTrailing(forms, IceEggValueRole.FormOfIce, "iceflz", 'F');
 
         if (traceOfIce)
             annotations.Add(new IceEggValue { Text = string.Empty, Role = IceEggValueRole.TraceOfIce });
@@ -114,13 +117,16 @@ public static class IceEggCodeBuilder
             PartialConcentrations = partialRow,
             StagesOfDevelopment = stageRow,
             FormsOfIce = formRow,
+            TrailingPartialConcentrations = partialTrailing,
+            TrailingStagesOfDevelopment = stageTrailing,
+            TrailingFormsOfIce = formTrailing,
             Annotations = annotations.ToImmutable(),
             ConcentrationRowFolded = singleType,
         };
     }
 
     private static ImmutableArray<IceEggValue> TakeRow(
-        IReadOnlyList<string> tokens, IceEggValueRole role, string sourceCode)
+        IReadOnlyList<string> tokens, IceEggValueRole role, string sourceCode, char symbolPrefix)
     {
         if (tokens.Count == 0)
             return ImmutableArray<IceEggValue>.Empty;
@@ -128,7 +134,39 @@ public static class IceEggCodeBuilder
         var take = Math.Min(MaxOvalTypes, tokens.Count);
         var builder = ImmutableArray.CreateBuilder<IceEggValue>(take);
         for (var i = 0; i < take; i++)
-            builder.Add(new IceEggValue { Text = tokens[i], Role = role, SourceCode = sourceCode });
+            builder.Add(new IceEggValue
+            {
+                Text = tokens[i],
+                Role = role,
+                SourceCode = sourceCode,
+                // Positional WMO subscript: a, b, c for the first three types.
+                Symbol = $"{symbolPrefix}{(char)('a' + i)}",
+            });
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Collects the thinner classes beyond the three that fit the oval (indices
+    /// <see cref="MaxOvalTypes"/> and up), assigning positional WMO subscripts
+    /// (<c>d</c>, <c>e</c>, …). These render outside the oval to the right of
+    /// their row.
+    /// </summary>
+    private static ImmutableArray<IceEggValue> TakeTrailing(
+        IReadOnlyList<string> tokens, IceEggValueRole role, string sourceCode, char symbolPrefix)
+    {
+        if (tokens.Count <= MaxOvalTypes)
+            return ImmutableArray<IceEggValue>.Empty;
+
+        var builder = ImmutableArray.CreateBuilder<IceEggValue>(tokens.Count - MaxOvalTypes);
+        for (var i = MaxOvalTypes; i < tokens.Count; i++)
+            builder.Add(new IceEggValue
+            {
+                Text = tokens[i],
+                Role = role,
+                SourceCode = sourceCode,
+                // Positional WMO subscript: d, e, … for classes 4, 5, …
+                Symbol = $"{symbolPrefix}{(char)('a' + i)}",
+            });
         return builder.ToImmutable();
     }
 
@@ -173,6 +211,26 @@ public static class IceEggCodeBuilder
         if (parts.Length <= 1 && trimmed.IndexOf(' ') >= 0)
             parts = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        return parts.Where(static p => p.Length > 0).ToArray();
+        return parts
+            .Select(StripQuotes)
+            .Where(static p => p.Length > 0)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Strips a single pair of surrounding straight quotes from a token.
+    /// Python-list-style producers quote non-numeric SIGRID-3 tokens (e.g.
+    /// <c>'9+'</c>, <c>'X'</c>, <c>'4-6'</c>); the quotes are serialisation
+    /// artefacts and must not appear in the egg diagram.
+    /// </summary>
+    private static string StripQuotes(string token)
+    {
+        if (token.Length >= 2
+            && (token[0] == '\'' || token[0] == '"')
+            && token[^1] == token[0])
+        {
+            return token[1..^1].Trim();
+        }
+        return token;
     }
 }

@@ -273,8 +273,8 @@ public class PickReportViewModelTests
         Assert.NotNull(vm.SelectedEggCode);
         Assert.Equal("70", vm.SelectedEggCode!.TotalConcentration!.Text);
         Assert.Equal(3, vm.SelectedEggCode.PartialConcentrations.Count);
-        Assert.Equal("95", vm.SelectedEggCode.ThinnerStage!.Text);
-        Assert.Equal("4", vm.SelectedEggCode.ThinnerPartial!.Text);
+        Assert.Equal(new[] { "95", "99" }, vm.SelectedEggCode.TrailingStagesOfDevelopment.Select(v => v.Text));
+        Assert.Equal(new[] { "4", "4" }, vm.SelectedEggCode.TrailingPartialConcentrations.Select(v => v.Text));
     }
 
     [Fact]

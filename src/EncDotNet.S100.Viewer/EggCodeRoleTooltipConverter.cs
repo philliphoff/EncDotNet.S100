@@ -26,8 +26,6 @@ internal sealed class EggCodeRoleTooltipConverter : IValueConverter
             IceEggValueRole.PartialConcentration => Resources.Strings.Pick_EggCode_Role_PartialConcentration,
             IceEggValueRole.StageOfDevelopment => Resources.Strings.Pick_EggCode_Role_StageOfDevelopment,
             IceEggValueRole.FormOfIce => Resources.Strings.Pick_EggCode_Role_FormOfIce,
-            IceEggValueRole.ThinnerStage => Resources.Strings.Pick_EggCode_Role_ThinnerStage,
-            IceEggValueRole.ThinnerPartial => Resources.Strings.Pick_EggCode_Role_ThinnerPartial,
             IceEggValueRole.SnowDepth => Resources.Strings.Pick_EggCode_Role_SnowDepth,
             _ => null,
         };

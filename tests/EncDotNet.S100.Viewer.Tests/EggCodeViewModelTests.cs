@@ -6,16 +6,18 @@ namespace EncDotNet.S100.Viewer.Tests;
 public class EggCodeViewModelTests
 {
     [Fact]
-    public void ThinnerSummary_CombinesStageAndPartialWithNotShownNote()
+    public void TrailingRows_ExposeFourthClassOutsideOval()
     {
         var egg = IceEggCodeBuilder.Build("70", "[30, 30, 10, 4]", "[91, 87, 85, 95]", "[5, 4, 4]")!;
 
         var vm = new EggCodeViewModel(egg);
 
-        Assert.True(vm.ShowThinnerSummary);
-        Assert.Contains("Sd 95", vm.ThinnerSummary);
-        Assert.Contains("4/10", vm.ThinnerSummary);
-        Assert.Contains("not shown", vm.ThinnerSummary);
+        Assert.True(vm.ShowTrailingStagesOfDevelopment);
+        Assert.Equal(new[] { "Sd" }, vm.TrailingStagesOfDevelopment.Select(v => v.Symbol));
+        Assert.Equal(new[] { "95" }, vm.TrailingStagesOfDevelopment.Select(v => v.Text));
+        Assert.True(vm.ShowTrailingPartialConcentrations);
+        Assert.Equal(new[] { "4" }, vm.TrailingPartialConcentrations.Select(v => v.Text));
+        Assert.False(vm.ShowTrailingFormsOfIce);
     }
 
     [Fact]
@@ -48,7 +50,6 @@ public class EggCodeViewModelTests
         var vm = new EggCodeViewModel(egg);
 
         Assert.False(vm.HasAnnotations);
-        Assert.Null(vm.ThinnerSummary);
         Assert.Null(vm.SnowSummary);
         Assert.Null(vm.TraceSummary);
     }

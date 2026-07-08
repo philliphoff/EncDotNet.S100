@@ -17,23 +17,11 @@ public enum IceEggValueRole
     /// <summary>Partial concentration of an ice type (<c>Ca</c>/<c>Cb</c>/<c>Cc</c>), second row.</summary>
     PartialConcentration,
 
-    /// <summary>Stage of development of an ice type (<c>Sa</c>/<c>Sb</c>/<c>So</c>), third row.</summary>
+    /// <summary>Stage of development of an ice type (<c>Sa</c>/<c>Sb</c>/<c>Sc</c>), third row.</summary>
     StageOfDevelopment,
 
-    /// <summary>Form of ice / floe size of an ice type (<c>Fa</c>/<c>Fb</c>/<c>Fp</c>), bottom row.</summary>
+    /// <summary>Form of ice / floe size of an ice type (<c>Fa</c>/<c>Fb</c>/<c>Fc</c>), bottom row.</summary>
     FormOfIce,
-
-    /// <summary>
-    /// Stage of development of a fourth, thinner ice class that the oval cannot
-    /// carry (<c>Sd</c>), reported beside the egg by convention.
-    /// </summary>
-    ThinnerStage,
-
-    /// <summary>
-    /// Partial concentration of the fourth, thinner ice class, reported beside
-    /// the egg by convention (rendered as <c>n/10</c>).
-    /// </summary>
-    ThinnerPartial,
 
     /// <summary>A trace of ice of land origin, flagged outside the oval (dots).</summary>
     TraceOfIce,
@@ -54,6 +42,16 @@ public sealed record IceEggValue
 
     /// <summary>Where this value belongs in the egg diagram.</summary>
     public required IceEggValueRole Role { get; init; }
+
+    /// <summary>
+    /// The WMO / SIGRID-3 positional symbol for this value (e.g. <c>"Ct"</c>,
+    /// <c>"Ca"</c>/<c>"Cb"</c>/<c>"Cc"</c>, <c>"Sa"</c>/<c>"Sb"</c>/<c>"Sc"</c>,
+    /// <c>"Fa"</c>/<c>"Fb"</c>/<c>"Fc"</c>, and <c>"Cd"</c>/<c>"Sd"</c>/<c>"Fd"</c>
+    /// and <c>"Ce"</c>/<c>"Se"</c>/<c>"Fe"</c> for the thinner fourth / fifth
+    /// classes reported outside the oval), or <c>null</c> for values without a
+    /// positional symbol (S-411 Edition 1.2.1 Annex A; WMO No. 259).
+    /// </summary>
+    public string? Symbol { get; init; }
 
     /// <summary>
     /// The S-411 source attribute code the value came from (e.g. <c>"iceact"</c>,
@@ -78,10 +76,13 @@ public sealed record IceEggValue
 /// <remarks>
 /// <para>
 /// The egg carries at most three ice types in the oval, ordered by decreasing
-/// thickness. A fourth, thinner class (when present) is not drawn inside the
-/// oval; its stage and partial concentration surface through
-/// <see cref="Annotations"/> instead (S-411 Edition 1.2.1 Annex A; WMO No. 259
-/// / SIGRID-3 egg-code conventions).
+/// thickness. Thinner fourth / fifth classes (when present) are not drawn
+/// inside the oval; each row's fourth / fifth stage, partial concentration and
+/// floe size surface through <see cref="TrailingStagesOfDevelopment"/>,
+/// <see cref="TrailingPartialConcentrations"/> and
+/// <see cref="TrailingFormsOfIce"/> instead — rendered outside the oval to the
+/// right of their row (S-411 Edition 1.2.1 Annex A; WMO No. 259 / SIGRID-3
+/// egg-code conventions).
 /// </para>
 /// <para>
 /// Special cases the model represents: a single ice type folds the
@@ -111,16 +112,37 @@ public sealed record IceEggCode
     /// </summary>
     public ImmutableArray<IceEggValue> PartialConcentrations { get; init; } = ImmutableArray<IceEggValue>.Empty;
 
-    /// <summary>Stages of development (<c>Sa Sb So</c>), at most three.</summary>
+    /// <summary>Stages of development (<c>Sa Sb Sc</c>), at most three.</summary>
     public ImmutableArray<IceEggValue> StagesOfDevelopment { get; init; } = ImmutableArray<IceEggValue>.Empty;
 
-    /// <summary>Forms of ice / floe sizes (<c>Fa Fb Fp</c>), at most three.</summary>
+    /// <summary>Forms of ice / floe sizes (<c>Fa Fb Fc</c>), at most three.</summary>
     public ImmutableArray<IceEggValue> FormsOfIce { get; init; } = ImmutableArray<IceEggValue>.Empty;
 
     /// <summary>
-    /// Values reported outside the oval by convention: the thinner fourth-class
-    /// stage / partial concentration, a trace of ice of land origin, and snow
-    /// depth. Ordered for display.
+    /// Partial concentrations of the thinner fourth / fifth ice classes
+    /// (<c>Cd Ce</c>) that do not fit the oval. Rendered outside the oval to the
+    /// right of the <see cref="PartialConcentrations"/> row (S-411 Ed 1.2.1
+    /// Annex A; WMO No. 259 egg-code convention).
+    /// </summary>
+    public ImmutableArray<IceEggValue> TrailingPartialConcentrations { get; init; } = ImmutableArray<IceEggValue>.Empty;
+
+    /// <summary>
+    /// Stages of development of the thinner fourth / fifth ice classes
+    /// (<c>Sd Se</c>), rendered outside the oval to the right of the
+    /// <see cref="StagesOfDevelopment"/> row.
+    /// </summary>
+    public ImmutableArray<IceEggValue> TrailingStagesOfDevelopment { get; init; } = ImmutableArray<IceEggValue>.Empty;
+
+    /// <summary>
+    /// Forms of ice / floe sizes of the thinner fourth / fifth ice classes
+    /// (<c>Fd Fe</c>), rendered outside the oval to the right of the
+    /// <see cref="FormsOfIce"/> row.
+    /// </summary>
+    public ImmutableArray<IceEggValue> TrailingFormsOfIce { get; init; } = ImmutableArray<IceEggValue>.Empty;
+
+    /// <summary>
+    /// Values reported outside the oval by convention: a trace of ice of land
+    /// origin and snow depth. Ordered for display below the egg.
     /// </summary>
     public ImmutableArray<IceEggValue> Annotations { get; init; } = ImmutableArray<IceEggValue>.Empty;
 
@@ -140,5 +162,8 @@ public sealed record IceEggCode
         && PartialConcentrations.IsEmpty
         && StagesOfDevelopment.IsEmpty
         && FormsOfIce.IsEmpty
+        && TrailingPartialConcentrations.IsEmpty
+        && TrailingStagesOfDevelopment.IsEmpty
+        && TrailingFormsOfIce.IsEmpty
         && Annotations.IsEmpty;
 }

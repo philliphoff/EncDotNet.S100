@@ -65,6 +65,55 @@ public class DataModelTests
         Assert.Empty(first.ExtraAttributes);
     }
 
+    [SkippableFact]
+    public void EggCodePermutations_Fixture_ProjectsEachVariant()
+    {
+        var dataset = Load("cis_seaice_eggcode_permutations.gml");
+        var inventory = S411SeaIceInventory.From(dataset, out var diagnostics);
+
+        // The only tolerated diagnostic is the int-parse of feature 9's
+        // undetermined "9+" total concentration; the egg control preserves the
+        // raw token verbatim regardless.
+        Assert.All(diagnostics, d => Assert.Equal("attribute.parse.int", d.Code));
+
+        // The showcase fixture carries nine <ice:seaice> egg-code variants.
+        var seaIce = inventory.IceFeatures.OfType<S411SeaIce>().ToList();
+        Assert.Equal(9, seaIce.Count);
+        Assert.All(seaIce, s => Assert.NotNull(s.EggCode));
+
+        // Feature 3: single ice type — a one-element partial list drives the
+        // folded-row behaviour in the egg control.
+        var single = seaIce[2].EggCode!;
+        Assert.Equal(50, single.TotalConcentration);
+        Assert.Equal("[50]", single.PartialConcentrationsRaw);
+
+        // Feature 4: four ice types — the fourth (thinner) class rides outside
+        // the oval; the raw list preserves all four tokens.
+        var fourClass = seaIce[3].EggCode!;
+        Assert.Equal("[30, 30, 20, 10]", fourClass.PartialConcentrationsRaw);
+        Assert.Equal("[87, 85, 84, 99]", fourClass.StagesOfDevelopmentRaw);
+
+        // Feature 6: snow depth surfaces as an outside annotation.
+        var snow = seaIce[5].EggCode!;
+        Assert.Equal(12.5, snow.SnowDepth);
+
+        // Feature 7: missing form-of-ice row — the egg omits that row.
+        var noForm = seaIce[6].EggCode!;
+        Assert.Null(noForm.FormsOfIceRaw);
+        Assert.Equal("[91, 85]", noForm.StagesOfDevelopmentRaw);
+
+        // Feature 8: open water — total concentration zero, no other values.
+        var openWater = seaIce[7].EggCode!;
+        Assert.Equal(0, openWater.TotalConcentration);
+        Assert.Null(openWater.PartialConcentrationsRaw);
+        Assert.Null(openWater.StagesOfDevelopmentRaw);
+        Assert.Null(openWater.FormsOfIceRaw);
+
+        // Feature 9: undetermined tokens are preserved verbatim.
+        var undetermined = seaIce[8].EggCode!;
+        Assert.Equal("['9+', 'X']", undetermined.PartialConcentrationsRaw);
+    }
+
     // ── IHO 1.2.1 sample shape ─────────────────────────────────────────
 
     [SkippableFact]
