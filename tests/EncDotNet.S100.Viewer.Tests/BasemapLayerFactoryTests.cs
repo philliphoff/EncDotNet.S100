@@ -14,13 +14,13 @@ public class BasemapLayerFactoryTests
     [Fact]
     public void None_ReturnsNull()
     {
-        Assert.Null(BasemapLayerFactory.Create(BasemapMode.None));
+        Assert.Null(BasemapLayerFactory.TryCreate(BasemapMode.None));
     }
 
     [Fact]
     public void Offline_BuildsMemoryLayerWithLandFeatures()
     {
-        var layer = BasemapLayerFactory.Create(BasemapMode.Offline);
+        var layer = BasemapLayerFactory.TryCreate(BasemapMode.Offline);
 
         var memory = Assert.IsType<MemoryLayer>(layer);
         Assert.NotEmpty(memory.Features);
@@ -29,7 +29,7 @@ public class BasemapLayerFactoryTests
     [Fact]
     public void Online_BuildsTileLayer()
     {
-        var layer = BasemapLayerFactory.Create(BasemapMode.Online);
+        var layer = BasemapLayerFactory.TryCreate(BasemapMode.Online);
 
         Assert.NotNull(layer);
         Assert.IsType<Mapsui.Tiling.Layers.TileLayer>(layer);

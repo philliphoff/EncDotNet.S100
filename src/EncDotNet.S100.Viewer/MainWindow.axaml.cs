@@ -250,7 +250,7 @@ public partial class MainWindow : ShadUI.Window
         // land — zero network); the user can switch to None or Online in
         // Settings (or via --basemap). Keep a reference so swapping mode
         // can replace it live. Always sits at index 0, beneath datasets.
-        _basemapLayer = BasemapLayerFactory.Create(_viewModel.Settings.SelectedBasemapMode);
+        _basemapLayer = BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode);
         if (_basemapLayer is not null)
         {
             MapControl.Map?.Layers.Add(_basemapLayer);
@@ -661,7 +661,7 @@ public partial class MainWindow : ShadUI.Window
             _basemapLayer = null;
         }
 
-        _basemapLayer = BasemapLayerFactory.Create(mode);
+        _basemapLayer = BasemapLayerFactory.TryCreate(mode);
         if (_basemapLayer is not null)
         {
             map.Layers.Insert(0, _basemapLayer);

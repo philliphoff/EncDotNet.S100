@@ -30,7 +30,7 @@ internal static class BasemapLayerFactory
     /// Creates the basemap layer for <paramref name="mode"/>, or null for
     /// <see cref="BasemapMode.None"/>.
     /// </summary>
-    public static ILayer? Create(BasemapMode mode) => mode switch
+    public static ILayer? TryCreate(BasemapMode mode) => mode switch
     {
         BasemapMode.Online => CreateOnlineLayer(),
         BasemapMode.Offline => CreateOfflineLayer(),

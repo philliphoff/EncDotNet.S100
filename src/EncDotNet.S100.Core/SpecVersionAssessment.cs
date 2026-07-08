@@ -100,7 +100,7 @@ public sealed record SpecVersionAssessment
     /// The resolved catalogue identity for informational display, or
     /// <c>null</c> when unknown.
     /// </param>
-    public static SpecVersionAssessment? Create(
+    public static SpecVersionAssessment? TryCreate(
         SpecRef declared,
         IReadOnlyList<SpecVersion> supported,
         CatalogueRef? catalogue = null)

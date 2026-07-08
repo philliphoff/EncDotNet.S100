@@ -143,7 +143,36 @@ Rules of thumb:
   externally-authored data and swallowing-with-a-report beats aborting the
   whole projection.
 
-## 4. Migration recipe (Immutable → read-only)
+## 4. Construction and factory methods
+
+Pick a construction entry point by intent, and name it so the caller knows
+whether it can fail:
+
+| Form | Use for | Examples |
+|---|---|---|
+| Public constructor / `required init` object initializer / positional record | plain value or model data whose construction cannot fail | `BoundingBox`, `Viewport`, most records |
+| `static From<Unit>(…)` | a **unit or value conversion** into the type | `Length.FromMetres`, `Depth.FromFathoms`, `Angle.FromDegrees`, `RgbaColor.FromHex` |
+| `static From<Source>(…)` | **adapting/parsing** another representation into the type | `S101Dataset.FromDocument`, `S100FeatureCatalogue.FromStream`, `GridRegion.FromViewport` |
+| `static Create(…)` | **infallible** construction of a service/wrapper (often composing dependencies) | `McpServerTool.Create`, `FileSystemAssetSource.Create`, `S100PipelineHost.Create` |
+| `static TryCreate(…)` returning `T?` | construction that **can legitimately fail** and returns `null` instead of throwing | `SpecVersionAssessment.TryCreate`, `TimeAwareDatasetFactory.TryCreate`, `BasemapLayerFactory.TryCreate` |
+| `static Default` / `static Empty` | the canonical or empty singleton of an immutable type | `ColorPalette.Default`, `ValidationRuleSet<T>.Default`, `ValidationReport.Empty` |
+
+Rules:
+
+- **`Create` must not return `null`.** If a factory can fail or yield nothing,
+  name it `TryCreate` and return `T?` (this repo uses the nullable-return
+  `TryCreate` shape rather than a `bool TryCreate(out T)` for reference types).
+  `From<X>` methods *may* return `null` when the source genuinely carries no
+  value (e.g. `ChromeTheme.FromVariant(null)`), but document that case on the
+  method.
+- **`Default` vs `Empty`:** `Default` is "the standard instance"; `Empty` is
+  "the zero-element instance." Don't use one to mean the other.
+- Prefer **one** construction style per shape and stay with it; do not offer a
+  constructor *and* a `Create` that do the same thing.
+- Keep the .NET `From*` / `Default` / `Empty` vocabulary — do not invent terser
+  factory names.
+
+## 5. Migration recipe (Immutable → read-only)
 
 When converting a file:
 
