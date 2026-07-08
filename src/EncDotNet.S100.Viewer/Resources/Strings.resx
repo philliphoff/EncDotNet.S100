@@ -732,6 +732,10 @@
     <value>Hover any value in the egg for its definition.</value>
     <comment>Hint shown below the egg-code diagram.</comment>
   </data>
+  <data name="Pick_EggCode_HoverLine" xml:space="preserve">
+    <value>{0} — {1}</value>
+    <comment>Hover description line below the egg; {0} is the symbol/value and {1} is its definition.</comment>
+  </data>
   <data name="Pick_EggCode_Role_TotalConcentration" xml:space="preserve">
     <value>Total concentration</value>
     <comment>Hover role label for the top row of the egg.</comment>

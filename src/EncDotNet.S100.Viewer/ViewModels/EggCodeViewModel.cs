@@ -54,20 +54,12 @@ internal sealed class EggCodeViewModel : INotifyPropertyChanged
                 return;
             _hoveredDescription = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(HoveredDescriptionDisplay));
             OnPropertyChanged(nameof(IsHoveringValue));
         }
     }
 
     /// <summary>True when the pointer is over an egg-code value.</summary>
     public bool IsHoveringValue => _hoveredDescription is not null;
-
-    /// <summary>
-    /// Text for the description region: the hovered value's meaning, or the
-    /// hover hint when no value is under the pointer.
-    /// </summary>
-    public string HoveredDescriptionDisplay =>
-        _hoveredDescription ?? Resources.Strings.Pick_EggCode_HoverHint;
 
     /// <summary>Top-row total concentration (<c>Ct</c>), or <c>null</c>.</summary>
     public IceEggValue? TotalConcentration { get; }

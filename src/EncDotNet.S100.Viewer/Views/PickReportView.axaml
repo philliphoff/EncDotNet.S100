@@ -152,7 +152,8 @@
         <!--
             One value cell inside the egg diagram. The raw token is centered
             and its semantic role (total/partial concentration, stage of
-            development, form of ice) is exposed as the hover tooltip.
+            development, form of ice) updates the below-egg description region
+            while hovered.
         -->
         <DataTemplate x:Key="EggValueCellTemplate" x:DataType="pp:IceEggValue">
             <Border Classes="eggCell"

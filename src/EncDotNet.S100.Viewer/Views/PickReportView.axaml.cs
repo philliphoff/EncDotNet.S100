@@ -90,10 +90,8 @@ public partial class PickReportView : UserControl
 
     private static string BuildEggValueDescription(IceEggValue value)
     {
-        // Compose "symbol value — meaning", e.g. "Sb 85 — Grey-White Ice" or,
-        // for a value with no Feature-Catalogue definition, "Ct 90 — Total
-        // concentration". The positional symbol carries the WMO subscript so
-        // the role label stays terse.
+        // Compose the localized "symbol value — meaning" line. The positional
+        // symbol carries the WMO subscript so the role label stays terse.
         var meaning = value.Definition;
         if (string.IsNullOrWhiteSpace(meaning))
         {
@@ -107,6 +105,6 @@ public partial class PickReportView : UserControl
 
         return string.IsNullOrWhiteSpace(meaning)
             ? head
-            : $"{head} — {meaning}";
+            : string.Format(Strings.Culture, Strings.Pick_EggCode_HoverLine, head, meaning);
     }
 }
