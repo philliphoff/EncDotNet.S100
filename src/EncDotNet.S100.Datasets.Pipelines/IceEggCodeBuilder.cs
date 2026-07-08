@@ -41,15 +41,13 @@ public static class IceEggCodeBuilder
     /// <param name="stagesOfDevelopmentRaw">Raw <c>icesod</c> value (list-style or scalar).</param>
     /// <param name="formsOfIceRaw">Raw <c>iceflz</c> value (list-style or scalar).</param>
     /// <param name="snowDepthCm">Optional snow depth in centimetres (<c>snowDepth</c>).</param>
-    /// <param name="traceOfIce">Whether a trace of ice of land origin should be flagged outside the oval.</param>
     /// <returns>The projected egg code, or <c>null</c> when every component is empty.</returns>
     public static IceEggCode? Build(
         string? totalConcentrationRaw,
         string? partialConcentrationsRaw,
         string? stagesOfDevelopmentRaw,
         string? formsOfIceRaw,
-        double? snowDepthCm = null,
-        bool traceOfIce = false)
+        double? snowDepthCm = null)
     {
         var total = Clean(totalConcentrationRaw);
         var partials = ParseList(partialConcentrationsRaw);
@@ -57,7 +55,7 @@ public static class IceEggCodeBuilder
         var forms = ParseList(formsOfIceRaw);
 
         var hasAnyIce = total is not null || partials.Count > 0 || stages.Count > 0
-            || forms.Count > 0 || snowDepthCm is not null || traceOfIce;
+            || forms.Count > 0 || snowDepthCm is not null;
         if (!hasAnyIce)
             return null;
 
@@ -68,7 +66,7 @@ public static class IceEggCodeBuilder
         // Open water / no ice: total is zero and nothing else is present. By
         // convention the oval is omitted and only Ct (0) is shown.
         if (IsZero(total) && partials.Count == 0 && stages.Count == 0
-            && forms.Count == 0 && snowDepthCm is null && !traceOfIce)
+            && forms.Count == 0 && snowDepthCm is null)
         {
             return new IceEggCode
             {
@@ -98,9 +96,6 @@ public static class IceEggCodeBuilder
             : TakeTrailing(partials, IceEggValueRole.PartialConcentration, "iceapc", 'C');
         var stageTrailing = TakeTrailing(stages, IceEggValueRole.StageOfDevelopment, "icesod", 'S');
         var formTrailing = TakeTrailing(forms, IceEggValueRole.FormOfIce, "iceflz", 'F');
-
-        if (traceOfIce)
-            annotations.Add(new IceEggValue { Text = string.Empty, Role = IceEggValueRole.TraceOfIce });
 
         if (snowDepthCm is { } snow)
             annotations.Add(new IceEggValue

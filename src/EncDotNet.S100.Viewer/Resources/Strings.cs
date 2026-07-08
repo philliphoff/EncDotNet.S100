@@ -316,7 +316,6 @@ internal static class Strings
     public static string Pick_EggCode_Description => Get(nameof(Pick_EggCode_Description));
     public static string Pick_EggCode_OpenWater => Get(nameof(Pick_EggCode_OpenWater));
     public static string Pick_EggCode_SnowDepth => Get(nameof(Pick_EggCode_SnowDepth));
-    public static string Pick_EggCode_Trace => Get(nameof(Pick_EggCode_Trace));
     public static string Pick_EggCode_HoverHint => Get(nameof(Pick_EggCode_HoverHint));
     public static string Pick_EggCode_Role_TotalConcentration => Get(nameof(Pick_EggCode_Role_TotalConcentration));
     public static string Pick_EggCode_Role_PartialConcentration => Get(nameof(Pick_EggCode_Role_PartialConcentration));

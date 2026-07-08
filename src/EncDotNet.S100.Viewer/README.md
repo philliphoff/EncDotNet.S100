@@ -241,8 +241,8 @@ shows:
   concentration on top of the oval with the partial-concentration,
   stage-of-development and form-of-ice rows beneath it (a single ice
   type folds the partial row away, and open water omits the oval).
-  Values convention reports outside the oval — a thinner fourth ice
-  class, snow depth, a trace of land-origin ice — appear as captions.
+  Thinner fourth / fifth ice classes are flanked to the right of their
+  row outside the oval; snow depth appears as a caption beneath it.
   Hovering any cell shows its Feature-Catalogue meaning (e.g.
   "Grey Ice") alongside its role in the egg.
 

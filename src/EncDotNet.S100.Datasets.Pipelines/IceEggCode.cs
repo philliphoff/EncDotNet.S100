@@ -23,9 +23,6 @@ public enum IceEggValueRole
     /// <summary>Form of ice / floe size of an ice type (<c>Fa</c>/<c>Fb</c>/<c>Fc</c>), bottom row.</summary>
     FormOfIce,
 
-    /// <summary>A trace of ice of land origin, flagged outside the oval (dots).</summary>
-    TraceOfIce,
-
     /// <summary>Snow depth (centimetres), reported beside the egg.</summary>
     SnowDepth,
 }
@@ -141,8 +138,8 @@ public sealed record IceEggCode
     public ImmutableArray<IceEggValue> TrailingFormsOfIce { get; init; } = ImmutableArray<IceEggValue>.Empty;
 
     /// <summary>
-    /// Values reported outside the oval by convention: a trace of ice of land
-    /// origin and snow depth. Ordered for display below the egg.
+    /// Values reported outside the oval by convention (snow depth). Ordered for
+    /// display below the egg.
     /// </summary>
     public ImmutableArray<IceEggValue> Annotations { get; init; } = ImmutableArray<IceEggValue>.Empty;
 

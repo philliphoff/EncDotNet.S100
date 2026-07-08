@@ -613,9 +613,9 @@
                     render-ready projection of the feature's concentration,
                     stage of development and floe size, drawn as the standard
                     stacked oval. Thinner fourth / fifth ice classes appear to
-                    the right of their row outside the oval; snow depth and a
-                    trace of land-origin ice appear as captions beneath it.
-                    Hidden for features that carry no egg data.
+                    the right of their row outside the oval; snow depth appears
+                    as a caption beneath it. Hidden for features that carry no
+                    egg data.
                 -->
                 <Border BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="0,1,0,0"
@@ -874,10 +874,6 @@
                                        FontSize="11"
                                        Opacity="0.75"
                                        IsVisible="{Binding ShowSnowSummary}" />
-                            <TextBlock Text="{Binding TraceSummary}"
-                                       FontSize="11"
-                                       Opacity="0.75"
-                                       IsVisible="{Binding TraceOfIce}" />
                         </StackPanel>
 
                         <!-- Description region: shows the meaning of the value

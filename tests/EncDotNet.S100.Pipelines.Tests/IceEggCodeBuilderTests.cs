@@ -113,16 +113,6 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
-    public void Build_FastIceWithTrace_FlagsTraceOutside()
-    {
-        // Variation F: fast ice as the sole form, plus a trace of land-origin ice.
-        var egg = IceEggCodeBuilder.Build("10", "[10]", "[5]", "[8]", traceOfIce: true);
-
-        Assert.NotNull(egg);
-        Assert.Contains(egg!.Annotations, a => a.Role == IceEggValueRole.TraceOfIce);
-    }
-
-    [Fact]
     public void Build_OpenWater_OmitsOval()
     {
         // Variation H: open water / no ice — oval omitted, only Ct (0).

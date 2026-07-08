@@ -7,9 +7,10 @@ namespace EncDotNet.S100.Viewer;
 
 /// <summary>
 /// Maps an <see cref="IceEggValueRole"/> (carried by each cell of the S-411
-/// WMO / SIGRID-3 egg diagram) to a localized human-readable role label used
-/// as the cell's tooltip. Unknown or unset roles yield <c>null</c> so no
-/// tooltip is shown.
+/// WMO / SIGRID-3 egg diagram) to a localized human-readable role label. Used
+/// as the fallback meaning shown in the below-egg hover description region when
+/// a value has no Feature Catalogue definition. Unknown or unset roles yield
+/// <c>null</c> so no label is shown.
 /// </summary>
 internal sealed class EggCodeRoleTooltipConverter : IValueConverter
 {

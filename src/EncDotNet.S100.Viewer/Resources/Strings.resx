@@ -728,10 +728,6 @@
     <value>Snow {0} cm</value>
     <comment>Snow depth reported beside the egg; {0} is the depth in centimetres.</comment>
   </data>
-  <data name="Pick_EggCode_Trace" xml:space="preserve">
-    <value>Trace of ice of land origin</value>
-    <comment>Marker for a trace of land-origin ice, flagged outside the egg oval.</comment>
-  </data>
   <data name="Pick_EggCode_HoverHint" xml:space="preserve">
     <value>Hover any value in the egg for its definition.</value>
     <comment>Hint shown below the egg-code diagram.</comment>

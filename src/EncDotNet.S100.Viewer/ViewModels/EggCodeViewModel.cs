@@ -11,8 +11,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// ice egg-code projection) into bindable rows and annotations for the Pick
 /// Report side panel. The oval carries up to three ice types; thinner fourth /
 /// fifth classes are surfaced as trailing rows rendered outside the oval, and
-/// other special values (a trace of ice of land origin, snow depth) as scalar
-/// properties.
+/// other special values (snow depth) as scalar properties.
 /// </summary>
 internal sealed class EggCodeViewModel : INotifyPropertyChanged
 {
@@ -32,7 +31,6 @@ internal sealed class EggCodeViewModel : INotifyPropertyChanged
 
         SnowDepth = model.Annotations
             .FirstOrDefault(a => a.Role == IceEggValueRole.SnowDepth);
-        TraceOfIce = model.Annotations.Any(a => a.Role == IceEggValueRole.TraceOfIce);
     }
 
     /// <summary>Whether the oval is drawn (false for open water / no ice).</summary>
@@ -107,9 +105,6 @@ internal sealed class EggCodeViewModel : INotifyPropertyChanged
     /// <summary>Snow depth (centimetres), reported outside the oval.</summary>
     public IceEggValue? SnowDepth { get; }
 
-    /// <summary>Whether a trace of ice of land origin is flagged outside the oval.</summary>
-    public bool TraceOfIce { get; }
-
     /// <summary>True when a top-row total concentration is present.</summary>
     public bool ShowTotalConcentration => TotalConcentration is not null;
 
@@ -168,18 +163,13 @@ internal sealed class EggCodeViewModel : INotifyPropertyChanged
     public double StagesOfDevelopmentCellMinHeight => StagesOfDevelopmentIsLast ? 42d : 0d;
 
     /// <summary>True when there is at least one value reported outside the oval.</summary>
-    public bool HasAnnotations =>
-        SnowDepth is not null || TraceOfIce;
+    public bool HasAnnotations => SnowDepth is not null;
 
     /// <summary>Snow-depth caption (e.g. <c>"Snow 12.5 cm"</c>), or <c>null</c>.</summary>
     public string? SnowSummary =>
         SnowDepth is { } snow
             ? string.Format(Culture, Resources.Strings.Pick_EggCode_SnowDepth, snow.Text)
             : null;
-
-    /// <summary>Trace-of-ice caption, or <c>null</c> when no trace is flagged.</summary>
-    public string? TraceSummary =>
-        TraceOfIce ? Resources.Strings.Pick_EggCode_Trace : null;
 
     /// <summary>True when <see cref="SnowSummary"/> is present.</summary>
     public bool ShowSnowSummary => SnowSummary is not null;

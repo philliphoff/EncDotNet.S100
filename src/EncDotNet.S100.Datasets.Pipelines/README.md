@@ -267,9 +267,9 @@ for the full design rationale.
   (S-411 Ed 1.2.1 Annex A). `IceEggCodeBuilder.Build` assembles the
   total concentration (`iceact`), up to three in-oval ice types
   (partial concentration `iceapc`, stage of development `icesod`, form
-  of ice `iceflz`), and the values convention reports *outside* the
-  oval (a thinner fourth class, snow depth, a trace of land-origin
-  ice). `S411DatasetProcessor` surfaces it on `FeatureInfo.EggCode` and
+  of ice `iceflz`), and the thinner fourth / fifth ice classes flanked
+  *outside* the oval (Cd/Ce, Sd/Se, Fd/Fe) plus snow depth as a caption.
+  `S411DatasetProcessor` surfaces it on `FeatureInfo.EggCode` and
   enriches each cell with its Feature-Catalogue enumeration definition
   (via `FeatureCatalogueDecoder.ResolveListedValueDefinition`) so the
   pick report can show the prose meaning on hover.

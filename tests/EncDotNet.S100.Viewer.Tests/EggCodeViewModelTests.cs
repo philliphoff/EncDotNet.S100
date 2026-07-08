@@ -32,17 +32,6 @@ public class EggCodeViewModelTests
     }
 
     [Fact]
-    public void TraceSummary_PresentWhenTraceFlagged()
-    {
-        var egg = IceEggCodeBuilder.Build("70", "[30, 40]", "[91, 87]", "[5, 4]", traceOfIce: true)!;
-
-        var vm = new EggCodeViewModel(egg);
-
-        Assert.True(vm.TraceOfIce);
-        Assert.NotNull(vm.TraceSummary);
-    }
-
-    [Fact]
     public void NoAnnotations_LeavesSummariesNull()
     {
         var egg = IceEggCodeBuilder.Build("70", "[30, 40]", "[91, 87]", "[5, 4]")!;
@@ -51,7 +40,6 @@ public class EggCodeViewModelTests
 
         Assert.False(vm.HasAnnotations);
         Assert.Null(vm.SnowSummary);
-        Assert.Null(vm.TraceSummary);
     }
 
     [Fact]

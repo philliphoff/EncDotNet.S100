@@ -7,8 +7,8 @@
     can be picked and compared side by side:
 
       1. Three ice types (full egg)          2. Two ice types
-      3. Single ice type (folded row)        4. Four types (thinner class out)
-      5. Five types (3 in oval, 5th dropped) 6. Snow depth annotation
+      3. Single ice type (folded row)        4. Four types (4th class flanked out)
+      5. Five types (3 in oval, 4th/5th flanked) 6. Snow depth annotation
       7. Missing form-of-ice row             8. Open water (no oval)
       9. Undetermined tokens ('9+', 'X')
 
@@ -82,7 +82,7 @@
             </gml:Polygon>
         </ice:seaice>
     </ice:IceFeatureMember>
-    <!-- Feature 5: Five ice types — 3 in oval, 4th shown outside, 5th dropped; undetermined 'X' form preserved -->
+    <!-- Feature 5: Five ice types — 3 in oval, 4th and 5th flanked outside (Cd/Ce, Sd/Se, Fd/Fe); undetermined 'X' form preserved -->
     <ice:IceFeatureMember>
         <ice:seaice gml:id="seaice.None">
             <ice:iceact>95</ice:iceact>
