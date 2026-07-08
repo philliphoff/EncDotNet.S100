@@ -12,8 +12,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <c>SymbolReference</c> / <c>LineStyleReference</c> / <c>AreaFillReference</c>
 /// / <c>OutlineStyleReference</c> names, awaits each catalogue
 /// <c>Get*Async</c> call, and stores the result (or null on
-/// <see cref="KeyNotFoundException"/>) in the returned dicts. Renderer
-/// callers then close over those dicts in their sync resolver lambdas.
+/// <see cref="PortrayalAssetNotFoundException"/> — or any other lookup
+/// failure) in the returned dicts. Renderer callers then close over those
+/// dicts in their sync resolver lambdas.
 /// </remarks>
 internal static class CataloguePreWarm
 {

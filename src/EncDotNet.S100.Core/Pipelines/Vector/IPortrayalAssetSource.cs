@@ -22,7 +22,7 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// <c>EncDotNet.S100.Datasets.Pipelines</c> for the shared helper.
 /// </para>
 /// <para>
-/// Implementations should throw <see cref="KeyNotFoundException"/> when the
+/// Implementations should throw <see cref="PortrayalAssetNotFoundException"/> when the
 /// named asset is not present in the loaded catalogue.
 /// </para>
 /// </remarks>

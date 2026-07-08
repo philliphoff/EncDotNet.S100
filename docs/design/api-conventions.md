@@ -115,7 +115,35 @@ than via a mass rewrite:
   above. For MCP/JSON DTOs a `record` remains acceptable (value equality is
   never exercised and `record` is idiomatic for payloads).
 
-## 3. Migration recipe (Immutable → read-only)
+## 3. Missing-value and lookup-failure strategy
+
+When a lookup, resolution, or mapping can fail to produce a value, pick the
+signalling strategy by *what the failure means*, not by habit:
+
+| Situation | Strategy | Example |
+|---|---|---|
+| **Expected absence** the caller is meant to handle inline | return nullable `T?` (or `bool TryGet(out T)` for value types) | `IFeatureGeometryProvider.GetGeometry` (renderer skips features it can't place); `CoverageColorScheme.Resolve(float)` (a value→colour map where "no band" is routine) |
+| **Absence while projecting untrusted data**, where the pipeline must continue *and* the problem must be reported | return nullable **and** emit a diagnostic; never throw | `XlinkResolver.Resolve<T>` (unresolved `xlink:href` → `null` + `xlink.unresolved` warning) |
+| **Contract violation / packaging defect** with no sensible recovery | throw a **specific** domain exception | portrayal-catalogue asset/rule lookups (`IPortrayalAssetSource.Get*Async`, `IXsltRuleSource.GetCompiledRuleAsync`) throw `PortrayalAssetNotFoundException` |
+
+Rules of thumb:
+
+- **Do not use `KeyNotFoundException`** (or other framework "not found"
+  exceptions) for a domain miss. A caller guarding an ordinary dictionary
+  lookup should not accidentally swallow a portrayal-packaging defect. Define a
+  domain exception deriving from `Exception` (the recommended base for custom
+  exceptions) carrying the useful context — e.g. `PortrayalAssetNotFoundException`
+  exposes `AssetKind` and `AssetName`.
+- **Throw only when the caller is not expected to guard.** These lookups have no
+  cheap pre-check (`Contains`) on their interface, so a miss is genuinely
+  exceptional. When a caller *does* need to tolerate absence (e.g. the render
+  pre-warm treats any lookup miss as "not in catalogue"), it catches the domain
+  exception explicitly.
+- **Nullable + diagnostic** is the right shape whenever the input is
+  externally-authored data and swallowing-with-a-report beats aborting the
+  whole projection.
+
+## 4. Migration recipe (Immutable → read-only)
 
 When converting a file:
 
