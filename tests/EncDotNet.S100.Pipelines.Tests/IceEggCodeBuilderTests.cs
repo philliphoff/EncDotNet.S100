@@ -177,6 +177,19 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
+    public void Build_QuotedTotalConcentration_StripsSurroundingQuotes()
+    {
+        var singleQuoted = IceEggCodeBuilder.Build("'9+'", null, null, null);
+        var doubleQuoted = IceEggCodeBuilder.Build("\"9+\"", null, null, null);
+
+        Assert.NotNull(singleQuoted);
+        Assert.Equal("9+", singleQuoted!.TotalConcentration!.Text);
+        Assert.NotNull(doubleQuoted);
+        Assert.Equal("9+", doubleQuoted!.TotalConcentration!.Text);
+        Assert.Null(IceEggCodeBuilder.Build("''", null, null, null));
+    }
+
+    [Fact]
     public void Build_AssignsWmoPositionalSymbols()
     {
         var egg = IceEggCodeBuilder.Build("90", "[30, 30, 20, 10]", "[87, 85, 84, 99]", "[7, 6, 5]");

@@ -56,6 +56,11 @@ public static class IceEggCodeBuilder
         string totalConcentrationSourceCode = "iceact")
     {
         var total = Clean(totalConcentrationRaw);
+        if (total is not null)
+        {
+            total = StripQuotes(total);
+            total = Clean(total);
+        }
         var partials = ParseList(partialConcentrationsRaw);
         var stages = ParseList(stagesOfDevelopmentRaw);
         var forms = ParseList(formsOfIceRaw);
