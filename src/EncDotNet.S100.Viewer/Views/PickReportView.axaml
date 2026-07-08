@@ -670,7 +670,8 @@
                                       Stretch="Fill"
                                       Stroke="{DynamicResource ForegroundColor}"
                                       StrokeThickness="1.5"
-                                      Data="M0,1 A0.5,1 0 0 1 1,1" />
+                                      Data="M0,1 A0.5,1 0 0 1 1,1"
+                                      IsVisible="{Binding ShowTotalConcentration}" />
                                 <!-- Bottom dome for the degenerate case where the
                                      Ct row is the only row (both first and last). -->
                                 <Path Grid.Column="1" Grid.Row="0"

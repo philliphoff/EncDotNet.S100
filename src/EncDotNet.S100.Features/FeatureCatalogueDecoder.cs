@@ -50,7 +50,7 @@ public sealed class FeatureCatalogueDecoder
             {
                 _listedValueLabels[$"{sa.Code}|{lv.Code}"] = lv.Label;
                 if (!string.IsNullOrWhiteSpace(lv.Definition))
-                    _listedValueDefinitions[$"{sa.Code}|{lv.Code}"] = lv.Definition!;
+                    _listedValueDefinitions[$"{sa.Code}|{lv.Code}"] = lv.Definition;
             }
         }
 

@@ -41,13 +41,15 @@ public static class IceEggCodeBuilder
     /// <param name="stagesOfDevelopmentRaw">Raw <c>icesod</c> value (list-style or scalar).</param>
     /// <param name="formsOfIceRaw">Raw <c>iceflz</c> value (list-style or scalar).</param>
     /// <param name="snowDepthCm">Optional snow depth in centimetres (<c>snowDepth</c>).</param>
+    /// <param name="totalConcentrationSourceCode">Source attribute code for <paramref name="totalConcentrationRaw"/>.</param>
     /// <returns>The projected egg code, or <c>null</c> when every component is empty.</returns>
     public static IceEggCode? Build(
         string? totalConcentrationRaw,
         string? partialConcentrationsRaw,
         string? stagesOfDevelopmentRaw,
         string? formsOfIceRaw,
-        double? snowDepthCm = null)
+        double? snowDepthCm = null,
+        string totalConcentrationSourceCode = "iceact")
     {
         var total = Clean(totalConcentrationRaw);
         var partials = ParseList(partialConcentrationsRaw);
@@ -61,7 +63,7 @@ public static class IceEggCodeBuilder
 
         var totalValue = total is null
             ? null
-            : new IceEggValue { Text = total, Role = IceEggValueRole.TotalConcentration, SourceCode = "iceact", Symbol = "Ct" };
+            : new IceEggValue { Text = total, Role = IceEggValueRole.TotalConcentration, SourceCode = totalConcentrationSourceCode, Symbol = "Ct" };
 
         // Open water / no ice: total is zero and nothing else is present. By
         // convention the oval is omitted and only Ct (0) is shown.

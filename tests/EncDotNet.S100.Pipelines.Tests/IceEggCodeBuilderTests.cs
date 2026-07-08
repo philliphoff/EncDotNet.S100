@@ -127,6 +127,20 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
+    public void Build_TotalConcentrationSourceCode_UsesCallerSuppliedCode()
+    {
+        var egg = IceEggCodeBuilder.Build(
+            "70",
+            null,
+            null,
+            null,
+            totalConcentrationSourceCode: "totalConcentration");
+
+        Assert.NotNull(egg);
+        Assert.Equal("totalConcentration", egg!.TotalConcentration!.SourceCode);
+    }
+
+    [Fact]
     public void Build_SpaceSeparatedList_ParsesTokens()
     {
         var egg = IceEggCodeBuilder.Build("9", "1 5 3", "7 5 4", "4 5 4");

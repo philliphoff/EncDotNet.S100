@@ -112,18 +112,26 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
             snowDepth = snow;
         }
 
+        var totalConcentration = attributes.GetValueOrDefault("iceact") ?? attributes.GetValueOrDefault("totalConcentration");
+        var totalConcentrationSourceCode = attributes.ContainsKey("iceact")
+            ? "iceact"
+            : attributes.ContainsKey("totalConcentration")
+                ? "totalConcentration"
+                : "iceact";
+
         var egg = IceEggCodeBuilder.Build(
-            attributes.GetValueOrDefault("iceact") ?? attributes.GetValueOrDefault("totalConcentration"),
+            totalConcentration,
             attributes.GetValueOrDefault("iceapc"),
             attributes.GetValueOrDefault("icesod"),
             attributes.GetValueOrDefault("iceflz"),
-            snowDepth);
+            snowDepth,
+            totalConcentrationSourceCode);
 
         return egg is null ? null : EnrichWithDefinitions(egg);
     }
 
     /// <summary>
-    /// JCOMM short attribute codes (as carried on <see cref="IceEggValue.SourceCode"/>)
+    /// JCOMM short and canonical attribute codes (as carried on <see cref="IceEggValue.SourceCode"/>)
     /// mapped to their S-411 Feature Catalogue simple-attribute codes, so an
     /// egg value's numeric SIGRID-3 code can be resolved to its prose meaning.
     /// </summary>
@@ -131,6 +139,7 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
         new(StringComparer.OrdinalIgnoreCase)
         {
             ["iceact"] = "totalConcentration",
+            ["totalConcentration"] = "totalConcentration",
             ["iceapc"] = "partialConcentration",
             ["icesod"] = "iceStageofDevelopment",
             ["iceflz"] = "floeSizes",
