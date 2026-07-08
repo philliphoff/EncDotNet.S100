@@ -172,7 +172,62 @@ Rules:
 - Keep the .NET `From*` / `Default` / `Empty` vocabulary — do not invent terser
   factory names.
 
-## 5. Migration recipe (Immutable → read-only)
+## 5. `CancellationToken` on synchronous methods
+
+A **synchronous** method (non-`Task`/`ValueTask` return) may accept a
+`CancellationToken` when, and only when, it performs **bounded CPU-bound work
+that it observes the token within** — typically a loop that calls
+`cancellationToken.ThrowIfCancellationRequested()`. This is the idiomatic .NET
+way to make a long in-memory computation abandonable; it is *not* a mistake and
+must not be "corrected" by wrapping the method in `Task`/`ValueTask`.
+
+Rules:
+
+- **Do not** add a `CancellationToken` to a synchronous method that never
+  observes it — an ignored token is misleading; drop the parameter instead.
+- **Do not** change a synchronous CPU method to return `Task`/`ValueTask` just
+  to carry a token. Async return types signal *I/O or offloaded* work; these
+  methods are neither.
+- **Do** state in the XML docs that the method is synchronous and CPU-bound and
+  that the token allows cooperative cancellation, so callers are not surprised
+  by a non-`Async` method taking a token.
+
+Sanctioned examples: `ICoverageSource.Sample` (a resident-grid copy that checks
+the token per cell) and `IFeatureXmlSource.GetFeatureXml` (projects in-memory
+features to FeatureXML). Both are already documented to this standard.
+
+## 6. `ValueTask` vs `Task`
+
+Both appear deliberately; pick by call-shape:
+
+- **`Task` / `Task<T>`** for a **one-shot genuinely-asynchronous** operation —
+  opening, reading, or parsing a dataset; disk/network I/O that runs once per
+  call. This is the default; reach for `Task` unless you have the specific
+  reason below.
+- **`ValueTask` / `ValueTask<T>`** for a **hot-path method that frequently
+  completes synchronously** — a memoized/cached lookup where allocating a `Task`
+  on every (usually cache-hit) call would be wasteful. In this codebase that is
+  the portrayal asset/rule/Lua-source resolution surface
+  (`IPortrayalAssetSource.Get*Async`, `IXsltRuleSource.GetCompiledRuleAsync`,
+  `ILuaRuleSource.Get*Async`): the first access does I/O, subsequent accesses
+  return through the synchronous `ValueTask` fast path.
+- Also use `ValueTask` where the framework prescribes it —
+  `IAsyncDisposable.DisposeAsync`, `Stream.ReadAsync(Memory<byte>, …)`.
+
+**Consuming a `ValueTask` safely** (these constraints are the cost of the
+allocation saving):
+
+- `await` it **exactly once**, directly. Do not `await` the same `ValueTask`
+  twice, store it in a field, or hand it to two consumers.
+- Do not block on it (`.Result` / `.GetAwaiter().GetResult()`) unless
+  `IsCompletedSuccessfully` is already true.
+- If you need to await multiple times, combine (`Task.WhenAll`), or otherwise
+  hold the pending operation, convert once with `.AsTask()`.
+
+If none of the `ValueTask` reasons apply, use `Task` — it is more forgiving for
+callers.
+
+## 7. Migration recipe (Immutable → read-only)
 
 When converting a file:
 
