@@ -42,7 +42,11 @@ public static class IceEggCodeBuilder
     /// <param name="formsOfIceRaw">Raw <c>iceflz</c> value (list-style or scalar).</param>
     /// <param name="snowDepthCm">Optional snow depth in centimetres (<c>snowDepth</c>).</param>
     /// <param name="totalConcentrationSourceCode">Source attribute code for <paramref name="totalConcentrationRaw"/>.</param>
-    /// <returns>The projected egg code, or <c>null</c> when every component is empty.</returns>
+    /// <returns>
+    /// The projected egg code, or <c>null</c> unless at least one core egg value
+    /// (<c>Ct</c>, partial concentration, stage, or form) is present; snow depth
+    /// alone does not produce an egg.
+    /// </returns>
     public static IceEggCode? Build(
         string? totalConcentrationRaw,
         string? partialConcentrationsRaw,
@@ -56,9 +60,9 @@ public static class IceEggCodeBuilder
         var stages = ParseList(stagesOfDevelopmentRaw);
         var forms = ParseList(formsOfIceRaw);
 
-        var hasAnyIce = total is not null || partials.Count > 0 || stages.Count > 0
-            || forms.Count > 0 || snowDepthCm is not null;
-        if (!hasAnyIce)
+        var hasCoreValue = total is not null || partials.Count > 0
+            || stages.Count > 0 || forms.Count > 0;
+        if (!hasCoreValue)
             return null;
 
         var totalValue = total is null

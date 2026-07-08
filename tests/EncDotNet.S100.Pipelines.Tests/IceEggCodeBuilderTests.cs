@@ -45,6 +45,21 @@ public class IceEggCodeBuilderTests
     }
 
     [Fact]
+    public void Build_ReturnsNull_WhenOnlySnowDepthPresent()
+    {
+        Assert.Null(IceEggCodeBuilder.Build(null, null, null, null, snowDepthCm: 12.5));
+    }
+
+    [Fact]
+    public void Build_WithCoreValueAndSnowDepth_AddsSnowAnnotation()
+    {
+        var egg = IceEggCodeBuilder.Build("70", null, null, null, snowDepthCm: 12.5);
+
+        Assert.NotNull(egg);
+        Assert.Contains(egg!.Annotations, a => a.Role == IceEggValueRole.SnowDepth);
+    }
+
+    [Fact]
     public void Build_TwoIceTypes_CarriesTwoColumns()
     {
         // Variation A: Ct 4, two partials 2 2, stages 5 4, forms 3 1.
