@@ -15,6 +15,9 @@ public class S411EggCodeProcessorTests
     private static string FixturePath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", "S411", "display_modes.gml");
 
+    private static string EmptyIceactFixturePath =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", "S411", "empty_iceact_total_concentration.gml");
+
     private static PortrayalCatalogueManager CreateCatalogueManager()
     {
         var manager = new PortrayalCatalogueManager();
@@ -26,9 +29,9 @@ public class S411EggCodeProcessorTests
         return manager;
     }
 
-    private static S411DatasetProcessor CreateProcessor() =>
+    private static S411DatasetProcessor CreateProcessor(string? fixturePath = null) =>
         new(
-            FixturePath,
+            fixturePath ?? FixturePath,
             CreateCatalogueManager(),
             new DisplayPlaneAuthorityProvider(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
@@ -52,5 +55,17 @@ public class S411EggCodeProcessorTests
         // prose meaning for the pick report's hover tooltip.
         var stage = info.EggCode.StagesOfDevelopment[0];
         Assert.Equal("Thin First Year Ice (30 to <70 cm)", stage.Definition);
+    }
+
+    [Fact]
+    public void GetFeatureInfo_EmptyIceact_UsesCanonicalTotalConcentration()
+    {
+        var processor = CreateProcessor(EmptyIceactFixturePath);
+
+        var info = processor.GetFeatureInfoAt(0);
+
+        Assert.NotNull(info?.EggCode?.TotalConcentration);
+        Assert.Equal("70", info!.EggCode!.TotalConcentration!.Text);
+        Assert.Equal("totalConcentration", info.EggCode.TotalConcentration.SourceCode);
     }
 }

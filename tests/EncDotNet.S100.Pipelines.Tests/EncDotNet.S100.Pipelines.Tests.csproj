@@ -53,6 +53,7 @@
     <Content Include="..\datasets\S102\PortrayalCatalogue\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
     <Content Include="..\datasets\S411\display_modes.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S411\display_modes_list.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S411\empty_iceact_total_concentration.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!--

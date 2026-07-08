@@ -112,12 +112,19 @@ public sealed class S411DatasetProcessor : GmlDatasetProcessorBase<S411Feature>
             snowDepth = snow;
         }
 
-        var totalConcentration = attributes.GetValueOrDefault("iceact") ?? attributes.GetValueOrDefault("totalConcentration");
-        var totalConcentrationSourceCode = attributes.ContainsKey("iceact")
-            ? "iceact"
-            : attributes.ContainsKey("totalConcentration")
-                ? "totalConcentration"
-                : "iceact";
+        string? totalConcentration = null;
+        var totalConcentrationSourceCode = "iceact";
+        foreach (var code in new[] { "iceact", "totalConcentration" })
+        {
+            // Skip empty source values so canonical totalConcentration can fill
+            // Ct when a producer emits an empty JCOMM iceact element.
+            if (attributes.TryGetValue(code, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                totalConcentration = value;
+                totalConcentrationSourceCode = code;
+                break;
+            }
+        }
 
         var egg = IceEggCodeBuilder.Build(
             totalConcentration,
