@@ -310,6 +310,25 @@ internal static class Strings
     public static string Pick_Chart_NoSamples => Get(nameof(Pick_Chart_NoSamples));
     public static string Pick_Chart_StationAttributes => Get(nameof(Pick_Chart_StationAttributes));
 
+    // Pick panel: WMO / SIGRID-3 ice egg code (S-411)
+    public static string Pick_EggCode_Heading => Get(nameof(Pick_EggCode_Heading));
+    public static string Pick_EggCode_Standard => Get(nameof(Pick_EggCode_Standard));
+    public static string Pick_EggCode_Description => Get(nameof(Pick_EggCode_Description));
+    public static string Pick_EggCode_OpenWater => Get(nameof(Pick_EggCode_OpenWater));
+    public static string Pick_EggCode_ThinnerStage => Get(nameof(Pick_EggCode_ThinnerStage));
+    public static string Pick_EggCode_ThinnerPartial => Get(nameof(Pick_EggCode_ThinnerPartial));
+    public static string Pick_EggCode_NotShown => Get(nameof(Pick_EggCode_NotShown));
+    public static string Pick_EggCode_SnowDepth => Get(nameof(Pick_EggCode_SnowDepth));
+    public static string Pick_EggCode_Trace => Get(nameof(Pick_EggCode_Trace));
+    public static string Pick_EggCode_HoverHint => Get(nameof(Pick_EggCode_HoverHint));
+    public static string Pick_EggCode_Role_TotalConcentration => Get(nameof(Pick_EggCode_Role_TotalConcentration));
+    public static string Pick_EggCode_Role_PartialConcentration => Get(nameof(Pick_EggCode_Role_PartialConcentration));
+    public static string Pick_EggCode_Role_StageOfDevelopment => Get(nameof(Pick_EggCode_Role_StageOfDevelopment));
+    public static string Pick_EggCode_Role_FormOfIce => Get(nameof(Pick_EggCode_Role_FormOfIce));
+    public static string Pick_EggCode_Role_ThinnerStage => Get(nameof(Pick_EggCode_Role_ThinnerStage));
+    public static string Pick_EggCode_Role_ThinnerPartial => Get(nameof(Pick_EggCode_Role_ThinnerPartial));
+    public static string Pick_EggCode_Role_SnowDepth => Get(nameof(Pick_EggCode_Role_SnowDepth));
+
     // Settings
     public static string Settings_Heading => Get(nameof(Settings_Heading));
     public static string Settings_AccentColor => Get(nameof(Settings_AccentColor));

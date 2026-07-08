@@ -253,6 +253,63 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void SetPicks_SeaIceWithEggCode_SurfacesEggViewModel()
+    {
+        var vm = new PickReportViewModel();
+        var egg = IceEggCodeBuilder.Build("70", "[30, 30, 10, 4, 4]", "[91, 87, 85, 95, 99]", "[5, 4, 4, 4, 5]");
+
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "SeaIce",
+                FeatureRef = "seaice.0007",
+                ProductSpec = "S-411",
+                EggCode = egg,
+            },
+        });
+
+        Assert.True(vm.HasEggCode);
+        Assert.NotNull(vm.SelectedEggCode);
+        Assert.Equal("70", vm.SelectedEggCode!.TotalConcentration!.Text);
+        Assert.Equal(3, vm.SelectedEggCode.PartialConcentrations.Count);
+        Assert.Equal("95", vm.SelectedEggCode.ThinnerStage!.Text);
+        Assert.Equal("4", vm.SelectedEggCode.ThinnerPartial!.Text);
+    }
+
+    [Fact]
+    public void SetPicks_FeatureWithoutEggCode_HasNoEggCode()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
+
+        Assert.False(vm.HasEggCode);
+        Assert.Null(vm.SelectedEggCode);
+    }
+
+    [Fact]
+    public void Clear_ResetsEggCode()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "SeaIce",
+                FeatureRef = "seaice.0007",
+                ProductSpec = "S-411",
+                EggCode = IceEggCodeBuilder.Build("70", "[30, 30]", "[91, 87]", "[5, 4]"),
+            },
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasEggCode);
+        Assert.Null(vm.SelectedEggCode);
+    }
+
+    [Fact]
     public void CopyLocationCommand_RaisesRequestWithDecimalDegrees()
     {
         var vm = new PickReportViewModel();

@@ -149,6 +149,27 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!--
+            One value cell inside the egg diagram. The raw token is centered
+            and its semantic role (total/partial concentration, stage of
+            development, form of ice) is exposed as the hover tooltip.
+        -->
+        <DataTemplate x:Key="EggValueCellTemplate" x:DataType="pp:IceEggValue">
+            <TextBlock Text="{Binding Text}"
+                       FontSize="13"
+                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       MinWidth="22"
+                       Margin="4,0">
+                <ToolTip.Tip>
+                    <MultiBinding Converter="{x:Static conv:EggCodeValueTooltipConverter.Instance}">
+                        <Binding Path="Definition" />
+                        <Binding Path="Role" />
+                    </MultiBinding>
+                </ToolTip.Tip>
+            </TextBlock>
+        </DataTemplate>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -574,6 +595,131 @@
                                    IsVisible="{Binding !HasAttributes}" />
                     </StackPanel>
                 </Expander>
+
+                <!--
+                    WMO / SIGRID-3 "egg code" (S-411 sea-ice / lake-ice). A
+                    render-ready projection of the feature's concentration,
+                    stage of development and floe size, drawn as the standard
+                    stacked oval. Values that convention reports outside the
+                    oval (a thinner fourth ice class, snow depth, a trace of
+                    land-origin ice) appear as captions beneath it. Hidden
+                    for features that carry no egg data.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding HasEggCode}">
+                    <StackPanel Spacing="6" DataContext="{Binding SelectedEggCode}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Heading}"
+                                       FontSize="10"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Standard}"
+                                       FontSize="10"
+                                       LetterSpacing="1"
+                                       Opacity="0.5"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_Description}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap" />
+
+                        <!-- The egg oval (or an open-water caption). -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,4">
+                            <!-- Oval: total concentration on top, then partial
+                                 concentration / stage of development / form of
+                                 ice rows, each shown only when populated. -->
+                            <Border IsVisible="{Binding HasOval}"
+                                    BorderBrush="{DynamicResource TextColor}"
+                                    BorderThickness="2"
+                                    CornerRadius="60"
+                                    Padding="26,12"
+                                    MinWidth="96"
+                                    HorizontalAlignment="Center">
+                                <StackPanel Spacing="3">
+                                    <ContentControl Content="{Binding TotalConcentration}"
+                                                    ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                    HorizontalAlignment="Center"
+                                                    IsVisible="{Binding ShowTotalConcentration}" />
+                                    <ItemsControl ItemsSource="{Binding PartialConcentrations}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  IsVisible="{Binding ShowPartialConcentrations}"
+                                                  HorizontalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding StagesOfDevelopment}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  IsVisible="{Binding ShowStagesOfDevelopment}"
+                                                  HorizontalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding FormsOfIce}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  IsVisible="{Binding ShowFormsOfIce}"
+                                                  HorizontalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Open water / no ice: no oval, only the total
+                                 concentration token and a caption. -->
+                            <StackPanel IsVisible="{Binding !HasOval}"
+                                        HorizontalAlignment="Center"
+                                        Spacing="2">
+                                <ContentControl Content="{Binding TotalConcentration}"
+                                                ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                HorizontalAlignment="Center"
+                                                IsVisible="{Binding ShowTotalConcentration}" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_OpenWater}"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Values reported outside the oval by convention. -->
+                        <StackPanel Spacing="2" IsVisible="{Binding HasAnnotations}">
+                            <TextBlock Text="{Binding ThinnerSummary}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding ShowThinnerSummary}" />
+                            <TextBlock Text="{Binding SnowSummary}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       IsVisible="{Binding ShowSnowSummary}" />
+                            <TextBlock Text="{Binding TraceSummary}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       IsVisible="{Binding TraceOfIce}" />
+                        </StackPanel>
+
+                        <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_HoverHint}"
+                                   FontSize="10"
+                                   FontStyle="Italic"
+                                   Opacity="0.5"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
 
                 <!--
                     Referenced text. Resolved `fileReference` content lifted

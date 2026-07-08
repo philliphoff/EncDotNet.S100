@@ -209,6 +209,15 @@ public sealed class FeatureInfo
     /// the processor as the global clock moves.
     /// </summary>
     public StationTimeSeriesSnapshot? StationSeries { get; init; }
+
+    /// <summary>
+    /// WMO / SIGRID-3 ice "egg code" projection for the feature when it is an
+    /// S-411 sea-ice / lake-ice feature carrying concentration, stage of
+    /// development, and form-of-ice attributes; <c>null</c> for every other
+    /// feature shape. Object-information UIs use it to render the egg diagram
+    /// in the pick report (S-411 Edition 1.2.1 Annex A).
+    /// </summary>
+    public IceEggCode? EggCode { get; init; }
 }
 
 /// <summary>
