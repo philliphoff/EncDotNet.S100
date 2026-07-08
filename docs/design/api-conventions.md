@@ -42,6 +42,43 @@ array is immutable in practice. If a specific hotspot later needs a hard
 guarantee (or a `record` needs structural collection equality), reintroduce an
 immutable/equatable type **at that site**, not across the board.
 
+### Choosing the return type: `IEnumerable<T>` vs a read-only collection
+
+The read-only vocabulary has three tiers; pick by what the result *is*:
+
+| Return type | Use when |
+|---|---|
+| `IReadOnlyList<T>` | the result is a finite, ordered, already-materialized sequence (the common case for model data) |
+| `IReadOnlyCollection<T>` / `IReadOnlySet<T>` / `IReadOnlyDictionary<K,V>` | the result is finite and materialized but is semantically a count-only bag, a set (membership/uniqueness), or a map |
+| `IEnumerable<T>` | the result is a **genuinely deferred producer** (e.g. a rule that `yield return`s findings) or a **composable query fragment** the caller is expected to filter/aggregate further |
+
+Reserve `IEnumerable<T>` for the last row — do not use it as a lazy hedge for
+data you have already materialized. Conversely, do not force a producer or a
+composable `.Where(...)`-style helper to allocate a list just to satisfy a
+"no `IEnumerable`" rule. Two Core examples that intentionally stay
+`IEnumerable<T>`: `IValidationRule<TModel>.Evaluate` (implementations `yield`)
+and `ValidationReport.FindingsOfSeverity` (a composable severity filter over an
+already-materialized `IReadOnlyList`).
+
+### Do not leak a live mutable collection behind a read-only interface
+
+Returning a mutable `HashSet<T>` / `Dictionary<K,V>` typed as
+`IReadOnlySet<T>` / `IReadOnlyDictionary<K,V>` is a hole: a consumer can cast
+the reference back to the concrete type and mutate it, bypassing the owner's
+invariants (e.g. mutating a controller's state without raising its `Changed`
+event). Wrap the live collection so it cannot be downcast:
+
+- Maps: `new ReadOnlyDictionary<K, V>(dict)` (available on all target
+  frameworks).
+- Sets: `new ReadOnlySetView<T>(set)` (an internal Core wrapper — `ReadOnlySet<T>`
+  / `HashSet<T>.AsReadOnly()` are .NET 9+ only and Core also targets .NET 8).
+
+Both are live projections (they reflect the owner's later edits), O(1) to
+construct. This is worth doing even though all consumers are first-party,
+because the hazard here is not mere immutability but silently breaking an
+observable invariant — a stronger reason than the general defensiveness §1
+declines above.
+
 ## 2. `class` vs `record` for data models
 
 - Use **`record` / `readonly record struct`** for small scalar *value types*
@@ -56,6 +93,27 @@ immutable/equatable type **at that site**, not across the board.
   backing array implementing `IReadOnlyList<T>` plus `IEquatable<>` with
   `SequenceEqual`/combined hash) and use it **only at that type**. Do not add
   such a primitive speculatively.
+- Exception types, builders, and types that carry behavior (methods, mutable
+  workflow state) are **always `class`**, never `record`, regardless of size.
+
+### Applying the policy to existing code
+
+This is a **forward rule**, applied opportunistically to existing code rather
+than via a mass rewrite:
+
+- Pure-scalar value types that were `sealed class` and want value equality have
+  been converted to `record` — notably `BoundingBox` and `Viewport` (also gains
+  `with`). Other minor value-ish candidates (`GmlReference`,
+  `ProjectionDiagnostic`, `ContourStyle`) may be converted opportunistically
+  when a file is next touched.
+- Existing collection-bearing `record` types (e.g. the per-product `DataModel`
+  families, `ValidationReport`, `DynamicFeature`, and the MCP request/result
+  DTOs) are **grandfathered as records**. Their collection fields compare by
+  reference, but these types are read-once/render-many and are not compared by
+  value anywhere, so the mismatch is dormant. Do **not** churn them wholesale;
+  when adding a *new* collection-bearing model, make it a `class` per the rule
+  above. For MCP/JSON DTOs a `record` remains acceptable (value equality is
+  never exercised and `record` is idiomatic for payloads).
 
 ## 3. Migration recipe (Immutable → read-only)
 

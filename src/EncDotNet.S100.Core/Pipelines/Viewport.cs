@@ -3,7 +3,7 @@ namespace EncDotNet.S100.Pipelines;
 /// <summary>
 /// A geographic bounding rectangle representing the current display area.
 /// </summary>
-public sealed class Viewport
+public sealed record Viewport
 {
     public required double MinLatitude { get; init; }
     public required double MaxLatitude { get; init; }

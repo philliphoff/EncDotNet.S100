@@ -1,5 +1,8 @@
 namespace EncDotNet.S100.Pipelines.Vector;
 
+using EncDotNet.S100.Collections;
+using System.Collections.ObjectModel;
+
 /// <summary>
 /// Supporting types referenced by the vector portrayal catalogue.
 /// </summary>
@@ -77,8 +80,8 @@ public sealed class ViewingGroupController
     /// </summary>
     public event Action? Changed;
 
-    /// <summary>Snapshot of the current per-group user overrides.</summary>
-    public IReadOnlyDictionary<int, bool> UserOverrides => _userOverrides;
+    /// <summary>Read-only view of the current per-group user overrides.</summary>
+    public IReadOnlyDictionary<int, bool> UserOverrides => new ReadOnlyDictionary<int, bool>(_userOverrides);
 
     /// <summary>
     /// Backwards-compatible view: the effective visibility for every
@@ -167,9 +170,10 @@ public sealed class ViewingGroupController
     /// <summary>
     /// The active mode membership, or <c>null</c> when no mode is
     /// active (in which case every viewing group is visible by
-    /// default).
+    /// default). The returned set is a non-downcastable read-only view.
     /// </summary>
-    public IReadOnlySet<int>? ActiveModeMembership => _modeMembership;
+    public IReadOnlySet<int>? ActiveModeMembership =>
+        _modeMembership is null ? null : new ReadOnlySetView<int>(_modeMembership);
 
     /// <summary>
     /// Returns the effective visibility for <paramref name="viewingGroup"/>.
@@ -203,6 +207,13 @@ public sealed class ViewingGroupController
 public sealed class DisplayPlaneController
 {
     private readonly HashSet<DisplayPlane> _hidden = new();
+    private readonly ReadOnlySetView<DisplayPlane> _hiddenView;
+
+    /// <summary>Creates a new <see cref="DisplayPlaneController"/>.</summary>
+    public DisplayPlaneController()
+    {
+        _hiddenView = new ReadOnlySetView<DisplayPlane>(_hidden);
+    }
 
     /// <summary>
     /// Raised whenever the hidden set changes.
@@ -210,9 +221,10 @@ public sealed class DisplayPlaneController
     public event Action? Changed;
 
     /// <summary>
-    /// The set of planes that are currently hidden.
+    /// The set of planes that are currently hidden. The returned set is a
+    /// non-downcastable read-only view over the live hidden set.
     /// </summary>
-    public IReadOnlySet<DisplayPlane> HiddenPlanes => _hidden;
+    public IReadOnlySet<DisplayPlane> HiddenPlanes => _hiddenView;
 
     /// <summary>
     /// Returns <c>true</c> when <paramref name="plane"/> is visible
@@ -271,15 +283,18 @@ public sealed class DisplayModeController
     /// </summary>
     public string? ActiveDisplayModeId { get; private set; }
 
+    private IReadOnlySet<string> _declaredModeIds =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The set of display-mode ids declared by the per-spec portrayal
     /// catalogue this controller is bound to. Empty until
     /// <see cref="SetDeclaredModeIds"/> is called (typically by
     /// <c>DisplayModeMembership.Bind</c>). The viewer uses this to
-    /// decide which ECDIS categories make sense for a given spec.
+    /// decide which ECDIS categories make sense for a given spec. The
+    /// returned set is a non-downcastable read-only view.
     /// </summary>
-    public IReadOnlySet<string> DeclaredModeIds { get; private set; }
-        = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlySet<string> DeclaredModeIds => new ReadOnlySetView<string>(_declaredModeIds);
 
     /// <summary>
     /// Raised whenever <see cref="ActiveDisplayModeId"/> changes.
@@ -306,6 +321,6 @@ public sealed class DisplayModeController
     public void SetDeclaredModeIds(IReadOnlySet<string> ids)
     {
         ArgumentNullException.ThrowIfNull(ids);
-        DeclaredModeIds = ids;
+        _declaredModeIds = ids;
     }
 }

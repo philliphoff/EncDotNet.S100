@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Pipelines;
 /// longitude ordering.
 /// </summary>
 [Description("Axis-aligned geographic bounding rectangle in decimal degrees, WGS-84.")]
-public sealed class BoundingBox
+public sealed record BoundingBox
 {
     /// <summary>South edge of the rectangle.</summary>
     [Description("South edge in decimal degrees, WGS-84, range -90..+90.")]
