@@ -708,6 +708,54 @@
     <value>STATION ATTRIBUTES</value>
     <comment>Header for the collapsed attribute Expander shown below a station chart.</comment>
   </data>
+  <data name="Pick_EggCode_Heading" xml:space="preserve">
+    <value>EGG CODE</value>
+    <comment>Section header for the WMO/SIGRID-3 ice egg-code diagram in the S-411 pick report.</comment>
+  </data>
+  <data name="Pick_EggCode_Standard" xml:space="preserve">
+    <value>WMO / SIGRID-3</value>
+    <comment>Standard reference shown on the right of the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_Description" xml:space="preserve">
+    <value>Standard ice-analysis symbol for this feature's concentration, stage of development and floe size.</value>
+    <comment>One-line description under the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_OpenWater" xml:space="preserve">
+    <value>Open water / no ice</value>
+    <comment>Caption shown for an egg code with no ice (total concentration 0), where the oval is omitted.</comment>
+  </data>
+  <data name="Pick_EggCode_SnowDepth" xml:space="preserve">
+    <value>Snow {0} cm</value>
+    <comment>Snow depth reported beside the egg; {0} is the depth in centimetres.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverHint" xml:space="preserve">
+    <value>Hover any value in the egg for its definition.</value>
+    <comment>Hint shown below the egg-code diagram.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverLine" xml:space="preserve">
+    <value>{0} — {1}</value>
+    <comment>Hover description line below the egg; {0} is the symbol/value and {1} is its definition.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_TotalConcentration" xml:space="preserve">
+    <value>Total concentration</value>
+    <comment>Hover role label for the top row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_PartialConcentration" xml:space="preserve">
+    <value>Partial concentration</value>
+    <comment>Hover role label for the partial-concentration row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Hover role label for the stage-of-development row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_FormOfIce" xml:space="preserve">
+    <value>Form of ice / floe size</value>
+    <comment>Hover role label for the form-of-ice row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_SnowDepth" xml:space="preserve">
+    <value>Snow depth (cm)</value>
+    <comment>Hover role label for snow depth reported beside the egg.</comment>
+  </data>
   <data name="Tooltip_Search" xml:space="preserve">
     <value>Search Features</value>
   </data>

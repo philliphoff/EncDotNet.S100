@@ -914,7 +914,9 @@ public partial class MainWindow : ShadUI.Window
         _accentColor = color;
         var variant = Application.Current?.ActualThemeVariant;
         var theme = ChromeThemes.FromVariant(variant) ?? ChromeTheme.Light;
-        Resources["AccentBrush"] = new SolidColorBrush(AccentColors.ForTheme(color, theme));
+        var themed = AccentColors.ForTheme(color, theme);
+        Resources["AccentBrush"] = new SolidColorBrush(themed);
+        Resources["AccentSubtleBrush"] = new SolidColorBrush(Color.FromArgb(0x33, themed.R, themed.G, themed.B));
     }
 
     private void CaptureScreenshot(string outputPath)

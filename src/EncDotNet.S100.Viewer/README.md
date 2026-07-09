@@ -236,6 +236,15 @@ shows:
   for S-125 AtoN status bindings and S-421 route topology.
 - A **Time-series chart** when the picked feature is a fixed-station
   observation (S-104 / S-111 data-coding-format-8 stations).
+- An **Egg code** diagram when the picked feature is an S-411 sea-ice
+  or lake-ice area. The WMO / SIGRID-3 "egg" draws the total
+  concentration on top of the oval with the partial-concentration,
+  stage-of-development and form-of-ice rows beneath it (a single ice
+  type folds the partial row away, and open water omits the oval).
+  Thinner fourth / fifth ice classes are flanked to the right of their
+  row outside the oval; snow depth appears as a caption beneath it.
+  Hovering any cell shows its Feature-Catalogue meaning (e.g.
+  "Grey Ice") alongside its role in the egg.
 
 A standard one-shot pick gesture (platform-specific click modifier,
 or a press-and-hold of about half a second) works outside Pick Mode

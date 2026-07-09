@@ -137,6 +137,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual IReadOnlyList<FeatureReference> BuildFeatureReferences(TFeature feature) => [];
 
     /// <summary>
+    /// Builds the WMO / SIGRID-3 ice "egg code" projection for a feature, when
+    /// the product supports it. Returns <c>null</c> by default; S-411 overrides
+    /// this to project sea-ice / lake-ice concentration, stage, and form
+    /// attributes into an <see cref="IceEggCode"/> for the pick report.
+    /// </summary>
+    protected virtual IceEggCode? BuildEggCode(TFeature feature) => null;
+
+    /// <summary>
     /// Called before the pipeline runs. Return a non-null info string to
     /// suppress rendering (the dataset contributes no portrayal for this
     /// context, e.g. S-411 hides when the time slider is before the issue
@@ -415,6 +423,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
             References = references,
+            EggCode = BuildEggCode(feature),
         };
     }
 

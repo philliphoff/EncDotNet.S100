@@ -149,6 +149,27 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!--
+            One value cell inside the egg diagram. The raw token is centered
+            and its semantic role (total/partial concentration, stage of
+            development, form of ice) updates the below-egg description region
+            while hovered.
+        -->
+        <DataTemplate x:Key="EggValueCellTemplate" x:DataType="pp:IceEggValue">
+            <Border Classes="eggCell"
+                    CornerRadius="4"
+                    Padding="6,5"
+                    Margin="2,0"
+                    PointerEntered="OnEggCellPointerEntered"
+                    PointerExited="OnEggCellPointerExited">
+                <TextBlock Text="{Binding Text}"
+                           FontSize="13"
+                           FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           MinWidth="16" />
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -156,6 +177,19 @@
              Targets the row Border inside each even item container. -->
         <Style Selector="ItemsControl.attrTable ContentPresenter:nth-child(even) Border#AttrRow">
             <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <!-- Highlight an egg-code value cell on mouse-over so the mariner can
+             see exactly which token they are inspecting for its tooltip. The
+             base Background is set via a style (not a local value) so the
+             :pointerover setter can override it — in Avalonia a locally-set
+             property beats a style setter. The highlight uses the
+             window-scoped AccentSubtleBrush so it tracks the user's
+             configurable accent, including the muted Dusk/Night variants. -->
+        <Style Selector="Border.eggCell">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.eggCell:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
     </UserControl.Styles>
 
@@ -574,6 +608,308 @@
                                    IsVisible="{Binding !HasAttributes}" />
                     </StackPanel>
                 </Expander>
+
+                <!--
+                    WMO / SIGRID-3 "egg code" (S-411 sea-ice / lake-ice). A
+                    render-ready projection of the feature's concentration,
+                    stage of development and floe size, drawn as the standard
+                    stacked oval. Thinner fourth / fifth ice classes appear to
+                    the right of their row outside the oval; snow depth appears
+                    as a caption beneath it. Hidden for features that carry no
+                    egg data.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding HasEggCode}">
+                    <StackPanel Spacing="6" DataContext="{Binding SelectedEggCode}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Heading}"
+                                       FontSize="10"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Standard}"
+                                       FontSize="10"
+                                       LetterSpacing="1"
+                                       Opacity="0.5"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_Description}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap" />
+
+                        <!-- The egg oval (or an open-water caption). Trailing
+                             fourth / fifth ice classes (Cd/Ce, Sd/Se, Fd/Fe)
+                             are drawn outside the oval, to the right of and
+                             vertically aligned with their row. The left gutter
+                             column is reserved for future left-flank values
+                             (e.g. So). -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,4">
+                            <Grid HorizontalAlignment="Center"
+                                  IsVisible="{Binding HasOval}"
+                                  ColumnDefinitions="Auto,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto,Auto">
+                                <!-- Egg outline: the first (Ct) and last (form)
+                                     rows are capped by half-ellipse domes that
+                                     fill their own row, reaching full width
+                                     exactly at the adjoining separator. The
+                                     straight vertical sides are drawn only on
+                                     the interior rows (partial / stage) between
+                                     them, so every full-width separator meets a
+                                     vertical side flush. The dome ends are inset
+                                     half a stroke (0.75) to sit on the same
+                                     centre line as the interior side borders. -->
+
+                                <!-- Top dome, filling the Ct row. -->
+                                <Path Grid.Column="1" Grid.Row="0"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,1 A0.5,1 0 0 1 1,1"
+                                      IsVisible="{Binding ShowTotalConcentration}" />
+                                <!-- Bottom dome for the degenerate case where the
+                                     Ct row is the only row (both first and last). -->
+                                <Path Grid.Column="1" Grid.Row="0"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding TotalConcentrationIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="0"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="42"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowTotalConcentration}">
+                                    <ContentControl Content="{Binding TotalConcentration}"
+                                                    ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center" />
+                                </Border>
+
+                                <!-- Partial concentration row (Ca Cb Cc). Outline
+                                     drawn as an overlay so the row can be either an
+                                     interior row (straight vertical sides) or the
+                                     bottom-most row (curved bottom dome). -->
+                                <!-- Interior variant: straight sides + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="1.5,1,1.5,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding ShowPartialConcentrationsAsMiddle}" />
+                                <!-- Last-row variant: bottom dome + top separator. -->
+                                <Path Grid.Column="1" Grid.Row="1"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding PartialConcentrationsIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding PartialConcentrationsIsLast}" />
+                                <!-- Content. -->
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="{Binding PartialConcentrationsCellMinHeight}"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowPartialConcentrations}">
+                                    <ItemsControl ItemsSource="{Binding PartialConcentrations}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Cd/Ce, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="1"
+                                              ItemsSource="{Binding TrailingPartialConcentrations}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingPartialConcentrations}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <!-- Stage of development row (Sa Sb Sc). -->
+                                <!-- Interior variant: straight sides + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="1.5,1,1.5,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding ShowStagesOfDevelopmentAsMiddle}" />
+                                <!-- Last-row variant: bottom dome + top separator. -->
+                                <Path Grid.Column="1" Grid.Row="2"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding StagesOfDevelopmentIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding StagesOfDevelopmentIsLast}" />
+                                <!-- Content. -->
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="{Binding StagesOfDevelopmentCellMinHeight}"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowStagesOfDevelopment}">
+                                    <ItemsControl ItemsSource="{Binding StagesOfDevelopment}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Sd/Se, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="2"
+                                              ItemsSource="{Binding TrailingStagesOfDevelopment}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingStagesOfDevelopment}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <!-- Bottom dome, filling the form row (form is always
+                                     the bottom-most row when present). -->
+                                <Path Grid.Column="1" Grid.Row="3"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding ShowFormsOfIce}" />
+                                <!-- Form of ice / floe size row (Fa Fb Fc):
+                                     curved sides (dome) + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="3"
+                                        Padding="18,6"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        MinHeight="42"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowFormsOfIce}">
+                                    <ItemsControl ItemsSource="{Binding FormsOfIce}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Fd/Fe, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="3"
+                                              ItemsSource="{Binding TrailingFormsOfIce}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingFormsOfIce}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </Grid>
+
+                            <!-- Open water / no ice: no oval, only the total
+                                 concentration token and a caption. -->
+                            <StackPanel IsVisible="{Binding !HasOval}"
+                                        HorizontalAlignment="Center"
+                                        Spacing="2">
+                                <ContentControl Content="{Binding TotalConcentration}"
+                                                ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                HorizontalAlignment="Center"
+                                                IsVisible="{Binding ShowTotalConcentration}" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_OpenWater}"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Values reported outside the oval by convention. -->
+                        <StackPanel Spacing="2" IsVisible="{Binding HasAnnotations}">
+                            <TextBlock Text="{Binding SnowSummary}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       IsVisible="{Binding ShowSnowSummary}" />
+                        </StackPanel>
+
+                        <!-- Description region: shows the meaning of the value
+                             the pointer is over (or a hint when idle). Placed
+                             below the egg rather than as a per-cell tooltip so
+                             it never obscures neighbouring values. -->
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8,6"
+                                MinHeight="46"
+                                Margin="0,2,0,0">
+                            <Panel>
+                                <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_HoverHint}"
+                                           FontSize="11"
+                                           FontStyle="Italic"
+                                           Opacity="0.5"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsHoveringValue}" />
+                                <TextBlock Text="{Binding HoveredDescription}"
+                                           FontSize="11"
+                                           Opacity="0.85"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsHoveringValue}" />
+                            </Panel>
+                        </Border>
+                    </StackPanel>
+                </Border>
 
                 <!--
                     Referenced text. Resolved `fileReference` content lifted
