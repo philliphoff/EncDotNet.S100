@@ -1653,8 +1653,14 @@ public static class S100VectorTileRenderer
         // device-scale matrix then keeps them crisp on HiDPI).
         var halfWorldW = widthDip * resolution * 0.5;
         var halfWorldH = heightDip * resolution * 0.5;
-        var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH);
-        var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH);
+        // Build the viewport's lat/lon corners with the lossless (unclamped)
+        // inverse so WorldToScreen re-projects back to these exact EPSG:3857
+        // bounds. Clamping here would pull a top/bottom edge that overhangs the
+        // Web-Mercator pole limit (common when a high-latitude dataset is zoomed
+        // out) back to ±85°, compressing the overlay's vertical span so labels
+        // drift poleward off their features. See WebMercator.ToLonLat.
+        var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH, clampLatitude: false);
 
         var viewport = new CoreViewport
         {
@@ -1821,8 +1827,13 @@ public static class S100VectorTileRenderer
             ? scene
             : new VectorScene(baseIndex.Query(fullMinX, fullMinY, fullMaxX, fullMaxY));
 
-        var (minLon, minLat) = WebMercator.ToLonLat(fullMinX, fullMinY);
-        var (maxLon, maxLat) = WebMercator.ToLonLat(fullMaxX, fullMaxY);
+        // Lossless (unclamped) inverse so WorldToScreen reproduces these exact
+        // tile bounds. The top tile row's gutter pushes fullMaxY just past the
+        // Web-Mercator pole limit (±π·EarthRadius); clamping there would squash
+        // the tile's vertical mapping and drift the base geometry poleward. See
+        // WebMercator.ToLonLat.
+        var (minLon, minLat) = WebMercator.ToLonLat(fullMinX, fullMinY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(fullMaxX, fullMaxY, clampLatitude: false);
 
         var sizeDip = TileGrid.TileSizeDip + 2 * GutterDip;
         var px = (int)Math.Round(sizeDip * deviceScale);

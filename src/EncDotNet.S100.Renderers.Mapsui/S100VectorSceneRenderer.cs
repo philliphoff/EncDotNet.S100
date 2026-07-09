@@ -428,8 +428,12 @@ public static class S100VectorSceneRenderer
         var minY = request.CenterY - halfHeightMetres;
         var maxY = request.CenterY + halfHeightMetres;
 
-        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY);
-        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY);
+        // Lossless (unclamped) inverse so WorldToScreen reproduces these exact
+        // world bounds — clamping a pole-overhanging edge back to ±85° would
+        // drift geometry poleward when a high-latitude cell is zoomed out. See
+        // WebMercator.ToLonLat.
+        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY, clampLatitude: false);
 
         var widthPx = (int)Math.Round(recordWidthDip * request.DeviceScale);
         var heightPx = (int)Math.Round(recordHeightDip * request.DeviceScale);
