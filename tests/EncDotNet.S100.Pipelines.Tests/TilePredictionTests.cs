@@ -145,9 +145,14 @@ public class TilePredictionTests
     }
 
     [Fact]
-    public void PredictedTiles_NeverEmitsOutOfRangeKeys()
+    public void PredictedTiles_ClampsYButNotXAtWorldCorner()
     {
         // Viewport hard against the world corner with a fan pointing off-world.
+        // The Y (latitude) index is clamped at the poles, but the X (longitude)
+        // index is intentionally NOT clamped: EPSG:3857 is periodic east-west and
+        // continuous-frame antimeridian data (and a fan pointing past the seam)
+        // legitimately produces columns outside [0, perAxis-1]. See
+        // TileGrid.VisibleTileRange for the rationale.
         var band = 4;
         var res = TileGrid.ResolutionForBand(band);
         var size = TileGrid.TileWorldSize(band);
@@ -157,7 +162,6 @@ public class TilePredictionTests
         Assert.All(predicted, k =>
         {
             var perAxis = TileGrid.TilesPerAxis(k.Band);
-            Assert.InRange(k.X, 0, perAxis - 1);
             Assert.InRange(k.Y, 0, perAxis - 1);
         });
     }

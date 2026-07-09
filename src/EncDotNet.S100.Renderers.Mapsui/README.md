@@ -571,6 +571,19 @@ origin (not the viewport), a constant-zoom pan re-uses every interior tile and
 only the newly-exposed perimeter rasterises — pan cost scales with *perimeter,
 not area*.
 
+**Antimeridian / continuous-longitude datasets.** The grid is world-anchored at
+`[-Extent, +Extent]` (±180°), but the tile enumeration keeps a **continuous** X
+frame: `TileGrid.VisibleTileRange` / `PredictedTiles` clamp only the **Y**
+(latitude) index at the poles and leave the **X** (longitude) index unclamped
+(the span is capped to one world so an extreme zoom-out cannot repeat columns).
+An antimeridian-spanning dataset kept in a continuous frame (e.g. the US NWS
+S-411 sea-ice product, ~175°E → ~225°E) therefore tiles into columns at index
+`>= perAxis`, whose `TileWorldBounds` map back to the correct world-X east of
++180°. Correspondingly, `RasterizeTile` sets `EnableSeamWrap = false` on its
+`SkiaDisplayListRenderer` so the headless seam-wrap does not teleport the
+off-tile vertices of large continuous polygons across the world (which
+previously collapsed such datasets into a thin ±180° sliver).
+
 Each frame the UI thread snaps the live resolution to the nearest band, blits
 the **best available** tile for every visible slot, each hard-clipped to its
 core over a rendered **gutter** (`S100_VECTOR_TILE_GUTTER`, default 64 DIP) so

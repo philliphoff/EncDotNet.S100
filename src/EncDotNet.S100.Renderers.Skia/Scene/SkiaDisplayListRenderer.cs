@@ -43,6 +43,26 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     public bool HonorScaleVisibility { get; set; } = true;
 
     /// <summary>
+    /// Whether to apply the antimeridian seam-wrap in <see cref="WorldToScreen"/>
+    /// (wrapping each op's world-X into the viewport's shifted longitude window
+    /// when <c>MaxLongitude &gt; 180</c> or <c>MinLongitude &lt; −180</c>).
+    /// Defaults to <see langword="true"/> so the headless single-viewport
+    /// auto-fit path (issue #413) can gather geometry across the ±180° seam.
+    /// <para>
+    /// The <b>tiled</b> subsystem sets this to <see langword="false"/>: it
+    /// rasterises each tile from a narrow per-tile viewport over geometry that is
+    /// already positioned in a <i>continuous</i> EPSG:3857 X frame (longitudes
+    /// may exceed +180° without wrapping). Under a per-tile window whose bounds
+    /// both lie east of +180°, the seam-wrap would teleport the far vertices of
+    /// large polygons that extend west of the tile back across the world,
+    /// smearing them across the tile. Disabling the wrap keeps continuous
+    /// geometry continuous; off-tile vertices simply project outside the tile
+    /// and are clipped.
+    /// </para>
+    /// </summary>
+    public bool EnableSeamWrap { get; set; } = true;
+
+    /// <summary>
     /// Process-wide cache of parsed symbol pictures keyed by the resolved SVG
     /// content (<see cref="ResolvedSymbol.ProcessedSvg"/>). Parsing an SVG into
     /// an <see cref="SKPicture"/> via <see cref="SKSvg.CreateFromSvg(string)"/>
@@ -283,7 +303,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(options);
 
-        var transform = WorldToScreen.Create(viewport);
+        var transform = WorldToScreen.Create(viewport, EnableSeamWrap);
         double denom = viewport.ScaleDenominator;
 
         var cullBounds = options.PointCullBounds ?? new SKRect(

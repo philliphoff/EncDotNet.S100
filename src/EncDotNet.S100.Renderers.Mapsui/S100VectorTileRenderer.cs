@@ -1846,6 +1846,12 @@ public static class S100VectorTileRenderer
         {
             Background = SceneRgbaColor.Transparent,
             HonorScaleVisibility = true,
+            // Tiles carry already-continuous EPSG:3857 geometry (longitudes may
+            // exceed +180° without wrapping). The seam-wrap is a headless
+            // single-viewport auto-fit concern; under a narrow per-tile viewport
+            // east of +180° it would teleport far vertices of large polygons and
+            // smear them across the tile, so it is disabled here.
+            EnableSeamWrap = false,
         };
 
         return renderer.Render(tileScene, viewport);
