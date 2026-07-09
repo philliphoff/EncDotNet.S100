@@ -575,7 +575,7 @@ not area*.
 `[-Extent, +Extent]` (±180°), but the tile enumeration keeps a **continuous** X
 frame: `TileGrid.VisibleTileRange` / `PredictedTiles` clamp only the **Y**
 (latitude) index at the poles and leave the **X** (longitude) index unclamped
-(the span is capped to one world so an extreme zoom-out cannot repeat columns).
+(an absolute guard of 4096 columns prevents runaway allocation at pathological zoom-out, but the span is otherwise unclamped so every visible column is enumerated).
 An antimeridian-spanning dataset kept in a continuous frame (e.g. the US NWS
 S-411 sea-ice product, ~175°E → ~225°E) therefore tiles into columns at index
 `>= perAxis`, whose `TileWorldBounds` map back to the correct world-X east of
