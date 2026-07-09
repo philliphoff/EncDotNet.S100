@@ -740,6 +740,18 @@ map to Online/None. Use None or Offline for offline operation, or for
 performance runs that want to measure only dataset rendering without
 basemap tile fetch / raster activity (issue #295).
 
+The **Offline** basemap repeats its Natural Earth land across the
+immediately-adjacent world copies (one circumference east and west), so
+a dataset kept in a continuous longitude frame across the ±180°
+antimeridian — e.g. the US NWS S-411 sea-ice product (~175°E → ~225°E) —
+has land beneath it instead of floating over empty water. The layer
+still reports a single-world extent, so "zoom to extent" is unaffected.
+The **Online** OpenStreetMap tiles are *not* world-copied (the XYZ tile
+schema spans one world and Mapsui's tiling does not wrap), so such a
+dataset shows no online tiles beneath the portion east of +180°; use the
+Offline basemap for antimeridian datasets. Wrapping the online tile
+source is a possible future enhancement.
+
 **Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course
 over ground (degrees true `[0, 360)`), and `--own-ship-sog <MS>` sets
