@@ -18,7 +18,7 @@ internal static class MapScaleFormatter
 
     // OGC standardized rendering pixel size (0.28 mm), the conventional basis
     // for converting ground-meters-per-pixel into a 1:N map-scale denominator.
-    private const double PixelSizeMeters = 0.00028;
+    internal const double PixelSizeMeters = 0.00028;
 
     /// <summary>
     /// Formats the scale denominator for the given EPSG:3857 viewport.

@@ -157,22 +157,43 @@ public class TileGridTests
         var bounds = TileGrid.TileWorldBounds(eastTile);
         Assert.True(bounds.MinX >= TileGrid.Extent,
             $"east tile world MinX {bounds.MinX} should be >= +Extent {TileGrid.Extent}");
-        // The whole selection spans no more than one world (the X span is capped).
+        // The data is drawn once at its true continuous position (no world-copy
+        // duplication like the basemap), so a normal (screenful) viewport emits a
+        // single contiguous run of columns — no repeated world copy.
         var span = tiles.Max(t => t.X) - tiles.Min(t => t.X) + 1;
-        Assert.True(span <= perAxis, $"X span {span} exceeds one world ({perAxis})");
+        var distinctColumns = tiles.Select(t => t.X).Distinct().Count();
+        Assert.Equal(span, distinctColumns);
     }
 
     [Fact]
-    public void VisibleTileRange_CapsXSpanToOneWorldOnExtremeZoomOut()
+    public void VisibleTileRange_EnumeratesEveryVisibleColumn_NoOneWorldCap()
     {
-        // A whole-world-wide viewport at band 0 (perAxis == 1) must not enumerate
-        // repeated columns: the span cap keeps it to a single column, matching the
-        // pre-existing single-world behaviour for normal (non-antimeridian) data.
+        // Option B: chart data is drawn exactly once at its true continuous
+        // EPSG:3857 position (it is not world-copied like the basemap), so a wide
+        // multi-world viewport must enumerate every visible column instead of
+        // collapsing to a single world. Otherwise antimeridian data would pop
+        // between world-copies as the pan crossed a world boundary. A band-0
+        // (perAxis == 1) viewport several worlds wide therefore yields several
+        // columns, not one.
         var band = 0;
         var perAxis = TileGrid.TilesPerAxis(band);
         var res = TileGrid.ResolutionForBand(band);
         var range = TileGrid.VisibleTileRange(0, 0, 4096, 4096, res, band);
-        Assert.Equal(perAxis, range.XEnd - range.XStart + 1);
+        var span = range.XEnd - range.XStart + 1;
+        Assert.True(span > perAxis, $"expected multiple world columns, got span {span} (perAxis {perAxis})");
+    }
+
+    [Fact]
+    public void VisibleTileRange_GuardBoundsPathologicalZoomOut()
+    {
+        // The one-world cap is gone, but a generous absolute guard still bounds a
+        // pathological viewport so tile enumeration cannot allocate unbounded
+        // columns. The guard is far beyond any realistic viewport.
+        var band = 0;
+        var res = TileGrid.ResolutionForBand(band);
+        var range = TileGrid.VisibleTileRange(0, 0, 1_000_000_000, 4096, res, band);
+        var span = range.XEnd - range.XStart + 1;
+        Assert.True(span <= 4096, $"span {span} should be bounded by the absolute guard (4096)");
     }
 
     [Fact]

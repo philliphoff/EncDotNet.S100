@@ -200,9 +200,15 @@ internal static class TileGrid
     /// viewer's tiled render subsystem drew a thin sliver at ±180° while the
     /// non-tiled and headless paths framed it correctly). Instead the raw
     /// column indices are kept — <see cref="TileWorldBounds"/> maps them to the
-    /// correct continuous world position — and only the column <em>span</em> is
-    /// capped to one full world (<paramref name="perAxis"/> columns) so an
-    /// extreme zoom-out cannot enumerate unbounded repeats.
+    /// correct continuous world position — so a dataset kept in a continuous
+    /// frame is reachable at its true columns wherever the viewport is panned.
+    /// The span is <em>not</em> capped to one world: the chart data is drawn
+    /// exactly once at its true position (it is not world-copied like the
+    /// basemap), so every visible column must be enumerable or the data would
+    /// pop between world-copies as the pan crossed a world boundary. Only a
+    /// generous absolute guard bounds a pathological zoom-out, and it keeps the
+    /// window anchored at the left edge (never re-centred) so panning slides the
+    /// columns smoothly instead of flipping the enumerated world.
     /// </remarks>
     public static TileRange VisibleTileRange(
         double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
@@ -219,10 +225,15 @@ internal static class TileGrid
 
         var xStart = (int)Math.Floor((centerX - halfW + Extent) / size);
         var xEnd = (int)Math.Floor((centerX + halfW + Extent) / size);
-        // Cap the X span to one full world; never clamp X into [0, perAxis-1].
-        if (xEnd - xStart + 1 > perAxis)
+        // Enumerate every visible column (including those beyond the standard
+        // world for antimeridian data); never clamp X into [0, perAxis-1] and
+        // never re-anchor the window. A large absolute guard only bounds a
+        // pathological zoom-out — it is far beyond any realistic viewport, so it
+        // does not truncate the visible copies in practice.
+        const int MaxColumns = 4096;
+        if (xEnd - xStart + 1 > MaxColumns)
         {
-            xEnd = xStart + perAxis - 1;
+            xEnd = xStart + MaxColumns - 1;
         }
         // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
         var yStart = (int)Math.Floor((Extent - (centerY + halfH)) / size);

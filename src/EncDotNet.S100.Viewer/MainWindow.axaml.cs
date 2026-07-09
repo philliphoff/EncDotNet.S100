@@ -326,6 +326,12 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.MapViewportNotifier>()
                 .Bind(notifierNav);
+
+            // Clamp zoom in/out so the user cannot zoom to an unbounded,
+            // meaningless scale (e.g. many world copies off the edge of a
+            // cross-antimeridian dataset, or arbitrarily deep past chart
+            // resolution).
+            MapZoomLimits.Apply(notifierNav);
         }
 
         // PR-D2: dynamic-source overlay host. Registered *after* the

@@ -338,6 +338,11 @@ public static class S100VectorSceneRenderer
                 {
                     Background = SceneRgbaColor.Transparent,
                     HonorScaleVisibility = true,
+                    // Draw the scene once at its true continuous EPSG:3857
+                    // position (matching the tiled path). Seam-wrap would
+                    // left-edge-wrap antimeridian data whose viewport spans past
+                    // ±180°, smearing it; keep it off so the data stays put.
+                    EnableSeamWrap = false,
                 };
 
                 var rasterStart = Stopwatch.GetTimestamp();

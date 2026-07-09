@@ -343,6 +343,14 @@ public static class S100VectorTileRenderer
     {
         Background = SceneRgbaColor.Transparent,
         HonorScaleVisibility = true,
+        // The overlay draws the live symbol/text layer over the base tiles,
+        // which carry already-continuous EPSG:3857 geometry (antimeridian data
+        // keeps longitudes beyond ±180° without wrapping). The seam-wrap is a
+        // headless single-viewport auto-fit concern; enabling it here would
+        // left-edge-wrap the overlay off the fixed tile positions, so the
+        // symbols/labels would slide away from their features. Keep it off so
+        // the overlay stays locked to the base's continuous frame.
+        EnableSeamWrap = false,
     };
 
     // Stateless, render-thread-only label declutter for the live overlay. S-100
