@@ -1620,9 +1620,24 @@ public static class S100VectorTileRenderer
             var dx = (minX + maxX) * 0.5 - centerX;
             var dy = (minY + maxY) * 0.5 - centerY;
             var score = dx * dx + dy * dy;
-            if (!found || score < bestScore || (score == bestScore && TileOrderLess(k, best)))
+            if (!found)
             {
                 found = true;
+                best = k;
+                bestScore = score;
+                continue;
+            }
+
+            // Squared distances in EPSG:3857 metres are large and involve π and
+            // division, so exact equality is unreliable for detecting a tie.
+            // Distinct tiles differ by at least ~a tile edge, which dwarfs this
+            // relative tolerance, so genuine ties (including mirror-image tiles)
+            // fall through to the deterministic (Band, Y, X) order while nearer
+            // tiles still win outright.
+            var tolerance = 1e-9 * Math.Max(Math.Abs(score), Math.Abs(bestScore));
+            var isTie = Math.Abs(score - bestScore) <= tolerance;
+            if (isTie ? TileOrderLess(k, best) : score < bestScore)
+            {
                 best = k;
                 bestScore = score;
             }

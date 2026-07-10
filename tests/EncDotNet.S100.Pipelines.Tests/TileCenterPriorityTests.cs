@@ -114,7 +114,11 @@ public class TileCenterPriorityTests
         {
             var next = S100VectorTileRenderer.TakeNearest(pending, cx, cy);
             var d = DistSq(next);
-            Assert.True(d >= previous, $"drain order must be non-decreasing distance: {previous} -> {d}");
+            // Same-ring tiles are equal-distance ties resolved by (Band, Y, X),
+            // so allow the same sub-ULP relative slack the dequeue treats as a
+            // tie rather than requiring a strict exact-distance ordering.
+            var tolerance = 1e-9 * Math.Max(previous, d);
+            Assert.True(d >= previous - tolerance, $"drain order must be non-decreasing distance: {previous} -> {d}");
             previous = d;
         }
     }
