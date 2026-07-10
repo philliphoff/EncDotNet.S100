@@ -45,6 +45,9 @@ public class ExchangeSetServiceLoaderTests
     private static string S101OrphanFixture() =>
         Path.Combine(FixturesRoot(), "Synthetic-S101Orphan");
 
+    private static string S411NoProductIdFixture() =>
+        Path.Combine(FixturesRoot(), "Synthetic-S411NoProductId");
+
     private sealed class NoopLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; }
@@ -170,6 +173,34 @@ public class ExchangeSetServiceLoaderTests
         // the underlying file handle is released right away.
         Assert.Empty(datasets.Entries);
         Assert.Empty(datasets.ExchangeSetHeaders);
+    }
+
+    /// <summary>
+    /// Reproduces the real-world JCOMM S-411 (Canadian Ice Service) exchange
+    /// set whose <c>productSpecification</c> declares only a human-readable
+    /// <c>name</c> ("Ice Information Product Specification (JCOMM S-411)") with
+    /// no <c>productIdentifier</c> or number. The declared spec cannot be
+    /// mapped, so the loader must content-sniff the GML root element
+    /// (<c>ice:IceDataSet</c>) and still dispatch the dataset as S-411 rather
+    /// than skipping it as unsupported.
+    /// </summary>
+    [Fact]
+    public async Task OpenAsync_S411NoProductId_ContentSniffsAndLoadsAsS411()
+    {
+        var (datasets, service) = CreateSystem();
+        using var _ = service;
+
+        var result = await service.OpenAsync(S411NoProductIdFixture());
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(1, result.Loaded);
+        Assert.Equal(0, result.SkippedUnsupported);
+        Assert.False(result.Cancelled);
+        Assert.Empty(result.SkipMessages);
+
+        var entry = Assert.Single(datasets.Entries);
+        Assert.Equal("S-411", entry.ProductSpec);
+        Assert.Equal("S-411/ice.gml", entry.RelativePath);
     }
 
     private sealed class SynchronousProgress<T> : IProgress<T>

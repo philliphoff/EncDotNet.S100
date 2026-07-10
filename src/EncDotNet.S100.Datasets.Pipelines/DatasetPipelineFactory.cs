@@ -142,6 +142,28 @@ public sealed class DatasetPipelineFactory
             // Some GML files have leading whitespace before the XML declaration;
             // read as text, trim, and parse via a StringReader to tolerate this.
             var xml = File.ReadAllText(path).TrimStart();
+            return DetectGmlProductSpecFromXml(xml);
+        }
+        catch
+        {
+            // Unable to parse – unknown
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Inspects the root element / declared namespaces / <c>productIdentifier</c>
+    /// of an already-loaded GML document body to determine its S-100 product
+    /// specification (e.g. <c>"S-411"</c>). Shared by the file-path and
+    /// asset-source detection paths so exchange-set datasets whose catalogue
+    /// omits a machine-readable <c>productIdentifier</c> (common for JCOMM S-411
+    /// sets) are still routed correctly. Returns <c>null</c> when unrecognized.
+    /// </summary>
+    private static string? DetectGmlProductSpecFromXml(string xml)
+    {
+        try
+        {
             using var stringReader = new StringReader(xml);
             using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
             while (reader.Read())
@@ -411,6 +433,7 @@ public sealed class DatasetPipelineFactory
 
         var spec = MapProductIdentifierToSpec(declaredProductSpec)
             ?? DetectProductSpecByExtension(relativePath)
+            ?? DetectProductSpecFromSource(source, relativePath)
             ?? throw new NotSupportedException(
                 $"Unable to determine product specification for '{relativePath}' " +
                 $"(declared='{declaredProductSpec ?? "<none>"}').");
@@ -597,5 +620,44 @@ public sealed class DatasetPipelineFactory
             return null;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Content-sniffs a GML dataset stored inside <paramref name="source"/> to
+    /// determine its S-100 product specification when the exchange-set catalogue
+    /// omits a machine-readable <c>productIdentifier</c>. Real-world JCOMM S-411
+    /// exchange sets declare only a human-readable product-specification
+    /// <c>name</c> (e.g. "Ice Information Product Specification (JCOMM S-411)")
+    /// with no identifier or number, so the declared spec cannot be mapped and
+    /// the dataset must be recognized from its GML root element / namespaces.
+    /// Only <c>.gml</c>/<c>.xml</c> datasets are sniffed; returns <c>null</c>
+    /// when the file cannot be read or is unrecognized. Returns the canonical
+    /// spec string (e.g. <c>"S-411"</c>) understood by
+    /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
+    /// </summary>
+    /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
+    /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
+    public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(relativePath);
+
+        var ext = Path.GetExtension(relativePath);
+        if (!string.Equals(ext, ".gml", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(ext, ".xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        try
+        {
+            AssetBytes bytes = source.ReadAllBytesAsync(relativePath).GetAwaiter().GetResult();
+            var xml = System.Text.Encoding.UTF8.GetString(bytes.Bytes.Span).TrimStart();
+            return DetectGmlProductSpecFromXml(xml);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
