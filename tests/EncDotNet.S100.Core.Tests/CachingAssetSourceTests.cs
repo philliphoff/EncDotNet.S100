@@ -133,6 +133,55 @@ public class CachingAssetSourceTests
     }
 
     [Fact]
+    public async Task DisposeAsync_ForwardsToInnerAsync()
+    {
+        var inner = new InMemoryAssetSource(new());
+        var cache = new CachingAssetSource(inner);
+
+        await cache.DisposeAsync();
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task AwaitUsing_DisposesInnerAsynchronously()
+    {
+        var inner = new InMemoryAssetSource(new());
+        await using (new CachingAssetSource(inner))
+        {
+        }
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DefaultImplementationForwardsToDispose()
+    {
+        var source = new SyncOnlyAssetSource();
+
+        await ((IAssetSource)source).DisposeAsync();
+
+        // The default IAsyncDisposable implementation on IAssetSource
+        // forwards to the synchronous Dispose().
+        Assert.True(source.Disposed);
+    }
+
+    /// <summary>
+    /// An <see cref="IAssetSource"/> that implements only the synchronous
+    /// <see cref="IDisposable.Dispose"/>, relying on the interface's default
+    /// <c>DisposeAsync</c> to bridge to async disposal.
+    /// </summary>
+    private sealed class SyncOnlyAssetSource : IAssetSource
+    {
+        public bool Disposed { get; private set; }
+
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
     public async Task GetAsync_PropagatesFileNotFoundOnMiss()
     {
         var inner = new InMemoryAssetSource(new());

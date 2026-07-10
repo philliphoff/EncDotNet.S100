@@ -356,4 +356,68 @@ public class ProtectionTests
         await stream.CopyToAsync(ms);
         return ms.ToArray();
     }
+
+    // --- DecryptingAssetSource: disposal ownership --------------------------
+
+    [Fact]
+    public async Task DisposeAsync_DisposesInnerWhenOwned()
+    {
+        var inner = new TrackingAssetSource();
+        var source = new DecryptingAssetSource(inner, new NoKeyProvider(), ownsInner: true);
+
+        await source.DisposeAsync();
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DoesNotDisposeInnerWhenNotOwned()
+    {
+        var inner = new TrackingAssetSource();
+        var source = new DecryptingAssetSource(inner, new NoKeyProvider(), ownsInner: false);
+
+        await source.DisposeAsync();
+
+        Assert.False(inner.Disposed);
+        Assert.False(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public void Dispose_DoesNotDisposeInnerWhenNotOwned()
+    {
+        var inner = new TrackingAssetSource();
+        var source = new DecryptingAssetSource(inner, new NoKeyProvider(), ownsInner: false);
+
+        source.Dispose();
+
+        Assert.False(inner.Disposed);
+    }
+
+    private sealed class NoKeyProvider : IDatasetKeyProvider
+    {
+        public bool TryGetCellKey(string datasetFileName, out byte[]? cellKey)
+        {
+            cellKey = null;
+            return false;
+        }
+    }
+
+    private sealed class TrackingAssetSource : EncDotNet.S100.Core.IAssetSource
+    {
+        public bool Disposed { get; private set; }
+
+        public bool DisposedAsync { get; private set; }
+
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public void Dispose() => Disposed = true;
+
+        public ValueTask DisposeAsync()
+        {
+            DisposedAsync = true;
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
 }

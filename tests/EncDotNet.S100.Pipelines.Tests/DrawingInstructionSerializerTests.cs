@@ -226,4 +226,28 @@ public class DrawingInstructionSerializerTests
                 break;
         }
     }
+
+    // The disk-backed portrayal cache persists these enums by their numeric
+    // ordinal (DrawingInstructionSerializer writes/reads them as int). The
+    // values are therefore an on-disk contract: reordering or renumbering a
+    // member would silently reinterpret already-cached files. These asserts
+    // pin the values so any accidental change fails the build; a deliberate
+    // change must also bump DrawingInstructionSerializer.FormatVersion.
+    [Fact]
+    public void PersistedEnumValues_AreStable()
+    {
+        Assert.Equal(0, (int)DisplayPlane.UnderRadar);
+        Assert.Equal(1, (int)DisplayPlane.OverRadar);
+
+        Assert.Equal(0, (int)TextHorizontalAlignment.Start);
+        Assert.Equal(1, (int)TextHorizontalAlignment.Center);
+        Assert.Equal(2, (int)TextHorizontalAlignment.End);
+
+        Assert.Equal(0, (int)TextVerticalAlignment.Top);
+        Assert.Equal(1, (int)TextVerticalAlignment.Center);
+        Assert.Equal(2, (int)TextVerticalAlignment.Bottom);
+
+        Assert.Equal(0, (int)LinePlacementMode.Relative);
+        Assert.Equal(1, (int)LinePlacementMode.Absolute);
+    }
 }

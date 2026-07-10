@@ -25,6 +25,9 @@ internal sealed class InMemoryAssetSource : IAssetSource
 
     public bool Disposed { get; private set; }
 
+    /// <summary>True when the source was released via <see cref="DisposeAsync"/>.</summary>
+    public bool DisposedAsync { get; private set; }
+
     public int OpenCount(string path) =>
         _openCounts.TryGetValue(path, out int count) ? count : 0;
 
@@ -50,5 +53,12 @@ internal sealed class InMemoryAssetSource : IAssetSource
     public void Dispose()
     {
         Disposed = true;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        DisposedAsync = true;
+        Disposed = true;
+        return ValueTask.CompletedTask;
     }
 }

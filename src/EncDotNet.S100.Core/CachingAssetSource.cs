@@ -80,4 +80,7 @@ public sealed class CachingAssetSource : IAssetSource
 
     /// <inheritdoc />
     public void Dispose() => _inner.Dispose();
+
+    /// <inheritdoc />
+    public ValueTask DisposeAsync() => _inner.DisposeAsync();
 }

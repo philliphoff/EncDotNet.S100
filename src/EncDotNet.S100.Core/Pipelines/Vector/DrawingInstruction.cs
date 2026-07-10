@@ -297,27 +297,42 @@ public sealed class TextInstruction : DrawingInstruction
 }
 
 /// <summary>S-100 Part 9 horizontal text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract: they are written by ordinal
+/// into the disk-backed portrayal cache (<see cref="Caching.DrawingInstructionSerializer"/>).
+/// Do not renumber or reorder existing members; append new members with the
+/// next free value, and bump <see cref="Caching.DrawingInstructionSerializer.FormatVersion"/>
+/// if the wire meaning changes.
+/// </remarks>
 public enum TextHorizontalAlignment
 {
-    Start,
-    Center,
-    End,
+    Start = 0,
+    Center = 1,
+    End = 2,
 }
 
 /// <summary>S-100 Part 9 vertical text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
 public enum TextVerticalAlignment
 {
-    Top,
-    Center,
-    Bottom,
+    Top = 0,
+    Center = 1,
+    Bottom = 2,
 }
 
 /// <summary>S-100 Part 9 line placement mode.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
 public enum LinePlacementMode
 {
     /// <summary>Offsets are fractions in the range [0,1] of the curve length.</summary>
-    Relative,
+    Relative = 0,
 
     /// <summary>Offsets are absolute distances in millimetres along the curve.</summary>
-    Absolute,
+    Absolute = 1,
 }

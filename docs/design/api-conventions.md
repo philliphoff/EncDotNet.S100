@@ -305,3 +305,72 @@ named types) on purpose:
 
 Both convert to/from `GeoPosition` at their boundary rather than propagating a
 second coordinate type inward.
+
+## 9. Explicit enum values only where the number is a contract
+
+An enum's underlying numeric value matters only when something outside the
+type observes it. Assign **explicit** values when — and only when — the
+number is a contract:
+
+- **Persisted / cached numerically.** The disk-backed portrayal cache
+  (`DrawingInstructionSerializer` behind `DiskPortrayalInstructionCache`)
+  writes some enums by ordinal, so `DisplayPlane`, `TextHorizontalAlignment`,
+  `TextVerticalAlignment`, and `LinePlacementMode` carry explicit values.
+  Their XML docs say so, a `PersistedEnumValues_AreStable` test pins them, and
+  any deliberate change must bump `DrawingInstructionSerializer.FormatVersion`.
+- **Serialized to a wire / file format** as a number, or mapped to an external
+  code list (e.g. S-100 Part 10b geometric-primitive codes on
+  `S100GeometryType`, the S-98 draw-order codes on `S98DisplayPlane`).
+
+For a purely in-memory enum whose value is never observed as a number, leave
+the ordinals implicit — adding `= 0, = 1, …` that merely restate the default
+is noise. `DiagnosticSeverity` and `ValidationSeverity` are compared only by
+equality (`== Error`), never by ordinal, and are never persisted, so they stay
+implicit.
+
+When an enum crosses a **JSON** boundary (MCP tools, settings files), prefer
+serializing it *as a string* via `JsonStringEnumConverter` rather than relying
+on the numeric value at all — that removes the ordering hazard entirely and
+keeps the wire self-describing.
+
+## 10. Disposal: pair `IDisposable` with `IAsyncDisposable`
+
+Resource-owning abstractions that already expose an async I/O surface should
+implement **both** `IDisposable` and `IAsyncDisposable`, so callers can write
+`await using` without giving up the synchronous path.
+
+`IAssetSource` is the reference example. It implements both, and provides a
+**default interface method** for `DisposeAsync` that forwards to `Dispose()`:
+
+```csharp
+public interface IAssetSource : IDisposable, IAsyncDisposable
+{
+    Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default);
+
+    ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
+```
+
+Guidance for implementations:
+
+- **Leaf sources** whose resources dispose synchronously (a `ZipArchive`, a
+  directory root, embedded resources) need **no** `DisposeAsync` — the default
+  is correct. `ZipArchive` isn't `IAsyncDisposable`, so there is no genuine
+  async path to add.
+- **Owning wrappers** that hold another `IAssetSource` (or a truly
+  async-disposable resource) should **override** `DisposeAsync` to propagate it
+  without blocking — e.g. `CachingAssetSource.DisposeAsync() => _inner.DisposeAsync()`.
+  When ownership is conditional, honour the flag:
+  `DecryptingAssetSource.DisposeAsync() => _ownsInner ? _inner.DisposeAsync() : ValueTask.CompletedTask`.
+- **Non-owning decorators** (e.g. `NonDisposingAssetSource`) keep their no-op
+  `Dispose`; the default `DisposeAsync` then correctly does nothing to the
+  borrowed inner source.
+
+The default interface method is only reachable through the interface (or an
+`await using` over an interface-typed variable). A concrete wrapper that expects
+to be `await using`-d directly should therefore also declare a public
+`DisposeAsync`, which the owning wrappers above already do.
