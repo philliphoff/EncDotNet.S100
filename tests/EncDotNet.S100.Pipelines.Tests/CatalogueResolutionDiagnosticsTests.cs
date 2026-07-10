@@ -12,6 +12,12 @@ public class CatalogueResolutionDiagnosticsTests
 
     private static MeterListener StartCapture(List<Measurement> sink)
     {
+        // The counter lives on a process-global meter, so a dataset-processor
+        // test running in parallel in another collection can emit into the same
+        // instrument. MeterListener callbacks fire synchronously on the thread
+        // that called Counter.Add, so restrict capture to measurements emitted
+        // on this test's own thread; cross-test leakage arrives on other threads.
+        int testThreadId = Environment.CurrentManagedThreadId;
         var listener = new MeterListener
         {
             InstrumentPublished = (instrument, l) =>
@@ -25,6 +31,8 @@ public class CatalogueResolutionDiagnosticsTests
         };
         listener.SetMeasurementEventCallback<long>((instrument, value, tags, state) =>
         {
+            if (Environment.CurrentManagedThreadId != testThreadId) return;
+
             var dict = new Dictionary<string, object?>(tags.Length);
             for (int i = 0; i < tags.Length; i++) dict[tags[i].Key] = tags[i].Value;
             sink.Add(new Measurement(value, dict));
