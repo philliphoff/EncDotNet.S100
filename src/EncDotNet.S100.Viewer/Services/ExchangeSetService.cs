@@ -231,7 +231,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 }
 
                 var spec = DatasetPipelineFactory.MapProductSpecificationToSpec(
-                    metadata.ProductSpecification);
+                    metadata.ProductSpecification)
+                    ?? await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(
+                        tracked.Source, relativePath, cancellationToken)
+                        .ConfigureAwait(true);
                 if (spec is null)
                 {
                     var msg = string.Format(

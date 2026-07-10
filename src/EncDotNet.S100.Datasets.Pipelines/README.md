@@ -39,7 +39,10 @@ enumerating features, and validating:
 
 `DatasetPipelineFactory` discriminates an input file by extension,
 HDF5 signature, or GML application namespace and returns the matching
-processor wrapped in an `IDatasetProcessor`. `ExchangeSetLoader`
+processor wrapped in an `IDatasetProcessor`. Its source-based GML sniff
+is also available through `DetectProductSpecFromSourceAsync(...)` for
+exchange-set callers whose catalogue metadata omits a machine-readable
+product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
 walks an S-100 exchange-set catalogue and yields one processor per
 dataset entry.
 
