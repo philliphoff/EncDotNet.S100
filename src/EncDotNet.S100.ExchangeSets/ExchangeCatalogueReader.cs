@@ -53,20 +53,36 @@ public static class ExchangeCatalogueReader
             Comment = ReadCharacterString(root.Element(xc + "exchangeCatalogueComment")),
             DataServerIdentifier = (string?)root.Element(xc + "dataServerIdentifier"),
             Certificates = ReadCertificateBlock(root.Element(xc + "certificates")),
-            DatasetDiscoveryMetadata = root
-                .Element(xc + "datasetDiscoveryMetadata")?
-                .Elements()
-                .Where(e => e.Name.LocalName.EndsWith("_DatasetDiscoveryMetadata", StringComparison.Ordinal))
+            DatasetDiscoveryMetadata = CollectDiscoveryRecords(
+                    root, xc, "datasetDiscoveryMetadata", "_DatasetDiscoveryMetadata")
                 .Select(e => ReadDatasetDiscovery(e, xc, lan))
-                .ToList() ?? [],
+                .ToList(),
             SupportFileDiscoveryMetadata = ReadSupportFileDiscoveries(root, xc),
-            CatalogueDiscoveryMetadata = root
-                .Element(xc + "catalogueDiscoveryMetadata")?
-                .Elements()
-                .Where(e => e.Name.LocalName.EndsWith("_CatalogueDiscoveryMetadata", StringComparison.Ordinal))
+            CatalogueDiscoveryMetadata = CollectDiscoveryRecords(
+                    root, xc, "catalogueDiscoveryMetadata", "_CatalogueDiscoveryMetadata")
                 .Select(e => ReadCatalogueDiscovery(e, xc, lan))
-                .ToList() ?? [],
+                .ToList(),
         };
+    }
+
+    /// <summary>
+    /// Collects typed discovery records (e.g. <c>S100_DatasetDiscoveryMetadata</c>)
+    /// from a catalogue, tolerating both layouts seen in the wild. Modern
+    /// S-100 (Edition 5.x, Part 17) nests the records inside a wrapper
+    /// element (e.g. <c>datasetDiscoveryMetadata</c>); the legacy
+    /// <c>S100EC</c> schema used by some products — notably JCOMM/IHO
+    /// S-411 — places the same <c>*_DatasetDiscoveryMetadata</c> records
+    /// directly under the catalogue root with no wrapper. When the wrapper
+    /// is present its children are used; otherwise the root is scanned
+    /// directly.
+    /// </summary>
+    private static IEnumerable<XElement> CollectDiscoveryRecords(
+        XElement root, XNamespace xc, string wrapperName, string suffix)
+    {
+        var wrapper = root.Element(xc + wrapperName);
+        var candidates = wrapper?.Elements() ?? root.Elements();
+        return candidates.Where(
+            e => e.Name.LocalName.EndsWith(suffix, StringComparison.Ordinal));
     }
 
     private static ExchangeCatalogueContact? ReadContact(XElement? element, XNamespace xc)

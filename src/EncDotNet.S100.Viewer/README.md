@@ -86,7 +86,9 @@ The viewer accepts:
 
 - **S-100 Exchange Sets** — point it at a directory containing a
   `CATALOG.XML` or at a `.zip` exchange-set archive, and it will
-  load every dataset entry the catalogue lists.
+  load every dataset entry the catalogue lists. The canonical
+  `CATALOG.XML` name and the `catalogue.xml` spelling used by some
+  products (e.g. JCOMM/IHO S-411 sample sets) are both recognised.
 - **S-57 / S-63 Exchange Sets** — point it at a directory containing a
   `CATALOG.031` (or drop the `CATALOG.031` file itself) and it will
   enumerate every base cell the catalogue lists, apply each cell's

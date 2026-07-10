@@ -70,9 +70,40 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
-    public void Dataset_ExpectedHash_IsParsedFromHashMrn()
+    public void Read_LegacyS100EcSchema_ParsesDatasetsWithoutWrapper()
     {
+        // The legacy S100EC schema used by JCOMM/IHO S-411 places the
+        // S100_DatasetDiscoveryMetadata records directly under the
+        // catalogue root, with no <datasetDiscoveryMetadata> wrapper
+        // (unlike modern S-100 Part 17). The reader must still find them.
         const string xml = """
+            <ec:S100_ExchangeCatalogue xmlns:ec="http://www.iho.int/S100EC">
+                <ec:identifier>
+                    <ec:identifier>S411_TEST</ec:identifier>
+                    <ec:editionNumber>1.1.0</ec:editionNumber>
+                </ec:identifier>
+                <ec:S100_DatasetDiscoveryMetadata>
+                    <ec:fileName>S411_TEST.gml</ec:fileName>
+                    <ec:filePath>/data/S411_TEST.gml</ec:filePath>
+                    <ec:description>S-411 Ice Data Set</ec:description>
+                    <ec:editionNumber>1.1.0</ec:editionNumber>
+                    <ec:updateNumber>not applicable</ec:updateNumber>
+                </ec:S100_DatasetDiscoveryMetadata>
+            </ec:S100_ExchangeCatalogue>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        Assert.Equal("S411_TEST", catalogue.Identifier.Identifier);
+        var dataset = Assert.Single(catalogue.DatasetDiscoveryMetadata);
+        Assert.Equal("S411_TEST.gml", dataset.FileName);
+        Assert.Equal("/data/S411_TEST.gml", dataset.FilePath);
+    }
+
+    [Fact]
+    public void Dataset_ExpectedHash_IsParsedFromHashMrn()
+    {        const string xml = """
             <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
                 <S100XC:identifier>
                     <S100XC:identifier>TEST</S100XC:identifier>
