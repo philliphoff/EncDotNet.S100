@@ -50,14 +50,17 @@ public sealed class CachingAssetSource : IAssetSource
     /// <inheritdoc />
     public async Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
     {
-        AssetBytes bytes = await GetAsync(relativePath, cancellationToken).ConfigureAwait(false);
+        AssetBytes bytes = await ReadAllBytesAsync(relativePath, cancellationToken).ConfigureAwait(false);
         return bytes.AsStream();
     }
 
     /// <summary>
     /// Returns the cached <see cref="AssetBytes"/> for
     /// <paramref name="relativePath"/>, reading from the underlying
-    /// source on first access.
+    /// source on first access. Overrides the
+    /// <see cref="IAssetSource.ReadAllBytesAsync"/> default so that callers
+    /// referencing this instance through <see cref="IAssetSource"/> get the
+    /// cached bytes without a stream round-trip.
     /// </summary>
     /// <param name="relativePath">A forward-slash relative path.</param>
     /// <param name="cancellationToken">
@@ -65,7 +68,7 @@ public sealed class CachingAssetSource : IAssetSource
     /// <see cref="IAssetSource.OpenAsync"/> is invoked); ignored on
     /// cache hits.
     /// </param>
-    public Task<AssetBytes> GetAsync(string relativePath, CancellationToken cancellationToken = default)
+    public Task<AssetBytes> ReadAllBytesAsync(string relativePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 

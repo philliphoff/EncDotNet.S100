@@ -374,3 +374,30 @@ The default interface method is only reachable through the interface (or an
 `await using` over an interface-typed variable). A concrete wrapper that expects
 to be `await using`-d directly should therefore also declare a public
 `DisposeAsync`, which the owning wrappers above already do.
+
+## 11. Layered convenience reads via default interface methods
+
+When an interface exposes a low-level primitive (a stream) and callers also want
+a higher-level convenience (all the bytes), prefer a **default interface method**
+on the interface over a static extension method, *provided some implementation
+can serve the convenience faster than the default*.
+
+`IAssetSource.ReadAllBytesAsync` is the reference example. The core contract is
+`OpenAsync` (a stream); `ReadAllBytesAsync` is a DIM whose default opens that
+stream and copies it into an `AssetBytes`. Because it lives on the interface,
+an implementation that already holds the bytes can **override** it and the
+acceleration applies through the interface — the common static type:
+
+```csharp
+// Default (on the interface): stream -> copy.
+async Task<AssetBytes> ReadAllBytesAsync(string relativePath, CancellationToken ct = default) { ... }
+
+// Override (CachingAssetSource): serve memoised bytes, no stream round-trip.
+public Task<AssetBytes> ReadAllBytesAsync(string relativePath, CancellationToken ct = default) => ...;
+```
+
+A static extension method cannot be overridden, so a `CachingAssetSource`
+reached through `IAssetSource` would still take the slow default path — the DIM
+avoids that. The same DIM caveat as §10 applies: the convenience is reachable
+through the interface (or any concrete type that redeclares it), which is how
+these sources are consumed.

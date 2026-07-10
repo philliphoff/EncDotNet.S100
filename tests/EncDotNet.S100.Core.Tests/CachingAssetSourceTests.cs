@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Core.Tests;
 public class CachingAssetSourceTests
 {
     [Fact]
-    public async Task GetAsync_ReturnsSameBytesOnRepeatedReads()
+    public async Task ReadAllBytesAsync_ReturnsSameBytesOnRepeatedReads()
     {
         var inner = new InMemoryAssetSource(new()
         {
@@ -13,8 +13,8 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes first = await cache.GetAsync("a.txt");
-        AssetBytes second = await cache.GetAsync("a.txt");
+        AssetBytes first = await cache.ReadAllBytesAsync("a.txt");
+        AssetBytes second = await cache.ReadAllBytesAsync("a.txt");
 
         Assert.Equal(new byte[] { 1, 2, 3 }, first.Bytes.ToArray());
         Assert.Equal(new byte[] { 1, 2, 3 }, second.Bytes.ToArray());
@@ -22,7 +22,7 @@ public class CachingAssetSourceTests
     }
 
     [Fact]
-    public async Task GetAsync_DifferentPathsAreIndependent()
+    public async Task ReadAllBytesAsync_DifferentPathsAreIndependent()
     {
         var inner = new InMemoryAssetSource(new()
         {
@@ -31,9 +31,9 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes a = await cache.GetAsync("a.txt");
-        AssetBytes b = await cache.GetAsync("b.txt");
-        AssetBytes a2 = await cache.GetAsync("a.txt");
+        AssetBytes a = await cache.ReadAllBytesAsync("a.txt");
+        AssetBytes b = await cache.ReadAllBytesAsync("b.txt");
+        AssetBytes a2 = await cache.ReadAllBytesAsync("a.txt");
 
         Assert.Equal(new byte[] { 1 }, a.Bytes.ToArray());
         Assert.Equal(new byte[] { 2 }, b.Bytes.ToArray());
@@ -43,7 +43,7 @@ public class CachingAssetSourceTests
     }
 
     [Fact]
-    public async Task GetAsync_KeyIsCaseSensitive()
+    public async Task ReadAllBytesAsync_KeyIsCaseSensitive()
     {
         // Ordinal keys: "A.txt" and "a.txt" should be distinct cache
         // entries. The underlying source decides case semantics.
@@ -54,8 +54,8 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes lower = await cache.GetAsync("a.txt");
-        AssetBytes upper = await cache.GetAsync("A.txt");
+        AssetBytes lower = await cache.ReadAllBytesAsync("a.txt");
+        AssetBytes upper = await cache.ReadAllBytesAsync("A.txt");
 
         Assert.Equal(new byte[] { 1 }, lower.Bytes.ToArray());
         Assert.Equal(new byte[] { 2 }, upper.Bytes.ToArray());
@@ -73,7 +73,7 @@ public class CachingAssetSourceTests
 
         Task<AssetBytes>[] tasks = Enumerable
             .Range(0, 32)
-            .Select(_ => Task.Run(() => cache.GetAsync("hot.txt")))
+            .Select(_ => Task.Run(() => cache.ReadAllBytesAsync("hot.txt")))
             .ToArray();
 
         AssetBytes[] results = await Task.WhenAll(tasks);
@@ -113,7 +113,7 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes bytes = await cache.GetAsync("a.txt");
+        AssetBytes bytes = await cache.ReadAllBytesAsync("a.txt");
         await using Stream stream = await cache.OpenAsync("a.txt");
         using var copy = new MemoryStream();
         await stream.CopyToAsync(copy);
@@ -182,13 +182,13 @@ public class CachingAssetSourceTests
     }
 
     [Fact]
-    public async Task GetAsync_PropagatesFileNotFoundOnMiss()
+    public async Task ReadAllBytesAsync_PropagatesFileNotFoundOnMiss()
     {
         var inner = new InMemoryAssetSource(new());
         using var cache = new CachingAssetSource(inner);
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => cache.GetAsync("missing"));
+            () => cache.ReadAllBytesAsync("missing"));
     }
 
     [Fact]
@@ -198,11 +198,11 @@ public class CachingAssetSourceTests
     }
 
     [Fact]
-    public async Task GetAsync_ThrowsOnEmptyPath()
+    public async Task ReadAllBytesAsync_ThrowsOnEmptyPath()
     {
         var inner = new InMemoryAssetSource(new());
         using var cache = new CachingAssetSource(inner);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => cache.GetAsync(""));
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.ReadAllBytesAsync(""));
     }
 }
