@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using Mapsui.Projections;
 
 namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
@@ -26,7 +27,7 @@ internal static class MercatorOffset
     /// reference position (<paramref name="refLatDeg"/>,
     /// <paramref name="refLonDeg"/>) into a new lat/lon pair.
     /// </summary>
-    public static (double Lat, double Lon) FromLocalMetres(
+    public static GeoPosition FromLocalMetres(
         double refLatDeg, double refLonDeg, double eastMetres, double northMetres)
     {
         var dLat = northMetres / MetresPerDegreeLatitude;
@@ -35,7 +36,7 @@ internal static class MercatorOffset
         var dLon = cosLat == 0
             ? 0.0
             : eastMetres / (MetresPerDegreeLatitude * cosLat);
-        return (refLatDeg + dLat, refLonDeg + dLon);
+        return new GeoPosition(refLatDeg + dLat, refLonDeg + dLon);
     }
 
     /// <summary>

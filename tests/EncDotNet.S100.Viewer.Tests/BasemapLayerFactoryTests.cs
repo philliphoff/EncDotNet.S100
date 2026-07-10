@@ -24,13 +24,13 @@ public class BasemapLayerFactoryTests
     [Fact]
     public void None_ReturnsNull()
     {
-        Assert.Null(BasemapLayerFactory.Create(BasemapMode.None));
+        Assert.Null(BasemapLayerFactory.TryCreate(BasemapMode.None));
     }
 
     [Fact]
     public void Offline_BuildsMemoryLayerWithLandFeatures()
     {
-        var layer = BasemapLayerFactory.Create(BasemapMode.Offline);
+        var layer = BasemapLayerFactory.TryCreate(BasemapMode.Offline);
 
         var memory = Assert.IsAssignableFrom<MemoryLayer>(layer);
         Assert.NotEmpty(memory.Features);
@@ -40,7 +40,7 @@ public class BasemapLayerFactoryTests
     public void Offline_RepeatsLandAcrossAdjacentWorldCopies()
     {
         var layer = Assert.IsAssignableFrom<MemoryLayer>(
-            BasemapLayerFactory.Create(BasemapMode.Offline));
+            BasemapLayerFactory.TryCreate(BasemapMode.Offline));
 
         double minX = double.MaxValue;
         double maxX = double.MinValue;
@@ -65,7 +65,7 @@ public class BasemapLayerFactoryTests
     public void Offline_ReportsBoundedSingleWorldExtent()
     {
         var extent = Assert.IsAssignableFrom<MemoryLayer>(
-            BasemapLayerFactory.Create(BasemapMode.Offline)).Extent;
+            BasemapLayerFactory.TryCreate(BasemapMode.Offline)).Extent;
 
         // Even though the geometry spans world copies, the layer must report
         // only the canonical single world so the copies never inflate
@@ -80,7 +80,7 @@ public class BasemapLayerFactoryTests
     [Fact]
     public void Online_BuildsTileLayer()
     {
-        var layer = BasemapLayerFactory.Create(BasemapMode.Online);
+        var layer = BasemapLayerFactory.TryCreate(BasemapMode.Online);
 
         Assert.NotNull(layer);
         Assert.IsType<Mapsui.Tiling.Layers.TileLayer>(layer);

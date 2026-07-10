@@ -100,12 +100,12 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
 
         if (feature.Motion is { } motion)
         {
-            if (motion.CourseOverGroundDeg is { } cog)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Cog, FormatDegrees(cog)));
-            if (motion.HeadingDeg is { } hdg)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Heading, FormatDegrees(hdg)));
-            if (motion.SpeedOverGroundKn is { } sog)
-                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Sog, FormatKnots(sog)));
+            if (motion.CourseOverGround is { } cog)
+                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Cog, FormatDegrees(cog.TotalDegrees)));
+            if (motion.Heading is { } hdg)
+                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Heading, FormatDegrees(hdg.TotalDegrees)));
+            if (motion.SpeedOverGround is { } sog)
+                rows.Add(new DynamicPickAttributeRow(Strings.PickReport_Sog, FormatKnots(sog.TotalKnots)));
         }
 
         if (feature.VesselGeometry is { } geom)

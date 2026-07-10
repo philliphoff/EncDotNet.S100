@@ -4,12 +4,12 @@ using EncDotNet.S100.Specifications;
 namespace EncDotNet.S100.Datasets.S131.Tests;
 
 /// <summary>
-/// Tests for the public <see cref="S131LuaDataProvider.TryGetFeatureTypeCode"/>
+/// Tests for the public <see cref="S131LuaDataProvider.GetFeatureTypeCode"/>
 /// API used by <see cref="S131LuaRuleExecutor"/> to attribute emitted
 /// drawing instructions to a feature-type code for the
 /// <c>s100.lua.feature.instructions.count</c> histogram.
 /// </summary>
-public class S131LuaDataProviderTryGetFeatureTypeCodeTests
+public class S131LuaDataProviderGetFeatureTypeCodeTests
 {
     private static string GetTestDataPath(string filename)
         => Path.Combine(AppContext.BaseDirectory, "TestData", filename);
@@ -22,7 +22,7 @@ public class S131LuaDataProviderTryGetFeatureTypeCodeTests
     }
 
     [Fact]
-    public void TryGetFeatureTypeCode_ResolvesFeatureToFcCode()
+    public void GetFeatureTypeCode_ResolvesFeatureToFcCode()
     {
         var dataset = S131Dataset.Open(GetTestDataPath("harbour_point.gml"));
         var fc = LoadS131Fc();
@@ -31,12 +31,12 @@ public class S131LuaDataProviderTryGetFeatureTypeCodeTests
 
         // Provider assigns sequential 1-based numeric ids in dataset order.
         // The fixture has Bollard (id 1) then MooringBuoy (id 2).
-        Assert.Equal("Bollard", provider.TryGetFeatureTypeCode("1"));
-        Assert.Equal("MooringBuoy", provider.TryGetFeatureTypeCode("2"));
+        Assert.Equal("Bollard", provider.GetFeatureTypeCode("1"));
+        Assert.Equal("MooringBuoy", provider.GetFeatureTypeCode("2"));
     }
 
     [Fact]
-    public void TryGetFeatureTypeCode_AcceptsDoubleFormattedRefs()
+    public void GetFeatureTypeCode_AcceptsDoubleFormattedRefs()
     {
         // MoonSharp marshals Lua numbers as System.Double, so feature
         // refs round-trip through a stringified double form (e.g. "1"
@@ -44,26 +44,26 @@ public class S131LuaDataProviderTryGetFeatureTypeCodeTests
         var dataset = S131Dataset.Open(GetTestDataPath("harbour_point.gml"));
         var provider = new S131LuaDataProvider(dataset, LoadS131Fc());
 
-        Assert.Equal("Bollard", provider.TryGetFeatureTypeCode("1"));
-        Assert.Equal("Bollard", provider.TryGetFeatureTypeCode("1.0"));
+        Assert.Equal("Bollard", provider.GetFeatureTypeCode("1"));
+        Assert.Equal("Bollard", provider.GetFeatureTypeCode("1.0"));
     }
 
     [Fact]
-    public void TryGetFeatureTypeCode_ReturnsNull_ForUnknownId()
+    public void GetFeatureTypeCode_ReturnsNull_ForUnknownId()
     {
         var dataset = S131Dataset.Open(GetTestDataPath("harbour_point.gml"));
         var provider = new S131LuaDataProvider(dataset, LoadS131Fc());
 
-        Assert.Null(provider.TryGetFeatureTypeCode("99999"));
+        Assert.Null(provider.GetFeatureTypeCode("99999"));
     }
 
     [Fact]
-    public void TryGetFeatureTypeCode_ReturnsNull_ForNonNumericRef()
+    public void GetFeatureTypeCode_ReturnsNull_ForNonNumericRef()
     {
         var dataset = S131Dataset.Open(GetTestDataPath("harbour_point.gml"));
         var provider = new S131LuaDataProvider(dataset, LoadS131Fc());
 
-        Assert.Null(provider.TryGetFeatureTypeCode(""));
-        Assert.Null(provider.TryGetFeatureTypeCode("not-a-number"));
+        Assert.Null(provider.GetFeatureTypeCode(""));
+        Assert.Null(provider.GetFeatureTypeCode("not-a-number"));
     }
 }

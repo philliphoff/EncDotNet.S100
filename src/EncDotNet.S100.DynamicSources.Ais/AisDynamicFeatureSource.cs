@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -290,12 +291,12 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
             Id = FeatureIdForMmsi(report.Mmsi),
             Kind = $"vessel.ais.{cls.ToKindToken()}",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (report.Latitude, report.Longitude) },
+            Coordinates = new[] { new GeoPosition(report.Latitude, report.Longitude) },
             Motion = new DynamicMotion
             {
-                CourseOverGroundDeg = report.CourseOverGroundDeg,
-                HeadingDeg = report.HeadingDeg,
-                SpeedOverGroundKn = report.SpeedOverGroundKn,
+                CourseOverGround = report.CourseOverGround,
+                Heading = report.Heading,
+                SpeedOverGround = report.SpeedOverGround,
             },
             VesselGeometry = geometry,
             Attributes = attributes,
@@ -324,9 +325,9 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
             Timestamp = feature.LastUpdated,
             Latitude = lat,
             Longitude = lon,
-            CourseOverGroundDeg = feature.Motion?.CourseOverGroundDeg,
-            HeadingDeg = feature.Motion?.HeadingDeg,
-            SpeedOverGroundKn = feature.Motion?.SpeedOverGroundKn,
+            CourseOverGround = feature.Motion?.CourseOverGround,
+            Heading = feature.Motion?.Heading,
+            SpeedOverGround = feature.Motion?.SpeedOverGround,
             NavigationStatus = navStatus,
             RateOfTurnDegPerMin = rot,
         };

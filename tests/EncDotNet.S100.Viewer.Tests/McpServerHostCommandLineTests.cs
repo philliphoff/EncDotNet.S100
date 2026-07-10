@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Immutable;
 using System.IO;
 using System.Threading.Tasks;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -19,7 +18,7 @@ public class McpServerHostCommandLineTests
 {
     private sealed class EmptyCatalog : IDatasetCatalog
     {
-        public ImmutableArray<LoadedDataset> Datasets => ImmutableArray<LoadedDataset>.Empty;
+        public IReadOnlyList<LoadedDataset> Datasets => [];
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
     }
 

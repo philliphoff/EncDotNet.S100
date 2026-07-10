@@ -3,7 +3,7 @@ using System;
 namespace EncDotNet.S100.Viewer.Tools;
 
 /// <summary>
-/// Immutable appearance bundle for the Measure Mode overlay. Aggregates
+/// Read-only appearance bundle for the Measure Mode overlay. Aggregates
 /// every visual concern that <see cref="MeasureOverlayLayer"/> needs so
 /// the renderer's signature does not grow each time we add a new style
 /// knob (palette, contrast level, etc.).

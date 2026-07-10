@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S57;
 
@@ -46,14 +46,14 @@ public sealed record S57FeatureRule
     /// Conditional cross-class redirects evaluated in order; the first match
     /// wins.
     /// </summary>
-    public ImmutableArray<S57FeatureRedirect> Redirects { get; init; } = ImmutableArray<S57FeatureRedirect>.Empty;
+    public IReadOnlyList<S57FeatureRedirect> Redirects { get; init; } = [];
 
     /// <summary>
     /// Attribute overrides applied whenever this rule is selected (default or
     /// redirect path). Keyed by S-57 attribute acronym.
     /// </summary>
-    public ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
-        = ImmutableDictionary<string, S57AttributeOverride>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
 }
 
 /// <summary>
@@ -68,7 +68,7 @@ public sealed record S57FeatureRedirect
     public required string ConditionAttribute { get; init; }
 
     /// <summary>S-57 attribute values that satisfy the condition.</summary>
-    public required ImmutableArray<string> ConditionValues { get; init; }
+    public required IReadOnlyList<string> ConditionValues { get; init; }
 
     /// <summary>Target S-101 Feature Catalogue code when the condition matches.</summary>
     public required string TargetS101Code { get; init; }
@@ -78,8 +78,8 @@ public sealed record S57FeatureRedirect
     /// Layered on top of the rule's <see cref="S57FeatureRule.AttributeOverrides"/>.
     /// Keyed by S-57 attribute acronym.
     /// </summary>
-    public ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
-        = ImmutableDictionary<string, S57AttributeOverride>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
 }
 
 /// <summary>
@@ -104,16 +104,16 @@ public sealed record S57AttributeOverride
     /// <c>COALNE/CATCOA</c> selectively redirecting to <c>natureOfSurface</c>
     /// (IHO Conversion Guidance § 4.5.1).
     /// </summary>
-    public ImmutableDictionary<string, string> S101CodeByValue { get; init; }
-        = ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> S101CodeByValue { get; init; }
+        = ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>
     /// Per-value remap. A key with a non-null value rewrites the S-57 value
     /// to the given S-101 value. A key with a <c>null</c> value drops the
     /// attribute entirely. Missing keys leave the value unchanged.
     /// </summary>
-    public ImmutableDictionary<string, string?> ValueRemap { get; init; }
-        = ImmutableDictionary<string, string?>.Empty;
+    public IReadOnlyDictionary<string, string?> ValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
 }
 
 /// <summary>
@@ -139,8 +139,8 @@ public sealed record S57AttributeRule
     /// override. A key with a non-null value rewrites the value; a key with
     /// a <c>null</c> value drops the attribute. Missing keys pass through.
     /// </summary>
-    public ImmutableDictionary<string, string?> DefaultValueRemap { get; init; }
-        = ImmutableDictionary<string, string?>.Empty;
+    public IReadOnlyDictionary<string, string?> DefaultValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
 }
 
 /// <summary>
@@ -156,7 +156,7 @@ public sealed record S57AttributeRule
 /// </param>
 public sealed record ResolvedFeature(
     string S101Code,
-    ImmutableDictionary<string, S57AttributeOverride> AttributeOverrides);
+    IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides);
 
 /// <summary>
 /// Result of resolving an S-57 attribute in the context of a

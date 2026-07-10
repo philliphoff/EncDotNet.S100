@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S128;
@@ -39,13 +40,13 @@ public sealed class S128Dataset
     /// <c>&lt;imember&gt;</c>/<c>&lt;imembers&gt;</c> entries, which are
     /// permitted by the encoding for forward compatibility.
     /// </remarks>
-    public required ImmutableArray<S128Feature> Features { get; init; }
+    public required IReadOnlyList<S128Feature> Features { get; init; }
 
     /// <summary>
     /// Information type instances carried in <c>&lt;imember&gt;</c> /
     /// <c>&lt;imembers&gt;</c> wrappers. Empty for the official 2.0.0 sample.
     /// </summary>
-    public required ImmutableArray<S128InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<S128InformationType> InformationTypes { get; init; }
 
     /// <summary>
     /// Catalogue product entries — the subset of <see cref="Features"/> whose
@@ -106,31 +107,31 @@ public sealed class S128Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple (leaf-text) attribute values keyed by attribute code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex (nested) attribute groups.</summary>
-    public required ImmutableArray<S128ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S128ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes;
 
     /// <summary>
     /// Outgoing <c>xlink:href</c> references carried directly on the feature
     /// (e.g. <c>elementContainer</c>, <c>theReference</c>).
     /// </summary>
-    public required ImmutableArray<S128XlinkReference> References { get; init; }
+    public required IReadOnlyList<S128XlinkReference> References { get; init; }
 }
 
 /// <summary>
@@ -146,10 +147,10 @@ public sealed class S128InformationType : IS100InformationType
     public required string TypeCode { get; init; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups.</summary>
-    public required ImmutableArray<S128ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S128ComplexAttribute> ComplexAttributes { get; init; }
 }
 
 /// <summary>
@@ -161,10 +162,10 @@ public sealed class S128ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute leaf values keyed by sub-attribute code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 
     /// <summary>Nested complex attributes (e.g. <c>timeIntervalOfProduct/issuanceCycle</c>).</summary>
-    public required ImmutableArray<S128ComplexAttribute> NestedAttributes { get; init; }
+    public required IReadOnlyList<S128ComplexAttribute> NestedAttributes { get; init; }
 }
 
 /// <summary>

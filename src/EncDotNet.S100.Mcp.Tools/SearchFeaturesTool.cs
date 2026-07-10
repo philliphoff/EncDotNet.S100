@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -55,7 +54,7 @@ public sealed record FeatureNameMatch(
 /// <param name="TotalCount">Total number of matching features across all pages.</param>
 /// <param name="HasMore">True if additional pages remain after the current one.</param>
 public sealed record SearchFeaturesResult(
-    [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] ImmutableArray<FeatureNameMatch> Features,
+    [property: Description("Matching features for the requested page, in catalog insertion order then per-dataset feature order.")] IReadOnlyList<FeatureNameMatch> Features,
     [property: Description("Echoed (and floored) zero-based page index.")] int Page,
     [property: Description("Echoed (and clamped) page size.")] int PageSize,
     [property: Description("Total number of matching features across all pages.")] int TotalCount,
@@ -124,7 +123,7 @@ public sealed class SearchFeaturesTool
         var pageSize = Math.Clamp(request.PageSize, 1, MaxPageSize);
         var comparison = request.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-        var matched = ImmutableArray.CreateBuilder<FeatureNameMatch>();
+        var matched = new List<FeatureNameMatch>();
 
         foreach (var dataset in _catalog.Datasets)
         {
@@ -189,7 +188,7 @@ public sealed class SearchFeaturesTool
         var totalCount = matched.Count;
         var skip = page * pageSize;
         var take = Math.Max(0, Math.Min(pageSize, totalCount - skip));
-        var pageBuilder = ImmutableArray.CreateBuilder<FeatureNameMatch>(take);
+        var pageBuilder = new List<FeatureNameMatch>(take);
         for (var i = 0; i < take; i++)
         {
             pageBuilder.Add(matched[skip + i]);
@@ -199,7 +198,7 @@ public sealed class SearchFeaturesTool
 
         return Task.FromResult(ToolResult<SearchFeaturesResult>.Ok(
             new SearchFeaturesResult(
-                pageBuilder.MoveToImmutable(),
+                pageBuilder,
                 page,
                 pageSize,
                 totalCount,

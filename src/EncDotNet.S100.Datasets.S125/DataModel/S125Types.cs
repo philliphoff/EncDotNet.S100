@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S125.DataModel;
 
@@ -48,11 +48,11 @@ public sealed class S125Aggregation
     public int? CategoryCode { get; init; }
 
     /// <summary>The aids to navigation bound by this aggregation, resolved from feature xlinks.</summary>
-    public ImmutableArray<IS125Aid> Members { get; init; } = ImmutableArray<IS125Aid>.Empty;
+    public IReadOnlyList<IS125Aid> Members { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -68,8 +68,8 @@ public sealed class S125SpatialQuality
     public int? QualityOfPosition { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -98,9 +98,9 @@ public sealed class S125OtherFeature
     public S125GeometryKind GeometryKind { get; init; }
 
     /// <summary>Coordinates whose semantics depend on <see cref="GeometryKind"/>.</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

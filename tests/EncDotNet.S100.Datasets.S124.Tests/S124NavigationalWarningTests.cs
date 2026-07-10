@@ -48,7 +48,7 @@ public class S124NavigationalWarningTests
         Assert.NotEmpty(w.Parts);
         Assert.All(w.Parts, p => Assert.NotNull(p.Id));
         // The mixed fixture has two NavwarnPart features.
-        Assert.True(w.Parts.Length >= 2);
+        Assert.True(w.Parts.Count >= 2);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class S124NavigationalWarningTests
         var w = Project("navwarn_curve.gml", out _);
         var part = w.Parts.First();
         Assert.Equal(S124GeometryKind.Curve, part.GeometryKind);
-        Assert.True(part.Coordinates.Length >= 2);
+        Assert.True(part.Coordinates.Count >= 2);
     }
 
     // ── xlink projection ─────────────────────────────────────────
@@ -142,8 +142,8 @@ public class S124NavigationalWarningTests
         {
             ProductIdentifier = "S-124",
             DatasetIdentifier = "x",
-            Features = System.Collections.Immutable.ImmutableArray<S124Feature>.Empty,
-            InformationTypes = System.Collections.Immutable.ImmutableArray<S124InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         Assert.Throws<InvalidOperationException>(() =>
             S124NavigationalWarning.From(empty, out _));

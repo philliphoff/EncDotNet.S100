@@ -1,3 +1,5 @@
+using EncDotNet.S100.Quantities;
+
 namespace EncDotNet.S100.DynamicSources.Ais;
 
 /// <summary>
@@ -36,20 +38,20 @@ public sealed record AisPositionReport : AisMessage
     /// <summary>WGS-84 longitude in degrees.</summary>
     public required double Longitude { get; init; }
 
-    /// <summary>Course over ground in degrees true (0–359.9), or
-    /// <see langword="null"/> when the report carried the 360.0
-    /// "not available" sentinel.</summary>
-    public double? CourseOverGroundDeg { get; init; }
+    /// <summary>Course over ground (degrees true, 0–359.9 on the
+    /// wire), or <see langword="null"/> when the report carried the
+    /// 360.0 "not available" sentinel.</summary>
+    public Angle? CourseOverGround { get; init; }
 
-    /// <summary>True heading in degrees (0–359), or
+    /// <summary>True heading (degrees, 0–359 on the wire), or
     /// <see langword="null"/> when the report carried the 511
     /// "not available" sentinel.</summary>
-    public double? HeadingDeg { get; init; }
+    public Angle? Heading { get; init; }
 
-    /// <summary>Speed over ground in knots, or
+    /// <summary>Speed over ground (knots on the wire), or
     /// <see langword="null"/> when the report carried the 102.3
     /// "not available" sentinel.</summary>
-    public double? SpeedOverGroundKn { get; init; }
+    public Speed? SpeedOverGround { get; init; }
 
     /// <summary>Navigation status, or <see langword="null"/> when
     /// the message family does not carry one (Class B Type 18).</summary>

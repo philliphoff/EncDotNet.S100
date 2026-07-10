@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S131.DataModel;
@@ -41,10 +41,10 @@ public interface IS131Feature
     /// <see cref="S131ResolvedReference.Target"/> and an associated
     /// <c>xlink.unresolved</c> projection diagnostic.
     /// </summary>
-    ImmutableArray<S131ResolvedReference> ResolvedReferences { get; }
+    IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    ImmutableDictionary<string, string> ExtraAttributes { get; }
+    IReadOnlyDictionary<string, string> ExtraAttributes { get; }
 
     /// <summary>The originating raw GML feature.</summary>
     S131Feature Source { get; }
@@ -70,11 +70,11 @@ public sealed class S131HarbourInfrastructure : IS131Feature
     /// <inheritdoc/>
     public required S131Geometry Geometry { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131Feature Source { get; init; }
 }
@@ -99,11 +99,11 @@ public sealed class S131LayoutFeature : IS131Feature
     /// <inheritdoc/>
     public required S131Geometry Geometry { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131Feature Source { get; init; }
 }
@@ -128,11 +128,11 @@ public sealed class S131MetadataFeature : IS131Feature
     /// <inheritdoc/>
     public required S131Geometry Geometry { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131Feature Source { get; init; }
 }
@@ -155,11 +155,11 @@ public sealed class S131OtherFeature : IS131Feature
     /// <inheritdoc/>
     public required S131Geometry Geometry { get; init; }
     /// <inheritdoc/>
-    public ImmutableArray<S131ResolvedReference> ResolvedReferences { get; init; } =
-        ImmutableArray<S131ResolvedReference>.Empty;
+    public IReadOnlyList<S131ResolvedReference> ResolvedReferences { get; init; } =
+        [];
     /// <inheritdoc/>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
     /// <inheritdoc/>
     public required S131Feature Source { get; init; }
 }

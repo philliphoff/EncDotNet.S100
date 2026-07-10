@@ -1,5 +1,5 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S57;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S57.Tests;
 
@@ -66,7 +66,7 @@ public class S57S101MappingTests
     public void ResolveFeature_NoRedirect_UsesDefault()
     {
         var m = S57S101Mapping.Default;
-        var resolved = m.ResolveFeature(42, ImmutableDictionary<string, string>.Empty);
+        var resolved = m.ResolveFeature(42, ReadOnlyDictionary<string, string>.Empty);
         Assert.NotNull(resolved);
         Assert.Equal("DepthArea", resolved!.S101Code);
         Assert.Empty(resolved.AttributeOverrides);
@@ -80,29 +80,24 @@ public class S57S101MappingTests
             Objl = 999,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null,
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1", "5"),
+                ConditionValues = ["1", "5"],
                 TargetS101Code = "Landmark",
-                AttributeOverrides = ImmutableDictionary.CreateRange(
-                    StringComparer.OrdinalIgnoreCase,
-                    new[]
+                AttributeOverrides = new Dictionary<string, S57AttributeOverride>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["CATCTR"] = new S57AttributeOverride
                     {
-                        new KeyValuePair<string, S57AttributeOverride>(
-                            "CATCTR",
-                            new S57AttributeOverride
-                            {
-                                S101Code = "categoryOfLandmark",
-                                ValueRemap = ImmutableDictionary.CreateRange(
-                                    new[]
-                                    {
-                                        new KeyValuePair<string, string?>("1", "22"),
-                                        new KeyValuePair<string, string?>("5", "23"),
-                                    }),
-                            }),
-                    }),
-            }),
+                        S101Code = "categoryOfLandmark",
+                        ValueRemap = new Dictionary<string, string?>
+                        {
+                            ["1"] = "22",
+                            ["5"] = "23",
+                        },
+                    },
+                },
+            }],
         };
 
         var ctrpntAttrRule = new S57AttributeRule
@@ -117,9 +112,10 @@ public class S57S101MappingTests
             .AddAttributeRule(ctrpntAttrRule)
             .Build();
 
-        var attrs = ImmutableDictionary.CreateRange(
-            StringComparer.OrdinalIgnoreCase,
-            new[] { new KeyValuePair<string, string>("CATCTR", "1") });
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATCTR"] = "1",
+        };
 
         var resolved = m.ResolveFeature(999, attrs);
         Assert.NotNull(resolved);
@@ -139,18 +135,19 @@ public class S57S101MappingTests
             Objl = 999,
             S57Acronym = "CTRPNT",
             DefaultS101Code = null, // drop when no redirect matches
-            Redirects = ImmutableArray.Create(new S57FeatureRedirect
+            Redirects = [new S57FeatureRedirect
             {
                 ConditionAttribute = "CATCTR",
-                ConditionValues = ImmutableArray.Create("1"),
+                ConditionValues = ["1"],
                 TargetS101Code = "Landmark",
-            }),
+            }],
         };
         var m = new S57S101Mapping.Builder().AddFeatureRule(rule).Build();
 
-        var attrs = ImmutableDictionary.CreateRange(
-            StringComparer.OrdinalIgnoreCase,
-            new[] { new KeyValuePair<string, string>("CATCTR", "9") });
+        var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CATCTR"] = "9",
+        };
 
         Assert.Null(m.ResolveFeature(999, attrs));
     }
@@ -163,8 +160,10 @@ public class S57S101MappingTests
             Attl = 9100,
             S57Acronym = "FOO",
             DefaultS101Code = "foo",
-            DefaultValueRemap = ImmutableDictionary.CreateRange(
-                new[] { new KeyValuePair<string, string?>("99", null) }),
+            DefaultValueRemap = new Dictionary<string, string?>
+            {
+                ["99"] = null,
+            },
         };
         var featRule = new S57FeatureRule
         {
@@ -177,7 +176,7 @@ public class S57S101MappingTests
             .AddAttributeRule(attrRule)
             .Build();
 
-        var resolved = m.ResolveFeature(9101, ImmutableDictionary<string, string>.Empty)!;
+        var resolved = m.ResolveFeature(9101, ReadOnlyDictionary<string, string>.Empty)!;
 
         Assert.Null(m.ResolveAttribute("FOO", "99", resolved));
         Assert.Equal("foo", m.ResolveAttribute("FOO", "1", resolved)!.S101Code);
@@ -245,7 +244,7 @@ public class S57S101MappingTests
     public void Ctrpnt_WithoutCatctr_IsDropped()
     {
         var m = S57S101Mapping.Default;
-        Assert.Null(m.ResolveFeature(33, ImmutableDictionary<string, string>.Empty));
+        Assert.Null(m.ResolveFeature(33, ReadOnlyDictionary<string, string>.Empty));
     }
 
     [Fact]
@@ -296,7 +295,7 @@ public class S57S101MappingTests
     public void Coalne_WithoutCatcoa_StillResolvesToCoastline()
     {
         var m = S57S101Mapping.Default;
-        var resolved = m.ResolveFeature(30, ImmutableDictionary<string, string>.Empty);
+        var resolved = m.ResolveFeature(30, ReadOnlyDictionary<string, string>.Empty);
         Assert.NotNull(resolved);
         Assert.Equal("Coastline", resolved!.S101Code);
     }

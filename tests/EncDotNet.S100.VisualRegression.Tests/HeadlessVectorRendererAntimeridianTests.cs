@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -26,12 +27,12 @@ public sealed class HeadlessVectorRendererAntimeridianTests
             "east" => new FeatureGeometry
             {
                 Type = GeometryType.Point,
-                Coordinates = [(65.0, 179.0)], // (Latitude, Longitude)
+                Coordinates = [new GeoPosition(65.0, 179.0)], // (Latitude, Longitude)
             },
             "west" => new FeatureGeometry
             {
                 Type = GeometryType.Point,
-                Coordinates = [(65.0, -179.0)], // (Latitude, Longitude)
+                Coordinates = [new GeoPosition(65.0, -179.0)], // (Latitude, Longitude)
             },
             _ => null,
         };

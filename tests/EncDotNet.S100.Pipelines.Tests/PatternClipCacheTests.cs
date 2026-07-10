@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -20,14 +21,14 @@ public class PatternClipCacheTests
     // Two overlapping area features with distinct pattern fills at different
     // drawing priorities, so the clip actually subtracts the higher-priority
     // area out of the lower-priority one.
-    private static readonly (double Lat, double Lon)[] LowSquare =
+    private static readonly GeoPosition[] LowSquare =
     [
-        (0.0, 0.0), (0.0, 2.0), (2.0, 2.0), (2.0, 0.0), (0.0, 0.0),
+        new GeoPosition(0.0, 0.0), new GeoPosition(0.0, 2.0), new GeoPosition(2.0, 2.0), new GeoPosition(2.0, 0.0), new GeoPosition(0.0, 0.0),
     ];
 
-    private static readonly (double Lat, double Lon)[] HighSquare =
+    private static readonly GeoPosition[] HighSquare =
     [
-        (1.0, 1.0), (1.0, 3.0), (3.0, 3.0), (3.0, 1.0), (1.0, 1.0),
+        new GeoPosition(1.0, 1.0), new GeoPosition(1.0, 3.0), new GeoPosition(3.0, 3.0), new GeoPosition(3.0, 1.0), new GeoPosition(1.0, 1.0),
     ];
 
     private sealed class StubGeometryProvider : IFeatureGeometryProvider
@@ -39,10 +40,10 @@ public class PatternClipCacheTests
             _ => null,
         };
 
-        private static FeatureGeometry Surface((double Lat, double Lon)[] ring) => new()
+        private static FeatureGeometry Surface(GeoPosition[] ring) => new()
         {
             Type = GeometryType.Surface,
-            Coordinates = ring.Select(p => (p.Lat, p.Lon)).ToArray(),
+            Coordinates = ring,
         };
     }
 

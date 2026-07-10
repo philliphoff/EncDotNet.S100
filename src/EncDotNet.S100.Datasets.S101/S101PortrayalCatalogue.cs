@@ -395,7 +395,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         var catalogItem = _provider.Catalogue.Symbols
             .FirstOrDefault(s => s.Id.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Symbol '{symbolName}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.Symbol, symbolName);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "Symbols", cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
@@ -433,7 +433,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         var catalogItem = _provider.Catalogue.LineStyles
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Line style '{name}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.LineStyle, name);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "LineStyles", cancellationToken).ConfigureAwait(false);
         return LineStyleReader.Read(stream, name);
@@ -464,7 +464,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         var catalogItem = _provider.Catalogue.AreaFills
             .FirstOrDefault(s => s.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Area fill '{name}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.AreaFill, name);
 
         using var stream = await _provider.FetchAssetAsync(catalogItem, "AreaFills", cancellationToken).ConfigureAwait(false);
         return AreaFillReader.Read(stream, name);
@@ -476,6 +476,6 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
     {
         return _provider.Catalogue.RuleFiles
             .FirstOrDefault(r => r.Id.Equals(ruleName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new KeyNotFoundException($"Rule '{ruleName}' not found in the portrayal catalogue.");
+            ?? throw new PortrayalAssetNotFoundException(PortrayalAssetKind.Rule, ruleName);
     }
 }

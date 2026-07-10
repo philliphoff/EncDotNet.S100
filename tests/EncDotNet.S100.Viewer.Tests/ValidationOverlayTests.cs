@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
@@ -41,10 +40,10 @@ public class ValidationOverlayTests
         public void SetRotation(double degrees) { }
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
-        public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
+        public GeoPosition? TryGetViewportCenterWgs84() => null;
         public (double Width, double Height)? TryGetViewportSizePx() => null;
-        public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx) => null;
-        public (double Latitude, double Longitude)? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
+        public GeoPosition? TryScreenToWgs84(double xPx, double yPx) => null;
+        public GeoPosition? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
         public void AddOverlayLayer(ILayer layer) => Overlays.Add(layer);
         public void RemoveOverlayLayer(ILayer layer) => Overlays.Remove(layer);
         public System.Threading.Tasks.Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, System.Threading.CancellationToken cancellationToken = default)
@@ -65,7 +64,7 @@ public class ValidationOverlayTests
         };
 
     private static ValidationReport ReportOf(params ValidationFinding[] findings)
-        => new(findings.ToImmutableArray(), RulesEvaluated: findings.Length,
+        => new(findings.ToArray(), RulesEvaluated: findings.Length,
             RulesWithFindings: findings.Length);
 
     // ── ValidationFindingViewModel.HasSpatialLocation truth table ────

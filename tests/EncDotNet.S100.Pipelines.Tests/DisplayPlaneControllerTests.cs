@@ -85,4 +85,25 @@ public class DisplayPlaneControllerTests
         ctrl.ShowAll();
         Assert.Equal(1, fired);
     }
+
+    [Fact]
+    public void HiddenPlanes_CannotBeDowncastToMutableSet()
+    {
+        var ctrl = new DisplayPlaneController();
+        // The exposed read-only set must not be castable back to the
+        // controller's live HashSet, or a caller could mutate hidden
+        // state without the Changed event firing.
+        Assert.IsNotType<HashSet<DisplayPlane>>(ctrl.HiddenPlanes);
+    }
+
+    [Fact]
+    public void HiddenPlanes_ReflectsLaterChanges()
+    {
+        var ctrl = new DisplayPlaneController();
+        var view = ctrl.HiddenPlanes;
+        Assert.Empty(view);
+        ctrl.SetVisible(DisplayPlane.UnderRadar, false);
+        // The view is live: the same reference now reports the change.
+        Assert.Contains(DisplayPlane.UnderRadar, view);
+    }
 }

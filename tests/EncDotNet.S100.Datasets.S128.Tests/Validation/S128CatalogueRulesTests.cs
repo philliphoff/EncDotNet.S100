@@ -1,10 +1,10 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S128.DataModel;
 using EncDotNet.S100.Datasets.S128.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S128.Tests.Validation;
 
@@ -22,9 +22,9 @@ public class S128CatalogueRulesTests
     {
         Id = id,
         FeatureType = type,
-        Attributes = ImmutableDictionary<string, string>.Empty,
-        ComplexAttributes = ImmutableArray<S128ComplexAttribute>.Empty,
-        References = ImmutableArray<S128XlinkReference>.Empty,
+        Attributes = ReadOnlyDictionary<string, string>.Empty,
+        ComplexAttributes = [],
+        References = [],
     };
 
     private static S128ElectronicProduct ElectronicProduct(
@@ -33,8 +33,8 @@ public class S128CatalogueRulesTests
         DateTimeOffset? issueDate = null,
         DateTimeOffset? updateDate = null,
         S128GeometryKind geometryKind = S128GeometryKind.None,
-        ImmutableArray<GeoPosition>? coordinates = null,
-        ImmutableArray<S128OnlineResource>? onlineResources = null) => new()
+        IReadOnlyList<GeoPosition>? coordinates = null,
+        IReadOnlyList<S128OnlineResource>? onlineResources = null) => new()
     {
         Id = id,
         FeatureType = "ElectronicProduct",
@@ -42,8 +42,8 @@ public class S128CatalogueRulesTests
         IssueDate = issueDate,
         UpdateDate = updateDate,
         GeometryKind = geometryKind,
-        Coordinates = coordinates ?? ImmutableArray<GeoPosition>.Empty,
-        OnlineResources = onlineResources ?? ImmutableArray<S128OnlineResource>.Empty,
+        Coordinates = coordinates ?? [],
+        OnlineResources = onlineResources ?? [],
         Source = SourceFeature(id),
     };
 
@@ -62,26 +62,26 @@ public class S128CatalogueRulesTests
     };
 
     private static S128ProductCatalogue Catalogue(
-        ImmutableArray<S128CatalogueEntry>? products = null,
-        ImmutableArray<S128ProducerInformation>? producers = null,
-        ImmutableArray<S128DistributorInformation>? distributors = null,
+        IReadOnlyList<S128CatalogueEntry>? products = null,
+        IReadOnlyList<S128ProducerInformation>? producers = null,
+        IReadOnlyList<S128DistributorInformation>? distributors = null,
         string? datasetId = "DS-1")
     {
         var dataset = new S128Dataset
         {
             DatasetIdentifier = datasetId,
             ProductIdentifier = "S-128",
-            Features = ImmutableArray<S128Feature>.Empty,
-            InformationTypes = ImmutableArray<S128InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
 
         return new S128ProductCatalogue
         {
             DatasetIdentifier = datasetId,
             ProductIdentifier = "S-128",
-            Products = products ?? ImmutableArray<S128CatalogueEntry>.Empty,
-            Producers = producers ?? ImmutableArray<S128ProducerInformation>.Empty,
-            Distributors = distributors ?? ImmutableArray<S128DistributorInformation>.Empty,
+            Products = products ?? [],
+            Producers = producers ?? [],
+            Distributors = distributors ?? [],
             Source = dataset,
         };
     }
@@ -91,8 +91,8 @@ public class S128CatalogueRulesTests
     [Fact]
     public void EditionNumberPositive_Passes_WhenAbsent()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1", editionNumber: null)));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1", editionNumber: null)]);
         Assert.Empty(S128CatalogueRules.EditionNumberPositive.Evaluate(cat, ValidationContext.Default));
     }
 
@@ -102,8 +102,8 @@ public class S128CatalogueRulesTests
     [InlineData(99)]
     public void EditionNumberPositive_Passes_OnPositiveValue(int edition)
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1", editionNumber: edition)));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1", editionNumber: edition)]);
         Assert.Empty(S128CatalogueRules.EditionNumberPositive.Evaluate(cat, ValidationContext.Default));
     }
 
@@ -112,8 +112,8 @@ public class S128CatalogueRulesTests
     [InlineData(-5)]
     public void EditionNumberPositive_Fails_OnNonPositive(int edition)
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("BAD", editionNumber: edition)));
+        var cat = Catalogue(products: [
+            ElectronicProduct("BAD", editionNumber: edition)]);
         var findings = S128CatalogueRules.EditionNumberPositive
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -126,10 +126,10 @@ public class S128CatalogueRulesTests
     [Fact]
     public void EditionNumberPositive_FlagsAllOffenders()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("OK", editionNumber: 3),
             ElectronicProduct("BAD1", editionNumber: 0),
-            ElectronicProduct("BAD2", editionNumber: -1)));
+            ElectronicProduct("BAD2", editionNumber: -1)]);
         var findings = S128CatalogueRules.EditionNumberPositive
             .Evaluate(cat, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
@@ -141,10 +141,10 @@ public class S128CatalogueRulesTests
     [Fact]
     public void IssueDateBeforeUpdateDate_Passes_WhenEitherDateAbsent()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1", issueDate: new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)),
             ElectronicProduct("E2", updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero)),
-            ElectronicProduct("E3")));
+            ElectronicProduct("E3")]);
         Assert.Empty(S128CatalogueRules.IssueDateBeforeUpdateDate.Evaluate(cat, ValidationContext.Default));
     }
 
@@ -152,28 +152,28 @@ public class S128CatalogueRulesTests
     public void IssueDateBeforeUpdateDate_Passes_WhenIssueEqualsUpdate()
     {
         var d = new DateTimeOffset(2024, 3, 1, 0, 0, 0, TimeSpan.Zero);
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1", issueDate: d, updateDate: d)));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1", issueDate: d, updateDate: d)]);
         Assert.Empty(S128CatalogueRules.IssueDateBeforeUpdateDate.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void IssueDateBeforeUpdateDate_Passes_WhenIssueBeforeUpdate()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
                 issueDate: new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
-                updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero))));
+                updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero))]);
         Assert.Empty(S128CatalogueRules.IssueDateBeforeUpdateDate.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void IssueDateBeforeUpdateDate_Fails_WhenIssueAfterUpdate()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
                 issueDate: new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero),
-                updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero))));
+                updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero))]);
         var findings = S128CatalogueRules.IssueDateBeforeUpdateDate
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -187,28 +187,28 @@ public class S128CatalogueRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Passes_WhenNoCoordinates()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1")));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1")]);
         Assert.Empty(S128CatalogueRules.CoordinatesInWgs84Range.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void CoordinatesInWgs84Range_Passes_OnValidPoints()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
                 geometryKind: S128GeometryKind.Point,
-                coordinates: ImmutableArray.Create(new GeoPosition(45.0, -120.0)))));
+                coordinates: [new GeoPosition(45.0, -120.0)])]);
         Assert.Empty(S128CatalogueRules.CoordinatesInWgs84Range.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnOutOfRangeLatitude()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
                 geometryKind: S128GeometryKind.Point,
-                coordinates: ImmutableArray.Create(new GeoPosition(95.0, 0.0)))));
+                coordinates: [new GeoPosition(95.0, 0.0)])]);
         var findings = S128CatalogueRules.CoordinatesInWgs84Range
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -221,10 +221,10 @@ public class S128CatalogueRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_Fails_OnOutOfRangeLongitude()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
                 geometryKind: S128GeometryKind.Point,
-                coordinates: ImmutableArray.Create(new GeoPosition(0.0, 181.0)))));
+                coordinates: [new GeoPosition(0.0, 181.0)])]);
         var findings = S128CatalogueRules.CoordinatesInWgs84Range
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -234,13 +234,13 @@ public class S128CatalogueRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_FlagsAllOffendingVertices()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
                 geometryKind: S128GeometryKind.Curve,
-                coordinates: ImmutableArray.Create(
+                coordinates: [
                     new GeoPosition(0, 0),
                     new GeoPosition(91, 0),
-                    new GeoPosition(0, -181)))));
+                    new GeoPosition(0, -181)])]);
         var findings = S128CatalogueRules.CoordinatesInWgs84Range
             .Evaluate(cat, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
@@ -251,40 +251,40 @@ public class S128CatalogueRulesTests
     [Fact]
     public void SurfaceRingClosed_Passes_OnNonSurfaceEntries()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
                 geometryKind: S128GeometryKind.Point,
-                coordinates: ImmutableArray.Create(new GeoPosition(0, 0)))));
+                coordinates: [new GeoPosition(0, 0)])]);
         Assert.Empty(S128CatalogueRules.SurfaceRingClosed.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void SurfaceRingClosed_Passes_OnClosedSquareRing()
     {
-        var ring = ImmutableArray.Create(
+        GeoPosition[] ring = [
             new GeoPosition(0, 0),
             new GeoPosition(0, 1),
             new GeoPosition(1, 1),
             new GeoPosition(1, 0),
-            new GeoPosition(0, 0));
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+            new GeoPosition(0, 0)];
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
                 geometryKind: S128GeometryKind.Surface,
-                coordinates: ring)));
+                coordinates: ring)]);
         Assert.Empty(S128CatalogueRules.SurfaceRingClosed.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void SurfaceRingClosed_Fails_WhenFewerThanFourVertices()
     {
-        var ring = ImmutableArray.Create(
+        GeoPosition[] ring = [
             new GeoPosition(0, 0),
             new GeoPosition(0, 1),
-            new GeoPosition(1, 1));
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+            new GeoPosition(1, 1)];
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
                 geometryKind: S128GeometryKind.Surface,
-                coordinates: ring)));
+                coordinates: ring)]);
         var findings = S128CatalogueRules.SurfaceRingClosed
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -295,15 +295,15 @@ public class S128CatalogueRulesTests
     [Fact]
     public void SurfaceRingClosed_Fails_WhenRingNotClosed()
     {
-        var ring = ImmutableArray.Create(
+        GeoPosition[] ring = [
             new GeoPosition(0, 0),
             new GeoPosition(0, 1),
             new GeoPosition(1, 1),
-            new GeoPosition(1, 0));
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+            new GeoPosition(1, 0)];
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
                 geometryKind: S128GeometryKind.Surface,
-                coordinates: ring)));
+                coordinates: ring)]);
         var findings = S128CatalogueRules.SurfaceRingClosed
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -313,8 +313,8 @@ public class S128CatalogueRulesTests
     [Fact]
     public void SurfaceRingClosed_Fails_WhenSurfaceHasNoCoordinates()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("BAD", geometryKind: S128GeometryKind.Surface)));
+        var cat = Catalogue(products: [
+            ElectronicProduct("BAD", geometryKind: S128GeometryKind.Surface)]);
         var findings = S128CatalogueRules.SurfaceRingClosed
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -326,16 +326,16 @@ public class S128CatalogueRulesTests
     [Fact]
     public void UniqueProductIds_Passes_OnAllUniqueIds()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1"), ElectronicProduct("E2"), ElectronicProduct("E3")));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1"), ElectronicProduct("E2"), ElectronicProduct("E3")]);
         Assert.Empty(S128CatalogueRules.UniqueProductIds.Evaluate(cat, ValidationContext.Default));
     }
 
     [Fact]
     public void UniqueProductIds_Fails_OnDuplicateId()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1"), ElectronicProduct("E1"), ElectronicProduct("E2")));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1"), ElectronicProduct("E1"), ElectronicProduct("E2")]);
         var findings = S128CatalogueRules.UniqueProductIds
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -347,9 +347,9 @@ public class S128CatalogueRulesTests
     [Fact]
     public void UniqueProductIds_Fails_OnMultipleDuplicates()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1"), ElectronicProduct("E1"),
-            ElectronicProduct("E2"), ElectronicProduct("E2"), ElectronicProduct("E2")));
+            ElectronicProduct("E2"), ElectronicProduct("E2"), ElectronicProduct("E2")]);
         var findings = S128CatalogueRules.UniqueProductIds
             .Evaluate(cat, ValidationContext.Default).ToList();
         // One finding per duplicate occurrence after the first.
@@ -361,8 +361,8 @@ public class S128CatalogueRulesTests
     [Fact]
     public void OnlineResourceLinkageWellFormed_Passes_WhenNoOnlineResources()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
-            ElectronicProduct("E1")));
+        var cat = Catalogue(products: [
+            ElectronicProduct("E1")]);
         Assert.Empty(S128CatalogueRules.OnlineResourceLinkageWellFormed
             .Evaluate(cat, ValidationContext.Default));
     }
@@ -370,11 +370,11 @@ public class S128CatalogueRulesTests
     [Fact]
     public void OnlineResourceLinkageWellFormed_Passes_WhenLinkageBlank()
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
-                onlineResources: ImmutableArray.Create(
+                onlineResources: [
                     new S128OnlineResource { Linkage = null },
-                    new S128OnlineResource { Linkage = "   " }))));
+                    new S128OnlineResource { Linkage = "   " }])]);
         Assert.Empty(S128CatalogueRules.OnlineResourceLinkageWellFormed
             .Evaluate(cat, ValidationContext.Default));
     }
@@ -384,10 +384,10 @@ public class S128CatalogueRulesTests
     [InlineData("ftp://example.com/path")]
     public void OnlineResourceLinkageWellFormed_Passes_OnAbsoluteUri(string linkage)
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("E1",
-                onlineResources: ImmutableArray.Create(
-                    new S128OnlineResource { Linkage = linkage }))));
+                onlineResources: [
+                    new S128OnlineResource { Linkage = linkage }])]);
         Assert.Empty(S128CatalogueRules.OnlineResourceLinkageWellFormed
             .Evaluate(cat, ValidationContext.Default));
     }
@@ -397,10 +397,10 @@ public class S128CatalogueRulesTests
     [InlineData("relative/path/only")]
     public void OnlineResourceLinkageWellFormed_Fails_OnMalformedLinkage(string linkage)
     {
-        var cat = Catalogue(products: ImmutableArray.Create<S128CatalogueEntry>(
+        var cat = Catalogue(products: [
             ElectronicProduct("BAD",
-                onlineResources: ImmutableArray.Create(
-                    new S128OnlineResource { Linkage = linkage }))));
+                onlineResources: [
+                    new S128OnlineResource { Linkage = linkage }])]);
         var findings = S128CatalogueRules.OnlineResourceLinkageWellFormed
             .Evaluate(cat, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -415,7 +415,7 @@ public class S128CatalogueRulesTests
     [Fact]
     public void ProducerOrDistributorPresent_Passes_WithProducer()
     {
-        var cat = Catalogue(producers: ImmutableArray.Create(Producer()));
+        var cat = Catalogue(producers: [Producer()]);
         Assert.Empty(S128CatalogueRules.ProducerOrDistributorPresent
             .Evaluate(cat, ValidationContext.Default));
     }
@@ -423,7 +423,7 @@ public class S128CatalogueRulesTests
     [Fact]
     public void ProducerOrDistributorPresent_Passes_WithDistributorOnly()
     {
-        var cat = Catalogue(distributors: ImmutableArray.Create(Distributor()));
+        var cat = Catalogue(distributors: [Distributor()]);
         Assert.Empty(S128CatalogueRules.ProducerOrDistributorPresent
             .Evaluate(cat, ValidationContext.Default));
     }
@@ -445,7 +445,7 @@ public class S128CatalogueRulesTests
     [Fact]
     public void Default_ContainsAllSevenRules()
     {
-        Assert.Equal(7, S128CatalogueRules.Default.Rules.Length);
+        Assert.Equal(7, S128CatalogueRules.Default.Rules.Count);
         var ids = S128CatalogueRules.Default.Rules.Select(r => r.RuleId).ToHashSet();
         Assert.Contains("S128-R-12.1", ids);
         Assert.Contains("S128-R-12.2", ids);
@@ -459,20 +459,20 @@ public class S128CatalogueRulesTests
     [Fact]
     public void Validate_OnValidCatalogue_ProducesNoFindings()
     {
-        var ring = ImmutableArray.Create(
+        GeoPosition[] ring = [
             new GeoPosition(0, 0), new GeoPosition(0, 1),
-            new GeoPosition(1, 1), new GeoPosition(1, 0), new GeoPosition(0, 0));
+            new GeoPosition(1, 1), new GeoPosition(1, 0), new GeoPosition(0, 0)];
         var cat = Catalogue(
-            products: ImmutableArray.Create<S128CatalogueEntry>(
+            products: [
                 ElectronicProduct("E1",
                     editionNumber: 2,
                     issueDate: new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
                     updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero),
                     geometryKind: S128GeometryKind.Surface,
                     coordinates: ring,
-                    onlineResources: ImmutableArray.Create(
-                        new S128OnlineResource { Linkage = "https://example.com/p1" }))),
-            producers: ImmutableArray.Create(Producer()));
+                    onlineResources: [
+                        new S128OnlineResource { Linkage = "https://example.com/p1" }])],
+            producers: [Producer()]);
         var report = S128CatalogueRules.Validate(cat);
         Assert.True(report.IsValid);
         Assert.Empty(report.Findings);
@@ -485,16 +485,16 @@ public class S128CatalogueRulesTests
         // Edition 0 (12.1), issue > update (12.2), out-of-range coord (12.3),
         // duplicate id (12.5), bad linkage (12.6), no producer/distributor (12.7).
         var cat = Catalogue(
-            products: ImmutableArray.Create<S128CatalogueEntry>(
+            products: [
                 ElectronicProduct("DUP",
                     editionNumber: 0,
                     issueDate: new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero),
                     updateDate: new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero),
                     geometryKind: S128GeometryKind.Point,
-                    coordinates: ImmutableArray.Create(new GeoPosition(95.0, 0.0)),
-                    onlineResources: ImmutableArray.Create(
-                        new S128OnlineResource { Linkage = "not a url" })),
-                ElectronicProduct("DUP")));
+                    coordinates: [new GeoPosition(95.0, 0.0)],
+                    onlineResources: [
+                        new S128OnlineResource { Linkage = "not a url" }]),
+                ElectronicProduct("DUP")]);
 
         var report = S128CatalogueRules.Validate(cat);
         Assert.False(report.IsValid);

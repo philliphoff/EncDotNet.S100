@@ -148,7 +148,7 @@ public static class S98DefaultRules
         IReadOnlyList<SubLayerStackItem> stack,
         S98RuleContext context)
     {
-        var safetyContour = context.EffectiveMariner.SafetyContour;
+        var safetyContour = context.EffectiveMariner.SafetyContour.TotalMetres;
 
         var result = new List<SubLayerStackItem>(stack.Count);
         foreach (var item in stack)

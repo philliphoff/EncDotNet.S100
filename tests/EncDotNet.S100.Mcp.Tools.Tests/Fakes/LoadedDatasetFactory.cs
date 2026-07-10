@@ -9,7 +9,6 @@ using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Mcp.Tools.Catalog;
 using EncDotNet.S100.Pipelines;
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 
@@ -57,8 +56,8 @@ internal static class LoadedDatasetFactory
     {
         var model = new S122Dataset
         {
-            Features = ImmutableArray<S122Feature>.Empty,
-            InformationTypes = ImmutableArray<S122InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         return new LoadedDataset(
             new DatasetId(id),

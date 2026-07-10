@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S421.DataModel;
@@ -60,8 +59,8 @@ public sealed class S421ActionPoint
     /// single coordinate; for <see cref="S421ActionPointGeometryKind.Surface"/>
     /// it contains the closed exterior ring.
     /// </summary>
-    public required ImmutableArray<GeoPosition> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>Unrecognised / extension attributes preserved verbatim.</summary>
-    public required ImmutableDictionary<string, string> ExtraAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
 }

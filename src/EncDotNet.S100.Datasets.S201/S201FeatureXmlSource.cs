@@ -46,7 +46,7 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
     {
         SynthesiseDefaultPortrayalAttributes(feature, featureElement);
 
-        if (!feature.InformationReferences.IsDefaultOrEmpty)
+        if (feature.InformationReferences.Count > 0)
         {
             foreach (var infoRef in feature.InformationReferences)
             {
@@ -55,7 +55,7 @@ public sealed class S201FeatureXmlSource : GmlFeatureXmlSource<S201Feature>
             }
         }
 
-        if (!feature.FeatureReferences.IsDefaultOrEmpty)
+        if (feature.FeatureReferences.Count > 0)
         {
             foreach (var featureRef in feature.FeatureReferences)
             {

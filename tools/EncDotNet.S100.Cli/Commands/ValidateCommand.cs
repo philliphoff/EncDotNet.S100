@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
@@ -355,7 +354,7 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
 
         var (kept, suppressedCount) = Partition(report, suppressPatterns);
 
-        if (kept.IsEmpty)
+        if (kept.Count == 0)
         {
             var suffix = suppressedCount > 0
                 ? $" ([grey]{report.RulesEvaluated} rule(s) evaluated; {suppressedCount} finding(s) suppressed[/])"
@@ -398,10 +397,10 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
 
     private static int EmitJson(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)
     {
-        var kept = report is null
-            ? ImmutableArray<ValidationFinding>.Empty
+        IReadOnlyList<ValidationFinding> kept = report is null
+            ? []
             : Partition(report, suppressPatterns).Kept;
-        int suppressedCount = report is null ? 0 : report.Findings.Length - kept.Length;
+        int suppressedCount = report is null ? 0 : report.Findings.Count - kept.Count;
 
         var payload = new
         {
@@ -410,7 +409,7 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             rulesAvailable = report is not null,
             rulesEvaluated = report?.RulesEvaluated ?? 0,
             rulesWithFindings = kept.Select(f => f.RuleId).Distinct().Count(),
-            valid = report is null || kept.IsEmpty,
+            valid = report is null || kept.Count == 0,
             suppressedPatterns = suppressPatterns.Count > 0 ? suppressPatterns.ToArray() : null,
             suppressedCount,
             findings = kept
@@ -445,17 +444,17 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
     /// A finding is suppressed when its <see cref="ValidationFinding.RuleId"/>
     /// matches any pattern (see <see cref="IsSuppressed"/>).
     /// </summary>
-    private static (ImmutableArray<ValidationFinding> Kept, int Suppressed) Partition(
+    private static (IReadOnlyList<ValidationFinding> Kept, int Suppressed) Partition(
         ValidationReport report, IReadOnlyList<string> suppressPatterns)
     {
-        if (report.Findings.IsDefaultOrEmpty)
-            return (ImmutableArray<ValidationFinding>.Empty, 0);
+        if (report.Findings.Count == 0)
+            return ([], 0);
 
         if (suppressPatterns.Count == 0)
             return (report.Findings, 0);
 
-        var kept = report.Findings.Where(f => !IsSuppressed(f.RuleId, suppressPatterns)).ToImmutableArray();
-        return (kept, report.Findings.Length - kept.Length);
+        var kept = report.Findings.Where(f => !IsSuppressed(f.RuleId, suppressPatterns)).ToArray();
+        return (kept, report.Findings.Count - kept.Length);
     }
 
     private static bool Failed(IReadOnlyCollection<ValidationFinding> findings, bool strict) =>

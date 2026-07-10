@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S131.DataModel;
 using EncDotNet.S100.Validation;
@@ -77,9 +76,10 @@ public static class S131HarbourInfrastructureRules
     /// geometry — they aggregate child features through xlinks. These
     /// are exempted from the geometry-presence rule.
     /// </summary>
-    private static readonly ImmutableHashSet<S131HarbourInfrastructureKind> ContainerHarbourKinds =
-        ImmutableHashSet.Create(
-            S131HarbourInfrastructureKind.HarbourFacility);
+    private static readonly HashSet<S131HarbourInfrastructureKind> ContainerHarbourKinds =
+    [
+        S131HarbourInfrastructureKind.HarbourFacility,
+    ];
 
     // ── S131-R-1.1 — harbour-infrastructure geometry present ───────────
 
@@ -294,7 +294,7 @@ public static class S131HarbourInfrastructureRules
                     if (f.Geometry.GeometryType != S131GeometryType.Surface) continue;
 
                     CheckRing(f, "exterior ring", f.Geometry.ExteriorRing, findings, tolerance);
-                    for (int i = 0; i < f.Geometry.InteriorRings.Length; i++)
+                    for (int i = 0; i < f.Geometry.InteriorRings.Count; i++)
                     {
                         CheckRing(f, $"interior ring [{i}]", f.Geometry.InteriorRings[i], findings, tolerance);
                     }
@@ -304,13 +304,13 @@ public static class S131HarbourInfrastructureRules
                 static void CheckRing(
                     IS131Feature f,
                     string label,
-                    ImmutableArray<GeoPosition> ring,
+                    IReadOnlyList<GeoPosition> ring,
                     List<ValidationFinding> sink,
                     double tolerance)
                 {
-                    if (ring.IsDefaultOrEmpty) return;
+                    if (ring.Count == 0) return;
 
-                    if (ring.Length < 4)
+                    if (ring.Count < 4)
                     {
                         sink.Add(new ValidationFinding
                         {
@@ -318,7 +318,7 @@ public static class S131HarbourInfrastructureRules
                             Severity = ValidationSeverity.Error,
                             Message =
                                 $"Feature '{f.Id}' ({f.FeatureType}) {label} has only " +
-                                $"{ring.Length} vertex/vertices; a closed ring requires at least 4.",
+                                $"{ring.Count} vertex/vertices; a closed ring requires at least 4.",
                             RelatedFeatureId = f.Id,
                         });
                         return;

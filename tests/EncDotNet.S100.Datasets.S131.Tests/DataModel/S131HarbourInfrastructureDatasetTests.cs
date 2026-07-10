@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using System.Linq;
 using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S131.Tests.DataModel;
 
@@ -17,8 +17,8 @@ public class S131HarbourInfrastructureDatasetTests
         var empty = new S131Dataset
         {
             ProductIdentifier = "S-131",
-            Features = ImmutableArray<S131Feature>.Empty,
-            InformationTypes = ImmutableArray<S131InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
 
         Assert.Throws<InvalidOperationException>(() =>
@@ -70,14 +70,14 @@ public class S131HarbourInfrastructureDatasetTests
 
         var anchorage = typed.LayoutFeatures.Single(l => l.Id == "f-anchorage");
         Assert.Equal(S131GeometryType.Surface, anchorage.Geometry.GeometryType);
-        Assert.Equal(5, anchorage.Geometry.ExteriorRing.Length);
+        Assert.Equal(5, anchorage.Geometry.ExteriorRing.Count);
         Assert.Single(anchorage.Geometry.InteriorRings);
-        Assert.Equal(5, anchorage.Geometry.InteriorRings[0].Length);
+        Assert.Equal(5, anchorage.Geometry.InteriorRings[0].Count);
 
         var fender = typed.LayoutFeatures.Single(l => l.Id == "f-fender");
         Assert.Equal(S131GeometryType.Curve, fender.Geometry.GeometryType);
         Assert.Single(fender.Geometry.Curves);
-        Assert.Equal(3, fender.Geometry.Curves[0].Length);
+        Assert.Equal(3, fender.Geometry.Curves[0].Count);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public class S131HarbourInfrastructureDatasetTests
         // as a feature (anything not in the hard-coded info-type list is a
         // feature). Both surface as S131OtherFeature with the
         // s131.feature.unknown diagnostic.
-        Assert.Equal(2, typed.OtherFeatures.Length);
+        Assert.Equal(2, typed.OtherFeatures.Count);
         Assert.Contains(typed.OtherFeatures, o => o.FeatureType == "MysteryFeature" && o.Id == "f-unknown");
         Assert.Contains(diags, d => d.Code == "s131.feature.unknown" && d.RelatedId == "f-unknown");
         Assert.All(typed.OtherFeatures, o => Assert.Equal(S131FeatureFamily.Unknown, o.Family));
@@ -162,14 +162,14 @@ public class S131HarbourInfrastructureDatasetTests
         var raw = new S131Dataset
         {
             ProductIdentifier = "S-131",
-            Features = ImmutableArray<S131Feature>.Empty,
-            InformationTypes = ImmutableArray.Create(new S131InformationType
+            Features = [],
+            InformationTypes = [new S131InformationType
             {
                 Id = "info-mystery",
                 TypeCode = "MysteryInformation",
-                Attributes = ImmutableDictionary<string, string>.Empty,
-                ComplexAttributes = ImmutableArray<S131ComplexAttribute>.Empty,
-            }),
+                Attributes = ReadOnlyDictionary<string, string>.Empty,
+                ComplexAttributes = [],
+            }],
         };
 
         var typed = S131HarbourInfrastructureDataset.From(raw, out var diags);
@@ -233,6 +233,6 @@ public class S131HarbourInfrastructureDatasetTests
         var area = Assert.Single(typed.LayoutFeatures);
         Assert.Equal(S131LayoutKind.AnchorageArea, area.Kind);
         Assert.Equal(S131GeometryType.Surface, area.Geometry.GeometryType);
-        Assert.True(area.Geometry.ExteriorRing.Length >= 4);
+        Assert.True(area.Geometry.ExteriorRing.Count >= 4);
     }
 }

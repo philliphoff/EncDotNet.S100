@@ -176,8 +176,8 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var geometryProvider = new FeatureGeometryProvider<S131Feature>(_dataset.Features);
         Console.WriteLine($"[S131] Prepared {prepared.Count} instructions");
 
-        var info = $"{_fileName} — {_dataset.Features.Length} features, " +
-                   $"{_dataset.InformationTypes.Length} info types, " +
+        var info = $"{_fileName} — {_dataset.Features.Count} features, " +
+                   $"{_dataset.InformationTypes.Count} info types, " +
                    $"{prepared.Count} instructions";
 
         return new VectorPortrayalResult
@@ -228,7 +228,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
     {
-        if (ordinal < 0 || ordinal >= _dataset.Features.Length)
+        if (ordinal < 0 || ordinal >= _dataset.Features.Count)
             return null;
 
         EnsureDecoder();
@@ -239,7 +239,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     public IEnumerable<FeatureSummary> EnumerateFeatures()
     {
         EnsureDecoder();
-        for (int i = 0; i < _dataset.Features.Length; i++)
+        for (int i = 0; i < _dataset.Features.Count; i++)
         {
             var f = _dataset.Features[i];
             yield return new FeatureSummary

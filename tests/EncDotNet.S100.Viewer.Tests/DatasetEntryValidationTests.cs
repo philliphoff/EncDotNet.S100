@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -26,7 +25,7 @@ public class DatasetEntryValidationTests
         };
 
     private static ValidationReport ReportOf(params ValidationFinding[] findings)
-        => new(findings.ToImmutableArray(), RulesEvaluated: findings.Length,
+        => new(findings.ToArray(), RulesEvaluated: findings.Length,
             RulesWithFindings: findings.Length);
 
     [Fact]

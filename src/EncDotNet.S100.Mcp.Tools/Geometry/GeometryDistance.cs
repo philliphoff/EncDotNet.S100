@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
@@ -71,12 +71,12 @@ public static class GeometryDistance
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentNullException.ThrowIfNull(point);
 
-        if (!feature.ExteriorRing.IsDefaultOrEmpty)
+        if (feature.ExteriorRing.Count > 0)
         {
             return MeasureSurface(feature, point);
         }
 
-        if (!feature.Curves.IsDefaultOrEmpty && feature.Curves.Length > 0)
+        if (feature.Curves.Count > 0)
         {
             var (dist, lat, lon) = NearestOnCurves(feature.Curves, point);
             if (!double.IsPositiveInfinity(dist))
@@ -85,7 +85,7 @@ public static class GeometryDistance
             }
         }
 
-        if (!feature.Points.IsDefaultOrEmpty)
+        if (feature.Points.Count > 0)
         {
             var best = double.PositiveInfinity;
             double bLat = 0, bLon = 0;
@@ -112,7 +112,7 @@ public static class GeometryDistance
     private static FeatureDistance MeasureSurface(IS100Feature feature, GeoPoint point)
     {
         var inside = ContainsPoint(feature.ExteriorRing, point);
-        if (inside && !feature.InteriorRings.IsDefaultOrEmpty)
+        if (inside && feature.InteriorRings.Count > 0)
         {
             foreach (var hole in feature.InteriorRings)
             {
@@ -131,7 +131,7 @@ public static class GeometryDistance
 
         // Outside (or inside a hole): distance to the nearest ring edge.
         var (dist, lat, lon) = NearestOnRing(feature.ExteriorRing, point);
-        if (!feature.InteriorRings.IsDefaultOrEmpty)
+        if (feature.InteriorRings.Count > 0)
         {
             foreach (var hole in feature.InteriorRings)
             {
@@ -149,7 +149,7 @@ public static class GeometryDistance
     }
 
     private static (double Distance, double Lat, double Lon) NearestOnCurves(
-        ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves,
         GeoPoint point)
     {
         var best = double.PositiveInfinity;
@@ -157,12 +157,12 @@ public static class GeometryDistance
 
         foreach (var curve in curves)
         {
-            if (curve.IsDefaultOrEmpty)
+            if (curve.Count == 0)
             {
                 continue;
             }
 
-            if (curve.Length == 1)
+            if (curve.Count == 1)
             {
                 var d = Meters(point, curve[0].Latitude, curve[0].Longitude);
                 if (d < best)
@@ -174,7 +174,7 @@ public static class GeometryDistance
                 continue;
             }
 
-            for (var i = 0; i < curve.Length - 1; i++)
+            for (var i = 0; i < curve.Count - 1; i++)
             {
                 var (d, lat, lon) = PointToSegment(point, curve[i], curve[i + 1]);
                 if (d < best)
@@ -190,18 +190,18 @@ public static class GeometryDistance
     }
 
     private static (double Distance, double Lat, double Lon) NearestOnRing(
-        ImmutableArray<(double Latitude, double Longitude)> ring,
+        IReadOnlyList<GeoPosition> ring,
         GeoPoint point)
     {
         var best = double.PositiveInfinity;
         double bLat = 0, bLon = 0;
 
-        if (ring.IsDefaultOrEmpty)
+        if (ring.Count == 0)
         {
             return (best, bLat, bLon);
         }
 
-        for (var i = 0; i < ring.Length - 1; i++)
+        for (var i = 0; i < ring.Count - 1; i++)
         {
             var (d, lat, lon) = PointToSegment(point, ring[i], ring[i + 1]);
             if (d < best)
@@ -224,8 +224,8 @@ public static class GeometryDistance
     /// </summary>
     public static (double Distance, double Lat, double Lon) PointToSegment(
         GeoPoint point,
-        (double Latitude, double Longitude) a,
-        (double Latitude, double Longitude) b)
+        GeoPosition a,
+        GeoPosition b)
     {
         var cosLat = Math.Cos(point.Latitude * Math.PI / 180.0);
 
@@ -295,9 +295,9 @@ public static class GeometryDistance
     /// reported as inside. Rings shorter than four points are treated as
     /// empty.
     /// </summary>
-    public static bool ContainsPoint(ImmutableArray<(double Latitude, double Longitude)> ring, GeoPoint point)
+    public static bool ContainsPoint(IReadOnlyList<GeoPosition> ring, GeoPoint point)
     {
-        if (ring.IsDefaultOrEmpty || ring.Length < 4)
+        if (ring.Count == 0 || ring.Count < 4)
         {
             return false;
         }
@@ -306,7 +306,7 @@ public static class GeometryDistance
         var y = point.Latitude;
         var inside = false;
 
-        for (int i = 0, j = ring.Length - 2; i < ring.Length - 1; j = i++)
+        for (int i = 0, j = ring.Count - 2; i < ring.Count - 1; j = i++)
         {
             var xi = ring[i].Longitude;
             var yi = ring[i].Latitude;

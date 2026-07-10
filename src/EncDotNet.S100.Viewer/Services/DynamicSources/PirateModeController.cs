@@ -84,8 +84,6 @@ internal enum PirateFollowOutcome
 /// </remarks>
 internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
 {
-    private const double KnotsToMetresPerSecond = 0.514_444_444;
-
     private readonly IDynamicFeatureSource _rawAis;
     private readonly ExcludingAisFeatureSource _exclusion;
     private readonly IOwnShipHelm _helm;
@@ -247,10 +245,8 @@ internal sealed class PirateModeController : IDisposable, IHelmStatusProvider
         if (feature is null || feature.Coordinates.Count == 0) return false;
 
         var (lat, lon) = feature.Coordinates[0];
-        double? cog = feature.Motion?.CourseOverGroundDeg;
-        double? sogMs = feature.Motion?.SpeedOverGroundKn is { } kn
-            ? kn * KnotsToMetresPerSecond
-            : null;
+        double? cog = feature.Motion?.CourseOverGround?.TotalDegrees;
+        double? sogMs = feature.Motion?.SpeedOverGround?.TotalMetresPerSecond;
 
         // Geometry first so the own-ship republish triggered by the helm
         // correction already sees the adopted dimensions. A target with no

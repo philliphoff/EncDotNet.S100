@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -39,43 +39,43 @@ public sealed class S201AtonInventory
     public string? ProductIdentifier { get; init; }
 
     /// <summary>Every AtoN object in the dataset, in source order.</summary>
-    public required ImmutableArray<S201AtonObject> AtoNs { get; init; }
+    public required IReadOnlyList<S201AtonObject> AtoNs { get; init; }
 
     /// <summary>Typed view of <see cref="AtoNs"/> filtered to <see cref="S201StructureObject"/>s.</summary>
-    public ImmutableArray<S201StructureObject> Structures { get; init; } =
-        ImmutableArray<S201StructureObject>.Empty;
+    public IReadOnlyList<S201StructureObject> Structures { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="AtoNs"/> filtered to <see cref="S201Equipment"/> (includes lights).</summary>
-    public ImmutableArray<S201Equipment> Equipment { get; init; } =
-        ImmutableArray<S201Equipment>.Empty;
+    public IReadOnlyList<S201Equipment> Equipment { get; init; } =
+        [];
 
     /// <summary>Typed view of <see cref="AtoNs"/> filtered to <see cref="S201ElectronicAtoN"/>s.</summary>
-    public ImmutableArray<S201ElectronicAtoN> ElectronicAtoNs { get; init; } =
-        ImmutableArray<S201ElectronicAtoN>.Empty;
+    public IReadOnlyList<S201ElectronicAtoN> ElectronicAtoNs { get; init; } =
+        [];
 
     /// <summary>AtoN aggregations declared in the dataset.</summary>
-    public ImmutableArray<S201AtonAggregation> Aggregations { get; init; } =
-        ImmutableArray<S201AtonAggregation>.Empty;
+    public IReadOnlyList<S201AtonAggregation> Aggregations { get; init; } =
+        [];
 
     /// <summary>AtoN associations declared in the dataset.</summary>
-    public ImmutableArray<S201AtonAssociation> Associations { get; init; } =
-        ImmutableArray<S201AtonAssociation>.Empty;
+    public IReadOnlyList<S201AtonAssociation> Associations { get; init; } =
+        [];
 
     /// <summary>AtoN status information records (FC: <c>AtonStatusInformation</c>).</summary>
-    public ImmutableArray<S201AtonStatusInformation> StatusInformation { get; init; } =
-        ImmutableArray<S201AtonStatusInformation>.Empty;
+    public IReadOnlyList<S201AtonStatusInformation> StatusInformation { get; init; } =
+        [];
 
     /// <summary>Positioning information records (FC: <c>PositioningInformation</c>).</summary>
-    public ImmutableArray<S201PositioningInformationRecord> PositioningInformation { get; init; } =
-        ImmutableArray<S201PositioningInformationRecord>.Empty;
+    public IReadOnlyList<S201PositioningInformationRecord> PositioningInformation { get; init; } =
+        [];
 
     /// <summary>Fixing-method records (FC: <c>AtoNFixingMethod</c>).</summary>
-    public ImmutableArray<S201AtoNFixingMethodRecord> FixingMethods { get; init; } =
-        ImmutableArray<S201AtoNFixingMethodRecord>.Empty;
+    public IReadOnlyList<S201AtoNFixingMethodRecord> FixingMethods { get; init; } =
+        [];
 
     /// <summary>Spatial quality records (FC: <c>SpatialQuality</c>).</summary>
-    public ImmutableArray<S201SpatialQuality> SpatialQualities { get; init; } =
-        ImmutableArray<S201SpatialQuality>.Empty;
+    public IReadOnlyList<S201SpatialQuality> SpatialQualities { get; init; } =
+        [];
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S201Dataset Source { get; init; }
@@ -94,7 +94,7 @@ public sealed class S201AtonInventory
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty && dataset.InformationTypes.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0 && dataset.InformationTypes.Count == 0)
             throw new InvalidOperationException("Dataset contains no features and no information types.");
 
         var ctx = new ProjectionContext(BuildXlinkResolver(dataset));
@@ -105,16 +105,16 @@ public sealed class S201AtonInventory
         var fixing = ProjectFixingMethods(dataset, ctx);
         var spatialQuality = ProjectSpatialQuality(dataset, ctx);
 
-        var statusInfoById = statusInfo.ToImmutableDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase);
-        var positioningById = positioning.ToImmutableDictionary(p => p.Id, StringComparer.OrdinalIgnoreCase);
-        var fixingById = fixing.ToImmutableDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
+        var statusInfoById = statusInfo.ToDictionary(s => s.Id, StringComparer.OrdinalIgnoreCase);
+        var positioningById = positioning.ToDictionary(p => p.Id, StringComparer.OrdinalIgnoreCase);
+        var fixingById = fixing.ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
 
         // Pass 2: project all AtoN features (cross-refs left empty for now).
-        var atons = ImmutableArray.CreateBuilder<S201AtonObject>();
+        var atons = new List<S201AtonObject>();
         var aggregationFeatures = new List<S201Feature>();
         var associationFeatures = new List<S201Feature>();
 
-        if (!dataset.Features.IsDefaultOrEmpty)
+        if (dataset.Features.Count > 0)
         {
             foreach (var f in dataset.Features)
             {
@@ -133,7 +133,7 @@ public sealed class S201AtonInventory
             }
         }
 
-        var atonArray = atons.ToImmutable();
+        var atonArray = atons;
         var atonsById = new Dictionary<string, S201AtonObject>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in atonArray)
             atonsById[a.Id] = a;
@@ -149,11 +149,11 @@ public sealed class S201AtonInventory
         BackFillMembership(atonArray, aggregations, associations);
 
         // Typed views.
-        var structures = atonArray.OfType<S201StructureObject>().ToImmutableArray();
-        var equipment = atonArray.OfType<S201Equipment>().ToImmutableArray();
-        var electronic = atonArray.OfType<S201ElectronicAtoN>().ToImmutableArray();
+        var structures = atonArray.OfType<S201StructureObject>().ToArray();
+        var equipment = atonArray.OfType<S201Equipment>().ToArray();
+        var electronic = atonArray.OfType<S201ElectronicAtoN>().ToArray();
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S201AtonInventory
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
@@ -176,10 +176,10 @@ public sealed class S201AtonInventory
     {
         IEnumerable<KeyValuePair<string, object>> All()
         {
-            if (!dataset.Features.IsDefaultOrEmpty)
+            if (dataset.Features.Count > 0)
                 foreach (var f in dataset.Features)
                     yield return new KeyValuePair<string, object>(f.Id, f);
-            if (!dataset.InformationTypes.IsDefaultOrEmpty)
+            if (dataset.InformationTypes.Count > 0)
                 foreach (var i in dataset.InformationTypes)
                     yield return new KeyValuePair<string, object>(i.Id, i);
         }
@@ -203,17 +203,17 @@ public sealed class S201AtonInventory
     // Information-type projections
     // -------------------------------------------------------------------
 
-    private static ImmutableArray<S201AtonStatusInformation> ProjectStatusInformation(S201Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S201AtonStatusInformation> ProjectStatusInformation(S201Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201AtonStatusInformation>();
-        if (dataset.InformationTypes.IsDefaultOrEmpty) return b.ToImmutable();
+        var b = new List<S201AtonStatusInformation>();
+        if (dataset.InformationTypes.Count == 0) return b;
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "AtonStatusInformation", StringComparison.OrdinalIgnoreCase))
                 continue;
             var changeDetails = i.ComplexAttributes
                 .FirstOrDefault(c => string.Equals(c.Code, "ChangeDetails", StringComparison.OrdinalIgnoreCase))
-                ?.SubAttributes ?? ImmutableDictionary<string, string>.Empty;
+                ?.SubAttributes ?? ReadOnlyDictionary<string, string>.Empty;
             b.Add(new S201AtonStatusInformation
             {
                 Id = i.Id,
@@ -225,13 +225,13 @@ public sealed class S201AtonInventory
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes, "ChangeTypes", "changeTypes"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201PositioningInformationRecord> ProjectPositioningInformation(S201Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S201PositioningInformationRecord> ProjectPositioningInformation(S201Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201PositioningInformationRecord>();
-        if (dataset.InformationTypes.IsDefaultOrEmpty) return b.ToImmutable();
+        var b = new List<S201PositioningInformationRecord>();
+        if (dataset.InformationTypes.Count == 0) return b;
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "PositioningInformation", StringComparison.OrdinalIgnoreCase))
@@ -245,13 +245,13 @@ public sealed class S201AtonInventory
             });
         }
         _ = ctx; // no parse calls yet
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201AtoNFixingMethodRecord> ProjectFixingMethods(S201Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S201AtoNFixingMethodRecord> ProjectFixingMethods(S201Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201AtoNFixingMethodRecord>();
-        if (dataset.InformationTypes.IsDefaultOrEmpty) return b.ToImmutable();
+        var b = new List<S201AtoNFixingMethodRecord>();
+        if (dataset.InformationTypes.Count == 0) return b;
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "AtoNFixingMethod", StringComparison.OrdinalIgnoreCase))
@@ -269,13 +269,13 @@ public sealed class S201AtonInventory
                     "referencePoint", "horizontalDatum", "sourceDate", "positioningProcedure"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201SpatialQuality> ProjectSpatialQuality(S201Dataset dataset, ProjectionContext ctx)
+    private static IReadOnlyList<S201SpatialQuality> ProjectSpatialQuality(S201Dataset dataset, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201SpatialQuality>();
-        if (dataset.InformationTypes.IsDefaultOrEmpty) return b.ToImmutable();
+        var b = new List<S201SpatialQuality>();
+        if (dataset.InformationTypes.Count == 0) return b;
         foreach (var i in dataset.InformationTypes)
         {
             if (!string.Equals(i.TypeCode, "SpatialQuality", StringComparison.OrdinalIgnoreCase))
@@ -292,7 +292,7 @@ public sealed class S201AtonInventory
                     "qualityOfHorizontalMeasurement", "spatialAccuracy"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
     // -------------------------------------------------------------------
@@ -335,7 +335,7 @@ public sealed class S201AtonInventory
                     f.Attributes.GetValueOrDefault("installationDate"), ctx, f.Id, "installationDate"),
                 FixedDateRange = ProjectDateRange(f, "fixedDateRange", ctx),
                 PeriodicDateRange = ProjectDateRange(f, "periodicDateRange", ctx),
-                SeasonalActionRequired = ImmutableArray<string>.Empty,
+                SeasonalActionRequired = [],
                 StatusInformation = status,
                 RemoteMonitoringSystem = f.Attributes.GetValueOrDefault("remoteMonitoringSystem"),
                 Height = AttributeParser.TryParseDouble(
@@ -380,7 +380,7 @@ public sealed class S201AtonInventory
                     f.Attributes.GetValueOrDefault("installationDate"), ctx, f.Id, "installationDate"),
                 FixedDateRange = ProjectDateRange(f, "fixedDateRange", ctx),
                 PeriodicDateRange = ProjectDateRange(f, "periodicDateRange", ctx),
-                SeasonalActionRequired = ImmutableArray<string>.Empty,
+                SeasonalActionRequired = [],
                 StatusInformation = status,
                 AtoNNumber = f.Attributes.GetValueOrDefault("AtoNNumber"),
                 MmsiCode = f.Attributes.GetValueOrDefault("mMSICode"),
@@ -391,7 +391,7 @@ public sealed class S201AtonInventory
 
         // Equipment? (anything with theParentFeature reference but not a light or AIS — heuristic
         // based on FC `superType=Equipment`; we use the role/structural cue here.)
-        var hasParentRef = !f.FeatureReferences.IsDefaultOrEmpty
+        var hasParentRef = f.FeatureReferences.Count > 0
             && f.FeatureReferences.Any(r => IsParentRole(r.Role));
         if (hasParentRef && !IsKnownStructureType(f.FeatureType))
         {
@@ -418,7 +418,7 @@ public sealed class S201AtonInventory
                     f.Attributes.GetValueOrDefault("installationDate"), ctx, f.Id, "installationDate"),
                 FixedDateRange = ProjectDateRange(f, "fixedDateRange", ctx),
                 PeriodicDateRange = ProjectDateRange(f, "periodicDateRange", ctx),
-                SeasonalActionRequired = ImmutableArray<string>.Empty,
+                SeasonalActionRequired = [],
                 StatusInformation = status,
                 RemoteMonitoringSystem = f.Attributes.GetValueOrDefault("remoteMonitoringSystem"),
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, EquipmentKnownAttributes),
@@ -454,7 +454,7 @@ public sealed class S201AtonInventory
                     f.Attributes.GetValueOrDefault("installationDate"), ctx, f.Id, "installationDate"),
                 FixedDateRange = ProjectDateRange(f, "fixedDateRange", ctx),
                 PeriodicDateRange = ProjectDateRange(f, "periodicDateRange", ctx),
-                SeasonalActionRequired = ImmutableArray<string>.Empty,
+                SeasonalActionRequired = [],
                 StatusInformation = status,
                 AtoNNumber = f.Attributes.GetValueOrDefault("AtoNNumber"),
                 AidAvailabilityCategory = AttributeParser.TryParseInt(
@@ -492,7 +492,7 @@ public sealed class S201AtonInventory
                 f.Attributes.GetValueOrDefault("installationDate"), ctx, f.Id, "installationDate"),
             FixedDateRange = ProjectDateRange(f, "fixedDateRange", ctx),
             PeriodicDateRange = ProjectDateRange(f, "periodicDateRange", ctx),
-            SeasonalActionRequired = ImmutableArray<string>.Empty,
+            SeasonalActionRequired = [],
             StatusInformation = status,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, CommonKnownAttributes),
         };
@@ -599,10 +599,10 @@ public sealed class S201AtonInventory
     // Per-feature helpers
     // -------------------------------------------------------------------
 
-    private static ImmutableArray<S201FeatureNameRecord> ProjectFeatureNames(S201Feature f, ProjectionContext ctx)
+    private static IReadOnlyList<S201FeatureNameRecord> ProjectFeatureNames(S201Feature f, ProjectionContext ctx)
     {
-        if (f.ComplexAttributes.IsDefaultOrEmpty) return ImmutableArray<S201FeatureNameRecord>.Empty;
-        var b = ImmutableArray.CreateBuilder<S201FeatureNameRecord>();
+        if (f.ComplexAttributes.Count == 0) return [];
+        var b = new List<S201FeatureNameRecord>();
         foreach (var ca in f.ComplexAttributes)
         {
             if (!string.Equals(ca.Code, "featureName", StringComparison.OrdinalIgnoreCase))
@@ -615,12 +615,12 @@ public sealed class S201AtonInventory
                     ca.SubAttributes.GetValueOrDefault("displayName"), ctx, f.Id, "displayName"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
     private static S201DateRange? ProjectDateRange(S201Feature f, string code, ProjectionContext ctx)
     {
-        if (f.ComplexAttributes.IsDefaultOrEmpty) return null;
+        if (f.ComplexAttributes.Count == 0) return null;
         foreach (var ca in f.ComplexAttributes)
         {
             if (!string.Equals(ca.Code, code, StringComparison.OrdinalIgnoreCase))
@@ -635,24 +635,24 @@ public sealed class S201AtonInventory
         return null;
     }
 
-    private static ImmutableArray<int> ParseIntList(string? value, ProjectionContext ctx,
+    private static IReadOnlyList<int> ParseIntList(string? value, ProjectionContext ctx,
         string? relatedId, string? attributeName)
     {
-        if (string.IsNullOrEmpty(value)) return ImmutableArray<int>.Empty;
-        var b = ImmutableArray.CreateBuilder<int>();
+        if (string.IsNullOrEmpty(value)) return [];
+        var b = new List<int>();
         foreach (var token in value.Split(new[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var n = AttributeParser.TryParseInt(token, ctx, relatedId, attributeName);
             if (n.HasValue) b.Add(n.Value);
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201AtonStatusInformation> ResolveStatusInformation(S201Feature f,
+    private static IReadOnlyList<S201AtonStatusInformation> ResolveStatusInformation(S201Feature f,
         ProjectionContext ctx, IReadOnlyDictionary<string, S201AtonStatusInformation> byId)
     {
-        if (f.InformationReferences.IsDefaultOrEmpty) return ImmutableArray<S201AtonStatusInformation>.Empty;
-        var b = ImmutableArray.CreateBuilder<S201AtonStatusInformation>();
+        if (f.InformationReferences.Count == 0) return [];
+        var b = new List<S201AtonStatusInformation>();
         foreach (var r in f.InformationReferences)
         {
             if (!string.Equals(r.Role, "AtoNStatus", StringComparison.OrdinalIgnoreCase))
@@ -664,14 +664,14 @@ public sealed class S201AtonInventory
                     $"Unresolved AtoNStatus reference '{r.InformationRef}'.",
                     code: "xlink.unresolved", relatedId: f.Id, relatedAttribute: r.Role);
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201PositioningInformationRecord> ResolvePositioningInformation(S201Feature f,
+    private static IReadOnlyList<S201PositioningInformationRecord> ResolvePositioningInformation(S201Feature f,
         ProjectionContext ctx, IReadOnlyDictionary<string, S201PositioningInformationRecord> byId)
     {
-        if (f.InformationReferences.IsDefaultOrEmpty) return ImmutableArray<S201PositioningInformationRecord>.Empty;
-        var b = ImmutableArray.CreateBuilder<S201PositioningInformationRecord>();
+        if (f.InformationReferences.Count == 0) return [];
+        var b = new List<S201PositioningInformationRecord>();
         foreach (var r in f.InformationReferences)
         {
             if (!string.Equals(r.Role, "positioningMethod", StringComparison.OrdinalIgnoreCase)
@@ -684,14 +684,14 @@ public sealed class S201AtonInventory
                     $"Unresolved positioningMethod reference '{r.InformationRef}'.",
                     code: "xlink.unresolved", relatedId: f.Id, relatedAttribute: r.Role);
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201AtoNFixingMethodRecord> ResolveFixingMethods(S201Feature f,
+    private static IReadOnlyList<S201AtoNFixingMethodRecord> ResolveFixingMethods(S201Feature f,
         ProjectionContext ctx, IReadOnlyDictionary<string, S201AtoNFixingMethodRecord> byId)
     {
-        if (f.InformationReferences.IsDefaultOrEmpty) return ImmutableArray<S201AtoNFixingMethodRecord>.Empty;
-        var b = ImmutableArray.CreateBuilder<S201AtoNFixingMethodRecord>();
+        if (f.InformationReferences.Count == 0) return [];
+        var b = new List<S201AtoNFixingMethodRecord>();
         foreach (var r in f.InformationReferences)
         {
             if (!string.Equals(r.Role, "fixingMethod", StringComparison.OrdinalIgnoreCase))
@@ -703,22 +703,22 @@ public sealed class S201AtonInventory
                     $"Unresolved fixingMethod reference '{r.InformationRef}'.",
                     code: "xlink.unresolved", relatedId: f.Id, relatedAttribute: r.Role);
         }
-        return b.ToImmutable();
+        return b;
     }
 
     // -------------------------------------------------------------------
     // Pass 3: equipment ↔ host-structure subordination
     // -------------------------------------------------------------------
 
-    private static void ResolveSubordination(ImmutableArray<S201AtonObject> atons,
+    private static void ResolveSubordination(IReadOnlyList<S201AtonObject> atons,
         IReadOnlyDictionary<string, S201AtonObject> byId, ProjectionContext ctx)
     {
-        var perStructureMounted = new Dictionary<string, ImmutableArray<S201Equipment>.Builder>(StringComparer.OrdinalIgnoreCase);
+        var perStructureMounted = new Dictionary<string, List<S201Equipment>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var atom in atons)
         {
             if (atom is not S201Equipment eq) continue;
-            if (atom.Source.FeatureReferences.IsDefaultOrEmpty) continue;
+            if (atom.Source.FeatureReferences.Count == 0) continue;
             foreach (var r in atom.Source.FeatureReferences)
             {
                 if (!IsParentRole(r.Role)) continue;
@@ -739,7 +739,7 @@ public sealed class S201AtonInventory
                 eq.HostStructure = structure;
                 if (!perStructureMounted.TryGetValue(structure.Id, out var builder))
                 {
-                    builder = ImmutableArray.CreateBuilder<S201Equipment>();
+                    builder = new List<S201Equipment>();
                     perStructureMounted[structure.Id] = builder;
                 }
                 builder.Add(eq);
@@ -751,7 +751,7 @@ public sealed class S201AtonInventory
         foreach (var atom in atons)
         {
             if (atom is not S201ElectronicAtoN electronic) continue;
-            if (atom.Source.FeatureReferences.IsDefaultOrEmpty) continue;
+            if (atom.Source.FeatureReferences.Count == 0) continue;
             foreach (var r in atom.Source.FeatureReferences)
             {
                 if (!IsParentRole(r.Role)) continue;
@@ -773,7 +773,7 @@ public sealed class S201AtonInventory
         {
             if (atom is not S201StructureObject structure) continue;
             if (!perStructureMounted.TryGetValue(structure.Id, out var builder)) continue;
-            structure.MountedEquipment = builder.ToImmutable();
+            structure.MountedEquipment = builder;
         }
     }
 
@@ -781,10 +781,10 @@ public sealed class S201AtonInventory
     // Pass 4: aggregations / associations
     // -------------------------------------------------------------------
 
-    private static ImmutableArray<S201AtonAggregation> ProjectAggregations(
+    private static IReadOnlyList<S201AtonAggregation> ProjectAggregations(
         List<S201Feature> features, IReadOnlyDictionary<string, S201AtonObject> byId, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201AtonAggregation>(features.Count);
+        var b = new List<S201AtonAggregation>(features.Count);
         foreach (var f in features)
         {
             var peers = ResolvePeers(f, byId, ctx);
@@ -800,13 +800,13 @@ public sealed class S201AtonInventory
                     "CategoryOfAssociation", "categoryOfAssociation"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201AtonAssociation> ProjectAssociations(
+    private static IReadOnlyList<S201AtonAssociation> ProjectAssociations(
         List<S201Feature> features, IReadOnlyDictionary<string, S201AtonObject> byId, ProjectionContext ctx)
     {
-        var b = ImmutableArray.CreateBuilder<S201AtonAssociation>(features.Count);
+        var b = new List<S201AtonAssociation>(features.Count);
         foreach (var f in features)
         {
             var peers = ResolvePeers(f, byId, ctx);
@@ -822,14 +822,14 @@ public sealed class S201AtonInventory
                     "CategoryOfAssociation", "categoryOfAssociation"),
             });
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static ImmutableArray<S201AtonObject> ResolvePeers(S201Feature f,
+    private static IReadOnlyList<S201AtonObject> ResolvePeers(S201Feature f,
         IReadOnlyDictionary<string, S201AtonObject> byId, ProjectionContext ctx)
     {
-        if (f.FeatureReferences.IsDefaultOrEmpty) return ImmutableArray<S201AtonObject>.Empty;
-        var b = ImmutableArray.CreateBuilder<S201AtonObject>();
+        if (f.FeatureReferences.Count == 0) return [];
+        var b = new List<S201AtonObject>();
         foreach (var r in f.FeatureReferences)
         {
             if (!IsPeerRole(r.Role)) continue;
@@ -840,17 +840,17 @@ public sealed class S201AtonInventory
                     $"Unresolved peer reference '{r.TargetRef}'.",
                     code: "xlink.unresolved", relatedId: f.Id, relatedAttribute: r.Role);
         }
-        return b.ToImmutable();
+        return b;
     }
 
-    private static void BackFillMembership(ImmutableArray<S201AtonObject> atons,
-        ImmutableArray<S201AtonAggregation> aggregations,
-        ImmutableArray<S201AtonAssociation> associations)
+    private static void BackFillMembership(IReadOnlyList<S201AtonObject> atons,
+        IReadOnlyList<S201AtonAggregation> aggregations,
+        IReadOnlyList<S201AtonAssociation> associations)
     {
-        if (aggregations.IsDefaultOrEmpty && associations.IsDefaultOrEmpty) return;
+        if (aggregations.Count == 0 && associations.Count == 0) return;
 
-        var aggBuilders = new Dictionary<string, ImmutableArray<S201AtonAggregation>.Builder>(StringComparer.OrdinalIgnoreCase);
-        var assocBuilders = new Dictionary<string, ImmutableArray<S201AtonAssociation>.Builder>(StringComparer.OrdinalIgnoreCase);
+        var aggBuilders = new Dictionary<string, List<S201AtonAggregation>>(StringComparer.OrdinalIgnoreCase);
+        var assocBuilders = new Dictionary<string, List<S201AtonAssociation>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var agg in aggregations)
         {
@@ -858,7 +858,7 @@ public sealed class S201AtonInventory
             {
                 if (!aggBuilders.TryGetValue(peer.Id, out var bld))
                 {
-                    bld = ImmutableArray.CreateBuilder<S201AtonAggregation>();
+                    bld = new List<S201AtonAggregation>();
                     aggBuilders[peer.Id] = bld;
                 }
                 bld.Add(agg);
@@ -870,7 +870,7 @@ public sealed class S201AtonInventory
             {
                 if (!assocBuilders.TryGetValue(peer.Id, out var bld))
                 {
-                    bld = ImmutableArray.CreateBuilder<S201AtonAssociation>();
+                    bld = new List<S201AtonAssociation>();
                     assocBuilders[peer.Id] = bld;
                 }
                 bld.Add(ass);
@@ -880,9 +880,9 @@ public sealed class S201AtonInventory
         foreach (var atom in atons)
         {
             if (aggBuilders.TryGetValue(atom.Id, out var aggs))
-                atom.Aggregations = aggs.ToImmutable();
+                atom.Aggregations = aggs;
             if (assocBuilders.TryGetValue(atom.Id, out var ass))
-                atom.Associations = ass.ToImmutable();
+                atom.Associations = ass;
         }
     }
 
@@ -890,24 +890,24 @@ public sealed class S201AtonInventory
     // Geometry
     // -------------------------------------------------------------------
 
-    private static (S201GeometryKind, ImmutableArray<GeoPosition>) ProjectGeometry(S201Feature f)
+    private static (S201GeometryKind, IReadOnlyList<GeoPosition>) ProjectGeometry(S201Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                return (S201GeometryKind.Point, f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S201GeometryKind.Point, f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Curve:
-                return (S201GeometryKind.Curve, f.Curves.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S201GeometryKind.Curve, f.Curves.Count == 0
+                    ? []
+                    : f.Curves.SelectMany(c => c).Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             case S100GeometryType.Surface:
-                return (S201GeometryKind.Surface, f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray());
+                return (S201GeometryKind.Surface, f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray());
             default:
-                return (S201GeometryKind.None, ImmutableArray<GeoPosition>.Empty);
+                return (S201GeometryKind.None, []);
         }
     }
 }

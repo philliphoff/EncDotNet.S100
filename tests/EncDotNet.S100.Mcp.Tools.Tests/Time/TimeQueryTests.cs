@@ -41,7 +41,7 @@ public class TimeQueryTests
     {
         var q = TimeQuery.Every(T0, T6, TimeSpan.FromHours(2));
         var instants = q.Enumerate();
-        Assert.Equal(4, instants.Length); // 00, 02, 04, 06
+        Assert.Equal(4, instants.Count); // 00, 02, 04, 06
         Assert.Equal(T0, instants[0]);
         Assert.Equal(T6, instants[^1]);
     }
@@ -51,7 +51,7 @@ public class TimeQueryTests
     {
         var q = TimeQuery.Every(T0, T6, TimeSpan.FromHours(1));
         Assert.Equal(7, q.EstimatedCount);
-        Assert.Equal(7, q.Enumerate().Length);
+        Assert.Equal(7, q.Enumerate().Count);
     }
 
     [Fact]

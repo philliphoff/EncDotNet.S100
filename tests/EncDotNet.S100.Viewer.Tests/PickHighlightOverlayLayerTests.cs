@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System.Linq;
 using EncDotNet.S100.Viewer.Tools;
@@ -32,7 +33,7 @@ public class PickHighlightOverlayLayerTests
         // Seed with a marker, then clear with an empty state.
         PickHighlightOverlayLayer.Update(
             layer,
-            new PickHighlightState((47.6, -122.3), Geometry: null),
+            new PickHighlightState(new GeoPosition(47.6, -122.3), Geometry: null),
             Appearance);
         Assert.True(FeatureCount(layer) > 0);
 
@@ -51,7 +52,7 @@ public class PickHighlightOverlayLayerTests
 
         PickHighlightOverlayLayer.Update(
             layer,
-            new PickHighlightState((47.6, -122.3), Geometry: null),
+            new PickHighlightState(new GeoPosition(47.6, -122.3), Geometry: null),
             Appearance);
 
         // Casing ring + accent ring (no centre dot).
@@ -63,23 +64,23 @@ public class PickHighlightOverlayLayerTests
     {
         var layer = PickHighlightOverlayLayer.Create();
 
-        var exterior = new List<(double Lat, double Lon)>
+        var exterior = new List<GeoPosition>
         {
-            (47.0, -122.0),
-            (47.0, -121.0),
-            (48.0, -121.0),
-            (48.0, -122.0),
+            new GeoPosition(47.0, -122.0),
+            new GeoPosition(47.0, -121.0),
+            new GeoPosition(48.0, -121.0),
+            new GeoPosition(48.0, -122.0),
         };
 
         var geometry = new PickHighlightGeometry(
             ExteriorRing: exterior,
-            InteriorRings: new List<IReadOnlyList<(double, double)>>(),
-            Curves: new List<IReadOnlyList<(double, double)>>(),
-            Points: new List<(double, double)>());
+            InteriorRings: new List<IReadOnlyList<GeoPosition>>(),
+            Curves: new List<IReadOnlyList<GeoPosition>>(),
+            Points: new List<GeoPosition>());
 
         PickHighlightOverlayLayer.Update(
             layer,
-            new PickHighlightState((47.5, -121.5), geometry),
+            new PickHighlightState(new GeoPosition(47.5, -121.5), geometry),
             Appearance);
 
         // Area fill (1) + exterior ring outline (1) + marker pair (2).
@@ -91,12 +92,12 @@ public class PickHighlightOverlayLayerTests
     {
         var layer = PickHighlightOverlayLayer.Create();
 
-        var curve = new List<(double Lat, double Lon)> { (47.0, -122.0), (47.5, -121.5), (48.0, -121.0) };
+        var curve = new List<GeoPosition> { new GeoPosition(47.0, -122.0), new GeoPosition(47.5, -121.5), new GeoPosition(48.0, -121.0) };
         var geometry = new PickHighlightGeometry(
-            ExteriorRing: new List<(double, double)>(),
-            InteriorRings: new List<IReadOnlyList<(double, double)>>(),
-            Curves: new List<IReadOnlyList<(double, double)>> { curve },
-            Points: new List<(double, double)>());
+            ExteriorRing: new List<GeoPosition>(),
+            InteriorRings: new List<IReadOnlyList<GeoPosition>>(),
+            Curves: new List<IReadOnlyList<GeoPosition>> { curve },
+            Points: new List<GeoPosition>());
 
         PickHighlightOverlayLayer.Update(
             layer,
@@ -113,10 +114,10 @@ public class PickHighlightOverlayLayerTests
         var layer = PickHighlightOverlayLayer.Create();
 
         var geometry = new PickHighlightGeometry(
-            ExteriorRing: new List<(double, double)>(),
-            InteriorRings: new List<IReadOnlyList<(double, double)>>(),
-            Curves: new List<IReadOnlyList<(double, double)>>(),
-            Points: new List<(double, double)> { (47.0, -122.0), (48.0, -121.0) });
+            ExteriorRing: new List<GeoPosition>(),
+            InteriorRings: new List<IReadOnlyList<GeoPosition>>(),
+            Curves: new List<IReadOnlyList<GeoPosition>>(),
+            Points: new List<GeoPosition> { new GeoPosition(47.0, -122.0), new GeoPosition(48.0, -121.0) });
 
         PickHighlightOverlayLayer.Update(
             layer,
@@ -137,7 +138,7 @@ public class PickHighlightOverlayLayerTests
 
         PickHighlightOverlayLayer.Update(
             layer,
-            new PickHighlightState((47.6, -122.3), Geometry: null),
+            new PickHighlightState(new GeoPosition(47.6, -122.3), Geometry: null),
             appearance);
 
         // The casing ring is the first marker feature (drawn under the accent

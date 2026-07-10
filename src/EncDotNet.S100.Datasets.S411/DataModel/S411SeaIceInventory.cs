@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -59,10 +58,10 @@ public sealed class S411SeaIceInventory
     /// <see cref="S411IceFeature"/> subclasses (excluding
     /// <see cref="S411DataCoverage"/>, which has its own list).
     /// </summary>
-    public required ImmutableArray<S411IceFeature> IceFeatures { get; init; }
+    public required IReadOnlyList<S411IceFeature> IceFeatures { get; init; }
 
     /// <summary>Data-coverage features describing the area for which the dataset carries ice information.</summary>
-    public required ImmutableArray<S411DataCoverage> DataCoverages { get; init; }
+    public required IReadOnlyList<S411DataCoverage> DataCoverages { get; init; }
 
     /// <summary>
     /// Features whose feature type was not recognised as one of the
@@ -70,7 +69,7 @@ public sealed class S411SeaIceInventory
     /// <see cref="S411OtherFeature"/> entries with all attributes preserved
     /// on <see cref="S411IceFeature.ExtraAttributes"/>.
     /// </summary>
-    public required ImmutableArray<S411OtherFeature> OtherFeatures { get; init; }
+    public required IReadOnlyList<S411OtherFeature> OtherFeatures { get; init; }
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S411Dataset Source { get; init; }
@@ -89,7 +88,7 @@ public sealed class S411SeaIceInventory
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0)
             throw new InvalidOperationException("Dataset contains no features.");
 
         // S-411 carries no information types and no xlinks, so an empty
@@ -97,9 +96,9 @@ public sealed class S411SeaIceInventory
         // diagnostics.
         var ctx = new ProjectionContext(XlinkResolver.Build(Array.Empty<KeyValuePair<string, object>>()));
 
-        var ice = ImmutableArray.CreateBuilder<S411IceFeature>();
-        var coverages = ImmutableArray.CreateBuilder<S411DataCoverage>();
-        var other = ImmutableArray.CreateBuilder<S411OtherFeature>();
+        var ice = new List<S411IceFeature>();
+        var coverages = new List<S411DataCoverage>();
+        var other = new List<S411OtherFeature>();
 
         foreach (var f in dataset.Features)
         {
@@ -258,15 +257,15 @@ public sealed class S411SeaIceInventory
             }
         }
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S411SeaIceInventory
         {
             ProductIdentifier = dataset.ProductIdentifier,
             DatasetIdentifier = dataset.DatasetIdentifier,
             IssueDate = dataset.IssueDate,
-            IceFeatures = ice.ToImmutable(),
-            DataCoverages = coverages.ToImmutable(),
-            OtherFeatures = other.ToImmutable(),
+            IceFeatures = ice,
+            DataCoverages = coverages,
+            OtherFeatures = other,
             Source = dataset,
         };
     }
@@ -278,38 +277,38 @@ public sealed class S411SeaIceInventory
     /// Feature Catalogue class names. IHO PascalCase names pass through
     /// unchanged.
     /// </summary>
-    private static readonly ImmutableDictionary<string, string> ShortCodeMap =
-        ImmutableDictionary.CreateRange(StringComparer.OrdinalIgnoreCase, new KeyValuePair<string, string>[]
+    private static readonly IReadOnlyDictionary<string, string> ShortCodeMap =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            new("seaice", "SeaIce"),
-            new("lacice", "LakeIce"),
-            new("icebrg", "Iceberg"),
-            new("brgare", "IcebergArea"),
-            new("brglne", "IcebergLimit"),
-            new("flobrg", "Floeberg"),
-            new("icelne", "IceEdge"),
-            new("icelea", "IceLead"),
-            new("icethk", "IceThickness"),
-            new("icekel", "IceKeelBummock"),
-            new("icerdg", "IceRidgeHummock"),
-            new("icerft", "IceRafting"),
-            new("icefra", "IceFracture"),
-            new("iceshr", "IceShear"),
-            new("icediv", "IceDivergence"),
-            new("icedft", "IceDrift"),
-            new("icecom", "IceCompacting"),
-            new("snwcvr", "SnowCover"),
-            new("stgmlt", "StageOfMelt"),
-            new("strptc", "StripsAndPatches"),
-            new("jmdbrr", "JammedBrashBarrier"),
-            new("i_lead", "LineOfIceLead"),
-            new("i_crac", "LineOfIceCrack"),
-            new("i_fral", "LineOfIceFracture"),
-            new("i_ridg", "LineOfIceRidge"),
-            new("i_grhm", "GroundedHummock"),
-            new("opnlne", "LimitOfOpenWater"),
-            new("lkilne", "LimitOfAllKnownIce"),
-        });
+            ["seaice"] = "SeaIce",
+            ["lacice"] = "LakeIce",
+            ["icebrg"] = "Iceberg",
+            ["brgare"] = "IcebergArea",
+            ["brglne"] = "IcebergLimit",
+            ["flobrg"] = "Floeberg",
+            ["icelne"] = "IceEdge",
+            ["icelea"] = "IceLead",
+            ["icethk"] = "IceThickness",
+            ["icekel"] = "IceKeelBummock",
+            ["icerdg"] = "IceRidgeHummock",
+            ["icerft"] = "IceRafting",
+            ["icefra"] = "IceFracture",
+            ["iceshr"] = "IceShear",
+            ["icediv"] = "IceDivergence",
+            ["icedft"] = "IceDrift",
+            ["icecom"] = "IceCompacting",
+            ["snwcvr"] = "SnowCover",
+            ["stgmlt"] = "StageOfMelt",
+            ["strptc"] = "StripsAndPatches",
+            ["jmdbrr"] = "JammedBrashBarrier",
+            ["i_lead"] = "LineOfIceLead",
+            ["i_crac"] = "LineOfIceCrack",
+            ["i_fral"] = "LineOfIceFracture",
+            ["i_ridg"] = "LineOfIceRidge",
+            ["i_grhm"] = "GroundedHummock",
+            ["opnlne"] = "LimitOfOpenWater",
+            ["lkilne"] = "LimitOfAllKnownIce",
+        };
 
     private static string NormaliseFeatureType(string featureType)
     {
@@ -349,8 +348,8 @@ public sealed class S411SeaIceInventory
         return bundle.IsEmpty ? null : bundle;
     }
 
-    private static ImmutableDictionary<string, string> ExcludeEggCodeAndKnown(
-        ImmutableDictionary<string, string> source) =>
+    private static IReadOnlyDictionary<string, string> ExcludeEggCodeAndKnown(
+        IReadOnlyDictionary<string, string> source) =>
         ExtraAttributes.ExcludeKnown(
             source,
             "iceact", "iceapc", "icesod", "iceflz",
@@ -366,29 +365,29 @@ public sealed class S411SeaIceInventory
         _ => S411GeometryKind.None,
     };
 
-    private static ImmutableArray<GeoPosition> ProjectCoordinates(S411Feature f)
+    private static IReadOnlyList<GeoPosition> ProjectCoordinates(S411Feature f)
     {
         switch (f.GeometryType)
         {
             case S100GeometryType.Point:
-                return f.Points.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                return f.Points.Count == 0
+                    ? []
+                    : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
 
             case S100GeometryType.Curve:
-                if (f.Curves.IsDefaultOrEmpty) return ImmutableArray<GeoPosition>.Empty;
+                if (f.Curves.Count == 0) return [];
                 return f.Curves
                     .SelectMany(c => c)
                     .Select(p => new GeoPosition(p.Latitude, p.Longitude))
-                    .ToImmutableArray();
+                    .ToArray();
 
             case S100GeometryType.Surface:
-                return f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
+                return f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
 
             default:
-                return ImmutableArray<GeoPosition>.Empty;
+                return [];
         }
     }
 }

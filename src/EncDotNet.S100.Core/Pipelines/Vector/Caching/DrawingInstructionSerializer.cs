@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.IO;
 using System.Text;
 
@@ -118,7 +119,7 @@ public static class DrawingInstructionSerializer
                 w.Write(l.LineWidth);
                 WriteString(w, l.LineColor);
                 WriteOffsetLengthList(w, l.Dashes);
-                w.Write(l.DashOnLengthMm);
+                w.Write(l.DashOnLength);
                 WriteCoordinateList(w, l.CoordinatesOverride);
                 break;
 
@@ -145,8 +146,8 @@ public static class DrawingInstructionSerializer
                 WriteNullableDouble(w, t.LinePlacementPosition);
                 w.Write((int)t.HorizontalAlignment);
                 w.Write((int)t.VerticalAlignment);
-                WriteNullableDouble(w, t.OffsetXmm);
-                WriteNullableDouble(w, t.OffsetYmm);
+                WriteNullableDouble(w, t.OffsetX);
+                WriteNullableDouble(w, t.OffsetY);
                 WriteNullableDouble(w, t.LineStartOffset);
                 WriteNullableDouble(w, t.LineEndOffset);
                 WriteNullableInt(w, t.LineOffsetMode is { } mode ? (int)mode : null);
@@ -208,7 +209,7 @@ public static class DrawingInstructionSerializer
             LineWidth = r.ReadDouble(),
             LineColor = ReadString(r),
             Dashes = ReadOffsetLengthList(r),
-            DashOnLengthMm = r.ReadDouble(),
+            DashOnLength = r.ReadDouble(),
             CoordinatesOverride = ReadCoordinateList(r),
         };
     }
@@ -253,8 +254,8 @@ public static class DrawingInstructionSerializer
             LinePlacementPosition = ReadNullableDouble(r),
             HorizontalAlignment = (TextHorizontalAlignment)r.ReadInt32(),
             VerticalAlignment = (TextVerticalAlignment)r.ReadInt32(),
-            OffsetXmm = ReadNullableDouble(r),
-            OffsetYmm = ReadNullableDouble(r),
+            OffsetX = ReadNullableDouble(r),
+            OffsetY = ReadNullableDouble(r),
             LineStartOffset = ReadNullableDouble(r),
             LineEndOffset = ReadNullableDouble(r),
             LineOffsetMode = ReadNullableInt(r) is { } mode ? (LinePlacementMode)mode : null,
@@ -329,7 +330,7 @@ public static class DrawingInstructionSerializer
 
     private static int? ReadNullableInt(BinaryReader r) => r.ReadBoolean() ? r.ReadInt32() : null;
 
-    private static void WriteNullableCoordinate(BinaryWriter w, (double Latitude, double Longitude)? value)
+    private static void WriteNullableCoordinate(BinaryWriter w, GeoPosition? value)
     {
         if (value is { } v)
         {
@@ -343,16 +344,16 @@ public static class DrawingInstructionSerializer
         }
     }
 
-    private static (double Latitude, double Longitude)? ReadNullableCoordinate(BinaryReader r)
+    private static GeoPosition? ReadNullableCoordinate(BinaryReader r)
     {
         if (!r.ReadBoolean())
             return null;
         var lat = r.ReadDouble();
         var lon = r.ReadDouble();
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
-    private static void WriteCoordinateList(BinaryWriter w, IReadOnlyList<(double Latitude, double Longitude)>? list)
+    private static void WriteCoordinateList(BinaryWriter w, IReadOnlyList<GeoPosition>? list)
     {
         if (list is null)
         {
@@ -368,18 +369,18 @@ public static class DrawingInstructionSerializer
         }
     }
 
-    private static IReadOnlyList<(double Latitude, double Longitude)>? ReadCoordinateList(BinaryReader r)
+    private static IReadOnlyList<GeoPosition>? ReadCoordinateList(BinaryReader r)
     {
         var count = r.ReadInt32();
         if (count < 0)
             return null;
 
-        var list = new List<(double, double)>(count);
+        var list = new List<GeoPosition>(count);
         for (var i = 0; i < count; i++)
         {
             var lat = r.ReadDouble();
             var lon = r.ReadDouble();
-            list.Add((lat, lon));
+            list.Add(new GeoPosition(lat, lon));
         }
 
         return list;

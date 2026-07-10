@@ -1,5 +1,4 @@
-using System.Collections.Immutable;
-
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Features;
 
 /// <summary>
@@ -28,22 +27,22 @@ public interface IS100Feature
     S100GeometryType GeometryType { get; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    ImmutableArray<(double Latitude, double Longitude)> Points { get; }
+    IReadOnlyList<GeoPosition> Points { get; }
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; }
+    IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; }
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; }
+    IReadOnlyList<GeoPosition> ExteriorRing { get; }
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; }
+    IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    ImmutableDictionary<string, string> Attributes { get; }
+    IReadOnlyDictionary<string, string> Attributes { get; }
 
     /// <summary>Complex (nested) attributes associated with the feature.</summary>
-    IEnumerable<IS100ComplexAttribute> ComplexAttributes { get; }
+    IReadOnlyList<IS100ComplexAttribute> ComplexAttributes { get; }
 }
 
 /// <summary>
@@ -56,7 +55,7 @@ public interface IS100ComplexAttribute
     string Code { get; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    ImmutableDictionary<string, string> SubAttributes { get; }
+    IReadOnlyDictionary<string, string> SubAttributes { get; }
 }
 
 /// <summary>
@@ -71,5 +70,5 @@ public interface IS100InformationType
     string TypeCode { get; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    ImmutableDictionary<string, string> Attributes { get; }
+    IReadOnlyDictionary<string, string> Attributes { get; }
 }

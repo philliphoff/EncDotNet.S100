@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
@@ -280,8 +281,8 @@ public sealed class VectorSceneBuilder
         bool defaultDash = false;
         if (dashed && instruction.Dashes is { Count: > 0 })
         {
-            var onMm = instruction.DashOnLengthMm > 0
-                ? instruction.DashOnLengthMm
+            var onMm = instruction.DashOnLength > 0
+                ? instruction.DashOnLength
                 : instruction.Dashes[0].Length;
             var gapMm = instruction.Dashes[0].Length;
             var onPx = (float)(onMm / S100PixelSizeMm);
@@ -403,13 +404,13 @@ public sealed class VectorSceneBuilder
             BackColor = backColor,
             HorizontalAlignment = instruction.HorizontalAlignment,
             VerticalAlignment = instruction.VerticalAlignment,
-            OffsetXpx = (instruction.OffsetXmm ?? 0) / S100PixelSizeMm,
-            OffsetYpx = (instruction.OffsetYmm ?? 0) / S100PixelSizeMm,
+            OffsetXpx = (instruction.OffsetX ?? 0) / S100PixelSizeMm,
+            OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
         };
     }
 
     private static IReadOnlyList<(double X, double Y)> Project(
-        IReadOnlyList<(double Latitude, double Longitude)> coords)
+        IReadOnlyList<GeoPosition> coords)
     {
         var result = new (double, double)[coords.Count];
         for (int i = 0; i < coords.Count; i++)
@@ -417,8 +418,8 @@ public sealed class VectorSceneBuilder
         return result;
     }
 
-    private static (double Lat, double Lon) InterpolateAlongPolyline(
-        IReadOnlyList<(double Lat, double Lon)> coords, double fraction)
+    private static GeoPosition InterpolateAlongPolyline(
+        IReadOnlyList<GeoPosition> coords, double fraction)
     {
         if (coords.Count < 2)
             return coords[0];
@@ -428,8 +429,8 @@ public sealed class VectorSceneBuilder
         double totalLength = 0;
         for (int i = 1; i < coords.Count; i++)
         {
-            double dLat = coords[i].Lat - coords[i - 1].Lat;
-            double dLon = coords[i].Lon - coords[i - 1].Lon;
+            double dLat = coords[i].Latitude - coords[i - 1].Latitude;
+            double dLon = coords[i].Longitude - coords[i - 1].Longitude;
             totalLength += Math.Sqrt(dLat * dLat + dLon * dLon);
         }
 
@@ -441,16 +442,16 @@ public sealed class VectorSceneBuilder
 
         for (int i = 1; i < coords.Count; i++)
         {
-            double dLat = coords[i].Lat - coords[i - 1].Lat;
-            double dLon = coords[i].Lon - coords[i - 1].Lon;
+            double dLat = coords[i].Latitude - coords[i - 1].Latitude;
+            double dLon = coords[i].Longitude - coords[i - 1].Longitude;
             double segmentLength = Math.Sqrt(dLat * dLat + dLon * dLon);
 
             if (accumulated + segmentLength >= targetLength)
             {
                 double t = segmentLength > 0 ? (targetLength - accumulated) / segmentLength : 0;
-                return (
-                    coords[i - 1].Lat + t * dLat,
-                    coords[i - 1].Lon + t * dLon);
+                return new GeoPosition(
+                    coords[i - 1].Latitude + t * dLat,
+                    coords[i - 1].Longitude + t * dLon);
             }
 
             accumulated += segmentLength;
@@ -459,8 +460,8 @@ public sealed class VectorSceneBuilder
         return coords[^1];
     }
 
-    private static (double Lat, double Lon) ComputeRingCentroid(
-        IReadOnlyList<(double Lat, double Lon)> ring)
+    private static GeoPosition ComputeRingCentroid(
+        IReadOnlyList<GeoPosition> ring)
     {
         int count = ring.Count;
         if (count >= 2 && ring[0] == ring[count - 1])
@@ -468,9 +469,9 @@ public sealed class VectorSceneBuilder
         double sumLat = 0, sumLon = 0;
         for (int i = 0; i < count; i++)
         {
-            sumLat += ring[i].Lat;
-            sumLon += ring[i].Lon;
+            sumLat += ring[i].Latitude;
+            sumLon += ring[i].Longitude;
         }
-        return (sumLat / count, sumLon / count);
+        return new GeoPosition(sumLat / count, sumLon / count);
     }
 }

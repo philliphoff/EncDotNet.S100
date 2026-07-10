@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S125.Diagnostics;
@@ -88,7 +88,7 @@ internal static class S125DatasetReader
         // children on features can be classified as information references
         // (target is an imember) vs. feature references (target is a member).
         var informationTypeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var informationTypes = ImmutableArray.CreateBuilder<S125InformationType>();
+        var informationTypes = new List<S125InformationType>();
         foreach (var imember in EnumerateChildren(root, datasetNs, "imember"))
         {
             foreach (var element in imember.Elements())
@@ -101,7 +101,7 @@ internal static class S125DatasetReader
             }
         }
 
-        var features = ImmutableArray.CreateBuilder<S125Feature>();
+        var features = new List<S125Feature>();
         foreach (var member in EnumerateChildren(root, datasetNs, "member"))
         {
             foreach (var element in member.Elements())
@@ -116,8 +116,8 @@ internal static class S125DatasetReader
             ProductIdentifier = productId ?? "S-125",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = informationTypes,
         };
     }
 
@@ -202,12 +202,12 @@ internal static class S125DatasetReader
 
     // ── Geometry ───────────────────────────────────────────────────────
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -232,9 +232,9 @@ internal static class S125DatasetReader
         {
             geometryType = S100GeometryType.Curve;
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            curves = coords.Length > 0
-                ? ImmutableArray.Create(coords)
-                : ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+            curves = coords.Count > 0
+                ? [coords]
+                : [];
         }
 
         var surfaceProp = geometryContainer.Element(s100Ns + "surfaceProperty");
@@ -249,12 +249,12 @@ internal static class S125DatasetReader
         return (geometryType, points, curves, exteriorRing, interiorRings);
     }    // ── Attributes ─────────────────────────────────────────────────────
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S125ComplexAttribute>, ImmutableArray<S125InformationReference>, ImmutableArray<S125FeatureReference>) ParseAttributes(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S125ComplexAttribute>, IReadOnlyList<S125InformationReference>, IReadOnlyList<S125FeatureReference>) ParseAttributes(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S125ComplexAttribute>();
-        var infoRefs = ImmutableArray.CreateBuilder<S125InformationReference>();
-        var featureRefs = ImmutableArray.CreateBuilder<S125FeatureReference>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S125ComplexAttribute>();
+        var infoRefs = new List<S125InformationReference>();
+        var featureRefs = new List<S125FeatureReference>();
 
         foreach (var child in element.Elements())
         {
@@ -297,7 +297,7 @@ internal static class S125DatasetReader
 
             if (child.HasElements)
             {
-                var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
+                var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
                     if (!sub.HasElements && !string.IsNullOrEmpty(sub.Value))
@@ -308,7 +308,7 @@ internal static class S125DatasetReader
                     complex.Add(new S125ComplexAttribute
                     {
                         Code = localName,
-                        SubAttributes = subAttrs.ToImmutable(),
+                        SubAttributes = subAttrs,
                     });
                 }
             }
@@ -319,7 +319,7 @@ internal static class S125DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable(), infoRefs.ToImmutable(), featureRefs.ToImmutable());
+        return (simple, complex, infoRefs, featureRefs);
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)

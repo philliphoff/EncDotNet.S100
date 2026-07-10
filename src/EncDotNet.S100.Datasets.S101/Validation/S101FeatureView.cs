@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Datasets.S101.Validation;
 
@@ -32,7 +32,7 @@ public sealed class S101FeatureView
     internal S101FeatureView(
         S101FeatureRecord raw,
         string? featureTypeAcronym,
-        ImmutableArray<S101AttributeView> attributes,
+        IReadOnlyList<S101AttributeView> attributes,
         IReadOnlyDictionary<ushort, string> attributeTypeCatalogue)
     {
         Raw = raw;
@@ -66,7 +66,7 @@ public sealed class S101FeatureView
         // so rules can iterate instances without re-walking the
         // record.
         var rows = raw.Attributes;
-        for (int i = 0; i < rows.Length; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
             if (row.Index != 1 || !string.IsNullOrEmpty(row.Value))
@@ -76,7 +76,7 @@ public sealed class S101FeatureView
 
             var slice = new List<S101AttributeView>();
             int j = i + 1;
-            while (j < rows.Length && rows[j].Index > 1)
+            while (j < rows.Count && rows[j].Index > 1)
             {
                 attributeTypeCatalogue.TryGetValue(rows[j].NumericCode, out var subAcronym);
                 slice.Add(new S101AttributeView
@@ -124,7 +124,7 @@ public sealed class S101FeatureView
     /// 8211 ATTR row. Complex-attribute marker rows are preserved so
     /// rule authors who need the raw ordering can iterate them.
     /// </summary>
-    public ImmutableArray<S101AttributeView> Attributes { get; }
+    public IReadOnlyList<S101AttributeView> Attributes { get; }
 
     /// <summary>
     /// Returns every complex-attribute instance whose parent acronym
@@ -175,11 +175,11 @@ public sealed class S101FeatureView
     }
 
     /// <summary>Spatial associations attached to the feature, in record order.</summary>
-    public ImmutableArray<S101SpatialAssociation> SpatialAssociations => Raw.SpatialAssociations;
+    public IReadOnlyList<S101SpatialAssociation> SpatialAssociations => Raw.SpatialAssociations;
 
     /// <summary>Feature-to-feature associations attached to the feature, in record order.</summary>
-    public ImmutableArray<S101FeatureAssociation> FeatureAssociations => Raw.FeatureAssociations;
+    public IReadOnlyList<S101FeatureAssociation> FeatureAssociations => Raw.FeatureAssociations;
 
     /// <summary>Feature-to-information-type associations attached to the feature, in record order.</summary>
-    public ImmutableArray<S101InformationAssociation> InformationAssociations => Raw.InformationAssociations;
+    public IReadOnlyList<S101InformationAssociation> InformationAssociations => Raw.InformationAssociations;
 }

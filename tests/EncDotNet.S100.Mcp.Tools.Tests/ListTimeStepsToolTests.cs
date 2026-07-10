@@ -49,11 +49,11 @@ public class ListTimeStepsToolTests
         var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Times.Length);
+        Assert.Equal(3, value.Times.Count);
         Assert.Equal(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), value.FirstTime);
         Assert.Equal(new DateTimeOffset(2024, 1, 1, 2, 0, 0, TimeSpan.Zero), value.LastTime);
         Assert.Equal(TimeSpan.FromHours(1), value.Cadence);
-        for (int i = 0; i < value.Times.Length; i++)
+        for (int i = 0; i < value.Times.Count; i++)
         {
             Assert.Equal(TimeSpan.Zero, value.Times[i].Offset);
         }
@@ -71,7 +71,7 @@ public class ListTimeStepsToolTests
         var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(5, value.Times.Length);
+        Assert.Equal(5, value.Times.Count);
         Assert.Equal(TimeSpan.FromHours(1), value.Cadence);
         Assert.Equal(new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), value.FirstTime);
         Assert.Equal(new DateTimeOffset(2024, 1, 1, 4, 0, 0, TimeSpan.Zero), value.LastTime);
@@ -110,7 +110,7 @@ public class ListTimeStepsToolTests
         var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
 
         Assert.True(result.TryGetValue(out var value));
-        Assert.Equal(3, value.Times.Length);
+        Assert.Equal(3, value.Times.Count);
         Assert.Null(value.Cadence);
     }
 

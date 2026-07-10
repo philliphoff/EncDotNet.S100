@@ -34,7 +34,7 @@ public interface ILuaDataProvider
     /// <c>DEPCNT</c>), or <see langword="null"/> when it cannot be resolved.
     /// Used for per-feature-type telemetry.
     /// </summary>
-    string? TryGetFeatureTypeCode(string featureRef);
+    string? GetFeatureTypeCode(string featureRef);
 
     /// <summary>
     /// Registers all <c>Host*</c> functions (and any debug table) on the given

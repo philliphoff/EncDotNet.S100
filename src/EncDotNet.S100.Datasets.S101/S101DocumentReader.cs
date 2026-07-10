@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.Iso8211;
 using S100Diag = EncDotNet.S100.Datasets.S101.Diagnostics;
 
@@ -31,19 +30,19 @@ internal static class S101DocumentReader
 
         S101DatasetIdentification? dsid = null;
         S101DatasetStructureInfo? dssi = null;
-        var featureTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var attributeTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var informationTypeCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var informationAssociationCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var featureAssociationCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var roleCatalogue = ImmutableDictionary.CreateBuilder<ushort, string>();
-        var points = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
-        var multiPoints = ImmutableDictionary.CreateBuilder<uint, S101MultiPointRecord>();
-        var curveSegments = ImmutableDictionary.CreateBuilder<uint, S101CurveSegmentRecord>();
-        var compositeCurves = ImmutableDictionary.CreateBuilder<uint, S101CompositeCurveRecord>();
-        var surfaces = ImmutableDictionary.CreateBuilder<uint, S101SurfaceRecord>();
-        var features = ImmutableArray.CreateBuilder<S101FeatureRecord>();
-        var informationTypes = ImmutableDictionary.CreateBuilder<uint, S101InformationRecord>();
+        var featureTypeCatalogue = new Dictionary<ushort, string>();
+        var attributeTypeCatalogue = new Dictionary<ushort, string>();
+        var informationTypeCatalogue = new Dictionary<ushort, string>();
+        var informationAssociationCatalogue = new Dictionary<ushort, string>();
+        var featureAssociationCatalogue = new Dictionary<ushort, string>();
+        var roleCatalogue = new Dictionary<ushort, string>();
+        var points = new Dictionary<uint, S101PointRecord>();
+        var multiPoints = new Dictionary<uint, S101MultiPointRecord>();
+        var curveSegments = new Dictionary<uint, S101CurveSegmentRecord>();
+        var compositeCurves = new Dictionary<uint, S101CompositeCurveRecord>();
+        var surfaces = new Dictionary<uint, S101SurfaceRecord>();
+        var features = new List<S101FeatureRecord>();
+        var informationTypes = new Dictionary<uint, S101InformationRecord>();
 
         foreach (var record in iso.DataRecords)
         {
@@ -119,19 +118,19 @@ internal static class S101DocumentReader
         {
             Identification = dsid ?? new S101DatasetIdentification(),
             StructureInfo = dssi ?? new S101DatasetStructureInfo(),
-            FeatureTypeCatalogue = featureTypeCatalogue.ToImmutable(),
-            AttributeTypeCatalogue = attributeTypeCatalogue.ToImmutable(),
-            Points = points.ToImmutable(),
-            MultiPoints = multiPoints.ToImmutable(),
-            CurveSegments = curveSegments.ToImmutable(),
-            CompositeCurves = compositeCurves.ToImmutable(),
-            Surfaces = surfaces.ToImmutable(),
-            Features = features.ToImmutable(),
-            InformationTypes = informationTypes.ToImmutable(),
-            InformationTypeCatalogue = informationTypeCatalogue.ToImmutable(),
-            InformationAssociationCatalogue = informationAssociationCatalogue.ToImmutable(),
-            FeatureAssociationCatalogue = featureAssociationCatalogue.ToImmutable(),
-            RoleCatalogue = roleCatalogue.ToImmutable(),
+            FeatureTypeCatalogue = featureTypeCatalogue,
+            AttributeTypeCatalogue = attributeTypeCatalogue,
+            Points = points,
+            MultiPoints = multiPoints,
+            CurveSegments = curveSegments,
+            CompositeCurves = compositeCurves,
+            Surfaces = surfaces,
+            Features = features,
+            InformationTypes = informationTypes,
+            InformationTypeCatalogue = informationTypeCatalogue,
+            InformationAssociationCatalogue = informationAssociationCatalogue,
+            FeatureAssociationCatalogue = featureAssociationCatalogue,
+            RoleCatalogue = roleCatalogue,
         };
     }
 
@@ -141,7 +140,7 @@ internal static class S101DocumentReader
         string fieldTag,
         string nameSubfield,
         string codeSubfield,
-        ImmutableDictionary<ushort, string>.Builder builder)
+        Dictionary<ushort, string> builder)
     {
         var field = record.GetFieldByTag(fieldTag);
         if (field is null) return;
@@ -320,7 +319,7 @@ internal static class S101DocumentReader
         mridReader.TryGetSubfield<ushort>("RVER", out var rver);
         var ruin = ReadUpdateInstruction(mridReader, "RUIN");
 
-        var coords = ImmutableArray.CreateBuilder<(int Y, int X, int Z)>();
+        var coords = new List<(int Y, int X, int Z)>();
         var c3ilField = record.GetFieldByTag("C3IL");
         if (c3ilField is not null)
         {
@@ -339,7 +338,7 @@ internal static class S101DocumentReader
         return new S101MultiPointRecord
         {
             RecordId = rcid,
-            Points = coords.ToImmutable(),
+            Points = coords,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
@@ -357,7 +356,7 @@ internal static class S101DocumentReader
         var ruin = ReadUpdateInstruction(cridReader, "RUIN");
 
         // PTAS — point topology associations (start/end)
-        var ptas = ImmutableArray.CreateBuilder<S101PointAssociation>();
+        var ptas = new List<S101PointAssociation>();
         foreach (var ptasField in record.GetFieldsByTag("PTAS"))
         {
             var ptasDef = ddr.GetFieldDefinition("PTAS")!;
@@ -372,7 +371,7 @@ internal static class S101DocumentReader
         }
 
         // C2IL — intermediate 2D coordinates
-        var coords = ImmutableArray.CreateBuilder<(int Y, int X)>();
+        var coords = new List<(int Y, int X)>();
         foreach (var c2ilField in record.GetFieldsByTag("C2IL"))
         {
             var c2ilDef = ddr.GetFieldDefinition("C2IL")!;
@@ -388,8 +387,8 @@ internal static class S101DocumentReader
         return new S101CurveSegmentRecord
         {
             RecordId = rcid,
-            PointAssociations = ptas.ToImmutable(),
-            IntermediateCoordinates = coords.ToImmutable(),
+            PointAssociations = ptas,
+            IntermediateCoordinates = coords,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
@@ -406,7 +405,7 @@ internal static class S101DocumentReader
         ccidReader.TryGetSubfield<ushort>("RVER", out var rver);
         var ruin = ReadUpdateInstruction(ccidReader, "RUIN");
 
-        var components = ImmutableArray.CreateBuilder<S101CurveUsage>();
+        var components = new List<S101CurveUsage>();
         foreach (var cucoField in record.GetFieldsByTag("CUCO"))
         {
             var cucoDef = ddr.GetFieldDefinition("CUCO")!;
@@ -423,7 +422,7 @@ internal static class S101DocumentReader
         return new S101CompositeCurveRecord
         {
             RecordId = rcid,
-            CurveComponents = components.ToImmutable(),
+            CurveComponents = components,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
@@ -440,7 +439,7 @@ internal static class S101DocumentReader
         sridReader.TryGetSubfield<ushort>("RVER", out var rver);
         var ruin = ReadUpdateInstruction(sridReader, "RUIN");
 
-        var rings = ImmutableArray.CreateBuilder<S101RingAssociation>();
+        var rings = new List<S101RingAssociation>();
         foreach (var riasField in record.GetFieldsByTag("RIAS"))
         {
             var riasDef = ddr.GetFieldDefinition("RIAS")!;
@@ -458,7 +457,7 @@ internal static class S101DocumentReader
         return new S101SurfaceRecord
         {
             RecordId = rcid,
-            RingAssociations = rings.ToImmutable(),
+            RingAssociations = rings,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
@@ -491,7 +490,7 @@ internal static class S101DocumentReader
         }
 
         // ATTR
-        var attributes = ImmutableArray.CreateBuilder<S101Attribute>();
+        var attributes = new List<S101Attribute>();
         foreach (var attrField in record.GetFieldsByTag("ATTR"))
         {
             var attrDef = ddr.GetFieldDefinition("ATTR")!;
@@ -511,7 +510,7 @@ internal static class S101DocumentReader
         }
 
         // SPAS
-        var spatials = ImmutableArray.CreateBuilder<S101SpatialAssociation>();
+        var spatials = new List<S101SpatialAssociation>();
         foreach (var spasField in record.GetFieldsByTag("SPAS"))
         {
             var spasDef = ddr.GetFieldDefinition("SPAS")!;
@@ -527,7 +526,7 @@ internal static class S101DocumentReader
         }
 
         // FACS — Feature associations
-        var featureAssociations = ImmutableArray.CreateBuilder<S101FeatureAssociation>();
+        var featureAssociations = new List<S101FeatureAssociation>();
         foreach (var facsField in record.GetFieldsByTag("FACS"))
         {
             var facsDef = ddr.GetFieldDefinition("FACS");
@@ -545,7 +544,7 @@ internal static class S101DocumentReader
         }
 
         // INAS — Information associations
-        var informationAssociations = ImmutableArray.CreateBuilder<S101InformationAssociation>();
+        var informationAssociations = new List<S101InformationAssociation>();
         foreach (var inasField in record.GetFieldsByTag("INAS"))
         {
             var inasDef = ddr.GetFieldDefinition("INAS");
@@ -569,10 +568,10 @@ internal static class S101DocumentReader
             ProducingAgency = agen,
             FeatureIdentificationNumber = fidn,
             FeatureIdentificationSubdivision = fids,
-            Attributes = attributes.ToImmutable(),
-            SpatialAssociations = spatials.ToImmutable(),
-            FeatureAssociations = featureAssociations.ToImmutable(),
-            InformationAssociations = informationAssociations.ToImmutable(),
+            Attributes = attributes,
+            SpatialAssociations = spatials,
+            FeatureAssociations = featureAssociations,
+            InformationAssociations = informationAssociations,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
@@ -590,7 +589,7 @@ internal static class S101DocumentReader
         iridReader.TryGetSubfield<ushort>("RVER", out var rver);
         var ruin = ReadUpdateInstruction(iridReader, "RUIN");
 
-        var attributes = ImmutableArray.CreateBuilder<S101Attribute>();
+        var attributes = new List<S101Attribute>();
         foreach (var attrField in record.GetFieldsByTag("ATTR"))
         {
             var attrDef = ddr.GetFieldDefinition("ATTR")!;
@@ -613,7 +612,7 @@ internal static class S101DocumentReader
         {
             RecordId = rcid,
             InformationTypeCode = nitc,
-            Attributes = attributes.ToImmutable(),
+            Attributes = attributes,
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };

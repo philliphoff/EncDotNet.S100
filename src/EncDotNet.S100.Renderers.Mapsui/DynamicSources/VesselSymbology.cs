@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;
@@ -88,10 +89,9 @@ internal static class VesselSymbology
         var (ax, ay) = SphericalMercator.FromLonLat(lon, lat);
 
         var headingDeg =
-            feature.Motion?.HeadingDeg
-            ?? feature.Motion?.CourseOverGroundDeg;
+            (feature.Motion?.Heading ?? feature.Motion?.CourseOverGround)?.TotalDegrees;
 
-        var sogKn = feature.Motion?.SpeedOverGroundKn ?? 0.0;
+        var sogKn = feature.Motion?.SpeedOverGround?.TotalKnots ?? 0.0;
 
         // 1. Course / speed vector + arrowhead.
         if (headingDeg is { } heading && sogKn > 0.0)
@@ -225,7 +225,7 @@ internal static class VesselSymbology
     /// Great-circle destination given start lat/lon (degrees), bearing
     /// (degrees true), and distance in metres. WGS-84 mean Earth radius.
     /// </summary>
-    public static (double Latitude, double Longitude) GeodeticDestination(
+    public static GeoPosition GeodeticDestination(
         double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
     {
         const double R = 6_371_008.8;
@@ -245,6 +245,6 @@ internal static class VesselSymbology
         var x = cosδ - sinφ1 * sinφ2;
         var λ2 = λ1 + Math.Atan2(y, x);
 
-        return (φ2 * 180.0 / Math.PI, ((λ2 * 180.0 / Math.PI) + 540.0) % 360.0 - 180.0);
+        return new GeoPosition(φ2 * 180.0 / Math.PI, ((λ2 * 180.0 / Math.PI) + 540.0) % 360.0 - 180.0);
     }
 }

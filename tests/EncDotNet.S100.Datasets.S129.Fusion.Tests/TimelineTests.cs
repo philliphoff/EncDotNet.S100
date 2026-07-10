@@ -20,7 +20,7 @@ public class TimelineTests
 
         var view = new S129TimelineView(plan);
 
-        Assert.Equal(3, view.Times.Length);
+        Assert.Equal(3, view.Times.Count);
         Assert.Equal(t0, view.Times[0]);
         Assert.Equal(t0.AddMinutes(10), view.Times[1]);
         Assert.Equal(t0.AddMinutes(20), view.Times[2]);

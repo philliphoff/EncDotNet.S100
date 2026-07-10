@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S201.DataModel;
@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.S201.DataModel;
 /// The geometry primitive kind of an S-201 feature when surfaced through
 /// the typed projection. Mirrors the S-124 typed-model geometry shape:
 /// callers get an enum discriminator plus a single
-/// <see cref="ImmutableArray{T}"/> of <see cref="GeoPosition"/>s whose
+/// read-only list of <see cref="GeoPosition"/>s whose
 /// semantics depend on the kind.
 /// </summary>
 public enum S201GeometryKind
@@ -118,12 +118,12 @@ public sealed class S201AtonStatusInformation
     public int? ChangeTypes { get; init; }
 
     /// <summary>The verbatim sub-attributes of the <c>ChangeDetails</c> complex attribute, when present.</summary>
-    public ImmutableDictionary<string, string> ChangeDetails { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ChangeDetails { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -143,8 +143,8 @@ public sealed class S201PositioningInformationRecord
     public string? PositioningMethod { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -169,8 +169,8 @@ public sealed class S201AtoNFixingMethodRecord
     public string? PositioningProcedure { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -192,8 +192,8 @@ public sealed class S201SpatialQuality
     public double? SpatialAccuracy { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -213,11 +213,11 @@ public sealed class S201AtonAggregation
     public int? CategoryOfAssociation { get; init; }
 
     /// <summary>The resolved peer AtoNs (order preserved from the source GML).</summary>
-    public ImmutableArray<S201AtonObject> Peers { get; init; } = ImmutableArray<S201AtonObject>.Empty;
+    public IReadOnlyList<S201AtonObject> Peers { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -234,9 +234,9 @@ public sealed class S201AtonAssociation
     public int? CategoryOfAssociation { get; init; }
 
     /// <summary>The resolved peer AtoNs (order preserved from the source GML).</summary>
-    public ImmutableArray<S201AtonObject> Peers { get; init; } = ImmutableArray<S201AtonObject>.Empty;
+    public IReadOnlyList<S201AtonObject> Peers { get; init; } = [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }

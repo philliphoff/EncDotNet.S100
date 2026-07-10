@@ -23,7 +23,7 @@ public class DatasetEntryVersionWarningTests
         entry.PropertyChanged += (_, e) => observed.Add(e.PropertyName);
 
         // Declared 1.0.0 but build implements 2.0.0 → MajorDivergence → warn.
-        var assessment = SpecVersionAssessment.Create(
+        var assessment = SpecVersionAssessment.TryCreate(
             new SpecRef("S-111", new SpecVersion(1, 0, 0)),
             [new SpecVersion(2, 0, 0)]);
 
@@ -40,7 +40,7 @@ public class DatasetEntryVersionWarningTests
     {
         var entry = new DatasetEntry("/tmp/x.h5", "S-104");
 
-        var assessment = SpecVersionAssessment.Create(
+        var assessment = SpecVersionAssessment.TryCreate(
             new SpecRef("S-104", new SpecVersion(2, 0, 0)),
             [new SpecVersion(2, 0, 0)]);
 
@@ -56,7 +56,7 @@ public class DatasetEntryVersionWarningTests
         var entry = new DatasetEntry("/tmp/x.h5", "S-111");
 
         // Build implements a newer minor on the same major → info only.
-        var assessment = SpecVersionAssessment.Create(
+        var assessment = SpecVersionAssessment.TryCreate(
             new SpecRef("S-111", new SpecVersion(2, 0, 0)),
             [new SpecVersion(2, 1, 0)]);
 
@@ -69,7 +69,7 @@ public class DatasetEntryVersionWarningTests
     public void SetVersionAssessment_ClearsWarning_WhenPassedNull()
     {
         var entry = new DatasetEntry("/tmp/x.h5", "S-111");
-        entry.SetVersionAssessment(SpecVersionAssessment.Create(
+        entry.SetVersionAssessment(SpecVersionAssessment.TryCreate(
             new SpecRef("S-111", new SpecVersion(1, 0, 0)),
             [new SpecVersion(2, 0, 0)]));
         Assert.True(entry.HasVersionWarning);

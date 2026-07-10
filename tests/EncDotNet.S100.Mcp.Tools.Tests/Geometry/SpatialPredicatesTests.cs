@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Pipelines;
 
@@ -44,12 +43,12 @@ public class SpatialPredicatesTests
     [Fact]
     public void ContainsPoint_simple_quad_ray_cast()
     {
-        var ring = ImmutableArray.Create(
+        IReadOnlyList<GeoPoint> ring = [
             new GeoPoint(0, 0),
             new GeoPoint(0, 10),
             new GeoPoint(10, 10),
             new GeoPoint(10, 0),
-            new GeoPoint(0, 0));
+            new GeoPoint(0, 0)];
 
         Assert.True(SpatialPredicates.ContainsPoint(ring, new GeoPoint(5, 5)));
         Assert.False(SpatialPredicates.ContainsPoint(ring, new GeoPoint(15, 5)));
@@ -59,7 +58,7 @@ public class SpatialPredicatesTests
     public void ContainsPoint_empty_ring_returns_false()
     {
         Assert.False(SpatialPredicates.ContainsPoint(
-            ImmutableArray<GeoPoint>.Empty,
+            [],
             new GeoPoint(0, 0)));
     }
 }

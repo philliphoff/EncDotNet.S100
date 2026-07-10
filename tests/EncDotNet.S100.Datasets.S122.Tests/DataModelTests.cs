@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Datasets.S122.DataModel;
@@ -249,8 +248,8 @@ public class DataModelTests
         var ds = S122Dataset.Open(path);
         var typed = S122MarineProtectedAreaDataset.From(ds, out var diags);
 
-        Assert.Equal(ds.Features.Length, typed.Features.Length);
-        Assert.Equal(ds.InformationTypes.Length, typed.InformationTypes.Length);
+        Assert.Equal(ds.Features.Count, typed.Features.Count);
+        Assert.Equal(ds.InformationTypes.Count, typed.InformationTypes.Count);
         Assert.NotNull(typed.ProductIdentifier);
         // Sample is xlink-free, so no unresolved-reference diagnostics.
         Assert.DoesNotContain(diags, d => d.Code == "xlink.unresolved");

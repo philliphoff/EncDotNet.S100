@@ -17,7 +17,7 @@ public class S201DatasetReaderTests
         var dataset = S201Dataset.Open(GetTestDataPath("aton_point.gml"));
 
         Assert.Equal("S-201", dataset.ProductIdentifier);
-        Assert.Equal(2, dataset.Features.Length);
+        Assert.Equal(2, dataset.Features.Count);
         Assert.Single(dataset.InformationTypes);
 
         var lateralBuoy = dataset.Features.Single(f => f.FeatureType == "LateralBuoy");
@@ -58,7 +58,7 @@ public class S201DatasetReaderTests
         Assert.Equal("NavigationLine", nav.FeatureType);
         Assert.Equal(S100GeometryType.Curve, nav.GeometryType);
         var curve = Assert.Single(nav.Curves);
-        Assert.Equal(3, curve.Length);
+        Assert.Equal(3, curve.Count);
         Assert.Equal(36.95, curve[0].Latitude, 4);
         Assert.Equal("045", nav.Attributes["orientation"]);
     }
@@ -71,7 +71,7 @@ public class S201DatasetReaderTests
         var coverage = Assert.Single(dataset.Features);
         Assert.Equal("DataCoverage", coverage.FeatureType);
         Assert.Equal(S100GeometryType.Surface, coverage.GeometryType);
-        Assert.Equal(5, coverage.ExteriorRing.Length);
+        Assert.Equal(5, coverage.ExteriorRing.Count);
         Assert.Empty(coverage.InteriorRings);
     }
 
@@ -88,7 +88,7 @@ public class S201DatasetReaderTests
 
         var aggregation = dataset.Features.Single(f => f.FeatureType == "AtonAggregation");
         Assert.Equal(S100GeometryType.None, aggregation.GeometryType);
-        Assert.Equal(2, aggregation.FeatureReferences.Length);
+        Assert.Equal(2, aggregation.FeatureReferences.Count);
         Assert.All(aggregation.FeatureReferences, r => Assert.Equal("peer", r.Role));
     }
 

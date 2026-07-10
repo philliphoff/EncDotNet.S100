@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -59,14 +58,14 @@ public class SerializationContractTests
     public void ListDatasetsResult_uses_camelCase_and_unambiguous_bbox_keys()
     {
         var result = new ListDatasetsResult(
-            ImmutableArray.Create(
+            [
                 new DatasetSummary(
                     new DatasetId("ds-1"),
                     new SpecRef("S-104", new SpecVersion(1, 0, 0)),
                     new BoundingBox(southLatitude: 47.0, westLongitude: -123.0, northLatitude: 48.0, eastLongitude: -122.0),
                     new TimeRange(
                         new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
-                        new DateTimeOffset(2025, 1, 2, 0, 0, 0, TimeSpan.Zero)))),
+                        new DateTimeOffset(2025, 1, 2, 0, 0, 0, TimeSpan.Zero)))],
             Page: 0,
             PageSize: 50,
             TotalCount: 1,

@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
@@ -61,7 +62,7 @@ public sealed class Feature : IS100Feature
     /// Points: single coordinate. Lines/Areas: ordered list of (lat, lon) pairs.
     /// For surfaces this is the exterior ring; holes are carried in <see cref="InteriorRings"/>.
     /// </summary>
-    public required IReadOnlyList<(double Latitude, double Longitude)> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// Interior (hole) rings for surface geometries, each an ordered list of
@@ -70,7 +71,7 @@ public sealed class Feature : IS100Feature
     /// when filling, so that, for example, a sea/depth area encoded around islands
     /// does not paint over the land cut out as holes.
     /// </summary>
-    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }
@@ -87,58 +88,40 @@ public sealed class Feature : IS100Feature
         _ => S100GeometryType.None,
     };
 
-    ImmutableArray<(double Latitude, double Longitude)> IS100Feature.Points =>
-        GeometryType == GeometryType.Point ? ToImmutable(Coordinates) : [];
+    IReadOnlyList<GeoPosition> IS100Feature.Points =>
+        GeometryType == GeometryType.Point ? Coordinates : [];
 
-    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> IS100Feature.Curves =>
+    IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.Curves =>
         GeometryType == GeometryType.Curve && Coordinates.Count > 0
-            ? ImmutableArray.Create(ToImmutable(Coordinates))
+            ? [Coordinates]
             : [];
 
-    ImmutableArray<(double Latitude, double Longitude)> IS100Feature.ExteriorRing =>
-        GeometryType == GeometryType.Surface ? ToImmutable(Coordinates) : [];
+    IReadOnlyList<GeoPosition> IS100Feature.ExteriorRing =>
+        GeometryType == GeometryType.Surface ? Coordinates : [];
 
-    ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> IS100Feature.InteriorRings =>
-        GeometryType == GeometryType.Surface ? ToImmutableRings(InteriorRings) : [];
+    IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.InteriorRings =>
+        GeometryType == GeometryType.Surface ? InteriorRings : [];
 
-    ImmutableDictionary<string, string> IS100Feature.Attributes
+    IReadOnlyDictionary<string, string> IS100Feature.Attributes
     {
         get
         {
-            if (Attributes.Count == 0) return ImmutableDictionary<string, string>.Empty;
-            var builder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+            if (Attributes.Count == 0) return ReadOnlyDictionary<string, string>.Empty;
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var (key, value) in Attributes)
             {
-                builder[key] = value switch
+                result[key] = value switch
                 {
                     null => string.Empty,
                     IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
                     _ => value.ToString() ?? string.Empty,
                 };
             }
-            return builder.ToImmutable();
+            return result;
         }
     }
 
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => [];
-
-    private static ImmutableArray<(double Latitude, double Longitude)> ToImmutable(
-        IReadOnlyList<(double Latitude, double Longitude)> coords)
-    {
-        if (coords.Count == 0) return [];
-        var builder = ImmutableArray.CreateBuilder<(double, double)>(coords.Count);
-        foreach (var c in coords) builder.Add(c);
-        return builder.MoveToImmutable();
-    }
-
-    private static ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> ToImmutableRings(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> rings)
-    {
-        if (rings.Count == 0) return [];
-        var builder = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>(rings.Count);
-        foreach (var ring in rings) builder.Add(ToImmutable(ring));
-        return builder.MoveToImmutable();
-    }
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => [];
 }
 
 public enum GeometryType

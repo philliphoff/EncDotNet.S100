@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S101.Validation;
 using EncDotNet.S100.Datasets.S57.Validation;
@@ -58,9 +57,9 @@ public class S57ValidationTests
             },
             Primitive = (S57GeometricPrimitive)primitive,
             ObjectCode = objectCode,
-            Attributes = ImmutableArray<S57AttributeValue>.Empty,
-            NationalAttributes = ImmutableArray<S57AttributeValue>.Empty,
-            SpatialPointers = (spatialPointers ?? Array.Empty<S57SpatialPointer>()).ToImmutableArray(),
+            Attributes = [],
+            NationalAttributes = [],
+            SpatialPointers = (spatialPointers ?? Array.Empty<S57SpatialPointer>()).ToArray(),
         };
 
     private const byte RcnmConnectedNode = 120;
@@ -69,10 +68,10 @@ public class S57ValidationTests
         => new()
         {
             RecordName = new S57RecordName { RecordNameCode = RcnmConnectedNode, RecordId = (int)id },
-            VectorPointers = ImmutableArray<S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray.Create(new S57Coordinate2D { X = x, Y = y }),
-            Soundings = ImmutableArray<S57Sounding>.Empty,
-            Attributes = ImmutableArray<S57AttributeValue>.Empty,
+            VectorPointers = [],
+            Coordinates2D = [new S57Coordinate2D { X = x, Y = y }],
+            Soundings = [],
+            Attributes = [],
         };
 
     private static S57SpatialPointer NodePointer(uint nodeId) => new()
@@ -92,8 +91,8 @@ public class S57ValidationTests
         {
             DataSetIdentification = dsid,
             DataSetParameters = dspm,
-            VectorRecords = (vectorRecords ?? Array.Empty<S57VectorRecord>()).ToImmutableArray(),
-            FeatureRecords = (features ?? Array.Empty<S57FeatureRecord>()).ToImmutableArray(),
+            VectorRecords = (vectorRecords ?? Array.Empty<S57VectorRecord>()).ToArray(),
+            FeatureRecords = (features ?? Array.Empty<S57FeatureRecord>()).ToArray(),
         };
 
     // ── S57-R-1.1 — DSID + DSPM/CSCL ───────────────────────────────────
@@ -287,7 +286,7 @@ public class S57ValidationTests
         var viaWrapper = S57PreTranslationRules.Validate(doc);
         var viaDefault = S57PreTranslationRules.Default.Run(doc);
 
-        Assert.Equal(viaDefault.Findings.Length, viaWrapper.Findings.Length);
+        Assert.Equal(viaDefault.Findings.Count, viaWrapper.Findings.Count);
         Assert.Equal(viaDefault.RulesEvaluated, viaWrapper.RulesEvaluated);
     }
 
@@ -321,7 +320,7 @@ public class S57ValidationTests
             });
 
         var translated = new S57ToS101Translator().Translate(doc);
-        Assert.Equal(2, translated.Features.Length);
+        Assert.Equal(2, translated.Features.Count);
 
         var view = S101DatasetView.From(translated, decoder: null);
         var s101Report = S101DatasetRules.Default.Run(view);

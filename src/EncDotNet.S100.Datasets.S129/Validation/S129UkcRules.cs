@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Validation;
@@ -163,19 +162,19 @@ public static class S129UkcRules
                 static void CheckSurface(
                     string kind,
                     string id,
-                    ImmutableArray<GeoPosition> exterior,
-                    ImmutableArray<ImmutableArray<GeoPosition>> holes,
+                    IReadOnlyList<GeoPosition> exterior,
+                    IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
                     List<ValidationFinding> findings)
                 {
-                    if (!exterior.IsDefaultOrEmpty)
+                    if (exterior.Count > 0)
                     {
                         foreach (var p in exterior)
                             if (!InRange(p)) findings.Add(OutOfRange(kind, id, p));
                     }
-                    if (!holes.IsDefaultOrEmpty)
+                    if (holes.Count > 0)
                     {
                         foreach (var ring in holes)
-                            if (!ring.IsDefaultOrEmpty)
+                            if (ring.Count > 0)
                                 foreach (var p in ring)
                                     if (!InRange(p)) findings.Add(OutOfRange(kind, id, p));
                     }
@@ -205,7 +204,7 @@ public static class S129UkcRules
                     return Array.Empty<ValidationFinding>();
 
                 var ring = pa.Coordinates;
-                int distinct = ring.IsDefaultOrEmpty
+                int distinct = ring.Count == 0
                     ? 0
                     : ring.Distinct().Count();
 

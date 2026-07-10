@@ -120,4 +120,32 @@ public class ViewingGroupControllerTests
 
         Assert.False(v.IsVisible(1));
     }
+
+    [Fact]
+    public void DeclaredModeIds_CannotBeDowncastToMutableSet()
+    {
+        var c = new DisplayModeController();
+        c.SetDeclaredModeIds(new HashSet<string> { "DisplayBase" });
+        Assert.IsNotType<HashSet<string>>(c.DeclaredModeIds);
+        Assert.Contains("DisplayBase", c.DeclaredModeIds);
+    }
+
+    [Fact]
+    public void ActiveModeMembership_CannotBeDowncastToMutableSet()
+    {
+        var v = new ViewingGroupController();
+        v.SetActiveModeMembership(new HashSet<int> { 1, 2 });
+        Assert.NotNull(v.ActiveModeMembership);
+        Assert.IsNotType<HashSet<int>>(v.ActiveModeMembership);
+        Assert.Equal(new HashSet<int> { 1, 2 }, v.ActiveModeMembership);
+    }
+
+    [Fact]
+    public void UserOverrides_CannotBeDowncastToMutableDictionary()
+    {
+        var v = new ViewingGroupController();
+        v.SetUserOverride(1, false);
+        Assert.IsNotType<Dictionary<int, bool>>(v.UserOverrides);
+        Assert.False(v.UserOverrides[1]);
+    }
 }

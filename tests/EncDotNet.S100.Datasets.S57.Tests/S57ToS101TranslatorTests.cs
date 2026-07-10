@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S57;
 
@@ -34,8 +33,8 @@ public class S57ToS101TranslatorTests
                 CoordinateMultiplicationFactor = (int)comf,
                 SoundingMultiplicationFactor = (int)somf,
             },
-            VectorRecords = (vectorRecords ?? Array.Empty<EncDotNet.S57.S57VectorRecord>()).ToImmutableArray(),
-            FeatureRecords = (features ?? Array.Empty<EncDotNet.S57.S57FeatureRecord>()).ToImmutableArray(),
+            VectorRecords = (vectorRecords ?? Array.Empty<EncDotNet.S57.S57VectorRecord>()).ToArray(),
+            FeatureRecords = (features ?? Array.Empty<EncDotNet.S57.S57FeatureRecord>()).ToArray(),
         };
 
     private static EncDotNet.S57.S57RecordName Name(byte rcnm, uint id)
@@ -45,11 +44,11 @@ public class S57ToS101TranslatorTests
         => new()
         {
             RecordName = Name(rcnm, id),
-            VectorPointers = ImmutableArray<EncDotNet.S57.S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray.Create(
-                new EncDotNet.S57.S57Coordinate2D { X = x, Y = y }),
-            Soundings = ImmutableArray<EncDotNet.S57.S57Sounding>.Empty,
-            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
+            VectorPointers = [],
+            Coordinates2D = [
+                new EncDotNet.S57.S57Coordinate2D { X = x, Y = y }],
+            Soundings = [],
+            Attributes = [],
         };
 
     private static EncDotNet.S57.S57VectorRecord Edge(
@@ -58,14 +57,14 @@ public class S57ToS101TranslatorTests
         => new()
         {
             RecordName = Name(RcnmEdge, id),
-            VectorPointers = ImmutableArray.Create(
+            VectorPointers = [
                 Vp(RcnmConnectedNode, beginNodeId, ornt: 1, usage: 0, topo: 1, mask: 255),
-                Vp(RcnmConnectedNode, endNodeId,   ornt: 1, usage: 0, topo: 2, mask: 255)),
+                Vp(RcnmConnectedNode, endNodeId,   ornt: 1, usage: 0, topo: 2, mask: 255)],
             Coordinates2D = intermediates
                 .Select(c => new EncDotNet.S57.S57Coordinate2D { X = c.X, Y = c.Y })
-                .ToImmutableArray(),
-            Soundings = ImmutableArray<EncDotNet.S57.S57Sounding>.Empty,
-            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
+                .ToArray(),
+            Soundings = [],
+            Attributes = [],
         };
 
     private static EncDotNet.S57.S57VectorRecord SoundingNode(
@@ -73,12 +72,12 @@ public class S57ToS101TranslatorTests
         => new()
         {
             RecordName = Name(RcnmIsolatedNode, id),
-            VectorPointers = ImmutableArray<EncDotNet.S57.S57VectorPointer>.Empty,
-            Coordinates2D = ImmutableArray<EncDotNet.S57.S57Coordinate2D>.Empty,
+            VectorPointers = [],
+            Coordinates2D = [],
             Soundings = soundings
                 .Select(s => new EncDotNet.S57.S57Sounding { X = s.X, Y = s.Y, Depth = s.Z })
-                .ToImmutableArray(),
-            Attributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
+                .ToArray(),
+            Attributes = [],
         };
 
     private static EncDotNet.S57.S57VectorPointer Vp(
@@ -126,9 +125,9 @@ public class S57ToS101TranslatorTests
             },
             Primitive = (EncDotNet.S57.S57GeometricPrimitive)(int)primitive,
             ObjectCode = (EncDotNet.S57.S57ObjectCode)(int)objectClass,
-            Attributes = (attributes ?? Array.Empty<EncDotNet.S57.S57AttributeValue>()).ToImmutableArray(),
-            NationalAttributes = ImmutableArray<EncDotNet.S57.S57AttributeValue>.Empty,
-            SpatialPointers = (spatialPointers ?? Array.Empty<EncDotNet.S57.S57SpatialPointer>()).ToImmutableArray(),
+            Attributes = (attributes ?? Array.Empty<EncDotNet.S57.S57AttributeValue>()).ToArray(),
+            NationalAttributes = [],
+            SpatialPointers = (spatialPointers ?? Array.Empty<EncDotNet.S57.S57SpatialPointer>()).ToArray(),
         };
 
     // ── Tests ──────────────────────────────────────────────────────────
@@ -159,7 +158,7 @@ public class S57ToS101TranslatorTests
 
         Assert.Equal(2, s101.Points.Count);
         var cs = Assert.Single(s101.CurveSegments.Values);
-        Assert.Equal(2, cs.PointAssociations.Length);
+        Assert.Equal(2, cs.PointAssociations.Count);
         Assert.Equal(1, cs.PointAssociations[0].Topology);
         Assert.Equal(2, cs.PointAssociations[1].Topology);
         Assert.Equal((50, 50), cs.IntermediateCoordinates[0]);
@@ -228,7 +227,7 @@ public class S57ToS101TranslatorTests
 
         var feat = Assert.Single(s101.Features);
         Assert.Equal("DepthArea", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
-        Assert.Equal(2, feat.Attributes.Length);
+        Assert.Equal(2, feat.Attributes.Count);
         var sa = Assert.Single(feat.SpatialAssociations);
         Assert.Equal(130, sa.RecordName);
 
@@ -238,7 +237,7 @@ public class S57ToS101TranslatorTests
         Assert.Equal(125, ring.RecordName);
 
         var composite = s101.CompositeCurves[ring.RecordId];
-        Assert.Equal(3, composite.CurveComponents.Length);
+        Assert.Equal(3, composite.CurveComponents.Count);
     }
 
     [Fact]
@@ -264,7 +263,7 @@ public class S57ToS101TranslatorTests
 
         var mp = Assert.Single(s101.MultiPoints.Values);
         Assert.Equal(spa.RecordId, mp.RecordId);
-        Assert.Equal(3, mp.Points.Length);
+        Assert.Equal(3, mp.Points.Count);
         Assert.Equal((10, 20, 50), mp.Points[0]);
         Assert.Equal((30, 40, 75), mp.Points[1]);
         Assert.Equal((50, 60, 100), mp.Points[2]);
@@ -294,7 +293,7 @@ public class S57ToS101TranslatorTests
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var mp = Assert.Single(s101.MultiPoints.Values);
-        Assert.Equal(3, mp.Points.Length);
+        Assert.Equal(3, mp.Points.Count);
     }
 
     [Fact]
@@ -390,7 +389,7 @@ public class S57ToS101TranslatorTests
         var s101 = new S57ToS101Translator().Translate(doc);
 
         var feat = Assert.Single(s101.Features);
-        Assert.Equal(2, feat.Attributes.Length);
+        Assert.Equal(2, feat.Attributes.Count);
         var values = feat.Attributes.Select(a => a.Value).ToArray();
         Assert.Contains("999.9", values);
         Assert.Contains("1234.5", values);
@@ -415,7 +414,7 @@ public class S57ToS101TranslatorTests
 
     private static IEnumerable<S101Attribute> InformationInstance(
         S101Document doc,
-        ImmutableArray<S101Attribute> attrs,
+        IReadOnlyList<S101Attribute> attrs,
         int instanceIndex)
     {
         ushort? infoCode = null;

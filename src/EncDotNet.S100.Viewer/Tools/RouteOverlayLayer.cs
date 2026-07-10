@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.Viewer.Geodesy;
@@ -121,14 +122,14 @@ internal static class RouteOverlayLayer
     /// geodesic legs into great-circle arcs and leaving loxodrome legs as
     /// straight segments.
     /// </summary>
-    private static List<(double Lat, double Lon)> DensifyRoute(Route route)
+    private static List<GeoPosition> DensifyRoute(Route route)
     {
-        var points = new List<(double Lat, double Lon)>();
+        var points = new List<GeoPosition>();
         if (route.Waypoints.Count == 0)
             return points;
 
         var first = route.Waypoints[0].Position;
-        points.Add((first.Latitude, first.Longitude));
+        points.Add(new GeoPosition(first.Latitude, first.Longitude));
 
         for (var i = 0; i < route.Legs.Count; i++)
         {
@@ -144,14 +145,14 @@ internal static class RouteOverlayLayer
             }
             else
             {
-                points.Add((b.Latitude, b.Longitude));
+                points.Add(new GeoPosition(b.Latitude, b.Longitude));
             }
         }
 
         return points;
     }
 
-    private static void AddPolyline(List<IFeature> features, IReadOnlyList<(double Lat, double Lon)> points, MapsuiColor strokeColor, float opacity)
+    private static void AddPolyline(List<IFeature> features, IReadOnlyList<GeoPosition> points, MapsuiColor strokeColor, float opacity)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
         {
@@ -159,7 +160,7 @@ internal static class RouteOverlayLayer
             var coords = new Coordinate[subPath.Count];
             for (var i = 0; i < subPath.Count; i++)
             {
-                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Lon, subPath[i].Lat);
+                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Longitude, subPath[i].Latitude);
                 coords[i] = new Coordinate(mx, my);
             }
 

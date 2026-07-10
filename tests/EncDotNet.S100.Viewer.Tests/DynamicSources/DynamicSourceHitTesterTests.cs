@@ -1,5 +1,7 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Viewer.Services.DynamicSources;
 using Mapsui;
 using Mapsui.Projections;
@@ -16,7 +18,7 @@ public class DynamicSourceHitTesterTests
     {
         Id = id,
         GeometryType = GeometryType.Point,
-        Coordinates = new[] { (lat, lon) },
+        Coordinates = new[] { new GeoPosition(lat, lon) },
         LastUpdated = DateTimeOffset.UtcNow,
     };
 
@@ -106,7 +108,7 @@ public class DynamicSourceHitTesterTests
             {
                 Id = "empty",
                 GeometryType = GeometryType.Point,
-                Coordinates = Array.Empty<(double, double)>(),
+                Coordinates = Array.Empty<GeoPosition>(),
                 LastUpdated = DateTimeOffset.UtcNow,
             },
         });
@@ -136,7 +138,7 @@ public class DynamicSourceHitTesterTests
         {
             Id = "ais1",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (SeattleLat, SeattleLon) },
+            Coordinates = new[] { new GeoPosition(SeattleLat, SeattleLon) },
             VesselGeometry = new DynamicVesselGeometry
             {
                 LengthMetres = 200,
@@ -144,7 +146,7 @@ public class DynamicSourceHitTesterTests
                 BowOffsetMetres = 0,
                 PortOffsetMetres = 15,
             },
-            Motion = new DynamicMotion { HeadingDeg = 0 }, // bow north
+            Motion = new DynamicMotion { Heading = Angle.FromDegrees(0) }, // bow north
             LastUpdated = DateTimeOffset.UtcNow,
         };
         // 100 m south of antenna → mid-hull, well inside polygon, far
@@ -168,7 +170,7 @@ public class DynamicSourceHitTesterTests
         {
             Id = "ais1",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (SeattleLat, SeattleLon) },
+            Coordinates = new[] { new GeoPosition(SeattleLat, SeattleLon) },
             VesselGeometry = new DynamicVesselGeometry
             {
                 LengthMetres = 200,

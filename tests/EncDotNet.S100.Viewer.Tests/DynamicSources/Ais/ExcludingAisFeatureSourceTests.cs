@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Services.DynamicSources.Ais;
@@ -14,7 +15,7 @@ public sealed class ExcludingAisFeatureSourceTests
             Id = id,
             Kind = "vessel.ais.cargo",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (50.0, -1.0) },
+            Coordinates = new[] { new GeoPosition(50.0, -1.0) },
             LastUpdated = DateTimeOffset.UnixEpoch,
         };
 

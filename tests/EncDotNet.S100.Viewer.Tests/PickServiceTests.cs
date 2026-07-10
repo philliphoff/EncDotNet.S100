@@ -14,6 +14,7 @@ using Mapsui.Layers;
 using Mapsui.Manipulations;
 using Mapsui.Rendering;
 using Mapsui.Styles;
+using System.Collections.ObjectModel;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

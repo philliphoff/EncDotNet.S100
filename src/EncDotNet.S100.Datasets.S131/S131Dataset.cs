@@ -1,4 +1,5 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S131;
@@ -30,10 +31,10 @@ public sealed class S131Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>Feature instances contained in the dataset.</summary>
-    public required ImmutableArray<S131Feature> Features { get; init; }
+    public required IReadOnlyList<S131Feature> Features { get; init; }
 
     /// <summary>Information type instances contained in the dataset.</summary>
-    public required ImmutableArray<S131InformationType> InformationTypes { get; init; }
+    public required IReadOnlyList<S131InformationType> InformationTypes { get; init; }
 
     /// <summary>Opens an S-131 dataset from a file path.</summary>
     public static S131Dataset Open(string path)
@@ -71,25 +72,25 @@ public sealed class S131Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> Points { get; init; }
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> Curves { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public ImmutableArray<(double Latitude, double Longitude)> ExteriorRing { get; init; }
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public ImmutableArray<ImmutableArray<(double Latitude, double Longitude)>> InteriorRings { get; init; }
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
-    public required ImmutableArray<S131ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S131ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <inheritdoc/>
-    IEnumerable<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>();
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>().ToArray();
 
     /// <summary>
     /// Information-type and feature-type association references resolved from
@@ -97,7 +98,7 @@ public sealed class S131Feature : IS100Feature
     /// <c>HostFeatureGetAssociatedInformationIDs</c> and
     /// <c>HostFeatureGetAssociatedFeatureIDs</c> host calls.
     /// </summary>
-    public required ImmutableArray<S131Reference> References { get; init; }
+    public required IReadOnlyList<S131Reference> References { get; init; }
 }
 
 /// <summary>
@@ -114,10 +115,10 @@ public sealed class S131InformationType : IS100InformationType
     public required string TypeCode { get; init; }
 
     /// <summary>Simple attributes keyed by code.</summary>
-    public required ImmutableDictionary<string, string> Attributes { get; init; }
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
 
     /// <summary>Complex attribute groups.</summary>
-    public required ImmutableArray<S131ComplexAttribute> ComplexAttributes { get; init; }
+    public required IReadOnlyList<S131ComplexAttribute> ComplexAttributes { get; init; }
 
     /// <summary>
     /// Cross-references parsed from <c>xlink:href</c> attributes on the
@@ -126,8 +127,8 @@ public sealed class S131InformationType : IS100InformationType
     /// peers). Defaults to an empty array for information types that do
     /// not carry outgoing references.
     /// </summary>
-    public ImmutableArray<S131Reference> References { get; init; } =
-        ImmutableArray<S131Reference>.Empty;
+    public IReadOnlyList<S131Reference> References { get; init; } =
+        [];
 }
 
 /// <summary>
@@ -139,7 +140,7 @@ public sealed class S131ComplexAttribute : IS100ComplexAttribute
     public required string Code { get; init; }
 
     /// <summary>Sub-attribute values keyed by code.</summary>
-    public required ImmutableDictionary<string, string> SubAttributes { get; init; }
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
 }
 
 /// <summary>

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 
 namespace EncDotNet.S100.Mcp.Tools.Time;
 
@@ -71,7 +70,7 @@ public abstract record TimeQuery
         /// <see cref="InvalidOperationException"/> if the count would
         /// exceed <see cref="MaxSeriesCount"/>.
         /// </summary>
-        public ImmutableArray<DateTimeOffset> Enumerate()
+        public IReadOnlyList<DateTimeOffset> Enumerate()
         {
             var count = EstimatedCount;
             if (count > MaxSeriesCount)
@@ -79,12 +78,12 @@ public abstract record TimeQuery
                 throw new InvalidOperationException(
                     $"Series would yield {count} instants which exceeds the cap of {MaxSeriesCount}.");
             }
-            var builder = ImmutableArray.CreateBuilder<DateTimeOffset>(count);
+            var builder = new List<DateTimeOffset>(count);
             for (int i = 0; i < count; i++)
             {
                 builder.Add(From + TimeSpan.FromTicks(Step.Ticks * i));
             }
-            return builder.MoveToImmutable();
+            return builder;
         }
 
         /// <summary>

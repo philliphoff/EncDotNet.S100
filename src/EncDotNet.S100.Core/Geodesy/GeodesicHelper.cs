@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Geodesy;
 
 /// <summary>
@@ -32,7 +33,7 @@ public static class GeodesicHelper
     /// <param name="bearingDeg">Initial true bearing in degrees (clockwise from north).</param>
     /// <param name="distanceMetres">Distance along the great circle in metres.</param>
     /// <returns>Destination (latitude, longitude) in degrees.</returns>
-    public static (double Latitude, double Longitude) DirectProblem(
+    public static GeoPosition DirectProblem(
         double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
     {
         double phi1 = latDeg * DegToRadFactor;
@@ -54,7 +55,7 @@ public static class GeodesicHelper
         double lonResult = lambda2 * RadToDegFactor;
         lonResult = ((lonResult + 540.0) % 360.0) - 180.0;
 
-        return (phi2 * RadToDegFactor, lonResult);
+        return new GeoPosition(phi2 * RadToDegFactor, lonResult);
     }
 
     /// <summary>
@@ -73,7 +74,7 @@ public static class GeodesicHelper
     /// An ordered list of coordinates approximating the arc. For a full circle
     /// the first and last points coincide.
     /// </returns>
-    public static IReadOnlyList<(double Latitude, double Longitude)> TessellateArc(
+    public static IReadOnlyList<GeoPosition> TessellateArc(
         double centreLat, double centreLon, double radiusMetres,
         double startBearingDeg, double sweepDeg)
     {
@@ -85,7 +86,7 @@ public static class GeodesicHelper
             SegmentsPerFullCircle * Math.Abs(sweepDeg) / 360.0));
 
         double step = sweepDeg / segments;
-        var points = new List<(double, double)>(segments + 1);
+        var points = new List<GeoPosition>(segments + 1);
 
         for (int i = 0; i <= segments; i++)
         {
@@ -115,7 +116,7 @@ public static class GeodesicHelper
     /// Short rays (&lt; 10 km) are returned as a simple two-point segment;
     /// longer rays are tessellated for great-circle fidelity.
     /// </returns>
-    public static IReadOnlyList<(double Latitude, double Longitude)> TessellateRay(
+    public static IReadOnlyList<GeoPosition> TessellateRay(
         double originLat, double originLon, double bearingDeg, double distanceMetres)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(distanceMetres);
@@ -126,7 +127,7 @@ public static class GeodesicHelper
         if (distanceMetres <= shortRayThreshold)
         {
             var end = DirectProblem(originLat, originLon, bearingDeg, distanceMetres);
-            return [(originLat, originLon), end];
+            return [new GeoPosition(originLat, originLon), end];
         }
 
         // Longer rays: tessellate at ~5 km intervals.
@@ -134,7 +135,7 @@ public static class GeodesicHelper
         int segments = Math.Max(2, (int)Math.Ceiling(distanceMetres / segmentLength));
         double stepDist = distanceMetres / segments;
 
-        var points = new List<(double, double)>(segments + 1);
+        var points = new List<GeoPosition>(segments + 1);
         for (int i = 0; i <= segments; i++)
         {
             points.Add(DirectProblem(originLat, originLon, bearingDeg, i * stepDist));

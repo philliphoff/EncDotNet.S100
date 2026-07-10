@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -887,10 +888,10 @@ internal sealed class SettingsViewModel : ViewModelBase
     /// </summary>
     public MarinerSettings BuildMarinerSettings() => new()
     {
-        SafetyContour = _safetyContour,
-        SafetyDepth = _safetyDepth,
-        ShallowContour = _shallowContour,
-        DeepContour = _deepContour,
+        SafetyContour = Depth.FromMetres(_safetyContour),
+        SafetyDepth = Depth.FromMetres(_safetyDepth),
+        ShallowContour = Depth.FromMetres(_shallowContour),
+        DeepContour = Depth.FromMetres(_deepContour),
         DepthUnit = _selectedDepthUnit,
         FourShades = _fourShades,
         ShallowWaterDangers = _shallowWaterDangers,
@@ -942,10 +943,10 @@ internal sealed class SettingsViewModel : ViewModelBase
 
         // Mariner settings — pull from JSON, falling back to MarinerSettings.Default.
         var def = MarinerSettings.Default;
-        _safetyContour = settings.SafetyContour ?? def.SafetyContour;
-        _safetyDepth = settings.SafetyDepth ?? def.SafetyDepth;
-        _shallowContour = settings.ShallowContour ?? def.ShallowContour;
-        _deepContour = settings.DeepContour ?? def.DeepContour;
+        _safetyContour = settings.SafetyContour ?? def.SafetyContour.TotalMetres;
+        _safetyDepth = settings.SafetyDepth ?? def.SafetyDepth.TotalMetres;
+        _shallowContour = settings.ShallowContour ?? def.ShallowContour.TotalMetres;
+        _deepContour = settings.DeepContour ?? def.DeepContour.TotalMetres;
         _selectedDepthUnit = Enum.TryParse<DepthUnit>(settings.DepthUnit, ignoreCase: true, out var du)
             ? du
             : def.DepthUnit;

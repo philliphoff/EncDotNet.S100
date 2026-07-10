@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -44,7 +45,7 @@ public class DynamicVesselGeometryTests
         var f = new DynamicFeature
         {
             Id = "ownship", GeometryType = GeometryType.Point,
-            Coordinates = new[] { (0.0, 0.0) },
+            Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             VesselGeometry = g,
             LastUpdated = DateTimeOffset.UtcNow,
         };
@@ -58,7 +59,7 @@ public class DynamicVesselGeometryTests
         var f = new DynamicFeature
         {
             Id = "x", GeometryType = GeometryType.Point,
-            Coordinates = new[] { (0.0, 0.0) },
+            Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
         Assert.Null(f.VesselGeometry);

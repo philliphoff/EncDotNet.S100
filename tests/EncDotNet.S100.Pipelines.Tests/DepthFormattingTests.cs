@@ -104,10 +104,10 @@ public class MarinerSettingsDefaultsTests
         // Source: src/EncDotNet.S100.Specifications/content/S101/pc/portrayal_catalogue.xml
         // Lines ~9681-9802 declare these context parameter defaults.
         var d = MarinerSettings.Default;
-        Assert.Equal(30.0, d.SafetyContour);
-        Assert.Equal(30.0, d.SafetyDepth);
-        Assert.Equal(2.0, d.ShallowContour);
-        Assert.Equal(30.0, d.DeepContour);
+        Assert.Equal(30.0, d.SafetyContour.TotalMetres);
+        Assert.Equal(30.0, d.SafetyDepth.TotalMetres);
+        Assert.Equal(2.0, d.ShallowContour.TotalMetres);
+        Assert.Equal(30.0, d.DeepContour.TotalMetres);
         Assert.False(d.FourShades);
         Assert.True(d.ShallowWaterDangers);
         Assert.True(d.PlainBoundaries);

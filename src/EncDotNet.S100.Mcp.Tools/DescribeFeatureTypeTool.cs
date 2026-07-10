@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
@@ -55,8 +54,8 @@ public sealed record AttributeInfo(
     [property: Description("True when the binding's lower multiplicity is > 0.")] bool Mandatory,
     [property: Description("True when the binding's upper multiplicity is unbounded or > 1.")] bool Repeatable,
     [property: Description("True when the attribute is a complex (nested) attribute rather than a simple one.")] bool IsComplex,
-    [property: Description("Permitted enumeration values (empty when not enumerated or omitted by request).")] ImmutableArray<ListedValueInfo> ListedValues,
-    [property: Description("When the binding constrains the attribute to a subset of its listed values, those codes; otherwise empty.")] ImmutableArray<string> PermittedValues);
+    [property: Description("Permitted enumeration values (empty when not enumerated or omitted by request).")] IReadOnlyList<ListedValueInfo> ListedValues,
+    [property: Description("When the binding constrains the attribute to a subset of its listed values, those codes; otherwise empty.")] IReadOnlyList<string> PermittedValues);
 
 /// <summary>A feature type defined in the Feature Catalogue.</summary>
 /// <param name="Code">The feature-type code.</param>
@@ -73,9 +72,9 @@ public sealed record FeatureTypeInfo(
     [property: Description("Optional definition text.")] string? Definition,
     [property: Description("True for abstract super-types that are not instantiated directly.")] bool IsAbstract,
     [property: Description("Code of the parent feature type, if any.")] string? SuperType,
-    [property: Description("Geometry primitives the feature type may carry.")] ImmutableArray<string> PermittedPrimitives,
+    [property: Description("Geometry primitives the feature type may carry.")] IReadOnlyList<string> PermittedPrimitives,
     [property: Description("Number of attribute bindings on the feature type.")] int AttributeCount,
-    [property: Description("Attribute detail (populated only when a specific feature type was requested).")] ImmutableArray<AttributeInfo> Attributes);
+    [property: Description("Attribute detail (populated only when a specific feature type was requested).")] IReadOnlyList<AttributeInfo> Attributes);
 
 /// <summary>Result of <see cref="DescribeFeatureTypeTool"/>.</summary>
 /// <param name="Spec">Echoed spec.</param>
@@ -87,7 +86,7 @@ public sealed record DescribeFeatureTypeResult(
     [property: Description("Echoed spec.")] SpecRef Spec,
     [property: Description("Name of the bundled Feature Catalogue.")] string CatalogueName,
     [property: Description("Version number of the bundled Feature Catalogue.")] string CatalogueVersion,
-    [property: Description("The matched feature type (detail mode) or every feature type (list mode).")] ImmutableArray<FeatureTypeInfo> FeatureTypes,
+    [property: Description("The matched feature type (detail mode) or every feature type (list mode).")] IReadOnlyList<FeatureTypeInfo> FeatureTypes,
     [property: Description("Total feature types in the catalogue.")] int TotalFeatureTypeCount);
 
 /// <summary>
@@ -120,7 +119,7 @@ public sealed class DescribeFeatureTypeTool
     public const string Name = "describe_feature_type";
 
     private readonly FeatureCatalogueManager _catalogues;
-    private readonly ImmutableArray<string> _acceptedSpecs;
+    private readonly IReadOnlyList<string> _acceptedSpecs;
 
     /// <summary>
     /// Creates a tool backed by the bundled Feature Catalogues exposed
@@ -148,8 +147,8 @@ public sealed class DescribeFeatureTypeTool
         ArgumentNullException.ThrowIfNull(catalogueResolver);
         _catalogues = new FeatureCatalogueManager(catalogueResolver);
         _acceptedSpecs = acceptedSpecs is null
-            ? ImmutableArray<string>.Empty
-            : acceptedSpecs.ToImmutableArray();
+            ? []
+            : acceptedSpecs.ToArray();
     }
 
     /// <summary>Executes the tool.</summary>
@@ -210,10 +209,10 @@ public sealed class DescribeFeatureTypeTool
             }
 
             var info = Describe(match, simpleByCode, complexByCode, request.IncludeListedValues);
-            return Ok(request.Spec, catalogue, ImmutableArray.Create(info), total);
+            return Ok(request.Spec, catalogue, [info], total);
         }
 
-        var builder = ImmutableArray.CreateBuilder<FeatureTypeInfo>(total);
+        var builder = new List<FeatureTypeInfo>(total);
         foreach (var ft in catalogue.FeatureTypes.OrderBy(ft => ft.Code, StringComparer.Ordinal))
         {
             builder.Add(new FeatureTypeInfo(
@@ -222,18 +221,18 @@ public sealed class DescribeFeatureTypeTool
                 ft.Definition,
                 ft.IsAbstract,
                 ft.SuperType,
-                ft.PermittedPrimitives.ToImmutableArray(),
+                ft.PermittedPrimitives.ToArray(),
                 ft.AttributeBindings.Count,
-                ImmutableArray<AttributeInfo>.Empty));
+                []));
         }
 
-        return Ok(request.Spec, catalogue, builder.ToImmutable(), total);
+        return Ok(request.Spec, catalogue, builder, total);
     }
 
     private static Task<ToolResult<DescribeFeatureTypeResult>> Ok(
         SpecRef spec,
         FeatureCatalogue catalogue,
-        ImmutableArray<FeatureTypeInfo> featureTypes,
+        IReadOnlyList<FeatureTypeInfo> featureTypes,
         int total) =>
         Task.FromResult(ToolResult<DescribeFeatureTypeResult>.Ok(
             new DescribeFeatureTypeResult(
@@ -249,7 +248,7 @@ public sealed class DescribeFeatureTypeTool
         IReadOnlyDictionary<string, ComplexAttribute> complexByCode,
         bool includeListedValues)
     {
-        var attributes = ImmutableArray.CreateBuilder<AttributeInfo>(featureType.AttributeBindings.Count);
+        var attributes = new List<AttributeInfo>(featureType.AttributeBindings.Count);
         foreach (var binding in featureType.AttributeBindings)
         {
             var mandatory = binding.Multiplicity.Lower > 0;
@@ -262,8 +261,8 @@ public sealed class DescribeFeatureTypeTool
                 var listed = includeListedValues
                     ? simple.ListedValues
                         .Select(v => new ListedValueInfo(v.Code, v.Label, v.Definition))
-                        .ToImmutableArray()
-                    : ImmutableArray<ListedValueInfo>.Empty;
+                        .ToArray()
+                    : [];
 
                 attributes.Add(new AttributeInfo(
                     simple.Code,
@@ -273,7 +272,7 @@ public sealed class DescribeFeatureTypeTool
                     repeatable,
                     IsComplex: false,
                     listed,
-                    binding.PermittedValues.ToImmutableArray()));
+                    binding.PermittedValues.ToArray()));
             }
             else if (complexByCode.TryGetValue(binding.AttributeRef, out var complex))
             {
@@ -284,8 +283,8 @@ public sealed class DescribeFeatureTypeTool
                     mandatory,
                     repeatable,
                     IsComplex: true,
-                    ImmutableArray<ListedValueInfo>.Empty,
-                    binding.PermittedValues.ToImmutableArray()));
+                    [],
+                    binding.PermittedValues.ToArray()));
             }
             else
             {
@@ -296,8 +295,8 @@ public sealed class DescribeFeatureTypeTool
                     mandatory,
                     repeatable,
                     IsComplex: false,
-                    ImmutableArray<ListedValueInfo>.Empty,
-                    binding.PermittedValues.ToImmutableArray()));
+                    [],
+                    binding.PermittedValues.ToArray()));
             }
         }
 
@@ -307,8 +306,8 @@ public sealed class DescribeFeatureTypeTool
             featureType.Definition,
             featureType.IsAbstract,
             featureType.SuperType,
-            featureType.PermittedPrimitives.ToImmutableArray(),
+            featureType.PermittedPrimitives.ToArray(),
             featureType.AttributeBindings.Count,
-            attributes.ToImmutable());
+            attributes);
     }
 }

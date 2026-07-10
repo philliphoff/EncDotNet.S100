@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128.DataModel;
 
@@ -31,7 +30,7 @@ public class DataModelTests
         var catalogue = ProjectSample(out _);
 
         Assert.Equal("S-128", catalogue.ProductIdentifier);
-        Assert.Equal(5, catalogue.Products.Length);
+        Assert.Equal(5, catalogue.Products.Count);
 
         var electronic = catalogue.Products.OfType<S128ElectronicProduct>().ToList();
         var physical = catalogue.Products.OfType<S128PhysicalProduct>().ToList();
@@ -87,7 +86,7 @@ public class DataModelTests
         var catalogue = ProjectSample(out _);
         var distributor = catalogue.Distributors.Single();
         Assert.NotNull(distributor.Source);
-        Assert.True(distributor.Source.ExteriorRing.IsDefaultOrEmpty);
+        Assert.True(distributor.Source.ExteriorRing.Count == 0);
     }
 
     [Fact]
@@ -300,8 +299,8 @@ public class DataModelTests
         {
             ProductIdentifier = "S-128",
             DatasetIdentifier = "EMPTY",
-            Features = ImmutableArray<S128Feature>.Empty,
-            InformationTypes = ImmutableArray<S128InformationType>.Empty,
+            Features = [],
+            InformationTypes = [],
         };
         Assert.Throws<InvalidOperationException>(() => S128ProductCatalogue.From(empty, out _));
     }

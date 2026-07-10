@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -95,7 +96,7 @@ internal sealed class S101FeatureAnchorProvider : IFeatureAnchorProvider
         _geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(dataset).GetFeatures());
     }
 
-    public (double Latitude, double Longitude)? GetAnchor(string featureRef)
+    public GeoPosition? GetAnchor(string featureRef)
     {
         var geom = _geometryProvider.GetGeometry(featureRef);
         if (geom is null || geom.Coordinates.Count == 0)
@@ -124,10 +125,10 @@ internal static class S101ContextParameterBindings
 {
     public static IReadOnlyList<LuaContextParameterBinding> Build() =>
     [
-        new("SafetyContour", m => m.SafetyContour, LuaValueSerializers.Number),
-        new("SafetyDepth", m => m.SafetyDepth, LuaValueSerializers.Number),
-        new("ShallowContour", m => m.ShallowContour, LuaValueSerializers.Number),
-        new("DeepContour", m => m.DeepContour, LuaValueSerializers.Number),
+        new("SafetyContour", m => m.SafetyContour.TotalMetres, LuaValueSerializers.Number),
+        new("SafetyDepth", m => m.SafetyDepth.TotalMetres, LuaValueSerializers.Number),
+        new("ShallowContour", m => m.ShallowContour.TotalMetres, LuaValueSerializers.Number),
+        new("DeepContour", m => m.DeepContour.TotalMetres, LuaValueSerializers.Number),
         new("FourShades", m => m.FourShades, LuaValueSerializers.Bool),
         new("ShallowWaterDangers", m => m.ShallowWaterDangers, LuaValueSerializers.Bool),
         new("PlainBoundaries", m => m.PlainBoundaries, LuaValueSerializers.Bool),

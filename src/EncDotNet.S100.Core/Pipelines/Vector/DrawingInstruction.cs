@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
@@ -123,7 +124,7 @@ public sealed class PointInstruction : DrawingInstruction
     /// (e.g. used by S-101 SOUNDG03 to place each sounding of a MultiPoint
     /// feature at its own coordinate).
     /// </summary>
-    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
+    public GeoPosition? CoordinateOverride { get; init; }
 
     internal override int TypeSortOrder => 2;
 }
@@ -168,7 +169,7 @@ public sealed class LineInstruction : DrawingInstruction
     /// Used with <see cref="Dashes"/> to form the full [on, gap] dash array.
     /// Zero means no explicit dash-on length was specified.
     /// </summary>
-    public double DashOnLengthMm { get; init; }
+    public double DashOnLength { get; init; }
 
     /// <summary>
     /// Optional explicit coordinate sequence that overrides the feature's
@@ -177,7 +178,7 @@ public sealed class LineInstruction : DrawingInstruction
     /// primitives to supply synthetic geometry for sector-light limit lines
     /// and all-around-light circles.
     /// </summary>
-    public IReadOnlyList<(double Latitude, double Longitude)>? CoordinatesOverride { get; init; }
+    public IReadOnlyList<GeoPosition>? CoordinatesOverride { get; init; }
 
     internal override int TypeSortOrder => 1;
 }
@@ -267,10 +268,10 @@ public sealed class TextInstruction : DrawingInstruction
     public TextVerticalAlignment VerticalAlignment { get; init; } = TextVerticalAlignment.Center;
 
     /// <summary>Optional X offset (millimetres on the nominal display surface) from the anchor.</summary>
-    public double? OffsetXmm { get; init; }
+    public double? OffsetX { get; init; }
 
     /// <summary>Optional Y offset (millimetres on the nominal display surface) from the anchor.</summary>
-    public double? OffsetYmm { get; init; }
+    public double? OffsetY { get; init; }
 
     /// <summary>
     /// Optional line-placement start offset (S-100 Part 9 §11.4.2). Interpretation
@@ -290,33 +291,48 @@ public sealed class TextInstruction : DrawingInstruction
     /// feature's geometry-derived anchor (S-100 Part 9 §11.5 <c>AugmentedPoint</c>
     /// in <c>GeographicCRS</c> mode).
     /// </summary>
-    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
+    public GeoPosition? CoordinateOverride { get; init; }
 
     internal override int TypeSortOrder => 3;
 }
 
 /// <summary>S-100 Part 9 horizontal text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract: they are written by ordinal
+/// into the disk-backed portrayal cache (<see cref="Caching.DrawingInstructionSerializer"/>).
+/// Do not renumber or reorder existing members; append new members with the
+/// next free value, and bump <see cref="Caching.DrawingInstructionSerializer.FormatVersion"/>
+/// if the wire meaning changes.
+/// </remarks>
 public enum TextHorizontalAlignment
 {
-    Start,
-    Center,
-    End,
+    Start = 0,
+    Center = 1,
+    End = 2,
 }
 
 /// <summary>S-100 Part 9 vertical text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
 public enum TextVerticalAlignment
 {
-    Top,
-    Center,
-    Bottom,
+    Top = 0,
+    Center = 1,
+    Bottom = 2,
 }
 
 /// <summary>S-100 Part 9 line placement mode.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
 public enum LinePlacementMode
 {
     /// <summary>Offsets are fractions in the range [0,1] of the curve length.</summary>
-    Relative,
+    Relative = 0,
 
     /// <summary>Offsets are absolute distances in millimetres along the curve.</summary>
-    Absolute,
+    Absolute = 1,
 }

@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S128.DataModel;
@@ -126,10 +126,10 @@ public abstract class S128CatalogueEntry
     public S128GeometryKind GeometryKind { get; init; }
 
     /// <summary>Coordinates of the source feature (semantics depend on <see cref="GeometryKind"/>).</summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>Online-resource records projected from <c>onlineResource</c> complex attributes.</summary>
-    public ImmutableArray<S128OnlineResource> OnlineResources { get; init; } = ImmutableArray<S128OnlineResource>.Empty;
+    public IReadOnlyList<S128OnlineResource> OnlineResources { get; init; } = [];
 
     /// <summary>
     /// Resolved targets that this entry supersedes — populated from
@@ -138,15 +138,15 @@ public abstract class S128CatalogueEntry
     /// <see cref="S128ProductMappingCategory.HigherPriorityAlternative"/>
     /// (S-128 § 12).
     /// </summary>
-    public ImmutableArray<S128CatalogueEntry> Supersedes { get; internal set; } =
-        ImmutableArray<S128CatalogueEntry>.Empty;
+    public IReadOnlyList<S128CatalogueEntry> Supersedes { get; internal set; } =
+        [];
 
     /// <summary>
     /// Resolved entries that supersede this one — the inverse traversal of
     /// <see cref="Supersedes"/>.
     /// </summary>
-    public ImmutableArray<S128CatalogueEntry> SupersededBy { get; internal set; } =
-        ImmutableArray<S128CatalogueEntry>.Empty;
+    public IReadOnlyList<S128CatalogueEntry> SupersededBy { get; internal set; } =
+        [];
 
     /// <summary>
     /// All <c>theReference</c> cross-references whose mapping category did
@@ -154,12 +154,12 @@ public abstract class S128CatalogueEntry
     /// callers can dispatch on future enumeration extensions without an
     /// enum revision (S-128 § 12).
     /// </summary>
-    public ImmutableArray<S128ProductReference> RelatedProducts { get; internal set; } =
-        ImmutableArray<S128ProductReference>.Empty;
+    public IReadOnlyList<S128ProductReference> RelatedProducts { get; internal set; } =
+        [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>The originating parsed feature.</summary>
     public required S128Feature Source { get; init; }
@@ -226,8 +226,8 @@ public sealed class S128ProducerInformation
     public string? AgencyResponsibleForProduction { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>The originating parsed feature.</summary>
     public required S128Feature Source { get; init; }
@@ -246,8 +246,8 @@ public sealed class S128DistributorInformation
     public string? DistributorName { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>The originating parsed feature.</summary>
     public required S128Feature Source { get; init; }
@@ -266,8 +266,8 @@ public sealed class S128ContactDetails
     public string? ContactInstructions { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>The originating parsed feature.</summary>
     public required S128Feature Source { get; init; }
@@ -286,8 +286,8 @@ public sealed class S128CatalogueSectionHeader
     public string? CatalogueSectionNumber { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 
     /// <summary>The originating parsed feature.</summary>
     public required S128Feature Source { get; init; }

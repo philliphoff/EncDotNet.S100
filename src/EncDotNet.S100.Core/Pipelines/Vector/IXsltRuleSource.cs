@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Pipelines.Vector;
 /// synchronously through the <see cref="ValueTask{TResult}"/> fast path.
 /// </para>
 /// <para>
-/// Implementations should throw <see cref="KeyNotFoundException"/> from
+/// Implementations should throw <see cref="PortrayalAssetNotFoundException"/> from
 /// <see cref="GetCompiledRuleAsync"/> when the named rule is not present in
 /// the loaded catalogue, just as <see cref="IPortrayalAssetSource"/>
 /// methods do for missing symbols, line styles, or area fills. The

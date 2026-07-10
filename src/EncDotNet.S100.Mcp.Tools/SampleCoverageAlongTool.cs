@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Mcp.Tools.Catalog;
@@ -56,7 +55,7 @@ public sealed record CoverageSampleAlong(
 /// <param name="Samples">One entry per polyline vertex, in input order.</param>
 public sealed record SampleCoverageAlongResult(
     [property: Description("The coverage spec that was sampled.")] SpecRef Spec,
-    [property: Description("One entry per polyline vertex, in input order. Per-vertex misses (point outside coverage or no data) surface as a sample with a null Result.")] ImmutableArray<CoverageSampleAlong> Samples);
+    [property: Description("One entry per polyline vertex, in input order. Per-vertex misses (point outside coverage or no data) surface as a sample with a null Result.")] IReadOnlyList<CoverageSampleAlong> Samples);
 
 /// <summary>
 /// Samples a coverage product (<see cref="SampleCoverageTool"/>) at
@@ -117,9 +116,9 @@ public sealed class SampleCoverageAlongTool
         }
 
         var vertices = request.Polyline.Vertices;
-        var samples = ImmutableArray.CreateBuilder<CoverageSampleAlong>(vertices.Length);
+        var samples = new List<CoverageSampleAlong>(vertices.Count);
 
-        for (var i = 0; i < vertices.Length; i++)
+        for (var i = 0; i < vertices.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var v = vertices[i];
@@ -147,6 +146,6 @@ public sealed class SampleCoverageAlongTool
         }
 
         return ToolResult<SampleCoverageAlongResult>.Ok(
-            new SampleCoverageAlongResult(request.Spec, samples.MoveToImmutable()));
+            new SampleCoverageAlongResult(request.Spec, samples));
     }
 }

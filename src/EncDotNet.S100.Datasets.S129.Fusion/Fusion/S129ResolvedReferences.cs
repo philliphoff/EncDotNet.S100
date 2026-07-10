@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S421.DataModel;
@@ -21,4 +20,4 @@ public sealed record S129ResolvedReferences(
     S129ResolvedReference<S102Dataset>? Bathymetry,
     S129ResolvedReference<S104Dataset>? WaterLevel,
     S129ResolvedReference<S421Route>? Route,
-    ImmutableArray<S129UnresolvedReference> Unresolved);
+    IReadOnlyList<S129UnresolvedReference> Unresolved);

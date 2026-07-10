@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using EncDotNet.S100.Core;
@@ -369,7 +368,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         };
 
         return new ValidationReport(
-            ImmutableArray.Create(finding),
+            [finding],
             RulesEvaluated: 1,
             RulesWithFindings: 1);
     }

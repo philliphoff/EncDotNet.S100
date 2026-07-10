@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S201.DataModel;
 using EncDotNet.S100.Validation;
@@ -41,11 +40,11 @@ namespace EncDotNet.S100.Datasets.S201.Validation;
 /// </remarks>
 public static class S201AtonRules
 {
-    private static readonly ImmutableHashSet<AisAtonKind> MmsiRequiredAisKinds =
-        ImmutableHashSet.Create(AisAtonKind.Physical, AisAtonKind.Synthetic);
+    private static readonly IReadOnlySet<AisAtonKind> MmsiRequiredAisKinds =
+        new HashSet<AisAtonKind> { AisAtonKind.Physical, AisAtonKind.Synthetic };
 
-    private static readonly ImmutableHashSet<int> ValidChangeTypes =
-        ImmutableHashSet.Create(1, 2, 3, 4);
+    private static readonly IReadOnlySet<int> ValidChangeTypes =
+        new HashSet<int> { 1, 2, 3, 4 };
 
     // ── S201-R-1.1 — coordinates in WGS-84 range ─────────────────
 
@@ -69,7 +68,7 @@ public static class S201AtonRules
                 var findings = new List<ValidationFinding>();
                 foreach (var aton in inventory.AtoNs)
                 {
-                    if (aton.Coordinates.IsDefaultOrEmpty) continue;
+                    if (aton.Coordinates.Count == 0) continue;
                     foreach (var pos in aton.Coordinates)
                     {
                         bool latOk = pos.Latitude is >= -90 and <= 90;
@@ -185,7 +184,7 @@ public static class S201AtonRules
                 foreach (var aton in inventory.AtoNs)
                 {
                     if (!RequiresGeometry(aton)) continue;
-                    if (!aton.Coordinates.IsDefaultOrEmpty && aton.Coordinates.Length > 0) continue;
+                    if (aton.Coordinates.Count > 0) continue;
 
                     findings.Add(new ValidationFinding
                     {
@@ -282,7 +281,7 @@ public static class S201AtonRules
         bool requirePresent)
     {
         var mmsi = ais.MmsiCode;
-        var position = ais.Coordinates.IsDefaultOrEmpty ? (GeoPosition?)null : ais.Coordinates[0];
+        var position = ais.Coordinates.Count == 0 ? (GeoPosition?)null : ais.Coordinates[0];
 
         if (string.IsNullOrEmpty(mmsi))
         {
@@ -438,7 +437,7 @@ public static class S201AtonRules
                 foreach (var eq in inventory.Equipment)
                 {
                     if (eq.HostStructure is not null) continue;
-                    var position = eq.Coordinates.IsDefaultOrEmpty ? (GeoPosition?)null : eq.Coordinates[0];
+                    var position = eq.Coordinates.Count == 0 ? (GeoPosition?)null : eq.Coordinates[0];
                     findings.Add(new ValidationFinding
                     {
                         RuleId = "S201-R-5.1",
@@ -488,9 +487,9 @@ public static class S201AtonRules
         S201AtonInventory inventory,
         string id,
         string kind,
-        ImmutableArray<S201AtonObject> peers)
+        IReadOnlyList<S201AtonObject> peers)
     {
-        var count = peers.IsDefaultOrEmpty ? 0 : peers.Length;
+        var count = peers.Count == 0 ? 0 : peers.Count;
         if (count >= 2) return;
         findings.Add(new ValidationFinding
         {
@@ -545,7 +544,7 @@ public static class S201AtonRules
         S201AtonInventory inventory,
         string id,
         string kind,
-        ImmutableArray<S201AtonObject> peers)
+        IReadOnlyList<S201AtonObject> peers)
     {
         var source = FindSourceFeature(inventory, id);
         if (source is null) return;
@@ -557,7 +556,7 @@ public static class S201AtonRules
                 expected++;
         }
 
-        var actual = peers.IsDefaultOrEmpty ? 0 : peers.Length;
+        var actual = peers.Count == 0 ? 0 : peers.Count;
         if (actual >= expected) return;
 
         findings.Add(new ValidationFinding
@@ -574,7 +573,7 @@ public static class S201AtonRules
 
     private static S201Feature? FindSourceFeature(S201AtonInventory inventory, string id)
     {
-        if (inventory.Source.Features.IsDefaultOrEmpty) return null;
+        if (inventory.Source.Features.Count == 0) return null;
         foreach (var f in inventory.Source.Features)
         {
             if (string.Equals(f.Id, id, StringComparison.Ordinal))

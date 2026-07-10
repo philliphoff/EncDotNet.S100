@@ -1,6 +1,7 @@
-using System.Collections.Immutable;
+using EncDotNet.S100.DataModel;
 using System.Diagnostics;
 using System.Xml.Linq;
+using System.Collections.ObjectModel;
 using S100Diag = EncDotNet.S100.Datasets.S128.Diagnostics;
 using EncDotNet.S100.Features;
 
@@ -62,8 +63,8 @@ internal static class S128DatasetReader
             productId = dsInfo.Element(s100Ns + "productIdentifier")?.Value;
         }
 
-        var features = ImmutableArray.CreateBuilder<S128Feature>();
-        var infoTypes = ImmutableArray.CreateBuilder<S128InformationType>();
+        var features = new List<S128Feature>();
+        var infoTypes = new List<S128InformationType>();
 
         // Walk every member/members child as a feature, every imember/imembers
         // child as an information type. We accept both per-element wrappers
@@ -95,7 +96,7 @@ internal static class S128DatasetReader
         var envelope = ParseEnvelope(root);
         if (envelope is not null && ShouldSwapAxes(features, envelope.Value))
         {
-            var swapped = ImmutableArray.CreateBuilder<S128Feature>(features.Count);
+            var swapped = new List<S128Feature>(features.Count);
             foreach (var f in features) swapped.Add(SwapFeatureAxes(f));
             features = swapped;
         }
@@ -120,15 +121,15 @@ internal static class S128DatasetReader
             ProductIdentifier = productId ?? "S-128",
             DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
             DatasetIdentifier = datasetId,
-            Features = features.ToImmutable(),
-            InformationTypes = infoTypes.ToImmutable(),
+            Features = features,
+            InformationTypes = infoTypes,
         };
     }
 
     private static bool HasGeometry(IEnumerable<S128Feature> features) =>
-        features.Any(f => !f.ExteriorRing.IsDefaultOrEmpty
-            || !f.Points.IsDefaultOrEmpty
-            || (!f.Curves.IsDefaultOrEmpty && f.Curves.Length > 0));
+        features.Any(f => f.ExteriorRing.Count > 0
+            || f.Points.Count > 0
+            || f.Curves.Count > 0);
 
     /// <summary>
     /// Returns all member/imember candidate elements found beneath the dataset
@@ -229,13 +230,13 @@ internal static class S128DatasetReader
         ?? element.Attribute(GmlNamespaces.Gml + "gmlId")?.Value
         ?? "";
 
-    private static (S100GeometryType, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>, ImmutableArray<(double, double)>, ImmutableArray<ImmutableArray<(double, double)>>)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>)
         ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        var points = ImmutableArray<(double, double)>.Empty;
-        var curves = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
-        var exteriorRing = ImmutableArray<(double, double)>.Empty;
-        var interiorRings = ImmutableArray<ImmutableArray<(double, double)>>.Empty;
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -260,7 +261,7 @@ internal static class S128DatasetReader
         {
             geometryType = S100GeometryType.Curve;
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
-            if (coords.Length > 0)
+            if (coords.Count > 0)
                 curves = [coords];
         }
 
@@ -279,11 +280,11 @@ internal static class S128DatasetReader
         return (geometryType, points, curves, exteriorRing, interiorRings);
     }    // ── Attributes & references ─────────────────────────────────────────
 
-    private static (ImmutableDictionary<string, string>, ImmutableArray<S128ComplexAttribute>)
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S128ComplexAttribute>)
         ParseAttributes(XElement element, XNamespace s100Ns)
     {
-        var simple = ImmutableDictionary.CreateBuilder<string, string>();
-        var complex = ImmutableArray.CreateBuilder<S128ComplexAttribute>();
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S128ComplexAttribute>();
 
         foreach (var child in element.Elements())
         {
@@ -312,13 +313,13 @@ internal static class S128DatasetReader
             }
         }
 
-        return (simple.ToImmutable(), complex.ToImmutable());
+        return (simple, complex);
     }
 
     private static S128ComplexAttribute? ParseComplex(XElement element)
     {
-        var subAttrs = ImmutableDictionary.CreateBuilder<string, string>();
-        var nested = ImmutableArray.CreateBuilder<S128ComplexAttribute>();
+        var subAttrs = new Dictionary<string, string>();
+        var nested = new List<S128ComplexAttribute>();
 
         foreach (var sub in element.Elements())
         {
@@ -342,8 +343,8 @@ internal static class S128DatasetReader
         return new S128ComplexAttribute
         {
             Code = element.Name.LocalName,
-            SubAttributes = subAttrs.ToImmutable(),
-            NestedAttributes = nested.ToImmutable(),
+            SubAttributes = subAttrs,
+            NestedAttributes = nested,
         };
     }
 
@@ -356,9 +357,9 @@ internal static class S128DatasetReader
         return hasHref;
     }
 
-    private static ImmutableArray<S128XlinkReference> ParseReferences(XElement element)
+    private static IReadOnlyList<S128XlinkReference> ParseReferences(XElement element)
     {
-        var refs = ImmutableArray.CreateBuilder<S128XlinkReference>();
+        var refs = new List<S128XlinkReference>();
         foreach (var child in element.Elements())
         {
             var href = child.Attribute(XlinkNs + "href")?.Value
@@ -372,7 +373,7 @@ internal static class S128DatasetReader
 
             refs.Add(new S128XlinkReference(child.Name.LocalName, href, arcrole, target));
         }
-        return refs.ToImmutable();
+        return refs;
     }
 
     // ── Envelope / axis-swap heuristic ──────────────────────────────────
@@ -425,7 +426,7 @@ internal static class S128DatasetReader
         return asIs * 4 < total && swapped * 4 > total * 3;
     }
 
-    private static IEnumerable<(double Lat, double Lon)> EnumerateCoords(S128Feature f)
+    private static IEnumerable<GeoPosition> EnumerateCoords(S128Feature f)
     {
         foreach (var p in f.Points) yield return p;
         foreach (var c in f.Curves) foreach (var p in c) yield return p;
@@ -447,21 +448,21 @@ internal static class S128DatasetReader
         References = f.References,
     };
 
-    private static ImmutableArray<(double, double)> SwapMany(ImmutableArray<(double, double)> src)
+    private static IReadOnlyList<GeoPosition> SwapMany(IReadOnlyList<GeoPosition> src)
     {
-        if (src.IsDefaultOrEmpty) return src;
-        var b = ImmutableArray.CreateBuilder<(double, double)>(src.Length);
-        foreach (var (a, c) in src) b.Add((c, a));
-        return b.ToImmutable();
+        if (src.Count == 0) return src;
+        var b = new List<GeoPosition>(src.Count);
+        foreach (var (a, c) in src) b.Add(new GeoPosition(c, a));
+        return b;
     }
 
-    private static ImmutableArray<ImmutableArray<(double, double)>> SwapRings(
-        ImmutableArray<ImmutableArray<(double, double)>> src)
+    private static IReadOnlyList<IReadOnlyList<GeoPosition>> SwapRings(
+        IReadOnlyList<IReadOnlyList<GeoPosition>> src)
     {
-        if (src.IsDefaultOrEmpty) return src;
-        var b = ImmutableArray.CreateBuilder<ImmutableArray<(double, double)>>(src.Length);
+        if (src.Count == 0) return src;
+        var b = new List<IReadOnlyList<GeoPosition>>(src.Count);
         foreach (var ring in src) b.Add(SwapMany(ring));
-        return b.ToImmutable();
+        return b;
     }
 
     // ── S100 namespace detection ────────────────────────────────────────

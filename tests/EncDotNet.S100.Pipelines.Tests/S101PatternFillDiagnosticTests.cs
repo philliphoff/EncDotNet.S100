@@ -482,7 +482,7 @@ public class S101PatternFillDiagnosticTests
             .Where(g => g.Count() > 1)
             .Select(g => $"  RecordId {g.Key}: {g.Count()} FRID records")
             .ToList();
-        rawLines.Add($"\n=== Raw doc.Features count: {doc.Features.Length} ===");
+        rawLines.Add($"\n=== Raw doc.Features count: {doc.Features.Count} ===");
         rawLines.Add($"=== Unique RecordIds: {docFeatureIds.Distinct().Count()} ===");
         rawLines.Add($"=== Duplicate RecordIds: {docDupIds.Count} ===");
         rawLines.AddRange(docDupIds);

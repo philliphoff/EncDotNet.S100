@@ -105,14 +105,14 @@ scalar lat/lon fields.
 ```csharp
 public interface IDatasetCatalog
 {
-    ImmutableArray<LoadedDataset> Datasets { get; }
+    IReadOnlyList<LoadedDataset> Datasets { get; }
     event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
 }
 ```
 
 **Why a property, not a method?** "What is loaded right now" reads more
 naturally as state than as an operation. The catalog implementation
-publishes a fresh `ImmutableArray<LoadedDataset>` on every change.
+publishes a fresh `IReadOnlyList<LoadedDataset>` on every change.
 Consumers capture the reference once and use it for the duration of an
 operation without taking any lock.
 
@@ -348,9 +348,11 @@ var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
     new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
     Spec: new SpecRef("S-101", default),
     FeatureType: "LIGHTS",
-    Attributes: ImmutableArray.Create(
+    Attributes:
+    [
         new AttributePredicate("categoryOfLight", AttributeOperator.Eq, "8"),
-        new AttributePredicate("objectName", AttributeOperator.Exists, null))));
+        new AttributePredicate("objectName", AttributeOperator.Exists, null),
+    ]));
 
 // Set Precise for true full-geometry intersection instead of the default
 // bounding-box test: point-in-polygon containment for areas (interior-ring
@@ -358,9 +360,11 @@ var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
 // this route leg actually cross?". A leg endpoint inside an area, or a leg
 // that crosses an area boundary or a curve, counts.
 var crossed = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
-    new GeoQuery.Polyline(new GeoPolyline(ImmutableArray.Create(
+    new GeoQuery.Polyline(new GeoPolyline(
+    [
         new GeoPoint(47.60, -122.40),
-        new GeoPoint(47.62, -122.30)))),
+        new GeoPoint(47.62, -122.30),
+    ])),
     Precise: true));
 
 // What kinds of features, and how many, are in a cell? count_features
@@ -410,7 +414,7 @@ if (buoy.TryGetValue(out var typeInfo))
     foreach (var attr in typeInfo.FeatureTypes[0].Attributes)
     {
         var card = attr.Mandatory ? "required" : "optional";
-        Console.WriteLine($"{attr.Code} ({attr.ValueType}, {card}): {attr.ListedValues.Length} listed values");
+        Console.WriteLine($"{attr.Code} ({attr.ValueType}, {card}): {attr.ListedValues.Count} listed values");
     }
 }
 
@@ -419,10 +423,12 @@ if (buoy.TryGetValue(out var typeInfo))
 // current speed along this transit". Per-vertex misses (OutOfBounds /
 // NoDataAtPoint) surface as null entries rather than aborting the
 // whole call, so a partial route still returns usable data.
-var route = new GeoPolyline(ImmutableArray.Create(
+var route = new GeoPolyline(
+[
     new GeoPoint(47.60, -122.35),
     new GeoPoint(47.62, -122.33),
-    new GeoPoint(47.64, -122.31)));
+    new GeoPoint(47.64, -122.31),
+]);
 var depths = await sampleAlong.InvokeAsync(new SampleCoverageAlongRequest(
     new SpecRef("S-102", new SpecVersion(2, 1, 0)),
     route));

@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -58,12 +57,12 @@ public sealed class S129UnderKeelClearancePlan
     public S129UkcPlanArea? PlanArea { get; init; }
 
     /// <summary>Non-navigable surface features.</summary>
-    public ImmutableArray<S129NonNavigableArea> NonNavigableAreas { get; init; } =
-        ImmutableArray<S129NonNavigableArea>.Empty;
+    public IReadOnlyList<S129NonNavigableArea> NonNavigableAreas { get; init; } =
+        [];
 
     /// <summary>Almost-non-navigable surface features.</summary>
-    public ImmutableArray<S129AlmostNonNavigableArea> AlmostNonNavigableAreas { get; init; } =
-        ImmutableArray<S129AlmostNonNavigableArea>.Empty;
+    public IReadOnlyList<S129AlmostNonNavigableArea> AlmostNonNavigableAreas { get; init; } =
+        [];
 
     /// <summary>
     /// Control points carrying the per-waypoint UKC time-step measurements,
@@ -71,8 +70,8 @@ public sealed class S129UnderKeelClearancePlan
     /// points with no expected-passing-time are sorted last, in their
     /// source-document order).
     /// </summary>
-    public ImmutableArray<S129ControlPoint> ControlPoints { get; init; } =
-        ImmutableArray<S129ControlPoint>.Empty;
+    public IReadOnlyList<S129ControlPoint> ControlPoints { get; init; } =
+        [];
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S129Dataset Source { get; init; }
@@ -94,16 +93,16 @@ public sealed class S129UnderKeelClearancePlan
     {
         ArgumentNullException.ThrowIfNull(dataset);
 
-        if (dataset.Features.IsDefaultOrEmpty)
+        if (dataset.Features.Count == 0)
             throw new InvalidOperationException("Dataset contains no features.");
 
         var ctx = new ProjectionContext(BuildXlinkResolver(dataset));
 
         S129UkcPlanMetadata? plan = null;
         S129UkcPlanArea? planArea = null;
-        var nonNav = ImmutableArray.CreateBuilder<S129NonNavigableArea>();
-        var almostNonNav = ImmutableArray.CreateBuilder<S129AlmostNonNavigableArea>();
-        var controlPoints = ImmutableArray.CreateBuilder<S129ControlPoint>();
+        var nonNav = new List<S129NonNavigableArea>();
+        var almostNonNav = new List<S129AlmostNonNavigableArea>();
+        var controlPoints = new List<S129ControlPoint>();
 
         foreach (var f in dataset.Features)
         {
@@ -164,24 +163,19 @@ public sealed class S129UnderKeelClearancePlan
         // Sort control points by expected passing time (stable). CPs with
         // no time stay in source-document order at the tail.
         var orderedControlPoints = controlPoints
-            .ToImmutable()
-            .Sort(static (a, b) =>
-            {
-                if (a.ExpectedPassingTime is null && b.ExpectedPassingTime is null) return 0;
-                if (a.ExpectedPassingTime is null) return 1;
-                if (b.ExpectedPassingTime is null) return -1;
-                return a.ExpectedPassingTime.Value.CompareTo(b.ExpectedPassingTime.Value);
-            });
+            .OrderBy(static cp => cp.ExpectedPassingTime is null)
+            .ThenBy(static cp => cp.ExpectedPassingTime)
+            .ToArray();
 
-        diagnostics = ctx.ToImmutableDiagnostics();
+        diagnostics = ctx.ToDiagnosticsSnapshot();
         return new S129UnderKeelClearancePlan
         {
             DatasetIdentifier = dataset.DatasetIdentifier,
             ProductIdentifier = dataset.ProductIdentifier,
             Plan = plan,
             PlanArea = planArea,
-            NonNavigableAreas = nonNav.ToImmutable(),
-            AlmostNonNavigableAreas = almostNonNav.ToImmutable(),
+            NonNavigableAreas = nonNav,
+            AlmostNonNavigableAreas = almostNonNav,
             ControlPoints = orderedControlPoints,
             Source = dataset,
         };
@@ -298,7 +292,7 @@ public sealed class S129UnderKeelClearancePlan
         var timeRange = ExtractTimeRange(f, "fixedTimeRange");
 
         GeoPosition? position = null;
-        if (!f.Points.IsDefaultOrEmpty)
+        if (f.Points.Count > 0)
         {
             var (lat, lon) = f.Points[0];
             position = new GeoPosition(lat, lon);
@@ -359,7 +353,7 @@ public sealed class S129UnderKeelClearancePlan
         return new S129TimeRange { Start = start, End = end };
     }
 
-    private static (S129GeometryKind, ImmutableArray<GeoPosition>, ImmutableArray<ImmutableArray<GeoPosition>>)
+    private static (S129GeometryKind, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>)
         ProjectGeometry(S129Feature f, ProjectionContext ctx)
     {
         switch (f.GeometryType)
@@ -367,21 +361,21 @@ public sealed class S129UnderKeelClearancePlan
             case S100GeometryType.Point:
                 return (
                     S129GeometryKind.Point,
-                    f.Points.IsDefaultOrEmpty
-                        ? ImmutableArray<GeoPosition>.Empty
-                        : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray(),
-                    ImmutableArray<ImmutableArray<GeoPosition>>.Empty);
+                    f.Points.Count == 0
+                        ? []
+                        : f.Points.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray(),
+                    []);
 
             case S100GeometryType.Surface:
-                var ext = f.ExteriorRing.IsDefaultOrEmpty
-                    ? ImmutableArray<GeoPosition>.Empty
-                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray();
-                var holes = f.InteriorRings.IsDefaultOrEmpty
-                    ? ImmutableArray<ImmutableArray<GeoPosition>>.Empty
+                IReadOnlyList<GeoPosition> ext = f.ExteriorRing.Count == 0
+                    ? []
+                    : f.ExteriorRing.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray();
+                IReadOnlyList<IReadOnlyList<GeoPosition>> holes = f.InteriorRings.Count == 0
+                    ? []
                     : f.InteriorRings
-                        .Select(r => r.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToImmutableArray())
-                        .ToImmutableArray();
-                if (ext.IsEmpty)
+                        .Select(r => r.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray())
+                        .ToArray();
+                if (ext.Count == 0)
                     ctx.Warn(
                         "Surface feature has no exterior-ring coordinates.",
                         code: "feature.geometry.missing",
@@ -391,8 +385,8 @@ public sealed class S129UnderKeelClearancePlan
             default:
                 return (
                     S129GeometryKind.None,
-                    ImmutableArray<GeoPosition>.Empty,
-                    ImmutableArray<ImmutableArray<GeoPosition>>.Empty);
+                    [],
+                    []);
         }
     }
 }

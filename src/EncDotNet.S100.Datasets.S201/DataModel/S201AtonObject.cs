@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S201.DataModel;
@@ -47,7 +47,7 @@ public abstract class S201AtonObject
     /// geometry is flattened in source order — full structure is
     /// available on <see cref="Source"/>.
     /// </summary>
-    public ImmutableArray<GeoPosition> Coordinates { get; init; } = ImmutableArray<GeoPosition>.Empty;
+    public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
     /// <summary>The unique AtoN identifier (FC: <c>iDCode</c>), when supplied.</summary>
     public string? IdCode { get; init; }
@@ -56,8 +56,8 @@ public abstract class S201AtonObject
     public string? Information { get; init; }
 
     /// <summary>Typed feature names (FC: <c>featureName</c>, multiplicity 0..*).</summary>
-    public ImmutableArray<S201FeatureNameRecord> FeatureNames { get; init; } =
-        ImmutableArray<S201FeatureNameRecord>.Empty;
+    public IReadOnlyList<S201FeatureNameRecord> FeatureNames { get; init; } =
+        [];
 
     /// <summary>Minimum display scale (FC: <c>scaleMinimum</c>), when supplied.</summary>
     public int? ScaleMinimum { get; init; }
@@ -90,7 +90,7 @@ public abstract class S201AtonObject
     public S201DateRange? PeriodicDateRange { get; init; }
 
     /// <summary>Seasonal action codes (FC: <c>SeasonalActionRequired</c>, multiplicity 0..*).</summary>
-    public ImmutableArray<string> SeasonalActionRequired { get; init; } = ImmutableArray<string>.Empty;
+    public IReadOnlyList<string> SeasonalActionRequired { get; init; } = [];
 
     /// <summary>
     /// AtoN status information resolved through the
@@ -98,20 +98,20 @@ public abstract class S201AtonObject
     /// Annex C — <c>Atonstatus</c> association). Multiple bindings
     /// project as a timeline of status records.
     /// </summary>
-    public ImmutableArray<S201AtonStatusInformation> StatusInformation { get; init; } =
-        ImmutableArray<S201AtonStatusInformation>.Empty;
+    public IReadOnlyList<S201AtonStatusInformation> StatusInformation { get; init; } =
+        [];
 
     /// <summary>Aggregations this AtoN participates in (back-resolved).</summary>
-    public ImmutableArray<S201AtonAggregation> Aggregations { get; internal set; } =
-        ImmutableArray<S201AtonAggregation>.Empty;
+    public IReadOnlyList<S201AtonAggregation> Aggregations { get; internal set; } =
+        [];
 
     /// <summary>Associations this AtoN participates in (back-resolved).</summary>
-    public ImmutableArray<S201AtonAssociation> Associations { get; internal set; } =
-        ImmutableArray<S201AtonAssociation>.Empty;
+    public IReadOnlyList<S201AtonAssociation> Associations { get; internal set; } =
+        [];
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
-    public ImmutableDictionary<string, string> ExtraAttributes { get; init; } =
-        ImmutableDictionary<string, string>.Empty;
+    public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
+        ReadOnlyDictionary<string, string>.Empty;
 }
 
 /// <summary>
@@ -141,16 +141,16 @@ public class S201StructureObject : S201AtonObject
     public string? ContactAddress { get; init; }
 
     /// <summary>Equipment mounted on this structure (resolved from <c>StructureEquipment</c> xlinks).</summary>
-    public ImmutableArray<S201Equipment> MountedEquipment { get; internal set; } =
-        ImmutableArray<S201Equipment>.Empty;
+    public IReadOnlyList<S201Equipment> MountedEquipment { get; internal set; } =
+        [];
 
     /// <summary>Positioning information records resolved through the <c>AtonPositioningInformationAssociation</c> binding.</summary>
-    public ImmutableArray<S201PositioningInformationRecord> PositioningInformation { get; init; } =
-        ImmutableArray<S201PositioningInformationRecord>.Empty;
+    public IReadOnlyList<S201PositioningInformationRecord> PositioningInformation { get; init; } =
+        [];
 
     /// <summary>Fixing method records resolved through the <c>AtonFixingMethodAssociation</c> binding.</summary>
-    public ImmutableArray<S201AtoNFixingMethodRecord> FixingMethods { get; init; } =
-        ImmutableArray<S201AtoNFixingMethodRecord>.Empty;
+    public IReadOnlyList<S201AtoNFixingMethodRecord> FixingMethods { get; init; } =
+        [];
 }
 
 /// <summary>
@@ -196,7 +196,7 @@ public sealed class S201Light : S201Equipment
     public double? Height { get; init; }
 
     /// <summary>Status codes (FC: <c>status</c>, multiplicity 0..*).</summary>
-    public ImmutableArray<int> Status { get; init; } = ImmutableArray<int>.Empty;
+    public IReadOnlyList<int> Status { get; init; } = [];
 
     /// <summary>Vertical datum code (FC: <c>verticalDatum</c>, codelist), when supplied.</summary>
     public int? VerticalDatum { get; init; }
@@ -236,7 +236,7 @@ public sealed class S201ElectronicAtoN : S201AtonObject
     public string? MmsiCode { get; init; }
 
     /// <summary>AIS operational status codes (FC: <c>status</c>, multiplicity 0..*).</summary>
-    public ImmutableArray<int> Status { get; init; } = ImmutableArray<int>.Empty;
+    public IReadOnlyList<int> Status { get; init; } = [];
 
     /// <summary>
     /// The host structure this AIS AtoN is bound to, when supplied by

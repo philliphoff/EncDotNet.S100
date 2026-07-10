@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
@@ -20,5 +21,5 @@ public interface IFeatureAnchorProvider
     /// geometry, or <see langword="null"/> if the feature has no point anchor.
     /// </summary>
     /// <param name="featureRef">Feature reference identifier.</param>
-    (double Latitude, double Longitude)? GetAnchor(string featureRef);
+    GeoPosition? GetAnchor(string featureRef);
 }

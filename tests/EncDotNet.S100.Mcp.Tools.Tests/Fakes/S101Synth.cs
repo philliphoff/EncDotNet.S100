@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S101;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -8,7 +8,7 @@ internal static class S101Synth
     /// <summary>Builds a minimal in-memory S-101 dataset for tests.</summary>
     public static S101Dataset Dataset(string name = "test-enc")
     {
-        return Dataset(name, features: ImmutableArray<S101FeatureRecord>.Empty);
+        return Dataset(name, features: []);
     }
 
     /// <summary>
@@ -17,15 +17,15 @@ internal static class S101Synth
     /// </summary>
     public static S101Dataset Dataset(
         string name,
-        ImmutableArray<S101FeatureRecord> features,
-        ImmutableDictionary<ushort, string>? featureTypes = null,
-        ImmutableDictionary<ushort, string>? attributeTypes = null,
-        ImmutableDictionary<uint, S101PointRecord>? points = null,
-        ImmutableDictionary<uint, S101MultiPointRecord>? multiPoints = null,
-        ImmutableDictionary<uint, S101InformationRecord>? informationTypes = null,
-        ImmutableDictionary<ushort, string>? informationTypeCatalogue = null,
-        ImmutableDictionary<ushort, string>? informationAssociationCatalogue = null,
-        ImmutableDictionary<ushort, string>? roleCatalogue = null)
+        IReadOnlyList<S101FeatureRecord> features,
+        IReadOnlyDictionary<ushort, string>? featureTypes = null,
+        IReadOnlyDictionary<ushort, string>? attributeTypes = null,
+        IReadOnlyDictionary<uint, S101PointRecord>? points = null,
+        IReadOnlyDictionary<uint, S101MultiPointRecord>? multiPoints = null,
+        IReadOnlyDictionary<uint, S101InformationRecord>? informationTypes = null,
+        IReadOnlyDictionary<ushort, string>? informationTypeCatalogue = null,
+        IReadOnlyDictionary<ushort, string>? informationAssociationCatalogue = null,
+        IReadOnlyDictionary<ushort, string>? roleCatalogue = null)
     {
         var document = new S101Document
         {
@@ -39,19 +39,19 @@ internal static class S101Synth
                 CoordinateMultiplicationFactorY = 10_000_000,
                 CoordinateMultiplicationFactorZ = 10,
             },
-            FeatureTypeCatalogue = featureTypes ?? ImmutableDictionary<ushort, string>.Empty,
-            AttributeTypeCatalogue = attributeTypes ?? ImmutableDictionary<ushort, string>.Empty,
-            Points = points ?? ImmutableDictionary<uint, S101PointRecord>.Empty,
-            MultiPoints = multiPoints ?? ImmutableDictionary<uint, S101MultiPointRecord>.Empty,
-            CurveSegments = ImmutableDictionary<uint, S101CurveSegmentRecord>.Empty,
-            CompositeCurves = ImmutableDictionary<uint, S101CompositeCurveRecord>.Empty,
-            Surfaces = ImmutableDictionary<uint, S101SurfaceRecord>.Empty,
+            FeatureTypeCatalogue = featureTypes ?? ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = attributeTypes ?? ReadOnlyDictionary<ushort, string>.Empty,
+            Points = points ?? ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            MultiPoints = multiPoints ?? ReadOnlyDictionary<uint, S101MultiPointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
             Features = features,
-            InformationTypes = informationTypes ?? ImmutableDictionary<uint, S101InformationRecord>.Empty,
-            InformationTypeCatalogue = informationTypeCatalogue ?? ImmutableDictionary<ushort, string>.Empty,
-            InformationAssociationCatalogue = informationAssociationCatalogue ?? ImmutableDictionary<ushort, string>.Empty,
-            FeatureAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty,
-            RoleCatalogue = roleCatalogue ?? ImmutableDictionary<ushort, string>.Empty,
+            InformationTypes = informationTypes ?? ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = informationTypeCatalogue ?? ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = informationAssociationCatalogue ?? ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = roleCatalogue ?? ReadOnlyDictionary<ushort, string>.Empty,
         };
         return S101Dataset.FromDocument(document);
     }
@@ -68,10 +68,10 @@ internal static class S101Synth
     public static S101Dataset DatasetWithPointFeatures(
         string name,
         IEnumerable<(uint Rcid, ushort FeatureTypeCode, double Lat, double Lon)> features,
-        ImmutableDictionary<ushort, string>? featureTypes = null)
+        IReadOnlyDictionary<ushort, string>? featureTypes = null)
     {
-        var featureRecords = ImmutableArray.CreateBuilder<S101FeatureRecord>();
-        var pointRecords = ImmutableDictionary.CreateBuilder<uint, S101PointRecord>();
+        var featureRecords = new List<S101FeatureRecord>();
+        var pointRecords = new Dictionary<uint, S101PointRecord>();
         foreach (var (rcid, code, lat, lon) in features)
         {
             featureRecords.Add(Feature(rcid, code, spatialRcnm: 110));
@@ -83,7 +83,7 @@ internal static class S101Synth
             };
         }
 
-        return Dataset(name, featureRecords.ToImmutable(), featureTypes, points: pointRecords.ToImmutable());
+        return Dataset(name, featureRecords.ToArray(), featureTypes, points: pointRecords.ToDictionary());
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ internal static class S101Synth
                 Y: (int)Math.Round(s.Lat * CoordinateMultiplicationFactor),
                 X: (int)Math.Round(s.Lon * CoordinateMultiplicationFactor),
                 Z: (int)Math.Round(s.Depth * cmfz)))
-            .ToImmutableArray();
+            .ToArray();
 
         var multiPoint = new S101MultiPointRecord
         {
@@ -121,21 +121,19 @@ internal static class S101Synth
             ProducingAgency = 540,
             FeatureIdentificationNumber = featureRcid,
             FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S101Attribute>.Empty,
-            SpatialAssociations = ImmutableArray.Create(
-                new S101SpatialAssociation(115, featureRcid, 1)),
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            Attributes = [],
+            SpatialAssociations = [
+                new S101SpatialAssociation(115, featureRcid, 1)],
+            FeatureAssociations = [],
+            InformationAssociations = [],
         };
 
-        var featureTypes = ImmutableDictionary<ushort, string>.Empty
-            .Add(featureTypeCode, "Sounding");
-        var multiPoints = ImmutableDictionary<uint, S101MultiPointRecord>.Empty
-            .Add(featureRcid, multiPoint);
+        var featureTypes = new Dictionary<ushort, string> { [featureTypeCode] = "Sounding" };
+        var multiPoints = new Dictionary<uint, S101MultiPointRecord> { [featureRcid] = multiPoint };
 
         return Dataset(
             name,
-            ImmutableArray.Create(feature),
+            [feature],
             featureTypes,
             multiPoints: multiPoints);
     }
@@ -164,7 +162,7 @@ internal static class S101Synth
         {
             RecordId = infoRcid,
             InformationTypeCode = infoTypeCode,
-            Attributes = ImmutableArray.Create(new S101Attribute(textAttributeCode, 1, text)),
+            Attributes = [new S101Attribute(textAttributeCode, 1, text)],
         };
 
         var feature = new S101FeatureRecord
@@ -174,37 +172,30 @@ internal static class S101Synth
             ProducingAgency = 540,
             FeatureIdentificationNumber = featureRcid,
             FeatureIdentificationSubdivision = 0,
-            Attributes = ImmutableArray<S101Attribute>.Empty,
-            SpatialAssociations = ImmutableArray.Create(new S101SpatialAssociation(110, featureRcid, 1)),
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray.Create(
-                new S101InformationAssociation(infoAssociationCode, infoRcid, roleCode)),
+            Attributes = [],
+            SpatialAssociations = [new S101SpatialAssociation(110, featureRcid, 1)],
+            FeatureAssociations = [],
+            InformationAssociations = [
+                new S101InformationAssociation(infoAssociationCode, infoRcid, roleCode)],
         };
 
-        var points = ImmutableDictionary<uint, S101PointRecord>.Empty
-            .Add(featureRcid, new S101PointRecord
+        var points = new Dictionary<uint, S101PointRecord> { [featureRcid] = new S101PointRecord
             {
                 RecordId = featureRcid,
                 Y = (int)Math.Round(47.6 * CoordinateMultiplicationFactor),
                 X = (int)Math.Round(-122.3 * CoordinateMultiplicationFactor),
-            });
+            } };
 
-        var featureTypes = ImmutableDictionary<ushort, string>.Empty
-            .Add(featureTypeCode, "CautionArea");
-        var attributeTypes = ImmutableDictionary<ushort, string>.Empty
-            .Add(textAttributeCode, "information");
-        var informationTypes = ImmutableDictionary<uint, S101InformationRecord>.Empty
-            .Add(infoRcid, infoRecord);
-        var informationTypeCatalogue = ImmutableDictionary<ushort, string>.Empty
-            .Add(infoTypeCode, "NauticalInformation");
-        var informationAssociationCatalogue = ImmutableDictionary<ushort, string>.Empty
-            .Add(infoAssociationCode, "AdditionalInformation");
-        var roleCatalogue = ImmutableDictionary<ushort, string>.Empty
-            .Add(roleCode, "the additional information");
+        var featureTypes = new Dictionary<ushort, string> { [featureTypeCode] = "CautionArea" };
+        var attributeTypes = new Dictionary<ushort, string> { [textAttributeCode] = "information" };
+        var informationTypes = new Dictionary<uint, S101InformationRecord> { [infoRcid] = infoRecord };
+        var informationTypeCatalogue = new Dictionary<ushort, string> { [infoTypeCode] = "NauticalInformation" };
+        var informationAssociationCatalogue = new Dictionary<ushort, string> { [infoAssociationCode] = "AdditionalInformation" };
+        var roleCatalogue = new Dictionary<ushort, string> { [roleCode] = "the additional information" };
 
         return Dataset(
             name,
-            ImmutableArray.Create(feature),
+            [feature],
             featureTypes,
             attributeTypes,
             points: points,
@@ -230,7 +221,7 @@ internal static class S101Synth
         double lat = 50.0,
         double lon = -1.0)
     {
-        var attrList = attributes.ToImmutableArray();
+        var attrList = attributes.ToArray();
 
         var feature = new S101FeatureRecord
         {
@@ -239,31 +230,29 @@ internal static class S101Synth
             ProducingAgency = 540,
             FeatureIdentificationNumber = featureRcid,
             FeatureIdentificationSubdivision = 0,
-            Attributes = attrList.Select(a => new S101Attribute(a.Code, 1, a.Value)).ToImmutableArray(),
-            SpatialAssociations = ImmutableArray.Create(new S101SpatialAssociation(110, featureRcid, 1)),
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            Attributes = attrList.Select(a => new S101Attribute(a.Code, 1, a.Value)).ToArray(),
+            SpatialAssociations = [new S101SpatialAssociation(110, featureRcid, 1)],
+            FeatureAssociations = [],
+            InformationAssociations = [],
         };
 
-        var points = ImmutableDictionary<uint, S101PointRecord>.Empty
-            .Add(featureRcid, new S101PointRecord
+        var points = new Dictionary<uint, S101PointRecord> { [featureRcid] = new S101PointRecord
             {
                 RecordId = featureRcid,
                 Y = (int)Math.Round(lat * CoordinateMultiplicationFactor),
                 X = (int)Math.Round(lon * CoordinateMultiplicationFactor),
-            });
+            } };
 
-        var featureTypes = ImmutableDictionary<ushort, string>.Empty
-            .Add(featureTypeCode, featureTypeName);
-        var attributeTypes = ImmutableDictionary<ushort, string>.Empty;
+        var featureTypes = new Dictionary<ushort, string> { [featureTypeCode] = featureTypeName };
+        var attributeTypes = new Dictionary<ushort, string>();
         foreach (var a in attrList)
         {
-            attributeTypes = attributeTypes.SetItem(a.Code, a.Acronym);
+            attributeTypes[a.Code] = a.Acronym;
         }
 
         return Dataset(
             name,
-            ImmutableArray.Create(feature),
+            [feature],
             featureTypes,
             attributeTypes,
             points: points);
@@ -279,10 +268,10 @@ internal static class S101Synth
         IEnumerable<(ushort Code, string Value)>? attributes = null,
         byte spatialRcnm = 110)
     {
-        var attrs = attributes is null
-            ? ImmutableArray<S101Attribute>.Empty
-            : attributes.Select(a => new S101Attribute(a.Code, 1, a.Value)).ToImmutableArray();
-        var spatial = ImmutableArray.Create(new S101SpatialAssociation(spatialRcnm, rcid, 1));
+        IReadOnlyList<S101Attribute> attrs = attributes is null
+            ? []
+            : attributes.Select(a => new S101Attribute(a.Code, 1, a.Value)).ToArray();
+        IReadOnlyList<S101SpatialAssociation> spatial = [new S101SpatialAssociation(spatialRcnm, rcid, 1)];
         return new S101FeatureRecord
         {
             RecordId = rcid,
@@ -292,8 +281,8 @@ internal static class S101Synth
             FeatureIdentificationSubdivision = 0,
             Attributes = attrs,
             SpatialAssociations = spatial,
-            FeatureAssociations = ImmutableArray<S101FeatureAssociation>.Empty,
-            InformationAssociations = ImmutableArray<S101InformationAssociation>.Empty,
+            FeatureAssociations = [],
+            InformationAssociations = [],
         };
     }
 }

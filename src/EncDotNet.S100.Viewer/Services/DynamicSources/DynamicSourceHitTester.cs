@@ -94,7 +94,7 @@ internal static class DynamicSourceHitTester
                 // 0 inside the polygon so closer-to-antenna hits
                 // still order ahead of edge hits.
                 var insideHull = feature.VesselGeometry is { } geom
-                    && IsInsideVesselHull(mapPoint, lat, lon, geom, feature.Motion?.HeadingDeg ?? 0.0);
+                    && IsInsideVesselHull(mapPoint, lat, lon, geom, feature.Motion?.Heading?.TotalDegrees ?? 0.0);
 
                 if (insideHull)
                 {
