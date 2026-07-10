@@ -51,11 +51,17 @@ public class DatasetPipelineFactorySourceSniffingTests
             new DisplayPlaneAuthorityProvider());
     }
 
+    private static string CreateScratchDirectory()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "s411-sniff-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
     [Fact]
     public void CreateProcessor_SniffsJcommIceGml_WhenCatalogueDeclaresNoProductIdentifier()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "s411-sniff-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
+        var dir = CreateScratchDirectory();
         try
         {
             File.WriteAllText(Path.Combine(dir, "ice.gml"), JcommIceGml);
@@ -77,8 +83,7 @@ public class DatasetPipelineFactorySourceSniffingTests
     [Fact]
     public void CreateProcessor_PrefersDeclaredSpec_OverContentSniffing()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "s411-sniff-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
+        var dir = CreateScratchDirectory();
         try
         {
             File.WriteAllText(Path.Combine(dir, "ice.gml"), JcommIceGml);
@@ -89,6 +94,46 @@ public class DatasetPipelineFactorySourceSniffingTests
             var processor = factory.CreateProcessor(source, "ice.gml", declaredProductSpec: "S-411");
 
             Assert.IsType<S411DatasetProcessor>(processor);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DetectProductSpecFromSourceAsync_SniffsJcommIceGml()
+    {
+        var dir = CreateScratchDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ice.gml"), JcommIceGml);
+            using var source = FileSystemAssetSource.Create(dir);
+
+            var spec = await DatasetPipelineFactory
+                .DetectProductSpecFromSourceAsync(source, "ice.gml");
+
+            Assert.Equal("S-411", spec);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DetectProductSpecFromSourceAsync_ReturnsNull_ForNonGmlExtension()
+    {
+        var dir = CreateScratchDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ice.txt"), JcommIceGml);
+            using var source = FileSystemAssetSource.Create(dir);
+
+            var spec = await DatasetPipelineFactory
+                .DetectProductSpecFromSourceAsync(source, "ice.txt");
+
+            Assert.Null(spec);
         }
         finally
         {

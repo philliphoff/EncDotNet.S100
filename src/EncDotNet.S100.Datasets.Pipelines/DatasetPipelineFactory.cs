@@ -630,14 +630,41 @@ public sealed class DatasetPipelineFactory
     /// <c>name</c> (e.g. "Ice Information Product Specification (JCOMM S-411)")
     /// with no identifier or number, so the declared spec cannot be mapped and
     /// the dataset must be recognized from its GML root element / namespaces.
-    /// Only <c>.gml</c>/<c>.xml</c> datasets are sniffed; returns <c>null</c>
-    /// when the file cannot be read or is unrecognized. Returns the canonical
-    /// spec string (e.g. <c>"S-411"</c>) understood by
-    /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
+    /// This synchronous wrapper exists for synchronous processor creation; async
+    /// callers should use <see cref="DetectProductSpecFromSourceAsync"/>.
     /// </summary>
     /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
     /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
     public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath)
+    {
+        return DetectProductSpecFromSourceAsync(source, relativePath)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    /// <summary>
+    /// Asynchronously content-sniffs a GML dataset stored inside
+    /// <paramref name="source"/> to determine its S-100 product specification
+    /// when the exchange-set catalogue omits a machine-readable
+    /// <c>productIdentifier</c>. Real-world JCOMM S-411 exchange sets declare
+    /// only a human-readable product-specification <c>name</c> (e.g. "Ice
+    /// Information Product Specification (JCOMM S-411)") with no identifier or
+    /// number, so the declared spec cannot be mapped and the dataset must be
+    /// recognized from its GML root element / namespaces. Only
+    /// <c>.gml</c>/<c>.xml</c> datasets are sniffed; returns <c>null</c> when
+    /// the file cannot be read or is unrecognized. Returns the canonical spec
+    /// string (e.g. <c>"S-411"</c>) understood by
+    /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
+    /// </summary>
+    /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
+    /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
+    /// <param name="cancellationToken">Cancellation token for reading dataset bytes.</param>
+    /// <returns>The canonical product-specification string, or <c>null</c> when not recognized.</returns>
+    public static async Task<string?> DetectProductSpecFromSourceAsync(
+        IAssetSource source,
+        string relativePath,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -651,9 +678,14 @@ public sealed class DatasetPipelineFactory
 
         try
         {
-            AssetBytes bytes = source.ReadAllBytesAsync(relativePath).GetAwaiter().GetResult();
+            AssetBytes bytes = await source.ReadAllBytesAsync(relativePath, cancellationToken)
+                .ConfigureAwait(false);
             var xml = System.Text.Encoding.UTF8.GetString(bytes.Bytes.Span).TrimStart();
             return DetectGmlProductSpecFromXml(xml);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
