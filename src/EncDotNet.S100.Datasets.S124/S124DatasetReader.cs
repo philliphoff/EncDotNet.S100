@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
 using S100Diag = EncDotNet.S100.Datasets.S124.Diagnostics;
@@ -130,12 +131,12 @@ internal static class S124DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
     {
-        IReadOnlyList<(double, double)> points = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
-        IReadOnlyList<(double, double)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         // Look for geometry in the "geometry" child element or directly under the feature
@@ -178,7 +179,7 @@ internal static class S124DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var curveBuilder = new List<IReadOnlyList<(double, double)>>();
+            var curveBuilder = new List<IReadOnlyList<GeoPosition>>();
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Count > 0)
                 curveBuilder.Add(coords);

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -81,7 +82,7 @@ public sealed class S101VectorSource : IVectorSource
 
     // ── Geometry resolution ────────────────────────────────────────────
 
-    private static (GeometryType, IReadOnlyList<(double Latitude, double Longitude)>) ResolveSpatialGeometry(
+    private static (GeometryType, IReadOnlyList<GeoPosition>) ResolveSpatialGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
         if (feature.SpatialAssociations.Count == 0)
@@ -100,10 +101,10 @@ public sealed class S101VectorSource : IVectorSource
         };
     }
 
-    private static IReadOnlyList<(double, double)> ResolvePointGeometry(
+    private static IReadOnlyList<GeoPosition> ResolvePointGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
-        var results = new List<(double, double)>();
+        var results = new List<GeoPosition>();
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
         // Defensive divide-by-zero guards only; valid datasets supply COMF (typically
@@ -115,17 +116,17 @@ public sealed class S101VectorSource : IVectorSource
         {
             if (spa.RecordName == RcnmPoint && doc.Points.TryGetValue(spa.RecordId, out var pt))
             {
-                results.Add((pt.Y / cmfy, pt.X / cmfx));
+                results.Add(new GeoPosition(pt.Y / cmfy, pt.X / cmfx));
             }
         }
 
         return results;
     }
 
-    private static IReadOnlyList<(double, double)> ResolveMultiPointGeometry(
+    private static IReadOnlyList<GeoPosition> ResolveMultiPointGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
-        var results = new List<(double, double)>();
+        var results = new List<GeoPosition>();
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
         // Defensive divide-by-zero guards only; valid datasets supply COMF (typically
@@ -140,17 +141,17 @@ public sealed class S101VectorSource : IVectorSource
 
             foreach (var (y, x, _) in mp.Points)
             {
-                results.Add((y / cmfy, x / cmfx));
+                results.Add(new GeoPosition(y / cmfy, x / cmfx));
             }
         }
 
         return results;
     }
 
-    private static IReadOnlyList<(double, double)> ResolveCurveGeometry(
+    private static IReadOnlyList<GeoPosition> ResolveCurveGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
-        var coords = new List<(double, double)>();
+        var coords = new List<GeoPosition>();
 
         foreach (var spa in feature.SpatialAssociations)
         {
@@ -160,11 +161,11 @@ public sealed class S101VectorSource : IVectorSource
         return coords;
     }
 
-    private static IReadOnlyList<(double, double)> ResolveSurfaceGeometry(
+    private static IReadOnlyList<GeoPosition> ResolveSurfaceGeometry(
         S101FeatureRecord feature, S101Document doc)
     {
         // Flatten exterior ring curves into a coordinate list.
-        var coords = new List<(double, double)>();
+        var coords = new List<GeoPosition>();
 
         foreach (var spa in feature.SpatialAssociations)
         {
@@ -181,14 +182,14 @@ public sealed class S101VectorSource : IVectorSource
         return coords;
     }
 
-    private static IReadOnlyList<IReadOnlyList<(double, double)>> ResolveSurfaceInteriorRings(
+    private static IReadOnlyList<IReadOnlyList<GeoPosition>> ResolveSurfaceInteriorRings(
         S101FeatureRecord feature, S101Document doc)
     {
         // S-100 Part 10a surface topology: each RIAS association with USAG = 2
         // (interior) bounds one hole. Resolve each independently into its own
         // closed ring so renderers can subtract it from the exterior fill
         // (e.g. a sea/depth area encoded around islands cut out as holes).
-        List<IReadOnlyList<(double, double)>>? rings = null;
+        List<IReadOnlyList<GeoPosition>>? rings = null;
 
         foreach (var spa in feature.SpatialAssociations)
         {
@@ -199,7 +200,7 @@ public sealed class S101VectorSource : IVectorSource
             {
                 if (ring.Usage == UsageExterior) continue;
 
-                var ringCoords = new List<(double, double)>();
+                var ringCoords = new List<GeoPosition>();
                 ResolveCurveCoords(ring.RecordName, ring.RecordId, ring.Orientation, doc, ringCoords);
                 if (ringCoords.Count >= 3)
                 {
@@ -209,11 +210,11 @@ public sealed class S101VectorSource : IVectorSource
             }
         }
 
-        return rings ?? (IReadOnlyList<IReadOnlyList<(double, double)>>)[];
+        return rings ?? (IReadOnlyList<IReadOnlyList<GeoPosition>>)[];
     }
 
     private static void ResolveCurveCoords(
-        byte rcnm, uint rcid, byte orientation, S101Document doc, List<(double, double)> coords)
+        byte rcnm, uint rcid, byte orientation, S101Document doc, List<GeoPosition> coords)
     {
         double cmfx = doc.StructureInfo.CoordinateMultiplicationFactorX;
         double cmfy = doc.StructureInfo.CoordinateMultiplicationFactorY;
@@ -224,26 +225,26 @@ public sealed class S101VectorSource : IVectorSource
 
         if (rcnm == RcnmCurveSegment && doc.CurveSegments.TryGetValue(rcid, out var segment))
         {
-            var segCoords = new List<(double, double)>();
+            var segCoords = new List<GeoPosition>();
 
             // Start point
             foreach (var pta in segment.PointAssociations)
             {
                 if (pta.Topology == 1 && doc.Points.TryGetValue(pta.RecordId, out var startPt)) // TOPI=1 begin
-                    segCoords.Add((startPt.Y / cmfy, startPt.X / cmfx));
+                    segCoords.Add(new GeoPosition(startPt.Y / cmfy, startPt.X / cmfx));
             }
 
             // Intermediate points
             foreach (var (y, x) in segment.IntermediateCoordinates)
             {
-                segCoords.Add((y / cmfy, x / cmfx));
+                segCoords.Add(new GeoPosition(y / cmfy, x / cmfx));
             }
 
             // End point
             foreach (var pta in segment.PointAssociations)
             {
                 if (pta.Topology == 2 && doc.Points.TryGetValue(pta.RecordId, out var endPt)) // TOPI=2 end
-                    segCoords.Add((endPt.Y / cmfy, endPt.X / cmfx));
+                    segCoords.Add(new GeoPosition(endPt.Y / cmfy, endPt.X / cmfx));
             }
 
             if (orientation == OrientationReverse)
@@ -346,7 +347,7 @@ public sealed class S101VectorSource : IVectorSource
     }
 
     private static bool IntersectsExtent(
-        IReadOnlyList<(double Latitude, double Longitude)> coords,
+        IReadOnlyList<GeoPosition> coords,
         BoundingBox extent)
     {
         foreach (var (lat, lon) in coords)

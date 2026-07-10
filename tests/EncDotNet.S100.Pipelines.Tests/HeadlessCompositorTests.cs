@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System.Globalization;
 using EncDotNet.S100.Core;
@@ -254,11 +255,11 @@ public class HeadlessCompositorTests
                 Type = GeometryType.Surface,
                 Coordinates = new[]
                 {
-                    (south, west),
-                    (south, east),
-                    (north, east),
-                    (north, west),
-                    (south, west),
+                    new GeoPosition(south, west),
+                    new GeoPosition(south, east),
+                    new GeoPosition(north, east),
+                    new GeoPosition(north, west),
+                    new GeoPosition(south, west),
                 },
             };
         }

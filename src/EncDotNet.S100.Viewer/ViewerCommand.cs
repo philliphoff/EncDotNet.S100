@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.ComponentModel;
 using System.Globalization;
@@ -158,8 +159,8 @@ internal sealed class ViewerCommandSettings : CommandSettings
     public bool HasExplicitViewport => Center is not null || BoundingBox is not null;
 
     /// <summary>Parsed center as (latitude, longitude), or <c>null</c>.</summary>
-    public (double Latitude, double Longitude)? ParsedCenter =>
-        TryParseLatLon(Center, out var lat, out var lon) ? (lat, lon) : null;
+    public GeoPosition? ParsedCenter =>
+        TryParseLatLon(Center, out var lat, out var lon) ? new GeoPosition(lat, lon) : null;
 
     /// <summary>Parsed bounding box as (south, west, north, east), or <c>null</c>.</summary>
     public (double South, double West, double North, double East)? ParsedBoundingBox =>
@@ -170,8 +171,8 @@ internal sealed class ViewerCommandSettings : CommandSettings
         TryParseWindowSize(WindowSize, out var w, out var h) ? (w, h) : null;
 
     /// <summary>Parsed own-ship position as (latitude, longitude), or <c>null</c>.</summary>
-    public (double Latitude, double Longitude)? ParsedOwnShipPosition =>
-        TryParseLatLon(OwnShipPosition, out var lat, out var lon) ? (lat, lon) : null;
+    public GeoPosition? ParsedOwnShipPosition =>
+        TryParseLatLon(OwnShipPosition, out var lat, out var lon) ? new GeoPosition(lat, lon) : null;
 
     /// <summary>True when any own-ship helm option was supplied.</summary>
     public bool HasOwnShipOption =>

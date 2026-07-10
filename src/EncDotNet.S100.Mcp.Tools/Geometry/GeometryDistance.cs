@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
@@ -148,7 +149,7 @@ public static class GeometryDistance
     }
 
     private static (double Distance, double Lat, double Lon) NearestOnCurves(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves,
         GeoPoint point)
     {
         var best = double.PositiveInfinity;
@@ -189,7 +190,7 @@ public static class GeometryDistance
     }
 
     private static (double Distance, double Lat, double Lon) NearestOnRing(
-        IReadOnlyList<(double Latitude, double Longitude)> ring,
+        IReadOnlyList<GeoPosition> ring,
         GeoPoint point)
     {
         var best = double.PositiveInfinity;
@@ -223,8 +224,8 @@ public static class GeometryDistance
     /// </summary>
     public static (double Distance, double Lat, double Lon) PointToSegment(
         GeoPoint point,
-        (double Latitude, double Longitude) a,
-        (double Latitude, double Longitude) b)
+        GeoPosition a,
+        GeoPosition b)
     {
         var cosLat = Math.Cos(point.Latitude * Math.PI / 180.0);
 
@@ -294,7 +295,7 @@ public static class GeometryDistance
     /// reported as inside. Rings shorter than four points are treated as
     /// empty.
     /// </summary>
-    public static bool ContainsPoint(IReadOnlyList<(double Latitude, double Longitude)> ring, GeoPoint point)
+    public static bool ContainsPoint(IReadOnlyList<GeoPosition> ring, GeoPoint point)
     {
         if (ring.Count == 0 || ring.Count < 4)
         {

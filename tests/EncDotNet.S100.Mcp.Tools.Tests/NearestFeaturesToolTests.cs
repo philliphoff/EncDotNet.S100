@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
@@ -14,15 +15,15 @@ public class NearestFeaturesToolTests
         Id = id,
         FeatureType = type,
         GeometryType = S100GeometryType.Point,
-        Points = [(lat, lon)],
+        Points = [new GeoPosition(lat, lon)],
         Attributes = ReadOnlyDictionary<string, string>.Empty,
         ComplexAttributes = [],
     };
 
     private static S124Feature Square(string id, double half)
     {
-        IReadOnlyList<(double, double)> ring = [
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
         return new S124Feature
         {
             Id = id,

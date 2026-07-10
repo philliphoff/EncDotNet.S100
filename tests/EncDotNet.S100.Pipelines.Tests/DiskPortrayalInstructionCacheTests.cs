@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 
@@ -30,7 +31,7 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     [
         new AreaInstruction { FeatureReference = feature, DrawingPriority = 1, AreaFillReference = "DIAMOND1", FillColor = "DEPVS", Transparency = 0.25 },
         new LineInstruction { FeatureReference = feature, DrawingPriority = 2, LineColor = "CHBLK", LineWidth = 0.32, Dashes = [(0.0, 1.0), (1.0, 2.0)] },
-        new PointInstruction { FeatureReference = feature, DrawingPriority = 3, SymbolReference = "BOYLAT01", CoordinateOverride = (50.5, -1.25) },
+        new PointInstruction { FeatureReference = feature, DrawingPriority = 3, SymbolReference = "BOYLAT01", CoordinateOverride = new GeoPosition(50.5, -1.25) },
         new TextInstruction { FeatureReference = feature, DrawingPriority = 4, Text = feature, FontSize = 11.0 },
     ];
 
@@ -44,7 +45,7 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
         var line = Assert.IsType<LineInstruction>(actual[1]);
         Assert.Equal([(0.0, 1.0), (1.0, 2.0)], line.Dashes);
         var point = Assert.IsType<PointInstruction>(actual[2]);
-        Assert.Equal((50.5, -1.25), point.CoordinateOverride);
+        Assert.Equal(new GeoPosition(50.5, -1.25), point.CoordinateOverride);
         var text = Assert.IsType<TextInstruction>(actual[3]);
         Assert.Equal(feature, text.Text);
     }

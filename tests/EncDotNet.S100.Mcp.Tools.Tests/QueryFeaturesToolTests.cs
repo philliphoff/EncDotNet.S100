@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
@@ -23,7 +24,7 @@ public class QueryFeaturesToolTests
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.Point,
-            Points = [(lat, lon)],
+            Points = [new GeoPosition(lat, lon)],
             Curves = [],
             ExteriorRing = [],
             InteriorRings = [],
@@ -39,7 +40,7 @@ public class QueryFeaturesToolTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = [(lat, lon)],
+            Points = [new GeoPosition(lat, lon)],
             Curves = [],
             ExteriorRing = [],
             InteriorRings = [],
@@ -298,7 +299,7 @@ public class QueryFeaturesToolTests
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = [
-                (0, 0), (2, 0), (0, 2), (0, 0)],
+                new GeoPosition(0, 0), new GeoPosition(2, 0), new GeoPosition(0, 2), new GeoPosition(0, 0)],
             InteriorRings = [],
             Attributes = ReadOnlyDictionary<string, string>.Empty,
             ComplexAttributes = [],
@@ -328,7 +329,7 @@ public class QueryFeaturesToolTests
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = [
-                (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)],
+                new GeoPosition(-1, -1), new GeoPosition(-1, 1), new GeoPosition(1, 1), new GeoPosition(1, -1), new GeoPosition(-1, -1)],
             InteriorRings = [],
             Attributes = ReadOnlyDictionary<string, string>.Empty,
             ComplexAttributes = [],

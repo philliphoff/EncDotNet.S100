@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Text.Json;
 using EncDotNet.S100.Datasets.S101;
@@ -392,7 +393,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
         double south = double.PositiveInfinity, north = double.NegativeInfinity;
         double west = double.PositiveInfinity, east = double.NegativeInfinity;
 
-        static double[] Pair((double Latitude, double Longitude) c) => [c.Latitude, c.Longitude];
+        static double[] Pair(GeoPosition c) => [c.Latitude, c.Longitude];
 
         var coordinates = new List<double[]>(geometry.Coordinates.Count);
         foreach (var c in geometry.Coordinates)

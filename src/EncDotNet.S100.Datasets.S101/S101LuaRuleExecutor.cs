@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -95,7 +96,7 @@ internal sealed class S101FeatureAnchorProvider : IFeatureAnchorProvider
         _geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(dataset).GetFeatures());
     }
 
-    public (double Latitude, double Longitude)? GetAnchor(string featureRef)
+    public GeoPosition? GetAnchor(string featureRef)
     {
         var geom = _geometryProvider.GetGeometry(featureRef);
         if (geom is null || geom.Coordinates.Count == 0)

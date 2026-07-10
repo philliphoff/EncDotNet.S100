@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
@@ -18,7 +19,7 @@ public class OwnShipRendererTests
         Id = "ownship",
         Kind = "ownship",
         GeometryType = GeometryType.Point,
-        Coordinates = new[] { (lat, lon) },
+        Coordinates = new[] { new GeoPosition(lat, lon) },
         Motion = headingDeg is null && sogKn == 0
             ? null
             : new DynamicMotion { Heading = headingDeg is { } h ? Angle.FromDegrees(h) : null, SpeedOverGround = Speed.FromKnots(sogKn) },
@@ -42,7 +43,7 @@ public class OwnShipRendererTests
         Assert.False(r.CanRender(new DynamicFeature
         {
             Id = "x", GeometryType = GeometryType.Curve,
-            Coordinates = new[] { (0.0, 0.0), (1.0, 1.0) },
+            Coordinates = new[] { new GeoPosition(0.0, 0.0), new GeoPosition(1.0, 1.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         }));
     }
@@ -70,7 +71,7 @@ public class OwnShipRendererTests
         var feat = new DynamicFeature
         {
             Id = "ownship", GeometryType = GeometryType.Point,
-            Coordinates = new[] { (0.0, 0.0) },
+            Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
         var features = new OwnShipRenderer().Render(feat).ToArray();
@@ -160,7 +161,7 @@ public class OwnShipRendererTests
         var feat = new DynamicFeature
         {
             Id = "ownship", GeometryType = GeometryType.Point,
-            Coordinates = new[] { (0.0, 0.0) },
+            Coordinates = new[] { new GeoPosition(0.0, 0.0) },
             VesselGeometry = DefaultGeom(),
             LastUpdated = DateTimeOffset.UtcNow,
         };

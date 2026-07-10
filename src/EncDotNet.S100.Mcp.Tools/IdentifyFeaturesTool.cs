@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Features;
@@ -397,7 +398,7 @@ public sealed class IdentifyFeaturesTool
         return builder is null ? [] : builder;
     }
 
-    private static IReadOnlyList<GeoPoint> ToRing(IReadOnlyList<(double Latitude, double Longitude)> ring)
+    private static IReadOnlyList<GeoPoint> ToRing(IReadOnlyList<GeoPosition> ring)
     {
         var builder = new List<GeoPoint>(ring.Count);
         foreach (var (lat, lon) in ring)
@@ -410,7 +411,7 @@ public sealed class IdentifyFeaturesTool
     private static double Area(BoundingBox b) =>
         Math.Max(0.0, b.NorthLatitude - b.SouthLatitude) * Math.Max(0.0, b.EastLongitude - b.WestLongitude);
 
-    private double Meters(GeoPoint a, (double Latitude, double Longitude) b)
+    private double Meters(GeoPoint a, GeoPosition b)
     {
         var dLat = (a.Latitude - b.Latitude) * MetersPerDegreeLatitude;
         var dLon = (a.Longitude - b.Longitude) * MetersPerDegreeLatitude

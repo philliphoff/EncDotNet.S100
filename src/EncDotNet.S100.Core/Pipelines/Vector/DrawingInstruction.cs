@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Pipelines.Vector;
 
 /// <summary>
@@ -123,7 +124,7 @@ public sealed class PointInstruction : DrawingInstruction
     /// (e.g. used by S-101 SOUNDG03 to place each sounding of a MultiPoint
     /// feature at its own coordinate).
     /// </summary>
-    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
+    public GeoPosition? CoordinateOverride { get; init; }
 
     internal override int TypeSortOrder => 2;
 }
@@ -177,7 +178,7 @@ public sealed class LineInstruction : DrawingInstruction
     /// primitives to supply synthetic geometry for sector-light limit lines
     /// and all-around-light circles.
     /// </summary>
-    public IReadOnlyList<(double Latitude, double Longitude)>? CoordinatesOverride { get; init; }
+    public IReadOnlyList<GeoPosition>? CoordinatesOverride { get; init; }
 
     internal override int TypeSortOrder => 1;
 }
@@ -290,7 +291,7 @@ public sealed class TextInstruction : DrawingInstruction
     /// feature's geometry-derived anchor (S-100 Part 9 §11.5 <c>AugmentedPoint</c>
     /// in <c>GeographicCRS</c> mode).
     /// </summary>
-    public (double Latitude, double Longitude)? CoordinateOverride { get; init; }
+    public GeoPosition? CoordinateOverride { get; init; }
 
     internal override int TypeSortOrder => 3;
 }

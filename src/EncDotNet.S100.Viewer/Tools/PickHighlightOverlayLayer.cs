@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using EncDotNet.S100.Viewer.Geodesy;
 using Mapsui;
@@ -22,10 +23,10 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <param name="Curves">Curve coordinate sequences.</param>
 /// <param name="Points">Point coordinates.</param>
 internal readonly record struct PickHighlightGeometry(
-    IReadOnlyList<(double Lat, double Lon)> ExteriorRing,
-    IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> InteriorRings,
-    IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> Curves,
-    IReadOnlyList<(double Lat, double Lon)> Points)
+    IReadOnlyList<GeoPosition> ExteriorRing,
+    IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings,
+    IReadOnlyList<IReadOnlyList<GeoPosition>> Curves,
+    IReadOnlyList<GeoPosition> Points)
 {
     /// <summary>True when the geometry carries at least one drawable vertex.</summary>
     public bool HasGeometry =>
@@ -47,7 +48,7 @@ internal readonly record struct PickHighlightGeometry(
 /// container features without geometry).
 /// </param>
 internal readonly record struct PickHighlightState(
-    (double Lat, double Lon)? Location,
+    GeoPosition? Location,
     PickHighlightGeometry? Geometry)
 {
     /// <summary>True when there is nothing to draw.</summary>
@@ -149,7 +150,7 @@ internal static class PickHighlightOverlayLayer
         // 2) Position marker (cursor echo) at the click location.
         if (state.Location is { } loc)
         {
-            AddPositionMarker(features, loc.Lat, loc.Lon, accentColor, casingColor);
+            AddPositionMarker(features, loc.Latitude, loc.Longitude, accentColor, casingColor);
         }
 
         layer.Features = features;
@@ -189,8 +190,8 @@ internal static class PickHighlightOverlayLayer
 
     private static void AddAreaFill(
         List<IFeature> features,
-        IReadOnlyList<(double Lat, double Lon)> exterior,
-        IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> holes,
+        IReadOnlyList<GeoPosition> exterior,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
         MapsuiColor accentColor)
     {
         // A filled polygon does not split sensibly at the antimeridian, so the
@@ -218,18 +219,18 @@ internal static class PickHighlightOverlayLayer
         features.Add(feature);
     }
 
-    private static LinearRing? ToLinearRing(IReadOnlyList<(double Lat, double Lon)> ring)
+    private static LinearRing? ToLinearRing(IReadOnlyList<GeoPosition> ring)
     {
         if (ring.Count < 3) return null;
 
         var closedCount = ring.Count;
         var first = ring[0];
         var last = ring[ring.Count - 1];
-        var alreadyClosed = first.Lat == last.Lat && first.Lon == last.Lon;
+        var alreadyClosed = first.Latitude == last.Latitude && first.Longitude == last.Longitude;
         var coords = new Coordinate[alreadyClosed ? closedCount : closedCount + 1];
         for (var i = 0; i < closedCount; i++)
         {
-            var (mx, my) = SphericalMercator.FromLonLat(ring[i].Lon, ring[i].Lat);
+            var (mx, my) = SphericalMercator.FromLonLat(ring[i].Longitude, ring[i].Latitude);
             coords[i] = new Coordinate(mx, my);
         }
         if (!alreadyClosed)
@@ -241,14 +242,14 @@ internal static class PickHighlightOverlayLayer
 
     private static void AddRingOutline(
         List<IFeature> features,
-        IReadOnlyList<(double Lat, double Lon)> ring,
+        IReadOnlyList<GeoPosition> ring,
         MapsuiColor accentColor)
     {
         // Close the ring for outlining (a ring's last vertex may or may not
         // repeat the first).
-        var points = new List<(double Lat, double Lon)>(ring);
+        var points = new List<GeoPosition>(ring);
         if (points.Count >= 2 &&
-            (points[0].Lat != points[^1].Lat || points[0].Lon != points[^1].Lon))
+            (points[0].Latitude != points[^1].Latitude || points[0].Longitude != points[^1].Longitude))
         {
             points.Add(points[0]);
         }
@@ -257,7 +258,7 @@ internal static class PickHighlightOverlayLayer
 
     private static void AddPolyline(
         List<IFeature> features,
-        IReadOnlyList<(double Lat, double Lon)> points,
+        IReadOnlyList<GeoPosition> points,
         MapsuiColor accentColor)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
@@ -266,7 +267,7 @@ internal static class PickHighlightOverlayLayer
             var coords = new Coordinate[subPath.Count];
             for (var i = 0; i < subPath.Count; i++)
             {
-                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Lon, subPath[i].Lat);
+                var (mx, my) = SphericalMercator.FromLonLat(subPath[i].Longitude, subPath[i].Latitude);
                 coords[i] = new Coordinate(mx, my);
             }
             var feature = new GeometryFeature(new LineString(coords));

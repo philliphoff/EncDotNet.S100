@@ -150,7 +150,7 @@ internal sealed class MeasureTool : IMapTool
         var world = _context.ScreenToLatLon(release);
         if (world is not { } w) return false;
 
-        if (_state.Click(w.Lat, w.Lon))
+        if (_state.Click(w.Latitude, w.Longitude))
             Refresh();
         return true;
     }

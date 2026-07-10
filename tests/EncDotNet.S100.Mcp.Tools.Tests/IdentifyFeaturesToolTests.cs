@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
@@ -13,12 +14,12 @@ public class IdentifyFeaturesToolTests
         Id = id,
         FeatureType = type,
         GeometryType = S100GeometryType.Point,
-        Points = [(lat, lon)],
+        Points = [new GeoPosition(lat, lon)],
         Attributes = ReadOnlyDictionary<string, string>.Empty,
         ComplexAttributes = [],
     };
 
-    private static S124Feature Curve(string id, params (double Lat, double Lon)[] vertices) => new()
+    private static S124Feature Curve(string id, params GeoPosition[] vertices) => new()
     {
         Id = id,
         FeatureType = "Fairway",
@@ -28,10 +29,10 @@ public class IdentifyFeaturesToolTests
         ComplexAttributes = [],
     };
 
-    private static S124Feature Square(string id, double half, params IReadOnlyList<(double Lat, double Lon)>[] holes)
+    private static S124Feature Square(string id, double half, params IReadOnlyList<GeoPosition>[] holes)
     {
-        IReadOnlyList<(double, double)> ring = [
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
         return new S124Feature
         {
             Id = id,
@@ -44,9 +45,9 @@ public class IdentifyFeaturesToolTests
         };
     }
 
-    private static IReadOnlyList<(double Lat, double Lon)> Hole(double half) =>
+    private static IReadOnlyList<GeoPosition> Hole(double half) =>
         [
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
 
     [Fact]
     public async Task Ranks_point_before_curve_before_smaller_then_larger_area()
@@ -55,7 +56,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(
             Square("big", 0.9),
             Square("small", 0.1),
-            Curve("curve", (0.0, 0.0), (0.0, 0.5)),
+            Curve("curve", new GeoPosition(0.0, 0.0), new GeoPosition(0.0, 0.5)),
             Point("pt", 0.0, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using System.Linq;
 using EncDotNet.S100.Datasets.S122;
@@ -16,7 +17,7 @@ public class FeatureNamesTests
             Id = "f1",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = [(5.0, 5.0)],
+            Points = [new GeoPosition(5.0, 5.0)],
             Attributes = (attributes ?? new Dictionary<string, string>()).ToDictionary(),
             ComplexAttributes = (complex ?? []).ToArray(),
         };

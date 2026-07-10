@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -290,7 +291,7 @@ public sealed class AisDynamicFeatureSource : IDynamicFeatureSource, IAsyncDispo
             Id = FeatureIdForMmsi(report.Mmsi),
             Kind = $"vessel.ais.{cls.ToKindToken()}",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (report.Latitude, report.Longitude) },
+            Coordinates = new[] { new GeoPosition(report.Latitude, report.Longitude) },
             Motion = new DynamicMotion
             {
                 CourseOverGround = report.CourseOverGround,

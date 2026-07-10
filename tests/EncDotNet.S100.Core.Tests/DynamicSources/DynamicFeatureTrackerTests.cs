@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -9,7 +10,7 @@ public class DynamicFeatureTrackerTests
     {
         Id = id,
         GeometryType = GeometryType.Point,
-        Coordinates = new[] { (lat, lon) },
+        Coordinates = new[] { new GeoPosition(lat, lon) },
         LastUpdated = t,
     };
 

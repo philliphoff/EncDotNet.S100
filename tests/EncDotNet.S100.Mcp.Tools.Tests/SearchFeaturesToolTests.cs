@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
@@ -20,7 +21,7 @@ public class SearchFeaturesToolTests
             Id = id,
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = [(lat, lon)],
+            Points = [new GeoPosition(lat, lon)],
             Curves = [],
             ExteriorRing = [],
             InteriorRings = [],
@@ -225,7 +226,7 @@ public class SearchFeaturesToolTests
             Id = "a",
             FeatureType = "MarineProtectedArea",
             GeometryType = S100GeometryType.Point,
-            Points = [(5.0, 5.0)],
+            Points = [new GeoPosition(5.0, 5.0)],
             Attributes = new Dictionary<string, string> { ["objectName"] = "Channel Marker" },
             ComplexAttributes = [new S122ComplexAttribute
             {

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
@@ -9,11 +10,11 @@ namespace EncDotNet.S100.Pipelines.Tests.DynamicSources;
 
 public class DefaultDynamicFeatureRendererTests
 {
-    private static DynamicFeature Make(GeometryType kind, params (double Lat, double Lon)[] coords) => new()
+    private static DynamicFeature Make(GeometryType kind, params GeoPosition[] coords) => new()
     {
         Id = "f",
         GeometryType = kind,
-        Coordinates = coords.Select(c => (c.Lat, c.Lon)).ToArray(),
+        Coordinates = coords,
         LastUpdated = DateTimeOffset.UtcNow,
     };
 
@@ -21,16 +22,16 @@ public class DefaultDynamicFeatureRendererTests
     public void CanRender_AcceptsPointCurveSurface()
     {
         var r = new DefaultDynamicFeatureRenderer();
-        Assert.True(r.CanRender(Make(GeometryType.Point, (0, 0))));
-        Assert.True(r.CanRender(Make(GeometryType.Curve, (0, 0), (1, 1))));
-        Assert.True(r.CanRender(Make(GeometryType.Surface, (0, 0), (1, 0), (1, 1))));
+        Assert.True(r.CanRender(Make(GeometryType.Point, new GeoPosition(0, 0))));
+        Assert.True(r.CanRender(Make(GeometryType.Curve, new GeoPosition(0, 0), new GeoPosition(1, 1))));
+        Assert.True(r.CanRender(Make(GeometryType.Surface, new GeoPosition(0, 0), new GeoPosition(1, 0), new GeoPosition(1, 1))));
     }
 
     [Fact]
     public void Point_NoMotion_EmitsSingleDisc()
     {
         var r = new DefaultDynamicFeatureRenderer();
-        var features = r.Render(Make(GeometryType.Point, (47.6, -122.3))).ToArray();
+        var features = r.Render(Make(GeometryType.Point, new GeoPosition(47.6, -122.3))).ToArray();
         Assert.Single(features);
         var disc = Assert.IsType<GeometryFeature>(features[0]);
         Assert.IsType<Point>(disc.Geometry);
@@ -43,7 +44,7 @@ public class DefaultDynamicFeatureRendererTests
         {
             Id = "ownship",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (47.6, -122.3) },
+            Coordinates = new[] { new GeoPosition(47.6, -122.3) },
             Motion = new DynamicMotion { Heading = Angle.FromDegrees(0), SpeedOverGround = Speed.FromKnots(10) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
@@ -62,7 +63,7 @@ public class DefaultDynamicFeatureRendererTests
         {
             Id = "stopped",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (47.6, -122.3) },
+            Coordinates = new[] { new GeoPosition(47.6, -122.3) },
             Motion = new DynamicMotion { Heading = Angle.FromDegrees(90), SpeedOverGround = Speed.FromKnots(0) },
             LastUpdated = DateTimeOffset.UtcNow,
         };
@@ -75,7 +76,7 @@ public class DefaultDynamicFeatureRendererTests
     public void Curve_TwoOrMore_EmitsLineString()
     {
         var features = new DefaultDynamicFeatureRenderer()
-            .Render(Make(GeometryType.Curve, (0, 0), (1, 1), (2, 2)))
+            .Render(Make(GeometryType.Curve, new GeoPosition(0, 0), new GeoPosition(1, 1), new GeoPosition(2, 2)))
             .ToArray();
 
         var ls = Assert.IsType<LineString>(((GeometryFeature)Assert.Single(features)).Geometry);
@@ -86,7 +87,7 @@ public class DefaultDynamicFeatureRendererTests
     public void Curve_SingleCoord_EmitsNothing()
     {
         var features = new DefaultDynamicFeatureRenderer()
-            .Render(Make(GeometryType.Curve, (0, 0)))
+            .Render(Make(GeometryType.Curve, new GeoPosition(0, 0)))
             .ToArray();
         Assert.Empty(features);
     }
@@ -95,7 +96,7 @@ public class DefaultDynamicFeatureRendererTests
     public void Surface_OpenRing_AutoClosesPolygon()
     {
         var features = new DefaultDynamicFeatureRenderer()
-            .Render(Make(GeometryType.Surface, (0, 0), (1, 0), (1, 1)))
+            .Render(Make(GeometryType.Surface, new GeoPosition(0, 0), new GeoPosition(1, 0), new GeoPosition(1, 1)))
             .ToArray();
 
         var poly = Assert.IsType<Polygon>(((GeometryFeature)Assert.Single(features)).Geometry);
@@ -107,7 +108,7 @@ public class DefaultDynamicFeatureRendererTests
     public void Surface_ClosedRing_KeepsRingAsGiven()
     {
         var features = new DefaultDynamicFeatureRenderer()
-            .Render(Make(GeometryType.Surface, (0, 0), (1, 0), (1, 1), (0, 0)))
+            .Render(Make(GeometryType.Surface, new GeoPosition(0, 0), new GeoPosition(1, 0), new GeoPosition(1, 1), new GeoPosition(0, 0)))
             .ToArray();
 
         var poly = Assert.IsType<Polygon>(((GeometryFeature)Assert.Single(features)).Geometry);
@@ -118,7 +119,7 @@ public class DefaultDynamicFeatureRendererTests
     public void Surface_TooFewCoords_EmitsNothing()
     {
         var features = new DefaultDynamicFeatureRenderer()
-            .Render(Make(GeometryType.Surface, (0, 0), (1, 1)))
+            .Render(Make(GeometryType.Surface, new GeoPosition(0, 0), new GeoPosition(1, 1)))
             .ToArray();
         Assert.Empty(features);
     }
@@ -130,7 +131,7 @@ public class DefaultDynamicFeatureRendererTests
         {
             Id = "empty",
             GeometryType = GeometryType.Point,
-            Coordinates = Array.Empty<(double, double)>(),
+            Coordinates = Array.Empty<GeoPosition>(),
             LastUpdated = DateTimeOffset.UtcNow,
         };
         Assert.Empty(new DefaultDynamicFeatureRenderer().Render(feature));

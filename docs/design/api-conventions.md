@@ -249,3 +249,59 @@ Then remove now-unused `using System.Collections.Immutable;` /
 
 `ReadOnlyDictionary<K, V>.Empty` lives in
 `System.Collections.ObjectModel` (available since .NET 8).
+
+## 8. Geographic coordinates: one canonical type
+
+A single type represents a geographic position everywhere in the codebase:
+
+```csharp
+public readonly record struct GeoPosition(double Latitude, double Longitude);
+```
+
+`GeoPosition` lives in `EncDotNet.S100.Core` (namespace
+`EncDotNet.S100.DataModel`). Latitude and longitude are decimal degrees on
+WGS-84 (EPSG:4326). It is a `readonly record struct`, so it has value
+equality, deconstructs to `(Latitude, Longitude)`, and costs no heap
+allocation — which is why it can replace bare tuples without a performance
+penalty.
+
+**Rule: do not use a raw `(double, double)` / `(double Latitude, double
+Longitude)` / `(double Lat, double Lon)` tuple to carry a lat/lon pair.**
+Use `GeoPosition` on every model, source, pipeline, renderer, tool, and test
+surface. This keeps latitude/longitude ordering unambiguous (a positional
+tuple silently tolerates a swap; a named record does not) and gives one type
+to search for, document, and validate.
+
+### Deliberate, documented exceptions
+
+These are **not** lat/lon coordinate pairs and stay as tuples (or their own
+named types) on purpose:
+
+- **Projected / screen space** — `(double X, double Y)` mercator-metre or
+  pixel pairs (e.g. `VectorSceneBuilder.Project`, `WorldToScreen`,
+  `MercatorOffset.ToMercator`). These are not geographic positions.
+- **`(double Longitude, double Latitude)` projection bridges** — helpers that
+  mirror a third-party lon/lat contract (`WebMercator.ToLonLat`,
+  `CompositeViewportBuilder.ToLonLat`, feeding `Mapsui.SphericalMercator` /
+  NTS `Coordinate(x, y)`). The reversed order is dictated by the external API;
+  keeping the tuple makes the mismatch explicit at the boundary.
+- **ISO 8211 raw grid coordinates** — `(int Y, int X)` intermediate
+  coordinates in `S101Document` are record-format integers, not degrees.
+- **Composite payloads** — tuples that carry more than a position, e.g.
+  soundings `(double Lat, double Lon, double Depth)` in test fakes, or the
+  dash-pattern `(double Offset, double Length)`.
+- **Two-parameter method signatures** — `Expand(double lat, double lon)`,
+  `IsValidLatLon(double lat, double lon)`, `Click(double lat, double lon)`,
+  xUnit `[Theory]` parameters, etc. are ordinary parameter lists, not tuple
+  types, and are left as-is.
+
+### Two other coordinate-bearing types are kept intentionally
+
+- `GeoPoint` (`EncDotNet.S100.Mcp.Tools`) — a JSON-bound record used at the
+  MCP wire boundary. It is a serialization DTO, deliberately decoupled from
+  the core model so the wire contract can evolve independently.
+- `PickLocation` (`EncDotNet.S100.Viewer`) — an internal viewer view-model
+  value. Kept internal and separate from the model layer.
+
+Both convert to/from `GeoPosition` at their boundary rather than propagating a
+second coordinate type inward.

@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
 using S100Diag = EncDotNet.S100.Datasets.S104.Diagnostics;
 
@@ -474,7 +475,7 @@ public static class S104DatasetReader
         return stations;
     }
 
-    private static List<(double Lat, double Lon)> ReadStationPositions(IHdf5Group root)
+    private static List<GeoPosition> ReadStationPositions(IHdf5Group root)
     {
         // S-104 Edition 2.0.0 §10.2.3 — station positions live in a
         // /Positioning group containing a compound 'geometryValues'
@@ -560,14 +561,14 @@ public static class S104DatasetReader
                     "S-104", null, "/Positioning/geometryValues", "longitude",
                     "S-104 Edition 2.0.0 §10.2.3"));
 
-        var positions = new List<(double Lat, double Lon)>(raw.RecordCount);
+        var positions = new List<GeoPosition>(raw.RecordCount);
         var span = raw.Data.AsSpan();
         for (int i = 0; i < raw.RecordCount; i++)
         {
             var record = span.Slice(i * raw.RecordSize, raw.RecordSize);
             double lat = ReadFloatingPointMember(record, latMember);
             double lon = ReadFloatingPointMember(record, lonMember);
-            positions.Add((lat, lon));
+            positions.Add(new GeoPosition(lat, lon));
         }
         return positions;
     }
@@ -586,7 +587,7 @@ public static class S104DatasetReader
     private static void ReadStationInstance(
         IHdf5Group instance,
         string instancePath,
-        IReadOnlyList<(double Lat, double Lon)> positions,
+        IReadOnlyList<GeoPosition> positions,
         List<WaterLevelStation> stations)
     {
         const string Spec = "S-104 Edition 2.0.0 §10.2.7";

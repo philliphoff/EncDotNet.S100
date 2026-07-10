@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
@@ -19,7 +20,7 @@ public class IdentifyFeaturesReferencedTextTests
             Id = "f1",
             FeatureType = "Light",
             GeometryType = S100GeometryType.Point,
-            Points = [(0.0, 0.0)],
+            Points = [new GeoPosition(0.0, 0.0)],
             Attributes = attributes ?? ReadOnlyDictionary<string, string>.Empty,
             ComplexAttributes = complex.ToArray(),
         };

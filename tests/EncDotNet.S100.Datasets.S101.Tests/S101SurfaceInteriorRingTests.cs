@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines.Vector;
 using Xunit;
@@ -41,13 +42,13 @@ public sealed class S101SurfaceInteriorRingTests
 
         // Exterior ring: a 10×10 square closed back to the origin.
         Assert.Equal(
-            new (double, double)[] { (0, 0), (0, 10), (10, 10), (10, 0), (0, 0) },
+            new[] { new GeoPosition(0, 0), new GeoPosition(0, 10), new GeoPosition(10, 10), new GeoPosition(10, 0), new GeoPosition(0, 0) },
             feature.Coordinates);
 
         // Interior ring: the 2..4 square hole carried through as a single hole.
         var hole = Assert.Single(feature.InteriorRings);
         Assert.Equal(
-            new (double, double)[] { (2, 2), (2, 4), (4, 4), (4, 2), (2, 2) },
+            new[] { new GeoPosition(2, 2), new GeoPosition(2, 4), new GeoPosition(4, 4), new GeoPosition(4, 2), new GeoPosition(2, 2) },
             hole);
     }
 

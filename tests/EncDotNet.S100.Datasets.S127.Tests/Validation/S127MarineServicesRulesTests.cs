@@ -44,37 +44,37 @@ public class S127MarineServicesRulesTests
     private static S127PilotBoardingPlace Pbp(
         string id,
         S127GeometryKind kind,
-        params (double lat, double lon)[] coords)
+        params GeoPosition[] coords)
         => new()
         {
             Id = id,
             GeometryKind = kind,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
+            Coordinates = coords,
             Source = SourceFeature(id, "PilotBoardingPlace"),
         };
 
     private static S127RegulatedArea Area(
         string id,
         S127GeometryKind kind,
-        params (double lat, double lon)[] coords)
+        params GeoPosition[] coords)
         => new()
         {
             Id = id,
             FeatureType = "RestrictedArea",
             Kind = S127RegulatedAreaKind.RestrictedArea,
             GeometryKind = kind,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
+            Coordinates = coords,
             Source = SourceFeature(id, "RestrictedArea"),
         };
 
     private static S127RouteingMeasure Curve(
         string id,
-        params (double lat, double lon)[] coords)
+        params GeoPosition[] coords)
         => new()
         {
             Id = id,
             GeometryKind = S127GeometryKind.Curve,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
+            Coordinates = coords,
             Source = SourceFeature(id, "RouteingMeasure"),
         };
 
@@ -82,12 +82,12 @@ public class S127MarineServicesRulesTests
         string id,
         IDictionary<string, string>? attrs = null,
         IEnumerable<S127ComplexAttribute>? complex = null,
-        params (double lat, double lon)[] coords)
+        params GeoPosition[] coords)
         => new()
         {
             Id = id,
             GeometryKind = coords.Length > 0 ? S127GeometryKind.Surface : S127GeometryKind.None,
-            Coordinates = coords.Select(c => new GeoPosition(c.lat, c.lon)).ToArray(),
+            Coordinates = coords,
             Source = SourceFeature(
                 id, "VesselTrafficServiceArea",
                 geometryType: coords.Length > 0 ? S100GeometryType.Surface : S100GeometryType.None,
@@ -134,7 +134,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void WgsLatLonInRange_Passes_OnValidCoordinates()
     {
-        var ds = Dataset(Pbp("P1", S127GeometryKind.Point, (10, 20)));
+        var ds = Dataset(Pbp("P1", S127GeometryKind.Point, new GeoPosition(10, 20)));
         Assert.Empty(S127MarineServicesRules.WgsLatLonInRange.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -142,8 +142,8 @@ public class S127MarineServicesRulesTests
     public void WgsLatLonInRange_Passes_OnRangeBoundaries()
     {
         var ds = Dataset(
-            Pbp("MIN", S127GeometryKind.Point, (-90, -180)),
-            Pbp("MAX", S127GeometryKind.Point, (90, 180)));
+            Pbp("MIN", S127GeometryKind.Point, new GeoPosition(-90, -180)),
+            Pbp("MAX", S127GeometryKind.Point, new GeoPosition(90, 180)));
         Assert.Empty(S127MarineServicesRules.WgsLatLonInRange.Evaluate(ds, ValidationContext.Default));
     }
 
@@ -159,7 +159,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void WgsLatLonInRange_Fails_OnOutOfRangeLatitude()
     {
-        var ds = Dataset(Pbp("BAD", S127GeometryKind.Point, (95, 0)));
+        var ds = Dataset(Pbp("BAD", S127GeometryKind.Point, new GeoPosition(95, 0)));
         var f = Assert.Single(
             S127MarineServicesRules.WgsLatLonInRange.Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S127-R-12.1", f.RuleId);
@@ -172,7 +172,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void WgsLatLonInRange_Fails_OnOutOfRangeLongitude()
     {
-        var ds = Dataset(Pbp("BAD", S127GeometryKind.Point, (0, 181)));
+        var ds = Dataset(Pbp("BAD", S127GeometryKind.Point, new GeoPosition(0, 181)));
         var f = Assert.Single(
             S127MarineServicesRules.WgsLatLonInRange.Evaluate(ds, ValidationContext.Default));
         Assert.Contains("longitude", f.Message);
@@ -181,7 +181,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void WgsLatLonInRange_EmitsOneFindingPerOffendingCoordinate()
     {
-        var ds = Dataset(Curve("LINE", (0, 0), (0, 181), (95, 0)));
+        var ds = Dataset(Curve("LINE", new GeoPosition(0, 0), new GeoPosition(0, 181), new GeoPosition(95, 0)));
         var findings = S127MarineServicesRules.WgsLatLonInRange
             .Evaluate(ds, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
@@ -192,7 +192,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void PilotBoardingPlaceHasGeometry_Passes_OnPoint()
     {
-        var ds = Dataset(Pbp("P1", S127GeometryKind.Point, (10, 20)));
+        var ds = Dataset(Pbp("P1", S127GeometryKind.Point, new GeoPosition(10, 20)));
         Assert.Empty(S127MarineServicesRules.PilotBoardingPlaceHasGeometry
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -201,7 +201,7 @@ public class S127MarineServicesRulesTests
     public void PilotBoardingPlaceHasGeometry_Passes_OnSurface()
     {
         var ds = Dataset(Pbp("P1", S127GeometryKind.Surface,
-            (0, 0), (0, 1), (1, 1), (0, 0)));
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)));
         Assert.Empty(S127MarineServicesRules.PilotBoardingPlaceHasGeometry
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -232,7 +232,7 @@ public class S127MarineServicesRulesTests
     public void SurfacePolygonClosure_Passes_OnClosedRing()
     {
         var ds = Dataset(Area("A1", S127GeometryKind.Surface,
-            (0, 0), (0, 1), (1, 1), (0, 0)));
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)));
         Assert.Empty(S127MarineServicesRules.SurfacePolygonClosure
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -241,7 +241,7 @@ public class S127MarineServicesRulesTests
     public void SurfacePolygonClosure_Passes_OnFloatingPointDrift()
     {
         var ds = Dataset(Area("A1", S127GeometryKind.Surface,
-            (0, 0), (0, 1), (1, 1), (1e-12, 1e-12)));
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1e-12, 1e-12)));
         Assert.Empty(S127MarineServicesRules.SurfacePolygonClosure
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -250,7 +250,7 @@ public class S127MarineServicesRulesTests
     public void SurfacePolygonClosure_Fails_OnTooFewVertices()
     {
         var ds = Dataset(Area("A1", S127GeometryKind.Surface,
-            (0, 0), (0, 1), (0, 0)));
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(0, 0)));
         var f = Assert.Single(S127MarineServicesRules.SurfacePolygonClosure
             .Evaluate(ds, ValidationContext.Default));
         Assert.Contains("only 3 vertex", f.Message);
@@ -260,7 +260,7 @@ public class S127MarineServicesRulesTests
     public void SurfacePolygonClosure_Fails_OnUnclosedRing()
     {
         var ds = Dataset(Area("A1", S127GeometryKind.Surface,
-            (0, 0), (0, 1), (1, 1), (1, 0)));
+            new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1, 0)));
         var f = Assert.Single(S127MarineServicesRules.SurfacePolygonClosure
             .Evaluate(ds, ValidationContext.Default));
         Assert.Contains("unclosed", f.Message);
@@ -270,8 +270,8 @@ public class S127MarineServicesRulesTests
     public void SurfacePolygonClosure_IgnoresNonSurfaceGeometries()
     {
         var ds = Dataset(
-            Pbp("P1", S127GeometryKind.Point, (0, 0)),
-            Curve("L1", (0, 0), (0, 1)));
+            Pbp("P1", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Curve("L1", new GeoPosition(0, 0), new GeoPosition(0, 1)));
         Assert.Empty(S127MarineServicesRules.SurfacePolygonClosure
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -281,7 +281,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void CurveMinimumVertices_Passes_OnTwoOrMore()
     {
-        var ds = Dataset(Curve("L1", (0, 0), (0, 1)));
+        var ds = Dataset(Curve("L1", new GeoPosition(0, 0), new GeoPosition(0, 1)));
         Assert.Empty(S127MarineServicesRules.CurveMinimumVertices
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -289,7 +289,7 @@ public class S127MarineServicesRulesTests
     [Fact]
     public void CurveMinimumVertices_Fails_OnSingleVertex()
     {
-        var ds = Dataset(Curve("L1", (0, 0)));
+        var ds = Dataset(Curve("L1", new GeoPosition(0, 0)));
         var f = Assert.Single(S127MarineServicesRules.CurveMinimumVertices
             .Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S127-R-12.4", f.RuleId);
@@ -300,8 +300,8 @@ public class S127MarineServicesRulesTests
     public void CurveMinimumVertices_IgnoresPointAndSurface()
     {
         var ds = Dataset(
-            Pbp("P1", S127GeometryKind.Point, (0, 0)),
-            Area("A1", S127GeometryKind.Surface, (0, 0), (0, 1), (1, 1), (0, 0)));
+            Pbp("P1", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Area("A1", S127GeometryKind.Surface, new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)));
         Assert.Empty(S127MarineServicesRules.CurveMinimumVertices
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -466,8 +466,8 @@ public class S127MarineServicesRulesTests
     public void UniqueFeatureIds_Passes_WhenAllDistinct()
     {
         var ds = Dataset(
-            Pbp("A", S127GeometryKind.Point, (0, 0)),
-            Pbp("B", S127GeometryKind.Point, (1, 1)));
+            Pbp("A", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Pbp("B", S127GeometryKind.Point, new GeoPosition(1, 1)));
         Assert.Empty(S127MarineServicesRules.UniqueFeatureIds
             .Evaluate(ds, ValidationContext.Default));
     }
@@ -476,8 +476,8 @@ public class S127MarineServicesRulesTests
     public void UniqueFeatureIds_Fails_OnDuplicate()
     {
         var ds = Dataset(
-            Pbp("DUP", S127GeometryKind.Point, (0, 0)),
-            Pbp("DUP", S127GeometryKind.Point, (1, 1)));
+            Pbp("DUP", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Pbp("DUP", S127GeometryKind.Point, new GeoPosition(1, 1)));
         var f = Assert.Single(S127MarineServicesRules.UniqueFeatureIds
             .Evaluate(ds, ValidationContext.Default));
         Assert.Equal("S127-R-12.7", f.RuleId);
@@ -489,8 +489,8 @@ public class S127MarineServicesRulesTests
     public void UniqueFeatureIds_TreatsIdsCaseInsensitive()
     {
         var ds = Dataset(
-            Pbp("Dup", S127GeometryKind.Point, (0, 0)),
-            Pbp("DUP", S127GeometryKind.Point, (1, 1)));
+            Pbp("Dup", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Pbp("DUP", S127GeometryKind.Point, new GeoPosition(1, 1)));
         var f = Assert.Single(S127MarineServicesRules.UniqueFeatureIds
             .Evaluate(ds, ValidationContext.Default));
         Assert.Equal(ValidationSeverity.Error, f.Severity);
@@ -540,10 +540,10 @@ public class S127MarineServicesRulesTests
     public void Validate_OnValidDataset_ProducesNoFindings()
     {
         var ds = Dataset(
-            Pbp("P1", S127GeometryKind.Point, (40.5, -74.0)),
+            Pbp("P1", S127GeometryKind.Point, new GeoPosition(40.5, -74.0)),
             Area("RA1", S127GeometryKind.Surface,
-                (40, -75), (40, -74), (41, -74), (40, -75)),
-            Curve("L1", (40, -74), (41, -73)),
+                new GeoPosition(40, -75), new GeoPosition(40, -74), new GeoPosition(41, -74), new GeoPosition(40, -75)),
+            Curve("L1", new GeoPosition(40, -74), new GeoPosition(41, -73)),
             Authority("AUTH-1", "NY Harbor"));
         var report = S127MarineServicesRules.Validate(ds);
         Assert.True(report.IsValid);
@@ -558,12 +558,12 @@ public class S127MarineServicesRulesTests
         // unclosed surface (12.3 fires), duplicate id (12.7 fires),
         // authority without name (12.8 fires).
         var ds = Dataset(
-            Pbp("BAD-LAT", S127GeometryKind.Point, (95, 0)),
+            Pbp("BAD-LAT", S127GeometryKind.Point, new GeoPosition(95, 0)),
             Pbp("NO-GEOM", S127GeometryKind.None),
             Area("UNCLOSED", S127GeometryKind.Surface,
-                (0, 0), (0, 1), (1, 1), (1, 0)),
-            Pbp("DUP", S127GeometryKind.Point, (0, 0)),
-            Pbp("DUP", S127GeometryKind.Point, (1, 1)),
+                new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1, 0)),
+            Pbp("DUP", S127GeometryKind.Point, new GeoPosition(0, 0)),
+            Pbp("DUP", S127GeometryKind.Point, new GeoPosition(1, 1)),
             Authority("A1"));
 
         var report = S127MarineServicesRules.Validate(ds);

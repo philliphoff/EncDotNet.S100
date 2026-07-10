@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
@@ -45,7 +46,7 @@ public sealed class PirateModeCoordinatorTests
         Id = id,
         Kind = "vessel.ais.cargo",
         GeometryType = GeometryType.Point,
-        Coordinates = new[] { (50.0, -1.0) },
+        Coordinates = new[] { new GeoPosition(50.0, -1.0) },
         Motion = new DynamicMotion { CourseOverGround = Angle.FromDegrees(90.0), Heading = Angle.FromDegrees(88.0), SpeedOverGround = Speed.FromKnots(10.0) },
         LastUpdated = DateTimeOffset.UnixEpoch,
     };

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;
@@ -176,7 +177,7 @@ public sealed class DefaultDynamicFeatureRenderer : IDynamicFeatureRenderer
     /// Earth radius; good enough for default-renderer heading
     /// predictors.
     /// </summary>
-    private static (double Latitude, double Longitude) GeodeticDestination(
+    private static GeoPosition GeodeticDestination(
         double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
     {
         const double R = 6_371_008.8;
@@ -196,6 +197,6 @@ public sealed class DefaultDynamicFeatureRenderer : IDynamicFeatureRenderer
         var x = cosδ - sinφ1 * sinφ2;
         var λ2 = λ1 + Math.Atan2(y, x);
 
-        return (φ2 * 180.0 / Math.PI, ((λ2 * 180.0 / Math.PI) + 540.0) % 360.0 - 180.0);
+        return new GeoPosition(φ2 * 180.0 / Math.PI, ((λ2 * 180.0 / Math.PI) + 540.0) % 360.0 - 180.0);
     }
 }

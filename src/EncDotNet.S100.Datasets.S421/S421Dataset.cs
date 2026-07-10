@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S421;
@@ -66,16 +67,16 @@ public sealed class S421Feature : IS100Feature
     public S100GeometryType GeometryType { get; init; }
 
     /// <summary>Point geometries (latitude, longitude pairs).</summary>
-    public IReadOnlyList<(double Latitude, double Longitude)> Points { get; init; } = [];
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
 
     /// <summary>Curve geometries as ordered coordinate sequences.</summary>
-    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> Curves { get; init; } = [];
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
 
     /// <summary>Surface exterior ring coordinates.</summary>
-    public IReadOnlyList<(double Latitude, double Longitude)> ExteriorRing { get; init; } = [];
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
 
     /// <summary>Surface interior ring coordinates (holes).</summary>
-    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Simple attributes keyed by code.</summary>
     public required IReadOnlyDictionary<string, string> Attributes { get; init; }

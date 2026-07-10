@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 
@@ -27,7 +28,7 @@ public class DrawingInstructionSerializerTests
         LocalOffsetX = 1.5,
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
-        CoordinateOverride = (50.5, -1.25),
+        CoordinateOverride = new GeoPosition(50.5, -1.25),
     };
 
     private static LineInstruction FullLine() => new()
@@ -43,7 +44,7 @@ public class DrawingInstructionSerializerTests
         LineColor = "CHBLK",
         Dashes = [(0.0, 1.0), (1.0, 2.0)],
         DashOnLength = 1.0,
-        CoordinatesOverride = [(50.1, -1.1), (50.2, -1.2), (50.3, -1.3)],
+        CoordinatesOverride = [new GeoPosition(50.1, -1.1), new GeoPosition(50.2, -1.2), new GeoPosition(50.3, -1.3)],
     };
 
     private static AreaInstruction FullArea() => new()
@@ -84,7 +85,7 @@ public class DrawingInstructionSerializerTests
         LineStartOffset = 0.1,
         LineEndOffset = 0.9,
         LineOffsetMode = LinePlacementMode.Absolute,
-        CoordinateOverride = (51.0, 1.0),
+        CoordinateOverride = new GeoPosition(51.0, 1.0),
     };
 
     // Minimal variants: every optional / nullable left at its default so the

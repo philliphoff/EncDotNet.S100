@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.DynamicSources;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
@@ -59,7 +60,7 @@ public class DynamicSourcePickServiceTests
                 Id = "367123456",
                 Kind = "vessel.ais.cargo",
                 GeometryType = GeometryType.Point,
-                Coordinates = new[] { (Lat, Lon) },
+                Coordinates = new[] { new GeoPosition(Lat, Lon) },
                 Motion = new DynamicMotion
                 {
                     CourseOverGround = Angle.FromDegrees(270.0),
@@ -112,7 +113,7 @@ public class DynamicSourcePickServiceTests
                 Id = "ownship",
                 Kind = "ownship",
                 GeometryType = GeometryType.Point,
-                Coordinates = new[] { (Lat, Lon) },
+                Coordinates = new[] { new GeoPosition(Lat, Lon) },
                 LastUpdated = DateTimeOffset.UtcNow,
             },
         });

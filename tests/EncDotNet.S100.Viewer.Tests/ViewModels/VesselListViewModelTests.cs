@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using EncDotNet.S100.Quantities;
@@ -40,7 +41,7 @@ public class VesselListViewModelTests
             Id = OwnShipSource.FeatureId,
             Kind = OwnShipSource.FeatureKind,
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (lat, lon) },
+            Coordinates = new[] { new GeoPosition(lat, lon) },
             LastUpdated = DateTimeOffset.UnixEpoch,
         };
 
@@ -101,7 +102,7 @@ public class VesselListViewModelTests
             Id = $"ais:{mmsi}",
             Kind = "vessel.ais.unknown",
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (lat, lon) },
+            Coordinates = new[] { new GeoPosition(lat, lon) },
             Motion = motion,
             VesselGeometry = geometry,
             Attributes = attrs,
@@ -381,7 +382,7 @@ public class VesselListViewModelTests
         // The viewport is centred near vessel "Near" (10,10); vessel "Far"
         // sits far away at (0,0). With no own ship, ordering should key off
         // the viewport centre, not MMSI (whose order would put 100 first).
-        host.ViewportCenter = (10, 10);
+        host.ViewportCenter = new GeoPosition(10, 10);
         ais.SetFeatures(new[] { Vessel(100, 0, 0, "Far"), Vessel(900, 10.1, 10, "Near") });
         Raise(ais);
 

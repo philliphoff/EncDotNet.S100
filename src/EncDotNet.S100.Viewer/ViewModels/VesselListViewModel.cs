@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -346,7 +347,7 @@ internal sealed class VesselListViewModel : ViewModelBase
     {
         var features = _ais?.CurrentFeatures.ToArray() ?? Array.Empty<DynamicFeature>();
         var ownFeature = ResolveOwnShipFeature();
-        var own = ownFeature is { } f ? (f.Coordinates[0].Latitude, f.Coordinates[0].Longitude) : ((double, double)?)null;
+        var own = ownFeature is { } f ? f.Coordinates[0] : (GeoPosition?)null;
 
         // When the own-ship overlay is on it is the reference point for
         // both range/bearing and list ordering. When it is off, fall back
@@ -586,8 +587,8 @@ internal sealed class VesselListViewModel : ViewModelBase
         DynamicFeature feature,
         double lat,
         double lon,
-        (double Latitude, double Longitude)? own,
-        (double Latitude, double Longitude)? sortOrigin)
+        GeoPosition? own,
+        GeoPosition? sortOrigin)
     {
         item.Latitude = lat;
         item.Longitude = lon;
@@ -711,7 +712,7 @@ internal sealed class VesselListViewModel : ViewModelBase
         VesselListItem item,
         double lat,
         double lon,
-        (double Latitude, double Longitude)? own)
+        GeoPosition? own)
     {
         if (own is { } ownPos)
         {

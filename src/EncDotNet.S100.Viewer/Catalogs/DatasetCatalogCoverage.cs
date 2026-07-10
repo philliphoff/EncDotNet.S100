@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 namespace EncDotNet.S100.Viewer.Catalogs;
 
@@ -13,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Catalogs;
 /// </para>
 /// </remarks>
 internal sealed record DatasetCatalogCoverage(
-    IReadOnlyList<(double Latitude, double Longitude)> Ring,
+    IReadOnlyList<GeoPosition> Ring,
     double MinLatitude,
     double MinLongitude,
     double MaxLatitude,
@@ -25,7 +26,7 @@ internal sealed record DatasetCatalogCoverage(
     /// ring is empty.
     /// </summary>
     public static DatasetCatalogCoverage? FromRing(
-        IReadOnlyList<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<GeoPosition> ring)
     {
         if (ring.Count == 0)
             return null;

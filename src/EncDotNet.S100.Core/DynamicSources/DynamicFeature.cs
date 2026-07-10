@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.DynamicSources;
@@ -70,7 +71,7 @@ public sealed record DynamicFeature
     /// at least 2 for Curve, a closed ring (first and last
     /// coincident) for Surface.
     /// </summary>
-    public required IReadOnlyList<(double Latitude, double Longitude)> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// Optional motion sidecar — only meaningful for moving point

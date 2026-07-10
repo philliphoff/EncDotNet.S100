@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Mcp.Tools.Geometry;
@@ -57,8 +58,8 @@ public static class GeometryIntersection
     }
 
     private static bool SurfaceIntersects(
-        IReadOnlyList<(double Latitude, double Longitude)> ring,
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<GeoPosition> ring,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
         GeoQuery query)
     {
         switch (query)
@@ -119,7 +120,7 @@ public static class GeometryIntersection
     }
 
     private static bool CurveIntersects(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves,
         GeoQuery query)
     {
         switch (query)
@@ -170,7 +171,7 @@ public static class GeometryIntersection
     }
 
     private static bool PointFeatureIntersects(
-        IReadOnlyList<(double Latitude, double Longitude)> points,
+        IReadOnlyList<GeoPosition> points,
         GeoQuery query)
     {
         switch (query)
@@ -219,8 +220,8 @@ public static class GeometryIntersection
     }
 
     private static bool ContainsArea(
-        IReadOnlyList<(double Latitude, double Longitude)> ring,
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
+        IReadOnlyList<GeoPosition> ring,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
         GeoPoint point)
     {
         if (!GeometryDistance.ContainsPoint(ring, point))
@@ -244,8 +245,8 @@ public static class GeometryIntersection
 
     private static bool WithinCorridor(
         GeoPolyline polyline,
-        IReadOnlyList<(double Latitude, double Longitude)> ring,
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes)
+        IReadOnlyList<GeoPosition> ring,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
     {
         if (polyline.CorridorWidthMeters is not { } half || half <= 0)
         {
@@ -284,7 +285,7 @@ public static class GeometryIntersection
     }
 
     private static bool CurvesWithinCorridor(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves,
         GeoPolyline polyline)
     {
         if (polyline.CorridorWidthMeters is not { } half || half <= 0)
@@ -318,8 +319,8 @@ public static class GeometryIntersection
     }
 
     private static bool AnyVertexWithin(
-        IReadOnlyList<(double Latitude, double Longitude)> vertices,
-        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
+        IReadOnlyList<GeoPosition> vertices,
+        IReadOnlyList<(GeoPosition A, GeoPosition B)> segments,
         double half)
     {
         foreach (var v in vertices)
@@ -339,7 +340,7 @@ public static class GeometryIntersection
 
     private static double MinDistanceToRing(
         GeoPoint point,
-        IReadOnlyList<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<GeoPosition> ring)
     {
         var best = double.PositiveInfinity;
         for (var i = 0; i < ring.Count - 1; i++)
@@ -354,23 +355,23 @@ public static class GeometryIntersection
         return best;
     }
 
-    private static IReadOnlyList<(double Latitude, double Longitude)> QueryRing(GeoQuery query) => query switch
+    private static IReadOnlyList<GeoPosition> QueryRing(GeoQuery query) => query switch
     {
         GeoQuery.Box b =>
         [
-            (b.Value.SouthLatitude, b.Value.WestLongitude),
-            (b.Value.SouthLatitude, b.Value.EastLongitude),
-            (b.Value.NorthLatitude, b.Value.EastLongitude),
-            (b.Value.NorthLatitude, b.Value.WestLongitude),
-            (b.Value.SouthLatitude, b.Value.WestLongitude),
+            new GeoPosition(b.Value.SouthLatitude, b.Value.WestLongitude),
+            new GeoPosition(b.Value.SouthLatitude, b.Value.EastLongitude),
+            new GeoPosition(b.Value.NorthLatitude, b.Value.EastLongitude),
+            new GeoPosition(b.Value.NorthLatitude, b.Value.WestLongitude),
+            new GeoPosition(b.Value.SouthLatitude, b.Value.WestLongitude),
         ],
         GeoQuery.Polygon p => p.Value.Ring
-            .Select(v => (v.Latitude, v.Longitude))
+            .Select(v => new GeoPosition(v.Latitude, v.Longitude))
             .ToArray(),
         _ => [],
     };
 
-    private static IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
+    private static IReadOnlyList<(GeoPosition A, GeoPosition B)> Segments(
         IReadOnlyList<GeoPoint> vertices)
     {
         if (vertices.Count == 0 || vertices.Count < 2)
@@ -378,26 +379,26 @@ public static class GeometryIntersection
             return [];
         }
 
-        var builder = new List<((double, double), (double, double))>(vertices.Count - 1);
+        var builder = new List<(GeoPosition, GeoPosition)>(vertices.Count - 1);
         for (var i = 0; i < vertices.Count - 1; i++)
         {
             builder.Add((
-                (vertices[i].Latitude, vertices[i].Longitude),
-                (vertices[i + 1].Latitude, vertices[i + 1].Longitude)));
+                new GeoPosition(vertices[i].Latitude, vertices[i].Longitude),
+                new GeoPosition(vertices[i + 1].Latitude, vertices[i + 1].Longitude)));
         }
 
         return builder;
     }
 
-    private static IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> Segments(
-        IReadOnlyList<(double Latitude, double Longitude)> vertices)
+    private static IReadOnlyList<(GeoPosition A, GeoPosition B)> Segments(
+        IReadOnlyList<GeoPosition> vertices)
     {
         if (vertices.Count == 0 || vertices.Count < 2)
         {
             return [];
         }
 
-        var builder = new List<((double, double), (double, double))>(vertices.Count - 1);
+        var builder = new List<(GeoPosition, GeoPosition)>(vertices.Count - 1);
         for (var i = 0; i < vertices.Count - 1; i++)
         {
             builder.Add((vertices[i], vertices[i + 1]));
@@ -407,13 +408,13 @@ public static class GeometryIntersection
     }
 
     private static bool RingsCross(
-        IReadOnlyList<(double Latitude, double Longitude)> ringA,
-        IReadOnlyList<(double Latitude, double Longitude)> ringB)
+        IReadOnlyList<GeoPosition> ringA,
+        IReadOnlyList<GeoPosition> ringB)
         => SegmentsCross(Segments(ringA), Segments(ringB));
 
     private static bool HolesCross(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
-        IReadOnlyList<(double Latitude, double Longitude)> ringB)
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
+        IReadOnlyList<GeoPosition> ringB)
     {
         if (holes.Count == 0)
         {
@@ -432,13 +433,13 @@ public static class GeometryIntersection
     }
 
     private static bool SegmentsCrossRing(
-        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments,
-        IReadOnlyList<(double Latitude, double Longitude)> ring)
+        IReadOnlyList<(GeoPosition A, GeoPosition B)> segments,
+        IReadOnlyList<GeoPosition> ring)
         => SegmentsCross(segments, Segments(ring));
 
     private static bool HolesCrossSegments(
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> holes,
-        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> segments)
+        IReadOnlyList<IReadOnlyList<GeoPosition>> holes,
+        IReadOnlyList<(GeoPosition A, GeoPosition B)> segments)
     {
         if (holes.Count == 0)
         {
@@ -457,8 +458,8 @@ public static class GeometryIntersection
     }
 
     private static bool SegmentsCross(
-        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> a,
-        IReadOnlyList<((double Latitude, double Longitude) A, (double Latitude, double Longitude) B)> b)
+        IReadOnlyList<(GeoPosition A, GeoPosition B)> a,
+        IReadOnlyList<(GeoPosition A, GeoPosition B)> b)
     {
         foreach (var (a1, a2) in a)
         {
@@ -475,10 +476,10 @@ public static class GeometryIntersection
     }
 
     private static bool SegmentsIntersect(
-        (double Latitude, double Longitude) p1,
-        (double Latitude, double Longitude) p2,
-        (double Latitude, double Longitude) p3,
-        (double Latitude, double Longitude) p4)
+        GeoPosition p1,
+        GeoPosition p2,
+        GeoPosition p3,
+        GeoPosition p4)
     {
         var d1 = Orient(p3, p4, p1);
         var d2 = Orient(p3, p4, p2);
@@ -502,16 +503,16 @@ public static class GeometryIntersection
     // Cross product of (b - a) and (c - a), using longitude as x and
     // latitude as y.
     private static double Orient(
-        (double Latitude, double Longitude) a,
-        (double Latitude, double Longitude) b,
-        (double Latitude, double Longitude) c)
+        GeoPosition a,
+        GeoPosition b,
+        GeoPosition c)
         => (b.Longitude - a.Longitude) * (c.Latitude - a.Latitude)
             - (b.Latitude - a.Latitude) * (c.Longitude - a.Longitude);
 
     private static bool OnSegment(
-        (double Latitude, double Longitude) a,
-        (double Latitude, double Longitude) b,
-        (double Latitude, double Longitude) p)
+        GeoPosition a,
+        GeoPosition b,
+        GeoPosition p)
         => Math.Min(a.Longitude, b.Longitude) <= p.Longitude
             && p.Longitude <= Math.Max(a.Longitude, b.Longitude)
             && Math.Min(a.Latitude, b.Latitude) <= p.Latitude

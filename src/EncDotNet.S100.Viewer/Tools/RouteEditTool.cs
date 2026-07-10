@@ -129,7 +129,7 @@ internal sealed class RouteEditTool : IMapTool
         var world = _context.ScreenToLatLon(pos);
         if (world is { } w && _routes.Routes.ActiveRoute is { } route && index < route.Waypoints.Count)
         {
-            route.MoveWaypoint(index, new GeoPosition(w.Lat, w.Lon));
+            route.MoveWaypoint(index, new GeoPosition(w.Latitude, w.Longitude));
             _routes.SelectedWaypointIndex = index;
             PushSummary();
         }
@@ -171,7 +171,7 @@ internal sealed class RouteEditTool : IMapTool
             return false;
 
         var active = _routes.Routes.ActiveRoute ?? CreateRoute();
-        var position = new GeoPosition(w.Lat, w.Lon);
+        var position = new GeoPosition(w.Latitude, w.Longitude);
 
         // If the click lands on an existing leg, insert a waypoint that
         // splits it; otherwise append to the end of the route.
@@ -253,7 +253,7 @@ internal sealed class RouteEditTool : IMapTool
         for (var i = 0; i < route.Waypoints.Count; i++)
         {
             var p = route.Waypoints[i].Position;
-            if (_context.LatLonToScreen((p.Latitude, p.Longitude)) is not { } s)
+            if (_context.LatLonToScreen(new GeoPosition(p.Latitude, p.Longitude)) is not { } s)
                 continue;
             var dx = s.X - screen.X;
             var dy = s.Y - screen.Y;
@@ -283,8 +283,8 @@ internal sealed class RouteEditTool : IMapTool
         {
             var a = route.Waypoints[i].Position;
             var b = route.Waypoints[i + 1].Position;
-            if (_context.LatLonToScreen((a.Latitude, a.Longitude)) is not { } pa ||
-                _context.LatLonToScreen((b.Latitude, b.Longitude)) is not { } pb)
+            if (_context.LatLonToScreen(new GeoPosition(a.Latitude, a.Longitude)) is not { } pa ||
+                _context.LatLonToScreen(new GeoPosition(b.Latitude, b.Longitude)) is not { } pb)
                 continue;
 
             var dist = DistancePointToSegment(screen, pa, pb);

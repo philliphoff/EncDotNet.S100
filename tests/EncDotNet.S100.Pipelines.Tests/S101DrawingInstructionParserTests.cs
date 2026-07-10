@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Pipelines.Vector;
 
@@ -238,7 +239,7 @@ public class S101DrawingInstructionParserTests
             "AugmentedRay:GeographicCRS,45.0,GeographicCRS,18520;" +
             "LineInstruction:_simple_";
 
-        var anchor = (Latitude: 60.0, Longitude: 25.0);
+        var anchor = new GeoPosition(60.0, 25.0);
         var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
 
         var line = Assert.Single(parsed.OfType<LineInstruction>());
@@ -260,7 +261,7 @@ public class S101DrawingInstructionParserTests
             "AugmentedPath:LocalCRS,LocalCRS,LocalCRS;" +
             "LineInstruction:_simple_";
 
-        var anchor = (Latitude: 51.5, Longitude: -0.1);
+        var anchor = new GeoPosition(51.5, -0.1);
         var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
 
         var line = Assert.Single(parsed.OfType<LineInstruction>());
@@ -288,7 +289,7 @@ public class S101DrawingInstructionParserTests
             "AugmentedPath:LocalCRS,LocalCRS,LocalCRS;" +
             "LineInstruction:_simple_";
 
-        var anchor = (Latitude: 0.0, Longitude: 0.0);
+        var anchor = new GeoPosition(0.0, 0.0);
         var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
 
         var line = Assert.Single(parsed.OfType<LineInstruction>());
@@ -324,7 +325,7 @@ public class S101DrawingInstructionParserTests
             "LineInstruction:_simple_;" +
             "ClearGeometry";
 
-        var anchor = (Latitude: 55.0, Longitude: 12.0);
+        var anchor = new GeoPosition(55.0, 12.0);
         var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
 
         var lines = parsed.OfType<LineInstruction>().ToList();
@@ -365,7 +366,7 @@ public class S101DrawingInstructionParserTests
             "ClearGeometry;" +
             "LineInstruction:_simple_";
 
-        var anchor = (Latitude: 10.0, Longitude: 20.0);
+        var anchor = new GeoPosition(10.0, 20.0);
         var parsed = DrawingInstructionParser.Parse("F1", s, anchor);
 
         var lines = parsed.OfType<LineInstruction>().ToList();

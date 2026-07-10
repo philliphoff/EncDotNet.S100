@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
@@ -169,9 +170,9 @@ internal static class S122DatasetReader
             foreach (var p in EnumerateCoords(f))
             {
                 total++;
-                if (p.lat >= minLat && p.lat <= maxLat && p.lon >= minLon && p.lon <= maxLon)
+                if (p.Latitude >= minLat && p.Latitude <= maxLat && p.Longitude >= minLon && p.Longitude <= maxLon)
                     asIs++;
-                if (p.lon >= minLat && p.lon <= maxLat && p.lat >= minLon && p.lat <= maxLon)
+                if (p.Longitude >= minLat && p.Longitude <= maxLat && p.Latitude >= minLon && p.Latitude <= maxLon)
                     swapped++;
             }
         }
@@ -182,7 +183,7 @@ internal static class S122DatasetReader
         return asIs * 4 < total && swapped * 4 > total * 3;
     }
 
-    private static IEnumerable<(double lat, double lon)> EnumerateCoords(S122Feature f)
+    private static IEnumerable<GeoPosition> EnumerateCoords(S122Feature f)
     {
         foreach (var p in f.Points) yield return p;
         foreach (var c in f.Curves)
@@ -205,19 +206,19 @@ internal static class S122DatasetReader
         ComplexAttributes = f.ComplexAttributes,
     };
 
-    private static IReadOnlyList<(double, double)> SwapMany(IReadOnlyList<(double, double)> src)
+    private static IReadOnlyList<GeoPosition> SwapMany(IReadOnlyList<GeoPosition> src)
     {
         if (src.Count == 0) return src;
-        var b = new List<(double, double)>(src.Count);
-        foreach (var (a, c) in src) b.Add((c, a));
+        var b = new List<GeoPosition>(src.Count);
+        foreach (var (a, c) in src) b.Add(new GeoPosition(c, a));
         return b;
     }
 
-    private static IReadOnlyList<IReadOnlyList<(double, double)>> SwapRings(
-        IReadOnlyList<IReadOnlyList<(double, double)>> src)
+    private static IReadOnlyList<IReadOnlyList<GeoPosition>> SwapRings(
+        IReadOnlyList<IReadOnlyList<GeoPosition>> src)
     {
         if (src.Count == 0) return src;
-        var b = new List<IReadOnlyList<(double, double)>>(src.Count);
+        var b = new List<IReadOnlyList<GeoPosition>>(src.Count);
         foreach (var ring in src) b.Add(SwapMany(ring));
         return b;
     }
@@ -289,12 +290,12 @@ internal static class S122DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        IReadOnlyList<(double, double)> points = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
-        IReadOnlyList<(double, double)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         // Look for geometry in the "geometry" child element or directly under the feature.
@@ -336,7 +337,7 @@ internal static class S122DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var curveBuilder = new List<IReadOnlyList<(double, double)>>();
+            var curveBuilder = new List<IReadOnlyList<GeoPosition>>();
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Count > 0)
                 curveBuilder.Add(coords);

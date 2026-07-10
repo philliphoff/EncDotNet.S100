@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.IO;
 using System.Text;
 
@@ -329,7 +330,7 @@ public static class DrawingInstructionSerializer
 
     private static int? ReadNullableInt(BinaryReader r) => r.ReadBoolean() ? r.ReadInt32() : null;
 
-    private static void WriteNullableCoordinate(BinaryWriter w, (double Latitude, double Longitude)? value)
+    private static void WriteNullableCoordinate(BinaryWriter w, GeoPosition? value)
     {
         if (value is { } v)
         {
@@ -343,16 +344,16 @@ public static class DrawingInstructionSerializer
         }
     }
 
-    private static (double Latitude, double Longitude)? ReadNullableCoordinate(BinaryReader r)
+    private static GeoPosition? ReadNullableCoordinate(BinaryReader r)
     {
         if (!r.ReadBoolean())
             return null;
         var lat = r.ReadDouble();
         var lon = r.ReadDouble();
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
-    private static void WriteCoordinateList(BinaryWriter w, IReadOnlyList<(double Latitude, double Longitude)>? list)
+    private static void WriteCoordinateList(BinaryWriter w, IReadOnlyList<GeoPosition>? list)
     {
         if (list is null)
         {
@@ -368,18 +369,18 @@ public static class DrawingInstructionSerializer
         }
     }
 
-    private static IReadOnlyList<(double Latitude, double Longitude)>? ReadCoordinateList(BinaryReader r)
+    private static IReadOnlyList<GeoPosition>? ReadCoordinateList(BinaryReader r)
     {
         var count = r.ReadInt32();
         if (count < 0)
             return null;
 
-        var list = new List<(double, double)>(count);
+        var list = new List<GeoPosition>(count);
         for (var i = 0; i < count; i++)
         {
             var lat = r.ReadDouble();
             var lon = r.ReadDouble();
-            list.Add((lat, lon));
+            list.Add(new GeoPosition(lat, lon));
         }
 
         return list;

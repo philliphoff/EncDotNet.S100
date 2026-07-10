@@ -32,8 +32,8 @@ public class S411SeaIceRulesTests
         ComplexAttributes = [],
     };
 
-    private static IReadOnlyList<GeoPosition> Coords(params (double lat, double lon)[] pts) =>
-        pts.Select(p => new GeoPosition(p.lat, p.lon)).ToArray();
+    private static IReadOnlyList<GeoPosition> Coords(params GeoPosition[] pts) =>
+        pts;
 
     private static S411SeaIce SeaIce(
         string id,
@@ -67,7 +67,7 @@ public class S411SeaIceRulesTests
         NormalizedFeatureType = "Iceberg",
         SourceFeatureType = "Iceberg",
         GeometryKind = S411GeometryKind.Point,
-        Coordinates = Coords((45, -50)),
+        Coordinates = Coords(new GeoPosition(45, -50)),
         IcebergSizeCode = sizeCode,
         Source = DummySource,
     };
@@ -88,7 +88,7 @@ public class S411SeaIceRulesTests
         NormalizedFeatureType = "IceThickness",
         SourceFeatureType = "IceThickness",
         GeometryKind = S411GeometryKind.Point,
-        Coordinates = Coords((45, -50)),
+        Coordinates = Coords(new GeoPosition(45, -50)),
         IceAverageThickness = thickness,
         Source = DummySource,
     };
@@ -104,7 +104,7 @@ public class S411SeaIceRulesTests
     };
 
     private static IReadOnlyList<GeoPosition> ClosedSquare() =>
-        Coords((0, 0), (0, 1), (1, 1), (1, 0), (0, 0));
+        Coords(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1, 0), new GeoPosition(0, 0));
 
     private static S411SeaIceInventory Inventory(
         IEnumerable<S411IceFeature>? ice = null,
@@ -134,7 +134,7 @@ public class S411SeaIceRulesTests
     [InlineData(0.0, -200.0)]
     public void CoordinatesInWgs84Range_Fails_WhenOutOfRange(double lat, double lon)
     {
-        var inv = Inventory(ice: new[] { SeaIce("F1", S411GeometryKind.Point, Coords((lat, lon))) });
+        var inv = Inventory(ice: new[] { SeaIce("F1", S411GeometryKind.Point, Coords(new GeoPosition(lat, lon))) });
         var findings = S411SeaIceRules.CoordinatesInWgs84Range
             .Evaluate(inv, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -147,7 +147,7 @@ public class S411SeaIceRulesTests
     [Fact]
     public void CoordinatesInWgs84Range_ReportsBothAxes_WhenBothInvalid()
     {
-        var inv = Inventory(ice: new[] { SeaIce("F1", S411GeometryKind.Point, Coords((200, 200))) });
+        var inv = Inventory(ice: new[] { SeaIce("F1", S411GeometryKind.Point, Coords(new GeoPosition(200, 200))) });
         var findings = S411SeaIceRules.CoordinatesInWgs84Range
             .Evaluate(inv, ValidationContext.Default).ToList();
         var f = Assert.Single(findings);
@@ -158,7 +158,7 @@ public class S411SeaIceRulesTests
     public void CoordinatesInWgs84Range_AlsoChecksDataCoveragesAndOthers()
     {
         var inv = Inventory(
-            coverages: new[] { DataCoverage("C1", Coords((100, 0), (0, 0), (0, 1), (100, 0))) });
+            coverages: new[] { DataCoverage("C1", Coords(new GeoPosition(100, 0), new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(100, 0))) });
         var findings = S411SeaIceRules.CoordinatesInWgs84Range
             .Evaluate(inv, ValidationContext.Default).ToList();
         Assert.Equal(2, findings.Count);
@@ -180,7 +180,7 @@ public class S411SeaIceRulesTests
     {
         var inv = Inventory(ice: new[]
         {
-            SeaIce("F1", coordinates: Coords((0, 0), (0, 1), (0, 0))),
+            SeaIce("F1", coordinates: Coords(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(0, 0))),
         });
         var findings = S411SeaIceRules.SurfacePolygonClosed
             .Evaluate(inv, ValidationContext.Default).ToList();
@@ -195,7 +195,7 @@ public class S411SeaIceRulesTests
     {
         var inv = Inventory(ice: new[]
         {
-            SeaIce("F1", coordinates: Coords((0, 0), (0, 1), (1, 1), (1, 0))),
+            SeaIce("F1", coordinates: Coords(new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(1, 0))),
         });
         var findings = S411SeaIceRules.SurfacePolygonClosed
             .Evaluate(inv, ValidationContext.Default).ToList();
@@ -209,7 +209,7 @@ public class S411SeaIceRulesTests
     {
         var inv = Inventory(ice: new[]
         {
-            (S411IceFeature)IceEdge("E1", Coords((0, 0), (1, 1))),
+            (S411IceFeature)IceEdge("E1", Coords(new GeoPosition(0, 0), new GeoPosition(1, 1))),
             Iceberg("I1"),
         });
         var findings = S411SeaIceRules.SurfacePolygonClosed.Evaluate(inv, ValidationContext.Default);
@@ -221,7 +221,7 @@ public class S411SeaIceRulesTests
     [Fact]
     public void CurveHasMinimumVertices_Passes_WhenTwoOrMore()
     {
-        var inv = Inventory(ice: new[] { (S411IceFeature)IceEdge("E1", Coords((0, 0), (1, 1))) });
+        var inv = Inventory(ice: new[] { (S411IceFeature)IceEdge("E1", Coords(new GeoPosition(0, 0), new GeoPosition(1, 1))) });
         var findings = S411SeaIceRules.CurveHasMinimumVertices.Evaluate(inv, ValidationContext.Default);
         Assert.Empty(findings);
     }

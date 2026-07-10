@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Features;
@@ -72,10 +73,10 @@ internal static class S129Synth
 
     public static S129Feature PlanArea(
         string id = "PLAN_AREA_1",
-        IEnumerable<(double Lat, double Lon)>? ring = null)
+        IEnumerable<GeoPosition>? ring = null)
     {
-        var ext = (ring ?? new[] { (47.0, -122.0), (47.0, -121.0), (48.0, -121.0), (47.0, -122.0) })
-            .Select(p => (p.Lat, p.Lon)).ToArray();
+        var ext = (ring ?? new[] { new GeoPosition(47.0, -122.0), new GeoPosition(47.0, -121.0), new GeoPosition(48.0, -121.0), new GeoPosition(47.0, -122.0) })
+            .ToArray();
         return new S129Feature
         {
             Id = id,
@@ -109,14 +110,14 @@ internal static class S129Synth
     public static S129Feature NonNavigableArea(
         string id = "NN_1",
         int? scaleMinimum = 50000,
-        IEnumerable<(double Lat, double Lon)>? ring = null)
+        IEnumerable<GeoPosition>? ring = null)
     {
         var attrs = new Dictionary<string, string>();
         if (scaleMinimum is { } sm)
             attrs["scaleMinimum"] = sm.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        var ext = (ring ?? new[] { (47.1, -121.9), (47.1, -121.8), (47.2, -121.8), (47.1, -121.9) })
-            .Select(p => (p.Lat, p.Lon)).ToArray();
+        var ext = (ring ?? new[] { new GeoPosition(47.1, -121.9), new GeoPosition(47.1, -121.8), new GeoPosition(47.2, -121.8), new GeoPosition(47.1, -121.9) })
+            .ToArray();
 
         return new S129Feature
         {
@@ -152,7 +153,7 @@ internal static class S129Synth
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
             GeometryType = S100GeometryType.Point,
-            Points = [(latitude, longitude)],
+            Points = [new GeoPosition(latitude, longitude)],
             Curves = [],
             ExteriorRing = [],
             InteriorRings = [],

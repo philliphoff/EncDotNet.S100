@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S122;
 using EncDotNet.S100.Features;
@@ -22,7 +23,7 @@ public class QueryFeaturesToolAttributeTests
             Id = id,
             FeatureType = featureType,
             GeometryType = S100GeometryType.Point,
-            Points = [(5.0, 5.0)],
+            Points = [new GeoPosition(5.0, 5.0)],
             Curves = [],
             ExteriorRing = [],
             InteriorRings = [],

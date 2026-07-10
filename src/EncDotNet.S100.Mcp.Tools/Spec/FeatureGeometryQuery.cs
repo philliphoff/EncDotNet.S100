@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Mcp.Tools.Geometry;
 using EncDotNet.S100.Pipelines;
@@ -32,7 +33,7 @@ public static class FeatureGeometryQuery
         var east = double.NegativeInfinity;
         var any = false;
 
-        void Accumulate((double Latitude, double Longitude) p)
+        void Accumulate(GeoPosition p)
         {
             any = true;
             if (p.Latitude < south) south = p.Latitude;

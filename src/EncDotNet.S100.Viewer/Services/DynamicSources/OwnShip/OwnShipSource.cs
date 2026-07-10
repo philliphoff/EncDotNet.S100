@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -264,7 +265,7 @@ internal sealed class OwnShipSource : IDynamicFeatureSource, INotifyPropertyChan
             Id = FeatureId,
             Kind = FeatureKind,
             GeometryType = GeometryType.Point,
-            Coordinates = new[] { (fix.Latitude, fix.Longitude) },
+            Coordinates = new[] { new GeoPosition(fix.Latitude, fix.Longitude) },
             Motion = motion,
             VesselGeometry = _geometryProvider?.Current,
             LastUpdated = fix.Timestamp,

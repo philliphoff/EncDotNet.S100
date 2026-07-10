@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Linq;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
@@ -17,7 +18,7 @@ public class S201FeatureXmlSourceTests
                 Id = "f1",
                 FeatureType = "LateralBuoy",
                 GeometryType = S100GeometryType.Point,
-                Points = [(36.95, -76.0)],
+                Points = [new GeoPosition(36.95, -76.0)],
                 Curves = [],
                 ExteriorRing = [],
                 InteriorRings = [],

@@ -331,7 +331,7 @@ public class S421RoutePlanTests
                 Id = $"RTE.WPT.{i}",
                 FeatureType = "RouteWaypoint",
                 GeometryType = S100GeometryType.Point,
-                Points = [(60.0 + 0.01 * i, 25.0 + 0.01 * i)],
+                Points = [new GeoPosition(60.0 + 0.01 * i, 25.0 + 0.01 * i)],
                 Curves = [],
                 ExteriorRing = [],
                 InteriorRings = [],
@@ -351,8 +351,8 @@ public class S421RoutePlanTests
                 Points = [],
                 Curves = [
                     [
-                        (60.0 + 0.01 * i, 25.0 + 0.01 * i),
-                        (60.0 + 0.01 * (i + 1), 25.0 + 0.01 * (i + 1))]],
+                        new GeoPosition(60.0 + 0.01 * i, 25.0 + 0.01 * i),
+                        new GeoPosition(60.0 + 0.01 * (i + 1), 25.0 + 0.01 * (i + 1))]],
                 ExteriorRing = [],
                 InteriorRings = [],
                 Attributes = emptyAttrs,

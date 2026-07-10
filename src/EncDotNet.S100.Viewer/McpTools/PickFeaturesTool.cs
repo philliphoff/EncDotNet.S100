@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.Generic;
 using System;
 using System.ComponentModel;
@@ -228,7 +229,7 @@ internal sealed class PickFeaturesTool
         return null;
     }
 
-    private (double Latitude, double Longitude)? ResolvePixelPoint(
+    private GeoPosition? ResolvePixelPoint(
         PickFeaturesRequest request,
         out ToolError? error)
     {

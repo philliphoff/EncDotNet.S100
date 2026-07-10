@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Features;
@@ -185,10 +186,10 @@ internal static class S201DatasetReader
         string Id,
         string FeatureType,
         S100GeometryType GeometryType,
-        IReadOnlyList<(double, double)> Points,
-        IReadOnlyList<IReadOnlyList<(double, double)>> Curves,
-        IReadOnlyList<(double, double)> ExteriorRing,
-        IReadOnlyList<IReadOnlyList<(double, double)>> InteriorRings,
+        IReadOnlyList<GeoPosition> Points,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> Curves,
+        IReadOnlyList<GeoPosition> ExteriorRing,
+        IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings,
         IReadOnlyDictionary<string, string> Attributes,
         IReadOnlyList<S201ComplexAttribute> ComplexAttributes);
 
@@ -223,12 +224,12 @@ internal static class S201DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
     {
-        IReadOnlyList<(double Latitude, double Longitude)> points = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves = [];
-        IReadOnlyList<(double Latitude, double Longitude)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Elements()

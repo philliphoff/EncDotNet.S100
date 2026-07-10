@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -1023,7 +1024,7 @@ public partial class MainWindow : ShadUI.Window
     /// math used by the mouse lat/lon readout in
     /// <see cref="MapInteractionController"/>.
     /// </summary>
-    private (double Lat, double Lon)? ScreenToLatLon(Point screen)
+    private GeoPosition? ScreenToLatLon(Point screen)
     {
         if (MapControl.Map?.Navigator is not { } navigator)
             return null;
@@ -1040,7 +1041,7 @@ public partial class MainWindow : ShadUI.Window
         // Normalize longitude into the canonical (-180, 180] range so paths
         // that cross the antimeridian render with consistent endpoints.
         lon = ((lon + 540.0) % 360.0) - 180.0;
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
     /// <summary>
@@ -1050,12 +1051,12 @@ public partial class MainWindow : ShadUI.Window
     /// by editing tools to hit-test pointer gestures against world-space
     /// features.
     /// </summary>
-    private Point? LatLonToScreen((double Lat, double Lon) world)
+    private Point? LatLonToScreen(GeoPosition world)
     {
         if (MapControl.Map?.Navigator is not { } navigator)
             return null;
 
-        var (x, y) = SphericalMercator.FromLonLat(world.Lon, world.Lat);
+        var (x, y) = SphericalMercator.FromLonLat(world.Longitude, world.Latitude);
         var screen = navigator.Viewport.WorldToScreen(x, y);
         if (double.IsNaN(screen.X) || double.IsNaN(screen.Y) ||
             double.IsInfinity(screen.X) || double.IsInfinity(screen.Y))

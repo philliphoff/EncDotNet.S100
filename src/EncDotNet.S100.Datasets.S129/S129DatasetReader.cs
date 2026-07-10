@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Xml.Linq;
 using System.Collections.ObjectModel;
 using S100Diag = EncDotNet.S100.Datasets.S129.Diagnostics;
@@ -100,12 +101,12 @@ internal static class S129DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        IReadOnlyList<(double Latitude, double Longitude)> points = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves = [];
-        IReadOnlyList<(double Latitude, double Longitude)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -146,7 +147,7 @@ internal static class S129DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var curveBuilder = new List<IReadOnlyList<(double, double)>>();
+            var curveBuilder = new List<IReadOnlyList<GeoPosition>>();
             var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
             if (coords.Count > 0)
                 curveBuilder.Add(coords);

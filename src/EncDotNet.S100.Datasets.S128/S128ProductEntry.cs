@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Datasets.S128;
 
@@ -133,7 +134,7 @@ public sealed class S128ProductEntry
     /// Coverage exterior ring of the entry's first surface geometry, or an
     /// empty array if the feature is geometry-less.
     /// </summary>
-    public IReadOnlyList<(double Latitude, double Longitude)> CoverageRing =>
+    public IReadOnlyList<GeoPosition> CoverageRing =>
         Feature.ExteriorRing.Count == 0 ? [] : Feature.ExteriorRing;
 
     /// <summary>

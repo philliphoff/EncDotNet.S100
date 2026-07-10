@@ -31,7 +31,7 @@ internal static class SyntheticDatasets
             Id = id,
             FeatureType = "UnderKeelClearanceControlPoint",
             GeometryType = S100GeometryType.Point,
-            Points = [(lat, lon)],
+            Points = [new GeoPosition(lat, lon)],
             ExteriorRing = [],
             InteriorRings = [],
             Curves = [],

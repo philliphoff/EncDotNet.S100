@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Core;
@@ -61,7 +62,7 @@ public sealed class Feature : IS100Feature
     /// Points: single coordinate. Lines/Areas: ordered list of (lat, lon) pairs.
     /// For surfaces this is the exterior ring; holes are carried in <see cref="InteriorRings"/>.
     /// </summary>
-    public required IReadOnlyList<(double Latitude, double Longitude)> Coordinates { get; init; }
+    public required IReadOnlyList<GeoPosition> Coordinates { get; init; }
 
     /// <summary>
     /// Interior (hole) rings for surface geometries, each an ordered list of
@@ -70,7 +71,7 @@ public sealed class Feature : IS100Feature
     /// when filling, so that, for example, a sea/depth area encoded around islands
     /// does not paint over the land cut out as holes.
     /// </summary>
-    public IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> InteriorRings { get; init; } = [];
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
 
     /// <summary>Feature attribute values keyed by attribute code.</summary>
     public required IReadOnlyDictionary<string, object?> Attributes { get; init; }
@@ -87,18 +88,18 @@ public sealed class Feature : IS100Feature
         _ => S100GeometryType.None,
     };
 
-    IReadOnlyList<(double Latitude, double Longitude)> IS100Feature.Points =>
+    IReadOnlyList<GeoPosition> IS100Feature.Points =>
         GeometryType == GeometryType.Point ? Coordinates : [];
 
-    IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> IS100Feature.Curves =>
+    IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.Curves =>
         GeometryType == GeometryType.Curve && Coordinates.Count > 0
             ? [Coordinates]
             : [];
 
-    IReadOnlyList<(double Latitude, double Longitude)> IS100Feature.ExteriorRing =>
+    IReadOnlyList<GeoPosition> IS100Feature.ExteriorRing =>
         GeometryType == GeometryType.Surface ? Coordinates : [];
 
-    IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> IS100Feature.InteriorRings =>
+    IReadOnlyList<IReadOnlyList<GeoPosition>> IS100Feature.InteriorRings =>
         GeometryType == GeometryType.Surface ? InteriorRings : [];
 
     IReadOnlyDictionary<string, string> IS100Feature.Attributes

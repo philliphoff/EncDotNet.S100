@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
@@ -7,10 +8,10 @@ namespace EncDotNet.S100.Mcp.Tools.Tests;
 
 public class GeometryIntersectionTests
 {
-    private static S124Feature Square(string id, double half, params IReadOnlyList<(double Lat, double Lon)>[] holes)
+    private static S124Feature Square(string id, double half, params IReadOnlyList<GeoPosition>[] holes)
     {
-        IReadOnlyList<(double, double)> ring = [
-            (-half, -half), (-half, half), (half, half), (half, -half), (-half, -half)];
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-half, -half), new GeoPosition(-half, half), new GeoPosition(half, half), new GeoPosition(half, -half), new GeoPosition(-half, -half)];
         return new S124Feature
         {
             Id = id,
@@ -23,7 +24,7 @@ public class GeometryIntersectionTests
         };
     }
 
-    private static S124Feature Curve(string id, params (double Lat, double Lon)[] vertices) => new()
+    private static S124Feature Curve(string id, params GeoPosition[] vertices) => new()
     {
         Id = id,
         FeatureType = "Fairway",
@@ -38,14 +39,14 @@ public class GeometryIntersectionTests
         Id = id,
         FeatureType = "Light",
         GeometryType = S100GeometryType.Point,
-        Points = [(lat, lon)],
+        Points = [new GeoPosition(lat, lon)],
         Attributes = ReadOnlyDictionary<string, string>.Empty,
         ComplexAttributes = [],
     };
 
-    private static GeoQuery.Polyline Leg(double? corridor, params (double Lat, double Lon)[] vertices)
+    private static GeoQuery.Polyline Leg(double? corridor, params GeoPosition[] vertices)
         => new(new GeoPolyline(
-            vertices.Select(v => new GeoPoint(v.Lat, v.Lon)).ToArray(),
+            vertices.Select(v => new GeoPoint(v.Latitude, v.Longitude)).ToArray(),
             corridor));
 
     [Fact]
@@ -66,7 +67,7 @@ public class GeometryIntersectionTests
             FeatureType = "RestrictedArea",
             GeometryType = S100GeometryType.Surface,
             ExteriorRing = [
-                (0, 0), (2, 0), (0, 2), (0, 0)],
+                new GeoPosition(0, 0), new GeoPosition(2, 0), new GeoPosition(0, 2), new GeoPosition(0, 0)],
             InteriorRings = [],
             Attributes = ReadOnlyDictionary<string, string>.Empty,
             ComplexAttributes = [],
@@ -80,8 +81,8 @@ public class GeometryIntersectionTests
     [Fact]
     public void Point_inside_hole_does_not_intersect()
     {
-        IReadOnlyList<(double, double)> hole = [
-            (-0.2, -0.2), (-0.2, 0.2), (0.2, 0.2), (0.2, -0.2), (-0.2, -0.2)];
+        IReadOnlyList<GeoPosition> hole = [
+            new GeoPosition(-0.2, -0.2), new GeoPosition(-0.2, 0.2), new GeoPosition(0.2, 0.2), new GeoPosition(0.2, -0.2), new GeoPosition(-0.2, -0.2)];
         var donut = Square("d", 1.0, hole);
         Assert.False(GeometryIntersection.Intersects(donut, new GeoQuery.Point(new GeoPoint(0, 0))));
     }
@@ -91,7 +92,7 @@ public class GeometryIntersectionTests
     {
         var area = Square("a", 1.0);
         // A leg from far west to far east passes straight through the area.
-        var leg = Leg(null, (0.0, -5.0), (0.0, 5.0));
+        var leg = Leg(null, new GeoPosition(0.0, -5.0), new GeoPosition(0.0, 5.0));
         Assert.True(GeometryIntersection.Intersects(area, leg));
     }
 
@@ -100,15 +101,15 @@ public class GeometryIntersectionTests
     {
         var area = Square("a", 1.0);
         // A leg well to the north of the area.
-        var leg = Leg(null, (5.0, -5.0), (5.0, 5.0));
+        var leg = Leg(null, new GeoPosition(5.0, -5.0), new GeoPosition(5.0, 5.0));
         Assert.False(GeometryIntersection.Intersects(area, leg));
     }
 
     [Fact]
     public void Route_leg_crossing_curve_intersects()
     {
-        var curve = Curve("c", (-1.0, 0.0), (1.0, 0.0));
-        var leg = Leg(null, (0.0, -1.0), (0.0, 1.0));
+        var curve = Curve("c", new GeoPosition(-1.0, 0.0), new GeoPosition(1.0, 0.0));
+        var leg = Leg(null, new GeoPosition(0.0, -1.0), new GeoPosition(0.0, 1.0));
         Assert.True(GeometryIntersection.Intersects(curve, leg));
     }
 
@@ -117,12 +118,12 @@ public class GeometryIntersectionTests
     {
         var point = Point("p", 0.0, 0.0);
         // A leg ~111 m north of the point.
-        var near = Leg(null, (0.001, -1.0), (0.001, 1.0));
+        var near = Leg(null, new GeoPosition(0.001, -1.0), new GeoPosition(0.001, 1.0));
 
         Assert.False(GeometryIntersection.Intersects(point, near));
         Assert.True(GeometryIntersection.Intersects(
             point,
-            Leg(500.0, (0.001, -1.0), (0.001, 1.0))));
+            Leg(500.0, new GeoPosition(0.001, -1.0), new GeoPosition(0.001, 1.0))));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Globalization;
 using System.Xml.Linq;
 using EncDotNet.S100.Features;
@@ -186,12 +187,12 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseInlineGmlGeometry(XElement element)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseInlineGmlGeometry(XElement element)
     {
-        IReadOnlyList<(double, double)> points = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
-        IReadOnlyList<(double, double)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var polygon = element.Element(GmlNamespaces.Gml + "Polygon");
@@ -322,12 +323,12 @@ internal static class S411DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGenericGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        IReadOnlyList<(double, double)> points = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> curves = [];
-        IReadOnlyList<(double, double)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double, double)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")

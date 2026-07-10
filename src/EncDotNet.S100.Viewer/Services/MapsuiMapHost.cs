@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -181,7 +182,7 @@ internal sealed class MapsuiMapHost : IMapHost
         nav.CenterOn(x, y, durationMs);
     }
 
-    public (double Latitude, double Longitude)? TryGetViewportCenterWgs84()
+    public GeoPosition? TryGetViewportCenterWgs84()
     {
         if (_mapControl.Map?.Navigator is not { } nav)
             return null;
@@ -194,7 +195,7 @@ internal sealed class MapsuiMapHost : IMapHost
         if (double.IsNaN(lat) || double.IsNaN(lon) || lat < -90.0 || lat > 90.0)
             return null;
 
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
     public (double Width, double Height)? TryGetViewportSizePx()
@@ -209,7 +210,7 @@ internal sealed class MapsuiMapHost : IMapHost
         return (viewport.Width, viewport.Height);
     }
 
-    public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx)
+    public GeoPosition? TryScreenToWgs84(double xPx, double yPx)
     {
         if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
             return null;
@@ -229,10 +230,10 @@ internal sealed class MapsuiMapHost : IMapHost
             return null;
         }
 
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
-    public (double Latitude, double Longitude)? TryImagePixelToWgs84(
+    public GeoPosition? TryImagePixelToWgs84(
         double xPx, double yPx, int imageWidthPx, int imageHeightPx)
     {
         if (double.IsNaN(xPx) || double.IsNaN(yPx) || double.IsInfinity(xPx) || double.IsInfinity(yPx))
@@ -270,7 +271,7 @@ internal sealed class MapsuiMapHost : IMapHost
             return null;
         }
 
-        return (lat, lon);
+        return new GeoPosition(lat, lon);
     }
 
     public void AddOverlayLayer(ILayer layer)

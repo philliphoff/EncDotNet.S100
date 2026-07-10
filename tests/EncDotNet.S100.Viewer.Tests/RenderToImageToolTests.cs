@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,10 +48,10 @@ public class RenderToImageToolTests
         public void SetRotation(double degrees) { }
 
         public void CenterOn(double latitudeWgs84, double longitudeWgs84, long durationMs = 300) { }
-        public (double Latitude, double Longitude)? TryGetViewportCenterWgs84() => null;
+        public GeoPosition? TryGetViewportCenterWgs84() => null;
         public (double Width, double Height)? TryGetViewportSizePx() => ViewportSize;
-        public (double Latitude, double Longitude)? TryScreenToWgs84(double xPx, double yPx) => null;
-        public (double Latitude, double Longitude)? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
+        public GeoPosition? TryScreenToWgs84(double xPx, double yPx) => null;
+        public GeoPosition? TryImagePixelToWgs84(double xPx, double yPx, int imageWidthPx, int imageHeightPx) => null;
 
         public Task<byte[]?> RenderCurrentViewToPngAsync(int widthPx, int heightPx, double pixelDensity, CancellationToken ct = default)
         {

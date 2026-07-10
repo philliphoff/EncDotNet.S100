@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Threading;
 using EncDotNet.S100.Quantities;
 
@@ -315,7 +316,7 @@ internal sealed class SteerableOwnShipPositionProvider
     /// Great-circle destination given a start point (degrees), bearing
     /// (degrees true), and distance (metres).
     /// </summary>
-    internal static (double Latitude, double Longitude) GeodeticDestination(
+    internal static GeoPosition GeodeticDestination(
         double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
     {
         var δ = distanceMetres / EarthRadiusMetres;
@@ -336,7 +337,7 @@ internal sealed class SteerableOwnShipPositionProvider
 
         var latOut = φ2 * 180.0 / Math.PI;
         var lonOut = ((λ2 * 180.0 / Math.PI) + 540.0) % 360.0 - 180.0;
-        return (latOut, lonOut);
+        return new GeoPosition(latOut, lonOut);
     }
 
     /// <summary>

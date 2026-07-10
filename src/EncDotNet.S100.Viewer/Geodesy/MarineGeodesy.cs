@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System;
 using System.Collections.Generic;
 
@@ -118,7 +119,7 @@ internal static class MarineGeodesy
     /// as a curve in Mercator space rather than a straight (rhumb-looking)
     /// line. <paramref name="segments"/> is clamped to at least 1.
     /// </summary>
-    public static IReadOnlyList<(double Lat, double Lon)> GreatCircleIntermediatePoints(
+    public static IReadOnlyList<GeoPosition> GreatCircleIntermediatePoints(
         double lat1Deg, double lon1Deg, double lat2Deg, double lon2Deg, int segments)
     {
         if (segments < 1) segments = 1;
@@ -136,12 +137,12 @@ internal static class MarineGeodesy
         var a = sinDphi * sinDphi + Math.Cos(phi1) * Math.Cos(phi2) * sinDlam * sinDlam;
         var delta = 2.0 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1.0 - a));
 
-        var result = new List<(double Lat, double Lon)>(segments + 1);
+        var result = new List<GeoPosition>(segments + 1);
         if (delta < 1e-12)
         {
             // Coincident points — nothing to interpolate.
-            result.Add((lat1Deg, lon1Deg));
-            result.Add((lat2Deg, lon2Deg));
+            result.Add(new GeoPosition(lat1Deg, lon1Deg));
+            result.Add(new GeoPosition(lat2Deg, lon2Deg));
             return result;
         }
 
@@ -164,7 +165,7 @@ internal static class MarineGeodesy
             var z = aCoef * z1 + bCoef * z2;
             var lat = Math.Atan2(z, Math.Sqrt(x * x + y * y));
             var lon = Math.Atan2(y, x);
-            result.Add((RadToDeg(lat), RadToDeg(lon)));
+            result.Add(new GeoPosition(RadToDeg(lat), RadToDeg(lon)));
         }
 
         return result;
@@ -186,38 +187,38 @@ internal static class MarineGeodesy
     /// space. Each new sub-path resets to the canonical range at its
     /// first point.
     /// </remarks>
-    public static IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>> SplitAtAntimeridian(
-        IEnumerable<(double Lat, double Lon)> points)
+    public static IReadOnlyList<IReadOnlyList<GeoPosition>> SplitAtAntimeridian(
+        IEnumerable<GeoPosition> points)
     {
         ArgumentNullException.ThrowIfNull(points);
 
-        var result = new List<List<(double Lat, double Lon)>>();
-        List<(double Lat, double Lon)>? current = null;
+        var result = new List<List<GeoPosition>>();
+        List<GeoPosition>? current = null;
         double prevLon = 0.0;
 
         foreach (var pt in points)
         {
             if (current is null)
             {
-                current = new List<(double Lat, double Lon)> { pt };
-                prevLon = pt.Lon;
+                current = new List<GeoPosition> { pt };
+                prevLon = pt.Longitude;
                 result.Add(current);
                 continue;
             }
 
             // If the longitude jump exceeds 180° in either direction, the
             // shorter rhumb crossed the antimeridian — start a new sub-path.
-            var rawDelta = pt.Lon - prevLon;
+            var rawDelta = pt.Longitude - prevLon;
             if (rawDelta > 180.0 || rawDelta < -180.0)
             {
-                current = new List<(double Lat, double Lon)> { pt };
+                current = new List<GeoPosition> { pt };
                 result.Add(current);
-                prevLon = pt.Lon;
+                prevLon = pt.Longitude;
             }
             else
             {
                 var unwrapped = prevLon + rawDelta;
-                current.Add((pt.Lat, unwrapped));
+                current.Add(new GeoPosition(pt.Latitude, unwrapped));
                 prevLon = unwrapped;
             }
         }

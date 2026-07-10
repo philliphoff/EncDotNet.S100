@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Diagnostics;
 using System.Xml.Linq;
 using System.Collections.ObjectModel;
@@ -229,13 +230,13 @@ internal static class S128DatasetReader
         ?? element.Attribute(GmlNamespaces.Gml + "gmlId")?.Value
         ?? "";
 
-    private static (S100GeometryType, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>, IReadOnlyList<(double, double)>, IReadOnlyList<IReadOnlyList<(double, double)>>)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>)
         ParseGeometry(XElement featureElement, XNamespace s100Ns)
     {
-        IReadOnlyList<(double Latitude, double Longitude)> points = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> curves = [];
-        IReadOnlyList<(double Latitude, double Longitude)> exteriorRing = [];
-        IReadOnlyList<IReadOnlyList<(double Latitude, double Longitude)>> interiorRings = [];
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
         var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
@@ -425,7 +426,7 @@ internal static class S128DatasetReader
         return asIs * 4 < total && swapped * 4 > total * 3;
     }
 
-    private static IEnumerable<(double Lat, double Lon)> EnumerateCoords(S128Feature f)
+    private static IEnumerable<GeoPosition> EnumerateCoords(S128Feature f)
     {
         foreach (var p in f.Points) yield return p;
         foreach (var c in f.Curves) foreach (var p in c) yield return p;
@@ -447,19 +448,19 @@ internal static class S128DatasetReader
         References = f.References,
     };
 
-    private static IReadOnlyList<(double, double)> SwapMany(IReadOnlyList<(double, double)> src)
+    private static IReadOnlyList<GeoPosition> SwapMany(IReadOnlyList<GeoPosition> src)
     {
         if (src.Count == 0) return src;
-        var b = new List<(double, double)>(src.Count);
-        foreach (var (a, c) in src) b.Add((c, a));
+        var b = new List<GeoPosition>(src.Count);
+        foreach (var (a, c) in src) b.Add(new GeoPosition(c, a));
         return b;
     }
 
-    private static IReadOnlyList<IReadOnlyList<(double, double)>> SwapRings(
-        IReadOnlyList<IReadOnlyList<(double, double)>> src)
+    private static IReadOnlyList<IReadOnlyList<GeoPosition>> SwapRings(
+        IReadOnlyList<IReadOnlyList<GeoPosition>> src)
     {
         if (src.Count == 0) return src;
-        var b = new List<IReadOnlyList<(double, double)>>(src.Count);
+        var b = new List<IReadOnlyList<GeoPosition>>(src.Count);
         foreach (var ring in src) b.Add(SwapMany(ring));
         return b;
     }

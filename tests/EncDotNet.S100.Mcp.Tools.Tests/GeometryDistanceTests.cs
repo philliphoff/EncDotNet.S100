@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S124;
@@ -10,7 +11,7 @@ public class GeometryDistanceTests
 {
     private const double MetersPerDegree = 111_320.0;
 
-    private static S124Feature PointFeature(params (double Lat, double Lon)[] points)
+    private static S124Feature PointFeature(params GeoPosition[] points)
         => new()
         {
             Id = "p",
@@ -21,7 +22,7 @@ public class GeometryDistanceTests
             ComplexAttributes = [],
         };
 
-    private static S124Feature CurveFeature(params (double Lat, double Lon)[] vertices)
+    private static S124Feature CurveFeature(params GeoPosition[] vertices)
         => new()
         {
             Id = "c",
@@ -33,8 +34,8 @@ public class GeometryDistanceTests
         };
 
     private static S124Feature SurfaceFeature(
-        IReadOnlyList<(double Lat, double Lon)> exterior,
-        IReadOnlyList<IReadOnlyList<(double Lat, double Lon)>>? holes = null)
+        IReadOnlyList<GeoPosition> exterior,
+        IReadOnlyList<IReadOnlyList<GeoPosition>>? holes = null)
         => new()
         {
             Id = "s",
@@ -49,7 +50,7 @@ public class GeometryDistanceTests
     [Fact]
     public void Point_distance_is_equirectangular()
     {
-        var feature = PointFeature((1.0, 0.0));
+        var feature = PointFeature(new GeoPosition(1.0, 0.0));
         var measured = GeometryDistance.Measure(feature, new GeoPoint(0, 0));
 
         Assert.NotNull(measured);
@@ -64,7 +65,7 @@ public class GeometryDistanceTests
         // Horizontal segment at lat=1 from lon=-1 to lon=1; nearest point to
         // the origin is (1, 0), one degree of latitude away — closer than
         // either vertex (which are ~1.41 degrees away).
-        var feature = CurveFeature((1.0, -1.0), (1.0, 1.0));
+        var feature = CurveFeature(new GeoPosition(1.0, -1.0), new GeoPosition(1.0, 1.0));
         var measured = GeometryDistance.Measure(feature, new GeoPoint(0, 0));
 
         Assert.NotNull(measured);
@@ -77,8 +78,8 @@ public class GeometryDistanceTests
     [Fact]
     public void Surface_containment_reports_zero_distance_inside()
     {
-        IReadOnlyList<(double, double)> ring = [
-            (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)];
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-1, -1), new GeoPosition(-1, 1), new GeoPosition(1, 1), new GeoPosition(1, -1), new GeoPosition(-1, -1)];
         var feature = SurfaceFeature(ring);
 
         var measured = GeometryDistance.Measure(feature, new GeoPoint(0, 0));
@@ -92,8 +93,8 @@ public class GeometryDistanceTests
     [Fact]
     public void Surface_outside_measures_distance_to_nearest_edge()
     {
-        IReadOnlyList<(double, double)> ring = [
-            (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)];
+        IReadOnlyList<GeoPosition> ring = [
+            new GeoPosition(-1, -1), new GeoPosition(-1, 1), new GeoPosition(1, 1), new GeoPosition(1, -1), new GeoPosition(-1, -1)];
         var feature = SurfaceFeature(ring);
 
         // Point two degrees east of centre; nearest edge is lon=1 at lat 0.
@@ -107,10 +108,10 @@ public class GeometryDistanceTests
     [Fact]
     public void Surface_point_inside_hole_is_not_contained()
     {
-        IReadOnlyList<(double, double)> exterior = [
-            (-2, -2), (-2, 2), (2, 2), (2, -2), (-2, -2)];
-        IReadOnlyList<(double, double)> hole = [
-            (-1, -1), (-1, 1), (1, 1), (1, -1), (-1, -1)];
+        IReadOnlyList<GeoPosition> exterior = [
+            new GeoPosition(-2, -2), new GeoPosition(-2, 2), new GeoPosition(2, 2), new GeoPosition(2, -2), new GeoPosition(-2, -2)];
+        IReadOnlyList<GeoPosition> hole = [
+            new GeoPosition(-1, -1), new GeoPosition(-1, 1), new GeoPosition(1, 1), new GeoPosition(1, -1), new GeoPosition(-1, -1)];
         var feature = SurfaceFeature(exterior, [hole]);
 
         var measured = GeometryDistance.Measure(feature, new GeoPoint(0, 0));

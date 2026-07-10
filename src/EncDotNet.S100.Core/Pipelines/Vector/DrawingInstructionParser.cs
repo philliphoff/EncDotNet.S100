@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Globalization;
 using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
@@ -36,7 +37,7 @@ public static class DrawingInstructionParser
     public static List<DrawingInstruction> Parse(
         string featureRef,
         string instructionString,
-        (double Latitude, double Longitude)? featureAnchor = null)
+        GeoPosition? featureAnchor = null)
     {
         if (string.IsNullOrEmpty(instructionString))
             return [];
@@ -80,14 +81,14 @@ public static class DrawingInstructionParser
         // AugmentedRay / ArcByRadius buffer segments that AugmentedPath
         // resolves into a tessellated coordinate list attached to the next
         // LineInstruction via CoordinatesOverride.
-        (double Latitude, double Longitude)? augmentedAnchor = null;
+        GeoPosition? augmentedAnchor = null;
 
         // Buffered augmented line segments awaiting AugmentedPath resolution.
         var augmentedLineSegments = new List<AugmentedSegment>();
 
         // Resolved augmented line coordinates ready to attach to the next
         // LineInstruction.  Set by the AugmentedPath command.
-        IReadOnlyList<(double Latitude, double Longitude)>? augmentedLineCoords = null;
+        IReadOnlyList<GeoPosition>? augmentedLineCoords = null;
 
         var segments = instructionString.Split(';');
 
@@ -388,7 +389,7 @@ public static class DrawingInstructionParser
                             double.TryParse(apParts[1], CultureInfo.InvariantCulture, out var apLon) &&
                             double.TryParse(apParts[2], CultureInfo.InvariantCulture, out var apLat))
                         {
-                            augmentedAnchor = (apLat, apLon);
+                            augmentedAnchor = new GeoPosition(apLat, apLon);
                         }
                     }
                     break;
@@ -541,18 +542,18 @@ public static class DrawingInstructionParser
     /// list. The feature's anchor point (from <paramref name="anchor"/>) is
     /// the origin for all geometry.
     /// </summary>
-    private static IReadOnlyList<(double Latitude, double Longitude)>? ResolveAugmentedPath(
+    private static IReadOnlyList<GeoPosition>? ResolveAugmentedPath(
         List<AugmentedSegment> segments,
-        (double Latitude, double Longitude)? anchor)
+        GeoPosition? anchor)
     {
         if (segments.Count == 0)
             return null;
 
-        var allPoints = new List<(double Latitude, double Longitude)>();
+        var allPoints = new List<GeoPosition>();
 
         foreach (var segment in segments)
         {
-            IReadOnlyList<(double Latitude, double Longitude)> tessellated = segment switch
+            IReadOnlyList<GeoPosition> tessellated = segment switch
             {
                 AugmentedSegment.Ray ray => TessellateRaySegment(ray, anchor),
                 AugmentedSegment.Arc arc => TessellateArcSegment(arc, anchor),
@@ -577,9 +578,9 @@ public static class DrawingInstructionParser
         return allPoints.Count >= 2 ? allPoints : null;
     }
 
-    private static IReadOnlyList<(double Latitude, double Longitude)> TessellateRaySegment(
+    private static IReadOnlyList<GeoPosition> TessellateRaySegment(
         AugmentedSegment.Ray ray,
-        (double Latitude, double Longitude)? anchor)
+        GeoPosition? anchor)
     {
         if (anchor is not { } origin)
             return [];
@@ -599,9 +600,9 @@ public static class DrawingInstructionParser
             origin.Latitude, origin.Longitude, ray.BearingDeg, distanceMetres);
     }
 
-    private static IReadOnlyList<(double Latitude, double Longitude)> TessellateArcSegment(
+    private static IReadOnlyList<GeoPosition> TessellateArcSegment(
         AugmentedSegment.Arc arc,
-        (double Latitude, double Longitude)? anchor)
+        GeoPosition? anchor)
     {
         if (anchor is not { } origin)
             return [];

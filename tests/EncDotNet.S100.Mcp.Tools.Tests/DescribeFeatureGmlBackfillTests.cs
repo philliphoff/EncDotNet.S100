@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using EncDotNet.S100.Core;
@@ -21,7 +22,7 @@ public class DescribeFeatureGmlBackfillTests
             GeometryType = S100GeometryType.Surface,
             Points = [],
             Curves = [],
-            ExteriorRing = [(0, 0), (0, 1), (1, 1), (0, 0)],
+            ExteriorRing = [new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)],
             InteriorRings = [],
             Attributes = new Dictionary<string, string> { ["categoryOfMarineProtectedArea"] = "nature reserve" },
             ComplexAttributes = [],
