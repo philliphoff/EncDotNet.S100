@@ -103,7 +103,8 @@ public class ExchangeCatalogueReaderTests
 
     [Fact]
     public void Dataset_ExpectedHash_IsParsedFromHashMrn()
-    {        const string xml = """
+    {
+        const string xml = """
             <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
                 <S100XC:identifier>
                     <S100XC:identifier>TEST</S100XC:identifier>
