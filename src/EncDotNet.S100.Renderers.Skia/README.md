@@ -67,6 +67,11 @@ collection / priority-clip / insert phase. Antimeridian (±180°) crossing **is*
 handled for the headless auto-fit: `SeamAwareBoundsAccumulator` (in
 `Rendering.Scene`) frames dateline-spanning datasets on their true extent and
 `WorldToScreen` wraps ops into the shifted window at draw time (issue #413).
+The seam-wrap is opt-out via `SkiaDisplayListRenderer.EnableSeamWrap` /
+`WorldToScreen.Create(viewport, allowSeamWrap)`: the Mapsui **tiled** subsystem
+disables it because it rasterises already-continuous geometry from narrow
+per-tile viewports, where wrapping would teleport off-tile vertices of large
+polygons back across the world (see the tiled renderer's `RasterizeTile`).
 
 ### Headless rendering & compositing (`…Renderers.Skia.Scene`)
 
