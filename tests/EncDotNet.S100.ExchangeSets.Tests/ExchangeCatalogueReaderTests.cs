@@ -102,6 +102,31 @@ public class ExchangeCatalogueReaderTests
     }
 
     [Fact]
+    public void Read_EmptyDatasetWrapper_FallsBackToRootLevelDatasets()
+    {
+        const string xml = """
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.0">
+                <S100XC:identifier>
+                    <S100XC:identifier>TEST</S100XC:identifier>
+                    <S100XC:dateTime>2024-01-01</S100XC:dateTime>
+                </S100XC:identifier>
+                <S100XC:datasetDiscoveryMetadata />
+                <S100XC:S100_DatasetDiscoveryMetadata>
+                    <S100XC:fileName>test.000</S100XC:fileName>
+                    <S100XC:filePath>data/test.000</S100XC:filePath>
+                </S100XC:S100_DatasetDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xml));
+        var catalogue = ExchangeCatalogueReader.Read(stream);
+
+        var dataset = Assert.Single(catalogue.DatasetDiscoveryMetadata);
+        Assert.Equal("test.000", dataset.FileName);
+        Assert.Equal("data/test.000", dataset.FilePath);
+    }
+
+    [Fact]
     public void Dataset_ExpectedHash_IsParsedFromHashMrn()
     {
         const string xml = """

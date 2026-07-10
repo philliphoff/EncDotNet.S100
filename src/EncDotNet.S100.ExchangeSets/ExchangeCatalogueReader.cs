@@ -73,16 +73,29 @@ public static class ExchangeCatalogueReader
     /// <c>S100EC</c> schema used by some products — notably JCOMM/IHO
     /// S-411 — places the same <c>*_DatasetDiscoveryMetadata</c> records
     /// directly under the catalogue root with no wrapper. When the wrapper
-    /// is present its children are used; otherwise the root is scanned
-    /// directly.
+    /// contains typed records its children are used; otherwise the root is
+    /// scanned directly.
     /// </summary>
     private static IEnumerable<XElement> CollectDiscoveryRecords(
         XElement root, XNamespace xc, string wrapperName, string suffix)
     {
         var wrapper = root.Element(xc + wrapperName);
-        var candidates = wrapper?.Elements() ?? root.Elements();
-        return candidates.Where(
-            e => e.Name.LocalName.EndsWith(suffix, StringComparison.Ordinal));
+        if (wrapper is not null)
+        {
+            var wrappedMatches = wrapper
+                .Elements()
+                .Where(e => e.Name.LocalName.EndsWith(suffix, StringComparison.Ordinal))
+                .ToList();
+
+            if (wrappedMatches.Count > 0)
+            {
+                return wrappedMatches;
+            }
+        }
+
+        return root
+            .Elements()
+            .Where(e => e.Name.LocalName.EndsWith(suffix, StringComparison.Ordinal));
     }
 
     private static ExchangeCatalogueContact? ReadContact(XElement? element, XNamespace xc)

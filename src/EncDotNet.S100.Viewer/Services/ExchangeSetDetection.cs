@@ -48,6 +48,17 @@ internal static class ExchangeSetDetection
             CatalogueFileNames,
             n => string.Equals(n, fileName, StringComparison.OrdinalIgnoreCase));
 
+    private static string? PickCatalogueName(IEnumerable<string?> names) =>
+        names.OfType<string>()
+            .Where(IsCatalogueFileName)
+            .OrderBy(
+                name => string.Equals(
+                    name, CatalogueFileName, StringComparison.OrdinalIgnoreCase)
+                    ? 0
+                    : 1)
+            .ThenBy(name => name, StringComparer.Ordinal)
+            .FirstOrDefault();
+
     /// <summary>True when <paramref name="path"/> ends with
     /// <c>.zip</c> (case-insensitive).</summary>
     public static bool IsZipPath(string path) =>
@@ -76,13 +87,10 @@ internal static class ExchangeSetDetection
         try
         {
             if (!Directory.Exists(folderPath)) return null;
-            foreach (var file in Directory.EnumerateFiles(
-                folderPath, "*", SearchOption.TopDirectoryOnly))
-            {
-                var name = Path.GetFileName(file);
-                if (IsCatalogueFileName(name)) return name;
-            }
-            return null;
+            return PickCatalogueName(
+                Directory.EnumerateFiles(
+                        folderPath, "*", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName));
         }
         catch (UnauthorizedAccessException) { return null; }
         catch (IOException) { return null; }
@@ -108,25 +116,23 @@ internal static class ExchangeSetDetection
         {
             if (!File.Exists(zipPath)) return null;
             using var archive = ZipFile.OpenRead(zipPath);
-            foreach (var entry in archive.Entries)
-            {
-                if (IsRootCatalogueEntry(entry)) return entry.FullName;
-            }
-            return null;
+            return PickCatalogueName(
+                archive.Entries
+                    .Where(IsRootEntry)
+                    .Select(entry => entry.FullName));
         }
         catch (InvalidDataException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
         catch (IOException) { return null; }
     }
 
-    private static bool IsRootCatalogueEntry(ZipArchiveEntry entry)
+    private static bool IsRootEntry(ZipArchiveEntry entry)
     {
         // ZIP entry names use forward slashes per the spec; tolerate
         // backslashes too in case a producer wrote them. A "root"
         // entry has no separator at all.
         var name = entry.FullName;
-        if (name.Contains('/') || name.Contains('\\')) return false;
-        return IsCatalogueFileName(name);
+        return !name.Contains('/') && !name.Contains('\\');
     }
 
     /// <summary>True when <paramref name="path"/> is an S-57 / S-63 exchange set

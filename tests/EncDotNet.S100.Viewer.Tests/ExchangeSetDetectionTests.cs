@@ -90,6 +90,19 @@ public sealed class ExchangeSetDetectionTests : IDisposable
     }
 
     [Fact]
+    public void ResolveFolderCatalogueName_PrefersCanonicalName()
+    {
+        var folder = Path.Combine(_tempRoot, "canon-preferred");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalogue.xml"), "<root/>");
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
     public void ResolveFolderCatalogueName_NullWhenAbsent()
     {
         var folder = Path.Combine(_tempRoot, "none");
@@ -149,6 +162,22 @@ public sealed class ExchangeSetDetectionTests : IDisposable
         Assert.True(ExchangeSetDetection.LooksLikeExchangeSetZip(zip));
         Assert.Equal(
             "catalogue.xml",
+            ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
+    }
+
+    [Fact]
+    public void ResolveZipCatalogueEntry_PrefersCanonicalName()
+    {
+        var zip = Path.Combine(_tempRoot, "canon-preferred.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("catalogue.xml");
+            archive.CreateEntry("CATALOG.XML");
+            archive.CreateEntry("data/S411.gml");
+        }
+
+        Assert.Equal(
+            "CATALOG.XML",
             ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
     }
 
