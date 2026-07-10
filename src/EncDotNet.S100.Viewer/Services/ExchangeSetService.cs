@@ -112,7 +112,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             source = OpenSource(folderOrZipPath);
             try
             {
-                exchangeSet = await ExchangeSet.OpenAsync(source, "CATALOG.XML", cancellationToken)
+                // Most producers use the canonical CATALOG.XML (S-100
+                // Part 17), but some — notably JCOMM/IHO S-411 sample
+                // sets — name it catalogue.xml. Resolve the actual name
+                // so the asset source opens the right entry.
+                var catalogueName = ResolveCatalogueName(folderOrZipPath);
+                exchangeSet = await ExchangeSet.OpenAsync(source, catalogueName, cancellationToken)
                     .ConfigureAwait(true);
             }
             catch (FileNotFoundException)
@@ -632,6 +637,28 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         }
         throw new FileNotFoundException(
             $"Exchange set source not found or not a folder/.zip: {path}", path);
+    }
+
+    /// <summary>
+    /// Resolves the relative catalogue name to open within the source at
+    /// <paramref name="path"/>. Folders and ZIP archives may use the
+    /// canonical <c>CATALOG.XML</c> or the S-411 <c>catalogue.xml</c>
+    /// spelling; the discovered name (preserving casing) is returned so
+    /// the asset source opens the correct entry. Falls back to
+    /// <c>CATALOG.XML</c> when nothing is found, letting the subsequent
+    /// open surface the standard "catalogue not found" message.
+    /// </summary>
+    private static string ResolveCatalogueName(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            return ExchangeSetDetection.ResolveFolderCatalogueName(path) ?? "CATALOG.XML";
+        }
+        if (ExchangeSetDetection.IsZipPath(path))
+        {
+            return ExchangeSetDetection.ResolveZipCatalogueEntry(path) ?? "CATALOG.XML";
+        }
+        return "CATALOG.XML";
     }
 
     private void EnsureCollectionSubscription()

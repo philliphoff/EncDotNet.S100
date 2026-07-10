@@ -20,12 +20,44 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal static class ExchangeSetDetection
 {
-    /// <summary>The catalogue filename, matched case-insensitively.</summary>
+    /// <summary>The canonical S-100 catalogue filename (S-100 Part 17),
+    /// matched case-insensitively.</summary>
     private const string CatalogueFileName = "CATALOG.XML";
+
+    /// <summary>
+    /// Accepted exchange-set catalogue filenames, matched
+    /// case-insensitively. In addition to the canonical
+    /// <c>CATALOG.XML</c> (S-100 Part 17), several products in the wild
+    /// — notably JCOMM/IHO S-411 sample sets — name the catalogue
+    /// <c>catalogue.xml</c>. Both are recognised so their exchange sets
+    /// route to the exchange-set loader instead of silently falling
+    /// through to the single-file loader.
+    /// </summary>
+    private static readonly string[] CatalogueFileNames =
+    {
+        CatalogueFileName,
+        "CATALOGUE.XML",
+    };
 
     /// <summary>The S-57 / S-63 exchange-set catalogue filename, matched
     /// case-insensitively.</summary>
     private const string S57CatalogueFileName = "CATALOG.031";
+
+    private static bool IsCatalogueFileName(string fileName) =>
+        Array.Exists(
+            CatalogueFileNames,
+            n => string.Equals(n, fileName, StringComparison.OrdinalIgnoreCase));
+
+    private static string? PickCatalogueName(IEnumerable<string?> names) =>
+        names.OfType<string>()
+            .Where(IsCatalogueFileName)
+            .OrderBy(
+                name => string.Equals(
+                    name, CatalogueFileName, StringComparison.OrdinalIgnoreCase)
+                    ? 0
+                    : 1)
+            .ThenBy(name => name, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>True when <paramref name="path"/> ends with
     /// <c>.zip</c> (case-insensitive).</summary>
@@ -34,51 +66,73 @@ internal static class ExchangeSetDetection
         string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>True when <paramref name="folderPath"/> exists and
-    /// contains a <c>CATALOG.XML</c> at its top level
-    /// (case-insensitive). Returns <c>false</c> for any I/O or
-    /// permission failure.</summary>
-    public static bool LooksLikeExchangeSetFolder(string folderPath)
+    /// contains a recognised catalogue file (<c>CATALOG.XML</c> or
+    /// <c>catalogue.xml</c>) at its top level (case-insensitive).
+    /// Returns <c>false</c> for any I/O or permission failure.</summary>
+    public static bool LooksLikeExchangeSetFolder(string folderPath) =>
+        ResolveFolderCatalogueName(folderPath) is not null;
+
+    /// <summary>
+    /// Returns the actual top-level catalogue file name found in
+    /// <paramref name="folderPath"/> (preserving its on-disk casing and
+    /// spelling, e.g. <c>CATALOG.XML</c> or <c>catalogue.xml</c>), or
+    /// <c>null</c> when the folder does not exist, is inaccessible, or
+    /// contains no recognised catalogue. Callers pass the returned name
+    /// to <c>ExchangeSet.OpenAsync</c> so producers using the S-411
+    /// <c>catalogue.xml</c> convention resolve correctly.
+    /// </summary>
+    public static string? ResolveFolderCatalogueName(string folderPath)
     {
-        if (string.IsNullOrEmpty(folderPath)) return false;
+        if (string.IsNullOrEmpty(folderPath)) return null;
         try
         {
-            if (!Directory.Exists(folderPath)) return false;
-            return Directory.EnumerateFiles(folderPath, "*", SearchOption.TopDirectoryOnly)
-                .Any(f => string.Equals(
-                    Path.GetFileName(f), CatalogueFileName,
-                    StringComparison.OrdinalIgnoreCase));
+            if (!Directory.Exists(folderPath)) return null;
+            return PickCatalogueName(
+                Directory.EnumerateFiles(
+                        folderPath, "*", SearchOption.TopDirectoryOnly)
+                    .Select(Path.GetFileName));
         }
-        catch (UnauthorizedAccessException) { return false; }
-        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException) { return null; }
     }
 
     /// <summary>True when <paramref name="zipPath"/> is a readable
-    /// ZIP archive whose root contains a <c>CATALOG.XML</c> entry
-    /// (case-insensitive). Returns <c>false</c> for corrupt archives
-    /// or I/O failures.</summary>
-    public static bool LooksLikeExchangeSetZip(string zipPath)
+    /// ZIP archive whose root contains a recognised catalogue entry
+    /// (<c>CATALOG.XML</c> or <c>catalogue.xml</c>, case-insensitive).
+    /// Returns <c>false</c> for corrupt archives or I/O failures.</summary>
+    public static bool LooksLikeExchangeSetZip(string zipPath) =>
+        ResolveZipCatalogueEntry(zipPath) is not null;
+
+    /// <summary>
+    /// Returns the actual root-level catalogue entry name found in the
+    /// ZIP at <paramref name="zipPath"/> (preserving its stored casing
+    /// and spelling), or <c>null</c> when the archive is missing,
+    /// corrupt, or contains no recognised root catalogue.
+    /// </summary>
+    public static string? ResolveZipCatalogueEntry(string zipPath)
     {
-        if (string.IsNullOrEmpty(zipPath)) return false;
+        if (string.IsNullOrEmpty(zipPath)) return null;
         try
         {
-            if (!File.Exists(zipPath)) return false;
+            if (!File.Exists(zipPath)) return null;
             using var archive = ZipFile.OpenRead(zipPath);
-            return archive.Entries.Any(IsRootCatalogueEntry);
+            return PickCatalogueName(
+                archive.Entries
+                    .Where(IsRootEntry)
+                    .Select(entry => entry.FullName));
         }
-        catch (InvalidDataException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-        catch (IOException) { return false; }
+        catch (InvalidDataException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException) { return null; }
     }
 
-    private static bool IsRootCatalogueEntry(ZipArchiveEntry entry)
+    private static bool IsRootEntry(ZipArchiveEntry entry)
     {
         // ZIP entry names use forward slashes per the spec; tolerate
         // backslashes too in case a producer wrote them. A "root"
         // entry has no separator at all.
         var name = entry.FullName;
-        if (name.Contains('/') || name.Contains('\\')) return false;
-        return string.Equals(
-            name, CatalogueFileName, StringComparison.OrdinalIgnoreCase);
+        return !name.Contains('/') && !name.Contains('\\');
     }
 
     /// <summary>True when <paramref name="path"/> is an S-57 / S-63 exchange set
