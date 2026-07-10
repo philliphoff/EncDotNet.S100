@@ -157,11 +157,6 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
     /// CLI alias. Kept in step with
     /// <c>RenderCommand.TryParseDisplayMode</c> (issue #416).
     /// </summary>
-    private static string DisplayModeCliToken(string displayModeId) => displayModeId switch
-    {
-        "IceScientificIceactDisplayMode" => "ice-concentration",
-        "IceScientificIcesodDisplayMode" => "ice-sod",
-        "IceNavigationalDisplayMode" => "ice-navigational",
-        _ => displayModeId,
-    };
+    private static string DisplayModeCliToken(string displayModeId) =>
+        S411DisplayModes.ToCliToken(displayModeId);
 }

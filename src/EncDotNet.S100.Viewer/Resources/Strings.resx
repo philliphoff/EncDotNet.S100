@@ -708,6 +708,54 @@
     <value>STATION ATTRIBUTES</value>
     <comment>Header for the collapsed attribute Expander shown below a station chart.</comment>
   </data>
+  <data name="Pick_EggCode_Heading" xml:space="preserve">
+    <value>EGG CODE</value>
+    <comment>Section header for the WMO/SIGRID-3 ice egg-code diagram in the S-411 pick report.</comment>
+  </data>
+  <data name="Pick_EggCode_Standard" xml:space="preserve">
+    <value>WMO / SIGRID-3</value>
+    <comment>Standard reference shown on the right of the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_Description" xml:space="preserve">
+    <value>Standard ice-analysis symbol for this feature's concentration, stage of development and floe size.</value>
+    <comment>One-line description under the egg-code section header.</comment>
+  </data>
+  <data name="Pick_EggCode_OpenWater" xml:space="preserve">
+    <value>Open water / no ice</value>
+    <comment>Caption shown for an egg code with no ice (total concentration 0), where the oval is omitted.</comment>
+  </data>
+  <data name="Pick_EggCode_SnowDepth" xml:space="preserve">
+    <value>Snow {0} cm</value>
+    <comment>Snow depth reported beside the egg; {0} is the depth in centimetres.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverHint" xml:space="preserve">
+    <value>Hover any value in the egg for its definition.</value>
+    <comment>Hint shown below the egg-code diagram.</comment>
+  </data>
+  <data name="Pick_EggCode_HoverLine" xml:space="preserve">
+    <value>{0} — {1}</value>
+    <comment>Hover description line below the egg; {0} is the symbol/value and {1} is its definition.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_TotalConcentration" xml:space="preserve">
+    <value>Total concentration</value>
+    <comment>Hover role label for the top row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_PartialConcentration" xml:space="preserve">
+    <value>Partial concentration</value>
+    <comment>Hover role label for the partial-concentration row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Hover role label for the stage-of-development row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_FormOfIce" xml:space="preserve">
+    <value>Form of ice / floe size</value>
+    <comment>Hover role label for the form-of-ice row of the egg.</comment>
+  </data>
+  <data name="Pick_EggCode_Role_SnowDepth" xml:space="preserve">
+    <value>Snow depth (cm)</value>
+    <comment>Hover role label for snow depth reported beside the egg.</comment>
+  </data>
   <data name="Tooltip_Search" xml:space="preserve">
     <value>Search Features</value>
   </data>
@@ -1493,6 +1541,56 @@
   <data name="Segment_TextAll" xml:space="preserve">
     <value>All</value>
     <comment>Compact segment label for the All text viewing group.</comment>
+  </data>
+
+  <!-- S-411 sea-ice display-mode selector (issue #416) -->
+  <data name="DisplayMode_SectionLabel" xml:space="preserve">
+    <value>Sea ice (S-411)</value>
+    <comment>Section label marking the S-411-specific sea-ice controls in the display-settings overlay; rendered in upper case.</comment>
+  </data>
+  <data name="DisplayMode_SectionDescription" xml:space="preserve">
+    <value>Controls how sea ice concentration, stage of development, and navigational ice are displayed for S-411 datasets.</value>
+    <comment>Explains that the ice display-mode selector is scoped to S-411 datasets only.</comment>
+  </data>
+  <data name="DisplayMode_Header" xml:space="preserve">
+    <value>Ice display mode</value>
+    <comment>Header for the S-411 sea-ice portrayal display-mode selector in the display-settings overlay.</comment>
+  </data>
+  <data name="DisplayMode_Concentration" xml:space="preserve">
+    <value>Concentration</value>
+    <comment>Label for the S-411 total ice-concentration portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_Concentration_Description" xml:space="preserve">
+    <value>Shade ice by how densely it covers the water</value>
+    <comment>One-line description shown beneath the S-411 concentration display mode.</comment>
+  </data>
+  <data name="DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Stage of development</value>
+    <comment>Label for the S-411 stage-of-development (ice thickness/age) portrayal mode.</comment>
+  </data>
+  <data name="DisplayMode_StageOfDevelopment_Description" xml:space="preserve">
+    <value>Shade ice by age and thickness</value>
+    <comment>One-line description shown beneath the S-411 stage-of-development display mode.</comment>
+  </data>
+  <data name="DisplayMode_Navigational" xml:space="preserve">
+    <value>Navigational ice</value>
+    <comment>Label for the provisional S-411 navigational portrayal mode; the provisional nature is conveyed in its tooltip.</comment>
+  </data>
+  <data name="DisplayMode_Navigational_Description" xml:space="preserve">
+    <value>Highlight ice that is hazardous to transit</value>
+    <comment>One-line description shown beneath the provisional S-411 navigational display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Concentration" xml:space="preserve">
+    <value>Portray sea ice by total concentration (WMO egg-code concentration ramp).</value>
+    <comment>Tooltip for the S-411 concentration display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_StageOfDevelopment" xml:space="preserve">
+    <value>Portray sea ice by stage of development (WMO egg-code thickness/age ramp).</value>
+    <comment>Tooltip for the S-411 stage-of-development display mode.</comment>
+  </data>
+  <data name="Tooltip_DisplayMode_Navigational" xml:space="preserve">
+    <value>Provisional navigational preview derived from total concentration. Not a POLARIS/RIO navigational-risk computation.</value>
+    <comment>Tooltip for the provisional S-411 navigational display mode.</comment>
   </data>
 
   <!-- Toast notification titles -->

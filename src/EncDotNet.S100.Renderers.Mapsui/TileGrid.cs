@@ -159,9 +159,12 @@ internal static class TileGrid
     /// the north-up viewport centred at (<paramref name="centerX"/>,
     /// <paramref name="centerY"/>) in EPSG:3857, sized
     /// <paramref name="widthDip"/> × <paramref name="heightDip"/> DIP at
-    /// <paramref name="resolution"/> m/px. Indices are clamped to the band's
-    /// valid range, so a viewport overhanging the world edge yields no
-    /// out-of-range keys.
+    /// <paramref name="resolution"/> m/px. The <b>Y</b> (latitude) index is
+    /// clamped to the band's valid range (northing is bounded at the poles), so
+    /// a viewport overhanging the top/bottom yields no out-of-range row. The
+    /// <b>X</b> (longitude) index is <em>not</em> clamped: EPSG:3857 is periodic
+    /// east-west and continuous-frame antimeridian data projects to columns
+    /// outside <c>[0, perAxis-1]</c> (see <see cref="VisibleTileRange"/>).
     /// </summary>
     public static IReadOnlyList<TileKey> VisibleTiles(
         double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
@@ -180,11 +183,33 @@ internal static class TileGrid
     }
 
     /// <summary>
-    /// The inclusive, world-clamped tile-index range covering the north-up
-    /// viewport at <paramref name="band"/>. A degenerate viewport yields an empty
-    /// range (<c>XStart &gt; XEnd</c>). Shared by <see cref="VisibleTiles"/> and
+    /// The inclusive tile-index range covering the north-up viewport at
+    /// <paramref name="band"/>. A degenerate viewport yields an empty range
+    /// (<c>XStart &gt; XEnd</c>). Shared by <see cref="VisibleTiles"/> and
     /// <see cref="PredictedTiles"/> so both tile the viewport identically.
     /// </summary>
+    /// <remarks>
+    /// The <b>Y</b> (latitude) axis is clamped to <c>[0, perAxis-1]</c>: the
+    /// Web-Mercator northing is physically bounded at the poles, so a viewport
+    /// overhanging the top/bottom yields no out-of-range row. The <b>X</b>
+    /// (longitude) axis is <em>not</em> clamped to the standard world, because
+    /// EPSG:3857 is periodic east-west and an antimeridian-spanning dataset
+    /// kept in a continuous longitude frame (e.g. the US NWS S-411 sea-ice
+    /// product, ~175°E → ~225°E) projects to world-X beyond ±<see cref="Extent"/>.
+    /// Clamping X collapsed such data into the boundary tile column (issue: the
+    /// viewer's tiled render subsystem drew a thin sliver at ±180° while the
+    /// non-tiled and headless paths framed it correctly). Instead the raw
+    /// column indices are kept — <see cref="TileWorldBounds"/> maps them to the
+    /// correct continuous world position — so a dataset kept in a continuous
+    /// frame is reachable at its true columns wherever the viewport is panned.
+    /// The span is <em>not</em> capped to one world: the chart data is drawn
+    /// exactly once at its true position (it is not world-copied like the
+    /// basemap), so every visible column must be enumerable or the data would
+    /// pop between world-copies as the pan crossed a world boundary. Only a
+    /// generous absolute guard bounds a pathological zoom-out, and it keeps the
+    /// window anchored at the left edge (never re-centred) so panning slides the
+    /// columns smoothly instead of flipping the enumerated world.
+    /// </remarks>
     public static TileRange VisibleTileRange(
         double centerX, double centerY, double widthDip, double heightDip, double resolution, int band)
     {
@@ -200,13 +225,23 @@ internal static class TileGrid
 
         var xStart = (int)Math.Floor((centerX - halfW + Extent) / size);
         var xEnd = (int)Math.Floor((centerX + halfW + Extent) / size);
+        // Enumerate every visible column (including those beyond the standard
+        // world for antimeridian data); never clamp X into [0, perAxis-1] and
+        // never re-anchor the window. A large absolute guard only bounds a
+        // pathological zoom-out — it is far beyond any realistic viewport, so it
+        // does not truncate the visible copies in practice.
+        const int MaxColumns = 4096;
+        if (xEnd - xStart + 1 > MaxColumns)
+        {
+            xEnd = xStart + MaxColumns - 1;
+        }
         // Y is inverted (XYZ): the top row (Y=0) is the northernmost.
         var yStart = (int)Math.Floor((Extent - (centerY + halfH)) / size);
         var yEnd = (int)Math.Floor((Extent - (centerY - halfH)) / size);
 
         return new TileRange(
-            Math.Clamp(xStart, 0, perAxis - 1),
-            Math.Clamp(xEnd, 0, perAxis - 1),
+            xStart,
+            xEnd,
             Math.Clamp(yStart, 0, perAxis - 1),
             Math.Clamp(yEnd, 0, perAxis - 1),
             perAxis);
@@ -294,8 +329,9 @@ internal static class TileGrid
         List<TileKey> result, HashSet<TileKey> seen, int band,
         int xStart, int xEnd, int yStart, int yEnd, int perAxis)
     {
-        xStart = Math.Clamp(xStart, 0, perAxis - 1);
-        xEnd = Math.Clamp(xEnd, 0, perAxis - 1);
+        // X is not clamped to the standard world (EPSG:3857 is periodic east-west
+        // and continuous-frame antimeridian data lives beyond ±Extent — see
+        // VisibleTileRange); only Y (latitude) is bounded at the poles.
         yStart = Math.Clamp(yStart, 0, perAxis - 1);
         yEnd = Math.Clamp(yEnd, 0, perAxis - 1);
         for (var y = yStart; y <= yEnd; y++)
@@ -321,7 +357,9 @@ internal static class TileGrid
 
         var size = TileWorldSize(band);
         var perAxis = TilesPerAxis(band);
-        var x = Math.Clamp((int)Math.Floor((centerX + Extent) / size), 0, perAxis - 1);
+        // X unclamped (periodic world / continuous-frame antimeridian data); Y
+        // clamped at the poles.
+        var x = (int)Math.Floor((centerX + Extent) / size);
         var y = Math.Clamp((int)Math.Floor((Extent - centerY) / size), 0, perAxis - 1);
         var key = new TileKey(band, x, y);
         if (seen.Add(key))

@@ -59,7 +59,26 @@ public readonly struct WorldToScreen
     /// </remarks>
     /// <param name="viewport">The display viewport (geographic bounds + pixel size).</param>
     /// <returns>The world → screen affine.</returns>
-    public static WorldToScreen Create(Viewport viewport)
+    public static WorldToScreen Create(Viewport viewport) => Create(viewport, allowSeamWrap: true);
+
+    /// <summary>
+    /// As <see cref="Create(Viewport)"/>, but with control over whether the
+    /// antimeridian seam-wrap is applied. When <paramref name="allowSeamWrap"/>
+    /// is <see langword="false"/>, world-X is never wrapped into the viewport's
+    /// longitude window even if the viewport is shifted across ±180°. The tiled
+    /// renderer passes <see langword="false"/> because it draws already-continuous
+    /// geometry from narrow per-tile viewports, where wrapping would smear
+    /// polygons that extend beyond a single tile (see the flag's remarks on the
+    /// tiled renderer).
+    /// </summary>
+    /// <param name="viewport">The display viewport (geographic bounds + pixel size).</param>
+    /// <param name="allowSeamWrap">
+    /// <see langword="true"/> to wrap world-X into a viewport shifted across the
+    /// ±180° seam (headless auto-fit); <see langword="false"/> to disable wrapping
+    /// (tiled continuous-X rasterisation).
+    /// </param>
+    /// <returns>The world → screen affine.</returns>
+    public static WorldToScreen Create(Viewport viewport, bool allowSeamWrap)
     {
         ArgumentNullException.ThrowIfNull(viewport);
 
@@ -70,9 +89,11 @@ public readonly struct WorldToScreen
         double spanY = maxY - minY;
         double scaleX = spanX != 0 ? viewport.WidthPixels / spanX : 0;
         double scaleY = spanY != 0 ? viewport.HeightPixels / spanY : 0;
-        bool wrapX = viewport.MaxLongitude > 180.0 || viewport.MinLongitude < -180.0;
+        bool wrapX = allowSeamWrap
+            && (viewport.MaxLongitude > 180.0 || viewport.MinLongitude < -180.0);
         return new WorldToScreen(minX, maxY, scaleX, scaleY, wrapX);
     }
+
 
     /// <summary>
     /// Projects an EPSG:3857 world coordinate to a screen pixel (origin top-left,

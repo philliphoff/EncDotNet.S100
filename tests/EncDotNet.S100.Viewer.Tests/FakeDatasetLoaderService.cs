@@ -46,7 +46,7 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     }
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries) { }
 
-    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; } =
+    public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; set; } =
         new Dictionary<DatasetEntry, IDatasetProcessor>();
 
     public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; } =

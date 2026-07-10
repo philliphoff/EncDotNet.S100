@@ -813,29 +813,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
     /// not a POLARIS/RIO navigational-risk computation.
     /// </summary>
     internal static bool TryParseDisplayMode(string? value, out string? displayModeId)
-    {
-        displayModeId = null;
-        if (string.IsNullOrWhiteSpace(value))
-            return true;
-
-        switch (value.Trim().ToLowerInvariant())
-        {
-            case "ice-concentration":
-            case "concentration":
-                displayModeId = "IceScientificIceactDisplayMode";
-                return true;
-            case "ice-sod":
-            case "sod":
-                displayModeId = "IceScientificIcesodDisplayMode";
-                return true;
-            case "ice-navigational":
-            case "navigational":
-                displayModeId = "IceNavigationalDisplayMode";
-                return true;
-            default:
-                return false;
-        }
-    }
+        => S411DisplayModes.TryParseToken(value, out displayModeId);
 
     /// <summary>
     /// Parses the <c>--display-mode</c> option for a single dataset. Enforces

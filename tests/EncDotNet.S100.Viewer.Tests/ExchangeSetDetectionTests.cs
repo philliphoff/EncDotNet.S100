@@ -62,6 +62,57 @@ public sealed class ExchangeSetDetectionTests : IDisposable
     }
 
     [Fact]
+    public void LooksLikeExchangeSetFolder_AcceptsS411CatalogueSpelling()
+    {
+        // JCOMM/IHO S-411 sample sets name the catalogue "catalogue.xml"
+        // rather than the canonical CATALOG.XML; the folder must still
+        // route to the exchange-set loader.
+        var folder = Path.Combine(_tempRoot, "s411");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalogue.xml"), "<root/>");
+
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetFolder(folder));
+        Assert.Equal(
+            "catalogue.xml",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_PreservesCanonicalName()
+    {
+        var folder = Path.Combine(_tempRoot, "canon");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_PrefersCanonicalName()
+    {
+        var folder = Path.Combine(_tempRoot, "canon-preferred");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "catalogue.xml"), "<root/>");
+        File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), "<root/>");
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+    }
+
+    [Fact]
+    public void ResolveFolderCatalogueName_NullWhenAbsent()
+    {
+        var folder = Path.Combine(_tempRoot, "none");
+        Directory.CreateDirectory(folder);
+        Assert.Null(ExchangeSetDetection.ResolveFolderCatalogueName(folder));
+        Assert.Null(ExchangeSetDetection.ResolveFolderCatalogueName(
+            Path.Combine(_tempRoot, "ghost")));
+    }
+
+    [Fact]
     public void LooksLikeExchangeSetFolder_FalseWhenCatalogOnlyInSubfolder()
     {
         // A nested CATALOG.XML doesn't constitute an exchange set
@@ -96,6 +147,38 @@ public sealed class ExchangeSetDetectionTests : IDisposable
         }
 
         Assert.True(ExchangeSetDetection.LooksLikeExchangeSetZip(zip));
+    }
+
+    [Fact]
+    public void LooksLikeExchangeSetZip_AcceptsS411CatalogueSpelling()
+    {
+        var zip = Path.Combine(_tempRoot, "s411.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("catalogue.xml");
+            archive.CreateEntry("data/S411.gml");
+        }
+
+        Assert.True(ExchangeSetDetection.LooksLikeExchangeSetZip(zip));
+        Assert.Equal(
+            "catalogue.xml",
+            ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
+    }
+
+    [Fact]
+    public void ResolveZipCatalogueEntry_PrefersCanonicalName()
+    {
+        var zip = Path.Combine(_tempRoot, "canon-preferred.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("catalogue.xml");
+            archive.CreateEntry("CATALOG.XML");
+            archive.CreateEntry("data/S411.gml");
+        }
+
+        Assert.Equal(
+            "CATALOG.XML",
+            ExchangeSetDetection.ResolveZipCatalogueEntry(zip));
     }
 
     [Fact]

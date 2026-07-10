@@ -1,5 +1,6 @@
 using System.Linq;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Xunit;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -110,18 +111,89 @@ public class TileGridTests
     }
 
     [Fact]
-    public void VisibleTiles_NeverEmitsOutOfRangeKeysAtWorldEdge()
+    public void VisibleTiles_ClampsYButNotXAtWorldEdge()
     {
-        // Viewport hard against the north-west corner; indices must clamp to 0.
+        // Viewport hard against the north-west corner. The Y (latitude) index is
+        // clamped at the pole, but the X (longitude) index is intentionally NOT
+        // clamped: EPSG:3857 is periodic east-west, so a viewport overhanging the
+        // west edge legitimately yields negative columns (their TileWorldBounds
+        // map to the continuous world position west of -Extent). The origin tile
+        // must still be emitted.
         var band = 3;
+        var perAxis = TileGrid.TilesPerAxis(band);
         var res = TileGrid.ResolutionForBand(band);
         var tiles = TileGrid.VisibleTiles(-TileGrid.Extent, TileGrid.Extent, 512, 512, res, band);
-        Assert.All(tiles, t =>
-        {
-            Assert.InRange(t.X, 0, TileGrid.TilesPerAxis(band) - 1);
-            Assert.InRange(t.Y, 0, TileGrid.TilesPerAxis(band) - 1);
-        });
+        Assert.All(tiles, t => Assert.InRange(t.Y, 0, perAxis - 1));
         Assert.Contains(new TileKey(band, 0, 0), tiles);
+        // The overhang past the west edge produces at least one negative column.
+        Assert.Contains(tiles, t => t.X < 0);
+    }
+
+    [Fact]
+    public void VisibleTiles_ContinuousAntimeridianFrame_EmitsColumnsBeyondWorld()
+    {
+        // Regression for the viewer's tiled subsystem drawing a thin ±180° sliver
+        // for antimeridian datasets kept in a continuous longitude frame (the US
+        // NWS S-411 sea-ice product, ~175°E → ~225°E). Geometry east of +180°
+        // projects to world-X beyond +Extent; the tile enumeration must emit the
+        // columns at index >= perAxis that cover it (not clamp them into the
+        // boundary column), and TileWorldBounds must map those columns back to the
+        // correct continuous world position.
+        var band = 6;
+        var perAxis = TileGrid.TilesPerAxis(band);
+        var res = TileGrid.ResolutionForBand(band);
+
+        // Centre the viewport at ~lon 200° (continuous, east of +180°).
+        var (centerX, _) = WebMercator.FromLonLat(200.0, 72.0);
+        Assert.True(centerX > TileGrid.Extent, "sanity: lon 200° projects east of +Extent");
+
+        var tiles = TileGrid.VisibleTiles(centerX, 0, 512, 512, res, band);
+        Assert.NotEmpty(tiles);
+        // At least one column lies beyond the standard world (index >= perAxis).
+        Assert.Contains(tiles, t => t.X >= perAxis);
+        // Every emitted column maps to a continuous world position east of the
+        // boundary — none is collapsed back to the ±180° edge column.
+        var eastTile = tiles.First(t => t.X >= perAxis);
+        var bounds = TileGrid.TileWorldBounds(eastTile);
+        Assert.True(bounds.MinX >= TileGrid.Extent,
+            $"east tile world MinX {bounds.MinX} should be >= +Extent {TileGrid.Extent}");
+        // The data is drawn once at its true continuous position (no world-copy
+        // duplication like the basemap), so a normal (screenful) viewport emits a
+        // single contiguous run of columns — no repeated world copy.
+        var span = tiles.Max(t => t.X) - tiles.Min(t => t.X) + 1;
+        var distinctColumns = tiles.Select(t => t.X).Distinct().Count();
+        Assert.Equal(span, distinctColumns);
+    }
+
+    [Fact]
+    public void VisibleTileRange_EnumeratesEveryVisibleColumn_NoOneWorldCap()
+    {
+        // Option B: chart data is drawn exactly once at its true continuous
+        // EPSG:3857 position (it is not world-copied like the basemap), so a wide
+        // multi-world viewport must enumerate every visible column instead of
+        // collapsing to a single world. Otherwise antimeridian data would pop
+        // between world-copies as the pan crossed a world boundary. A band-0
+        // (perAxis == 1) viewport several worlds wide therefore yields several
+        // columns, not one.
+        var band = 0;
+        var perAxis = TileGrid.TilesPerAxis(band);
+        var res = TileGrid.ResolutionForBand(band);
+        var range = TileGrid.VisibleTileRange(0, 0, 4096, 4096, res, band);
+        var span = range.XEnd - range.XStart + 1;
+        Assert.True(span > perAxis, $"expected multiple world columns, got span {span} (perAxis {perAxis})");
+    }
+
+    [Fact]
+    public void VisibleTileRange_GuardBoundsPathologicalZoomOut()
+    {
+        // The one-world cap is gone, but a generous absolute guard still bounds a
+        // pathological viewport so tile enumeration cannot allocate unbounded
+        // columns. The guard is far beyond any realistic viewport.
+        var band = 0;
+        var res = TileGrid.ResolutionForBand(band);
+        var range = TileGrid.VisibleTileRange(0, 0, 1_000_000_000, 4096, res, band);
+        var span = range.XEnd - range.XStart + 1;
+        Assert.True(span <= 4096, $"span {span} should be bounded by the absolute guard (4096)");
     }
 
     [Fact]

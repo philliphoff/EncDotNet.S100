@@ -74,4 +74,41 @@ public sealed class WorldToScreenSeamWrapTests
 
         Assert.True(x < 0f, "A feature west of a normal viewport must stay off the left edge.");
     }
+
+    [Fact]
+    public void Shifted_viewport_with_wrap_disabled_does_not_teleport_far_ops()
+    {
+        // The tiled renderer disables the wrap (allowSeamWrap: false) because it
+        // draws already-continuous geometry from narrow per-tile viewports. Under
+        // a shifted window an op west of the viewport must project to a negative
+        // pixel X — NOT be wrapped +circumference to the right edge (which is what
+        // smeared large polygons across eastern tiles before the fix).
+        var transform = WorldToScreen.Create(ShiftedViewport(), allowSeamWrap: false);
+
+        // A feature at −135° has a large negative raw world-X. With the wrap on it
+        // would land at the right edge (see Op_west_of_seam_wraps_into_the_shifted_window);
+        // with the wrap off it must stay far off-screen left.
+        var world = WebMercator.FromLonLat(-135.0, 66.0);
+        var (x, _) = transform.Project(world);
+
+        Assert.True(x < 0f, "With wrap disabled, a far-west op must not be teleported into the window.");
+    }
+
+    [Fact]
+    public void Wrap_disabled_matches_wrap_enabled_for_in_window_ops()
+    {
+        // Disabling the wrap must not disturb ops already inside the shifted
+        // window (the common case for a per-tile viewport): both forms project
+        // them identically.
+        var vp = ShiftedViewport();
+        var wrapOn = WorldToScreen.Create(vp, allowSeamWrap: true);
+        var wrapOff = WorldToScreen.Create(vp, allowSeamWrap: false);
+
+        var world = WebMercator.FromLonLat(200.0, 66.0); // continuous, inside [175,225]
+        var (xOn, yOn) = wrapOn.Project(world);
+        var (xOff, yOff) = wrapOff.Project(world);
+
+        Assert.Equal(xOn, xOff, 3);
+        Assert.Equal(yOn, yOff, 3);
+    }
 }

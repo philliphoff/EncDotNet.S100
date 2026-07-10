@@ -34,6 +34,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private string? _productSpec;
     private bool _hasPick;
     private PickHit? _selectedHit;
+    private EggCodeViewModel? _eggCode;
     private PickLocation? _location;
 
     public PickReportViewModel()
@@ -639,11 +640,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         Attributes.Clear();
         ReferencedTexts.Clear();
         References.Clear();
+        _eggCode = null;
         Location = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(HasReferencedText));
         OnPropertyChanged(nameof(HasReferences));
+        OnPropertyChanged(nameof(SelectedEggCode));
+        OnPropertyChanged(nameof(HasEggCode));
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
@@ -661,11 +665,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             Attributes.Clear();
             ReferencedTexts.Clear();
             References.Clear();
+            _eggCode = null;
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasReferencedText));
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));
+            OnPropertyChanged(nameof(SelectedEggCode));
+            OnPropertyChanged(nameof(HasEggCode));
             RaiseIdentityChanged();
             return;
         }
@@ -683,8 +690,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             References.Add(reference);
         OnPropertyChanged(nameof(HasReferences));
 
+        _eggCode = hit.EggCode is { } egg ? new EggCodeViewModel(egg) : null;
+
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
+        OnPropertyChanged(nameof(SelectedEggCode));
+        OnPropertyChanged(nameof(HasEggCode));
         RaiseIdentityChanged();
     }
 
@@ -712,6 +723,17 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>True when <see cref="SelectedStationSeries"/> is non-null.</summary>
     public bool HasStationSeries => _selectedHit?.StationSeries is not null;
+
+    /// <summary>
+    /// WMO / SIGRID-3 ice egg-code view model attached to
+    /// <see cref="SelectedHit"/>, or <c>null</c> when the selected hit is not
+    /// an S-411 sea-ice / lake-ice feature. Bound by the pick panel's
+    /// egg-code section.
+    /// </summary>
+    public EggCodeViewModel? SelectedEggCode => _eggCode;
+
+    /// <summary>True when <see cref="SelectedEggCode"/> is non-null.</summary>
+    public bool HasEggCode => _eggCode is not null;
 
     private void DisposeHitResources()
     {

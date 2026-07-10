@@ -86,7 +86,9 @@ The viewer accepts:
 
 - **S-100 Exchange Sets** — point it at a directory containing a
   `CATALOG.XML` or at a `.zip` exchange-set archive, and it will
-  load every dataset entry the catalogue lists.
+  load every dataset entry the catalogue lists. The canonical
+  `CATALOG.XML` name and the `catalogue.xml` spelling used by some
+  products (e.g. JCOMM/IHO S-411 sample sets) are both recognised.
 - **S-57 / S-63 Exchange Sets** — point it at a directory containing a
   `CATALOG.031` (or drop the `CATALOG.031` file itself) and it will
   enumerate every base cell the catalogue lists, apply each cell's
@@ -236,6 +238,15 @@ shows:
   for S-125 AtoN status bindings and S-421 route topology.
 - A **Time-series chart** when the picked feature is a fixed-station
   observation (S-104 / S-111 data-coding-format-8 stations).
+- An **Egg code** diagram when the picked feature is an S-411 sea-ice
+  or lake-ice area. The WMO / SIGRID-3 "egg" draws the total
+  concentration on top of the oval with the partial-concentration,
+  stage-of-development and form-of-ice rows beneath it (a single ice
+  type folds the partial row away, and open water omits the oval).
+  Thinner fourth / fifth ice classes are flanked to the right of their
+  row outside the oval; snow depth appears as a caption beneath it.
+  Hovering any cell shows its Feature-Catalogue meaning (e.g.
+  "Grey Ice") alongside its role in the egg.
 
 A standard one-shot pick gesture (platform-specific click modifier,
 or a press-and-hold of about half a second) works outside Pick Mode
@@ -320,6 +331,15 @@ and from a pair of compact pill buttons on the map toolbar:
 - **Text groups** — quick toggles for the three S-101 text
   viewing-group layers (Important Text / Other Text / All Other
   Chart Text).
+- **Ice display mode** *(S-411 sea ice)* — a per-dataset selector,
+  shown only when an S-411 dataset is loaded, that switches the
+  sea-ice portrayal between **Concentration** (total concentration),
+  **Stage of development**, and a **Navigational** preview
+  (S-100 Part 9 §11.7). This axis is independent of the ECDIS display
+  category above. The navigational option is *provisional* — a
+  concentration-derived preview, not a POLARIS/RIO navigational-risk
+  product — and is labelled as such in its tooltip. The selection
+  persists between sessions.
 - **Per-spec viewing groups** — the **ECDIS** activity-bar panel
   lists each loaded vector product's viewing groups individually so
   power users can hide or reveal specific symbol families. Labels
@@ -644,13 +664,16 @@ sets the bind address (loopback recommended). Any MCP flag implies
 `--mcp-port-file <PATH>` writes the bound endpoint URI to a file once
 the server is listening (the endpoint is also echoed to stdout as
 `[MCP] listening on …`). A CLI-driven MCP run never persists the
-bound port back to the user's `settings.json`. Twenty-one viewer-only tools
+bound port back to the user's `settings.json`. Twenty-two viewer-only tools
 are injected when the server starts: `render_to_image` (read-only —
 captures a PNG snapshot from a clone of the live map),
 `set_viewport` (mutating — drives the live navigator to a bbox or
 centre+zoom), `set_palette` (mutating — Day / Dusk / Night),
 `set_display_category` (mutating — DisplayBase / Standard /
-OtherInformation / All), `set_time_step` (mutating — drives the
+OtherInformation / All), `set_display_mode` (mutating — explicit
+per-spec S-100 Part 9 §11.7 mode; today only S-411 sea ice, switching
+`ice-concentration` / `ice-sod` / provisional `ice-navigational`),
+`set_time_step` (mutating — drives the
 global time clock to a sample by index or timestamp),
 `set_own_ship` (mutating — positions and steers the simulated
 own-ship: WGS-84 `lat`/`lon`, `cog`, `sog`, `heading`, and
@@ -718,6 +741,18 @@ Natural Earth 1:10m land (public domain) with zero network access;
 map to Online/None. Use None or Offline for offline operation, or for
 performance runs that want to measure only dataset rendering without
 basemap tile fetch / raster activity (issue #295).
+
+The **Offline** basemap repeats its Natural Earth land across the
+immediately-adjacent world copies (one circumference east and west), so
+a dataset kept in a continuous longitude frame across the ±180°
+antimeridian — e.g. the US NWS S-411 sea-ice product (~175°E → ~225°E) —
+has land beneath it instead of floating over empty water. The layer
+still reports a single-world extent, so "zoom to extent" is unaffected.
+The **Online** OpenStreetMap tiles are *not* world-copied (the XYZ tile
+schema spans one world and Mapsui's tiling does not wrap), so such a
+dataset shows no online tiles beneath the portion east of +180°; use the
+Offline basemap for antimeridian datasets. Wrapping the online tile
+source is a possible future enhancement.
 
 **Own-ship.** `--own-ship-pos <LAT,LON>` places the simulated
 own-ship at a WGS-84 position, `--own-ship-cog <DEG>` sets its course

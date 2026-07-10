@@ -285,6 +285,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(SetPaletteMcpAdapter.Create(new SetPaletteTool(_renderStateAccessor)));
             tools.Add(SetDisplayCategoryMcpAdapter.Create(new SetDisplayCategoryTool(_renderStateAccessor)));
+            tools.Add(SetDisplayModeMcpAdapter.Create(new SetDisplayModeTool(_renderStateAccessor)));
             tools.Add(SetRenderSubsystemMcpAdapter.Create(new SetRenderSubsystemTool(_renderStateAccessor)));
         }
         if (_globalTime is not null)

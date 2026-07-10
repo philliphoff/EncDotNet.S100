@@ -295,13 +295,19 @@ public static class HeadlessVectorRenderer
             minX -= grow; maxX += grow;
         }
 
-        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY);
-        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY);
+        // Lossless (unclamped) inverse for the viewport corners so the renderer
+        // reproduces these exact world bounds (a pole-overhanging edge clamped
+        // to ±85° would drift geometry poleward). See WebMercator.ToLonLat.
+        var (minLon, minLat) = WebMercator.ToLonLat(minX, minY, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(maxX, maxY, clampLatitude: false);
 
         // Approximate scale denominator (used only if a caller re-enables
         // culling): mercator metres-per-pixel, corrected to ground metres by
         // cos(midLat), divided by the S-100 standard 0.00028 m/px screen pitch.
-        double midLatRad = (minLat + maxLat) * 0.5 * Math.PI / 180.0;
+        // Clamp the mid-latitude to the display limit so an overhanging edge
+        // cannot drive cos(midLat) to ~0 and blow up the denominator.
+        double midLat = Math.Clamp((minLat + maxLat) * 0.5, -WebMercator.MaxLatitude, WebMercator.MaxLatitude);
+        double midLatRad = midLat * Math.PI / 180.0;
         double groundMetresPerPixel = (maxX - minX) / widthPixels * Math.Cos(midLatRad);
         double denom = groundMetresPerPixel / ScaleVisibility.DenomToResolutionMetres;
 

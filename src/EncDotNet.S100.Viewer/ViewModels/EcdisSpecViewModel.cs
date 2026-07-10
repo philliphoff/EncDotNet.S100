@@ -69,6 +69,16 @@ internal sealed class EcdisSpecViewModel : ViewModelBase
     public IReadOnlyList<EcdisViewingGroupViewModel> ViewingGroups { get; }
 
     /// <summary>
+    /// True when this spec contributes at least one toggleable viewing group.
+    /// Specs whose portrayal catalogue declares no viewing groups (e.g.
+    /// S-411, whose display is driven by the sea-ice display-mode selector
+    /// rather than viewing-group filters) produce an empty section; the panel
+    /// hides those entries so an otherwise content-less spec header is not
+    /// shown.
+    /// </summary>
+    public bool HasViewingGroups => ViewingGroups.Count > 0;
+
+    /// <summary>
     /// Viewing-group checkboxes grouped into curated, ordered
     /// subsections. Specs that declare no sections produce a single
     /// untitled section preserving the catalogue order.

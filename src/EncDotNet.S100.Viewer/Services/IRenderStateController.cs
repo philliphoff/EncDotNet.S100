@@ -59,6 +59,28 @@ internal interface IRenderStateController
     /// when <see cref="RenderSubsystemPinned"/> is true.
     /// </summary>
     Task SetRenderSubsystemAsync(RenderSubsystemKind subsystem, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the explicit spec-native display-mode id currently active for
+    /// <paramref name="spec"/> (e.g. an S-411 sea-ice portrayal mode,
+    /// S-100 Part 9 §11.7), or <see langword="null"/> when no explicit
+    /// mode is selected (each catalogue's default look applies).
+    /// </summary>
+    /// <param name="spec">The product-specification code (e.g. <c>S-411</c>).</param>
+    string? GetDisplayMode(string spec);
+
+    /// <summary>
+    /// Sets the explicit spec-native display-mode id for
+    /// <paramref name="spec"/> (S-100 Part 9 §11.7). A <see langword="null"/>
+    /// or empty <paramref name="modeId"/> clears the selection so the
+    /// catalogue default applies. Marshals to the UI thread for parity with
+    /// <see cref="SetDisplayCategoryAsync"/>. Idempotent: setting the
+    /// current value is a no-op.
+    /// </summary>
+    /// <param name="spec">The product-specification code (e.g. <c>S-411</c>).</param>
+    /// <param name="modeId">The spec-native mode id, or <see langword="null"/> to clear.</param>
+    /// <param name="ct">A cancellation token.</param>
+    Task SetDisplayModeAsync(string spec, string? modeId, CancellationToken ct = default);
 }
 
 /// <summary>

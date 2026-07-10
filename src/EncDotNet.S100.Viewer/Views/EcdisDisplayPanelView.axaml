@@ -74,7 +74,8 @@
                             <Border BorderBrush="{DynamicResource BorderColor}"
                                     BorderThickness="0,1,0,0"
                                     Padding="0,8,0,0"
-                                    Margin="0,4,0,0">
+                                    Margin="0,4,0,0"
+                                    IsVisible="{Binding HasViewingGroups}">
                                 <StackPanel Spacing="4">
                                     <!-- Spec header -->
                                     <DockPanel>
@@ -137,6 +138,16 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!--
+                  S-411 sea-ice display-mode selector (issue #416). The same
+                  reusable control and view-model instance used by the map
+                  Display Settings flyout, so a mode chosen in either place
+                  stays in sync. Self-hides unless a loaded dataset declares
+                  more than one mode (S-411 today).
+                -->
+                <views:DisplayModeSelectorView DataContext="{Binding DisplayModeToolbar}"
+                                               ShowDivider="False" />
             </StackPanel>
         </ScrollViewer>
     </Grid>
