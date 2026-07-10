@@ -40,7 +40,7 @@ public class BasemapLayerFactoryTests
     public void Offline_RepeatsLandAcrossAdjacentWorldCopies()
     {
         var layer = Assert.IsAssignableFrom<MemoryLayer>(
-            BasemapLayerFactory.Create(BasemapMode.Offline));
+            BasemapLayerFactory.TryCreate(BasemapMode.Offline));
 
         double minX = double.MaxValue;
         double maxX = double.MinValue;
@@ -65,7 +65,7 @@ public class BasemapLayerFactoryTests
     public void Offline_ReportsBoundedSingleWorldExtent()
     {
         var extent = Assert.IsAssignableFrom<MemoryLayer>(
-            BasemapLayerFactory.Create(BasemapMode.Offline)).Extent;
+            BasemapLayerFactory.TryCreate(BasemapMode.Offline)).Extent;
 
         // Even though the geometry spans world copies, the layer must report
         // only the canonical single world so the copies never inflate
