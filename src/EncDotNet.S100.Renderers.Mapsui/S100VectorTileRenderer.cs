@@ -727,6 +727,8 @@ public static class S100VectorTileRenderer
             {
                 state.PendingDeviceScale = deviceScale;
                 state.PendingGeneration = state.Generation;
+                state.PendingCenterX = centerX;
+                state.PendingCenterY = centerY;
                 // Spin up enough workers to cover the pending tiles, capped at the
                 // tier's per-layer pool size, so a cold pan's misses rasterise in
                 // parallel instead of one at a time. A second cap on the total live
@@ -1470,12 +1472,12 @@ public static class S100VectorTileRenderer
 
                     if (state.PendingVisible.Count > 0)
                     {
-                        key = TakeOne(state.PendingVisible);
+                        key = TakeNearest(state.PendingVisible, state.PendingCenterX, state.PendingCenterY);
                         isPrediction = false;
                     }
                     else
                     {
-                        key = TakeOne(state.PendingPredicted);
+                        key = TakeNearest(state.PendingPredicted, state.PendingCenterX, state.PendingCenterY);
                         isPrediction = true;
                     }
 
@@ -1600,15 +1602,81 @@ public static class S100VectorTileRenderer
         }
     }
 
-    private static TileKey TakeOne(HashSet<TileKey> pending)
+    /// <summary>
+    /// Removes and returns the pending tile whose world centre is nearest the
+    /// viewport centre (<paramref name="centerX"/>, <paramref name="centerY"/> in
+    /// EPSG:3857 metres), so central tiles rasterise before the perimeter within
+    /// a priority tier — cutting time-to-centre-fill on a cold pan/zoom without
+    /// disturbing the visible-before-predicted ordering (that is the caller's
+    /// two-tier drain). Ties are broken deterministically on
+    /// (<c>Band</c>, <c>Y</c>, <c>X</c>) so the drain order never depends on the
+    /// set's hash iteration order. Returns <see langword="default"/> for an empty
+    /// set. O(n) per call over a viewport-sized set (tens of tiles).
+    /// </summary>
+    /// <param name="pending">The pending tile set to draw from; mutated in place.</param>
+    /// <param name="centerX">Viewport centre X in EPSG:3857 metres.</param>
+    /// <param name="centerY">Viewport centre Y in EPSG:3857 metres.</param>
+    /// <returns>The removed nearest-to-centre tile, or <see langword="default"/> when empty.</returns>
+    internal static TileKey TakeNearest(HashSet<TileKey> pending, double centerX, double centerY)
     {
+        var found = false;
+        var best = default(TileKey);
+        var bestScore = double.PositiveInfinity;
         foreach (var k in pending)
         {
-            pending.Remove(k);
-            return k;
+            var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(k);
+            var dx = (minX + maxX) * 0.5 - centerX;
+            var dy = (minY + maxY) * 0.5 - centerY;
+            var score = dx * dx + dy * dy;
+            if (!found)
+            {
+                found = true;
+                best = k;
+                bestScore = score;
+                continue;
+            }
+
+            // Squared distances in EPSG:3857 metres are large and involve π and
+            // division, so exact equality is unreliable for detecting a tie.
+            // Distinct tiles differ by at least ~a tile edge, which dwarfs this
+            // relative tolerance, so genuine ties (including mirror-image tiles)
+            // fall through to the deterministic (Band, Y, X) order while nearer
+            // tiles still win outright.
+            var tolerance = 1e-9 * Math.Max(Math.Abs(score), Math.Abs(bestScore));
+            var isTie = Math.Abs(score - bestScore) <= tolerance;
+            if (isTie ? TileOrderLess(k, best) : score < bestScore)
+            {
+                best = k;
+                bestScore = score;
+            }
         }
 
-        return default;
+        if (found)
+        {
+            pending.Remove(best);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Deterministic total order on tiles by (<c>Band</c>, <c>Y</c>, <c>X</c>),
+    /// used only to break equal centre-distance ties in <see cref="TakeNearest"/>
+    /// so the drain order is stable across runs.
+    /// </summary>
+    private static bool TileOrderLess(TileKey a, TileKey b)
+    {
+        if (a.Band != b.Band)
+        {
+            return a.Band < b.Band;
+        }
+
+        if (a.Y != b.Y)
+        {
+            return a.Y < b.Y;
+        }
+
+        return a.X < b.X;
     }
 
     /// <summary>
@@ -1965,6 +2033,15 @@ public static class S100VectorTileRenderer
         public int ActiveWorkers;
         public float PendingDeviceScale = 1f;
         public long PendingGeneration;
+
+        // Viewport centre (EPSG:3857 metres) of the frame that produced the
+        // current pending sets, so the worker can dequeue centre-first within
+        // each priority tier (nearest pending tile to the viewport centre
+        // rasterises before the perimeter). Refreshed every frame that enqueues
+        // work, in lockstep with the pending sets, so it always matches the
+        // centre the visible/predicted tiles were selected for.
+        public double PendingCenterX;
+        public double PendingCenterY;
 
         // Off-screen north-up composite for the current rotated frame (null on
         // north-up frames). DrawImage is deferred, so these must outlive the frame

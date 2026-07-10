@@ -419,8 +419,13 @@ hysteresis comes from the velocity EMA, not from retaining stale predictions.
 Pending work is split into two queues: `PendingVisible` (on-screen exact-band
 misses, high priority) and `PendingPredicted` (the warm set, low priority). The
 pool of coalescing workers drains visible-first, so prediction always yields to
-tiles the user is actually looking at and never delays an on-screen fill. The
-pool size is `RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
+tiles the user is actually looking at and never delays an on-screen fill. Within
+each tier a worker dequeues **centre-first** (`TakeNearest`): the pending tile
+whose world centre is nearest the current viewport centre rasterises before the
+perimeter, cutting time-to-centre-fill on a cold pan/zoom. Equal-distance ties
+break deterministically on `(band, y, x)`, so the drain order never depends on
+the pending set's hash iteration order. The pool size is
+`RenderingOptimizations.TileWorkerCount` (tier-sized); a per-layer
 `ActiveWorkers` count plus a process-wide `s_activeWorkerTotal` cap (core count)
 bound how many run at once.
 
