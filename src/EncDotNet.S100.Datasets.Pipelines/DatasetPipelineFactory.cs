@@ -165,7 +165,7 @@ public sealed class DatasetPipelineFactory
         try
         {
             using var stringReader = new StringReader(xml);
-            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit });
+            using var reader = System.Xml.XmlReader.Create(stringReader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
             while (reader.Read())
             {
                 if (reader.NodeType == System.Xml.XmlNodeType.Element)
@@ -651,10 +651,11 @@ public sealed class DatasetPipelineFactory
     /// only a human-readable product-specification <c>name</c> (e.g. "Ice
     /// Information Product Specification (JCOMM S-411)") with no identifier or
     /// number, so the declared spec cannot be mapped and the dataset must be
-    /// recognized from its GML root element / namespaces. Only
-    /// <c>.gml</c>/<c>.xml</c> datasets are sniffed; returns <c>null</c> when
-    /// the file cannot be read or is unrecognized. Returns the canonical spec
-    /// string (e.g. <c>"S-411"</c>) understood by
+    /// recognized from its GML root element / namespaces. Reads only a bounded,
+    /// BOM-aware prefix of the dataset. Only <c>.gml</c>/<c>.xml</c> datasets
+    /// are sniffed; returns <c>null</c> when the file cannot be read or is
+    /// unrecognized. Returns the canonical spec string (e.g. <c>"S-411"</c>)
+    /// understood by
     /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
     /// </summary>
     /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
@@ -678,9 +679,19 @@ public sealed class DatasetPipelineFactory
 
         try
         {
-            AssetBytes bytes = await source.ReadAllBytesAsync(relativePath, cancellationToken)
+            await using var stream = await source.OpenAsync(relativePath, cancellationToken)
                 .ConfigureAwait(false);
-            var xml = System.Text.Encoding.UTF8.GetString(bytes.Bytes.Span).TrimStart();
+            using var streamReader = new StreamReader(
+                stream,
+                System.Text.Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true);
+            const int MaxSniffPrefixChars = 64 * 1024;
+            var buffer = new char[MaxSniffPrefixChars];
+            int read = await streamReader.ReadBlockAsync(
+                    buffer.AsMemory(0, MaxSniffPrefixChars),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            var xml = new string(buffer, 0, read).TrimStart();
             return DetectGmlProductSpecFromXml(xml);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

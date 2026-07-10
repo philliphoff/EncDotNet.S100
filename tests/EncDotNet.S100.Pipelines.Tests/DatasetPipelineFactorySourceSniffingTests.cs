@@ -122,6 +122,29 @@ public class DatasetPipelineFactorySourceSniffingTests
     }
 
     [Fact]
+    public async Task DetectProductSpecFromSourceAsync_SniffsUtf16BomJcommIceGml()
+    {
+        var dir = CreateScratchDirectory();
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(dir, "ice.gml"),
+                JcommIceGml,
+                new System.Text.UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+            using var source = FileSystemAssetSource.Create(dir);
+
+            var spec = await DatasetPipelineFactory
+                .DetectProductSpecFromSourceAsync(source, "ice.gml");
+
+            Assert.Equal("S-411", spec);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task DetectProductSpecFromSourceAsync_ReturnsNull_ForNonGmlExtension()
     {
         var dir = CreateScratchDirectory();
