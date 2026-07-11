@@ -362,7 +362,6 @@ internal static class DefaultRules
         // (information, featureName, rhythmOfLight, the date ranges,
         // zoneOfConfidence/CATZOC, and surfaceCharacteristics/NATSUR+NATQUA).
         // Still deferred:
-        //   HORCLR → horizontalClearanceValue (horizontalClearanceFixed/Open),
         //   MLTYLT (light-sector complex),
         //   SORDAT/SORIND (→ complex sourceIndication/reportedDate).
         //
@@ -372,6 +371,8 @@ internal static class DefaultRules
         //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd);
         //   NATSUR/NATQUA → surfaceCharacteristics (natureOfSurface plus
         //   natureOfSurfaceQualifyingTerms) on SeabedArea;
+        //   HORCLR → horizontalClearanceValue of horizontalClearanceOpen (Gate)
+        //   or horizontalClearanceFixed (spans/tunnels/shoreline/canals/etc.);
         //   LITCHR/SIGGRP/SIGPER/SIGSEQ → rhythmOfLight (non-sectored lights);
         //   LITCHR/COLOUR/SECTR1/SECTR2/VALNMR/LITVIS/SIGGRP/SIGPER/SIGSEQ →
         //   sectorCharacteristics/lightSector/sectorLimit (sectored lights →

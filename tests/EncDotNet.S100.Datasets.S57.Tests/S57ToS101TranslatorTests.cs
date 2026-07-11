@@ -1028,6 +1028,75 @@ public class S57ToS101TranslatorTests
         Assert.DoesNotContain("valueOfNominalRange", topLevel);
     }
 
+    // ── HORCLR → horizontalClearanceOpen / horizontalClearanceFixed ──────
+
+    [Fact]
+    public void Translate_GateWithHorclr_AssemblesHorizontalClearanceOpen()
+    {
+        // GATCON (OBJL 61) → Gate, which binds horizontalClearanceOpen. HORCLR
+        // (ATTL 98) feeds the mandatory horizontalClearanceValue sub-attribute.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(61, Attr(98, "12.5")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Gate", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var open = ComplexInstance(s101, feat.Attributes, "horizontalClearanceOpen", 1).ToList();
+        Assert.NotEmpty(open);
+        Assert.Equal("12.5", GetSubAttribute(s101, open, "horizontalClearanceValue"));
+
+        // Gate binds the open complex, not the fixed one.
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceFixed", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_ShorelineConstructionWithHorclr_AssemblesHorizontalClearanceFixed()
+    {
+        // SLCONS (OBJL 122) → ShorelineConstruction, which binds
+        // horizontalClearanceFixed (not open).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(122, Attr(98, "8.0")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("ShorelineConstruction", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var fixedClr = ComplexInstance(s101, feat.Attributes, "horizontalClearanceFixed", 1).ToList();
+        Assert.NotEmpty(fixedClr);
+        Assert.Equal("8.0", GetSubAttribute(s101, fixedClr, "horizontalClearanceValue"));
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceOpen", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_TunnelWithHorclr_AssemblesHorizontalClearanceFixed()
+    {
+        // TUNNEL (OBJL 151) → Tunnel, which binds horizontalClearanceFixed.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(151, Attr(98, "6.25")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Tunnel", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+
+        var fixedClr = ComplexInstance(s101, feat.Attributes, "horizontalClearanceFixed", 1).ToList();
+        Assert.Equal("6.25", GetSubAttribute(s101, fixedClr, "horizontalClearanceValue"));
+    }
+
+    [Fact]
+    public void Translate_BridgeWithHorclr_LeavesHorclrUnmapped()
+    {
+        // BRIDGE (OBJL 11) → Bridge, which binds neither horizontalClearance
+        // complex (S-101 carries bridge clearance on the decomposed spans).
+        // HORCLR therefore has no conformant home and is left unmapped — no
+        // clearance complex is emitted and no attribute carries the value.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11, Attr(98, "12.5")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Bridge", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceOpen", 1).ToList());
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "horizontalClearanceFixed", 1).ToList());
+        Assert.Empty(feat.Attributes);
+    }
+
     // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
 
     private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(

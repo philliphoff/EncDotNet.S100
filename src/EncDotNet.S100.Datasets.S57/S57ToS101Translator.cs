@@ -224,6 +224,25 @@ public sealed class S57ToS101Translator
     private const string S101AttrValueOfNominalRange = "valueOfNominalRange";
     private const string S101AttrLightVisibility = "lightVisibility";
 
+    // S-57 HORCLR (Horizontal clearance, ATTL 98) maps to the mandatory
+    // `horizontalClearanceValue` [1..1] sub-attribute of one of two S-101
+    // complex attributes (S-101 Conversion Guidance; verified against the
+    // bundled FC): `horizontalClearanceOpen` — bound to Gate — or
+    // `horizontalClearanceFixed` — bound to SpanFixed, SpanOpening, Tunnel,
+    // ShorelineConstruction, StructureOverNavigableWater, Canal, DockArea and
+    // LockBasin. Both complexes share the same two sub-attributes:
+    // `horizontalClearanceValue` (real, [1..1]) and
+    // `horizontalDistanceUncertainty` (real, [0..1]); S-57 carries no
+    // per-clearance uncertainty source, so only the value is populated. The
+    // correct complex is chosen per resolved feature by its FC binding; a
+    // feature that binds neither (for example Bridge, which S-101 decomposes
+    // into spans that carry the clearance) has no conformant home for HORCLR,
+    // which then falls through and is recorded unmapped.
+    private const ushort S57AttrHorclr = 98;   // HORCLR — horizontal clearance
+    private const string S101AttrHorizontalClearanceOpen = "horizontalClearanceOpen";
+    private const string S101AttrHorizontalClearanceFixed = "horizontalClearanceFixed";
+    private const string S101AttrHorizontalClearanceValue = "horizontalClearanceValue";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -662,6 +681,16 @@ public sealed class S57ToS101Translator
             string? sectrSiggrp = null;
             string? sectrSigper = null;
             string? sectrSigseq = null;
+            // horizontalClearance source — HORCLR. The destination complex
+            // depends on the resolved feature's FC binding: Gate binds
+            // `horizontalClearanceOpen`; spans, tunnels, shoreline
+            // constructions, canals and dock/lock areas bind
+            // `horizontalClearanceFixed`. A feature that binds neither has no
+            // conformant home for HORCLR.
+            bool bindsHorClearanceOpen = _featureBindings.Binds(feature.S101Code, S101AttrHorizontalClearanceOpen);
+            bool bindsHorClearanceFixed = _featureBindings.Binds(feature.S101Code, S101AttrHorizontalClearanceFixed);
+            bool bindsHorClearance = bindsHorClearanceOpen || bindsHorClearanceFixed;
+            string? horclrValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -702,6 +731,7 @@ public sealed class S57ToS101Translator
                     case S57AttrCatzoc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) catzocValue = a.Value; break;
                     case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
                     case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
+                    case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
                 }
             }
 
@@ -761,6 +791,16 @@ public sealed class S57ToS101Translator
                 if (bindsSectorChar && a.AttributeCode is S57AttrLitchr or S57AttrColour
                         or S57AttrLitvis or S57AttrValnmr or S57AttrSectr1 or S57AttrSectr2
                         or S57AttrSiggrp or S57AttrSigper or S57AttrSigseq)
+                    continue;
+
+                // On features binding a horizontalClearance complex (Gate →
+                // open; spans, tunnels, shoreline constructions, canals and
+                // dock/lock areas → fixed), HORCLR is assembled into that
+                // complex below rather than passed through — it is not a
+                // top-level simple attribute on those features. (On a feature
+                // binding neither, HORCLR falls through and is recorded
+                // unmapped, having no conformant S-101 home there.)
+                if (bindsHorClearance && a.AttributeCode is S57AttrHorclr)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -927,6 +967,21 @@ public sealed class S57ToS101Translator
                 }
             }
 
+            // Append the `horizontalClearance` complex-attribute instance —
+            // `horizontalClearanceOpen` on Gate, `horizontalClearanceFixed`
+            // elsewhere. Its mandatory sub-attribute `horizontalClearanceValue`
+            // is a real that carries the HORCLR value verbatim (matching the
+            // fidelity of the other real sub-attributes such as
+            // valueOfNominalRange); `horizontalDistanceUncertainty` has no S-57
+            // source and is left unpopulated.
+            if (bindsHorClearance && horclrValue is not null)
+            {
+                var complexName = bindsHorClearanceOpen
+                    ? S101AttrHorizontalClearanceOpen
+                    : S101AttrHorizontalClearanceFixed;
+                AppendHorizontalClearanceInstance(builder, complexName, horclrValue);
+            }
+
             // Append `surfaceCharacteristics` complex-attribute instances. The
             // S-57 NATSUR and NATQUA lists are paired positionally: position i
             // yields one instance carrying `natureOfSurface` = NATSUR[i] (when
@@ -1091,6 +1146,24 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(zocCode, 1, string.Empty));
             var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
             builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
+        }
+
+        // Emits a `horizontalClearanceOpen` / `horizontalClearanceFixed`
+        // complex-attribute instance (marker + its mandatory
+        // `horizontalClearanceValue` real sub-attribute) using the same marker
+        // / contiguous-sub-attribute convention as the other complex
+        // attributes. The S-101 data provider delimits the instance from any
+        // following complex marker.
+        private void AppendHorizontalClearanceInstance(
+            List<S101Attribute> builder,
+            string complexName,
+            string horizontalClearanceValue)
+        {
+            var complexCode = GetOrAssignAttributeCode(complexName);
+            // Marker entry — Index=1, value=empty — followed by the sub-attribute.
+            builder.Add(new S101Attribute(complexCode, 1, string.Empty));
+            var valueCode = GetOrAssignAttributeCode(S101AttrHorizontalClearanceValue);
+            builder.Add(new S101Attribute(valueCode, 1, horizontalClearanceValue));
         }
 
         // Emits zero or more `surfaceCharacteristics` complex-attribute
