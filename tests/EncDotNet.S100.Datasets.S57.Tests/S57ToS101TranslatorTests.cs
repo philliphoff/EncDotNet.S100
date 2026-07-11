@@ -852,6 +852,87 @@ public class S57ToS101TranslatorTests
         Assert.Equal("(3)", attr.Value);
     }
 
+    // ── SIGSEQ → signalSequence complex attribute ───────────────────────
+
+    [Fact]
+    public void Translate_SigseqOnLight_BecomesNestedSignalSequenceInRhythmOfLight()
+    {
+        // LIGHTS (OBJL 75) → LightAllAround, which binds rhythmOfLight; SIGSEQ
+        // nests inside it. "02.0+(02.0)" → two phases: 2.0s lit, 2.0s eclipsed.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),            // LITCHR → lightCharacteristic (Flashing)
+            Attr(143, "02.0+(02.0)"))); // SIGSEQ → nested signalSequence
+
+        var feat = Assert.Single(s101.Features);
+        var rhythm = ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList();
+        Assert.Equal("2", GetSubAttribute(s101, rhythm, "lightCharacteristic"));
+
+        // Two nested signalSequence phases, read directly from the flat list.
+        var phase1 = ComplexInstance(s101, feat.Attributes, "signalSequence", 1).ToList();
+        Assert.Equal("2", GetSubAttribute(s101, phase1, "signalDuration"));
+        Assert.Equal("1", GetSubAttribute(s101, phase1, "signalStatus"));
+
+        var phase2 = ComplexInstance(s101, feat.Attributes, "signalSequence", 2).ToList();
+        Assert.Equal("2", GetSubAttribute(s101, phase2, "signalDuration"));
+        Assert.Equal("2", GetSubAttribute(s101, phase2, "signalStatus"));
+    }
+
+    [Fact]
+    public void Translate_SigseqLeadingZerosAndMultiplePhases_NormalisedAndOrdered()
+    {
+        // "00.6+(05.4)+03.0+(03.0)" → 4 phases, leading zeros normalised.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "2"),
+            Attr(143, "00.6+(05.4)+03.0+(03.0)")));
+
+        var feat = Assert.Single(s101.Features);
+        var expected = new[] { ("0.6", "1"), ("5.4", "2"), ("3", "1"), ("3", "2") };
+        for (int i = 0; i < expected.Length; i++)
+        {
+            var phase = ComplexInstance(s101, feat.Attributes, "signalSequence", i + 1).ToList();
+            Assert.Equal(expected[i].Item1, GetSubAttribute(s101, phase, "signalDuration"));
+            Assert.Equal(expected[i].Item2, GetSubAttribute(s101, phase, "signalStatus"));
+        }
+    }
+
+    [Fact]
+    public void Translate_SigseqOnFogSignal_BecomesTopLevelSignalSequence()
+    {
+        // FOGSIG (OBJL 58) → FogSignal, which binds signalSequence at the top
+        // level (not via rhythmOfLight). "05.0+(10.0)" → 5.0s sound, 10.0s silent.
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 58,
+            attributes: new[] { Attr(143, "05.0+(10.0)") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList());
+
+        var phase1 = ComplexInstance(s101, feat.Attributes, "signalSequence", 1).ToList();
+        Assert.Equal("5", GetSubAttribute(s101, phase1, "signalDuration"));
+        Assert.Equal("1", GetSubAttribute(s101, phase1, "signalStatus"));
+
+        var phase2 = ComplexInstance(s101, feat.Attributes, "signalSequence", 2).ToList();
+        Assert.Equal("10", GetSubAttribute(s101, phase2, "signalDuration"));
+        Assert.Equal("2", GetSubAttribute(s101, phase2, "signalStatus"));
+    }
+
+    [Fact]
+    public void Translate_SigseqOnLightWithoutLitchr_EmitsNoSignalSequence()
+    {
+        // No LITCHR means no rhythmOfLight instance to anchor the nested
+        // signalSequence, so the sequence has nowhere to nest and is dropped.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(143, "02.0+(02.0)")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList());
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "signalSequence", 1).ToList());
+    }
+
     // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
 
     private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(

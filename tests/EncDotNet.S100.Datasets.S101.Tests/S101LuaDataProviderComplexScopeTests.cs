@@ -134,6 +134,190 @@ public class S101LuaDataProviderComplexScopeTests
         return new S101LuaDataProvider(S101Dataset.FromDocument(document), featureCatalogue);
     }
 
+    // ── Nested complex attributes (rhythmOfLight → signalSequence) ──────
+
+    // Numeric codes for the nested-complex fixture.
+    private const ushort RhythmOfLight = 10;
+    private const ushort LightCharacteristic = 11;
+    private const ushort SignalGroup = 12;
+    private const ushort SignalSequence = 13;
+    private const ushort SignalDuration = 14;
+    private const ushort SignalStatus = 15;
+
+    [Fact]
+    public void NestedComplex_ScopedThroughParent_ResolvesChildSubAttributes()
+    {
+        var provider = CreateNestedProvider();
+        var context = new RecordingLuaContext();
+        provider.RegisterHostFunctions(context);
+
+        var getSimple = Assert.IsAssignableFrom<Func<double, string, string, List<object>>>(
+            context.Globals["HostFeatureGetSimpleAttribute"]);
+
+        // rhythmOfLight:1;signalSequence:1 must resolve the FIRST nested phase.
+        Assert.Equal(new object[] { "2.0" }, getSimple(1, "rhythmOfLight:1;signalSequence:1", "signalDuration"));
+        Assert.Equal(new object[] { "1" }, getSimple(1, "rhythmOfLight:1;signalSequence:1", "signalStatus"));
+
+        // …and signalSequence:2 the SECOND nested phase.
+        Assert.Equal(new object[] { "24.0" }, getSimple(1, "rhythmOfLight:1;signalSequence:2", "signalDuration"));
+        Assert.Equal(new object[] { "2" }, getSimple(1, "rhythmOfLight:1;signalSequence:2", "signalStatus"));
+    }
+
+    [Fact]
+    public void NestedComplex_ParentSimpleSubAttribute_StillResolvesWithNestedChildPresent()
+    {
+        var provider = CreateNestedProvider();
+        var context = new RecordingLuaContext();
+        provider.RegisterHostFunctions(context);
+
+        var getSimple = Assert.IsAssignableFrom<Func<double, string, string, List<object>>>(
+            context.Globals["HostFeatureGetSimpleAttribute"]);
+
+        // The parent's own simple sub-attributes must remain readable even
+        // though a nested signalSequence complex follows them in the flat list.
+        Assert.Equal(new object[] { "2" }, getSimple(1, "rhythmOfLight:1", "lightCharacteristic"));
+        Assert.Equal(new object[] { "(2)" }, getSimple(1, "rhythmOfLight:1", "signalGroup"));
+    }
+
+    [Fact]
+    public void NestedComplex_CountedWithinParentScope()
+    {
+        var provider = CreateNestedProvider();
+        var context = new RecordingLuaContext();
+        provider.RegisterHostFunctions(context);
+
+        var count = Assert.IsAssignableFrom<Func<double, string, string, double>>(
+            context.Globals["HostFeatureGetComplexAttributeCount"]);
+
+        Assert.Equal(2, count(1, "rhythmOfLight:1", "signalSequence"));
+    }
+
+    private static S101LuaDataProvider CreateNestedProvider()
+    {
+        // Flat attribute list for one feature carrying a rhythmOfLight complex
+        // with two nested signalSequence sub-complexes appended after its own
+        // simple sub-attributes:
+        //   [rhythmOfLight][lightCharacteristic][signalGroup]
+        //     [signalSequence][signalDuration][signalStatus]
+        //     [signalSequence][signalDuration][signalStatus]
+        var attributes = new[]
+        {
+            new S101Attribute(RhythmOfLight, 1, string.Empty),
+            new S101Attribute(LightCharacteristic, 1, "2"),
+            new S101Attribute(SignalGroup, 1, "(2)"),
+            new S101Attribute(SignalSequence, 1, string.Empty),
+            new S101Attribute(SignalDuration, 1, "2.0"),
+            new S101Attribute(SignalStatus, 1, "1"),
+            new S101Attribute(SignalSequence, 1, string.Empty),
+            new S101Attribute(SignalDuration, 1, "24.0"),
+            new S101Attribute(SignalStatus, 1, "2"),
+        };
+
+        var document = new S101Document
+        {
+            Identification = new S101DatasetIdentification { DatasetName = "nested-scope-test" },
+            StructureInfo = new S101DatasetStructureInfo
+            {
+                CoordinateMultiplicationFactorX = 10_000_000,
+                CoordinateMultiplicationFactorY = 10_000_000,
+                CoordinateMultiplicationFactorZ = 10,
+            },
+            FeatureTypeCatalogue = new ReadOnlyDictionary<ushort, string>(
+                new Dictionary<ushort, string> { [1] = "TestFeature" }),
+            AttributeTypeCatalogue = new ReadOnlyDictionary<ushort, string>(
+                new Dictionary<ushort, string>
+                {
+                    [RhythmOfLight] = "rhythmOfLight",
+                    [LightCharacteristic] = "lightCharacteristic",
+                    [SignalGroup] = "signalGroup",
+                    [SignalSequence] = "signalSequence",
+                    [SignalDuration] = "signalDuration",
+                    [SignalStatus] = "signalStatus",
+                }),
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = ReadOnlyDictionary<uint, S101CompositeCurveRecord>.Empty,
+            Surfaces = ReadOnlyDictionary<uint, S101SurfaceRecord>.Empty,
+            Features =
+            [
+                new S101FeatureRecord
+                {
+                    RecordId = 1,
+                    FeatureTypeCode = 1,
+                    Attributes = attributes,
+                },
+            ],
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+        };
+
+        // rhythmOfLight must declare signalSequence as a complex sub-attribute
+        // so the provider treats a signalSequence marker as a nested child
+        // (collected into the parent scope) rather than a sibling terminator.
+        var featureCatalogue = new FeatureCatalogue
+        {
+            Name = "S-101 test",
+            VersionNumber = "1.0.0",
+            VersionDate = "2024-01-01",
+            ComplexAttributes =
+            [
+                new ComplexAttribute
+                {
+                    Name = "Rhythm Of Light",
+                    Code = "rhythmOfLight",
+                    SubAttributeBindings =
+                    [
+                        new SubAttributeBinding
+                        {
+                            AttributeRef = "lightCharacteristic",
+                            Multiplicity = new Multiplicity { Lower = 1, Upper = 1 },
+                        },
+                        new SubAttributeBinding
+                        {
+                            AttributeRef = "signalGroup",
+                            Multiplicity = new Multiplicity { Lower = 0, Upper = null, IsInfinite = true },
+                        },
+                        new SubAttributeBinding
+                        {
+                            AttributeRef = "signalSequence",
+                            Multiplicity = new Multiplicity { Lower = 0, Upper = null, IsInfinite = true },
+                        },
+                    ],
+                },
+                new ComplexAttribute
+                {
+                    Name = "Signal Sequence",
+                    Code = "signalSequence",
+                    SubAttributeBindings =
+                    [
+                        new SubAttributeBinding
+                        {
+                            AttributeRef = "signalDuration",
+                            Multiplicity = new Multiplicity { Lower = 1, Upper = 1 },
+                        },
+                        new SubAttributeBinding
+                        {
+                            AttributeRef = "signalStatus",
+                            Multiplicity = new Multiplicity { Lower = 1, Upper = 1 },
+                        },
+                    ],
+                },
+            ],
+            SimpleAttributes =
+            [
+                new SimpleAttribute { Name = "Light Characteristic", Code = "lightCharacteristic", ValueType = "enumeration" },
+                new SimpleAttribute { Name = "Signal Group", Code = "signalGroup", ValueType = "text" },
+                new SimpleAttribute { Name = "Signal Duration", Code = "signalDuration", ValueType = "real" },
+                new SimpleAttribute { Name = "Signal Status", Code = "signalStatus", ValueType = "enumeration" },
+            ],
+        };
+
+        return new S101LuaDataProvider(S101Dataset.FromDocument(document), featureCatalogue);
+    }
+
     /// <summary>
     /// Minimal <see cref="ILuaContext"/> that records globals so the host
     /// bindings can be invoked directly without a real Lua engine.

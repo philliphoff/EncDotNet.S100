@@ -31,6 +31,8 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private Dictionary<string, SimpleAttribute>? _simpleAttrByCode;
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
     private HashSet<ushort>? _complexAttrNumericCodes;
+    private Dictionary<ushort, HashSet<ushort>>? _nestedChildComplexCodes;
+    private static readonly HashSet<ushort> s_emptyComplexCodes = new();
 
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
@@ -625,6 +627,54 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     }
 
     /// <summary>
+    /// Returns the numeric codes of the complex attributes that the feature
+    /// catalogue declares as complex sub-attributes of the complex attribute
+    /// named by <paramref name="parentCode"/> — i.e. its nested child
+    /// complexes. Used by <see cref="ResolveAttributeScope"/> so that a nested
+    /// complex instance is collected within its parent's scope (and can be
+    /// navigated into with a multi-segment path such as
+    /// <c>rhythmOfLight:1;signalSequence:1</c>) instead of terminating the
+    /// parent's sub-attribute run the way a sibling complex marker does.
+    /// </summary>
+    private HashSet<ushort> GetNestedChildComplexCodes(ushort parentCode)
+    {
+        if (_nestedChildComplexCodes is null)
+        {
+            EnsureComplexAttrLookup();
+            var complexCodes = GetComplexAttributeNumericCodes();
+
+            // Reverse map: attribute name → numeric code (first occurrence).
+            var codeByName = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+                codeByName.TryAdd(name, code);
+
+            var map = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+            {
+                if (!_complexAttrByCode!.TryGetValue(name, out var ca))
+                    continue;
+
+                var children = new HashSet<ushort>();
+                foreach (var ab in ca.SubAttributeBindings)
+                {
+                    if (codeByName.TryGetValue(ab.AttributeRef, out var childCode)
+                        && complexCodes.Contains(childCode))
+                        children.Add(childCode);
+                }
+
+                if (children.Count > 0)
+                    map[code] = children;
+            }
+
+            _nestedChildComplexCodes = map;
+        }
+
+        return _nestedChildComplexCodes.TryGetValue(parentCode, out var set)
+            ? set
+            : s_emptyComplexCodes;
+    }
+
+    /// <summary>
     /// Navigate into the flat attribute list to find sub-attributes under the
     /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
     /// Returns the sub-attributes within the specified complex attribute scope.
@@ -657,6 +707,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             if (numericCode is null) return [];
 
             var complexCodes = GetComplexAttributeNumericCodes();
+            var nestedChildren = GetNestedChildComplexCodes(numericCode.Value);
 
             // Find the nth instance of this complex attribute and collect sub-attributes
             int found = 0;
@@ -680,16 +731,23 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 else if (collecting)
                 {
                     // A subsequent complex-attribute marker (Index == 1 whose code
-                    // names a complex attribute in the FC) begins a sibling complex
-                    // instance and therefore terminates the current instance's
-                    // sub-attribute run. Without this, the sub-attributes of a
-                    // following complex would be wrongly absorbed into this scope,
-                    // since distinct complexes share sub-attribute codes such as
-                    // `language` (information / featureName), `dateStart`, and
-                    // `dateEnd` (fixedDateRange / periodicDateRange / surveyDateRange).
-                    // Note: this is a flat, single-level model; nested complex
-                    // instances are not emitted by the current data sources.
-                    if (attr.Index == 1 && complexCodes.Contains(attr.NumericCode))
+                    // names a complex attribute in the FC) normally begins a
+                    // sibling complex instance and therefore terminates the
+                    // current instance's sub-attribute run. Without this, the
+                    // sub-attributes of a following complex would be wrongly
+                    // absorbed into this scope, since distinct complexes share
+                    // sub-attribute codes such as `language` (information /
+                    // featureName), `dateStart`, and `dateEnd` (fixedDateRange /
+                    // periodicDateRange / surveyDateRange).
+                    //
+                    // A marker whose code the FC declares to be a *nested* child
+                    // complex of the current parent (e.g. `signalSequence` within
+                    // `rhythmOfLight`) is instead collected into this scope so it
+                    // — and its sub-attributes — can be navigated into with a
+                    // further path segment (`rhythmOfLight:1;signalSequence:1`).
+                    if (attr.Index == 1
+                        && complexCodes.Contains(attr.NumericCode)
+                        && !nestedChildren.Contains(attr.NumericCode))
                         break;
                     subAttrs.Add(attr);
                 }

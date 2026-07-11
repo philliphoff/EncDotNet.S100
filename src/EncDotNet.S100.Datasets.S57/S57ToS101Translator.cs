@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S57;
 
@@ -112,6 +113,23 @@ public sealed class S57ToS101Translator
     private static readonly FrozenSet<string> RhythmOfLightFeatureClasses =
         new[] { "LightAllAround", "LightFogDetector", "LightAirObstruction" }
             .ToFrozenSet(StringComparer.Ordinal);
+
+    // S-57 SIGSEQ (Signal sequence, ATTL 143) maps to the S-101
+    // `signalSequence` complex attribute. The S-57 value (S-57 Appendix B.1)
+    // is a '+'-separated list of phase durations in seconds; a duration in
+    // parentheses denotes an eclipse / silence phase. Each phase becomes one
+    // `signalSequence` instance carrying `signalDuration` [1..1] (real,
+    // seconds) and `signalStatus` [1..1] (1 = Lit/Sound for a bare duration,
+    // 2 = Eclipsed/Silent for a parenthesised duration). On the light feature
+    // classes that bind `rhythmOfLight` the sequence nests inside that complex
+    // (it is the last sub-attribute in the FC's binding order); on FogSignal /
+    // RadarTransponderBeacon `signalSequence` is bound at the top level.
+    private const ushort S57AttrSigseq = 143;  // SIGSEQ — signal sequence
+    private const string S101AttrSignalSequence = "signalSequence";
+    private const string S101AttrSignalDuration = "signalDuration";
+    private const string S101AttrSignalStatus = "signalStatus";
+    private const string SignalStatusLit = "1";        // Lit / Sound
+    private const string SignalStatusEclipsed = "2";   // Eclipsed / Silent
 
     // ── S-57 date-range attribute codes (S-57 Appendix A) ──
     // These pairs are not simple pass-through attributes; each pair becomes a
@@ -567,6 +585,12 @@ public sealed class S57ToS101Translator
             string? litchrValue = null;
             string? siggrpValue = null;
             string? sigperValue = null;
+            // signalSequence source — SIGSEQ. On the light feature classes it
+            // nests inside `rhythmOfLight`; on FogSignal / RadarTransponderBeacon
+            // it binds at the top level. Gated so it is only diverted from the
+            // per-attribute pass-through where it has a conformant home.
+            bool bindsSignalSequenceTop = _featureBindings.Binds(feature.S101Code, S101AttrSignalSequence);
+            string? sigseqValue = null;
             // Date-range sources — each S-57 pair maps to a distinct S-101
             // date-range complex, gated on the resolved feature class actually
             // binding that complex (per the bundled FC).
@@ -601,6 +625,7 @@ public sealed class S57ToS101Translator
                     case S57AttrLitchr: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) litchrValue = a.Value; break;
                     case S57AttrSiggrp: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) siggrpValue = a.Value; break;
                     case S57AttrSigper: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) sigperValue = a.Value; break;
+                    case S57AttrSigseq: if ((bindsRhythm || bindsSignalSequenceTop) && !string.IsNullOrEmpty(a.Value)) sigseqValue = a.Value; break;
                     case S57AttrDatsta: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datstaValue = a.Value; break;
                     case S57AttrDatend: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datendValue = a.Value; break;
                     case S57AttrPersta: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perstaValue = a.Value; break;
@@ -626,6 +651,14 @@ public sealed class S57ToS101Translator
                 // are assembled into the `rhythmOfLight` complex attribute below
                 // rather than emitted as top-level simple attributes.
                 if (bindsRhythm && a.AttributeCode is S57AttrLitchr or S57AttrSiggrp or S57AttrSigper)
+                    continue;
+
+                // SIGSEQ is assembled into the `signalSequence` complex —
+                // nested inside `rhythmOfLight` on light features, or top-level
+                // on FogSignal / RadarTransponderBeacon. On any other feature
+                // it falls through and is recorded as unmapped (no conformant
+                // home in S-101).
+                if ((bindsRhythm || bindsSignalSequenceTop) && a.AttributeCode is S57AttrSigseq)
                     continue;
 
                 // On feature classes that bind a date-range complex, the S-57
@@ -739,20 +772,30 @@ public sealed class S57ToS101Translator
             // makes `lightCharacteristic` [1..1] mandatory, so an instance is
             // only emitted when a valid LITCHR value is present; SIGGRP/SIGPER
             // are included as the optional `signalGroup`/`signalPeriod`
-            // sub-attributes. An out-of-range LITCHR code is dropped (and
+            // sub-attributes and SIGSEQ as the nested `signalSequence`
+            // sub-complex. An out-of-range LITCHR code is dropped (and
             // reported), which also drops the instance since the mandatory
-            // sub-attribute would be missing.
+            // sub-attribute would be missing; a SIGSEQ carried by a light with
+            // no valid LITCHR therefore has nowhere to nest and is dropped.
             if (bindsRhythm && litchrValue is not null)
             {
                 if (_allowedEnumValues is null
                     || _allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, litchrValue))
                 {
-                    AppendRhythmOfLightInstance(builder, litchrValue, siggrpValue, sigperValue);
+                    AppendRhythmOfLightInstance(builder, litchrValue, siggrpValue, sigperValue, sigseqValue);
                 }
                 else
                 {
                     _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, litchrValue);
+                    if (sigseqValue is not null)
+                        _diagnostics?.RecordRuleDroppedAttribute(S57AttrSigseq);
                 }
+            }
+            else if (bindsRhythm && sigseqValue is not null)
+            {
+                // SIGSEQ present on a rhythmOfLight-binding light but no LITCHR
+                // to anchor the parent complex — the sequence cannot be nested.
+                _diagnostics?.RecordRuleDroppedAttribute(S57AttrSigseq);
             }
 
             // Append the date-range complex-attribute instances. Each is a
@@ -816,6 +859,14 @@ public sealed class S57ToS101Translator
             if (bindsSurfaceChar && (natsurList is not null || natquaList is not null))
                 AppendSurfaceCharacteristicsInstances(builder, natsurList, natquaList);
 
+            // Append top-level `signalSequence` complex-attribute instances on
+            // feature classes that bind it directly (FogSignal,
+            // RadarTransponderBeacon). On the light feature classes SIGSEQ is
+            // instead nested inside `rhythmOfLight` (emitted above), so the
+            // `!bindsRhythm` guard prevents any double emission.
+            if (bindsSignalSequenceTop && !bindsRhythm && sigseqValue is not null)
+                AppendSignalSequenceInstances(builder, sigseqValue);
+
             return builder;
         }
 
@@ -870,7 +921,8 @@ public sealed class S57ToS101Translator
             List<S101Attribute> builder,
             string lightCharacteristic,
             string? signalGroup,
-            string? signalPeriod)
+            string? signalPeriod,
+            string? signalSequence)
         {
             var rhythmCode = GetOrAssignAttributeCode(S101AttrRhythmOfLight);
             // Marker entry — Index=1, value=empty — followed by sub-attributes.
@@ -887,6 +939,15 @@ public sealed class S57ToS101Translator
                 var sigPerCode = GetOrAssignAttributeCode(S101AttrSignalPeriod);
                 builder.Add(new S101Attribute(sigPerCode, 1, signalPeriod));
             }
+            // Nested `signalSequence` sub-complex instances. Per the FC binding
+            // order `signalSequence` is the last sub-attribute of
+            // `rhythmOfLight`, so the nested markers/sub-attributes are appended
+            // after signalGroup/signalPeriod. The S-101 data provider's scope
+            // resolver treats these as nested (rather than sibling) complexes
+            // because the FC declares `signalSequence` a sub-attribute of
+            // `rhythmOfLight`.
+            if (signalSequence is not null)
+                AppendSignalSequenceInstances(builder, signalSequence);
         }
 
         // Emits a date-range complex-attribute instance (marker + optional
@@ -994,6 +1055,59 @@ public sealed class S57ToS101Translator
                     result.Add(code);
             }
             return result;
+        }
+
+        // Emits zero or more `signalSequence` complex-attribute instances by
+        // parsing the S-57 SIGSEQ string (S-57 Appendix B.1). Each parsed
+        // phase becomes a flat marker + contiguous sub-attribute run (marker +
+        // signalDuration + signalStatus), the same convention as the other
+        // complex attributes; when appended after a `rhythmOfLight` instance's
+        // simple sub-attributes these form nested sub-complexes of that
+        // instance. Phases that do not parse as a real duration are dropped
+        // (and reported).
+        private void AppendSignalSequenceInstances(List<S101Attribute> builder, string sigseq)
+        {
+            foreach (var (duration, status) in ParseSignalSequence(sigseq))
+            {
+                var seqCode = GetOrAssignAttributeCode(S101AttrSignalSequence);
+                // Marker entry — Index=1, value=empty — followed by sub-attributes.
+                builder.Add(new S101Attribute(seqCode, 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSignalDuration), 1, duration));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSignalStatus), 1, status));
+            }
+        }
+
+        // Parses an S-57 SIGSEQ value into (signalDuration, signalStatus)
+        // pairs. The value is a '+'-separated list of phase durations in
+        // seconds (e.g. "02.0+(02.0)+02.0+(24.0)"); a duration enclosed in
+        // parentheses is an eclipse / silence phase (signalStatus = 2), an
+        // unparenthesised one is a lit / sound phase (signalStatus = 1). The
+        // duration is normalised to an invariant-culture real. Tokens that do
+        // not parse as a real are skipped and recorded as a rule-dropped
+        // attribute.
+        private IEnumerable<(string Duration, string Status)> ParseSignalSequence(string sigseq)
+        {
+            foreach (var rawToken in sigseq.Split('+'))
+            {
+                var token = rawToken.Trim();
+                if (token.Length == 0)
+                    continue;
+
+                var status = SignalStatusLit;
+                if (token.StartsWith('(') && token.EndsWith(')'))
+                {
+                    status = SignalStatusEclipsed;
+                    token = token[1..^1].Trim();
+                }
+
+                if (!double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+                {
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrSigseq);
+                    continue;
+                }
+
+                yield return (seconds.ToString(CultureInfo.InvariantCulture), status);
+            }
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)
