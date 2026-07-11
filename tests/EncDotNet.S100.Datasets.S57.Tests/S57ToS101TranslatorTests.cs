@@ -770,4 +770,85 @@ public class S57ToS101TranslatorTests
         var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
         Assert.Equal("Some Place", GetSubAttribute(s101, instance, "name"));
     }
+
+    // ── LITCHR/SIGGRP/SIGPER → rhythmOfLight complex attribute ──────────
+
+    private static EncDotNet.S57.S57Document LightWithS57Attributes(
+        params EncDotNet.S57.S57AttributeValue[] attrs)
+    {
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 75, // LIGHTS → LightAllAround
+            attributes: attrs,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+    }
+
+    [Fact]
+    public void Translate_Litchr_BecomesRhythmOfLightComplex()
+    {
+        // LITCHR = 107, value 2 ("Flashing") is an allowable lightCharacteristic.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(Attr(107, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("LightAllAround", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+        var instance = ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("2", GetSubAttribute(s101, instance, "lightCharacteristic"));
+    }
+
+    [Fact]
+    public void Translate_LitchrWithSignalGroupAndPeriod_AllBecomeRhythmSubAttributes()
+    {
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(
+            Attr(107, "8"),   // LITCHR → lightCharacteristic (Occulting)
+            Attr(141, "(2)"), // SIGGRP → signalGroup
+            Attr(142, "6.0"))); // SIGPER → signalPeriod
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList();
+        Assert.Equal("8", GetSubAttribute(s101, instance, "lightCharacteristic"));
+        Assert.Equal("(2)", GetSubAttribute(s101, instance, "signalGroup"));
+        Assert.Equal("6.0", GetSubAttribute(s101, instance, "signalPeriod"));
+
+        // signalGroup/signalPeriod must NOT also appear as top-level simple
+        // attributes on a light (they bind only via rhythmOfLight here).
+        ushort? sigGrpCode = null;
+        foreach (var (c, n) in s101.AttributeTypeCatalogue)
+            if (string.Equals(n, "signalGroup", StringComparison.OrdinalIgnoreCase)) sigGrpCode = c;
+        var topLevelSigGrp = feat.Attributes
+            .TakeWhile(a => s101.AttributeTypeCatalogue[a.NumericCode] != "rhythmOfLight");
+        Assert.DoesNotContain(topLevelSigGrp, a => a.NumericCode == sigGrpCode);
+    }
+
+    [Fact]
+    public void Translate_InvalidLitchr_EmitsNoRhythmOfLight()
+    {
+        // 99 is not an allowable lightCharacteristic code; the mandatory
+        // sub-attribute is missing so no rhythmOfLight instance is emitted.
+        var s101 = new S57ToS101Translator().Translate(LightWithS57Attributes(Attr(107, "99")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_SignalGroupOnFogSignal_StaysTopLevelSimpleAttribute()
+    {
+        // FOGSIG (OBJL 58) → FogSignal, which binds signalGroup directly (not
+        // via rhythmOfLight). SIGGRP must remain a top-level simple attribute.
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 58, // FOGSIG → FogSignal
+            attributes: new[] { Attr(141, "(3)") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstance(s101, feat.Attributes, "rhythmOfLight", 1).ToList());
+        var attr = Assert.Single(feat.Attributes);
+        Assert.Equal("signalGroup", s101.AttributeTypeCatalogue[attr.NumericCode]);
+        Assert.Equal("(3)", attr.Value);
+    }
 }

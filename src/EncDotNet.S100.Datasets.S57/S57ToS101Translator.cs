@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S57;
@@ -82,6 +83,35 @@ public sealed class S57ToS101Translator
     // `language` is [1..1], `nameUsage` is [0..1] and has no S-57 source).
     private const string S101AttrFeatureName = "featureName";
     private const string S101AttrName = "name";
+
+    // ── S-57 light-characteristic attribute codes (S-57 Appendix A) ──
+    // On light features these do NOT pass through as simple attributes;
+    // they become sub-attributes of the S-101 `rhythmOfLight` complex
+    // attribute. LITCHR is the mandatory `lightCharacteristic` [1..1];
+    // SIGGRP/SIGPER are the optional `signalGroup`/`signalPeriod`. (The
+    // nested `signalSequence` sub-complex from SIGSEQ, and the sector
+    // geometry from SECTR1/SECTR2/LITVIS, are deferred.)
+    private const ushort S57AttrLitchr = 107;   // LITCHR  — light characteristic
+    private const ushort S57AttrSiggrp = 141;   // SIGGRP  — signal group
+    private const ushort S57AttrSigper = 142;   // SIGPER  — signal period
+
+    // S-101 attribute codes for the `rhythmOfLight` complex attribute and
+    // its (first-level) sub-attributes (verified against the bundled FC:
+    // `lightCharacteristic` [1..1], `signalGroup` [0..*], `signalPeriod`
+    // [0..1]).
+    private const string S101AttrRhythmOfLight = "rhythmOfLight";
+    private const string S101AttrLightCharacteristic = "lightCharacteristic";
+    private const string S101AttrSignalGroup = "signalGroup";
+    private const string S101AttrSignalPeriod = "signalPeriod";
+
+    // S-101 feature classes that bind `rhythmOfLight` directly (per the
+    // bundled S-101 FC). On any other feature class, LITCHR/SIGGRP/SIGPER
+    // are handled by the normal per-attribute path (e.g. `signalGroup` /
+    // `signalPeriod` are directly feature-bound simple attributes on
+    // FogSignal / RadarTransponderBeacon).
+    private static readonly FrozenSet<string> RhythmOfLightFeatureClasses =
+        new[] { "LightAllAround", "LightFogDetector", "LightAirObstruction" }
+            .ToFrozenSet(StringComparer.Ordinal);
 
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
@@ -454,6 +484,12 @@ public sealed class S57ToS101Translator
             string? ntxtdsFile = null;
             string? objnamText = null;
             string? nobjnmText = null;
+            // rhythmOfLight sources — only assembled on light features that
+            // bind the complex (see RhythmOfLightFeatureClasses).
+            bool bindsRhythm = RhythmOfLightFeatureClasses.Contains(feature.S101Code);
+            string? litchrValue = null;
+            string? siggrpValue = null;
+            string? sigperValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -464,6 +500,9 @@ public sealed class S57ToS101Translator
                     case S57AttrNtxtds: ntxtdsFile = a.Value; break;
                     case S57AttrObjnam: if (!string.IsNullOrEmpty(a.Value)) objnamText = a.Value; break;
                     case S57AttrNobjnm: if (!string.IsNullOrEmpty(a.Value)) nobjnmText = a.Value; break;
+                    case S57AttrLitchr: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) litchrValue = a.Value; break;
+                    case S57AttrSiggrp: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) siggrpValue = a.Value; break;
+                    case S57AttrSigper: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) sigperValue = a.Value; break;
                 }
             }
 
@@ -474,6 +513,12 @@ public sealed class S57ToS101Translator
                 // attribute groups below — skip the per-attribute pass-through.
                 if (a.AttributeCode is S57AttrInform or S57AttrNinfom or S57AttrTxtdsc or S57AttrNtxtds
                     or S57AttrObjnam or S57AttrNobjnm)
+                    continue;
+
+                // On rhythmOfLight-binding feature classes, LITCHR/SIGGRP/SIGPER
+                // are assembled into the `rhythmOfLight` complex attribute below
+                // rather than emitted as top-level simple attributes.
+                if (bindsRhythm && a.AttributeCode is S57AttrLitchr or S57AttrSiggrp or S57AttrSigper)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -559,6 +604,26 @@ public sealed class S57ToS101Translator
             if (nobjnmText is not null)
                 AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
 
+            // Append the `rhythmOfLight` complex-attribute instance. The FC
+            // makes `lightCharacteristic` [1..1] mandatory, so an instance is
+            // only emitted when a valid LITCHR value is present; SIGGRP/SIGPER
+            // are included as the optional `signalGroup`/`signalPeriod`
+            // sub-attributes. An out-of-range LITCHR code is dropped (and
+            // reported), which also drops the instance since the mandatory
+            // sub-attribute would be missing.
+            if (bindsRhythm && litchrValue is not null)
+            {
+                if (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrLightCharacteristic, litchrValue))
+                {
+                    AppendRhythmOfLightInstance(builder, litchrValue, siggrpValue, sigperValue);
+                }
+                else
+                {
+                    _diagnostics?.RecordDroppedEnumValue(S101AttrLightCharacteristic, litchrValue);
+                }
+            }
+
             return builder;
         }
 
@@ -601,6 +666,35 @@ public sealed class S57ToS101Translator
             builder.Add(new S101Attribute(nameCode, 1, name));
             var langCode = GetOrAssignAttributeCode(S101AttrLanguage);
             builder.Add(new S101Attribute(langCode, 1, language));
+        }
+
+        // Emits a `rhythmOfLight` complex-attribute instance (marker +
+        // lightCharacteristic + optional signalGroup/signalPeriod), using the
+        // same flat marker + contiguous-sub-attribute convention as the other
+        // complex attributes. Only the first level of the FC's structure is
+        // populated; the nested `signalSequence` sub-complex (from SIGSEQ) is
+        // not yet assembled.
+        private void AppendRhythmOfLightInstance(
+            List<S101Attribute> builder,
+            string lightCharacteristic,
+            string? signalGroup,
+            string? signalPeriod)
+        {
+            var rhythmCode = GetOrAssignAttributeCode(S101AttrRhythmOfLight);
+            // Marker entry — Index=1, value=empty — followed by sub-attributes.
+            builder.Add(new S101Attribute(rhythmCode, 1, string.Empty));
+            var litCharCode = GetOrAssignAttributeCode(S101AttrLightCharacteristic);
+            builder.Add(new S101Attribute(litCharCode, 1, lightCharacteristic));
+            if (signalGroup is not null)
+            {
+                var sigGrpCode = GetOrAssignAttributeCode(S101AttrSignalGroup);
+                builder.Add(new S101Attribute(sigGrpCode, 1, signalGroup));
+            }
+            if (signalPeriod is not null)
+            {
+                var sigPerCode = GetOrAssignAttributeCode(S101AttrSignalPeriod);
+                builder.Add(new S101Attribute(sigPerCode, 1, signalPeriod));
+            }
         }
 
         private IReadOnlyList<S101SpatialAssociation> TranslateSpatialPointers(EncDotNet.S57.S57FeatureRecord feat)
