@@ -851,4 +851,199 @@ public class S57ToS101TranslatorTests
         Assert.Equal("signalGroup", s101.AttributeTypeCatalogue[attr.NumericCode]);
         Assert.Equal("(3)", attr.Value);
     }
+
+    // ── DATSTA/DATEND, PERSTA/PEREND, SURSTA/SUREND → date-range complexes ──
+
+    private static EncDotNet.S57.S57Document PointFeatureWithS57Attributes(
+        ushort objectClass,
+        params EncDotNet.S57.S57AttributeValue[] attrs)
+    {
+        var n1 = Node(1, 1000, 2000);
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: objectClass,
+            attributes: attrs,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        return BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+    }
+
+    private static ushort? ResolveAttributeCode(S101Document doc, string name)
+    {
+        foreach (var (c, n) in doc.AttributeTypeCatalogue)
+            if (string.Equals(n, name, StringComparison.OrdinalIgnoreCase))
+                return c;
+        return null;
+    }
+
+    // Collects one complex-attribute instance, delimiting at the next marker of
+    // ANY of the named complex attributes — mirroring the S-101 data provider's
+    // ResolveAttributeScope. This is required for complexes that share
+    // sub-attribute codes (dateStart / dateEnd), where the simpler
+    // same-code-only delimiter would wrongly absorb a sibling complex's rows.
+    private static IEnumerable<S101Attribute> ComplexInstanceStrict(
+        S101Document doc,
+        IReadOnlyList<S101Attribute> attrs,
+        string complexCode,
+        int instanceIndex,
+        params string[] allComplexCodes)
+    {
+        var code = ResolveAttributeCode(doc, complexCode);
+        if (code is null) yield break;
+
+        var markerCodes = new HashSet<ushort>();
+        foreach (var name in allComplexCodes)
+            if (ResolveAttributeCode(doc, name) is { } c)
+                markerCodes.Add(c);
+
+        int found = 0;
+        bool collecting = false;
+        foreach (var a in attrs)
+        {
+            if (a.NumericCode == code && a.Index == 1)
+            {
+                if (collecting) break;
+                found++;
+                if (found == instanceIndex)
+                {
+                    collecting = true;
+                    yield return a;
+                    continue;
+                }
+            }
+            else if (collecting)
+            {
+                if (a.Index == 1 && markerCodes.Contains(a.NumericCode))
+                    break; // sibling complex instance begins
+                yield return a;
+            }
+        }
+    }
+
+    [Fact]
+    public void Translate_DatstaDatend_BecomeFixedDateRangeComplex()
+    {
+        // BRIDGE (OBJL 11) → Bridge, which binds fixedDateRange.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11, Attr(86, "20200101"), Attr(85, "20201231")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "fixedDateRange", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("20200101", GetSubAttribute(s101, instance, "dateStart"));
+        Assert.Equal("20201231", GetSubAttribute(s101, instance, "dateEnd"));
+
+        // The first row naming `dateStart` must be preceded by the
+        // fixedDateRange marker — it is never a bare top-level attribute.
+        var fixedCode = ResolveAttributeCode(s101, "fixedDateRange");
+        var startCode = ResolveAttributeCode(s101, "dateStart");
+        Assert.NotNull(fixedCode);
+        Assert.NotNull(startCode);
+        int markerIdx = feat.Attributes.ToList().FindIndex(a => a.NumericCode == fixedCode);
+        int startIdx = feat.Attributes.ToList().FindIndex(a => a.NumericCode == startCode);
+        Assert.True(markerIdx >= 0 && markerIdx < startIdx);
+    }
+
+    [Fact]
+    public void Translate_FixedDateRange_EmittedWithSingleEndpoint()
+    {
+        // fixedDateRange allows dateStart [0..1] / dateEnd [0..1]; a lone DATEND
+        // still yields an instance carrying only dateEnd.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(11, Attr(85, "20201231")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "fixedDateRange", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Null(GetSubAttribute(s101, instance, "dateStart"));
+        Assert.Equal("20201231", GetSubAttribute(s101, instance, "dateEnd"));
+    }
+
+    [Fact]
+    public void Translate_PerstaPerend_BecomePeriodicDateRangeComplex()
+    {
+        // ACHARE (OBJL 4) → AnchorageArea, which binds periodicDateRange.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(119, "20200401"), Attr(118, "20200930")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "periodicDateRange", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("20200401", GetSubAttribute(s101, instance, "dateStart"));
+        Assert.Equal("20200930", GetSubAttribute(s101, instance, "dateEnd"));
+    }
+
+    [Fact]
+    public void Translate_PeriodicDateRange_DroppedWhenMissingMandatoryEndpoint()
+    {
+        // periodicDateRange makes both dateStart and dateEnd mandatory [1..1];
+        // a lone PERSTA cannot form a conformant instance, so none is emitted.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(4, Attr(119, "20200401")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstanceStrict(s101, feat.Attributes, "periodicDateRange", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_SurstaSurend_BecomeSurveyDateRangeComplex()
+    {
+        // M_QUAL (OBJL 308) → QualityOfBathymetricData, which binds surveyDateRange.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(152, "20190501"), Attr(151, "20190815")));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "surveyDateRange", 1).ToList();
+        Assert.NotEmpty(instance);
+        Assert.Equal("20190501", GetSubAttribute(s101, instance, "dateStart"));
+        Assert.Equal("20190815", GetSubAttribute(s101, instance, "dateEnd"));
+    }
+
+    [Fact]
+    public void Translate_SurveyDateRange_DroppedWhenMissingDateEnd()
+    {
+        // surveyDateRange makes dateEnd mandatory [1..1] (dateStart is optional);
+        // a lone SURSTA cannot form a conformant instance.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(152, "20190501")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstanceStrict(s101, feat.Attributes, "surveyDateRange", 1).ToList());
+    }
+
+    [Fact]
+    public void Translate_DateRange_NotEmittedOnFeatureThatDoesNotBindIt()
+    {
+        // LNDRGN (OBJL 73) → LandRegion binds none of the date-range complexes,
+        // so DATSTA/DATEND have no conformant home and no complex is emitted.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(73, Attr(86, "20200101"), Attr(85, "20201231")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(ComplexInstanceStrict(s101, feat.Attributes, "fixedDateRange", 1).ToList());
+        Assert.DoesNotContain("fixedDateRange", s101.AttributeTypeCatalogue.Values);
+    }
+
+    [Fact]
+    public void Translate_FixedAndPeriodicDateRange_EmittedAsDistinctInstances()
+    {
+        // BERTHS (OBJL 10) → Berth binds BOTH fixedDateRange and
+        // periodicDateRange. Each S-57 pair must land in its own complex; the
+        // shared dateStart/dateEnd sub-attributes must not cross-contaminate.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(10,
+                Attr(86, "20200101"), Attr(85, "20201231"),   // DATSTA/DATEND → fixed
+                Attr(119, "20200401"), Attr(118, "20200930"))); // PERSTA/PEREND → periodic
+
+        var feat = Assert.Single(s101.Features);
+
+        var fixedInstance = ComplexInstanceStrict(
+            s101, feat.Attributes, "fixedDateRange", 1, "fixedDateRange", "periodicDateRange").ToList();
+        Assert.Equal("20200101", GetSubAttribute(s101, fixedInstance, "dateStart"));
+        Assert.Equal("20201231", GetSubAttribute(s101, fixedInstance, "dateEnd"));
+
+        var periodicInstance = ComplexInstanceStrict(
+            s101, feat.Attributes, "periodicDateRange", 1, "fixedDateRange", "periodicDateRange").ToList();
+        Assert.Equal("20200401", GetSubAttribute(s101, periodicInstance, "dateStart"));
+        Assert.Equal("20200930", GetSubAttribute(s101, periodicInstance, "dateEnd"));
+    }
 }

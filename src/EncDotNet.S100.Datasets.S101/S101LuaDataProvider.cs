@@ -30,6 +30,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private Dictionary<string, InformationType>? _infoTypeByCode;
     private Dictionary<string, SimpleAttribute>? _simpleAttrByCode;
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
+    private HashSet<ushort>? _complexAttrNumericCodes;
 
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
@@ -601,6 +602,29 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     }
 
     /// <summary>
+    /// Returns the set of this document's numeric attribute codes that name a
+    /// complex attribute in the feature catalogue. Used by
+    /// <see cref="ResolveAttributeScope"/> to delimit one complex-attribute
+    /// instance from the next sibling instance in the flat attribute list.
+    /// </summary>
+    private HashSet<ushort> GetComplexAttributeNumericCodes()
+    {
+        if (_complexAttrNumericCodes is not null)
+            return _complexAttrNumericCodes;
+
+        EnsureComplexAttrLookup();
+        var set = new HashSet<ushort>();
+        foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+        {
+            if (_complexAttrByCode!.ContainsKey(name))
+                set.Add(code);
+        }
+
+        _complexAttrNumericCodes = set;
+        return set;
+    }
+
+    /// <summary>
     /// Navigate into the flat attribute list to find sub-attributes under the
     /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
     /// Returns the sub-attributes within the specified complex attribute scope.
@@ -632,6 +656,8 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
             if (numericCode is null) return [];
 
+            var complexCodes = GetComplexAttributeNumericCodes();
+
             // Find the nth instance of this complex attribute and collect sub-attributes
             int found = 0;
             var subAttrs = new List<S101Attribute>();
@@ -653,10 +679,18 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
                 }
                 else if (collecting)
                 {
-                    // Check if this is another top-level/sibling complex attribute (not a sub-attribute)
-                    // Sub-attributes have Index values that may vary, but we track them by
-                    // whether we've hit another complex attr marker. For simplicity, collect
-                    // until we see a code that matches ANY complex attribute at this level.
+                    // A subsequent complex-attribute marker (Index == 1 whose code
+                    // names a complex attribute in the FC) begins a sibling complex
+                    // instance and therefore terminates the current instance's
+                    // sub-attribute run. Without this, the sub-attributes of a
+                    // following complex would be wrongly absorbed into this scope,
+                    // since distinct complexes share sub-attribute codes such as
+                    // `language` (information / featureName), `dateStart`, and
+                    // `dateEnd` (fixedDateRange / periodicDateRange / surveyDateRange).
+                    // Note: this is a flat, single-level model; nested complex
+                    // instances are not emitted by the current data sources.
+                    if (attr.Index == 1 && complexCodes.Contains(attr.NumericCode))
+                        break;
                     subAttrs.Add(attr);
                 }
             }

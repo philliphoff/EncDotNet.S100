@@ -299,10 +299,15 @@ internal static class DefaultRules
         // *complex* attribute, so a flat emission would be non-conformant;
         // they need complex-attribute assembly, like OBJNAM → featureName):
         //   OBJNAM→name, LITCHR→lightCharacteristic, SECTR1→sectorBearing,
-        //   HORCLR→horizontalClearanceValue, DATSTA→dateStart, DATEND→dateEnd,
+        //   HORCLR→horizontalClearanceValue,
         //   NATQUA→natureOfSurfaceQualifyingTerms. Also deferred: SORDAT/SORIND
-        //   (→ complex sourceIndication/reportedDate), PERSTA/PEREND (→ complex
-        //   periodicDateRange), SECTR2/MLTYLT (light-sector complex).
+        //   (→ complex sourceIndication/reportedDate), SECTR2/MLTYLT
+        //   (light-sector complex).
+        //
+        // Assembled into S-101 complex attributes by S57ToS101Translator (feature
+        // binding-gated), NOT emitted here as flat simple attributes:
+        //   DATSTA/DATEND → fixedDateRange, PERSTA/PEREND → periodicDateRange,
+        //   SURSTA/SUREND → surveyDateRange (each with dateStart/dateEnd).
         //
         // NOTE: enum (E/L) attributes still pass their values through the
         // FC-driven S101AllowedEnumValues check; S-57 enum values that have no

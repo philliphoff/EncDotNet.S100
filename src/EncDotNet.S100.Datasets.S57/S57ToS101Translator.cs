@@ -113,6 +113,31 @@ public sealed class S57ToS101Translator
         new[] { "LightAllAround", "LightFogDetector", "LightAirObstruction" }
             .ToFrozenSet(StringComparer.Ordinal);
 
+    // ── S-57 date-range attribute codes (S-57 Appendix A) ──
+    // These pairs are not simple pass-through attributes; each pair becomes a
+    // distinct S-101 date-range *complex* attribute whose `dateStart`/`dateEnd`
+    // sub-attributes are of type S100_TruncatedDate. The destination complex is
+    // determined by the S-57 pair, and is only emitted on a feature class that
+    // actually binds it (see S101FeatureAttributeBindings), since the shared
+    // sub-attributes would otherwise be non-conformant:
+    //   DATSTA/DATEND → fixedDateRange     (dateStart [0..1], dateEnd [0..1])
+    //   PERSTA/PEREND → periodicDateRange  (dateStart [1..1], dateEnd [1..1])
+    //   SURSTA/SUREND → surveyDateRange    (dateStart [0..1], dateEnd [1..1])
+    private const ushort S57AttrDatsta = 86;   // DATSTA — date start
+    private const ushort S57AttrDatend = 85;   // DATEND — date end
+    private const ushort S57AttrPersta = 119;  // PERSTA — periodic date start
+    private const ushort S57AttrPerend = 118;  // PEREND — periodic date end
+    private const ushort S57AttrSursta = 152;  // SURSTA — survey date start
+    private const ushort S57AttrSurend = 151;  // SUREND — survey date end
+
+    // S-101 date-range complex attribute codes and their shared sub-attribute
+    // codes (verified against the bundled FC).
+    private const string S101AttrFixedDateRange = "fixedDateRange";
+    private const string S101AttrPeriodicDateRange = "periodicDateRange";
+    private const string S101AttrSurveyDateRange = "surveyDateRange";
+    private const string S101AttrDateStart = "dateStart";
+    private const string S101AttrDateEnd = "dateEnd";
+
     // ISO 639-3 language code used for the English-language INFORM/TXTDSC
     // bucket. NINFOM/NTXTDS are emitted with an empty language string,
     // since S-57 carries no language tag and Data Producers are expected
@@ -121,6 +146,7 @@ public sealed class S57ToS101Translator
 
     private readonly S57S101Mapping _mapping;
     private readonly S101AllowedEnumValues? _allowedEnumValues;
+    private readonly S101FeatureAttributeBindings _featureBindings;
 
     /// <summary>Creates a translator using <see cref="S57S101Mapping.Default"/>.</summary>
     public S57ToS101Translator() : this(S57S101Mapping.Default, S101AllowedEnumValues.Default) { }
@@ -135,10 +161,25 @@ public sealed class S57ToS101Translator
     /// to disable enumerate-value enforcement (useful in tests).
     /// </summary>
     public S57ToS101Translator(S57S101Mapping mapping, S101AllowedEnumValues? allowedEnumValues)
+        : this(mapping, allowedEnumValues, S101FeatureAttributeBindings.Default) { }
+
+    /// <summary>
+    /// Creates a translator using the supplied code mapping, allowable-value
+    /// lookup, and feature/attribute binding lookup. Pass <c>null</c> for
+    /// <paramref name="allowedEnumValues"/> to disable enumerate-value
+    /// enforcement (useful in tests). <paramref name="featureBindings"/> gates
+    /// which feature classes may carry each assembled S-101 complex attribute.
+    /// </summary>
+    public S57ToS101Translator(
+        S57S101Mapping mapping,
+        S101AllowedEnumValues? allowedEnumValues,
+        S101FeatureAttributeBindings featureBindings)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        ArgumentNullException.ThrowIfNull(featureBindings);
         _mapping = mapping;
         _allowedEnumValues = allowedEnumValues;
+        _featureBindings = featureBindings;
     }
 
     /// <summary>
@@ -181,7 +222,7 @@ public sealed class S57ToS101Translator
     {
         ArgumentNullException.ThrowIfNull(s57);
 
-        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues, diagnostics);
+        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics);
         ctx.IndexVectorRecords();
         ctx.TranslateNodes();
         ctx.TranslateEdges();
@@ -235,6 +276,7 @@ public sealed class S57ToS101Translator
         private readonly EncDotNet.S57.S57Document _s57;
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
+        private readonly S101FeatureAttributeBindings _featureBindings;
         private readonly S57TranslationDiagnostics? _diagnostics;
 
         // Index of the document's flat VectorRecords list, keyed by
@@ -268,11 +310,13 @@ public sealed class S57ToS101Translator
             EncDotNet.S57.S57Document s57,
             S57S101Mapping mapping,
             S101AllowedEnumValues? allowedEnumValues,
+            S101FeatureAttributeBindings featureBindings,
             S57TranslationDiagnostics? diagnostics)
         {
             _s57 = s57;
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
+            _featureBindings = featureBindings;
             _diagnostics = diagnostics;
         }
 
@@ -490,6 +534,18 @@ public sealed class S57ToS101Translator
             string? litchrValue = null;
             string? siggrpValue = null;
             string? sigperValue = null;
+            // Date-range sources — each S-57 pair maps to a distinct S-101
+            // date-range complex, gated on the resolved feature class actually
+            // binding that complex (per the bundled FC).
+            bool bindsFixedDate = _featureBindings.Binds(feature.S101Code, S101AttrFixedDateRange);
+            bool bindsPeriodicDate = _featureBindings.Binds(feature.S101Code, S101AttrPeriodicDateRange);
+            bool bindsSurveyDate = _featureBindings.Binds(feature.S101Code, S101AttrSurveyDateRange);
+            string? datstaValue = null;
+            string? datendValue = null;
+            string? perstaValue = null;
+            string? perendValue = null;
+            string? surstaValue = null;
+            string? surendValue = null;
             foreach (var a in attrs)
             {
                 switch (a.AttributeCode)
@@ -503,6 +559,12 @@ public sealed class S57ToS101Translator
                     case S57AttrLitchr: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) litchrValue = a.Value; break;
                     case S57AttrSiggrp: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) siggrpValue = a.Value; break;
                     case S57AttrSigper: if (bindsRhythm && !string.IsNullOrEmpty(a.Value)) sigperValue = a.Value; break;
+                    case S57AttrDatsta: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datstaValue = a.Value; break;
+                    case S57AttrDatend: if (bindsFixedDate && !string.IsNullOrEmpty(a.Value)) datendValue = a.Value; break;
+                    case S57AttrPersta: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perstaValue = a.Value; break;
+                    case S57AttrPerend: if (bindsPeriodicDate && !string.IsNullOrEmpty(a.Value)) perendValue = a.Value; break;
+                    case S57AttrSursta: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surstaValue = a.Value; break;
+                    case S57AttrSurend: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surendValue = a.Value; break;
                 }
             }
 
@@ -519,6 +581,18 @@ public sealed class S57ToS101Translator
                 // are assembled into the `rhythmOfLight` complex attribute below
                 // rather than emitted as top-level simple attributes.
                 if (bindsRhythm && a.AttributeCode is S57AttrLitchr or S57AttrSiggrp or S57AttrSigper)
+                    continue;
+
+                // On feature classes that bind a date-range complex, the S-57
+                // date pair is assembled into that complex below rather than
+                // passed through. (When the feature does not bind the complex
+                // the pair falls through and is recorded as unmapped, since the
+                // date has no conformant home in S-101 on that feature.)
+                if (bindsFixedDate && a.AttributeCode is S57AttrDatsta or S57AttrDatend)
+                    continue;
+                if (bindsPeriodicDate && a.AttributeCode is S57AttrPersta or S57AttrPerend)
+                    continue;
+                if (bindsSurveyDate && a.AttributeCode is S57AttrSursta or S57AttrSurend)
                     continue;
 
                 var attl = (ushort)a.AttributeCode;
@@ -624,6 +698,40 @@ public sealed class S57ToS101Translator
                 }
             }
 
+            // Append the date-range complex-attribute instances. Each is a
+            // marker followed by the S100_TruncatedDate `dateStart`/`dateEnd`
+            // sub-attributes (S-57 dates pass through unchanged; both S-57 and
+            // S-101 use CCYYMMDD). Mandatory sub-attributes (per the FC's
+            // multiplicity) must be present or the instance is dropped and
+            // recorded, rather than emitting a non-conformant partial complex.
+            //
+            //   fixedDateRange    — dateStart [0..1], dateEnd [0..1]: emit if
+            //                       either endpoint is present.
+            if (bindsFixedDate && (datstaValue is not null || datendValue is not null))
+                AppendDateRangeInstance(builder, S101AttrFixedDateRange, datstaValue, datendValue);
+
+            //   periodicDateRange — dateStart [1..1], dateEnd [1..1]: both
+            //                       endpoints are mandatory.
+            if (bindsPeriodicDate)
+            {
+                if (perstaValue is not null && perendValue is not null)
+                    AppendDateRangeInstance(builder, S101AttrPeriodicDateRange, perstaValue, perendValue);
+                else if (perstaValue is not null)
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrPersta);
+                else if (perendValue is not null)
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrPerend);
+            }
+
+            //   surveyDateRange   — dateStart [0..1], dateEnd [1..1]: dateEnd is
+            //                       mandatory, dateStart optional.
+            if (bindsSurveyDate)
+            {
+                if (surendValue is not null)
+                    AppendDateRangeInstance(builder, S101AttrSurveyDateRange, surstaValue, surendValue);
+                else if (surstaValue is not null)
+                    _diagnostics?.RecordRuleDroppedAttribute(S57AttrSursta);
+            }
+
             return builder;
         }
 
@@ -694,6 +802,35 @@ public sealed class S57ToS101Translator
             {
                 var sigPerCode = GetOrAssignAttributeCode(S101AttrSignalPeriod);
                 builder.Add(new S101Attribute(sigPerCode, 1, signalPeriod));
+            }
+        }
+
+        // Emits a date-range complex-attribute instance (marker + optional
+        // dateStart + optional dateEnd), using the same flat marker +
+        // contiguous-sub-attribute convention as the other complex attributes.
+        // The three date-range complexes (fixedDateRange / periodicDateRange /
+        // surveyDateRange) share the `dateStart` / `dateEnd` sub-attribute
+        // codes; the S-101 data provider delimits one instance from the next
+        // by the complex marker, so emitting each instance as a contiguous run
+        // keeps them distinct.
+        private void AppendDateRangeInstance(
+            List<S101Attribute> builder,
+            string complexCode,
+            string? dateStart,
+            string? dateEnd)
+        {
+            var rangeCode = GetOrAssignAttributeCode(complexCode);
+            // Marker entry — Index=1, value=empty — followed by sub-attributes.
+            builder.Add(new S101Attribute(rangeCode, 1, string.Empty));
+            if (dateStart is not null)
+            {
+                var startCode = GetOrAssignAttributeCode(S101AttrDateStart);
+                builder.Add(new S101Attribute(startCode, 1, dateStart));
+            }
+            if (dateEnd is not null)
+            {
+                var endCode = GetOrAssignAttributeCode(S101AttrDateEnd);
+                builder.Add(new S101Attribute(endCode, 1, dateEnd));
             }
         }
 
