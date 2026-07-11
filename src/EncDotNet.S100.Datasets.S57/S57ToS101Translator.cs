@@ -490,6 +490,45 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                // S-57 list-type attributes (e.g. COLOUR, NATSUR, CATLIT)
+                // carry multiple enumerate codes as a comma-separated string
+                // (e.g. "3,3"). The destination S-101 enumerate attribute
+                // encodes each value as a separate occurrence, so split the
+                // list and validate each code independently — otherwise a
+                // single invalid (or simply multi-valued) code would cause the
+                // whole attribute to be dropped. Enumerate codes are integer
+                // tokens and never contain commas, so non-enumerate attributes
+                // (text such as OBJNAM, which may legitimately contain commas)
+                // are never split.
+                if (_allowedEnumValues is not null
+                    && _allowedEnumValues.IsEnumerated(resolved.S101Code)
+                    && a.Value.Contains(','))
+                {
+                    ushort index = 1;
+                    foreach (var rawCode in a.Value.Split(','))
+                    {
+                        var code = rawCode.Trim();
+                        if (code.Length == 0)
+                            continue;
+
+                        var sub = _mapping.ResolveAttribute(attrRule.S57Acronym, code, feature);
+                        if (sub is null)
+                        {
+                            _diagnostics?.RecordRuleDroppedAttribute(attl);
+                            continue;
+                        }
+
+                        if (!_allowedEnumValues.IsAllowed(sub.S101Code, sub.Value))
+                        {
+                            _diagnostics?.RecordDroppedEnumValue(sub.S101Code, sub.Value);
+                            continue;
+                        }
+
+                        builder.Add(new S101Attribute(GetOrAssignAttributeCode(sub.S101Code), index++, sub.Value));
+                    }
+                    continue;
+                }
+
                 // Drop S-57 enum values that aren't in the S-101 FC's allowable
                 // listed values (per IHO S-57→S-101 Conversion Guidance, Jan 2021).
                 if (_allowedEnumValues is not null

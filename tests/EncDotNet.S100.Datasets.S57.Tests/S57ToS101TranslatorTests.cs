@@ -410,6 +410,81 @@ public class S57ToS101TranslatorTests
         Assert.True(allowed.IsAllowed("totallyMadeUpAttribute", "x"));
     }
 
+    // ── List-valued enum attributes: comma-separated S-57 codes are split
+    //    into one S-101 occurrence per value (not dropped wholesale). ──────
+
+    [Fact]
+    public void Translate_ListEnumAttribute_SplitsCommaSeparatedValues()
+    {
+        // CATLND (list type) → categoryOfLandRegion; "1,3" is two valid codes.
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("1,3"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        Assert.All(feat.Attributes, a =>
+            Assert.Equal("categoryOfLandRegion", s101.AttributeTypeCatalogue[a.NumericCode]));
+        var values = feat.Attributes.Select(a => a.Value).OrderBy(v => v).ToArray();
+        Assert.Equal(new[] { "1", "3" }, values);
+        // Each occurrence carries a distinct ATIX (1-based).
+        Assert.Equal(new ushort[] { 1, 2 }, feat.Attributes.Select(a => a.Index).OrderBy(i => i).ToArray());
+    }
+
+    [Fact]
+    public void Translate_ListEnumAttribute_DropsOnlyInvalidCodes_KeepsValidOnes()
+    {
+        // "3,99,5": 99 is not an allowable categoryOfLandRegion code.
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("3,99,5"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        var values = feat.Attributes.Select(a => a.Value).OrderBy(v => v).ToArray();
+        Assert.Equal(new[] { "3", "5" }, values);
+    }
+
+    [Fact]
+    public void Translate_ListEnumAttribute_PreservesDuplicateCodes()
+    {
+        // "3,3" is a real corpus pattern; both occurrences are preserved.
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("3,3"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        Assert.All(feat.Attributes, a => Assert.Equal("3", a.Value));
+    }
+
+    [Fact]
+    public void Translate_ListEnumAttribute_AllInvalidCodes_EmitsNothing()
+    {
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("98,99"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Empty(feat.Attributes);
+    }
+
+    [Fact]
+    public void Translate_ListEnumAttribute_IgnoresEmptyElements()
+    {
+        // Trailing/duplicate commas should not produce empty-valued rows.
+        var s101 = new S57ToS101Translator().Translate(LandRegionDocWithCatlnd("1,,3,"));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(2, feat.Attributes.Count);
+        Assert.DoesNotContain(feat.Attributes, a => a.Value.Length == 0);
+    }
+
+    [Fact]
+    public void Translate_NonEnumTextAttribute_WithComma_IsNotSplit()
+    {
+        // OBJNAM (text) is handled as featureName; a comma in the name must
+        // survive intact rather than being split as if it were a list.
+        var doc = LandRegionWithS57Attributes(Attr(116, "Smith, Jones and Co."));
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Smith, Jones and Co.", GetSubAttribute(s101, instance, "name"));
+    }
+
     // ── v3.4: INFORM/NINFOM/TXTDSC/NTXTDS → information complex attribute ──
 
     private static IEnumerable<S101Attribute> InformationInstance(
